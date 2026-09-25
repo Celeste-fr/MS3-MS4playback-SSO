@@ -239,7 +239,7 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_IO_PULSEAUDIO_USEPULSEAUDIO,                     new BoolPreference(defaultUsePulseAudio, false)},
             {PREF_SCORE_CHORD_PLAYONADDNOTE,                       new BoolPreference(true, false)},
             {PREF_SCORE_HARMONY_PLAY_ONEDIT,                       new BoolPreference(true, false)},
-            {PREF_SCORE_HARMONY_PLAY_DISABLE_COMPATIBILITY,        new BoolPreference(true, true)},
+            {PREF_SCORE_HARMONY_PLAY_DISABLE_COMPATIBILITY,        new BoolPreference(false, true)},  // MS4 plays chord symbols of old scores too
             {PREF_SCORE_HARMONY_PLAY_DISABLE_NEW,                  new BoolPreference(false, true)},
             {PREF_SCORE_NOTE_PLAYONCLICK,                          new BoolPreference(true, false)},
             {PREF_SCORE_NOTE_DEFAULTPLAYDURATION,                  new IntPreference(300 /* ms */, false)},

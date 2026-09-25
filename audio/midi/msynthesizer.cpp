@@ -366,6 +366,8 @@ bool MasterSynthesizer::setState(const SynthesizerState& ss)
                               case 5:
                                     setCcToUseIndex(v.data.toInt());
                                     break;
+                              case 6:     // written by the MuseScore 4 playback build (SynthesizerState::upgradeToMs4Playback)
+                                    break;
                               default:
                                     qDebug("MasterSynthesizer::setState: unknown master id <%d>", v.id);
                               }
@@ -405,6 +407,7 @@ SynthesizerState MasterSynthesizer::state() const
       g.push_back(IdValue(3, QString("%1").arg(masterTuning())));
       g.push_back(IdValue(4, QString("%1").arg(dynamicsMethod())));
       g.push_back(IdValue(5, QString("%1").arg(ccToUseIndex())));
+      g.push_back(IdValue(6, "1"));
       ss.push_back(g);
       for (Synthesizer* s : _synthesizer)
             ss.push_back(s->state());

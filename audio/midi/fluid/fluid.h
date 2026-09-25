@@ -33,8 +33,9 @@ using namespace Ms;
 class Fluid : public Synthesizer {
    public:
       // A FluidSynth instance has a fixed number of MIDI channels; MuseScore numbers its channels
-      // 0…n over all ports, so channel c plays on instance c / CHANNELS_PER_SYNTH.
-      static constexpr int CHANNELS_PER_SYNTH = 256;
+      // 0…n over all ports, so channel c plays on instance c / CHANNELS_PER_SYNTH. Not 256: channel
+      // 255 is FluidSynth's NO_CHANNEL mark of unused voices (setting it up modulates those, and crashes).
+      static constexpr int CHANNELS_PER_SYNTH = 240;
 
       // MuseScore 4's settings (framework/audio/engine/internal/synthesizers/fluidsynth)
       static constexpr double GLOBAL_GAIN      = 4.8;  // FLUID_GLOBAL_VOLUME_GAIN

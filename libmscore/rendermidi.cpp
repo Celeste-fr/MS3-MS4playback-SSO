@@ -87,6 +87,8 @@ struct SndConfig {
       int ms4Ts = 0;
       int ms4Offset = 0;          // ticks the note starts late (arpeggio, grace notes before), taken off its length
       int ms4Cut = 0;             // ticks taken off the note's end (grace notes after)
+      int ms4SwingOn = 0;         // swing: on-time offset, per mille of the chord's length
+      int ms4SwingGate = 100;     // swing: the chord's length, percent
 
       SndConfig() {}
       SndConfig(bool use, int c, DynamicsRenderMethod me) : useSND(use), controller(c), method(me) {}
@@ -387,8 +389,10 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   }
             int p = qBound(0, note->ppitch() + nel[0].pitch(), 127);
             const int offset = qMin(config.ms4Offset, ticks);
-            int on  = tick1 + offset + ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
-            int off = on + int((qint64(chainTicks - offset - config.ms4Cut) * config.ms4Dur) / Ms4::HUNDRED) - 1;
+            // swing on the chord's own length only, not on the tied notes' (NoteRenderer::applySwingIfNeed)
+            const int swungTicks = (ticks * config.ms4SwingGate) / 100 + (chainTicks - ticks);
+            int on  = tick1 + (ticks * config.ms4SwingOn) / 1000 + offset + ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
+            int off = on + int((qint64(swungTicks - offset - config.ms4Cut) * config.ms4Dur) / Ms4::HUNDRED) - 1;
             playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx);
             nels = 0;                             // done; bends below still apply
             }
@@ -902,6 +906,44 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
       }
 
 //---------------------------------------------------------
+//   ms4Swing
+//    Swing::applySwing (MuseScore 4): MuseScore 3's swing, but with the position in a pickup
+//    bar counted from where the full bar would start (anacrusisOffset); not in tuplets
+//---------------------------------------------------------
+
+static void ms4Swing(const Chord* chord, int& onTime, int& gateTime)
+      {
+      onTime = 0;
+      gateTime = 100;
+      if (!chord || chord->tuplet() || chord->isGrace())
+            return;
+      const SwingParameters params = chord->staff()->swing(chord->tick());
+      if (params.swingUnit == 0)
+            return;
+      auto isSubdivided = [&](ChordRest* cr) {
+            if (!cr)
+                  return false;
+            ChordRest* prev = prevChordRest(cr);
+            return cr->actualTicks().ticks() < params.swingUnit || (prev && prev->actualTicks().ticks() < params.swingUnit);
+            };
+      Chord* c = const_cast<Chord*>(chord);
+      const int startTick = (chord->rtick() + chord->measure()->anacrusisOffset()).ticks();
+      const int swingBeat = params.swingUnit * 2;
+      const double ticksDuration = chord->actualTicks().ticks();
+      const double swingTickAdjust = swingBeat * ((params.swingRatio - 50) / 100.0);
+      const double swingActualAdjust = (swingTickAdjust / ticksDuration) * 1000.0;
+      if (startTick % swingBeat == params.swingUnit && !isSubdivided(c)) {
+            onTime = int(onTime + swingActualAdjust);
+            gateTime = int(200 - (gateTime + (swingActualAdjust / 10)));
+            }
+      const int endTick = startTick + int(ticksDuration);
+      if (endTick % swingBeat == params.swingUnit && !isSubdivided(nextChordRest(c)))
+            gateTime = int(gateTime + (swingActualAdjust / 10));
+      if (gateTime <= 0)
+            gateTime = 100;
+      }
+
+//---------------------------------------------------------
 //   addMs4PitchCurve
 //    FluidSequencer::addPitchCurve: a bend reset where the articulation (the note's nominal
 //    length) or the note ends, and the curve's segments interpolated in steps of 1/25 semitone
@@ -958,9 +1000,30 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               h = toHarmony(e);
                         else if (e->isFretDiagram())
                               h = toFretDiagram(e)->harmony();
-                        if (!h || !h->play())
+                        if (!h || !h->play() || !h->isRealizable())
                               continue;
-                        renderHarmony(events, m, h, tickOffset);
+                        // PlaybackEventsRenderer::renderChordSymbol: the realized notes as a plain
+                        // keyboard chord at the part's dynamic, on its own track (MS4: piano)
+                        Staff* hs = m->score()->staff(h->track() / VOICES);
+                        const Channel* hc = hs ? hs->part()->harmonyChannel() : nullptr;
+                        auto hpc = hs ? ms4Parts.find(hs->part()) : ms4Parts.end();
+                        if (!hc || !hs->primaryStaff() || hpc == ms4Parts.end())
+                              continue;
+                        events->registerChannel(hc->channel());
+                        const int htick = h->tick().ticks();
+                        const Ms4::NoteResult r = Ms4::note(Ms4::Family::Keyboards, {}, hpc->second.dynamics.levelAt(htick), false);
+                        RealizedHarmony rh = h->getRealizedHarmony();
+                        const int on = htick + tickOffset;
+                        const int length = rh.getActualDuration(on).ticks();
+                        const int off = on + (length * r.dur) / Ms4::HUNDRED - 1;
+                        for (int p : rh.pitches()) {
+                              NPlayEvent ev(ME_NOTEON, hc->channel(), p, r.velocity);
+                              ev.setHarmony(h);
+                              ev.setOriginatingStaff(hs->idx());
+                              events->insert(std::make_pair(on, ev));
+                              ev.setVelo(0);
+                              events->insert(std::make_pair(qMax(on, off), ev));
+                              }
                         }
                   }
 
@@ -1003,6 +1066,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Ts = r.ts;
                         config.ms4Offset = offset;
                         config.ms4Cut = cut;
+                        ms4Swing(note->chord(), config.ms4SwingOn, config.ms4SwingGate);
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
                         if (r.bend && !note->chord()->isGrace() && !note->tieBack()) {
                               const Chord* ch = note->chord();
@@ -1227,6 +1291,17 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
       for (const auto& pc : ms4Parts) {
             const Part* part = pc.first;
             const Ms4::PartContext& ctx = pc.second;
+
+            // chord symbols: MS4 plays them on a track of their own with the piano (Program(0, 0))
+            if (const Channel* hc = const_cast<Part*>(part)->harmonyChannel()) {
+                  for (const NPlayEvent& ev : { NPlayEvent(ME_CONTROLLER, hc->channel(), CTRL_HBANK, 0),
+                                                NPlayEvent(ME_CONTROLLER, hc->channel(), CTRL_LBANK, 0),
+                                                NPlayEvent(ME_CONTROLLER, hc->channel(), CTRL_PROGRAM, 0) }) {
+                        NPlayEvent e(ev);
+                        e.setOriginatingStaff(part->staff(0)->idx());
+                        events->insert(std::make_pair(tick1 + tickOffset, e));
+                        }
+                  }
 
             // the presets MS4 plays: each channel slot of each of the part's instruments
             for (const auto& is : ctx.sounds) {

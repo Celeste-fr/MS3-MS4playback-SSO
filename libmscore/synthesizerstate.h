@@ -67,6 +67,7 @@ class SynthesizerState : public std::list<SynthesizerGroup> {
       bool isDefaultSynthSoundfont();
       int ccToUse() const;
       int method() const;
+      void upgradeToMs4Playback();
       bool isDefault() const        { return _isDefault; }
       void setIsDefault(bool val)   { _isDefault = val; }
       };
@@ -84,7 +85,8 @@ static SynthesizerState defaultState = {
             { 2, "0.1"   },
             { 3, "440"   },
             { 4, "3"     },     // dynamics method: 3 = MuseScore 4 (DynamicsRenderMethod::MS4)
-            { 5, "1"     }
+            { 5, "1"     },
+            { 6, "1"     }      // written by the MuseScore 4 playback build (see upgradeToMs4Playback)
             },
             },
       { "Fluid", {

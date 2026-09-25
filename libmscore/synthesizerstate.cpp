@@ -62,7 +62,49 @@ void SynthesizerState::read(XmlReader& e)
             // Replace any previously set state if we have read a new state
             swap(tempGroups);
             setIsDefault(false);
+            upgradeToMs4Playback();
             }
+      }
+
+//---------------------------------------------------------
+//   upgradeToMs4Playback
+///  Settings saved by MuseScore 3 (a score's, or synthesizer.xml) carry MuseScore 3's sound:
+///  MuseScore_General, the Zita reverb, its dynamics methods. MuseScore 4 ignores them; here
+///  those defaults become this build's (MS Basic.sf3, MuseReverb, the MuseScore 4 dynamics
+///  method), other choices (another SoundFont, Zerberus …) stay. Settings saved by this build
+///  carry master id 6 and are left alone.
+//---------------------------------------------------------
+
+void SynthesizerState::upgradeToMs4Playback()
+      {
+      for (SynthesizerGroup& g : *this)
+            if (g.name() == "master")
+                  for (const IdValue& v : g)
+                        if (v.id == 6)
+                              return;
+
+      for (SynthesizerGroup& g : *this) {
+            if (g.name() == "master") {
+                  bool hasMethod = false;
+                  for (IdValue& v : g) {
+                        if ((v.id == 0 || v.id == 1) && v.data == "Zita1")
+                              v.data = v.id == 0 ? "MuseReverb" : "NoEffect";
+                        else if (v.id == 4) {
+                              v.data = "3";                       // DynamicsRenderMethod::MS4
+                              hasMethod = true;
+                              }
+                        }
+                  if (!hasMethod)
+                        g.push_back(IdValue(4, "3"));
+                  g.push_back(IdValue(6, "1"));
+                  }
+            else if (g.name() == "Fluid") {
+                  for (IdValue& v : g)
+                        if (v.id == 0 && v.data.startsWith("MuseScore_General"))
+                              v.data = "MS Basic.sf3";
+                  }
+            }
+      remove_if([](const SynthesizerGroup& g) { return g.name() == "Zita1"; });
       }
 
 //---------------------------------------------------------
