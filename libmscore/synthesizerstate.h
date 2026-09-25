@@ -80,9 +80,7 @@ class SynthesizerState : public std::list<SynthesizerGroup> {
 static SynthesizerState defaultState = {
       { "master", {
 
-#ifdef ZITA_REVERB
-            { 0, "Zita1" },
-#endif
+            { 0, "MuseReverb" },   // MuseScore 4's reverb, as its default aux send
             { 2, "0.1"   },
             { 3, "440"   },
             { 4, "1"     },

@@ -35,6 +35,9 @@ add_library (effects STATIC
       zita1/zitagui.cpp
       compressor/compressor.cpp
       compressor/compressorgui.cpp
+      musereverb/musereverb.cpp
+      musereverb/reverbprocessor.cpp
+      musereverb/ivndecorrelation.cpp
       ${INCS}
       )
 

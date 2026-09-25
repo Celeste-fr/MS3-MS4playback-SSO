@@ -100,6 +100,7 @@
 #include "effects/compressor/compressor.h"
 #include "effects/noeffect/noeffect.h"
 #include "effects/zita1/zita.h"
+#include "effects/musereverb/musereverb.h"
 
 #include "importexport/midiimport/importmidi_instrument.h"
 #include "importexport/midiimport/importmidi_operations.h"
@@ -4459,6 +4460,7 @@ MasterSynthesizer* synthesizerFactory()
       ms->registerSynthesizer(createZerberus());
 #endif
       ms->registerEffect(0, new NoEffect);
+      ms->registerEffect(0, new MuseReverb);   // MuseScore 4's reverb
 
 #ifdef ZITA_REVERB
       ms->registerEffect(0, new ZitaReverb);
@@ -4467,6 +4469,7 @@ MasterSynthesizer* synthesizerFactory()
       ms->registerEffect(0, new Compressor);
       // ms->registerEffect(0, new Freeverb);
       ms->registerEffect(1, new NoEffect);
+      ms->registerEffect(1, new MuseReverb);   // MuseScore 4's reverb
 
 #ifdef ZITA_REVERB
       ms->registerEffect(1, new ZitaReverb);
