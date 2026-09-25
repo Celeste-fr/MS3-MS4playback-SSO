@@ -1058,7 +1058,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               continue;
                         events->registerChannel(hc->channel());
                         const int htick = h->tick().ticks();
-                        const Ms4::NoteResult r = Ms4::note(Ms4::Family::Keyboards, {}, hpc->second.dynamics.levelAt(h->track(), htick), false);
+                        const Ms4::NoteResult r = Ms4::note(Ms4::Family::Keyboards, {}, hpc->second.dynamics.levelAt(h->track(), htick + tickOffset), false);
                         RealizedHarmony rh = h->getRealizedHarmony();
                         const int on = htick + tickOffset;
                         const int length = rh.getActualDuration(on).ticks();
@@ -1092,7 +1092,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   if (pc == ms4Parts.end())
                         continue;
                   const Ms4::PartContext& ctx = pc->second;
-                  const int level = ctx.dynamics.levelAt(chord->track(), tick.ticks());
+                  const int level = ctx.dynamics.levelAt(chord->track(), tick.ticks() + tickOffset);
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics);
 
                   auto sit = ctx.sounds.find(instr);
@@ -1211,7 +1211,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // (glissando notes need the tieBack exemption: they play their later steps)
                         if (!note->play() || length <= 0)
                               return;
-                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(note->track(), start), ctx.snd);
+                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(note->track(), start + tickOffset), ctx.snd);
                         int noteChannel = channel;
                         int layer = note->voice();
                         if (sit != ctx.sounds.end()) {
@@ -1499,12 +1499,13 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                         }
                   };
             const std::map<int, int>& levels = ctx.dynamics.levels();
+            // levels are kept at unrolled ticks
             {
-                  auto it = levels.upper_bound(tick1);
+                  auto it = levels.upper_bound(tick1 + tickOffset);
                   put(tick1, it == levels.begin() ? Ms4::NATURAL : std::prev(it)->second);
             }
-            for (auto it = levels.upper_bound(tick1); it != levels.end() && it->first < tick2; ++it)
-                  put(it->first, it->second);
+            for (auto it = levels.upper_bound(tick1 + tickOffset); it != levels.end() && it->first < tick2 + tickOffset; ++it)
+                  put(it->first - tickOffset, it->second);
             }
       }
 

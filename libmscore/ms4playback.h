@@ -84,13 +84,13 @@ class Dynamics {
       void apply(const Element* e, int tick, int level);
       int appliable(int track, int tick) const;
       int nominal(int track, int tick) const;
-      void addDynamic(Score*, Dynamic*);
-      void addHairpin(Score*, Hairpin*);
+      void addDynamic(Score*, Dynamic*, int offset);
+      void addHairpin(Score*, Hairpin*, int offset);
       void mergeTracks();
 
    public:
       void build(Score* score, Part* part);
-      int levelAt(int track, int tick) const { return appliable(track, tick); }
+      int levelAt(int track, int utick) const { return appliable(track, utick); }   // unrolled tick
       const std::map<int, int>& levels() const { return _merged; }     // all tracks' changes (FluidSequencer::updateDynamicEvents)
       bool subitoAt(int tick, int staffIdx) const { return _subito.count({ staffIdx, tick }) > 0; }
       int spannerStop(const Spanner* sp) const;     // tick2, clipped as MS4's collision-free intervals

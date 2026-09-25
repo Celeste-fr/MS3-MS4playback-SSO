@@ -23,6 +23,7 @@
 #include "measure.h"
 #include "note.h"
 #include "part.h"
+#include "repeatlist.h"
 #include "score.h"
 #include "segment.h"
 #include "slur.h"
@@ -620,13 +621,14 @@ static QString tagFromText(const QString& text)
       return best;
       }
 
-// PlaybackContext::updateDynamicMap
-void Dynamics::addDynamic(Score*, Dynamic* dynamic)
+// PlaybackContext::updateDynamicMap, at the dynamic's place in the unrolled score (tick + offset)
+void Dynamics::addDynamic(Score*, Dynamic* dynamic, int offset)
       {
       Segment* segment = dynamic->segment();
       if (!segment)
             return;
-      const int tick = segment->tick().ticks();
+      const int scoreTick = segment->tick().ticks();
+      const int tick = scoreTick + offset;
       QString type = dynamic->dynamicTypeName();
       if (type == "other-dynamics")
             type = tagFromText(dynamic->xmlText());
@@ -634,7 +636,7 @@ void Dynamics::addDynamic(Score*, Dynamic* dynamic)
       // AnnotationsMetaParser: these make the chords of their staff Subito
       static const QSet<QString> SUBITO { "s", "sf", "sff", "sfff", "sfz", "sffz", "sfffz", "sfp", "sfpp" };
       if (SUBITO.contains(type))
-            _subito.insert({ dynamic->staffIdx(), tick });
+            _subito.insert({ dynamic->staffIdx(), scoreTick });
 
       int level = ordinaryLevel(type);
       if (level >= 0) {
@@ -646,7 +648,7 @@ void Dynamics::addDynamic(Score*, Dynamic* dynamic)
             const int prev = appliable(dynamic->track(), tick);
             apply(dynamic, tick, level);
             if (Segment* next = segment->next())
-                  apply(dynamic, next->tick().ticks(), prev);
+                  apply(dynamic, next->tick().ticks() + offset, prev);
             return;
             }
       int from, to;
@@ -680,8 +682,9 @@ static int levelOf(const QString& type, bool atEnd)
       return NATURAL;
       }
 
-// PlaybackContext::handleHairpin
-void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
+// PlaybackContext::handleHairpin: the hairpin's whole length at its place in this pass of the
+// unrolled score, even where it reaches past the pass (it then runs on into what plays next)
+void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
       {
       int spannerFrom = hairpin->tick().ticks();
       int spannerTo = spannerFrom + std::abs(hairpin->ticks().ticks());
@@ -696,7 +699,7 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
 
       // MS3 hairpins carry no start dynamic of their own: the level in force
       const int track = hairpin->track();
-      const int levelFrom = appliable(track, spannerFrom);
+      const int levelFrom = appliable(track, spannerFrom + offset);
 
       Dynamic* endDynamic = dynamicAt(score->tick2segment(Fraction::fromTicks(spannerTo), true, SegmentType::ChordRest), hairpin->track());
       const int nominalLevelTo = endDynamic ? levelOf(endDynamic->dynamicTypeName(), true) : NATURAL;
@@ -705,7 +708,7 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
       const bool useNominalLevelTo = hasNominalLevelTo && (isCrescendo ? nominalLevelTo > levelFrom : nominalLevelTo < levelFrom);
       const int levelTo = useNominalLevelTo ? nominalLevelTo : levelFrom + (isCrescendo ? STEP : -STEP);
 
-      const int levelAtEnd = nominal(track, spannerTo);
+      const int levelAtEnd = nominal(track, spannerTo + offset);
       const bool hasDynamicAtEndTick = levelAtEnd != NATURAL;
       if (hasDynamicAtEndTick && levelAtEnd != levelTo)
             spannerTo -= 1;                                   // Fraction::eps()
@@ -716,10 +719,10 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
 
       const int steps = std::max(durationTicks / (DIVISION / 4), 24);
       for (const auto& p : easingValueCurve(durationTicks, steps, levelTo - levelFrom, hairpin->veloChangeMethod()))
-            apply(hairpin, spannerFrom + p.first, levelFrom + p.second);
+            apply(hairpin, spannerFrom + p.first + offset, levelFrom + p.second);
 
       if (hasNominalLevelTo && !useNominalLevelTo && !hasDynamicAtEndTick)
-            apply(hairpin, spannerTo, nominalLevelTo);
+            apply(hairpin, spannerTo + offset, nominalLevelTo);
       }
 
 // PlaybackContext::update: the part's dynamic markings in score order, then its hairpins
@@ -757,25 +760,35 @@ void Dynamics::build(Score* score, Part* part)
             lastOfType[sp->type()] = sp;
             }
 
-      for (Segment* s = score->firstSegment(SegmentType::All); s; s = s->next1()) {
-            for (Element* e : s->annotations()) {
-                  if (e->isDynamic() && e->track() >= strack && e->track() < etrack)
-                        addDynamic(score, toDynamic(e));
+      // PlaybackContext::update: pass by pass through the unrolled score (repeats, jumps), the
+      // dynamic markings of each pass's measures, then the hairpins overlapping the pass; levels
+      // are kept at unrolled ticks, so after a jump the level last played is in force
+      for (const RepeatSegment* rs : score->repeatList()) {
+            const int offset = rs->utick - rs->tick;
+            const Measure* last = rs->lastMeasure();
+            for (const Measure* m = rs->firstMeasure(); m; m = m->nextMeasure()) {
+                  for (Segment* s = m->first(); s; s = s->next()) {
+                        for (Element* e : s->annotations()) {
+                              if (e->isDynamic() && e->track() >= strack && e->track() < etrack)
+                                    addDynamic(score, toDynamic(e), offset);
+                              }
+                        }
+                  if (m == last)
+                        break;
                   }
-            }
-
-      std::vector<Hairpin*> hairpins;
-      for (const auto& p : score->spanner()) {
-            Spanner* sp = p.second;
-            if (sp->isHairpin() && sp->track() >= strack && sp->track() < etrack) {
-                  Staff* st = sp->staff();
-                  if (st && !st->primaryStaff())
-                        continue;                             // linked staves
-                  hairpins.push_back(toHairpin(sp));
+            std::vector<Hairpin*> hairpins;
+            for (const auto& iv : score->spannerMap().findOverlapping(rs->tick + 1, rs->tick + rs->len() - 1)) {
+                  Spanner* sp = iv.value;
+                  if (sp->isHairpin() && sp->track() >= strack && sp->track() < etrack) {
+                        Staff* st = sp->staff();
+                        if (st && !st->primaryStaff())
+                              continue;                             // linked staves
+                        hairpins.push_back(toHairpin(sp));
+                        }
                   }
+            for (Hairpin* h : hairpins)
+                  addHairpin(score, h, offset);
             }
-      for (Hairpin* h : hairpins)
-            addHairpin(score, h);
 
       for (int track = strack; track < etrack; ++track)
             _byTrack[track].emplace(0, Info { NATURAL, 0 });
