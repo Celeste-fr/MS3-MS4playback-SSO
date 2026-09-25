@@ -1456,16 +1456,20 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
             // chord symbols: MS4 plays them on a track of their own with the piano (Program(0, 0))
             if (const Channel* hc = const_cast<Part*>(part)->harmonyChannel()) {
+                  auto pos = events->lower_bound(tick1 + tickOffset);
                   for (const NPlayEvent& ev : { NPlayEvent(ME_CONTROLLER, hc->channel(), CTRL_HBANK, 0),
                                                 NPlayEvent(ME_CONTROLLER, hc->channel(), CTRL_LBANK, 0),
                                                 NPlayEvent(ME_CONTROLLER, hc->channel(), CTRL_PROGRAM, 0) }) {
                         NPlayEvent e(ev);
                         e.setOriginatingStaff(part->staff(0)->idx());
-                        events->insert(std::make_pair(tick1 + tickOffset, e));
+                        events->insert(pos, std::make_pair(tick1 + tickOffset, e));
                         }
                   }
 
-            // the presets MS4 plays: each channel slot of each of the part's instruments
+            // the presets MS4 plays: each channel slot of each of the part's instruments; ahead of
+            // the notes at the chunk's start, which would otherwise sound with the preset before
+            // (the score's MuseScore 3 program at the start of playback)
+            auto pos = events->lower_bound(tick1 + tickOffset);
             for (const auto& is : ctx.sounds) {
                   const Instrument* instr = is.first;
                   for (const Ms4::Slot& slot : is.second.channelSlots) {
@@ -1475,7 +1479,7 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                                                       NPlayEvent(ME_CONTROLLER, ch, CTRL_PROGRAM, slot.program) }) {
                               NPlayEvent e(ev);
                               e.setOriginatingStaff(part->staff(0)->idx());
-                              events->insert(std::make_pair(tick1 + tickOffset, e));
+                              events->insert(pos, std::make_pair(tick1 + tickOffset, e));
                               }
                         }
                   }
