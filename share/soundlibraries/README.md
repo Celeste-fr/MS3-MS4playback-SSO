@@ -26,36 +26,58 @@ keyswitches or program changes for other libraries).
 This only works with the **MuseScore 4** dynamics method (View › Synthesizer › Dynamics). That
 is the default.
 
-## Setup on Windows with Spitfire Symphony Orchestra
+## Setup on Windows with Spitfire Symphony Orchestra (plug-in in MuseScore)
+
+MuseScore hosts the library's plug-in itself (Kontakt, VST 3). There is no separate host, no
+virtual MIDI cable, and audio export includes the library.
+
+1. In *Edit › Preferences › I/O › Sound library*, choose *Spitfire Symphony Orchestra* and set
+   *Play through* to *Its plug-in, in MuseScore*. MuseScore finds *Kontakt 8* or *Kontakt 7*
+   in `C:\Program Files\Common Files\VST3` on its own. If yours is somewhere else, choose
+   its `.vst3` with the *…* button next to *Plug-in*.
+2. Open a score and choose *View › Sound Library…*. The dialog lists each part with the
+   library patch it plays. For every patch marked *Not set up yet*:
+   - Click *Show*. Kontakt opens with an empty rack.
+   - Load that SSO patch (the one with all the section's articulations). Set its articulation
+     switching to **UACC** and its MIDI channel to 1 (or omni).
+   - Close the window. MuseScore keeps this setup for the instrument and loads it by itself in
+     every score from then on. To keep later changes, use *Save setup*.
+3. Play, or export audio (File › Export, or `mscore -o score.wav score.mscz`).
+
+Each library part gets its own plug-in instance. The first playback of a score loads them all,
+and the samples take a moment. The library's audio is mixed in after MuseScore's reverb,
+because SSO brings its own room. Setups are stored in MuseScore's data folder under
+`soundlibraries/<library>/<patch>.vst3state`.
+
+## Setup on Windows with a host of its own (MIDI output)
+
+Use this if the library runs in a DAW or standalone host (*Play through: MIDI output*).
 
 1. **Virtual MIDI cable.** Install [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html)
    and create one port for every 16 library parts. A full orchestra usually needs 2.
-2. **Host.** Start Kontakt standalone (or a DAW with Kontakt). Under *Options › MIDI*, enable the
-   loopMIDI ports as inputs and assign them to Kontakt ports A, B, C, D in the same order.
+2. **Host.** Start Kontakt standalone (or a DAW with Kontakt). Enable the loopMIDI ports as
+   MIDI inputs and assign them to Kontakt ports A, B, C, D in the same order.
 3. **MuseScore.** Open *Edit › Preferences › I/O*:
-   - PortAudio: choose the first loopMIDI port as *MIDI output* and the next ones as *MIDI output B, C, D*.
-   - Sound library: choose *Spitfire Symphony Orchestra*.
-   - Click *Show routing…* with your score open. For each part, it lists the patch to load, the
-     port (A–D) and the MIDI channel (1–16).
-4. **Patches.** Load each listed patch in Kontakt (the *All techniques* patch of that section).
-   Set it to the port and channel shown. In the patch's articulation settings, set switching to
-   **UACC**.
-5. Play. Parts the library has no patch for (piano, percussion …) still play on MuseScore's
-   built-in synthesizer.
+   - PortAudio: choose the first loopMIDI port as *MIDI output* and the next ones as
+     *MIDI output B, C, D*.
+   - Sound library: choose *Spitfire Symphony Orchestra*, with *Play through: MIDI output*.
+   - Click *Show routing…* (or *View › Sound Library…*) with your score open. For each part
+     it lists the patch to load, the port (A–D) and the MIDI channel (1–16).
+4. **Patches.** Load each listed patch in Kontakt on its port and channel, with articulation
+   switching set to **UACC**.
 
-To line up the library's sound with the built-in synthesizer, use *MIDI output latency* in the
-same preferences section.
+To line up the library's sound with the built-in synthesizer, use *MIDI output latency*.
+Audio export can't record the external host. Use *File › Export › MIDI*, which includes the
+articulation switches and dynamics, and render that in the DAW.
 
-Notes:
+Notes for both setups:
 
-- Audio export (WAV, MP3 …) cannot record the external library. Exported audio plays those
-  parts with the built-in synthesizer. To record the library, use *File › Export › MIDI* and
-  render the MIDI file in your DAW. The exported MIDI file includes the articulation switches
-  and dynamics.
+- Parts the library has no patch for (piano, percussion …) play on MuseScore's built-in
+  synthesizer.
 - Solo and section patches are picked from the MuseScore instrument (Violin → Solo Violin 1,
   Violins → Violins 1). "a2" / "a6" patches are picked from the part name (for example,
   "Flutes 1.2", "Horns a4"). "Violins II" gets the Violins 2 patch.
-- Mixer volume and pan don't reach the external library. Use Kontakt's own mixer.
+- Mixer volume and pan don't reach the library. Use Kontakt's own mixer.
 
 ## The map files
 
@@ -66,6 +88,7 @@ switch value of each articulation. For example:
 <SoundLibrary name="Spitfire Symphony Orchestra">
   <Switch type="cc" number="32"/>            <!-- or type="keyswitch" / type="program" -->
   <Dynamics cc="1" expression="127"/>        <!-- dynamics controller; CC11 is set to 127 -->
+  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3"/>  <!-- the plug-in to host, found in the VST3 folders -->
   <Instrument name="Violins 1" ids="violins">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>

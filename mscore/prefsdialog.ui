@@ -3084,13 +3084,54 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
            </widget>
           </item>
           <item row="1" column="0">
+           <widget class="QLabel" name="soundLibraryOutputLabel">
+            <property name="text">
+             <string>Play through:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="soundLibraryOutput">
+            <property name="accessibleName">
+             <string>Play through</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="2">
+           <widget class="QLabel" name="soundLibraryPluginLabel">
+            <property name="text">
+             <string>Plug-in:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="3" colspan="2">
+           <widget class="QLineEdit" name="soundLibraryPlugin">
+            <property name="placeholderText">
+             <string>found automatically</string>
+            </property>
+            <property name="accessibleName">
+             <string>Plug-in</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="5">
+           <widget class="QToolButton" name="soundLibraryPluginBrowse">
+            <property name="text">
+             <string>…</string>
+            </property>
+            <property name="toolTip">
+             <string>Choose the library's VST 3 plug-in (Kontakt …)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
            <widget class="QLabel" name="portMidiOutputBLabel">
             <property name="text">
              <string>MIDI output B:</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="1">
+          <item row="2" column="1">
            <widget class="QComboBox" name="portMidiOutputB">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -3103,14 +3144,14 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
             </property>
            </widget>
           </item>
-          <item row="1" column="2">
+          <item row="2" column="2">
            <widget class="QLabel" name="portMidiOutputCLabel">
             <property name="text">
              <string>C:</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="3">
+          <item row="2" column="3">
            <widget class="QComboBox" name="portMidiOutputC">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -3123,14 +3164,14 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
             </property>
            </widget>
           </item>
-          <item row="1" column="4">
+          <item row="2" column="4">
            <widget class="QLabel" name="portMidiOutputDLabel">
             <property name="text">
              <string>D:</string>
             </property>
            </widget>
           </item>
-          <item row="1" column="5">
+          <item row="2" column="5">
            <widget class="QComboBox" name="portMidiOutputD">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -3143,10 +3184,10 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
             </property>
            </widget>
           </item>
-          <item row="2" column="0" colspan="6">
+          <item row="3" column="0" colspan="6">
            <widget class="QLabel" name="soundLibraryInfo">
             <property name="text">
-             <string>Parts the library has an instrument for play through MIDI output (A, then B, C, D: 16 parts each) with the articulation their notation asks for, instead of the built-in synthesizer. Needs the MuseScore 4 dynamics method (Synthesizer).</string>
+             <string>Parts the library has an instrument for play with the articulation their notation asks for, instead of on the built-in synthesizer: through the library's plug-in, hosted by MuseScore (its setup per instrument: View › Sound Library…), or through MIDI output (A, then B, C, D: 16 parts each) to a host of its own. Needs the MuseScore 4 dynamics method (Synthesizer).</string>
             </property>
             <property name="wordWrap">
              <bool>true</bool>

@@ -36,6 +36,7 @@
 #include "audio/midi/msynthesizer.h"
 #include "musescore.h"
 #include "preferences.h"
+#include "soundlibraryhost.h"
 
 namespace Ms {
 
@@ -97,6 +98,9 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
       int oldSampleRate  = MScore::sampleRate;
       MScore::sampleRate = sampleRate;
 
+      // the sound library's hosted plug-ins play their parts (offline, while this runs)
+      SoundLibraryExport libraryExport(score, synth, sampleRate);
+
       float peak  = 0.0;
       double gain = 1.0;
       EventMap::const_iterator endPos = events.cend();
@@ -156,6 +160,8 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                         playTime  += n;
                         frames    -= n;
                         const NPlayEvent& e = playPos->second;
+                        if (libraryExport.play(e))          // a sound library part, on its plug-in
+                              continue;
                         // (a sound library's articulation switches are for it only)
                         if (!(!e.velo() && e.discard()) && e.isChannelEvent() && !e.librarySwitch()) {
                               int channelIdx = e.channel();
@@ -210,6 +216,7 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
             }
 
       MScore::sampleRate = oldSampleRate;
+      libraryExport.finish();
       delete synth;
 
       device->close();

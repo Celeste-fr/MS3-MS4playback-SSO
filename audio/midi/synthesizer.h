@@ -81,6 +81,9 @@ class Synthesizer {
       virtual void allNotesOff(int /*channel*/) {}
 
       virtual SynthesizerGui* gui()  { return _gui; }
+
+      // mixed in after the master effects (a hosted plug-in brings its own room: Vst3Synth)
+      virtual bool dry() const       { return false; }
       };
 
 }

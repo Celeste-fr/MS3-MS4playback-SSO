@@ -99,8 +99,41 @@ ninja -j4 mscore                    # a full build takes about 40 minutes on 4 c
 - There is no way to hear Kontakt, SSO or Windows here. Anything about them is either untested
   or tested with a stand-in; say which when you report.
 
-## Next: plugin hosting (VST3)
+## Plugin hosting (VST3)
 
-The next planned step is to host the library's plugin (Kontakt, VST3) inside MuseScore, so
-that library parts play and export without an external host. The VST3 SDK is MIT-licensed
-from 3.8 on. Update this section with the state of that work.
+This mode applies when Preferences › I/O › Sound library › Play through is set to the
+library's plug-in, which is the default when `BUILD_VST3` is on. The default is ON except on
+macOS.
+
+- `thirdparty/vst3sdk`: a subset of the VST 3 SDK v3.8.1 (MIT). Its own CMake builds
+  `vst3sdk_hosting` and, for the tests, `vst3sdk_plugin`.
+- `audio/vst3/vst3plugin.*`: one hosted instrument instance. MIDI arrives as note events and
+  as `IMidiMapping` parameters (CC32 UACC and CC1 reach Kontakt this way). It also handles
+  state, offline mode and the editor view.
+- `audio/vst3/vst3synth.*`: `Vst3Synth`, registered in the live `synti` only
+  (`musescore.cpp`). It has 64 slots, one per route (slot = port * 16 + channel). It is
+  "dry", mixed in after the master effects (`MasterSynthesizer::process`). Export borrows it
+  through `MasterSynthesizer::addGuest` and `beginExport` (offline mode, exporting thread
+  only).
+- `mscore/soundlibraryhost.*`: `SoundLibraryHost::sync(score)` runs at `Seq::start`, in
+  exports and in the dialog. It loads an instance per route and restores the instrument's
+  setup from `<dataPath>/soundlibraries/<library>/<instrument>.vst3state`.
+  `SoundLibraryExport` handles audio export. Without a sequencer (command-line `-o`), it
+  loads its own instances. `SoundLibraryDialog` is *View › Sound Library…*: parts, patches,
+  Show (the plug-in's editor) and Save setup.
+- `mscore/vst3editor.*`: the plug-in's editor window (HWND, NSView or X11 plus IRunLoop).
+- `Seq::putEvent`: in plugin mode, external events go to `Vst3Synth` with the slot as the
+  channel.
+
+Tested here: `tst_soundlibrary` hosts `mstestsynth.vst3`
+(`mtest/libmscore/soundlibrary/testsynth`), a sine synth that maps CC32 and CC1 like
+Kontakt. The tests cover notes, CC mapping, state, offline mode and a rendered score. A
+command-line WAV export with the Spitfire map and the test synth as its plug-in played the
+violin through the plug-in and the piano on FluidSynth. **Kontakt itself, the editor window
+on Windows and SSO have not been tried.** No Windows host is available here. When the owner
+reports problems, suspect these first: Kontakt's MIDI channel (we send channel 1), its
+editor sizing, and sample loading in offline export.
+
+The earlier alternative, an Ableton set with every technique preconfigured, was not chosen.
+Kontakt's patch loading can't be automated from outside (its state is opaque). Hosting means
+the patch is set up once per instrument, and MuseScore reloads it by itself.

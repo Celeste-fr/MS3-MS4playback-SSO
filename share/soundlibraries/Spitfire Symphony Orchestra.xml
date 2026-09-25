@@ -19,6 +19,7 @@
 <SoundLibrary name="Spitfire Symphony Orchestra">
   <Switch type="cc" number="32"/>
   <Dynamics cc="1" expression="127"/>
+  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>
   <Instrument name="Violins 1" ids="violins">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>

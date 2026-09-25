@@ -238,6 +238,12 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_IO_PORTMIDI_OUTPUTDEVICE_C,                      new StringPreference("")},
             {PREF_IO_PORTMIDI_OUTPUTDEVICE_D,                      new StringPreference("")},
             {PREF_IO_SOUNDLIBRARY,                                 new StringPreference("")},
+#ifdef USE_VST3
+            {PREF_IO_SOUNDLIBRARY_OUTPUT,                          new StringPreference("plugin")},
+#else
+            {PREF_IO_SOUNDLIBRARY_OUTPUT,                          new StringPreference("midi")},
+#endif
+            {PREF_IO_SOUNDLIBRARY_PLUGIN,                          new StringPreference("")},
             {PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS,           new IntPreference(0)},
       #endif
             {PREF_IO_PULSEAUDIO_USEPULSEAUDIO,                     new BoolPreference(defaultUsePulseAudio, false)},

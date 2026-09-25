@@ -122,7 +122,8 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '-->',
 '<SoundLibrary name="Spitfire Symphony Orchestra">',
 '  <Switch type="cc" number="32"/>',
-'  <Dynamics cc="1" expression="127"/>']
+'  <Dynamics cc="1" expression="127"/>',
+'  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>']
 for bank,name,ids,pn in I:
     attrs=f'name={q(name)} ids={q(ids)}'
     if pn: attrs+=f' partName={q(pn)}'

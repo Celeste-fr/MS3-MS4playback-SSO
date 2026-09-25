@@ -18,6 +18,11 @@
 #include "libmscore/synthesizerstate.h"
 #include "mtest/testutils.h"
 
+#ifdef TESTSYNTH
+#include "audio/vst3/vst3plugin.h"
+#include "audio/vst3/vst3synth.h"
+#endif
+
 #define DIR QString("libmscore/soundlibrary/")
 
 using namespace Ms;
@@ -34,11 +39,15 @@ class TestSoundLibrary : public QObject, public MTest
 
    private slots:
       void initTestCase() { initMTest(); }
-      void cleanup() { SoundLib::setCurrent(nullptr); }
+      void cleanup() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); }
       void textTechniques();
       void choose();
       void spitfireMap();
       void render();
+#ifdef TESTSYNTH
+      void vst3Plugin();
+      void vst3Render();
+#endif
       };
 
 //---------------------------------------------------------
@@ -252,6 +261,153 @@ void TestSoundLibrary::render()
             }
       delete score;
       }
+
+#ifdef TESTSYNTH
+
+//---------------------------------------------------------
+//   testSynthState
+//    the test synth's parameters from a Vst3Plugin state: articulation (CC32), level (CC1)
+//---------------------------------------------------------
+
+static std::pair<double, double> testSynthState(const QByteArray& state)
+      {
+      QDataStream ds(state);
+      char magic[4];
+      ds.readRawData(magic, 4);
+      quint32 version;
+      QString name;
+      QByteArray component, controller;
+      ds >> version >> name >> component >> controller;
+      double v[2] = { -1, -1 };
+      if (component.size() >= 16)
+            memcpy(v, component.constData(), 16);       // little endian doubles (x86, arm)
+      return { v[0], v[1] };
+      }
+
+static float peak(const std::vector<float>& buffer)
+      {
+      float p = 0;
+      for (float f : buffer)
+            p = std::max(p, std::fabs(f));
+      return p;
+      }
+
+//---------------------------------------------------------
+//   vst3Plugin
+//    a VST 3 instrument hosted: notes to sound, CCs to its mapped parameters, state kept
+//---------------------------------------------------------
+
+void TestSoundLibrary::vst3Plugin()
+      {
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      QCOMPARE(p->name(), QString("MS Test Synth"));
+
+      std::vector<float> buffer(2 * 1024, 0.f);
+      p->process(1024, buffer.data());
+      QCOMPARE(peak(buffer), 0.f);                   // nothing played
+
+      p->midi(ME_CONTROLLER, 0, 32, 71);                // UACC: an articulation
+      p->midi(ME_CONTROLLER, 0, 1, 64);                 // dynamics
+      p->midi(ME_NOTEON, 0, 69, 100);
+      p->process(1024, buffer.data());                  // 2 blocks of 512
+      QVERIFY(peak(buffer) > 0.05f);
+
+      const QByteArray state = p->state();
+      auto params = testSynthState(state);
+      QCOMPARE(params.first, 71 / 127.0);
+      QCOMPARE(params.second, 64 / 127.0);
+
+      p->midi(ME_NOTEON, 0, 69, 0);
+      std::fill(buffer.begin(), buffer.end(), 0.f);
+      p->process(1024, buffer.data());
+      QCOMPARE(peak(buffer), 0.f);                   // note off
+
+      // the state in another instance (what a saved setup does)
+      std::unique_ptr<Vst3Plugin> q = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(q, qPrintable(error));
+      QCOMPARE(testSynthState(q->state()).first, 0.0);
+      QVERIFY(q->setState(state));
+      QCOMPARE(testSynthState(q->state()), params);
+      QVERIFY(!q->setState(QByteArray("not a state")));
+
+      // offline (audio export) and another sample rate keep it playing
+      QVERIFY(q->setSampleRate(44100));
+      QVERIFY(q->setOffline(true));
+      q->midi(ME_NOTEON, 0, 60, 90);
+      std::fill(buffer.begin(), buffer.end(), 0.f);
+      q->process(1024, buffer.data());
+      QVERIFY(peak(buffer) > 0.05f);
+      QVERIFY(q->setOffline(false));
+      }
+
+//---------------------------------------------------------
+//   vst3Render
+//    a score played as an audio export plays it: the violin part on the hosted plug-in (its
+//    slot, the switches and dynamics as its parameters), the piano not
+//---------------------------------------------------------
+
+void TestSoundLibrary::vst3Render()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Trill M2' value='71' techniques='trill-M2'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+
+      const int rate = 48000;
+      Vst3Synth vst;
+      vst.init(rate);
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      QCOMPARE(int(routes.size()), 1);
+      const int slot = routes[0].port * 16 + routes[0].channel;
+      vst.setPlugin(slot, std::move(p));
+
+      // the export loop: the plug-in's events, audio up to each event's time
+      std::vector<float> buffer;
+      int frame = 0;
+      int played = 0;
+      for (const auto& te : events) {
+            const int f = int(score->utick2utime(te.first) * rate);
+            if (f > frame) {
+                  const size_t at = buffer.size();
+                  buffer.resize(at + 2 * size_t(f - frame), 0.f);
+                  vst.process(unsigned(f - frame), buffer.data() + at, nullptr, nullptr);
+                  frame = f;
+                  }
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            PlayEvent e(ev);
+            e.setChannel(ev.extPort() * 16 + ev.extChannel());
+            vst.play(e);
+            ++played;
+            }
+      QVERIFY(played > 12);
+      QVERIFY(peak(buffer) > 0.02f);
+      // the last switch: the major-second trill (and the dynamics came as CC1)
+      auto params = testSynthState(vst.plugin(slot)->state());
+      QCOMPARE(params.first, 71 / 127.0);
+      QVERIFY(params.second < 1.0);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      delete score;
+      }
+#endif
 
 QTEST_MAIN(TestSoundLibrary)
 #include "tst_soundlibrary.moc"

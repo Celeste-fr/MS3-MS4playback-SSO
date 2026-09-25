@@ -88,6 +88,7 @@ class Library {
       QString name;
       QString path;
       int dynamicsCC { 1 };               // single-note dynamics (Spitfire: CC1); -1: velocity only
+      QStringList plugins;                // the plug-in to host, by file name, in order of preference
       int expressionValue { 127 };        // CC11 at the start (when dynamicsCC is not 11)
       std::vector<LibInstrument> instruments;
 
@@ -114,6 +115,12 @@ Choice choose(const LibInstrument& instrument, const Want& want);
 void setCurrent(std::shared_ptr<const Library> library);
 std::shared_ptr<const Library> current();
 bool active();
+
+// where the library parts play: MIDI out (the library in a host of its own), or the library's
+// plug-in hosted by MuseScore (audio/vst3, mscore/soundlibraryhost)
+enum class Output : signed char { MIDI, PLUGIN };
+void setOutput(Output output);
+Output output();
 
 //---------------------------------------------------------
 //   Route

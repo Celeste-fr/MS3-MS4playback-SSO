@@ -32,6 +32,7 @@
 #include "libmscore/part.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
+#include "soundlibraryhost.h"
 
 #include "audiodrivers/pa.h"
 #ifdef USE_PORTMIDI
@@ -79,6 +80,17 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
 
       connect(soundLibraryBrowse, &QToolButton::clicked, this, &PreferenceDialog::selectSoundLibrary);
       connect(soundLibraryRouting, &QPushButton::clicked, this, &PreferenceDialog::showSoundLibraryRouting);
+      connect(soundLibraryPluginBrowse, &QToolButton::clicked, this, &PreferenceDialog::selectSoundLibraryPlugin);
+      soundLibraryOutput->clear();
+      if (SoundLibraryHost::available())
+            soundLibraryOutput->addItem(tr("Its plug-in, in MuseScore"), "plugin");
+      soundLibraryOutput->addItem(tr("MIDI output"), "midi");
+      auto updateOutput = [this]() {
+            const bool plugin = soundLibraryOutput->currentData().toString() == "plugin";
+            soundLibraryPlugin->setEnabled(plugin);
+            soundLibraryPluginBrowse->setEnabled(plugin);
+            };
+      connect(soundLibraryOutput, QOverload<int>::of(&QComboBox::currentIndexChanged), this, updateOutput);
 
       styleName->clear();
       styleName->addItem(tr("Light"));
@@ -553,6 +565,8 @@ void PreferenceDialog::start()
                   new IntPreferenceItem(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS, portMidiOutputLatencyMilliseconds),
             #endif
                   new StringPreferenceItem(PREF_IO_SOUNDLIBRARY, soundLibrary, doNothing, doNothing),
+                  new StringPreferenceItem(PREF_IO_SOUNDLIBRARY_OUTPUT, soundLibraryOutput, doNothing, doNothing),
+                  new StringPreferenceItem(PREF_IO_SOUNDLIBRARY_PLUGIN, soundLibraryPlugin, doNothing, doNothing),
       };
 
       // These connections are used to enable the Apply button and to save only the changed preferences.
@@ -800,6 +814,11 @@ void PreferenceDialog::updateValues(bool useDefaultValues, bool setup)
                   idx = soundLibrary->count() - 1;
                   }
             soundLibrary->setCurrentIndex(qMax(0, idx));
+            soundLibraryOutput->setCurrentIndex(qMax(0, soundLibraryOutput->findData(preferences.getString(PREF_IO_SOUNDLIBRARY_OUTPUT))));
+            soundLibraryPlugin->setText(QDir::toNativeSeparators(preferences.getString(PREF_IO_SOUNDLIBRARY_PLUGIN)));
+            const bool plugin = soundLibraryOutput->currentData().toString() == "plugin";
+            soundLibraryPlugin->setEnabled(plugin);
+            soundLibraryPluginBrowse->setEnabled(plugin);
 #ifndef USE_PORTMIDI
             for (QWidget* w : { static_cast<QWidget*>(portMidiOutputB), static_cast<QWidget*>(portMidiOutputC), static_cast<QWidget*>(portMidiOutputD),
                                 static_cast<QWidget*>(portMidiOutputBLabel), static_cast<QWidget*>(portMidiOutputCLabel), static_cast<QWidget*>(portMidiOutputDLabel) })
@@ -859,53 +878,32 @@ void PreferenceDialog::selectSoundLibrary()
 void PreferenceDialog::showSoundLibraryRouting()
       {
       const QString path = soundLibrary->currentData().toString();
-      Score* score = mscore->currentScore();
-      if (path.isEmpty() || !score) {
-            QMessageBox::information(this, tr("Sound Library"), path.isEmpty() ? tr("No sound library is chosen.") : tr("No score is open."));
-            return;
-            }
-      QString error;
-      std::shared_ptr<SoundLib::Library> library = SoundLib::Library::load(path, &error);
-      if (!library) {
-            QMessageBox::warning(this, tr("Sound Library"), error);
-            return;
-            }
-      score = score->masterScore();
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
-
-      QDialog d(this);
-      d.setWindowTitle(tr("Sound Library Routing: %1").arg(library->name));
-      QVBoxLayout* layout = new QVBoxLayout(&d);
-      QLabel* info = new QLabel(tr("Load each patch on the MIDI output (A: \"%1\", then B, C, D) and channel shown. "
-                                   "Parts without a patch play on MuseScore's built-in synthesizer.")
-                                   .arg(preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE)), &d);
-      info->setWordWrap(true);
-      layout->addWidget(info);
-      QTableWidget* table = new QTableWidget(0, 4, &d);
-      table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("MIDI output"), tr("Channel") });
-      table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-      table->verticalHeader()->hide();
-      for (const Part* part : score->parts()) {
-            const int row = table->rowCount();
-            table->insertRow(row);
-            table->setItem(row, 0, new QTableWidgetItem(part->partName()));
-            auto r = std::find_if(routes.begin(), routes.end(), [part](const SoundLib::Route& rt) { return rt.part == part; });
-            if (r == routes.end()) {
-                  table->setItem(row, 1, new QTableWidgetItem(tr("(built-in synthesizer)")));
-                  continue;
+      std::shared_ptr<const SoundLib::Library> library;
+      if (!path.isEmpty()) {
+            QString error;
+            library = SoundLib::Library::load(path, &error);
+            if (!library) {
+                  QMessageBox::warning(this, tr("Sound Library"), error);
+                  return;
                   }
-            table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
-            table->setItem(row, 2, new QTableWidgetItem(QString(QChar('A' + r->port))));
-            table->setItem(row, 3, new QTableWidgetItem(QString::number(r->channel + 1)));
             }
-      table->resizeColumnsToContents();
-      table->horizontalHeader()->setStretchLastSection(true);
-      layout->addWidget(table);
-      QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &d);
-      connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
-      layout->addWidget(buttons);
-      d.resize(560, 420);
+      const SoundLib::Output output = soundLibraryOutput->currentData().toString() == "midi" ? SoundLib::Output::MIDI : SoundLib::Output::PLUGIN;
+      SoundLibraryDialog d(library, output, this);
       d.exec();
+      }
+
+//---------------------------------------------------------
+//   selectSoundLibraryPlugin
+//---------------------------------------------------------
+
+void PreferenceDialog::selectSoundLibraryPlugin()
+      {
+      QStringList folders = SoundLibraryHost::pluginFolders();
+      const QString path = QFileDialog::getOpenFileName(this, tr("Choose the Sound Library's Plug-in"),
+         folders.isEmpty() ? QString() : folders.first(), tr("VST 3 plug-in") + " (*.vst3)",
+         nullptr, preferences.getBool(PREF_UI_APP_USENATIVEDIALOGS) ? QFileDialog::Options() : QFileDialog::DontUseNativeDialog);
+      if (!path.isEmpty())
+            soundLibraryPlugin->setText(QDir::toNativeSeparators(path));
       }
 
 //---------------------------------------------------------
@@ -1683,6 +1681,8 @@ void PreferenceDialog::apply()
                   restartAudioEngine();
 #endif
             preferences.setPreference(PREF_IO_SOUNDLIBRARY, soundLibrary->currentData().toString());
+            preferences.setPreference(PREF_IO_SOUNDLIBRARY_OUTPUT, soundLibraryOutput->currentData().toString());
+            preferences.setPreference(PREF_IO_SOUNDLIBRARY_PLUGIN, QDir::fromNativeSeparators(soundLibraryPlugin->text().trimmed()));
             }
 
       if (shortcutsChanged) {

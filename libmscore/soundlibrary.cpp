@@ -86,6 +86,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         return fail(QString("%1:%2: bad Switch").arg(path).arg(r.lineNumber()));
                   r.skipCurrentElement();
                   }
+            else if (r.name() == "Plugin") {
+                  // <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3"/>
+                  for (const QString& f : a.value("files").toString().split(';'))
+                        if (!f.trimmed().isEmpty())
+                              lib->plugins.append(f.trimmed());
+                  r.skipCurrentElement();
+                  }
             else if (r.name() == "Dynamics") {
                   if (a.hasAttribute("cc"))
                         lib->dynamicsCC = a.value("cc").toInt();
@@ -203,6 +210,17 @@ Choice choose(const LibInstrument& instrument, const Want& want)
 static std::mutex currentMutex;
 static std::shared_ptr<const Library> currentLibrary;
 static std::atomic<bool> currentActive { false };
+static std::atomic<Output> currentOutput { Output::MIDI };
+
+void setOutput(Output output)
+      {
+      currentOutput = output;
+      }
+
+Output output()
+      {
+      return currentOutput;
+      }
 
 void setCurrent(std::shared_ptr<const Library> library)
       {

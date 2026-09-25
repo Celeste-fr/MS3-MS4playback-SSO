@@ -10,6 +10,8 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
+#include <algorithm>
+
 #include "msynthesizer.h"
 #include "synthesizer.h"
 #include "synthesizergui.h"
@@ -103,6 +105,30 @@ void MasterSynthesizer::play(const NPlayEvent& event, unsigned syntiIdx)
 //   synthNameToIndex
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   addGuest / removeGuest
+//    a synthesizer of another MasterSynthesizer, mixed in dry (the hosted plug-ins, lent to
+//    an audio export: Vst3Synth)
+//---------------------------------------------------------
+
+void MasterSynthesizer::addGuest(Synthesizer* s)
+      {
+      _guests.push_back(s);
+      }
+
+void MasterSynthesizer::removeGuest(Synthesizer* s)
+      {
+      _guests.erase(std::remove(_guests.begin(), _guests.end(), s), _guests.end());
+      }
+
+int MasterSynthesizer::findIndex(const QString& name) const
+      {
+      for (size_t i = 0; i < _synthesizer.size(); ++i)
+            if (_synthesizer[i]->name() == name)
+                  return int(i);
+      return -1;
+      }
+
 int MasterSynthesizer::index(const QString& name) const
       {
       int idx = 0;
@@ -163,6 +189,8 @@ void MasterSynthesizer::allSoundsOff(int channel)
       {
       for (Synthesizer* s : _synthesizer)
             s->allSoundsOff(channel);
+      for (Synthesizer* s : _guests)
+            s->allSoundsOff(channel);
       }
 
 //---------------------------------------------------------
@@ -172,6 +200,8 @@ void MasterSynthesizer::allSoundsOff(int channel)
 void MasterSynthesizer::allNotesOff(int channel)
       {
       for (Synthesizer* s : _synthesizer)
+            s->allNotesOff(channel);
+      for (Synthesizer* s : _guests)
             s->allNotesOff(channel);
       }
 
@@ -263,7 +293,8 @@ void MasterSynthesizer::setSampleRate(float val)
       _sampleRate = val;
       for (Synthesizer* s : _synthesizer) {
             s->init(_sampleRate);
-            connect(s->gui(), SIGNAL(sfChanged()), SLOT(sfChanged()));
+            if (s->gui())                 // (hosted plug-ins have none)
+                  connect(s->gui(), SIGNAL(sfChanged()), SLOT(sfChanged()));
             }
       for (Effect* e : _effectList[0])
             e->init(_sampleRate);
@@ -290,7 +321,7 @@ void MasterSynthesizer::process(unsigned n, float* p)
       if (n > MAX_BUFFERSIZE / 2)
             return;
       for (Synthesizer* s : _synthesizer) {
-            if (s->active())
+            if (s->active() && !s->dry())
                   s->process(n, p, effect1Buffer, effect2Buffer);
             }
 
@@ -306,6 +337,12 @@ void MasterSynthesizer::process(unsigned n, float* p)
             else
                   _effect[1]->process(n, effect1Buffer, p);
             }
+      for (Synthesizer* s : _synthesizer) {
+            if (s->active() && s->dry())
+                  s->process(n, p, effect1Buffer, effect2Buffer);
+            }
+      for (Synthesizer* s : _guests)
+            s->process(n, p, effect1Buffer, effect2Buffer);
       float g = _gain * _boost;
       for (unsigned i = 0; i < n * 2; ++i)
             *p++ *= g;

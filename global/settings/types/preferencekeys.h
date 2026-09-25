@@ -130,6 +130,8 @@
 #define PREF_IO_PORTMIDI_OUTPUTBUFFERCOUNT                  "io/portMidi/outputBufferCount"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE                       "io/portMidi/outputDevice"
 #define PREF_IO_SOUNDLIBRARY                                "io/soundLibrary"
+#define PREF_IO_SOUNDLIBRARY_OUTPUT                         "io/soundLibraryOutput"
+#define PREF_IO_SOUNDLIBRARY_PLUGIN                         "io/soundLibraryPlugin"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_B                     "io/portMidi/outputDeviceB"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_C                     "io/portMidi/outputDeviceC"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_D                     "io/portMidi/outputDeviceD"

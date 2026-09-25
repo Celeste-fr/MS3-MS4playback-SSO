@@ -1,0 +1,74 @@
+//=============================================================================
+//  MuseScore
+//  Music Composition & Notation
+//
+//  Vst3Synth: the hosted plug-ins (vst3plugin.h) as one of the MasterSynthesizer's
+//  synthesizers. A sound library part's events come with its route (SoundLib::Route): the
+//  slot port * 16 + channel is the event's channel here, each slot a plug-in instance of its
+//  own (one library instrument, played on MIDI channel 1). It is "dry": mixed in after the
+//  master effects, as the library brings its own room.
+//
+//  Audio export uses the same instances (their instruments are loaded already): between
+//  beginExport() and endExport() they play for the exporting thread only, in offline mode.
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 3.
+//=============================================================================
+
+#ifndef __VST3SYNTH_H__
+#define __VST3SYNTH_H__
+
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+#include "audio/midi/synthesizer.h"
+#include "vst3plugin.h"
+
+namespace Ms {
+
+class Vst3Synth : public Synthesizer {
+      mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
+      std::vector<std::unique_ptr<Vst3Plugin>> _slots;
+      std::atomic<bool> _exporting { false };
+      std::thread::id _exportThread;
+      QList<MidiPatch*> _patches;
+
+      bool mine() const;
+
+   public:
+      static constexpr int MAX_SLOTS = 64;
+      static const char* NAME;
+
+      Vst3Synth();
+      ~Vst3Synth() override;
+
+      const char* name() const override { return NAME; }
+      bool dry() const override         { return true; }
+      void init(float sampleRate) override;
+
+      bool loadSoundFonts(const QStringList&) override        { return true; }
+      std::vector<SoundFontInfo> soundFontsInfo() const override { return {}; }
+      const QList<MidiPatch*>& getPatchInfo() const override  { return _patches; }
+      SynthesizerGroup state() const override;
+      bool setState(const SynthesizerGroup&) override         { return true; }
+
+      void play(const PlayEvent& event) override;             // channel: the slot
+      void process(unsigned frames, float* out, float*, float*) override;
+      void allSoundsOff(int slot) override;
+      void allNotesOff(int slot) override;
+
+      // GUI thread
+      Vst3Plugin* plugin(int slot) const;
+      void setPlugin(int slot, std::unique_ptr<Vst3Plugin> plugin);
+      std::unique_ptr<Vst3Plugin> takePlugin(int slot);
+      int slotCount() const;
+      void idle();                        // Vst3Plugin::idle of each
+      void beginExport(float sampleRate); // the calling thread plays them, offline
+      void endExport();
+      };
+
+} // namespace Ms
+#endif
