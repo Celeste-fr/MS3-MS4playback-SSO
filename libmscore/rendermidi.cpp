@@ -85,6 +85,8 @@ struct SndConfig {
       int ms4Velocity = 64;
       int ms4Dur = Ms4::HUNDRED;
       int ms4Ts = 0;
+      int ms4Offset = 0;          // ticks the note starts late (arpeggio, grace notes before), taken off its length
+      int ms4Cut = 0;             // ticks taken off the note's end (grace notes after)
 
       SndConfig() {}
       SndConfig(bool use, int c, DynamicsRenderMethod me) : useSND(use), controller(c), method(me) {}
@@ -384,8 +386,9 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   n = next;
                   }
             int p = qBound(0, note->ppitch() + nel[0].pitch(), 127);
-            int on  = tick1 + (ticks * config.ms4Ts) / Ms4::HUNDRED;
-            int off = on + int((qint64(chainTicks) * config.ms4Dur) / Ms4::HUNDRED) - 1;
+            const int offset = qMin(config.ms4Offset, ticks);
+            int on  = tick1 + offset + ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
+            int off = on + int((qint64(chainTicks - offset - config.ms4Cut) * config.ms4Dur) / Ms4::HUNDRED) - 1;
             playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx);
             nels = 0;                             // done; bends below still apply
             }
@@ -983,7 +986,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics);
 
                   auto sit = ctx.sounds.find(instr);
-                  auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts) {
+                  auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0) {
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), level, ctx.snd);
                         // the preset MS4 plays this note with -> the channel slot programmed with it
                         int noteChannel = channel;
@@ -998,6 +1001,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Velocity = r.velocity;
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
+                        config.ms4Offset = offset;
+                        config.ms4Cut = cut;
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
                         if (r.bend && !note->chord()->isGrace() && !note->tieBack()) {
                               const Chord* ch = note->chord();
@@ -1049,16 +1054,100 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         }
 
-                  if (!graceNotesMerged(chord))
-                        for (Chord*& c : chord->graceNotesBefore())
-                              for (const Note* note : c->notes())
-                                    collect(note, Ms4::chordArticulations(c, ctx.dynamics));
-                  for (const Note* note : chord->notes())
-                        collect(note, chordArts);
-                  if (!graceNotesMerged(chord))
-                        for (Chord*& c : chord->graceNotesAfter())
-                              for (const Note* note : c->notes())
-                                    collect(note, Ms4::chordArticulations(c, ctx.dynamics));
+                  // a note of its own at a given start and length (grace notes)
+                  auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length) {
+                        if (!note->play() || note->hidden() || length <= 0)
+                              return;
+                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(start), ctx.snd);
+                        int noteChannel = channel;
+                        if (sit != ctx.sounds.end())
+                              noteChannel = instr->channel(sit->second.channelSlots[sit->second.slotFor(r.arts)].channel)->channel();
+                        events->registerChannel(noteChannel);
+                        const int on = start + tickOffset + (length * r.ts) / Ms4::HUNDRED;
+                        const int off = on + (length * r.dur) / Ms4::HUNDRED - 1;
+                        playNote(events, note, noteChannel, qBound(0, note->ppitch(), 127), qBound(1, r.velocity, 127), on, qMax(on, off), st1->idx());
+                        };
+
+                  // grace notes (GraceChordCtx): the first grace type of the chord (MS4 enum order) is
+                  // played, its grace chords in at most half the principal (2/3 in compound time for
+                  // a lone appoggiatura or after-graces; acciaccaturas and groups at most 1/64 each),
+                  // keeping their proportions; the principal starts after them / ends before them
+                  std::vector<Ms4::ArtRef> principalArts = chordArts;
+                  int principalOffset = 0;
+                  int principalCut = 0;
+                  {
+                        Ms4::Art graceType = Ms4::Art::COUNT;
+                        for (const Ms4::ArtRef& a : chordArts)
+                              if ((a.art == Ms4::Art::PreAppoggiatura || a.art == Ms4::Art::PostAppoggiatura || a.art == Ms4::Art::Acciaccatura)
+                                  && a.art < graceType)
+                                    graceType = a.art;
+                        if (graceType != Ms4::Art::COUNT) {
+                              const bool before = graceType != Ms4::Art::PostAppoggiatura;
+                              QVector<Chord*> graces;
+                              for (Chord* g : before ? chord->graceNotesBefore() : chord->graceNotesAfter()) {
+                                    bool playable = false;
+                                    for (Note* n : g->notes())
+                                          playable |= n->play();
+                                    if (playable)
+                                          graces.push_back(g);
+                                    }
+                              const int nominal = chord->actualTicks().ticks();
+                              const Fraction ts = score->sigmap()->timesig(tick).nominal();
+                              const bool compound = ts.numerator() % 3 == 0 && ts.numerator() > 3;
+                              double available;
+                              if (graceType == Ms4::Art::PostAppoggiatura || (graceType == Ms4::Art::PreAppoggiatura && graces.size() == 1))
+                                    available = (compound && nominal > DIVISION / 2) ? 2.0 * nominal / 3 : 0.5 * nominal;
+                              else
+                                    available = std::min(30.0 * graces.size(), 0.5 * nominal);     // DEMISEMIQUAVER_TICKS / 2 each
+                              double total = 0;
+                              for (Chord* g : graces)
+                                    total += g->durationTypeTicks().ticks();
+                              if (total > 0) {
+                                    const double actual = std::min(available, total);
+                                    const double factor = actual / total;
+                                    principalArts.erase(std::remove_if(principalArts.begin(), principalArts.end(),
+                                          [graceType](const Ms4::ArtRef& a) { return a.art == graceType; }), principalArts.end());
+                                    if (before)
+                                          principalOffset = int(std::round(actual));
+                                    else
+                                          principalCut = int(std::round(actual));
+                                    double t = before ? tick.ticks() : tick.ticks() + nominal - actual;
+                                    for (Chord* g : graces) {
+                                          const int length = int(std::round(factor * g->durationTypeTicks().ticks()));
+                                          for (const Note* note : g->notes())
+                                                renderAt(note, chordArts, int(std::round(t)), length);
+                                          t += length;
+                                          }
+                                    }
+                              }
+                  }
+
+                  Arpeggio* arp = chord->arpeggio();
+                  if (arp && arp->playArpeggio() && chord->notes().size() > 1) {
+                        // ArpeggioRenderer: by pitch, a step later each (the note's length / the number
+                        // of notes, at most 60 ms, times the stretch), each shortened by its delay
+                        std::map<int, const Note*> byPitch;
+                        for (const Note* note : chord->notes())
+                              byPitch.emplace(note->pitch(), note);
+                        const int n = int(chord->notes().size());
+                        const double bps = score->tempomap()->tempo(tick.ticks());
+                        const double durMs = chord->actualTicks().ticks() / (bps * DIVISION) * 1000.0;
+                        const double stepMs = std::min(durMs / n, 60.0);
+                        const bool up = arp->arpeggioType() != ArpeggioType::DOWN && arp->arpeggioType() != ArpeggioType::DOWN_STRAIGHT;
+                        std::vector<const Note*> order;
+                        for (const auto& bp : byPitch)
+                              order.push_back(bp.second);
+                        if (!up)
+                              std::reverse(order.begin(), order.end());
+                        for (int i = 0; i < int(order.size()); ++i) {
+                              const double offsetMs = stepMs * i * arp->Stretch();
+                              collect(order[i], principalArts, principalOffset + int(std::round(offsetMs / 1000.0 * bps * DIVISION)), principalCut);
+                              }
+                        }
+                  else {
+                        for (const Note* note : chord->notes())
+                              collect(note, principalArts, principalOffset, principalCut);
+                        }
                   }
             }
       }

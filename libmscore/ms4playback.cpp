@@ -12,6 +12,7 @@
 
 #include <cmath>
 
+#include "arpeggio.h"
 #include "articulation.h"
 #include "chord.h"
 #include "chordline.h"
@@ -679,6 +680,33 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
                         case TremoloType::R32: arts.push_back({ Art::Tremolo32nd, false }); break;
                         case TremoloType::R64: arts.push_back({ Art::Tremolo64th, false }); break;
                         case TremoloType::BUZZ_ROLL: arts.push_back({ Art::TremoloBuzz, false }); break;
+                        default: break;
+                        }
+                  }
+            }
+      // grace notes (GraceNotesMetaParser): their type is an articulation of the principal chord
+      for (const Chord* g : chord->graceNotes()) {
+            switch (g->noteType()) {
+                  case NoteType::ACCIACCATURA: arts.push_back({ Art::Acciaccatura, false }); break;
+                  case NoteType::APPOGGIATURA:
+                  case NoteType::GRACE4:
+                  case NoteType::GRACE16:
+                  case NoteType::GRACE32:      arts.push_back({ Art::PreAppoggiatura, false }); break;
+                  case NoteType::GRACE8_AFTER:
+                  case NoteType::GRACE16_AFTER:
+                  case NoteType::GRACE32_AFTER: arts.push_back({ Art::PostAppoggiatura, false }); break;
+                  default: break;
+                  }
+            }
+      // arpeggio (ArpeggioMetaParser)
+      if (Arpeggio* a = chord->arpeggio()) {
+            if (a->playArpeggio()) {
+                  switch (a->arpeggioType()) {
+                        case ArpeggioType::NORMAL:        arts.push_back({ Art::Arpeggio, false }); break;
+                        case ArpeggioType::UP:            arts.push_back({ Art::ArpeggioUp, false }); break;
+                        case ArpeggioType::DOWN:          arts.push_back({ Art::ArpeggioDown, false }); break;
+                        case ArpeggioType::UP_STRAIGHT:   arts.push_back({ Art::ArpeggioStraightUp, false }); break;
+                        case ArpeggioType::DOWN_STRAIGHT: arts.push_back({ Art::ArpeggioStraightDown, false }); break;
                         default: break;
                         }
                   }
