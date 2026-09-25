@@ -111,9 +111,13 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  (Preferences > I/O > Sound library > Show routing).',
 '',
 '  The UACC values come from a community-made articulation bank for this library (Reaticulate',
-'  user bank "Spitfire - Symphony Orchestra", github.com/jtackaberry/reaticulate) and have not',
-'  been checked against the library. Each patch shows its numbers: if one differs, correct',
-'  its value here. Violins 2 and Solo Violin 2 are assumed to match Violins 1 / Solo Violin 1.',
+'  user bank "Spitfire - Symphony Orchestra", github.com/jtackaberry/reaticulate), checked',
+'  against Spitfire\'s own Cubase expression maps for Symphonic Strings, Brass and Woodwinds',
+'  (legacy downloads): the orchestral patches agree with them, with Spitfire\'s additions',
+'  (Legato 20 in woodwinds and brass …) and corrections applied. Solo strings and harp have',
+'  no Spitfire map, and a few articulations are in no Spitfire map (tools/soundlibraries/',
+'  check_spitfire_expressionmaps.py lists them). Each patch shows its numbers: if one',
+'  differs, correct it in tools/soundlibraries/gen_spitfire_sso.py.',
 '',
 '  techniques: long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato',
 '              bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3 fall rip',
@@ -124,21 +128,45 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  <Switch type="cc" number="32"/>',
 '  <Dynamics cc="1" expression="127"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>']
+# Corrections from Spitfire's own Cubase expression maps for SSS / SSB / SSW (legacy downloads,
+# CC32 = UACC; see check_spitfire_expressionmaps.py), where they differ from the community bank
+SPITFIRE_ADD = {
+    # Legato (UACC 20) in the woodwinds' and brass techniques patches
+    **{n: [('Legato', 20, 'legato', '')] for n in [
+        'Piccolo', 'Flute Solo', 'Flutes a2', 'Alto Flute', 'Bass Flute', 'Oboe Solo', 'Oboes a2',
+        'Cor Anglais', 'Clarinet Solo', 'Clarinets a2', 'Bass Clarinet', 'Contrabass Clarinet',
+        'Bassoon Solo', 'Bassoons a2', 'Contrabassoon', 'Horn Solo', 'Horns a2', 'Horns a6',
+        'Trumpet Solo', 'Trumpets a2', 'Trumpets a6', 'Tenor Trombones a2', 'Trombones a6',
+        'Bass Trombones a2', 'Tuba Solo']},
+}
+SPITFIRE_ADD['Trumpets a6'] = SPITFIRE_ADD['Trumpets a6'] + [('Trill (Minor 2nd)', 70, 'trill-m2', ''), ('Trill (Major 2nd)', 71, 'trill-M2', '')]
+SPITFIRE_ADD['Violins 2'] = [('Trem CS', 12, 'tremolo', 'muted')]
+SPITFIRE_DROP = {('Violins 2', 'Long Sul Tasto'), ('Violins 2', 'Trill (Minor 3rd'), ('Violins 2', 'Trill (Major 3rd)')}
+SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
+
+def articulation(n, v, t, m):
+    a=f'    <Articulation name={q(n)} value="{v}" techniques={q(t)}'
+    if m: a+=f' modifiers={q(m)}'
+    return a+'/>'
+
 for bank,name,ids,pn in I:
     attrs=f'name={q(name)} ids={q(ids)}'
     if pn: attrs+=f' partName={q(pn)}'
     out.append(f'  <Instrument {attrs}>')
     seen=set()
     for n,v in banks[bank]:
-        if n not in T or n in seen: continue
+        if n not in T or n in seen or (name, n) in SPITFIRE_DROP: continue
         seen.add(n)
         t,m=T[n]
         # a patch with its own staccato: staccato dots play it, spiccato stays for staccatissimo
         if n == 'Spiccato' and any(x == 'staccato' for x, _ in banks[bank]):
             t = 'spiccato staccatissimo'
-        a=f'    <Articulation name={q(n.replace("Trill (Minor 3rd","Trill (Minor 3rd)").replace("))",")").replace("Tremelo","Tremolo"))} value="{v}" techniques={q(t)}'
-        if m: a+=f' modifiers={q(m)}'
-        out.append(a+'/>')
+        shown = n.replace("Trill (Minor 3rd","Trill (Minor 3rd)").replace("))",")").replace("Tremelo","Tremolo")
+        if (name, n) in SPITFIRE_RENAME:
+            shown, t, m = SPITFIRE_RENAME[(name, n)]
+        out.append(articulation(shown, v, t, m))
+    for n, v, t, m in SPITFIRE_ADD.get(name, []):
+        out.append(articulation(n, v, t, m))
     out.append('  </Instrument>')
 out.append('</SoundLibrary>')
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')
