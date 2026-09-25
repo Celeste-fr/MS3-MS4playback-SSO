@@ -135,8 +135,11 @@ switch value of each articulation. For example:
 - `techniques` lists what the articulation can play: `long legato short staccatissimo spiccato
   tenuto marcato longmarcato pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
   fall rip`.
-- `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre`. When no variant
-  matches, the plain articulation plays.
+- `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup
+  pdlt multitongue`. When no variant matches, the plain articulation plays. Staff text sets them:
+  "sul pont.", "sul tasto", "flautando", "cuivré", "sul G", "sul C", "bells up" ("campana in
+  aria", "pavillons en l'air"), "près de la table" ("pdlt"), "double tongue" / "triple tongue";
+  "ord." ends them all.
 - `partName` on an `Instrument` is a regular expression. That instrument is preferred for parts
   whose name matches it.
 - For a keyswitch, `value` is the key's MIDI pitch. An `Instrument` can override `<Switch>` with

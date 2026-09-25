@@ -279,7 +279,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
 
       // back to normal first: "ord." may come with a new technique ("ord. pizz.")
       if (has("\\b(ord|ordin|ordinario|ordinary|nat|naturale|natural|norm|normale|normal|modo ordinario)\\b")) {
-            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre" })
+            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue" })
                   s.modifiers.removeAll(m);
             s.harmonics = false;
             s.tremolo = false;
@@ -308,6 +308,23 @@ void TextTechniques::apply(const QString& text, TextState& s)
             addModifier(s, "flautando");
       if (has("\\b(cuivre|brassy)"))
             addModifier(s, "cuivre");
+      // on one string (the strings' lowest: violins G, violas and celli C)
+      if (has("\\bsul\\s+g\\b")) {
+            addModifier(s, "sulg");
+            s.modifiers.removeAll("sulc");
+            }
+      if (has("\\bsul\\s+c\\b")) {
+            addModifier(s, "sulc");
+            s.modifiers.removeAll("sulg");
+            }
+      if (has("\\bbells\\s+(down|normal)\\b"))
+            s.modifiers.removeAll("bellsup");
+      else if (has("\\b(bells\\s+up|bells\\s+in\\s+the\\s+air|campana\\s+in\\s+aria|campane\\s+in\\s+aria|pavillons?\\s+en\\s+l.air|schalltrichter\\s+(auf|hoch))"))
+            addModifier(s, "bellsup");
+      if (has("\\b(pres\\s+de\\s+la\\s+table|p\\.?\\s*d\\.?\\s*l\\.?\\s*t\\b)"))
+            addModifier(s, "pdlt");
+      if (has("\\b(multi|double|triple)[\\s-]*tongu") || has("\\b(doppel|tripel)zunge"))
+            addModifier(s, "multitongue");
       if (has("\\bharm(?!on)"))
             s.harmonics = true;
       if (has("\\b(non|senza)\\s+(trem|flz|flutter)"))

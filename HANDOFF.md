@@ -21,14 +21,14 @@ made. The commit messages on this branch explain each step in detail.
 
 ## What the owner is doing now
 
-The owner has been asked to do the following, then run *Check* and send the result zip:
+The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2
+and 4 of the last request are done (Oboe Solo and Solo Cello pass; the scanned articulations
+are mapped where notation can ask for them). Still open:
 
-1. Set Oboe Solo to *UACC & UI only* (it was on "Normal keyswitching"), then *Set up…* again.
-2. Set up Solo Cello again. It played nothing in the last run.
-3. Add the patches the map lacks, such as Trombones a5, with *Add a patch…* and *Set up…*.
-   Added patches are always scanned.
-4. Optionally tick *Scan every value* to find articulations the map lacks, such as Flute's
-   Long Hollow and Multi Tongued.
+- Patches the map lacks (Trombones a5 …). The owner has many and found *Add a patch…* one by
+  one too slow; they were asked for a list of their SSO `.nki` files (PowerShell
+  `Get-ChildItem -Recurse -Filter *.nki`), to tell which are instruments the map lacks rather
+  than single-articulation patches of instruments it has.
 
 **Open question:** the owner mentioned a piano. SSO has no piano as far as I know, but I'm not
 sure. Ask which library it comes from before mapping it. A different library needs its own

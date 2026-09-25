@@ -97,6 +97,22 @@ void TestSoundLibrary::textTechniques()
       QVERIFY(s.modifiers.contains("cuivre"));
       SoundLib::TextTechniques::apply("accord", s);       // no "ord" inside a word
       QVERIFY(s.modifiers.contains("cuivre"));
+      SoundLib::TextTechniques::apply("sul G", s);
+      QVERIFY(s.modifiers.contains("sulg"));
+      SoundLib::TextTechniques::apply("sul C", s);
+      QVERIFY(s.modifiers.contains("sulc") && !s.modifiers.contains("sulg"));
+      SoundLib::TextTechniques::apply("Bells up", s);
+      QVERIFY(s.modifiers.contains("bellsup"));
+      SoundLib::TextTechniques::apply("bells down", s);
+      QVERIFY(!s.modifiers.contains("bellsup"));
+      SoundLib::TextTechniques::apply("Près de la table", s);
+      QVERIFY(s.modifiers.contains("pdlt"));
+      SoundLib::TextTechniques::apply("triple tongue", s);
+      QVERIFY(s.modifiers.contains("multitongue"));
+      SoundLib::TextTechniques::apply("ord.", s);
+      for (const char* m : { "sulc", "pdlt", "multitongue", "cuivre" })
+            QVERIFY(!s.modifiers.contains(m));
+      SoundLib::TextTechniques::apply("Cuivré", s);
       SoundLib::TextTechniques::apply("col legno", s);
       QVERIFY(s.colLegno);
       SoundLib::TextTechniques::apply("arco", s);
@@ -169,6 +185,25 @@ void TestSoundLibrary::spitfireMap()
       // every instrument can play a note without marks
       for (const SoundLib::LibInstrument& li : lib->instruments)
             QVERIFY2(SoundLib::choose(li, SoundLib::Want { { "long" }, {} }), qPrintable(li.name));
+
+      // staff-text variants: the variant where the patch has it, else the plain articulation
+      auto valueFor = [&](const QString& name, const SoundLib::Want& want) {
+            for (const SoundLib::LibInstrument& li : lib->instruments) {
+                  if (li.name == name) {
+                        const SoundLib::Choice c = SoundLib::choose(li, want);
+                        return c ? c.articulation->value : -1;
+                        }
+                  }
+            return -2;
+            };
+      QCOMPARE(valueFor("Horns a2", { { "long", "legato" }, { "bellsup" } }), 17);
+      QCOMPARE(valueFor("Horns a2", { { "short", "staccatissimo" }, { "bellsup" } }), 59);
+      QCOMPARE(valueFor("Horns a6", { { "long", "legato" }, { "bellsup" } }), 1);
+      QCOMPARE(valueFor("Violas", { { "long", "legato" }, { "sulc" } }), 112);
+      QCOMPARE(valueFor("Celli", { { "long", "legato" }, { "sulc" } }), 1);
+      QCOMPARE(valueFor("Harp", { { "long", "legato" }, { "pdlt" } }), 18);
+      QCOMPARE(valueFor("Oboe Solo", { { "tremolo" }, { "multitongue" } }), 75);
+      QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, {} }), 1);
       }
 
 //---------------------------------------------------------

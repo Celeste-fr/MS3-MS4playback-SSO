@@ -48,7 +48,8 @@ namespace SoundLib {
 //    bases:     long legato short staccatissimo spiccato tenuto marcato longmarcato
 //               pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
 //               fall rip
-//    modifiers: muted harmonics sulpont sultasto flautando cuivre
+//    modifiers: muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup pdlt
+//               multitongue
 //---------------------------------------------------------
 
 enum class SwitchType : signed char { CC, KEYSWITCH, PROGRAM };

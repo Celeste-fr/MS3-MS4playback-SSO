@@ -1178,6 +1178,27 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             base.save(folder + "/" + fileBase + " (window).png");
             }
 
+      // a value the scan took for an articulation the map lacks, but that plays nothing at every
+      // pitch: in SSO that is "None" with some other part of the window changed (the RELEASE
+      // slider stays where the last short articulation put it), not a missing articulation
+      std::vector<int> silentNotInMap;
+      for (const ArticulationCheck::Result& r : report.results) {
+            auto it = std::find(notInMap.begin(), notInMap.end(), r.value);
+            if (it != notInMap.end() && r.verdict == ArticulationCheck::Verdict::SILENT) {
+                  notInMap.erase(it);
+                  silentNotInMap.push_back(r.value);
+                  }
+            }
+      if (out.contains("notInMap")) {
+            QJsonArray extra, silent;
+            for (int v : notInMap)
+                  extra.append(v);
+            for (int v : silentNotInMap)
+                  silent.append(v);
+            out["notInMap"] = extra;
+            out["silentNotInMap"] = silent;
+            }
+
       // results
       QJsonArray arts;
       int counts[5] = { 0, 0, 0, 0, 0 };
@@ -1202,6 +1223,8 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             if (r.sameAs >= 0)
                   a["soundsLike"] = r.sameAs;
             arts.append(a);
+            if (std::find(silentNotInMap.begin(), silentNotInMap.end(), r.value) != silentNotInMap.end())
+                  continue;
             ++counts[int(r.verdict)];
             if (r.verdict == ArticulationCheck::Verdict::SILENT)
                   problems << QString("%1 (%2): silent at every pitch tried").arg(names[r.value].join(" / ")).arg(r.value);
@@ -1215,6 +1238,12 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             for (int v : notInMap)
                   l << QString::number(v);
             problems << tr("%1 articulations the map lacks, values %2 (see the sheet for their names)").arg(notInMap.size()).arg(l.join(", "));
+            }
+      if (!silentNotInMap.empty()) {
+            QStringList l;
+            for (int v : silentNotInMap)
+                  l << QString::number(v);
+            problems << tr("%1 values look different from \"no articulation\" but play nothing, most likely none: %2 (see the sheet)").arg(silentNotInMap.size()).arg(l.join(", "));
             }
       // passed: every value of the map switches, and shows an articulation
       bool passed = report.switching && noneInMap.empty() && !mapValues.empty();

@@ -244,6 +244,21 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     articulations it lacks (Flute: Long Hollow, Multi Tongued): hence *Add a patch…* and
     the scan.
 
+- Fifth run, all 42 patches with *Scan every value*:
+  - Oboe Solo (now on UACC) and Solo Cello (set up again) pass; every mapped value of every
+    patch switches and shows the map's name (the OCR's "Large"/"Terait" are Long/Tenuto).
+  - Every articulation the scan found is in the Reaticulate bank with the same UACC number.
+    The map had left them out because no notation asked for them. Now in the map, through
+    new staff-text modifiers: Long Sul C (Violas), Bells up Long/Crotchet/Staccato (Horns a2),
+    PDLT (Harp), Multi Tongued (winds and brass, "double/triple tongue" + tremolo). Left out:
+    Violins' Long Sul G and Celli's Long Sul C (silent in Kontakt at every pitch tried), and
+    the ones no notation names (Long CS Blend, Long (Rachm.), Short 0.5, Short Brushed, the
+    measured tremolos, Long Hollow, Overblown, Mariachi, FX, Slid).
+  - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
+    the last short articulation put it, so their pictures differ from the first "None". They
+    are silent at every pitch; the report now lists such values apart ("most likely none",
+    `silentNotInMap` in results.json) instead of as articulations the map lacks.
+
 A value a SSO patch lacks: its window shows "None" and it plays nothing (no default).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. Start it with *Run workflow* (Actions › Test: Sound library on Windows), or

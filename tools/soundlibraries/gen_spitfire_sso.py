@@ -47,6 +47,13 @@ T={
  'Trill (Minor 2nd)':('trill-m2',''), 'Trill (Major 2nd)':('trill-M2',''),
  'Trill (Minor 3rd':('trill-m3',''), 'Trill (Minor 3rd)':('trill-m3',''), 'Trill (Major 3rd)':('trill-M3',''),
  'Rip':('rip',''), 'Fall':('fall',''),
+ # variants staff text asks for (sul C, bells up, près de la table, double/triple tongue);
+ # all shown by name and UACC number in Kontakt: Check articulations with a scan, 2026-09-25
+ 'Long Sul G':('long legato','sulg'), 'Long Sul C':('long legato','sulc'),
+ 'Bells up Long':('long legato','bellsup'), 'Bells up Crotchet':('tenuto','bellsup'),
+ 'Bells up Staccato':('short staccatissimo','bellsup'),
+ 'PDLT':('long legato short','pdlt'),
+ 'Multi Tongued':('tremolo','multitongue'),
 }
 A2=r'\ba\s*2\b|\b1\s*[.&+-]?\s*2\b|\bI\s*[.&+-]?\s*II\b'
 A6=r'\ba\s*[3-8]\b|\btutti\b|\bsection\b'
@@ -116,12 +123,13 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  (legacy downloads), with corrections, and checked in Kontakt itself with MuseScore\'s',
 '  View > Sound Library > Check articulations (2026-09-25, SSO in Kontakt 8): every value',
 '  of the orchestral, solo string and harp patches selects the articulation named here, by',
-'  the patch\'s own name and UACC number (Solo Cello and Oboe Solo still to be checked).',
+'  the patch\'s own name and UACC number.',
 '  If one differs, correct it in tools/soundlibraries/gen_spitfire_sso.py.',
 '',
 '  techniques: long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato',
 '              bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3 fall rip',
-'  modifiers:  muted harmonics sulpont sultasto flautando cuivre',
+'  modifiers:  muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup pdlt',
+'              multitongue',
 '  An instrument with a partName is preferred for parts whose name matches it (a2, a6 …).',
 '-->',
 '<SoundLibrary name="Spitfire Symphony Orchestra">',
@@ -136,6 +144,9 @@ SPITFIRE_ADD = {}
 # active technique" and play nothing: Check articulations, 2026-09-25)
 SPITFIRE_ADD['Violins 2'] = [('Trem CS', 12, 'tremolo', 'muted')]
 SPITFIRE_DROP = {('Violins 2', 'Long Sul Tasto'), ('Violins 2', 'Trill (Minor 3rd'), ('Violins 2', 'Trill (Major 3rd)')}
+# Long Sul G / Sul C that played nothing in the owner's Kontakt at every pitch the check tried
+# (Violas' Long Sul C did play), 2026-09-25
+SPITFIRE_DROP |= {('Violins 1', 'Long Sul G'), ('Violins 2', 'Long Sul G'), ('Celli', 'Long Sul C')}
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
 
 def articulation(n, v, t, m):
