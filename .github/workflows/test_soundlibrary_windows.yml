@@ -3,16 +3,17 @@ name: 'Test: Sound library on Windows'
 # Builds MuseScore with MSVC (as "Build: Windows" does), runs the sound library tests
 # (tst_soundlibrary: the VST 3 host with the MS Test Synth plug-in), and uploads the
 # installed MuseScore for trying it. Manual only: Actions -> this workflow -> Run workflow
-# (once the workflow is on the default branch), or push a tag test-soundlibrary-windows-<n>
-# (runs the workflow of the tagged commit, from any branch).
+# (once the workflow is on the default branch), or a push to a claude/ branch whose last
+# commit message contains [windows-build]. Other pushes skip the job (no runner minutes).
 on:
   workflow_dispatch:
   push:
-    tags:
-      - 'test-soundlibrary-windows-*'
+    branches:
+      - 'claude/**'
 
 jobs:
   windows_x64:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[windows-build]') }}
     runs-on: windows-2022
     steps:
     - name: Clone repository
