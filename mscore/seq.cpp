@@ -48,6 +48,8 @@
 #include "libmscore/segment.h"
 #include "libmscore/sig.h"
 #include "libmscore/staff.h"
+#include "libmscore/soundlibrary.h"
+#include "soundlibraryhost.h"
 #include "libmscore/tempo.h"
 #include "libmscore/tie.h"
 #include "libmscore/utils.h"
@@ -422,6 +424,11 @@ void Seq::start()
             }
 
       mscore->moveControlCursor();
+
+      // the sound library's plug-ins for this score (loaded once, then kept)
+      QString libraryError;
+      if (!SoundLibraryHost::instance()->sync(cs, &libraryError))
+            mscore->showMessage(libraryError, 10000);
 
       allowBackgroundRendering = true;
       collectEvents(getPlayStartUtick());
@@ -2301,6 +2308,21 @@ void Seq::stopNotes(int channel, bool realTime)
             if (cs->midiChannel(channel) != 9)
                   send(NPlayEvent(ME_PITCHBEND,  channel, 0, 64));
             }
+      // the sound library's hosted plug-ins, or its MIDI outs: sustain and all notes off on
+      // every channel
+      // (through putEvent, in the audio thread, like the notes)
+      if (channel == -1 && SoundLib::active()
+          && (SoundLib::output() == SoundLib::Output::PLUGIN || (_driver && _driver->canOutputMidi()))) {
+            for (int port = 0; port < SoundLib::MAX_PORTS; ++port) {
+                  for (int ch = 0; ch < 16; ++ch) {
+                        for (int ctrl : { CTRL_SUSTAIN, CTRL_ALL_NOTES_OFF }) {
+                              NPlayEvent ev(ME_CONTROLLER, 0, ctrl, 0);
+                              ev.setExternal(port, ch);
+                              send(ev);
+                              }
+                        }
+                  }
+            }
       if (cachedPrefs.useAlsaAudio || cachedPrefs.useJackAudio || cachedPrefs.usePulseAudio || cachedPrefs.usePortAudio) {
             guiToSeq(SeqMsg(SeqMsgId::ALL_NOTE_OFF, channel));
             }
@@ -2513,12 +2535,35 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
             return;
             }
 
+      const bool midiOut = _driver != 0 && (cachedPrefs.useJackMidi || cachedPrefs.useAlsaAudio || cachedPrefs.usePortAudio);
+
+      // a sound library part (soundlibrary.h): to its hosted plug-in (Vst3Synth, the route as
+      // the channel), or to MIDI out only, or without its articulation switches to the
+      // synthesizer while there is neither
+      if (event.isExternal() && SoundLib::output() == SoundLib::Output::PLUGIN) {
+            const int vst = _synti->findIndex("VST3");
+            if (vst >= 0) {
+                  NPlayEvent e(event);
+                  e.setChannel(event.extPort() * 16 + event.extChannel());
+                  _synti->play(e, vst);
+                  return;
+                  }
+            }
+      if (event.isExternal()) {
+            if (midiOut && _driver->canOutputMidi()) {
+                  _driver->putEvent(event, framePos);
+                  return;
+                  }
+            if (event.librarySwitch())
+                  return;
+            }
+
       // audio
       int syntiIdx= _synti->index(cs->midiMapping(channel)->articulation()->synti());
       _synti->play(event, syntiIdx);
 
-      // midi
-      if (_driver != 0 && (cachedPrefs.useJackMidi || cachedPrefs.useAlsaAudio || cachedPrefs.usePortAudio))
+      // midi (with a sound library, MIDI out is the library's: its routes use the channels)
+      if (midiOut && !event.isExternal() && !SoundLib::active())
             _driver->putEvent(event, framePos);
       }
 

@@ -43,6 +43,7 @@ class PortMidiDriver : public MidiDriver {
       QTimer* timer;
       PmStream* inputStream;
       PmStream* outputStream;
+      PmStream* extraOutputStreams[3] { nullptr, nullptr, nullptr };    // MIDI out B, C, D (sound library ports)
 
    public:
       PortMidiDriver(Seq*);
@@ -60,6 +61,7 @@ class PortMidiDriver : public MidiDriver {
       int getDeviceOut(const QString& interfaceAndName);
       PmStream* getInputStream() { return inputStream; }
       PmStream* getOutputStream() { return outputStream; }
+      PmStream* getOutputStream(int port) { return port == 0 ? outputStream : (port >= 1 && port <= 3 ? extraOutputStreams[port - 1] : nullptr); }
       bool canOutput() { return outputStream != 0; }
       bool isSameCoreMidiIacBus(const QString& inInterfaceAndName, const QString& outInterfaceAndName);
       int getInputId() { return inputId; }

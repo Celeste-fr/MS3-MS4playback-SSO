@@ -53,6 +53,7 @@ class MasterSynthesizer : public QObject {
       std::atomic<bool> lock1      { false };
       std::atomic<bool> lock2      { true  };
       std::vector<Synthesizer*> _synthesizer;
+      std::vector<Synthesizer*> _guests;        // not owned (addGuest)
       std::vector<Effect*> _effectList[MAX_EFFECTS];
       Effect* _effect[MAX_EFFECTS]  { nullptr, nullptr };
 
@@ -97,6 +98,9 @@ class MasterSynthesizer : public QObject {
       bool setState(const SynthesizerState&);
 
       Synthesizer* synthesizer(const QString& name);
+      int findIndex(const QString& name) const;         // -1: none of that name
+      void addGuest(Synthesizer*);
+      void removeGuest(Synthesizer*);
       const std::vector<Effect*>& effectList(int ab) const { return _effectList[ab]; }
       const std::vector<Synthesizer*> synthesizer() const { return _synthesizer; }
       bool hasSoundFontsLoaded() const;

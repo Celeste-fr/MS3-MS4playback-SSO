@@ -87,6 +87,8 @@ set (SOURCE_LIB
       )
 
 add_library(testutils STATIC ${SOURCE_LIB})
+# for ft2build.h (libmscore/sym.h): the bundled freetype target carries its include path
+target_link_libraries(testutils ${FREETYPE_LIBRARIES})
 
 # testutils version that is linked to a full mscoreapp target
 add_library(testutils_mscoreapp STATIC
@@ -174,6 +176,7 @@ subdirs (
         libmscore/remove
         libmscore/repeat
         libmscore/rhythmicGrouping
+        libmscore/soundlibrary
         libmscore/selectionfilter
         libmscore/selectionrangedelete
         libmscore/unrollrepeats

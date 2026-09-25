@@ -1,0 +1,111 @@
+//=============================================================================
+//  MuseScore
+//  Music Composition & Notation
+//
+//  ArticulationCheckDialog (Sound Library… › Check articulations…): checks the library's
+//  map against the plug-in itself, for every patch that has a setup, with one click.
+//
+//    Set up…   a patch's plug-in window, on an instance of its own (no score needed): load
+//              the patch, set its switching (Spitfire: UACC), close it; the setup is kept
+//    Check     for each chosen patch, an instance with its setup:
+//              - its window after each articulation value of the map, grabbed; the part of
+//                the window that changes with the switches goes on a contact sheet, labelled
+//                with the value and the map's articulation, to read which one it selected
+//              - offline, whether each value switches the plug-in at all (ArticulationCheck,
+//                audio/vst3/articulationcheck.h)
+//              written to Documents/MuseScore Sound Library Check/<library> <date>/ (sheets,
+//              results.json, summary.txt) and to a .zip of it next to the folder, which opens
+//    scan      (Scan every value, and patches added with "Add a patch…" that the map lacks)
+//              the pictures of all 128 values of the switch: the one that most of them show
+//              is the patch's "no articulation" (SSO: "None"); the others are its
+//              articulations. Reports those the map lacks and map values that show none, and
+//              listens to all it found
+//    memory    each patch's last check is kept (<data>/soundlibraries/<library>/checks.json):
+//              its setup, its map entries and the check's version, and whether it passed.
+//              A patch needs checking again only when one of those changed, or its last
+//              check failed to run; "Tick what needs checking" ticks just those
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 3.
+//=============================================================================
+
+#ifndef __SOUNDLIBRARYCHECK_H__
+#define __SOUNDLIBRARYCHECK_H__
+
+#include <memory>
+
+#include <QDialog>
+#include <QImage>
+#include <QJsonArray>
+#include <QJsonObject>
+
+#include "libmscore/soundlibrary.h"
+
+class QCheckBox;
+class QLabel;
+class QProgressBar;
+class QPushButton;
+class QTableWidget;
+
+namespace Ms {
+
+class ArticulationCheckDialog : public QDialog {
+      Q_OBJECT
+
+      std::shared_ptr<const SoundLib::Library> _library;
+
+      // the table's rows: the map's patches, then those the owner added (not in the map yet;
+      // their check is always a scan)
+      struct Row {
+            const SoundLib::LibInstrument* instrument;
+            bool added;
+            };
+      std::vector<Row> _rows;
+      std::vector<std::unique_ptr<SoundLib::LibInstrument>> _added;
+
+      QLabel* _info;
+      QCheckBox* _scan;
+      QPushButton* _add;
+      QTableWidget* _table;
+      QLabel* _status;
+      QProgressBar* _progress;
+      QPushButton* _check;
+      QPushButton* _all;
+      QPushButton* _close;
+      bool _running { false };
+      bool _cancel { false };
+      QWidget* _setupWindow { nullptr };
+
+      QJsonObject _records;         // the last check of each patch (checks.json)
+
+      void rebuild();
+      void setUp(int index);
+      void check();
+      bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
+      QString recordsFile() const;
+      QString addedFile() const;
+      void loadAdded();
+      void saveAdded() const;
+      void addPatch();
+      void removePatch(const QString& name);
+      void loadRecords();
+      void saveRecords() const;
+      void record(const QString& patch, const QByteArray& setup, bool ok, const QString& line, bool scanned);
+      bool needsCheck(int index, QString* status) const;
+      QByteArray setupHash(const QString& patch) const;
+
+   protected:
+      void closeEvent(QCloseEvent*) override;
+      void reject() override;
+
+   public:
+      ArticulationCheckDialog(std::shared_ptr<const SoundLib::Library> library, QWidget* parent = nullptr);
+
+      // for the contact sheets (public for the tests)
+      static QByteArray mapHash(const SoundLib::LibInstrument& instrument);
+      static QRect changedRegion(const QImage& base, const QImage& again, const std::vector<QImage>& shots);
+      static int testPitch(const SoundLib::LibInstrument& instrument);
+      };
+
+} // namespace Ms
+#endif

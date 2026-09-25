@@ -1,0 +1,61 @@
+name: 'Test: Sound library on Windows'
+
+# Builds MuseScore with MSVC (as "Build: Windows" does), runs the sound library tests
+# (tst_soundlibrary: the VST 3 host with the MS Test Synth plug-in), and uploads the
+# installed MuseScore for trying it. Manual only: Actions -> this workflow -> Run workflow
+# (once the workflow is on the default branch), or a push to a claude/ branch whose last
+# commit message contains [windows-build]. Other pushes skip the job (no runner minutes).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'claude/**'
+
+jobs:
+  windows_x64:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[windows-build]') }}
+    runs-on: windows-2022
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v7
+      with:
+        submodules: 'true'
+    - name: Setup environment
+      run: |
+        build\ci\windows\setup.bat
+    - name: Build MuseScore
+      shell: cmd
+      run: |
+        XCOPY "C:\musescore_dependencies" %CD% /E /I /Y
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;C:\Program Files (x86)\Jack;%PATH%"
+        CALL msvc_build.bat relwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
+        CALL msvc_build.bat installrelwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
+    # (on MSVC mtest/ is a project of its own, not in MuseScore's solution: its vcxproj is
+    # built with MSBuild, which builds the projects it references too)
+    - name: Build the sound library tests
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%"
+        FOR /F "usebackq tokens=*" %%i IN (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) DO SET "MSBUILD=%%i"
+        ECHO MSBuild: %MSBUILD%
+        "%MSBUILD%" msvc.build_x64\mtest\libmscore\soundlibrary\tst_soundlibrary.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
+    - name: Run the sound library tests
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%CD%\dependencies\libs\Win64;%PATH%"
+        SET QT_QPA_PLATFORM=offscreen
+        cd msvc.build_x64\mtest\libmscore\soundlibrary
+        FOR /R %%F IN (tst_soundlibrary.exe) DO IF EXIST "%%F" SET TST=%%F
+        IF NOT DEFINED TST (DIR /S /B & exit /b 1)
+        REM (the results to a file: the console shows none of QtTest's output on Windows)
+        "%TST%" -o "%CD%\tst_soundlibrary.txt,txt"
+        SET RC=%ERRORLEVEL%
+        TYPE "%CD%\tst_soundlibrary.txt"
+        FINDSTR /C:"Totals:" "%CD%\tst_soundlibrary.txt" >NUL || exit /b 1
+        IF NOT "%RC%"=="0" exit /b 1
+    - name: Upload MuseScore (installed)
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: MuseScore-soundlibrary-win64
+        path: msvc.install_x64\

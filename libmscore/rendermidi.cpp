@@ -91,6 +91,8 @@ struct SndConfig {
       int ms4TiedTicks = -1;      // what the tied notes add to the note (-1: their whole length)
       int ms4SwingOn = 0;         // swing: on-time offset, per mille of the chord's length
       int ms4SwingGate = 100;     // swing: the chord's length, percent
+      bool ms4Once = false;       // the note once, as written, whatever MuseScore 3's play events are
+                                  // (a sound library plays the trill / tremolo: SoundLib)
 
       SndConfig() {}
       SndConfig(bool use, int c, DynamicsRenderMethod me) : useSND(use), controller(c), method(me) {}
@@ -476,7 +478,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
 
       // MuseScore 4: a plain note (one play event, not edited in the Piano Roll) and the notes tied
       // to it are one note of the chain's whole length, scaled by the articulations' duration factor
-      if (config.ms4 && nels >= 1) {   // MS4 plays no stored play events (MS3's ornaments, Piano Roll edits, MuseScore 2 events)
+      if (config.ms4 && (nels >= 1 || config.ms4Once)) {   // MS4 plays no stored play events (MS3's ornaments, Piano Roll edits, MuseScore 2 events)
             if (tieBack)
                   return;                         // played with the note the tie comes from
             int chainTicks = ticks;
@@ -1173,8 +1175,32 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics, tickOffset);
 
                   auto sit = ctx.sounds.find(instr);
+
+                  // a sound library part: all on the instrument's first channel, each note after
+                  // the switch to the articulation the notation asks for, without pitch curves
+                  const LibPart* lp = nullptr;
+                  const SoundLib::LibInstrument* li = nullptr;
+                  {
+                        auto lpit = libParts.find(st1->part());
+                        if (lpit != libParts.end()) {
+                              auto iit = lpit->second.instruments.find(instr);
+                              if (iit != lpit->second.instruments.end() && iit->second) {
+                                    lp = &lpit->second;
+                                    li = iit->second;
+                                    }
+                              }
+                  }
+                  const int libChannel = li ? instr->channel(0)->channel() : -1;
+                  if (li)
+                        events->registerChannel(libChannel);
+                  auto librarySwitch = [&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
+                        const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
+                        if (c)
+                              putLibrarySwitch(events, *li, libChannel, c, start + tickOffset, st1->idx());
+                        };
+
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
-                  auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0) {
+                  auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0, bool once = false) {
                         // a discrete glissando: its steps over the note's length, each a note of its own at the
                         // dynamic of its time; tied into, the first step is left out (the tie took it)
                         const std::vector<int> steps = ms4DiscreteGlissando(note);
@@ -1250,7 +1276,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // the preset MS4 plays this note with -> the channel slot programmed with it
                         int noteChannel = channel;
                         int layer = note->voice();
-                        if (sit != ctx.sounds.end()) {
+                        if (li) {
+                              noteChannel = libChannel;
+                              if (!note->tieBack()) {
+                                    const Chord* ch = note->chord();
+                                    librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
+                                    }
+                              }
+                        else if (sit != ctx.sounds.end()) {
                               const Ms4::Slot& slot = sit->second.channelSlots[sit->second.slotFor(r.arts)];
                               noteChannel = instr->channel(slot.channel)->channel();
                               layer = sit->second.layerFor(r.arts, layer);
@@ -1266,9 +1299,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Cut = cut;
                         config.ms4Layer = layer;
                         config.ms4TiedTicks = tiedTicks;
+                        config.ms4Once = once;
                         ms4Swing(note->chord(), config.ms4SwingOn, config.ms4SwingGate);
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
-                        if (r.bend && !note->chord()->isGrace() && !note->tieBack()) {
+                        if (r.bend && !li && !note->chord()->isGrace() && !note->tieBack()) {
                               const Chord* ch = note->chord();
                               const int ticks = ch->actualTicks().ticks();
                               const int artStart = ch->tick().ticks() + tickOffset;
@@ -1288,10 +1322,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // (glissando notes need the tieBack exemption: they play their later steps)
                         if (!note->play())
                               return;
-                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(note->track(), start + tickOffset), ctx.snd);
+                        const std::vector<Ms4::ArtRef> noteArts = Ms4::noteArticulations(note, arts);
+                        Ms4::NoteResult r = Ms4::note(ctx.family, noteArts, ctx.dynamics.levelAt(note->track(), start + tickOffset), ctx.snd);
                         int noteChannel = channel;
                         int layer = note->voice();
-                        if (sit != ctx.sounds.end()) {
+                        if (li) {
+                              noteChannel = libChannel;
+                              librarySwitch(note, noteArts, start, length);
+                              }
+                        else if (sit != ctx.sounds.end()) {
                               noteChannel = instr->channel(sit->second.channelSlots[sit->second.slotFor(r.arts)].channel)->channel();
                               layer = sit->second.layerFor(r.arts, layer);
                               }
@@ -1459,8 +1498,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   Arpeggio* arp = chord->arpeggio();
                   enum class Special { NONE, TREMOLO, ORNAMENT, ARPEGGIO } special = Special::NONE;
                   const Ms4::OrnamentRule* ornament = nullptr;
+                  // the library plays the trill or tremolo itself: the notes once, as they are
+                  bool sampledOrnament = false;
+                  if (li && chord->upNote()) {
+                        const Note* up = chord->upNote();
+                        sampledOrnament = libraryChoice(*lp, *li, up, Ms4::noteArticulations(up, principalArts), pStart, pLength).sampledOrnament();
+                        }
                   for (const Ms4::ArtRef& a : sorted) {
                         const bool tremoloType = a.art >= Ms4::Art::Tremolo8th && a.art <= Ms4::Art::Tremolo64th;
+                        if (sampledOrnament && (tremoloType || Ms4::ornamentRule(a.art)))
+                              continue;
                         if (tremoloType && trem && trem->tremoloType() != TremoloType::BUZZ_ROLL) {
                               special = Special::TREMOLO;
                               break;
@@ -1538,7 +1585,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                      qPrintable(all), qPrintable(syms));
                               }
                         for (const Note* note : chord->notes())
-                              collect(note, principalArts, principalOffset, principalCut);
+                              collect(note, principalArts, principalOffset, principalCut, sampledOrnament);
                         }
                   }
             }
@@ -1572,12 +1619,25 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                         }
                   }
 
+            // a sound library part: its dynamics on the library's controller, on the channel it
+            // plays on; no presets (a program change would reach the library)
+            auto lpit = libParts.find(part);
+            const LibPart* lp = lpit != libParts.end() ? &lpit->second : nullptr;
+            auto libraryPlays = [lp](const Instrument* instr) {
+                  if (!lp)
+                        return false;
+                  auto it = lp->instruments.find(instr);
+                  return it != lp->instruments.end() && it->second;
+                  };
+
             // the presets MS4 plays: each channel slot of each of the part's instruments; ahead of
             // the notes at the chunk's start, which would otherwise sound with the preset before
             // (the score's MuseScore 3 program at the start of playback)
             auto pos = events->lower_bound(tick1 + tickOffset);
             for (const auto& is : ctx.sounds) {
                   const Instrument* instr = is.first;
+                  if (libraryPlays(instr))
+                        continue;
                   for (const Ms4::Slot& slot : is.second.channelSlots) {
                         const int ch = score->masterScore()->playbackChannel(instr->channel(slot.channel))->channel();
                         for (const NPlayEvent& ev : { NPlayEvent(ME_CONTROLLER, ch, CTRL_HBANK, (slot.bank >> 7) & 0x7f),
@@ -1590,16 +1650,35 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                         }
                   }
 
-            if (!ctx.snd)
-                  continue;
+            int controller = CTRL_EXPRESSION;
             std::vector<int> channels;
-            for (const auto& ip : *part->instruments())
-                  for (const Channel* c : ip.second->channel())
-                        channels.push_back(score->masterScore()->playbackChannel(c)->channel());
+            if (lp) {
+                  if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
+                        continue;
+                  controller = library->dynamicsCC;
+                  for (const auto& ip : *part->instruments()) {
+                        if (!libraryPlays(ip.second))
+                              continue;
+                        const int ch = ip.second->channel(0)->channel();
+                        channels.push_back(ch);
+                        if (controller != CTRL_EXPRESSION) {
+                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, library->expressionValue, 127));
+                              ev.setOriginatingStaff(part->staff(0)->idx());
+                              events->insert(std::make_pair(tick1 + tickOffset, ev));
+                              }
+                        }
+                  }
+            else {
+                  if (!ctx.snd)
+                        continue;
+                  for (const auto& ip : *part->instruments())
+                        for (const Channel* c : ip.second->channel())
+                              channels.push_back(score->masterScore()->playbackChannel(c)->channel());
+                  }
             auto put = [&](int tick, int level) {
                   const int value = Ms4::expressionLevel(level);
                   for (int ch : channels) {
-                        NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, value);
+                        NPlayEvent ev(ME_CONTROLLER, ch, controller, value);
                         ev.setOriginatingStaff(part->staff(0)->idx());
                         events->insert(std::make_pair(tick + tickOffset, ev));
                         }
@@ -1612,6 +1691,101 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
             }
             for (auto it = levels.upper_bound(tick1 + tickOffset); it != levels.end() && it->first < tick2 + tickOffset; ++it)
                   put(it->first - tickOffset, it->second);
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryChoice
+//    the library's articulation for a note: what its articulations and the staff text in
+//    force ask for (SoundLib::want)
+//---------------------------------------------------------
+
+SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::LibInstrument& li, const Note* note,
+                                             const std::vector<Ms4::ArtRef>& noteArts, int tick, int ticks) const
+      {
+      int trill = 0;
+      for (const Ms4::ArtRef& a : noteArts)
+            if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
+                  trill = SoundLib::trillSemitones(note);
+      const TempoMap* tm = score->tempomap();
+      const double seconds = tm->tick2time(tick + qMax(0, ticks)) - tm->tick2time(tick);
+      return SoundLib::choose(li, SoundLib::want(noteArts, lp.text.at(tick), seconds, trill));
+      }
+
+//---------------------------------------------------------
+//   putLibrarySwitch
+//    the switch to an articulation, before the note (redundant ones go in finishLibraryEvents)
+//---------------------------------------------------------
+
+void MidiRenderer::putLibrarySwitch(EventMap* events, const SoundLib::LibInstrument& li, int channel,
+                                    const SoundLib::Choice& choice, int utick, int staffIdx)
+      {
+      const int value = choice.articulation->value;
+      auto put = [&](NPlayEvent ev) {
+            ev.setLibrarySwitch(true);
+            ev.setOriginatingStaff(staffIdx);
+            events->insert(std::make_pair(utick, ev));
+            };
+      switch (li.switchType) {
+            case SoundLib::SwitchType::CC:
+                  put(NPlayEvent(ME_CONTROLLER, channel, li.switchNumber, value));
+                  break;
+            case SoundLib::SwitchType::PROGRAM:
+                  put(NPlayEvent(ME_CONTROLLER, channel, CTRL_PROGRAM, value));
+                  break;
+            case SoundLib::SwitchType::KEYSWITCH:
+                  put(NPlayEvent(ME_NOTEON, channel, value, 100));
+                  put(NPlayEvent(ME_NOTEON, channel, value, 0));
+                  break;
+            }
+      }
+
+//---------------------------------------------------------
+//   finishLibraryEvents
+//    the library parts' events of the chunk: each switch that selects what is selected
+//    already dropped (a channel's first switch in the chunk stays: playback can start or
+//    seek anywhere), and all of them marked with the part's MIDI out
+//---------------------------------------------------------
+
+void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
+      {
+      if (libRoutes.empty())
+            return;
+      const int utick2 = chunk.utick2();
+      std::map<int, int> selected;              // channel -> the switch in force
+      std::map<int, int> dropOff;               // channel -> the keyswitch whose note off goes too
+      for (auto i = events->lower_bound(chunk.utick1()); i != events->end();) {
+            NPlayEvent& ev = i->second;
+            auto r = libRoutes.find(ev.channel());
+            if (r == libRoutes.end()) {
+                  ++i;
+                  continue;
+                  }
+            if (ev.librarySwitch() && i->first < utick2) {
+                  const int ch = ev.channel();
+                  const bool keyswitch = ev.type() == ME_NOTEON;
+                  if (keyswitch && ev.velo() == 0) {
+                        auto d = dropOff.find(ch);
+                        if (d != dropOff.end() && d->second == ev.pitch()) {
+                              dropOff.erase(d);
+                              i = events->erase(i);
+                              continue;
+                              }
+                        }
+                  else {
+                        const int value = keyswitch ? ev.pitch() : ev.value();
+                        auto sel = selected.find(ch);
+                        if (sel != selected.end() && sel->second == value) {
+                              if (keyswitch)
+                                    dropOff[ch] = ev.pitch();
+                              i = events->erase(i);
+                              continue;
+                              }
+                        selected[ch] = value;
+                        }
+                  }
+            ev.setExternal(r->second.first, r->second.second);
+            ++i;
             }
       }
 
@@ -3214,6 +3388,9 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       // create sustain pedal events
       renderSpanners(chunk, events);
 
+      if (ms4Mode)
+            finishLibraryEvents(chunk, events);
+
       if (ctx.metronome)
             renderMetronome(chunk, events);
 
@@ -3249,11 +3426,31 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 
 void MidiRenderer::updateState()
       {
+      if (library != SoundLib::current())
+            needUpdate = true;
       if (needUpdate) {
             // Update the related structures inside score
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
             score->updateCapo();
+
+            libParts.clear();
+            libRoutes.clear();
+            library = SoundLib::current();
+            if (library) {
+                  for (const SoundLib::Route& r : SoundLib::routes(score, *library)) {
+                        Part* part = const_cast<Part*>(r.part);
+                        LibPart& lp = libParts[part];
+                        lp.route = r;
+                        lp.text.build(score, part);
+                        for (const auto& ip : *part->instruments()) {
+                              const SoundLib::LibInstrument* li = library->match(ip.second, part);
+                              lp.instruments[ip.second] = li;
+                              if (li)
+                                    libRoutes[ip.second->channel(0)->channel()] = { r.port, r.channel };
+                              }
+                        }
+                  }
 
             ms4Parts.clear();
             for (Part* part : score->parts()) {

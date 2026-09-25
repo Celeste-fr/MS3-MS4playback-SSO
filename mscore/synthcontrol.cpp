@@ -48,7 +48,7 @@ SynthControl::SynthControl(QWidget* parent)
 
       int idx = 0;
       for (Synthesizer* s : synti->synthesizer()) {
-            if (strcmp(s->name(), "Aeolus") == 0)    // no gui for aeolus
+            if (strcmp(s->name(), "Aeolus") == 0 || !s->gui())    // no gui for aeolus (and hosted plug-ins)
                   continue;
             tabWidget->insertTab(idx++, s->gui(), tr(s->name()));
             s->gui()->synthesizerChanged();
@@ -456,7 +456,7 @@ void SynthControl::updateGui()
       effectB->setCurrentIndex(idx);
       effectStackB->setCurrentIndex(idx);
       for (Synthesizer* s : synti->synthesizer()) {
-            if (strcmp(s->name(), "Aeolus") == 0)    // no gui for aeolus
+            if (strcmp(s->name(), "Aeolus") == 0 || !s->gui())    // no gui for aeolus (and hosted plug-ins)
                   continue;
             s->gui()->synthesizerChanged();
             }

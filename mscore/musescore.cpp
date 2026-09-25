@@ -127,6 +127,11 @@
 #include "libmscore/sig.h"
 #include "libmscore/staff.h"
 #include "libmscore/style.h"
+#include "libmscore/soundlibrary.h"
+#include "soundlibraryhost.h"
+#ifdef USE_VST3
+#include "audio/vst3/vst3synth.h"
+#endif
 #include "libmscore/sym.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/system.h"
@@ -480,6 +485,29 @@ void MuseScore::closeEvent(QCloseEvent* ev)
       qApp->quit();
       }
 
+//---------------------------------------------------------
+//   updateSoundLibrary
+//    the sound library map of the preference (soundlibrary.h); true if it changed
+//---------------------------------------------------------
+
+static bool updateSoundLibrary()
+      {
+      static QString loaded;
+      const QString path = preferences.getString(PREF_IO_SOUNDLIBRARY);
+      if (path == loaded)
+            return false;
+      loaded = path;
+      std::shared_ptr<const SoundLib::Library> library;
+      if (!path.isEmpty()) {
+            QString error;
+            library = SoundLib::Library::load(path, &error);
+            if (!library)
+                  qWarning("Sound library: %s", qPrintable(error));
+            }
+      SoundLib::setCurrent(library);
+      return true;
+      }
+
 void updateExternalValuesFromPreferences() {
       // set values in libmscore
       MScore::bgColor = preferences.getColor(PREF_UI_CANVAS_BG_COLOR);
@@ -497,6 +525,18 @@ void updateExternalValuesFromPreferences() {
       MScore::layoutBreakColor = preferences.getColor(PREF_UI_SCORE_LAYOUTBREAKCOLOR);
       MScore::frameMarginColor = preferences.getColor(PREF_UI_SCORE_FRAMEMARGINCOLOR);
       MScore::setVerticalOrientation(preferences.getBool(PREF_UI_CANVAS_SCROLL_VERTICALORIENTATION));
+
+      if (updateSoundLibrary() && mscore) {
+            for (MasterScore* s : mscore->scores())
+                  s->setPlaylistDirty();
+            }
+      const SoundLib::Output output = (SoundLibraryHost::available() && preferences.getString(PREF_IO_SOUNDLIBRARY_OUTPUT) != "midi")
+                                      ? SoundLib::Output::PLUGIN : SoundLib::Output::MIDI;
+      if (output != SoundLib::output()) {
+            SoundLib::setOutput(output);
+            if (output == SoundLib::Output::MIDI)
+                  SoundLibraryHost::instance()->release();
+            }
 
       MScore::selectColor[0] = preferences.getColor(PREF_UI_SCORE_VOICE1_COLOR);
       MScore::selectColor[1] = preferences.getColor(PREF_UI_SCORE_VOICE2_COLOR);
@@ -1937,6 +1977,8 @@ MuseScore::MuseScore()
       a = getAction("synth-control");
       a->setCheckable(true);
       menuView->addAction(a);
+
+      menuView->addAction(getAction("sound-library"));
 
       a = getAction("toggle-selection-window");
       a->setCheckable(true);
@@ -6946,6 +6988,11 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             }
       else if (cmd == "synth-control")
             showSynthControl(a->isChecked());
+      else if (cmd == "sound-library") {
+            SoundLibraryDialog* d = new SoundLibraryDialog(SoundLib::current(), SoundLib::output(), this);
+            d->setAttribute(Qt::WA_DeleteOnClose);
+            d->show();
+            }
       else if (cmd == "create-new-workspace") {
             mscore->createNewWorkspace();
             emit mscore->workspacesChanged();
@@ -7802,6 +7849,9 @@ bool MuseScore::saveMp3(Score* score, QIODevice* device, bool& wasCanceled)
 
       MScore::sampleRate = sampleRate;
 
+      // the sound library's hosted plug-ins play their parts (offline, while this runs)
+      SoundLibraryExport libraryExport(score, synth, sampleRate);
+
       if (!useCurrentSynthesizerState) {
             score->masterScore()->rebuildAndUpdateExpressive(synth->synthesizer("Fluid"));
             score->renderMidi(&events, score->synthesizerState());
@@ -7892,7 +7942,10 @@ bool MuseScore::saveMp3(Score* score, QIODevice* device, bool& wasCanceled)
                               frames    -= n;
                               }
                         const NPlayEvent& e = playPos->second;
-                        if (!(!e.velo() && e.discard()) && e.isChannelEvent()) {
+                        if (libraryExport.play(e))          // a sound library part, on its plug-in
+                              continue;
+                        // (a sound library's articulation switches are for it only)
+                        if (!(!e.velo() && e.discard()) && e.isChannelEvent() && !e.librarySwitch()) {
                               int channelIdx = e.channel();
                               Channel* c = score->masterScore()->midiMapping(channelIdx)->articulation();
                               if (!c->mute()) {
@@ -7974,6 +8027,7 @@ bool MuseScore::saveMp3(Score* score, QIODevice* device, bool& wasCanceled)
             device->write((char*)bufferOut, bytes);
       wasCanceled = progress.wasCanceled();
       progress.close();
+      libraryExport.finish();
       delete synth;
       delete[] bufferOut;
       MScore::sampleRate = oldSampleRate;
@@ -8712,6 +8766,9 @@ void MuseScore::init(QStringList& argv)
             MScore::seq    = seq;
             Driver* driver = driverFactory(seq, *audioDriver);
             synti          = synthesizerFactory();
+#ifdef USE_VST3
+            synti->registerSynthesizer(new Vst3Synth);      // a sound library's hosted plug-ins
+#endif
             if (driver) {
                   MScore::sampleRate = driver->sampleRate();
                   synti->setSampleRate(MScore::sampleRate);

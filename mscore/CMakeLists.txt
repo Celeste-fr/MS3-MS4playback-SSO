@@ -310,6 +310,8 @@ add_library(mscoreapp STATIC
       migration/handlers/resetallelementspositionshandler.cpp
       migration/handlers/styledefaultshandler.cpp migration/handlers/lelandstylehandler.cpp
       migration/handlers/edwinstylehandler.cpp
+      soundlibraryhost.cpp soundlibraryhost.h
+      soundlibrarycheck.cpp soundlibrarycheck.h
 
       ${CLOUD_SRC}
       ${IMPORTMIDIUI_SRC}
@@ -381,6 +383,11 @@ endif (OSC)
 if (AVSOMR)
    target_link_libraries(mscoreapp avsomr)
 endif (AVSOMR)
+
+if (BUILD_VST3)
+   target_sources(mscoreapp PRIVATE vst3editor.cpp vst3editor.h)
+   target_link_libraries(mscoreapp vst3host)
+endif (BUILD_VST3)
 
 if (MINGW)
    string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE)

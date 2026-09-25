@@ -59,6 +59,9 @@ PortMidiDriver::~PortMidiDriver()
             Pt_Stop();
             Pm_Close(inputStream);
             }
+      for (PmStream* s : extraOutputStreams)
+            if (s)
+                  Pm_Close(s);
       if (outputStream) {
             Pt_Stop();
             Pm_Close(outputStream);
@@ -127,6 +130,21 @@ bool PortMidiDriver::init()
                   qDebug("PortMidi: open output (id=%d) failed: %s", int(outputId), p);
                   Pt_Stop();
                   return false;
+                  }
+            // the sound library's further ports (soundlibrary.h): MIDI out B, C, D
+            const char* const extraPrefs[3] = { PREF_IO_PORTMIDI_OUTPUTDEVICE_B, PREF_IO_PORTMIDI_OUTPUTDEVICE_C, PREF_IO_PORTMIDI_OUTPUTDEVICE_D };
+            for (int i = 0; i < 3; ++i) {
+                  const QString name = preferences.getString(extraPrefs[i]);
+                  const int id = name.isEmpty() ? pmNoDevice : getDeviceOut(name);
+                  if (id == pmNoDevice || id == outputId)
+                        continue;
+                  error = Pm_OpenOutput(&extraOutputStreams[i], id, (void*)DRIVER_INFO,
+                     preferences.getInt(PREF_IO_PORTMIDI_OUTPUTBUFFERCOUNT), ((PmTimeProcPtr) Pt_Time), (void*)TIME_INFO,
+                     preferences.getInt(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS));
+                  if (error != pmNoError) {
+                        qDebug("PortMidi: open output %c (id=%d) failed: %s", 'B' + i, id, Pm_GetErrorText(error));
+                        extraOutputStreams[i] = nullptr;
+                        }
                   }
             }
 

@@ -85,6 +85,9 @@ class PreferenceDialog : public AbstractDialog, private Ui::PrefsDialogBase {
       void clearShortcutClicked();
       void defineShortcutClicked();
       void portaudioApiActivated(int idx);
+      void selectSoundLibrary();
+      void showSoundLibraryRouting();
+      void selectSoundLibraryPlugin();
       void resetAllValues();
       void styleFileButtonClicked();
       void recordButtonClicked(int);

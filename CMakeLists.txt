@@ -120,6 +120,16 @@ endif (NOT APPLE AND NOT MINGW AND NOT MSVC)
 
 option(AEOLUS        "Enable pipe organ synthesizer"      OFF)
 option(ZERBERUS      "Enable experimental SFZ sampler"    ON)
+# Host VST 3 plug-ins for sound library parts (Kontakt …): libmscore/soundlibrary.h, audio/vst3.
+# Not on macOS yet (the SDK wants C++17, the non-Xcode macOS build is gnu++11).
+if (APPLE)
+      option(BUILD_VST3 "Host VST 3 plug-ins for sound libraries" OFF)
+else (APPLE)
+      option(BUILD_VST3 "Host VST 3 plug-ins for sound libraries" ON)
+endif (APPLE)
+if (BUILD_VST3)
+      set(USE_VST3 1)
+endif (BUILD_VST3)
 option(USE_ZITA_REVERB "Enable Zita Reverb audio effect"    ON)
 option(OSC           "Enable OSC remote control protocol" ON)
 option(AVSOMR        "Enable AVSOMR import"               OFF) # AVSOMR - optical music recognition by audirevis
@@ -808,6 +818,10 @@ configure_file (
 ## Add subdirs
 ##
 add_subdirectory(thirdparty/fluidsynth)
+if (BUILD_VST3)
+      add_subdirectory(thirdparty/vst3sdk)
+      add_subdirectory(audio/vst3)
+endif (BUILD_VST3)
 add_subdirectory(audio)
 add_subdirectory(audiofile)
 add_subdirectory(awl)

@@ -24,6 +24,7 @@
 #include "measure.h"
 
 #include "ms4playback.h"
+#include "soundlibrary.h"
 
 namespace Ms {
 
@@ -68,6 +69,16 @@ class MidiRenderer {
       bool needUpdate = true;
       std::map<const Part*, Ms4::PartContext> ms4Parts;     // DynamicsRenderMethod::MS4, per part
       bool ms4Mode { false };                               // the chunk being rendered uses it
+
+      // parts played by an external sound library (soundlibrary.h, MS4 note model only)
+      struct LibPart {
+            SoundLib::Route route;
+            SoundLib::TextTechniques text;
+            std::map<const Instrument*, const SoundLib::LibInstrument*> instruments;
+            };
+      std::shared_ptr<const SoundLib::Library> library;
+      std::map<const Part*, LibPart> libParts;
+      std::map<int, std::pair<int, int>> libRoutes;         // channel -> MIDI out port, channel
       int minChunkSize = 0;
 
    public:
@@ -119,6 +130,11 @@ class MidiRenderer {
       void collectMeasureEventsDefault(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
       void collectMeasureEventsMs4(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
       void renderMs4Dynamics(const Chunk&, EventMap* events);
+      SoundLib::Choice libraryChoice(const LibPart& lp, const SoundLib::LibInstrument& li, const Note* note,
+                                     const std::vector<Ms4::ArtRef>& noteArts, int tick, int ticks) const;
+      static void putLibrarySwitch(EventMap* events, const SoundLib::LibInstrument& li, int channel,
+                                   const SoundLib::Choice& choice, int utick, int staffIdx);
+      void finishLibraryEvents(const Chunk&, EventMap* events);
 
    public:
       explicit MidiRenderer(Score* s) : score(s) {}

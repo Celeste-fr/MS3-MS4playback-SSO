@@ -551,6 +551,15 @@ Transport JackAudio::getState()
       }
 
 //---------------------------------------------------------
+//   canOutputMidi
+//---------------------------------------------------------
+
+bool JackAudio::canOutputMidi() const
+      {
+      return preferences.getBool(PREF_IO_JACK_USEJACKMIDI) && !midiOutputPorts.isEmpty();
+      }
+
+//---------------------------------------------------------
 //   putEvent
 //---------------------------------------------------------
 
@@ -559,8 +568,9 @@ void JackAudio::putEvent(const NPlayEvent& e, unsigned framePos)
       if (!preferences.getBool(PREF_IO_JACK_USEJACKMIDI))
             return;
 
-      int portIdx = seq->score()->midiPort(e.channel());
-      int chan    = seq->score()->midiChannel(e.channel());
+      // a sound library part goes to its own route
+      int portIdx = e.isExternal() ? e.extPort() : seq->score()->midiPort(e.channel());
+      int chan    = e.isExternal() ? e.extChannel() : seq->score()->midiChannel(e.channel());
 
 // qDebug("JackAudio::putEvent %d:%d  pos %d(%d)", portIdx, chan, framePos, _segmentSize);
 
