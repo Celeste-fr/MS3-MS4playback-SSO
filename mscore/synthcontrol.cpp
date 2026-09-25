@@ -266,7 +266,7 @@ void SynthControl::effectBChanged(int idx)
 
 void SynthControl::dynamicsMethodChanged(int val)
       {
-      ccToUseList->setEnabled(val != 0);
+      ccToUseList->setEnabled(val != 0 && val != 3);     // 3: MuseScore 4, always CC 11
       synti->setDynamicsMethod(val);
       setDirty();
       }
@@ -442,10 +442,7 @@ void SynthControl::updateGui()
 
       dynamicsMethodList->setCurrentIndex(synti->dynamicsMethod());
       ccToUseList->setCurrentIndex(synti->ccToUseIndex());
-      if (dynamicsMethodList->currentIndex() == 0)
-            ccToUseList->setEnabled(false);
-      else
-            ccToUseList->setEnabled(true);
+      ccToUseList->setEnabled(dynamicsMethodList->currentIndex() != 0 && dynamicsMethodList->currentIndex() != 3);
 
       int idx = synti->indexOfEffect(0);
       effectA->setCurrentIndex(idx);

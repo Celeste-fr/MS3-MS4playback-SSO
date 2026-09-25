@@ -1,7 +1,7 @@
 #=============================================================================
 #  FluidSynth 2.3.3 as MuseScore 4 builds it (src/framework/audio/thirdparty/fluidsynth:
-#  no glib, no threads; Ogg Vorbis samples are decoded by the host through
-#  vorbis_decode_memory(), see vorbisdecode.cpp). LGPL-2.1+, see LICENSE.
+#  no glib, no threads; SF3 samples decoded by vorbis_decode_memory() in vorbisdecode.cpp with
+#  stb_vorbis.c, public domain, as in MS4). FluidSynth: LGPL-2.1+, see LICENSE.
 #=============================================================================
 
 set(FS ${CMAKE_CURRENT_LIST_DIR})
@@ -60,13 +60,6 @@ target_include_directories(fluidsynth
       ${FS}/src/synth
       ${FS}/src/utils
       )
-
-# vorbisdecode.cpp decodes the SF3 samples with libvorbisfile (as mscoreapp links it)
-if (MSVC OR MINGW)
-      target_link_libraries(fluidsynth PRIVATE vorbisfiledll)
-else (MSVC OR MINGW)
-      target_link_libraries(fluidsynth PRIVATE vorbisfile)
-endif (MSVC OR MINGW)
 
 target_compile_definitions(fluidsynth PUBLIC NO_GLIB NO_THREADS PRIVATE EXTERN_VORBIS_SUPPORT)
 

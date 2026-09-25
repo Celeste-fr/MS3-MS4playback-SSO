@@ -83,7 +83,7 @@ static SynthesizerState defaultState = {
             { 0, "MuseReverb" },   // MuseScore 4's reverb, as its default aux send
             { 2, "0.1"   },
             { 3, "440"   },
-            { 4, "1"     },
+            { 4, "3"     },     // dynamics method: 3 = MuseScore 4 (DynamicsRenderMethod::MS4)
             { 5, "1"     }
             },
             },

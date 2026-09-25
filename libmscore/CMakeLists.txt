@@ -47,7 +47,10 @@ add_library (libmscore STATIC
       layoutbreak.cpp layout.cpp line.cpp lyrics.cpp measurebase.cpp
       measure.cpp navigate.cpp note.cpp noteevent.cpp ottava.cpp
       page.cpp part.cpp pedal.cpp letring.cpp vibrato.cpp palmmute.cpp pitch.cpp pitchspelling.cpp
-      rendermidi.cpp repeat.cpp repeatlist.cpp rest.cpp
+      rendermidi.cpp
+      ms4playback.cpp
+      ms4playback.h
+      ms4tables.h repeat.cpp repeatlist.cpp rest.cpp
       score.cpp segment.cpp select.cpp shadownote.cpp slur.cpp tie.cpp slurtie.cpp
       spacer.cpp spanner.cpp staff.cpp staffstate.cpp
       stafftextbase.cpp stafftext.cpp systemtext.cpp stafftype.cpp stem.cpp style.cpp symbol.cpp

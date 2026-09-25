@@ -37,7 +37,7 @@ class MasterSynthesizer : public QObject {
       float _boost            { 10.0  };     // +20dB
       double _masterTuning    { 440.0 };
 
-      int _dynamicsMethod     { 1 };      // Default dynamics method
+      int _dynamicsMethod     { 3 };      // Default dynamics method: MuseScore 4 (DynamicsRenderMethod::MS4)
       int _ccToUse            { 1 };      // CC2
 
       static constexpr double MUTE = 0.00;            // for gain to decibels conversion

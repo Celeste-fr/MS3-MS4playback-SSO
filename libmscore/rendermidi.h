@@ -23,6 +23,8 @@
 #include "fraction.h"
 #include "measure.h"
 
+#include "ms4playback.h"
+
 namespace Ms {
 
 class EventMap;
@@ -33,7 +35,8 @@ class SynthesizerState;
 enum class DynamicsRenderMethod : signed char {
       FIXED_MAX,
       SEG_START,
-      SIMPLE
+      SIMPLE,
+      MS4               // MuseScore 4's note model and dynamics (ms4playback.h)
       };
 
 //---------------------------------------------------------
@@ -63,6 +66,7 @@ class RangeMap {
 class MidiRenderer {
       Score* score{nullptr};
       bool needUpdate = true;
+      std::map<const Part*, Ms4::PartContext> ms4Parts;     // DynamicsRenderMethod::MS4, per part
       int minChunkSize = 0;
 
    public:
@@ -112,6 +116,8 @@ class MidiRenderer {
       void collectMeasureEvents(EventMap* events, Measure const * m, const MidiRenderer::StaffContext& sctx, int tickOffset);
       void collectMeasureEventsSimple(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
       void collectMeasureEventsDefault(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
+      void collectMeasureEventsMs4(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
+      void renderMs4Dynamics(const Chunk&, EventMap* events);
 
    public:
       explicit MidiRenderer(Score* s) : score(s) {}

@@ -80,6 +80,11 @@ struct SndConfig {
       bool useSND = false;
       int controller = -1;
       DynamicsRenderMethod method = DynamicsRenderMethod::SEG_START;
+      // DynamicsRenderMethod::MS4: the note as MuseScore 4 plays it (Ms4::note)
+      bool ms4 = false;
+      int ms4Velocity = 64;
+      int ms4Dur = Ms4::HUNDRED;
+      int ms4Ts = 0;
 
       SndConfig() {}
       SndConfig(bool use, int c, DynamicsRenderMethod me) : useSND(use), controller(c), method(me) {}
@@ -353,6 +358,26 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
 
       NoteEventList nel = note->playEvents();
       int nels = nel.size();
+
+      // MuseScore 4: a plain note (one play event, not edited in the Piano Roll) and the notes tied
+      // to it are one note of the chain's whole length, scaled by the articulations' duration factor
+      if (config.ms4 && nels == 1 && chord->playEventType() == PlayEventType::Auto && !isGlissandoFor(note)) {
+            if (tieBack)
+                  return;                         // played with the note the tie comes from
+            int chainTicks = ticks;
+            for (const Note* n = note; n->tieFor() && n->tieFor()->endNote(); ) {
+                  const Note* next = n->tieFor()->endNote();
+                  if (next == n || next->playEvents().size() != 1 || isGlissandoFor(next))
+                        break;
+                  chainTicks += next->chord()->actualTicks().ticks();
+                  n = next;
+                  }
+            int p = qBound(0, note->ppitch() + nel[0].pitch(), 127);
+            int on  = tick1 + (ticks * config.ms4Ts) / Ms4::HUNDRED;
+            int off = on + int((qint64(chainTicks) * config.ms4Dur) / Ms4::HUNDRED) - 1;
+            playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx);
+            nels = 0;                             // done; bends below still apply
+            }
       for (int i = 0, pitch = note->ppitch(); i < nels; ++i) {
             const NoteEvent& e = nel[i]; // we make an explicit const ref, not a const copy.  no need to copy as we won't change the original object.
 
@@ -376,6 +401,10 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             // This allows correct playback of tremolos even without SND enabled.
             int velo;
             Fraction nonUnwoundTick = Fraction::fromTicks(on - tickOffset);
+            if (config.ms4) {
+                  playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, off, staffIdx);
+                  continue;
+                  }
             if (config.useSND) {
                   switch (config.method) {
                         case DynamicsRenderMethod::FIXED_MAX:
@@ -397,7 +426,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
 
       // Single-note dynamics
       // Find any changes, and apply events
-      if (config.useSND) {
+      if (config.useSND && !config.ms4) {
             ChangeMap& veloEvents = staff->velocities();
             ChangeMap& multEvents = staff->velocityMultiplications();
             Fraction stick = chord->tick();
@@ -859,6 +888,118 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
       }
 
 //---------------------------------------------------------
+//   collectMeasureEventsMs4
+//    MuseScore 4's note model: each note's articulations from its context, their averaged
+//    length and dynamic pattern at the dynamic level in force, and FluidSequencer's velocity.
+//    Single-note dynamics are CC11 events from the part's dynamics (renderMs4Dynamics).
+//---------------------------------------------------------
+
+void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset)
+      {
+      const int firstStaffIdx = sctx.staff->idx();
+      const int strack = firstStaffIdx * VOICES;
+      const int etrack = strack + VOICES;
+
+      for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
+            Fraction tick = seg->tick();
+            if (sctx.renderHarmony) {
+                  for (Element* e : seg->annotations()) {
+                        if (!e || (e->track() < strack) || (e->track() >= etrack))
+                              continue;
+                        Harmony* h = nullptr;
+                        if (e->isHarmony())
+                              h = toHarmony(e);
+                        else if (e->isFretDiagram())
+                              h = toFretDiagram(e)->harmony();
+                        if (!h || !h->play())
+                              continue;
+                        renderHarmony(events, m, h, tickOffset);
+                        }
+                  }
+
+            for (int track = strack; track < etrack; ++track) {
+                  Staff* st1 = m->score()->staff(track / VOICES);
+                  if (!st1->primaryStaff()) {
+                        track += VOICES - 1;
+                        continue;
+                        }
+                  Element* cr = seg->element(track);
+                  if (!cr || !cr->isChord())
+                        continue;
+                  Chord* chord = toChord(cr);
+                  Instrument* instr = st1->part()->instrument(tick);
+                  int channel = instr->channel(chord->upNote()->subchannel())->channel();
+                  events->registerChannel(channel);
+
+                  auto pc = ms4Parts.find(st1->part());
+                  if (pc == ms4Parts.end())
+                        continue;
+                  const Ms4::PartContext& ctx = pc->second;
+                  const int level = ctx.dynamics.levelAt(tick.ticks());
+                  const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics);
+
+                  auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts) {
+                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), level, ctx.snd);
+                        SndConfig config;
+                        config.ms4 = true;
+                        config.method = DynamicsRenderMethod::MS4;
+                        config.ms4Velocity = r.velocity;
+                        config.ms4Dur = r.dur;
+                        config.ms4Ts = r.ts;
+                        collectNote(events, channel, note, 1.0, tickOffset, st1, config);
+                        };
+
+                  if (!graceNotesMerged(chord))
+                        for (Chord*& c : chord->graceNotesBefore())
+                              for (const Note* note : c->notes())
+                                    collect(note, Ms4::chordArticulations(c, ctx.dynamics));
+                  for (const Note* note : chord->notes())
+                        collect(note, chordArts);
+                  if (!graceNotesMerged(chord))
+                        for (Chord*& c : chord->graceNotesAfter())
+                              for (const Note* note : c->notes())
+                                    collect(note, Ms4::chordArticulations(c, ctx.dynamics));
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   renderMs4Dynamics
+//    single-note dynamics as MuseScore 4 plays them: CC11 at every point of the part's dynamics
+//    (FluidSequencer::addDynamicEvents), to all of the instrument's channels (MS4's CC11 goes
+//    to its whole synth), and the level in force at the chunk's start
+//---------------------------------------------------------
+
+void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
+      {
+      const int tick1 = chunk.tick1();
+      const int tick2 = chunk.tick2();
+      const int tickOffset = chunk.tickOffset();
+      for (const auto& pc : ms4Parts) {
+            const Part* part = pc.first;
+            const Ms4::PartContext& ctx = pc.second;
+            if (!ctx.snd)
+                  continue;
+            std::vector<int> channels;
+            for (const auto& ip : *part->instruments())
+                  for (const Channel* c : ip.second->channel())
+                        channels.push_back(score->masterScore()->playbackChannel(c)->channel());
+            auto put = [&](int tick, int level) {
+                  const int value = Ms4::expressionLevel(level);
+                  for (int ch : channels) {
+                        NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, value);
+                        ev.setOriginatingStaff(part->staff(0)->idx());
+                        events->insert(std::make_pair(tick + tickOffset, ev));
+                        }
+                  };
+            const std::map<int, int>& levels = ctx.dynamics.levels();
+            put(tick1, ctx.dynamics.levelAt(tick1));
+            for (auto it = levels.upper_bound(tick1); it != levels.end() && it->first < tick2; ++it)
+                  put(it->first, it->second);
+            }
+      }
+
+//---------------------------------------------------------
 //   collectMeasureEvents
 //    redirects to the correct function based on the passed method
 //---------------------------------------------------------
@@ -872,6 +1013,9 @@ void MidiRenderer::collectMeasureEvents(EventMap* events, Measure const * m, con
             case DynamicsRenderMethod::SEG_START:
             case DynamicsRenderMethod::FIXED_MAX:
                   collectMeasureEventsDefault(events, m, sctx, tickOffset);
+                  break;
+            case DynamicsRenderMethod::MS4:
+                  collectMeasureEventsMs4(events, m, sctx, tickOffset);
                   break;
             default:
                   qDebug("Unrecognized dynamics method: %d", int(sctx.method));
@@ -2381,7 +2525,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             if (method == -1) {
                   // fall back to defaults - this may be needed to pass tests,
                   // since sometimes the synth state is not init
-                  method = 1;
+                  method = 3;
                   cc = 2;
                   qDebug("Had to fall back to defaults to render measure");
                   }
@@ -2398,6 +2542,9 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             case 2:
                   renderMethod = DynamicsRenderMethod::FIXED_MAX;
                   break;
+            case 3:
+                  renderMethod = DynamicsRenderMethod::MS4;
+                  break;
             default:
                   qDebug("Unrecognized dynamics method: %d", method);
                   break;
@@ -2412,6 +2559,9 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             sctx.renderHarmony = ctx.renderHarmony;
             renderStaffChunk(chunk, events, sctx);
             }
+      if (renderMethod == DynamicsRenderMethod::MS4)
+            renderMs4Dynamics(chunk, events);
+
       events->fixupMIDI();
 
       // create sustain pedal events
@@ -2457,6 +2607,15 @@ void MidiRenderer::updateState()
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
             score->updateCapo();
+
+            ms4Parts.clear();
+            for (Part* part : score->parts()) {
+                  Ms4::PartContext& ctx = ms4Parts[part];
+                  const Instrument* instr = part->instrument();
+                  ctx.family = Ms4::family(instr);
+                  ctx.snd = instr->singleNoteDynamics();
+                  ctx.dynamics.build(score, part);
+                  }
 
             updateChunksPartition();
 
