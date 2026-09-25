@@ -100,6 +100,58 @@ bool graceNotesMerged(Chord *chord);
 bool glissandoPitchOffsets(const Spanner* spanner, std::vector<int>& pitchOffsets);
 
 //---------------------------------------------------------
+//   ms4SameRepeat
+//    notesInSameRepeat: whether a tied-to note plays in the same pass of the unrolled score as
+//    the note the tie comes from (a tie into a first ending does not carry on into the second)
+//---------------------------------------------------------
+
+static bool ms4SameRepeat(const Score* score, const Note* first, const Note* second, int tickOffset)
+      {
+      const RepeatList& repeats = score->repeatList();
+      if (repeats.size() == 1)
+            return true;
+      auto it = repeats.findRepeatSegmentFromUTick(first->chord()->tick().ticks() + tickOffset);
+      if (it == repeats.end())
+            return true;
+      const int t = second->chord()->tick().ticks();
+      return (*it)->tick <= t && t < (*it)->tick + (*it)->len();
+      }
+
+//---------------------------------------------------------
+//   ms4PartialTieIncoming
+//    findIncomingNoteInNextRepeat: a tie from the last note of a pass carries on into the next
+//    pass's first note of that pitch if a tie leads into it (e.g. into a coda that starts tied)
+//---------------------------------------------------------
+
+static const Note* ms4PartialTieIncoming(const Score* score, const Note* outgoing, int tickOffset, int& nextOffset)
+      {
+      const RepeatList& repeats = score->repeatList();
+      const int utick = outgoing->chord()->tick().ticks() + tickOffset;
+      auto it = repeats.findRepeatSegmentFromUTick(utick);
+      if (it == repeats.end())
+            return nullptr;
+      if (utick != (*it)->utick + (*it)->len() - outgoing->chord()->actualTicks().ticks())
+            return nullptr;                   // not the pass's last note
+      auto next = it + 1;
+      if (next == repeats.end() || !(*next)->firstMeasure())
+            return nullptr;
+      const int track = outgoing->track();
+      for (Segment* s = (*next)->firstMeasure()->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest)) {
+            Element* e = s->element(track);
+            if (!e)
+                  continue;
+            if (!e->isChord())
+                  return nullptr;
+            const Note* incoming = toChord(e)->findNote(outgoing->pitch());
+            if (!incoming || !incoming->tieBack())
+                  return nullptr;
+            nextOffset = (*next)->utick - (*next)->tick;
+            return incoming;
+            }
+      return nullptr;
+      }
+
+//---------------------------------------------------------
 //   ms4DiscreteGlissando
 //    the steps of a note's discrete (non-portamento) glissando, as MuseScore 4 plays them
 //    (Glissando::pitchSteps); empty if the note has none
@@ -408,7 +460,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             int chainTicks = ticks;
             for (const Note* n = note; config.ms4TiedTicks < 0 && n->tieFor() && n->tieFor()->endNote(); ) {
                   const Note* next = n->tieFor()->endNote();
-                  if (next == n)
+                  if (next == n || !ms4SameRepeat(note->score(), note, next, tickOffset))
                         break;
                   if (isGlissandoFor(next)) {
                         const std::vector<int> steps = ms4DiscreteGlissando(next);
@@ -1118,10 +1170,22 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         int tiedTicks = -1;
                         if (note->tieFor() && !note->tieBack()) {
                               double extra = 0;
+                              const Note* anchor = note;          // the chain's note in the pass being walked
+                              int anchorOffset = tickOffset;
                               for (const Note* n = note; n->tieFor() && n->tieFor()->endNote(); ) {
                                     const Note* next = n->tieFor()->endNote();
                                     if (next == n || !next->play())
                                           break;
+                                    if (!ms4SameRepeat(score, anchor, next, anchorOffset)) {
+                                          // the tie leads out of this pass: only a pass's last note carries on,
+                                          // into the next pass's first note if a tie leads there (renderPartialTie)
+                                          int nextOffset = 0;
+                                          next = (n == anchor) ? ms4PartialTieIncoming(score, n, anchorOffset, nextOffset) : nullptr;
+                                          if (!next || !next->play())
+                                                break;
+                                          anchor = next;
+                                          anchorOffset = nextOffset;
+                                          }
                                     const int t = next->chord()->actualTicks().ticks();
                                     if (isGlissandoFor(next)) {
                                           const std::vector<int> steps = ms4DiscreteGlissando(next);

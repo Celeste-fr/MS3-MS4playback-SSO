@@ -792,6 +792,7 @@ bool ParsedChord::parse(const QString& s, const ChordList* cl, bool syntaxOnly, 
 
       // get modifiers
       bool addPending = false;
+      bool susPending = false;      // MuseScore 4: "sus" takes the next token as its argument (susb9, sus#4)
       _modifierList.clear();
       while (i < len) {
             // eat leading parens
@@ -827,6 +828,12 @@ bool ParsedChord::parse(const QString& s, const ChordList* cl, bool syntaxOnly, 
                   addPending = true;
                   continue;
                   }
+            // the same for "sus" (MuseScore 4); with nothing after it, it is sus4 further down
+            if (tok1L == "sus" && i != len) {
+                  addToken(tok1,ChordTokenClass::MODIFIER);
+                  susPending = true;
+                  continue;
+                  }
             // eat spaces
             while (i < len && s[i] == ' ')
                   ++i;
@@ -849,6 +856,17 @@ bool ParsedChord::parse(const QString& s, const ChordList* cl, bool syntaxOnly, 
                         tok1L = "major";
                   tok2L = tok1L + tok2L;
                   tok1L = "add";
+                  }
+            // re-attach "sus"
+            if (susPending) {
+                  if (raise.contains(tok1L))
+                        tok1L = "#";
+                  else if (lower.contains(tok1L))
+                        tok1L = "b";
+                  else if (tok1 == "M" || major.contains(tok1L))
+                        tok1L = "major";
+                  tok2L = tok1L + tok2L;
+                  tok1L = "sus";
                   }
             // standardize spelling
             if (tok1 == "M" || major.contains(tok1L))
@@ -1083,6 +1101,15 @@ bool ParsedChord::parse(const QString& s, const ChordList* cl, bool syntaxOnly, 
                         else
                               hdl += HDegree(d, 0, HDegreeType::ADD);
                         }
+                  else if (susPending) {
+                        degree = "sus" + tok1L + tok2L;
+                        if (raise.contains(tok1L))
+                              hdl += HDegree(d, 1, HDegreeType::ADD);
+                        else if (lower.contains(tok1L))
+                              hdl += HDegree(d, -1, HDegreeType::ADD);
+                        else
+                              hdl += HDegree(d, 0, HDegreeType::ADD);
+                        }
                   else if (tok1L == "" && tok2L != "") {
                         degree = "add" + tok2L;
                         hdl += HDegree(d, 0, HDegreeType::ADD);
@@ -1132,6 +1159,7 @@ bool ParsedChord::parse(const QString& s, const ChordList* cl, bool syntaxOnly, 
             while (i < len && trailing.contains(s[i]))
                   addToken(QString(s[i++]),ChordTokenClass::MODIFIER);
             addPending = false;
+            susPending = false;
             }
       if (!syntaxOnly) {
             chord.add(hdl);
