@@ -426,7 +426,7 @@ void TestSoundLibrary::articulationCheck()
       QVERIFY(p->setOffline(true));
       AC::Settings s;
       s.pitch = 67;
-      const std::vector<int> values { 1, 2, 3, 12, 30, 42, 43, 71, 87, 99, 110, 127 };
+      const std::vector<int> values { 1, 2, 25, 3, 12, 30, 42, 43, 71, 87, 99, 110, 127 };
       int steps = 0;
       AC::Report r = AC::run(p.get(), values, s, [&](int, int) { ++steps; return true; });
       QVERIFY2(r.switching, qPrintable(r.message));
@@ -437,11 +437,14 @@ void TestSoundLibrary::articulationCheck()
                : x.value >= 90 ? AC::Verdict::IGNORED : AC::Verdict::SWITCHES;
             QVERIFY2(x.verdict == expected, qPrintable(QString("value %1: %2 (ratio %3), expected %4")
                .arg(x.value).arg(AC::name(x.verdict)).arg(x.ratio).arg(AC::name(expected))));
+            // 25 has no sound at 67: tested an octave up (and never a reference)
+            QCOMPARE(x.pitch, x.value == 25 ? 79 : 67);
             const int sameAs = x.value == 87 ? 1 : x.value == 1 ? 87 : -1;
             QVERIFY2(x.sameAs == sameAs, qPrintable(QString("value %1 sounds like %2, expected %3").arg(x.value).arg(x.sameAs).arg(sameAs)));
             }
       QVERIFY(r.refA != r.refB);
       QVERIFY(r.refA < 90 && r.refB < 90);
+      QVERIFY(r.refA != 25 && r.refB != 25);
 
       // switched on another CC than the patch listens to: nothing to tell
       s.switchCC = 33;

@@ -695,6 +695,15 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       s.dynamicsCC = _library->dynamicsCC;
       s.expressionCC = _library->dynamicsCC == 11 ? -1 : 11;
       s.pitch = pitch;
+      for (const QString& id : ins.ids) {
+            if (const InstrumentTemplate* t = searchTemplate(id)) {
+                  if (t->maxPitchP > t->minPitchP) {
+                        s.minPitch = t->minPitchP;
+                        s.maxPitch = t->maxPitchP;
+                        break;
+                        }
+                  }
+            }
       QElapsedTimer events;
       events.start();
       ArticulationCheck::Report report;
@@ -761,9 +770,10 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   pt.setFont(font);
                   pt.setPen(colour);
                   pt.drawText(QRect(x, y + 18, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
-                              QString("sound: %1%2%3").arg(ArticulationCheck::name(v))
+                              QString("sound: %1%2%3%4").arg(ArticulationCheck::name(v))
                               .arg(r && r->ratio >= 0 ? QString(" (%1)").arg(r->ratio, 0, 'f', 2) : QString())
-                              .arg(r && r->sameAs >= 0 ? QString(", like %1").arg(r->sameAs) : QString()));
+                              .arg(r && r->sameAs >= 0 ? QString(", like %1").arg(r->sameAs) : QString())
+                              .arg(r && r->pitch >= 0 && r->pitch != pitch ? QString(", at pitch %1").arg(r->pitch) : QString()));
                   QImage shot = shots[i].size() == base.size() ? shots[i] : shots[i].scaled(base.size());
                   pt.drawImage(QRect(QPoint(x, y + labelH), cell), shot.copy(crop));
                   pt.setPen(QColor(200, 200, 200));
@@ -786,6 +796,11 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             a["ratio"] = std::round(r.ratio * 1000) / 1000;
             a["peakDb"] = std::round(r.peakDb * 10) / 10;
             a["unlikeFirstDb"] = std::round(r.firstDistance * 10) / 10;
+            if (r.pitch >= 0 && r.pitch != pitch) {
+                  a["pitch"] = r.pitch;
+                  problems << QString("%1 (%2): no sound at pitch %3, tested at %4: %5").arg(names[r.value].join(" / ")).arg(r.value)
+                              .arg(pitch).arg(r.pitch).arg(ArticulationCheck::name(r.verdict));
+                  }
             if (r.sameAs >= 0) {
                   a["soundsLike"] = r.sameAs;
                   problems << QString("%1 (%2): sounds just like %3 (%4)").arg(names[r.value].join(" / ")).arg(r.value)
@@ -793,7 +808,9 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   }
             arts.append(a);
             ++counts[int(r.verdict)];
-            if (r.verdict != ArticulationCheck::Verdict::SWITCHES)
+            if (r.verdict == ArticulationCheck::Verdict::SILENT)
+                  problems << QString("%1 (%2): silent at every pitch tried").arg(names[r.value].join(" / ")).arg(r.value);
+            else if (r.verdict != ArticulationCheck::Verdict::SWITCHES && (r.pitch < 0 || r.pitch == pitch))
                   problems << QString("%1 (%2): %3").arg(names[r.value].join(" / ")).arg(r.value).arg(ArticulationCheck::name(r.verdict));
             }
       out["articulations"] = arts;

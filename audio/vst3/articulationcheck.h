@@ -19,6 +19,11 @@
 //    from the first (both are then known to switch). When every value sounds like the first,
 //    the patch doesn't switch at all (not set to UACC, another MIDI channel …): "untestable".
 //
+//  A value with no sound at the test pitch (40 dB under the patch's loudest, or less: a
+//  harmonics patch with no sample there) is tried at other pitches of the instrument's range
+//  (an octave up, down, a fifth …) and tested at the first where it sounds; when there is
+//  none, it is "silent". Such values are never references.
+//
 //  A value that switches is also compared with the others that do: one that sounds just like
 //  another is marked "sounds like" it. "Just like": closer than twice the round robins' own
 //  spread (the median distance between the two notes of a value that switches; 0.5 dB at
@@ -58,6 +63,8 @@ class ArticulationCheck {
             int dynamicsValue { 100 };
             int expressionCC { 11 };      // -1: none
             int pitch { 60 };
+            int minPitch { 0 };           // the instrument's range, for other pitches
+            int maxPitch { 127 };
             int velocity { 100 };
             double note { 1.0 };          // seconds held
             double tail { 0.5 };          // seconds after the release
@@ -73,6 +80,8 @@ class ArticulationCheck {
             double peakDb { -200 };       // the note's peak
             double firstDistance { 0 };   // how unlike the first value it sounds (dB)
             double spread { -1 };         // distance(after A, after B), dB
+            int pitch { -1 };             // the pitch it was tested at (another than the
+                                          // test pitch when it had no sound there)
             int sameAs { -1 };            // another value it sounds just like (a plug-in that
                                           // plays a default for values it lacks, or a map
                                           // with one sound under two names), else -1

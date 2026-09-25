@@ -10,6 +10,7 @@
 //  Each held note plays at velocity * level, with a timbre of the articulation that was
 //  current at its note on (the articulation check listens for it), like a UACC patch:
 //    1-29, 31-89   harmonics of their own; 40-60 short (decaying), 70-80 trills (tremolo)
+//    25            like a harmonics patch: -66 dB under pitch 72 (no sample there)
 //    30            plays nothing
 //    85-89         not in the patch: articulation 1 (a default)
 //    90-127        not in the patch: ignored, the articulation stays
@@ -50,6 +51,7 @@ struct Voice {
       double phase { 0 };
       float velocity { 0 };
       int articulation { 1 };
+      int pitch { 60 };
       double gain { 1 };            // the round robin
       int roundRobin { 0 };
       long t { 0 };                 // samples played
@@ -76,6 +78,8 @@ static float timbre(const Voice& v, double sampleRate)
             s += std::sin(k * v.phase) * (0.3 + 0.7 * x) / k * (1 + 0.08 * std::sin(v.roundRobin * 1.7 + k));
             }
       const double t = v.t / sampleRate;
+      if (v.articulation == 25 && v.pitch < 72)
+            s *= 0.0005;
       if (v.articulation >= 40 && v.articulation <= 60)
             s *= std::exp(-t / 0.1);
       else if (v.articulation >= 70 && v.articulation <= 80)
@@ -144,6 +148,7 @@ class Processor : public AudioEffect {
                               Voice v;
                               v.velocity = e.noteOn.velocity;
                               v.articulation = current;
+                              v.pitch = e.noteOn.pitch;
                               v.roundRobin = roundRobin % 4;
                               v.gain = 1.0 + 0.06 * ((roundRobin++ % 3) - 1);
                               voices[e.noteOn.pitch] = v;

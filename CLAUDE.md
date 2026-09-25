@@ -184,6 +184,15 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   tests caught it. The same bug would have made audio export with Kontakt silent. The check
   now waits for an offline note to sound (up to a minute) before listening.
 
+- Second run, with the bus fix: listening worked offline. 20 of 22 values "switch", with
+  ratios 0 to 0.12. Short Harmonics (61) was silent and Long Harmonics (10) −73 dB at the
+  test pitch (B4); the pictures show both selected correctly, so the harmonics most likely
+  just have no sample there. The −73 dB note was normalised to the others' loudness, so
+  noise was compared: "ignored" was wrong, and it was even picked as reference A. Fixed: a
+  note 40 dB under the patch's loudest counts as having no sound at that pitch. It is never
+  a reference, and it is re-tested at other pitches of the instrument's range (octave, fifth
+  …), reported as "at pitch n". Test synth value 25 reproduces this.
+
 Still unknown: whether Kontakt keeps the articulation or plays a default for a value the
 patch lacks (the check handles both).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and

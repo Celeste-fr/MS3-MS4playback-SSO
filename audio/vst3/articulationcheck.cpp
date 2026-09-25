@@ -190,10 +190,13 @@ struct Player {
             }
       int frames(double seconds) const { return int(seconds * s.sampleRate); }
 
+      int lastPitch { -1 };
+
       // until the last note has died away (or 4 s)
       void settle()
             {
-            p->midi(ME_NOTEON, s.channel, s.pitch, 0);
+            if (lastPitch >= 0)
+                  p->midi(ME_NOTEON, s.channel, lastPitch, 0);
             p->allNotesOff();
             const int block = frames(0.1);
             for (int i = 0; i < 40; ++i) {
@@ -206,7 +209,7 @@ struct Player {
                   }
             }
 
-      Clip play(int prior, int value)
+      Clip play(int prior, int value, int pitch)
             {
             settle();
             if (prior >= 0) {
@@ -219,9 +222,10 @@ struct Player {
             if (s.expressionCC >= 0 && s.expressionCC != s.dynamicsCC)
                   p->midi(ME_CONTROLLER, s.channel, s.expressionCC, 127);
             render(frames(0.1));
-            p->midi(ME_NOTEON, s.channel, s.pitch, s.velocity);
+            lastPitch = pitch;
+            p->midi(ME_NOTEON, s.channel, pitch, s.velocity);
             std::vector<float> clip = render(frames(s.note));
-            p->midi(ME_NOTEON, s.channel, s.pitch, 0);
+            p->midi(ME_NOTEON, s.channel, pitch, 0);
             const std::vector<float>& tail = render(frames(s.tail));
             clip.insert(clip.end(), tail.begin(), tail.end());
             Clip c;
@@ -261,7 +265,7 @@ ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::
       // every value after the first
       std::vector<Clip> first(n);
       for (int i = 0; i < n; ++i) {
-            first[i] = player.play(values[0], values[i]);
+            first[i] = player.play(values[0], values[i], settings.pitch);
             if (!step())
                   return report;
             }
@@ -270,13 +274,21 @@ ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::
             report.results[i].value = values[i];
             report.results[i].peakDb = first[i].peakDb;
             report.results[i].firstDistance = distance(first[i].features, first[0].features);
+            report.results[i].pitch = settings.pitch;
             }
       auto silent = [](const Clip& c) { return c.peakDb < SILENT_DB; };
+
+      // no sound at the pitch: far under the patch's loudest (its features would be noise
+      // brought up to the loudness of the others)
+      double loudest = -200;
+      for (const Clip& c : first)
+            loudest = std::max(loudest, c.peakDb);
+      auto quiet = [&](const Clip& c) { return silent(c) || c.peakDb < loudest - 40; };
 
       // the references: A most unlike the first, B most unlike A among the others unlike the first
       int a = -1;
       for (int i = 1; i < n; ++i) {
-            if (!silent(first[i]) && (a < 0 || report.results[i].firstDistance > report.results[a].firstDistance))
+            if (!quiet(first[i]) && (a < 0 || report.results[i].firstDistance > report.results[a].firstDistance))
                   a = i;
             }
       // round robins of one articulation stay well under this (dB)
@@ -296,7 +308,7 @@ ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::
             int best = -1;
             double bestD = -1;
             for (int i = 0; i < n; ++i) {
-                  if (i == except1 || i == except2 || silent(first[i]))
+                  if (i == except1 || i == except2 || quiet(first[i]))
                         continue;
                   if (i != 0 && report.results[i].firstDistance < 0.5 * aDistance)
                         continue;         // might sound like the first because it is ignored
@@ -316,6 +328,14 @@ ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::
       report.refB = values[b];
       report.refDistance = distance(first[a].features, first[b].features);
 
+      // other pitches, for a value with no sound at the test pitch
+      std::vector<int> others;
+      for (int d : { 12, -12, 7, -7, 19, -19, 24, 5, -5 }) {
+            const int q = settings.pitch + d;
+            if (q >= std::max(0, settings.minPitch) && q <= std::min(127, settings.maxPitch))
+                  others.push_back(q);
+            }
+
       // every value after A and after B
       for (int i = 0; i < n; ++i) {
             Result& r = report.results[i];
@@ -330,18 +350,41 @@ ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::
                   done += 2;
                   continue;
                   }
-            const double ref = distance(first[p1].features, first[p2].features);
+            int pitch = settings.pitch;
+            double ref = distance(first[p1].features, first[p2].features);
+            if (quiet(first[i])) {
+                  // where does it sound?
+                  pitch = -1;
+                  for (int q : others) {
+                        const Clip t = player.play(values[0], values[i], q);
+                        if (!quiet(t)) {
+                              pitch = q;
+                              break;
+                              }
+                        }
+                  if (pitch < 0) {
+                        r.verdict = Verdict::SILENT;
+                        ++done;
+                        if (!step())
+                              return report;
+                        continue;
+                        }
+                  r.pitch = pitch;
+                  // the references at that pitch
+                  ref = distance(player.play(values[p1], values[p1], pitch).features,
+                                 player.play(values[p2], values[p2], pitch).features);
+                  }
             double ratio = 0;
             int tries = 0;
             for (;;) {
-                  const Clip x = player.play(values[p1], values[i]);
+                  const Clip x = player.play(values[p1], values[i], pitch);
                   if (!step())
                         return report;
-                  const Clip y = player.play(values[p2], values[i]);
+                  const Clip y = player.play(values[p2], values[i], pitch);
                   if (!step())
                         return report;
                   r.peakDb = std::max(x.peakDb, y.peakDb);
-                  if (silent(x) && silent(y)) {
+                  if (quiet(x) && quiet(y)) {
                         r.verdict = Verdict::SILENT;
                         break;
                         }
@@ -372,11 +415,11 @@ ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::
       // value played before it)
       for (int i = 0; i < n; ++i) {
             Result& r = report.results[i];
-            if (r.verdict != Verdict::SWITCHES)
+            if (r.verdict != Verdict::SWITCHES || r.pitch != settings.pitch)
                   continue;
             double best = report.sameDistance;
             for (int j = 0; j < n; ++j) {
-                  if (j == i || report.results[j].verdict != Verdict::SWITCHES)
+                  if (j == i || report.results[j].verdict != Verdict::SWITCHES || report.results[j].pitch != settings.pitch)
                         continue;
                   const double d = distance(first[i].features, first[j].features);
                   if (d < best) {
