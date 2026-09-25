@@ -36,6 +36,9 @@ class Fluid : public Synthesizer {
       // 0…n over all ports, so channel c plays on instance c / CHANNELS_PER_SYNTH. Not 256: channel
       // 255 is FluidSynth's NO_CHANNEL mark of unused voices (setting it up modulates those, and crashes).
       static constexpr int CHANNELS_PER_SYNTH = 240;
+      // each MuseScore channel has a FluidSynth channel per voice (PlayEvent::layer): channel c,
+      // voice v plays on FluidSynth channel c * LAYERS + v
+      static constexpr int LAYERS = 4;
 
       // MuseScore 4's settings (framework/audio/engine/internal/synthesizers/fluidsynth)
       static constexpr double GLOBAL_GAIN      = 4.8;  // FLUID_GLOBAL_VOLUME_GAIN
@@ -61,6 +64,7 @@ class Fluid : public Synthesizer {
       mutable QMutex _mutex;              // the audio thread plays; the GUI thread loads SoundFonts
 
       Instance* synthFor(int channel);
+      void playOn(int fluidChannel, const PlayEvent&);
       Instance* newInstance();
       void deleteInstances();
       void setupChannel(Instance*, int chan);

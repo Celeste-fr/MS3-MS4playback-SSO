@@ -270,13 +270,14 @@ static int ms3PitchBend(int p)
       }
 
 static void playNote(EventMap* events, const Note* note, int channel, int pitch,
-   int velo, int onTime, int offTime, int staffIdx)
+   int velo, int onTime, int offTime, int staffIdx, int layer = -1)
       {
       if (!note->play())
             return;
       velo = note->customizeVelocity(velo);
       NPlayEvent ev(ME_NOTEON, channel, pitch, velo);
       ev.setOriginatingStaff(staffIdx);
+      ev.setLayer(layer);
       ev.setTuning(note->tuning());
       ev.setNote(note);
       if (offTime < onTime)
@@ -328,7 +329,7 @@ static void playNote(EventMap* events, const Note* note, int channel, int pitch,
 
 static void collectNote(EventMap* events, int channel, const Note* note, qreal velocityMultiplier, int tickOffset, Staff* staff, SndConfig config)
       {
-      if (!note->play() || note->hidden())      // do not play overlapping notes
+      if (!note->play() || (note->hidden() && !config.ms4))      // MS3: do not play overlapping notes; MS4 plays both
             return;
       Chord* chord = note->chord();
 
@@ -376,24 +377,24 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
 
       // MuseScore 4: a plain note (one play event, not edited in the Piano Roll) and the notes tied
       // to it are one note of the chain's whole length, scaled by the articulations' duration factor
-      if (config.ms4 && nels == 1 && chord->playEventType() == PlayEventType::Auto && !isGlissandoFor(note)) {
+      if (config.ms4 && nels >= 1 && !isGlissandoFor(note)) {   // MS4 plays no stored play events (MS3's ornaments, Piano Roll edits, MuseScore 2 events)
             if (tieBack)
                   return;                         // played with the note the tie comes from
             int chainTicks = ticks;
             for (const Note* n = note; n->tieFor() && n->tieFor()->endNote(); ) {
                   const Note* next = n->tieFor()->endNote();
-                  if (next == n || next->playEvents().size() != 1 || isGlissandoFor(next))
+                  if (next == n || isGlissandoFor(next))
                         break;
                   chainTicks += next->chord()->actualTicks().ticks();
                   n = next;
                   }
-            int p = qBound(0, note->ppitch() + nel[0].pitch(), 127);
+            int p = qBound(0, note->ppitch(), 127);           // MS4: no play-event pitch offsets
             const int offset = qMin(config.ms4Offset, ticks);
             // swing on the chord's own length only, not on the tied notes' (NoteRenderer::applySwingIfNeed)
             const int swungTicks = (ticks * config.ms4SwingGate) / 100 + (chainTicks - ticks);
             int on  = tick1 + (ticks * config.ms4SwingOn) / 1000 + offset + ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
-            int off = on + int((qint64(swungTicks - offset - config.ms4Cut) * config.ms4Dur) / Ms4::HUNDRED) - 1;
-            playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx);
+            int off = on + int((qint64(swungTicks - offset - config.ms4Cut) * config.ms4Dur) / Ms4::HUNDRED);   // MS4 ends the note there (MS3 one tick early)
+            playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx, note->voice());
             nels = 0;                             // done; bends below still apply
             }
       for (int i = 0, pitch = note->ppitch(); i < nels; ++i) {
@@ -420,7 +421,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             int velo;
             Fraction nonUnwoundTick = Fraction::fromTicks(on - tickOffset);
             if (config.ms4) {
-                  playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, off, staffIdx);
+                  playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, off, staffIdx, note->voice());
                   continue;
                   }
             if (config.useSND) {
@@ -949,11 +950,12 @@ static void ms4Swing(const Chord* chord, int& onTime, int& gateTime)
 //    length) or the note ends, and the curve's segments interpolated in steps of 1/25 semitone
 //---------------------------------------------------------
 
-static void addMs4PitchCurve(EventMap* events, int channel, int staffIdx, int artStart, int artTicks, int noteEnd, const int* curve)
+static void addMs4PitchCurve(EventMap* events, int channel, int staffIdx, int artStart, int artTicks, int noteEnd, const int* curve, int layer)
       {
       auto bend = [&](int tick, int value) {
             NPlayEvent ev(ME_PITCHBEND, channel, value % 128, value / 128);
             ev.setOriginatingStaff(staffIdx);
+            ev.setLayer(layer);
             events->insert(std::make_pair(tick, ev));
             };
       const int resetAt = std::min(artStart + artTicks, noteEnd);
@@ -1015,7 +1017,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         RealizedHarmony rh = h->getRealizedHarmony();
                         const int on = htick + tickOffset;
                         const int length = rh.getActualDuration(on).ticks();
-                        const int off = on + (length * r.dur) / Ms4::HUNDRED - 1;
+                        const int off = on + (length * r.dur) / Ms4::HUNDRED;
                         for (int p : rh.pitches()) {
                               NPlayEvent ev(ME_NOTEON, hc->channel(), p, r.velocity);
                               ev.setHarmony(h);
@@ -1074,7 +1076,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const int artStart = ch->tick().ticks() + tickOffset;
                               const int on = artStart + (ticks * r.ts) / Ms4::HUNDRED;
                               const int off = on + (ticks * r.dur) / Ms4::HUNDRED;
-                              addMs4PitchCurve(events, noteChannel, st1->idx(), artStart, ticks, off, r.pitchCurve);
+                              addMs4PitchCurve(events, noteChannel, st1->idx(), artStart, ticks, off, r.pitchCurve, note->voice());
                               }
                         };
 
@@ -1085,7 +1087,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
 
                   // a note of its own at a given start, length and pitch offset
                   auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length, int pitchOffset = 0) {
-                        if (!note->play() || note->hidden() || length <= 0)
+                        if (!note->play() || length <= 0)
                               return;
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(start), ctx.snd);
                         int noteChannel = channel;
@@ -1093,9 +1095,59 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               noteChannel = instr->channel(sit->second.channelSlots[sit->second.slotFor(r.arts)].channel)->channel();
                         events->registerChannel(noteChannel);
                         const int on = start + tickOffset + (length * r.ts) / Ms4::HUNDRED;
-                        const int off = on + (length * r.dur) / Ms4::HUNDRED - 1;
+                        const int off = on + (length * r.dur) / Ms4::HUNDRED;
                         playNote(events, note, noteChannel, qBound(0, note->ppitch() + pitchOffset, 127), qBound(1, r.velocity, 127),
-                                 on, qMax(on, off), st1->idx());
+                                 on, qMax(on, off), st1->idx(), note->voice());
+                        };
+
+                  // OrnamentsRenderer: prefix, body (repeated while it fits for trills) and suffix of
+                  // sub-notes on the diatonic neighbours; too short a note plays as it is
+                  auto renderOrnament = [&](const Chord* c, const Ms4::OrnamentRule* orn, const std::vector<Ms4::ArtRef>& arts, int start, int length) {
+                        bool isSymbol = false;
+                        for (Articulation* a : c->articulations()) {
+                              const QString name = Sym::id2name(a->symId());
+                              if (name.startsWith("ornament") || name == "brassJazzTurn")
+                                    isSymbol = true;
+                              }
+                        const double bps = score->tempomap()->tempo(start);
+                        const float sub = orn->subNoteTicks(bps);
+                        for (const Note* note : c->notes()) {
+                              int T = length;
+                              if (isSymbol && note->tieFor()) {             // applyTiedNotesDuration
+                                    const Note* last = note->lastTiedNote();
+                                    if (last && last != note)
+                                          T = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks() - start;
+                                    }
+                              if (T <= orn->lowTempoTicks) {
+                                    renderAt(note, arts, start, T);
+                                    continue;
+                                    }
+                              const int up = Ms4::neighbourSemitones(note, 1);
+                              const int down = Ms4::neighbourSemitones(note, -1);
+                              auto semis = [&](int step) { return step > 0 ? step * up : (step < 0 ? step * down : 0); };
+                              const int preT = int(std::round(orn->prefix.size() * sub));
+                              const int sufT = int(std::round(orn->suffix.size() * sub));
+                              double t = start;
+                              auto run = [&](const std::vector<int>& steps, double span, int times) {
+                                    const double d = span / (steps.size() * times);
+                                    for (int k = 0; k < times; ++k)
+                                          for (int step : steps) {
+                                                renderAt(note, arts, int(std::round(t)), int(d), semis(step));
+                                                t += d;
+                                                }
+                                    };
+                              if (!orn->prefix.empty())
+                                    run(orn->prefix, preT, 1);
+                              if (!orn->body.empty()) {
+                                    const int alterations = orn->repeat ? int(std::max((T / sub) / 2.f, 0.f)) : 1;
+                                    if (alterations == 0)
+                                          renderAt(note, arts, int(std::round(t)), T);     // as MS4: the whole length, from here
+                                    else
+                                          run(orn->body, double(T - preT - sufT), alterations);
+                                    }
+                              if (!orn->suffix.empty())
+                                    run(orn->suffix, sufT, 1);
+                              }
                         };
 
                   // grace notes (GraceChordCtx): the first grace type of the chord (MS4 enum order) is
@@ -1142,10 +1194,23 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     else
                                           principalCut = int(std::round(actual));
                                     double t = before ? tick.ticks() : tick.ticks() + nominal - actual;
+                                    // a grace chord renders with the principal's articulations: an ornament of the
+                                    // principal ornaments its grace notes too (renderChord with graceCtx, as MS4)
+                                    const Ms4::OrnamentRule* graceOrnament = nullptr;
+                                    {
+                                          std::vector<Ms4::ArtRef> ga = chordArts;
+                                          std::sort(ga.begin(), ga.end(), [](const Ms4::ArtRef& a, const Ms4::ArtRef& b) { return a.art < b.art; });
+                                          for (const Ms4::ArtRef& a : ga)
+                                                if ((graceOrnament = Ms4::ornamentRule(a.art)))
+                                                      break;
+                                    }
                                     for (Chord* g : graces) {
                                           const int length = int(std::round(factor * g->durationTypeTicks().ticks()));
-                                          for (const Note* note : g->notes())
-                                                renderAt(note, chordArts, int(std::round(t)), length);
+                                          if (graceOrnament)
+                                                renderOrnament(g, graceOrnament, chordArts, int(std::round(t)), length);
+                                          else
+                                                for (const Note* note : g->notes())
+                                                      renderAt(note, chordArts, int(std::round(t)), length);
                                           t += length;
                                           }
                                     }
@@ -1199,53 +1264,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         }
                   else if (special == Special::ORNAMENT) {
-                        // OrnamentsRenderer: prefix, body (repeated while it fits for trills) and suffix of
-                        // sub-notes on the diatonic neighbours; too short a note plays as it is
-                        bool isSymbol = false;
-                        for (Articulation* a : chord->articulations()) {
-                              const QString name = Sym::id2name(a->symId());
-                              if (name.startsWith("ornament") || name == "brassJazzTurn")
-                                    isSymbol = true;
+                        if (qEnvironmentVariableIsSet("MS4_DEBUG_ORN")) {
+                              QString all;
+                              for (const Ms4::ArtRef& a : sorted)
+                                    all += QString(Ms4::ART_NAMES[int(a.art)]) + (Ms4::ornamentRule(a.art) == ornament ? "* " : " ");
+                              qDebug("MS4ORN tick %d utick %d staff %d pitch %d len %d arts %s", pStart, pStart + tickOffset, st1->idx(),
+                                     chord->upNote()->pitch(), pLength, qPrintable(all));
                               }
-                        const double bps = score->tempomap()->tempo(pStart);
-                        const float sub = ornament->subNoteTicks(bps);
-                        for (const Note* note : chord->notes()) {
-                              int T = pLength;
-                              if (isSymbol && note->tieFor()) {             // applyTiedNotesDuration
-                                    const Note* last = note->lastTiedNote();
-                                    if (last && last != note)
-                                          T = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks() - pStart;
-                                    }
-                              if (T <= ornament->lowTempoTicks) {
-                                    renderAt(note, principalArts, pStart, T);
-                                    continue;
-                                    }
-                              const int up = Ms4::neighbourSemitones(note, 1);
-                              const int down = Ms4::neighbourSemitones(note, -1);
-                              auto semis = [&](int step) { return step > 0 ? step * up : (step < 0 ? step * down : 0); };
-                              const int preT = int(std::round(ornament->prefix.size() * sub));
-                              const int sufT = int(std::round(ornament->suffix.size() * sub));
-                              double t = pStart;
-                              auto run = [&](const std::vector<int>& steps, double span, int times) {
-                                    const double d = span / (steps.size() * times);
-                                    for (int k = 0; k < times; ++k)
-                                          for (int step : steps) {
-                                                renderAt(note, principalArts, int(std::round(t)), int(d), semis(step));
-                                                t += d;
-                                                }
-                                    };
-                              if (!ornament->prefix.empty())
-                                    run(ornament->prefix, preT, 1);
-                              if (!ornament->body.empty()) {
-                                    const int alterations = ornament->repeat ? int(std::max((T / sub) / 2.f, 0.f)) : 1;
-                                    if (alterations == 0)
-                                          renderAt(note, principalArts, int(std::round(t)), T);     // as MS4: the whole length, from here
-                                    else
-                                          run(ornament->body, double(T - preT - sufT), alterations);
-                                    }
-                              if (!ornament->suffix.empty())
-                                    run(ornament->suffix, sufT, 1);
-                              }
+                        renderOrnament(chord, ornament, principalArts, pStart, pLength);
                         }
                   else if (special == Special::ARPEGGIO) {
                         // ArpeggioRenderer: by pitch, a step later each (the note's length / the number
@@ -1269,6 +1295,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         }
                   else {
+                        if (qEnvironmentVariableIsSet("MS4_DEBUG_ORN") && !chord->articulations().empty()) {
+                              QString all, syms;
+                              for (const Ms4::ArtRef& a : sorted)
+                                    all += QString(Ms4::ART_NAMES[int(a.art)]) + " ";
+                              for (Articulation* a : chord->articulations())
+                                    syms += QString(Sym::id2name(a->symId())) + " ";
+                              qDebug("MS4PLAIN utick %d pitch %d arts %s syms %s", pStart + tickOffset, chord->upNote()->pitch(),
+                                     qPrintable(all), qPrintable(syms));
+                              }
                         for (const Note* note : chord->notes())
                               collect(note, principalArts, principalOffset, principalCut);
                         }

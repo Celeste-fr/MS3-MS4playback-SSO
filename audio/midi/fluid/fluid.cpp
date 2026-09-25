@@ -197,11 +197,22 @@ Fluid::Instance* Fluid::synthFor(int channel)
 void Fluid::play(const PlayEvent& event)
       {
       QMutexLocker locker(&_mutex);
-      Instance* in = synthFor(event.channel());
+      const int base = event.channel() * LAYERS;
+      const bool isNote = event.type() == ME_NOTEON || event.type() == ME_NOTEOFF;
+      if (isNote || event.layer() >= 0)
+            playOn(base + qBound(0, event.layer(), LAYERS - 1), event);     // a note: its voice's channel
+      else
+            for (int l = 0; l < LAYERS; ++l)                                 // controllers, programs: all of them
+                  playOn(base + l, event);
+      }
+
+void Fluid::playOn(int channel, const PlayEvent& event)
+      {
+      Instance* in = synthFor(channel);
       if (!in)
             return;
       fluid_synth_t* s = in->synth;
-      const int ch = event.channel() % CHANNELS_PER_SYNTH;
+      const int ch = channel % CHANNELS_PER_SYNTH;
       const int a = event.dataA();
       const int b = event.dataB();
 
@@ -263,8 +274,9 @@ void Fluid::allNotesOff(int channel)
                   fluid_synth_all_notes_off(in->synth, -1);
             return;
             }
-      if (Instance* in = synthFor(channel))
-            fluid_synth_all_notes_off(in->synth, channel % CHANNELS_PER_SYNTH);
+      for (int l = 0; l < LAYERS; ++l)
+            if (Instance* in = synthFor(channel * LAYERS + l))
+                  fluid_synth_all_notes_off(in->synth, (channel * LAYERS + l) % CHANNELS_PER_SYNTH);
       }
 
 void Fluid::allSoundsOff(int channel)
@@ -275,8 +287,9 @@ void Fluid::allSoundsOff(int channel)
                   fluid_synth_all_sounds_off(in->synth, -1);
             return;
             }
-      if (Instance* in = synthFor(channel))
-            fluid_synth_all_sounds_off(in->synth, channel % CHANNELS_PER_SYNTH);
+      for (int l = 0; l < LAYERS; ++l)
+            if (Instance* in = synthFor(channel * LAYERS + l))
+                  fluid_synth_all_sounds_off(in->synth, (channel * LAYERS + l) % CHANNELS_PER_SYNTH);
       }
 
 //---------------------------------------------------------

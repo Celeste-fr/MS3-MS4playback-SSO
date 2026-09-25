@@ -692,7 +692,6 @@ static bool ornamentType(const QString& s, MScore::OrnamentStyle style, Art& art
       else if (s == "ornamentTrill" || s == "ornamentShake3" || s == "ornamentShakeMuffat1") art = baroque ? Art::TrillBaroque : Art::Trill;
       else if (s == "ornamentShortTrill") art = baroque ? Art::UpperMordentBaroque : Art::UpperMordent;
       else if (s == "ornamentTremblement" || s == "ornamentTremblementCouperin") art = Art::Tremblement;
-      else if (s == "ornamentPrecompMordentUpperPrefix") art = Art::MordentWithUpperPrefix;
       else return false;
       return true;
       }

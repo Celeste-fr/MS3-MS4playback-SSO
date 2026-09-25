@@ -228,6 +228,7 @@ class PlayEvent : public MidiCoreEvent {
 
    protected:
       float _tuning = .0f;
+      signed char _layer = -1;      // voice (0-3) the event belongs to, -1: the whole channel
 
    public:
       PlayEvent() : MidiCoreEvent() {}
@@ -236,6 +237,10 @@ class PlayEvent : public MidiCoreEvent {
          : MidiCoreEvent(t, c, a, b) {}
       float tuning() const           { return _tuning;  }
       void setTuning(float v)        { _tuning = v;     }
+      // MuseScore 4 gives each voice of an instrument a synth channel of its own (FluidSynth's
+      // ChannelMap: per voice layer), so voices in unison both sound and a voice's bends stay its own
+      int layer() const              { return _layer;   }
+      void setLayer(int v)           { _layer = static_cast<signed char>(v); }
       };
 
 //---------------------------------------------------------
