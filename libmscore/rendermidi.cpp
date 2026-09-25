@@ -1833,6 +1833,36 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
             int idx = s->staff()->channel(s->tick(), 0);
             int channel = s->part()->instrument(s->tick())->channel(idx)->channel();
 
+            if (ms4Mode && (s->isPedal() || s->isLetRing())) {
+                  // FluidSequencer::addNoteEvent: the pedal's notes send it down at its start and up at
+                  // its end -- the collision-free interval's (a pedal followed by another ends a tick
+                  // before it) -- both ahead of the notes of that moment
+                  auto pc = ms4Parts.find(s->part());
+                  if (pc == ms4Parts.end() || (s->staff() && !s->staff()->primaryStaff()))
+                        continue;
+                  const int from = s->tick().ticks();
+                  const int to = pc->second.dynamics.spannerStop(s);
+                  if (to <= from)
+                        continue;
+                  auto put = [&](int tick, int value) {
+                        NPlayEvent ev(ME_CONTROLLER, channel, CTRL_SUSTAIN, value);
+                        ev.setOriginatingStaff(staff);
+                        // on the channel of the notes that carry it: without technique mappings a
+                        // Pedal note plays on the first voice's (resolveChannelForEvent)
+                        bool firstLayer = true;
+                        for (const auto& snd : pc->second.sounds)
+                              firstLayer &= !snd.second.techniques;
+                        if (firstLayer)
+                              ev.setLayer(0);
+                        events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
+                        };
+                  if (from >= tick1 && from < tick2)
+                        put(from, 127);
+                  const bool lastChunk = score->lastMeasure() && tick2 >= score->lastMeasure()->endTick().ticks();
+                  if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2))
+                        put(to, 0);
+                  continue;
+                  }
             if (s->isPedal() || s->isLetRing()) {
                   channelPedalEvents.insert({channel, std::vector<std::pair<int, std::pair<bool, int> > >()});
                   std::vector<std::pair<int, std::pair<bool, int> > > pedalEventList = channelPedalEvents.at(channel);
