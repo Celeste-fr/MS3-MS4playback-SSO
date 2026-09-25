@@ -118,6 +118,28 @@ static bool ms4SameRepeat(const Score* score, const Note* first, const Note* sec
       }
 
 //---------------------------------------------------------
+//   ms4EndPause
+//    pauseUs: the pause (breath, caesura; a section break's at the end of its pass) at a note's
+//    end, in seconds -- MS4 leaves it out of the note's length
+//---------------------------------------------------------
+
+static qreal ms4EndPause(const Score* score, int endUtick)
+      {
+      const RepeatList& repeats = score->repeatList();
+      auto it = repeats.findRepeatSegmentFromUTick(endUtick - 1);
+      if (it == repeats.end())
+            return 0.0;
+      const RepeatSegment* rs = *it;
+      qreal pause = 0.0;
+      auto e = score->tempomap()->find(endUtick - (rs->utick - rs->tick));
+      if (e != score->tempomap()->end())
+            pause += e->second.pause;
+      if (endUtick == rs->utick + rs->len())
+            pause += rs->pause;
+      return pause;
+      }
+
+//---------------------------------------------------------
 //   ms4PartialTieIncoming
 //    findIncomingNoteInNextRepeat: a tie from the last note of a pass carries on into the next
 //    pass's first note of that pitch if a tie leads into it (e.g. into a coda that starts tied)
@@ -360,8 +382,8 @@ static void playNote(EventMap* events, const Note* note, int channel, int pitch,
       if (offTime < onTime)
             offTime = onTime;
       events->insert(std::pair<int, NPlayEvent>(onTime, ev));
-      // adds portamento for continuous glissando
-      for (Spanner* spanner : note->spannerFor()) {
+      // adds portamento for continuous glissando (MuseScore 3; MS4 notes bend by their pitch curve)
+      for (Spanner* spanner : layer < 0 ? note->spannerFor() : QVector<Spanner*>()) {
             if (spanner->type() == ElementType::GLISSANDO) {
                   Glissando *glissando = toGlissando(spanner);
                   if (glissando->glissandoStyle() == GlissandoStyle::PORTAMENTO) {
@@ -454,7 +476,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
 
       // MuseScore 4: a plain note (one play event, not edited in the Piano Roll) and the notes tied
       // to it are one note of the chain's whole length, scaled by the articulations' duration factor
-      if (config.ms4 && nels >= 1 && !isGlissandoFor(note)) {   // MS4 plays no stored play events (MS3's ornaments, Piano Roll edits, MuseScore 2 events)
+      if (config.ms4 && nels >= 1) {   // MS4 plays no stored play events (MS3's ornaments, Piano Roll edits, MuseScore 2 events)
             if (tieBack)
                   return;                         // played with the note the tie comes from
             int chainTicks = ticks;
@@ -486,7 +508,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   const int n0 = on - ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
                   const int n1 = n0 + swungTicks - offset - config.ms4Cut;
                   const qreal t0 = sc->utick2utime(n0);
-                  const qreal span = sc->utick2utime(n1) - t0;
+                  const qreal span = sc->utick2utime(n1) - t0 - ms4EndPause(sc, n1);
                   const qreal slope = sc->utick2utime(n0 + 1) - t0;
                   if (n1 > n0 && qAbs(span - slope * (n1 - n0)) > 1e-6)
                         off = sc->utime2utick(sc->utick2utime(on) + span * config.ms4Dur / Ms4::HUNDRED);
@@ -608,8 +630,11 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   }
             }
 
-      // Bends
+      // Bends (MuseScore 3's; MS4 plays a score's old bends straight -- only its own guitar
+      // bends bend)
       for (Element* e : note->el()) {
+            if (config.ms4)
+                  break;
             if (e == 0 || e->type() != ElementType::BEND)
                   continue;
             Bend* bend = toBend(e);

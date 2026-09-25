@@ -582,12 +582,17 @@ static const PitchEntry PITCH[] = {
       { Family::Strings, Art::Plop, { 200, 100, 50, 0, 0, 0, 0, 0, 0, 0, 0 } },
       { Family::Strings, Art::Scoop, { -200, -100, -50, 0, 0, 0, 0, 0, 0, 0, 0 } },
       { Family::Strings, Art::BrassBend, { 0, 0, 0, -50, -100, -100, -100, -50, 0, 0, 0 } },
+      { Family::Strings, Art::ContinuousGlissando, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 } },
       { Family::Winds, Art::Fall, { 0, 0, 0, 0, 0, 0, -100, -200, -300, -400, -500 } },
       { Family::Winds, Art::QuickFall, { 0, 0, 0, 0, 0, 0, 0, 0, -150, -300, -500 } },
       { Family::Winds, Art::Doit, { 0, 0, 0, 0, 0, 0, 100, 200, 300, 400, 500 } },
       { Family::Winds, Art::Plop, { 200, 100, 50, 0, 0, 0, 0, 0, 0, 0, 0 } },
       { Family::Winds, Art::Scoop, { -200, -100, -50, 0, 0, 0, 0, 0, 0, 0, 0 } },
       { Family::Winds, Art::BrassBend, { 0, 0, 0, -50, -100, -100, -100, -50, 0, 0, 0 } },
+      { Family::Winds, Art::ContinuousGlissando, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 } },
+      { Family::Keyboards, Art::ContinuousGlissando, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 } },
+      { Family::Voices, Art::ContinuousGlissando, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 } },
+      { Family::Percussions, Art::ContinuousGlissando, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 } },
       };
 
 // MusicXML sound id (Instrument::instrumentId()) -> family

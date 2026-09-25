@@ -51,6 +51,7 @@ struct ArtRef {
       int phase { 0 };                    // 0 chord (ChordArticulationsParser), 1 note (NoteArticulationsParser),
                                           // 2 merged from a tied note (addTiedNote)
       bool erased { false };              // taken out after its phase (the principal's grace type)
+      int pitchRange { 0 };               // overallPitchChangesRange (a glissando's interval, 50 = semitone)
       };
 
 // ArticulationMap is a std::unordered_map: where MS4 takes "the first" articulation (the average's

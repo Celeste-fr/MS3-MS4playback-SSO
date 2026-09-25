@@ -24,7 +24,7 @@ MPE = os.path.join(MS4, 'framework', 'mpe')
 FAMS = ['Strings', 'Winds', 'Keyboards', 'Voices', 'Percussions']
 FILE = {'Strings': 'strings', 'Winds': 'winds', 'Keyboards': 'keyboard', 'Voices': 'voice', 'Percussions': 'percussion'}
 JSON_TO_ENUM = {'SulPonticello': 'SulPont', 'ShortTrill': 'UpperMordent', 'Mordent': 'LowerMordent'}
-BENT = ['Fall', 'QuickFall', 'Doit', 'Plop', 'Scoop', 'BrassBend']
+BENT = ['Fall', 'QuickFall', 'Doit', 'Plop', 'Scoop', 'BrassBend', 'ContinuousGlissando']
 
 
 def enum_order():

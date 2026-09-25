@@ -18,6 +18,7 @@
 #include "chord.h"
 #include "chordline.h"
 #include "dynamic.h"
+#include "glissando.h"
 #include "hairpin.h"
 #include "instrument.h"
 #include "measure.h"
@@ -71,6 +72,7 @@ static bool isBendType(Art a)
             case Art::Doit:
             case Art::Plop:
             case Art::Scoop:
+            case Art::ContinuousGlissando:
                   return true;
             default:
                   return false;
@@ -466,10 +468,18 @@ NoteResult note(Family fam, const std::vector<ArtRef>& arts, int D, bool snd)
       r.dur = dur;
       r.ts = ts;
 
-      // pitch curve (ArticulationMap: averaged over the articulations that bend)
+      // pitch curve (ArticulationMap: averaged over the articulations that bend, as their range;
+      // NoteEvent::calculatePitchCurve scales it by the range unless that is 0 or a semitone)
       {
+            auto rangeOf = [&](Art art) {
+                  for (const ArtRef& a : arts)
+                        if (a.art == art)
+                              return a.pitchRange;
+                  return 0;
+                  };
             int sum[11] = {};
             int count = 0;
+            int rangeSum = 0;
             for (const P& q : pats) {
                   const int* pc = pitchPattern(fam, q.art);
                   if (!pc)
@@ -480,14 +490,24 @@ NoteResult note(Family fam, const std::vector<ArtRef>& arts, int D, bool snd)
                   if (!meaningful)
                         continue;
                   ++count;
+                  rangeSum += rangeOf(q.art);
                   for (int k = 0; k < 11; ++k)
                         sum[k] += pc[k];
                   }
             for (const P& q : pats)
                   r.bend |= isBendType(q.art);
+            const int range = count > 0 ? rangeSum / count : rangeOf(pats[0].art);
             if (count > 0)
                   for (int k = 0; k < 11; ++k)
                         r.pitchCurve[k] = sum[k] / count;
+            else if (const int* pc = pitchPattern(fam, pats[0].art))
+                  std::copy(pc, pc + 11, r.pitchCurve);
+            if (range != 0 && range != 50) {                  // PITCH_LEVEL_STEP
+                  const float ratio = range / 50.0f;
+                  const float unit = 50.0f / 100.0f;          // PITCH_LEVEL_STEP / ONE_PERCENT
+                  for (int k = 0; k < 11; ++k)
+                        r.pitchCurve[k] = int(std::round(r.pitchCurve[k] * ratio * unit));
+                  }
             }
       const Peak pk = peak(curve);
       if (snd) {
@@ -968,17 +988,19 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
       // segment of their own and get none
       if (!chord->isGrace() && dynamics.subitoAt(tick, staffIdx))
             arts.push_back({ Art::Subito, false });
-      // tremolo on one chord (TremoloMetaParser)
+      // tremolo on one chord or between two (TremoloSingleMetaParser / TremoloTwoMetaParser)
       if (Tremolo* t = chord->tremolo()) {
-            if (!t->twoNotes()) {
-                  switch (t->tremoloType()) {
-                        case TremoloType::R8:  arts.push_back({ Art::Tremolo8th, false }); break;
-                        case TremoloType::R16: arts.push_back({ Art::Tremolo16th, false }); break;
-                        case TremoloType::R32: arts.push_back({ Art::Tremolo32nd, false }); break;
-                        case TremoloType::R64: arts.push_back({ Art::Tremolo64th, false }); break;
-                        case TremoloType::BUZZ_ROLL: arts.push_back({ Art::TremoloBuzz, false }); break;
-                        default: break;
-                        }
+            switch (t->tremoloType()) {
+                  case TremoloType::R8:
+                  case TremoloType::C8:  arts.push_back({ Art::Tremolo8th, false }); break;
+                  case TremoloType::R16:
+                  case TremoloType::C16: arts.push_back({ Art::Tremolo16th, false }); break;
+                  case TremoloType::R32:
+                  case TremoloType::C32: arts.push_back({ Art::Tremolo32nd, false }); break;
+                  case TremoloType::R64:
+                  case TremoloType::C64: arts.push_back({ Art::Tremolo64th, false }); break;
+                  case TremoloType::BUZZ_ROLL: arts.push_back({ Art::TremoloBuzz, false }); break;
+                  default: break;
                   }
             }
       // arpeggio (ArpeggioMetaParser)
@@ -1062,11 +1084,28 @@ std::vector<ArtRef> noteArticulations(const Note* note, const std::vector<ArtRef
             case NoteHead::Group::HEAD_TI: head = Art::TriangleRoundDownNote; break;
             default: break;
             }
-      // (NoteArticulationsParser::doParse: technique, ghost note, notehead, …)
-      if (note->ghost())
-            arts.push_back({ Art::GhostNote, false, 1 });
+      // (NoteArticulationsParser::doParse: technique, ghost note, notehead, symbols, laissez vibrer,
+      // spanners)
+      // a MuseScore 3 ghost note reaches MS4 with an x notehead, so it plays as one (CrossNote,
+      // parseNoteHead's notehead symbol), not as a GhostNote
+      if (note->ghost() && head == Art::COUNT)
+            head = Art::CrossNote;
       if (head != Art::COUNT)
             arts.push_back({ head, false, 1 });
+      // a portamento glissando from the note: a continuous bend over it to the next note's pitch
+      // (SpannersMetaParser: ContinuousGlissando, its range the interval)
+      for (Spanner* sp : note->spannerFor()) {
+            if (!sp->isGlissando() || !toGlissando(sp)->playGlissando())
+                  continue;
+            Glissando* g = toGlissando(sp);
+            const Note* end = sp->endElement() && sp->endElement()->isNote() ? toNote(sp->endElement()) : nullptr;
+            if (g->glissandoStyle() == GlissandoStyle::PORTAMENTO && end) {
+                  ArtRef a { Art::ContinuousGlissando, false, 1 };
+                  a.pitchRange = (end->ppitch() - note->ppitch()) * 50;
+                  arts.push_back(a);
+                  }
+            break;
+            }
       return arts;
       }
 
