@@ -352,26 +352,64 @@ int expressionLevel(int level)
 //    FluidSequencer::noteVelocity
 //---------------------------------------------------------
 
+static const Pattern* patternOf(Family fam, const ArtRef& a)
+      {
+      const Pattern* p = pattern(fam, a.art);
+      if (!p && a.fallback)
+            p = pattern(fam, Art::Standard);
+      return p;
+      }
+
+std::vector<Art> iterationOrder(const std::vector<ArtRef>& arts, int fam)
+      {
+      std::unordered_map<Art, int> map;
+      auto enters = [&](const ArtRef& a) { return fam < 0 || patternOf(Family(fam), a) != nullptr; };
+      // the chord's map, the principal's grace type out
+      for (const ArtRef& a : arts)
+            if (a.phase == 0 && enters(a))
+                  map.emplace(a.art, 0);
+      for (const ArtRef& a : arts)
+            if (a.phase == 0 && a.erased)
+                  map.erase(a.art);
+      // the note's own (a copy of the chord's, then the note's parsers), Standard if nothing
+      bool note = false;
+      for (const ArtRef& a : arts)
+            note |= a.phase >= 1;
+      if (note || fam >= 0) {
+            for (const ArtRef& a : arts)
+                  if (a.phase == 1 && enters(a))
+                        map.emplace(a.art, 0);
+            if (map.empty())
+                  map.emplace(Art::Standard, 0);
+            // renderNormalTie: the tied notes' articulations, then Standard out where there are others
+            for (const ArtRef& a : arts)
+                  if (a.phase == 2 && enters(a))
+                        map.emplace(a.art, 0);
+            if (map.size() > 1)
+                  map.erase(Art::Standard);
+            }
+      std::vector<Art> order;
+      for (const auto& p : map)
+            order.push_back(p.first);
+      return order;
+      }
+
 NoteResult note(Family fam, const std::vector<ArtRef>& arts, int D, bool snd)
       {
       struct P { Art art; const Pattern* p; };
       std::vector<P> pats;
-      for (const ArtRef& a : arts) {
-            bool seen = false;
-            for (const P& q : pats)
-                  if (q.art == a.art)
-                        seen = true;
-            if (seen)
-                  continue;
-            const Pattern* p = pattern(fam, a.art);
-            if (!p && a.fallback)
+      for (Art art : iterationOrder(arts, int(fam))) {
+            const Pattern* p = nullptr;
+            for (const ArtRef& a : arts)
+                  if (a.art == art && (p = patternOf(fam, a)))
+                        break;
+            if (!p && art == Art::Standard)
                   p = pattern(fam, Art::Standard);
             if (p)
-                  pats.push_back({ a.art, p });
+                  pats.push_back({ art, p });
             }
-      if (pats.empty())                                     // NoteArticulationsParser: nothing -> Standard
+      if (pats.empty())
             pats.push_back({ Art::Standard, pattern(fam, Art::Standard) });
-      std::sort(pats.begin(), pats.end(), [](const P& a, const P& b) { return a.art < b.art; });
 
       // average (ArticulationMap::preCalculateAverageData)
       int dur, ts, maxAmp;
@@ -943,6 +981,19 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
                         }
                   }
             }
+      // arpeggio (ArpeggioMetaParser)
+      if (Arpeggio* a = chord->arpeggio()) {
+            if (a->playArpeggio()) {
+                  switch (a->arpeggioType()) {
+                        case ArpeggioType::NORMAL:        arts.push_back({ Art::Arpeggio, false }); break;
+                        case ArpeggioType::UP:            arts.push_back({ Art::ArpeggioUp, false }); break;
+                        case ArpeggioType::DOWN:          arts.push_back({ Art::ArpeggioDown, false }); break;
+                        case ArpeggioType::UP_STRAIGHT:   arts.push_back({ Art::ArpeggioStraightUp, false }); break;
+                        case ArpeggioType::DOWN_STRAIGHT: arts.push_back({ Art::ArpeggioStraightDown, false }); break;
+                        default: break;
+                        }
+                  }
+            }
       // grace notes (GraceNotesMetaParser): their type is an articulation of the principal chord
       for (const Chord* g : chord->graceNotes()) {
             switch (g->noteType()) {
@@ -955,19 +1006,6 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
                   case NoteType::GRACE16_AFTER:
                   case NoteType::GRACE32_AFTER: arts.push_back({ Art::PostAppoggiatura, false }); break;
                   default: break;
-                  }
-            }
-      // arpeggio (ArpeggioMetaParser)
-      if (Arpeggio* a = chord->arpeggio()) {
-            if (a->playArpeggio()) {
-                  switch (a->arpeggioType()) {
-                        case ArpeggioType::NORMAL:        arts.push_back({ Art::Arpeggio, false }); break;
-                        case ArpeggioType::UP:            arts.push_back({ Art::ArpeggioUp, false }); break;
-                        case ArpeggioType::DOWN:          arts.push_back({ Art::ArpeggioDown, false }); break;
-                        case ArpeggioType::UP_STRAIGHT:   arts.push_back({ Art::ArpeggioStraightUp, false }); break;
-                        case ArpeggioType::DOWN_STRAIGHT: arts.push_back({ Art::ArpeggioStraightDown, false }); break;
-                        default: break;
-                        }
                   }
             }
       // chord line (ChordLineMetaParser)
@@ -994,7 +1032,7 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
             const Channel* ch = instr->channel(up->subchannel());
             Art art;
             if (ch && techniqueOfChannel(ch->name(), art))
-                  arts.push_back({ art, false });
+                  arts.push_back({ art, false, 1 });          // NoteArticulationsParser::parsePlayingTechnique
             }
       return arts;
       }
@@ -1024,10 +1062,11 @@ std::vector<ArtRef> noteArticulations(const Note* note, const std::vector<ArtRef
             case NoteHead::Group::HEAD_TI: head = Art::TriangleRoundDownNote; break;
             default: break;
             }
-      if (head != Art::COUNT)
-            arts.push_back({ head, false });
+      // (NoteArticulationsParser::doParse: technique, ghost note, notehead, …)
       if (note->ghost())
-            arts.push_back({ Art::GhostNote, false });
+            arts.push_back({ Art::GhostNote, false, 1 });
+      if (head != Art::COUNT)
+            arts.push_back({ head, false, 1 });
       return arts;
       }
 

@@ -48,7 +48,16 @@ constexpr int STEP = 500;                 // DYNAMIC_LEVEL_STEP (5 %)
 struct ArtRef {
       Art art;
       bool fallback;                      // SymbolsMetaParser: use Standard's pattern if the family lacks one
+      int phase { 0 };                    // 0 chord (ChordArticulationsParser), 1 note (NoteArticulationsParser),
+                                          // 2 merged from a tied note (addTiedNote)
+      bool erased { false };              // taken out after its phase (the principal's grace type)
       };
+
+// ArticulationMap is a std::unordered_map: where MS4 takes "the first" articulation (the average's
+// fallback, the technique's channel, the renderer of a chord) it takes the map's iteration order. The
+// same map built the same way gives the same order (with the same standard library as MS4's build).
+// Articulations without a pattern in the family (fam >= 0) never enter the map.
+std::vector<Art> iterationOrder(const std::vector<ArtRef>& arts, int fam = -1);
 
 struct NoteResult {
       int dur { HUNDRED };                // length factor, 10000 = 100 %

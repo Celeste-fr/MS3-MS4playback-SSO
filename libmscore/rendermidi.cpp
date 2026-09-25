@@ -1199,31 +1199,19 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           extra += t;
                                     else {
                                           extra += t * double(rn.dur) / Ms4::HUNDRED;
-                                          for (const Ms4::ArtRef& a : nextArts) {
-                                                if (a.art == Ms4::Art::Staccato || a.art == Ms4::Art::Staccatissimo)
+                                          // merged in the tied note's map order (Standard is dropped from the
+                                          // merged map afterwards: iterationOrder)
+                                          for (Ms4::Art art : rn.arts) {
+                                                if (art == Ms4::Art::Staccato || art == Ms4::Art::Staccatissimo)
                                                       continue;
-                                                bool have = false;
-                                                for (const Ms4::ArtRef& b : noteArts)
-                                                      have |= b.art == a.art;
-                                                if (!have)
-                                                      noteArts.push_back(a);
+                                                bool fallback = false;
+                                                for (const Ms4::ArtRef& a : nextArts)
+                                                      fallback |= a.art == art && a.fallback;
+                                                noteArts.push_back({ art, fallback, 2 });
                                                 }
                                           }
                                     n = next;
                                     }
-                              int kinds = 0;
-                              bool standard = false;
-                              std::vector<Ms4::Art> seen;
-                              for (const Ms4::ArtRef& a : noteArts) {
-                                    if (std::find(seen.begin(), seen.end(), a.art) == seen.end()) {
-                                          seen.push_back(a.art);
-                                          ++kinds;
-                                          }
-                                    standard |= a.art == Ms4::Art::Standard;
-                                    }
-                              if (kinds > 1 && standard)
-                                    noteArts.erase(std::remove_if(noteArts.begin(), noteArts.end(),
-                                          [](const Ms4::ArtRef& a) { return a.art == Ms4::Art::Standard; }), noteArts.end());
                               tiedTicks = int(std::lround(extra));
                               }
                         Ms4::NoteResult r = Ms4::note(ctx.family, noteArts, level, ctx.snd);
@@ -1354,7 +1342,23 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         };
 
-                  // grace notes (GraceChordCtx): the first grace type of the chord (MS4 enum order) is
+                  // a chord's articulations in the order of its ArticulationMap (chord level only)
+                  auto chordOrder = [&](const std::vector<Ms4::ArtRef>& refs) {
+                        std::vector<Ms4::ArtRef> chordRefs;
+                        for (const Ms4::ArtRef& a : refs)
+                              if (a.phase == 0)
+                                    chordRefs.push_back(a);
+                        std::vector<Ms4::ArtRef> out;
+                        for (Ms4::Art art : Ms4::iterationOrder(chordRefs, int(ctx.family)))
+                              for (const Ms4::ArtRef& a : chordRefs)
+                                    if (a.art == art && !a.erased) {
+                                          out.push_back(a);
+                                          break;
+                                          }
+                        return out;
+                        };
+
+                  // grace notes (GraceChordCtx): the first grace type of the chord (map order) is
                   // played, its grace chords in at most half the principal (2/3 in compound time for
                   // a lone appoggiatura or after-graces; acciaccaturas and groups at most 1/64 each),
                   // keeping their proportions; the principal starts after them / ends before them
@@ -1363,10 +1367,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   int principalCut = 0;
                   {
                         Ms4::Art graceType = Ms4::Art::COUNT;
-                        for (const Ms4::ArtRef& a : chordArts)
-                              if ((a.art == Ms4::Art::PreAppoggiatura || a.art == Ms4::Art::PostAppoggiatura || a.art == Ms4::Art::Acciaccatura)
-                                  && a.art < graceType)
+                        for (const Ms4::ArtRef& a : chordOrder(chordArts))
+                              if (a.art == Ms4::Art::PreAppoggiatura || a.art == Ms4::Art::PostAppoggiatura || a.art == Ms4::Art::Acciaccatura) {
                                     graceType = a.art;
+                                    break;
+                                    }
+                        // the principal's context goes on without it (erased, keeping the map's history)
+                        for (Ms4::ArtRef& a : principalArts)
+                              if (a.art == graceType && a.phase == 0)
+                                    a.erased = true;
                         if (graceType != Ms4::Art::COUNT) {
                               const bool before = graceType != Ms4::Art::PostAppoggiatura;
                               QVector<Chord*> graces;
@@ -1391,8 +1400,6 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (total > 0) {
                                     const double actual = std::min(available, total);
                                     const double factor = actual / total;
-                                    principalArts.erase(std::remove_if(principalArts.begin(), principalArts.end(),
-                                          [graceType](const Ms4::ArtRef& a) { return a.art == graceType; }), principalArts.end());
                                     if (before)
                                           principalOffset = int(std::round(actual));
                                     else
@@ -1402,9 +1409,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // principal ornaments its grace notes too (renderChord with graceCtx, as MS4)
                                     const Ms4::OrnamentRule* graceOrnament = nullptr;
                                     {
-                                          std::vector<Ms4::ArtRef> ga = chordArts;
-                                          std::sort(ga.begin(), ga.end(), [](const Ms4::ArtRef& a, const Ms4::ArtRef& b) { return a.art < b.art; });
-                                          for (const Ms4::ArtRef& a : ga)
+                                          for (const Ms4::ArtRef& a : chordOrder(chordArts))
                                                 if ((graceOrnament = Ms4::ornamentRule(a.art)))
                                                       break;
                                     }
@@ -1423,10 +1428,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const int pStart = tick.ticks() + principalOffset;
                   const int pLength = chord->actualTicks().ticks() - principalOffset - principalCut;
 
-                  // the principal chord: the first of its articulations (MS4 enum order) that a renderer
+                  // the principal chord: the first of its articulations (map order) that a renderer
                   // takes (ChordArticulationsRenderer::renderChordArticulations), else its notes as they are
-                  std::vector<Ms4::ArtRef> sorted = principalArts;
-                  std::sort(sorted.begin(), sorted.end(), [](const Ms4::ArtRef& a, const Ms4::ArtRef& b) { return a.art < b.art; });
+                  const std::vector<Ms4::ArtRef> sorted = chordOrder(principalArts);
                   Arpeggio* arp = chord->arpeggio();
                   enum class Special { NONE, TREMOLO, ORNAMENT, ARPEGGIO } special = Special::NONE;
                   const Ms4::OrnamentRule* ornament = nullptr;
