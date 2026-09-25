@@ -261,7 +261,8 @@ printed nothing, though, since QtTest's console output doesn't show on Windows, 
 per-test results weren't seen. The workflow now writes them to a file and prints it. The
 next run (number 8, 44372f0, pitch fallback) showed **tst_soundlibrary 9/9 passed on
 Windows**, including vst3Plugin, vst3Render and articulationCheck with the test synth. A
-run takes about 15 minutes.
+run takes about 15 minutes. Run 11 (6bc3a62: check memory, scan, added patches, map fixes):
+**10/10 passed on Windows**, scanPictures included.
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 
