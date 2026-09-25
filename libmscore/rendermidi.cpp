@@ -1209,7 +1209,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a note of its own at a given start, length and pitch offset
                   auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length, int pitchOffset = 0) {
                         // (glissando notes need the tieBack exemption: they play their later steps)
-                        if (!note->play() || length <= 0)
+                        if (!note->play())
                               return;
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(note->track(), start + tickOffset), ctx.snd);
                         int noteChannel = channel;
@@ -1221,6 +1221,17 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         events->registerChannel(noteChannel);
                         const int on = start + tickOffset + (length * r.ts) / Ms4::HUNDRED;
                         const int off = on + (length * r.dur) / Ms4::HUNDRED;
+                        if (length <= 0) {
+                              // no length (an ornament's body squeezed out by its prefix and suffix): MS4
+                              // sends no note-on but still the note-off, at its start plus the (negative)
+                              // length -- it ends whatever the key has sounding on the channel
+                              NPlayEvent ev(ME_NOTEON, noteChannel, qBound(0, note->ppitch() + pitchOffset, 127), 0);
+                              ev.setOriginatingStaff(st1->idx());
+                              ev.setLayer(layer);
+                              ev.setNote(note);
+                              events->insert(std::make_pair(off, ev));
+                              return;
+                              }
                         playNote(events, note, noteChannel, qBound(0, note->ppitch() + pitchOffset, 127), qBound(1, r.velocity, 127),
                                  on, qMax(on, off), st1->idx(), layer);
                         };
@@ -1252,14 +1263,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const int up = Ms4::neighbourSemitones(note, 1);
                               const int down = Ms4::neighbourSemitones(note, -1);
                               auto semis = [&](int step) { return step > 0 ? step * up : (step < 0 ? step * down : 0); };
-                              const int preT = int(std::round(orn->prefix.size() * sub));
+                              const int preT = int(std::round(orn->prefix.size() * sub));   // buildActualPattern
                               const int sufT = int(std::round(orn->suffix.size() * sub));
                               double t = start;
+                              // (createEvents: a negative span -- prefix and suffix longer than the note -- gives
+                              // sub-notes of negative length, and walks the time back)
                               auto run = [&](const std::vector<int>& steps, double span, int times) {
                                     const double d = span / (steps.size() * times);
                                     for (int k = 0; k < times; ++k)
                                           for (int step : steps) {
-                                                renderAt(note, arts, int(std::round(t)), int(d), semis(step));
+                                                renderAt(note, arts, int(std::round(t)), int(std::lround(d)), semis(step));
                                                 t += d;
                                                 }
                                     };
