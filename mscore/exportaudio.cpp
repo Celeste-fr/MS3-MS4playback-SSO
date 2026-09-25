@@ -296,7 +296,7 @@ bool MuseScore::saveAudio(Score* score, const QString& name)
       int format;
       int PCMRate;
       switch (preferences.getInt(PREF_EXPORT_AUDIO_PCMRATE)) {
-            case 32: PCMRate = SF_FORMAT_PCM_32; break;
+            case 32: PCMRate = SF_FORMAT_FLOAT; break;      // 32-bit float, as MuseScore 4 exports: no clipping over full scale
             case 24: PCMRate = SF_FORMAT_PCM_24; break;
             case 16: PCMRate = SF_FORMAT_PCM_16; break;
             case 8:  PCMRate = SF_FORMAT_PCM_S8; break;
@@ -308,7 +308,7 @@ bool MuseScore::saveAudio(Score* score, const QString& name)
       else if (name.endsWith(".ogg"))
             format = SF_FORMAT_OGG | SF_FORMAT_VORBIS;
       else if (name.endsWith(".flac"))
-            format = SF_FORMAT_FLAC | PCMRate;
+            format = SF_FORMAT_FLAC | (PCMRate == SF_FORMAT_FLOAT ? SF_FORMAT_PCM_24 : PCMRate);   // FLAC has no float
       else {
             qDebug("unknown audio file type <%s>", qPrintable(name));
             return false;
