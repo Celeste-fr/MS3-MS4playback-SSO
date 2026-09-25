@@ -192,6 +192,10 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   note 40 dB under the patch's loudest counts as having no sound at that pitch. It is never
   a reference, and it is re-tested at other pitches of the instrument's range (octave, fifth
   …), reported as "at pitch n". Test synth value 25 reproduces this.
+- Third run (build 8): **Violins 1 22/22 switch**, confirmed by picture and by ear. Both
+  harmonics were tested at pitch 83 and switch. Ratios 0–0.32, the highest being
+  Pizzicato (round robins), so still well under 0.5. Nothing sounded like anything else.
+  Patches still to check: the other 41.
 
 Still unknown: whether Kontakt keeps the articulation or plays a default for a value the
 patch lacks (the check handles both).
