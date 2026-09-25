@@ -27,15 +27,21 @@ namespace Ms {
 //---------------------------------------------------------
 //   Vst3EditorFrame
 //    the host side of the view: its size (IPlugFrame) and, for X11 views, the run loop
+//    (Linux::IRunLoop exists on Linux only: the SDK defines its id there)
 //---------------------------------------------------------
 
+#ifdef Q_OS_LINUX
 class Vst3EditorFrame : public U::ImplementsNonDestroyable<U::Directly<IPlugFrame, Linux::IRunLoop>> {
-      Vst3EditorWindow* _window;
       std::map<Linux::IEventHandler*, QSocketNotifier*> _fds;
       std::map<Linux::ITimerHandler*, QTimer*> _timers;
+#else
+class Vst3EditorFrame : public U::ImplementsNonDestroyable<U::Directly<IPlugFrame>> {
+#endif
+      Vst3EditorWindow* _window;
 
    public:
       explicit Vst3EditorFrame(Vst3EditorWindow* w) : _window(w) {}
+#ifdef Q_OS_LINUX
       ~Vst3EditorFrame()
             {
             for (auto& f : _fds)
@@ -43,6 +49,7 @@ class Vst3EditorFrame : public U::ImplementsNonDestroyable<U::Directly<IPlugFram
             for (auto& t : _timers)
                   delete t.second;
             }
+#endif
 
       tresult PLUGIN_API resizeView(IPlugView* view, ViewRect* newSize) override
             {
@@ -53,6 +60,7 @@ class Vst3EditorFrame : public U::ImplementsNonDestroyable<U::Directly<IPlugFram
             return kResultTrue;
             }
 
+#ifdef Q_OS_LINUX
       tresult PLUGIN_API registerEventHandler(Linux::IEventHandler* handler, Linux::FileDescriptor fd) override
             {
             QSocketNotifier* n = new QSocketNotifier(fd, QSocketNotifier::Read);
@@ -87,6 +95,7 @@ class Vst3EditorFrame : public U::ImplementsNonDestroyable<U::Directly<IPlugFram
             _timers.erase(i);
             return kResultTrue;
             }
+#endif
       };
 
 //---------------------------------------------------------

@@ -182,7 +182,8 @@ uploads the build. It isn't on the default branch, so *Run workflow* can't start
 this environment can't push tags. It runs on a push to a `claude/` branch whose last commit
 message contains `[windows-build]` (only with the owner's OK, since it uses the private
 repo's minutes). Other pushes show up as skipped runs, which use no minutes. Runs so far
-are in the commit log.
+are in the commit log. Run 1 compiled everything with MSVC (about 15 minutes) and failed
+only at the link (`Linux::IRunLoop` in vst3editor; now Linux-only).
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 
