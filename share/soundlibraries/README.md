@@ -53,12 +53,24 @@ because SSO brings its own room. Setups are stored in MuseScore's data folder un
 
 *View › Sound Library…* › *Check articulations…* lists every patch of the library.
 
-1. For each patch not set up yet, click *Set up…*, load the patch in Kontakt, set it to UACC
-   and close the window. This is the same setup playback uses, so it is only done once.
-2. Click *Check* (*Tick all set up* selects them all) and leave the computer alone. Kontakt's
-   window has to stay visible. It takes about a minute per patch.
+1. For each patch not set up yet, click *Set up…*, load the patch in Kontakt, set it to
+   **UACC & UI only** and close the window. This is the same setup playback uses, so it is
+   only done once.
+2. Click *Check* and leave the computer alone. Kontakt's window has to stay visible. It takes
+   about 15 seconds per patch.
 3. MuseScore opens the folder `Documents/MuseScore Sound Library Check`. Hand back the
    `.zip` it made.
+
+MuseScore remembers each patch's last check (the *Last check* column). A patch is ticked for
+checking only when it was never checked, when its setup or its map entry changed since, or
+when its last check couldn't run. *Tick what needs checking* ticks just those; tick others by
+hand to check them anyway.
+
+- *Scan every value* also tries all 128 UACC values. It finds articulations the patch has and
+  the map lacks, and map values the patch doesn't have (SSO shows "None" for them). It takes
+  about a minute more per patch.
+- *Add a patch…* adds a patch the map lacks (e.g. *Trombones a5*). Set it up like the others.
+  Its check is always a scan, so its articulations can be added to the map from the results.
 
 For each articulation value in the map, the check keeps a picture of Kontakt's window after
 the switch. It also listens to whether the switch took. Each value's note is played after two

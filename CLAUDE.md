@@ -148,9 +148,22 @@ against the plug-in itself):
     playing. Then it runs the audio check.
   - Output goes to `Documents/MuseScore Sound Library Check/<library> <date>/`: sheets,
     `results.json` and `summary.txt`, plus a `.zip` of the folder next to it. The owner is
-    asked to hand back that zip. **When they do**, read the sheets (the patch's own
-    articulation name is on each picture) and `results.json`, then fix the map through
-    `gen_spitfire_sso.py`.
+    asked to hand back that zip. **When they do**, run
+    `tools/soundlibraries/read_check_names.py <folder>`. It OCRs each picture's articulation
+    name, compares it with the map and lists mismatches and "None". Then look at the sheets
+    for what it flags, and fix the map through `gen_spitfire_sso.py`. The OCR misreads
+    (Long → "Large").
+  - Memory: `<dataPath>/soundlibraries/<library>/checks.json` holds each patch's last check:
+    setup SHA-1, map-entry SHA-1 (values and names), `CHECK_VERSION`, and a result of
+    passed, problems or error. A patch needs checking only if something changed or its check
+    errored. Raise `CHECK_VERSION` (soundlibrarycheck.cpp) when a change to the check makes
+    old results stale.
+  - Scan (checkbox, and always for patches added with *Add a patch…*, kept in
+    `addedpatches.json`): pictures of CC 0–127. The picture most values share is "no
+    articulation" (candidates 0, 127, 126, 99, 64). Two pictures count as the same when
+    fewer pixels differ than max(30, 3 × the base-versus-again noise). Found values are
+    listened to. `results.json` gets `found`, `notInMap`, `mapValuesShowingNone` and
+    `sheet` (the sheet's order). Not tried with Kontakt yet.
 
 Tested here:
 - `tst_soundlibrary` hosts `mstestsynth.vst3` (`mtest/libmscore/soundlibrary/testsynth`), a
@@ -171,6 +184,20 @@ Tested here:
   - In the GUI with sfizz, *Set up…* then *Check* on Solo Violin 1 plus a bogus value 99:
     6 switch, 99 silent (the SFZ has no region for it), a sheet and a zip. *Stop* works.
     sfizz's window doesn't show CC32, so its pictures were retaken with the note playing.
+  - `tst_soundlibrary::scanPictures`: 128 synthetic SSO-like pictures ("None / NO ACTIVE
+    TECHNIQUE" or a name, a flickering meter, a memory display that grows during the scan).
+    It finds exactly the 7 articulations. Without the after-scan picture of the start state,
+    the growing display makes it fail.
+  - Memory in the GUI with sfizz: a patch shows "Passed (date)" after its check and is
+    unticked. That survives a restart. Changing its setup file shows "Its setup changed
+    since the check of …" and ticks it; raising CHECK_VERSION shows "The check changed …".
+  - Scan with sfizz is "inconclusive" (sfizz's window doesn't show the articulation). The
+    map values are then only listened to. An added patch ("Trombones a5" with the Solo
+    Violin 1 setup) loads (UACC 1 is tried when nothing is known) and is scanned; nothing
+    was found, so it too is inconclusive.
+  - Safety rules, because a wrong "missing" is worse than none: the scan is inconclusive
+    when pictures needed a note, when nothing was found, or when more than half the map's
+    values would show "None".
 
 **Tried by the owner (Windows, Kontakt 8, SSO), 2026-09-25: first Check articulations run on
 Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
@@ -197,8 +224,24 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   Pizzicato (round robins), so still well under 0.5. Nothing sounded like anything else.
   Patches still to check: the other 41.
 
-Still unknown: whether Kontakt keeps the articulation or plays a default for a value the
-patch lacks (the check handles both).
+- Fourth run, all 42 patches (10 minutes):
+  - Every value's picture shows the map's articulation, except that Legato (20) in all 25
+    woodwind and brass patches and the Trumpets a6 trills (70, 71) show SSO's "None, no
+    active technique" and play nothing. Those were additions from Spitfire's legacy
+    SSW/SSB maps and are now removed from the map. The six values no Spitfire map
+    mentioned, and the solo strings and harp, all match.
+  - Oboe Solo was left on "Normal keyswitching": its pictures say "KEYSWITCH C0". Solo
+    Cello played nothing (not set up right). Both still need checking.
+  - The "sounds like" hints were false alarms (trills a second apart, Tenuto and Marcato),
+    so they are no longer listed as problems. Violins 2's Long Super Sul Tasto sits 42 dB
+    under the patch's loudest, so the "no sound here" threshold is now 50 dB.
+  - A few "ignored"/"unclear" verdicts on falls, rips and harmonics had pictures that
+    confirm the right articulation: audio is the weaker evidence for those.
+  - The owner's Kontakt lists patches the map lacks (Trombones a5, piano …) and
+    articulations it lacks (Flute: Long Hollow, Multi Tongued): hence *Add a patch…* and
+    the scan.
+
+A value a SSO patch lacks: its window shows "None" and it plays nothing (no default).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. It isn't on the default branch, so *Run workflow* can't start it, and
 this environment can't push tags. It runs on a push to a `claude/` branch whose last commit

@@ -113,11 +113,11 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  The UACC values come from a community-made articulation bank for this library (Reaticulate',
 '  user bank "Spitfire - Symphony Orchestra", github.com/jtackaberry/reaticulate), checked',
 '  against Spitfire\'s own Cubase expression maps for Symphonic Strings, Brass and Woodwinds',
-'  (legacy downloads): the orchestral patches agree with them, with Spitfire\'s additions',
-'  (Legato 20 in woodwinds and brass …) and corrections applied. Solo strings and harp have',
-'  no Spitfire map, and a few articulations are in no Spitfire map (tools/soundlibraries/',
-'  check_spitfire_expressionmaps.py lists them). Each patch shows its numbers: if one',
-'  differs, correct it in tools/soundlibraries/gen_spitfire_sso.py.',
+'  (legacy downloads), with corrections, and checked in Kontakt itself with MuseScore\'s',
+'  View > Sound Library > Check articulations (2026-09-25, SSO in Kontakt 8): every value',
+'  of the orchestral, solo string and harp patches selects the articulation named here, by',
+'  the patch\'s own name and UACC number (Solo Cello and Oboe Solo still to be checked).',
+'  If one differs, correct it in tools/soundlibraries/gen_spitfire_sso.py.',
 '',
 '  techniques: long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato',
 '              bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3 fall rip',
@@ -130,16 +130,10 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>']
 # Corrections from Spitfire's own Cubase expression maps for SSS / SSB / SSW (legacy downloads,
 # CC32 = UACC; see check_spitfire_expressionmaps.py), where they differ from the community bank
-SPITFIRE_ADD = {
-    # Legato (UACC 20) in the woodwinds' and brass techniques patches
-    **{n: [('Legato', 20, 'legato', '')] for n in [
-        'Piccolo', 'Flute Solo', 'Flutes a2', 'Alto Flute', 'Bass Flute', 'Oboe Solo', 'Oboes a2',
-        'Cor Anglais', 'Clarinet Solo', 'Clarinets a2', 'Bass Clarinet', 'Contrabass Clarinet',
-        'Bassoon Solo', 'Bassoons a2', 'Contrabassoon', 'Horn Solo', 'Horns a2', 'Horns a6',
-        'Trumpet Solo', 'Trumpets a2', 'Trumpets a6', 'Tenor Trombones a2', 'Trombones a6',
-        'Bass Trombones a2', 'Tuba Solo']},
-}
-SPITFIRE_ADD['Trumpets a6'] = SPITFIRE_ADD['Trumpets a6'] + [('Trill (Minor 2nd)', 70, 'trill-m2', ''), ('Trill (Major 2nd)', 71, 'trill-M2', '')]
+SPITFIRE_ADD = {}
+# (Spitfire's SSW/SSB maps also list Legato 20 for the woodwinds and brass, and trills 70/71 for
+# Trumpets a6: SSO's "All techniques" patches have neither. In Kontakt they show "None - no
+# active technique" and play nothing: Check articulations, 2026-09-25)
 SPITFIRE_ADD['Violins 2'] = [('Trem CS', 12, 'tremolo', 'muted')]
 SPITFIRE_DROP = {('Violins 2', 'Long Sul Tasto'), ('Violins 2', 'Trill (Minor 3rd'), ('Violins 2', 'Trill (Major 3rd)')}
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}

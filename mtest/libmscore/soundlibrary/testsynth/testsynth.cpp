@@ -11,6 +11,7 @@
 //  current at its note on (the articulation check listens for it), like a UACC patch:
 //    1-29, 31-89   harmonics of their own; 40-60 short (decaying), 70-80 trills (tremolo)
 //    25            like a harmonics patch: -66 dB under pitch 72 (no sample there)
+//    26            very soft (-40 dB), like a super sul tasto
 //    30            plays nothing
 //    85-89         not in the patch: articulation 1 (a default)
 //    90-127        not in the patch: ignored, the articulation stays
@@ -80,6 +81,8 @@ static float timbre(const Voice& v, double sampleRate)
       const double t = v.t / sampleRate;
       if (v.articulation == 25 && v.pitch < 72)
             s *= 0.0005;
+      if (v.articulation == 26)
+            s *= 0.01;
       if (v.articulation >= 40 && v.articulation <= 60)
             s *= std::exp(-t / 0.1);
       else if (v.articulation >= 70 && v.articulation <= 80)

@@ -165,6 +165,90 @@ double ArticulationCheck::distance(const std::vector<double>& a, const std::vect
       }
 
 //---------------------------------------------------------
+//   scanPictures
+//---------------------------------------------------------
+
+std::vector<bool> ArticulationCheck::scanPictures(const QImage& base, const std::vector<QImage>& sameState, const std::vector<QImage>& shots,
+                                                  const QRect& area, const std::vector<int>& candidates, int* noneIndex)
+      {
+      const int n = int(shots.size());
+      std::vector<bool> articulation(n, false);
+      if (n == 0 || base.isNull())
+            return articulation;
+      const QRect a = area.isNull() ? base.rect() : (area & base.rect());
+      auto prepared = [&](const QImage& img) {
+            return (img.size() == base.size() ? img : img.scaled(base.size())).copy(a).convertToFormat(QImage::Format_RGB32);
+            };
+      const QImage b = prepared(base);
+      const int w = b.width();
+      const int h = b.height();
+      auto differs = [](QRgb p1, QRgb p2) {
+            return std::abs(qRed(p1) - qRed(p2)) > 40 || std::abs(qGreen(p1) - qGreen(p2)) > 40
+                   || std::abs(qBlue(p1) - qBlue(p2)) > 40;
+            };
+      // what changes by itself, in cells of 8 x 8 pixels, with a margin of 2 cells
+      const int C = 8;
+      const int cw = (w + C - 1) / C;
+      const int ch = (h + C - 1) / C;
+      std::vector<char> noisy(cw * ch, 0);
+      for (const QImage& s : sameState) {
+            const QImage q = prepared(s);
+            for (int y = 0; y < h; ++y) {
+                  const QRgb* p1 = reinterpret_cast<const QRgb*>(b.constScanLine(y));
+                  const QRgb* p2 = reinterpret_cast<const QRgb*>(q.constScanLine(y));
+                  for (int x = 0; x < w; ++x)
+                        if (differs(p1[x], p2[x]))
+                              noisy[(y / C) * cw + x / C] = 1;
+                  }
+            }
+      std::vector<char> masked(cw * ch, 0);
+      for (int y = 0; y < ch; ++y)
+            for (int x = 0; x < cw; ++x)
+                  if (noisy[y * cw + x])
+                        for (int dy = -2; dy <= 2; ++dy)
+                              for (int dx = -2; dx <= 2; ++dx)
+                                    if (y + dy >= 0 && y + dy < ch && x + dx >= 0 && x + dx < cw)
+                                          masked[(y + dy) * cw + x + dx] = 1;
+      std::vector<QImage> crops;
+      for (const QImage& sh : shots)
+            crops.push_back(prepared(sh));
+      auto differing = [&](const QImage& p, const QImage& q) {
+            int count = 0;
+            for (int y = 0; y < h; ++y) {
+                  const QRgb* p1 = reinterpret_cast<const QRgb*>(p.constScanLine(y));
+                  const QRgb* p2 = reinterpret_cast<const QRgb*>(q.constScanLine(y));
+                  const char* m = &masked[(y / C) * cw];
+                  for (int x = 0; x < w; ++x)
+                        if (!m[x / C] && differs(p1[x], p2[x]))
+                              ++count;
+                  }
+            return count;
+            };
+      // a word changed is hundreds of pixels; a few may differ in a redrawn edge
+      const int same = 12;
+      int none = -1;
+      int most = -1;
+      for (int c : candidates) {
+            if (c < 0 || c >= n)
+                  continue;
+            int count = 0;
+            for (const QImage& cr : crops)
+                  count += differing(crops[c], cr) <= same;
+            if (count > most) {
+                  most = count;
+                  none = c;
+                  }
+            }
+      if (none < 0)
+            none = 0;
+      for (int i = 0; i < n; ++i)
+            articulation[i] = differing(crops[none], crops[i]) > same;
+      if (noneIndex)
+            *noneIndex = none;
+      return articulation;
+      }
+
+//---------------------------------------------------------
 //   Player
 //    one instance, rendered offline block by block
 //---------------------------------------------------------
@@ -192,19 +276,20 @@ struct Player {
 
       int lastPitch { -1 };
 
-      // until the last note has died away (or 4 s)
+      // until the last note has died away to -70 dBFS (or 2 s): what is left of a reverb tail
+      // then is 50 dB and more under the next note, too little to change its features
       void settle()
             {
             if (lastPitch >= 0)
                   p->midi(ME_NOTEON, s.channel, lastPitch, 0);
             p->allNotesOff();
             const int block = frames(0.1);
-            for (int i = 0; i < 40; ++i) {
+            for (int i = 0; i < 20; ++i) {
                   const std::vector<float>& b = render(block);
                   double peak = 0;
                   for (float x : b)
                         peak = std::max(peak, double(std::fabs(x)));
-                  if (db(peak * peak) < SILENT_DB && i >= 2)
+                  if (db(peak * peak) < -70 && i >= 2)
                         break;
                   }
             }
@@ -283,7 +368,9 @@ ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::
       double loudest = -200;
       for (const Clip& c : first)
             loudest = std::max(loudest, c.peakDb);
-      auto quiet = [&](const Clip& c) { return silent(c) || c.peakDb < loudest - 40; };
+      // (50 dB: SSO's Long Super Sul Tasto plays 42 dB under the patch's loudest, harmonics
+      // with no sample at the pitch 57 dB and more)
+      auto quiet = [&](const Clip& c) { return silent(c) || c.peakDb < loudest - 50; };
 
       // the references: A most unlike the first, B most unlike A among the others unlike the first
       int a = -1;

@@ -9,6 +9,7 @@
 #include <set>
 
 #include <QtTest/QtTest>
+#include <QPainter>
 
 #include "audio/midi/event.h"
 #include "libmscore/instrument.h"
@@ -49,6 +50,7 @@ class TestSoundLibrary : public QObject, public MTest
       void vst3Plugin();
       void vst3Render();
       void articulationCheck();
+      void scanPictures();
 #endif
       };
 
@@ -426,7 +428,7 @@ void TestSoundLibrary::articulationCheck()
       QVERIFY(p->setOffline(true));
       AC::Settings s;
       s.pitch = 67;
-      const std::vector<int> values { 1, 2, 25, 3, 12, 30, 42, 43, 71, 87, 99, 110, 127 };
+      const std::vector<int> values { 1, 2, 25, 26, 3, 12, 30, 42, 43, 71, 87, 99, 110, 127 };
       int steps = 0;
       AC::Report r = AC::run(p.get(), values, s, [&](int, int) { ++steps; return true; });
       QVERIFY2(r.switching, qPrintable(r.message));
@@ -437,7 +439,8 @@ void TestSoundLibrary::articulationCheck()
                : x.value >= 90 ? AC::Verdict::IGNORED : AC::Verdict::SWITCHES;
             QVERIFY2(x.verdict == expected, qPrintable(QString("value %1: %2 (ratio %3), expected %4")
                .arg(x.value).arg(AC::name(x.verdict)).arg(x.ratio).arg(AC::name(expected))));
-            // 25 has no sound at 67: tested an octave up (and never a reference)
+            // 25 has no sound at 67: tested an octave up (and never a reference); 26 is soft
+            // but there, tested at 67
             QCOMPARE(x.pitch, x.value == 25 ? 79 : 67);
             const int sameAs = x.value == 87 ? 1 : x.value == 1 ? 87 : -1;
             QVERIFY2(x.sameAs == sameAs, qPrintable(QString("value %1 sounds like %2, expected %3").arg(x.value).arg(x.sameAs).arg(sameAs)));
@@ -458,6 +461,57 @@ void TestSoundLibrary::articulationCheck()
       s.switchCC = 32;
       r = AC::run(p.get(), { 1, 2, 42, 71 }, s, [](int done, int) { return done < 2; });
       QVERIFY(r.cancelled);
+      }
+
+//---------------------------------------------------------
+//   scanPictures
+//    a scan's pictures, drawn like SSO's window: the articulation's name, or "None" for a
+//    value the patch lacks, a meter that moves in every picture, and a memory display that
+//    grows during the scan. The values with an articulation are told from the others
+//---------------------------------------------------------
+
+void TestSoundLibrary::scanPictures()
+      {
+      const std::map<int, QString> patch { { 1, "Long" }, { 7, "Long CS" }, { 11, "Long Flutter" }, { 40, "Staccato" },
+                                           { 42, "Spiccato" }, { 70, "Trill (Minor 2nd)" }, { 71, "Trill (Major 2nd)" } };
+      int meter = 0;
+      int memory = 700;
+      auto picture = [&](int value) {
+            QImage img(640, 360, QImage::Format_RGB32);
+            img.fill(QColor(20, 50, 100));
+            QPainter p(&img);
+            QFont f = p.font();
+            f.setPixelSize(18);
+            p.setFont(f);
+            p.setPen(Qt::white);
+            p.drawText(20, 60, "SYMPHONIC WOODWINDS");
+            auto i = patch.find(value);
+            p.drawText(20, 120, i == patch.end() ? QString("None") : i->second);
+            f.setPixelSize(10);
+            p.setFont(f);
+            p.setPen(QColor(120, 140, 170));
+            p.drawText(20, 136, i == patch.end() ? QString("NO ACTIVE TECHNIQUE") : QString("UACC CC#%1").arg(value));
+            // the meter: another height each time; a memory display that grows during the scan
+            meter = (meter * 37 + 11) % 60;
+            p.fillRect(600, 300 - meter, 12, meter, QColor(0, 200, 0));
+            p.setPen(Qt::white);
+            p.drawText(480, 20, QString("Memory: %1 MB").arg(memory));
+            return img;
+            };
+      const QImage base = picture(1);
+      std::vector<QImage> again { picture(1), picture(1), picture(1) };
+      std::vector<QImage> shots;
+      for (int v = 0; v < 128; ++v) {
+            memory = 700 + v / 10;
+            shots.push_back(picture(v));
+            }
+      again.push_back(picture(1));        // back to the start after the scan
+      int none = -1;
+      const std::vector<bool> found = ArticulationCheck::scanPictures(base, again, shots, QRect(), { 0, 127, 126, 99, 64 }, &none);
+      QCOMPARE(int(found.size()), 128);
+      QVERIFY(!patch.count(none));
+      for (int v = 0; v < 128; ++v)
+            QVERIFY2(found[v] == bool(patch.count(v)), qPrintable(QString("value %1").arg(v)));
       }
 #endif
 

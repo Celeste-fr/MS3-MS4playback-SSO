@@ -19,7 +19,7 @@
 //    from the first (both are then known to switch). When every value sounds like the first,
 //    the patch doesn't switch at all (not set to UACC, another MIDI channel …): "untestable".
 //
-//  A value with no sound at the test pitch (40 dB under the patch's loudest, or less: a
+//  A value with no sound at the test pitch (50 dB under the patch's loudest, or less: a
 //  harmonics patch with no sample there) is tried at other pitches of the instrument's range
 //  (an octave up, down, a fifth …) and tested at the first where it sounds; when there is
 //  none, it is "silent". Such values are never references.
@@ -47,6 +47,8 @@
 #include <functional>
 #include <vector>
 
+#include <QImage>
+#include <QRect>
 #include <QString>
 
 namespace Ms {
@@ -102,6 +104,15 @@ class ArticulationCheck {
       using Progress = std::function<bool(int, int)>;
 
       static Report run(Vst3Plugin* plugin, const std::vector<int>& values, const Settings& settings, Progress progress = nullptr);
+
+      // a scan's pictures (the plug-in's window after each value of the switch, cropped to
+      // area): which show an articulation. "No articulation" is the picture most of them
+      // share, found among the candidates' (indices of values patches rarely use). What
+      // changes by itself (a meter …) is left out: the spots where base and the pictures of
+      // the same state (sameState) differ, with a margin. Two pictures are the same when no
+      // more than a few other pixels differ. none: the index of the "no articulation" picture
+      static std::vector<bool> scanPictures(const QImage& base, const std::vector<QImage>& sameState, const std::vector<QImage>& shots,
+                                            const QRect& area, const std::vector<int>& candidates, int* none = nullptr);
 
       // features of a stereo interleaved clip (the note from its start, noteFrames long, then
       // its tail) and their distance, for the tests

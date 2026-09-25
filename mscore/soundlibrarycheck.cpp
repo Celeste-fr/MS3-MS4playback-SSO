@@ -16,7 +16,9 @@
 #include <map>
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QCloseEvent>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
@@ -25,6 +27,7 @@
 #include <QFile>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -68,6 +71,10 @@ namespace Ms {
 extern Seq* seq;
 
 static const int GRAB_WAIT_MS = 400;      // after a switch, for the window to show it
+
+// the check's version: raise it when a change makes earlier results stale (all patches are then
+// checked again)
+static const int CHECK_VERSION = 3;
 
 //---------------------------------------------------------
 //   testPitch
@@ -256,11 +263,23 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       layout->addWidget(_info);
       _table = new QTableWidget(this);
       _table->setColumnCount(4);
-      _table->setHorizontalHeaderLabels({ tr("Patch"), tr("Setup"), QString(), tr("Result") });
+      _table->setHorizontalHeaderLabels({ tr("Patch"), tr("Setup"), QString(), tr("Last check") });
       _table->setEditTriggers(QAbstractItemView::NoEditTriggers);
       _table->verticalHeader()->hide();
       _table->setSelectionMode(QAbstractItemView::NoSelection);
       layout->addWidget(_table);
+      _scan = new QCheckBox(tr("Scan every value (0–127) too, to find articulations the map lacks (about a minute more per patch)"), this);
+      layout->addWidget(_scan);
+      // scanning: the set-up patches never scanned (else: what needs checking)
+      connect(_scan, &QCheckBox::toggled, this, [this](bool on) {
+            for (int row = 0; row < _table->rowCount(); ++row) {
+                  QString last;
+                  const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+                  const bool scanned = _records.value(_rows[row].instrument->name).toObject().value("scanned").toBool();
+                  const bool tick = setup && (on ? !scanned || needsCheck(row, &last) : needsCheck(row, &last));
+                  _table->item(row, 0)->setCheckState(tick ? Qt::Checked : Qt::Unchecked);
+                  }
+            });
       _status = new QLabel(this);
       _status->setWordWrap(true);
       _status->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -270,17 +289,204 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _progress->setValue(0);
       layout->addWidget(_progress);
       QDialogButtonBox* buttons = new QDialogButtonBox(this);
-      _all = buttons->addButton(tr("Tick all set up"), QDialogButtonBox::ActionRole);
+      _add = buttons->addButton(tr("Add a patch…"), QDialogButtonBox::ActionRole);
+      connect(_add, &QPushButton::clicked, this, &ArticulationCheckDialog::addPatch);
+      _all = buttons->addButton(tr("Tick what needs checking"), QDialogButtonBox::ActionRole);
       _check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
       _close = buttons->addButton(QDialogButtonBox::Close);
       connect(_all, &QPushButton::clicked, this, [this]() {
-            for (int row = 0; row < _table->rowCount(); ++row)
-                  _table->item(row, 0)->setCheckState(_table->item(row, 1)->data(Qt::UserRole).toBool() ? Qt::Checked : Qt::Unchecked);
+            for (int row = 0; row < _table->rowCount(); ++row) {
+                  QString last;
+                  const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+                  _table->item(row, 0)->setCheckState(setup && needsCheck(row, &last) ? Qt::Checked : Qt::Unchecked);
+                  }
             });
       connect(_check, &QPushButton::clicked, this, &ArticulationCheckDialog::check);
       connect(_close, &QPushButton::clicked, this, &ArticulationCheckDialog::reject);
       layout->addWidget(buttons);
-      resize(720, 640);
+      resize(820, 640);
+      loadRecords();
+      loadAdded();
+      rebuild();
+      }
+
+//---------------------------------------------------------
+//   memory
+//    each patch's last check: what was checked (setup, map entries, check version) and how
+//    it went ("passed", "problems" or "error")
+//---------------------------------------------------------
+
+QString ArticulationCheckDialog::recordsFile() const
+      {
+      return QFileInfo(SoundLibraryHost::setupFile(*_library, "x")).absolutePath() + "/checks.json";
+      }
+
+void ArticulationCheckDialog::loadRecords()
+      {
+      _records = QJsonObject();
+      if (!_library)
+            return;
+      QFile f(recordsFile());
+      if (f.open(QIODevice::ReadOnly))
+            _records = QJsonDocument::fromJson(f.readAll()).object();
+      }
+
+void ArticulationCheckDialog::saveRecords() const
+      {
+      const QString file = recordsFile();
+      QDir().mkpath(QFileInfo(file).absolutePath());
+      QFile f(file);
+      if (f.open(QIODevice::WriteOnly))
+            f.write(QJsonDocument(_records).toJson());
+      }
+
+QByteArray ArticulationCheckDialog::setupHash(const QString& patch) const
+      {
+      QFile f(SoundLibraryHost::setupFile(*_library, patch));
+      if (!f.open(QIODevice::ReadOnly))
+            return QByteArray();
+      return QCryptographicHash::hash(f.readAll(), QCryptographicHash::Sha1).toHex();
+      }
+
+// what is checked of a patch's map entry: its switch and its values with their names
+QByteArray ArticulationCheckDialog::mapHash(const SoundLib::LibInstrument& instrument)
+      {
+      QStringList lines;
+      lines << QString("switch %1 %2").arg(int(instrument.switchType)).arg(instrument.switchNumber);
+      for (const SoundLib::Articulation& a : instrument.articulations)
+            lines << QString("%1=%2").arg(a.value).arg(a.name);
+      lines.sort();
+      return QCryptographicHash::hash(lines.join("\n").toUtf8(), QCryptographicHash::Sha1).toHex();
+      }
+
+void ArticulationCheckDialog::record(const QString& patch, const QByteArray& setup, bool ok, const QString& line, bool scanned)
+      {
+      const SoundLib::LibInstrument* ins = nullptr;
+      for (const Row& row : _rows)
+            if (row.instrument->name == patch)
+                  ins = row.instrument;
+      QJsonObject r;
+      r["date"] = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
+      r["setup"] = QString(setup);
+      r["map"] = ins ? QString(mapHash(*ins)) : QString();
+      r["checker"] = CHECK_VERSION;
+      r["result"] = ok ? "passed" : (line.startsWith("!") ? "error" : "problems");
+      r["line"] = line.startsWith("!") ? line.mid(1) : line;
+      r["scanned"] = scanned;
+      _records[patch] = r;
+      saveRecords();
+      }
+
+// a set-up patch needs checking when it never was, when its setup, its map entry or the
+// check changed since, or when its last check could not run
+bool ArticulationCheckDialog::needsCheck(int index, QString* status) const
+      {
+      const SoundLib::LibInstrument& ins = *_rows[index].instrument;
+      const QJsonObject r = _records.value(ins.name).toObject();
+      if (r.isEmpty()) {
+            *status = tr("Never checked");
+            return true;
+            }
+      const QString date = r.value("date").toString();
+      QStringList changed;
+      if (r.value("setup").toString() != QString(setupHash(ins.name)))
+            changed << tr("its setup");
+      if (r.value("map").toString() != QString(mapHash(ins)))
+            changed << tr("the map");
+      if (r.value("checker").toInt() != CHECK_VERSION)
+            changed << tr("the check");
+      if (!changed.isEmpty()) {
+            QString what = changed.join(", ");
+            what[0] = what[0].toUpper();
+            *status = tr("%1 changed since the check of %2").arg(what, date);
+            return true;
+            }
+      const QString result = r.value("result").toString();
+      if (result == "error") {
+            *status = tr("Could not check (%1): %2").arg(date, r.value("line").toString());
+            return true;
+            }
+      *status = (result == "passed" ? tr("Passed (%1)") : tr("Checked (%1): %2")).arg(date, r.value("line").toString());
+      return false;
+      }
+
+//---------------------------------------------------------
+//   added patches
+//    patches of the library the map lacks, added by name (addedpatches.json); checked by
+//    scanning, to write their map entries from
+//---------------------------------------------------------
+
+QString ArticulationCheckDialog::addedFile() const
+      {
+      return QFileInfo(recordsFile()).absolutePath() + "/addedpatches.json";
+      }
+
+void ArticulationCheckDialog::loadAdded()
+      {
+      _added.clear();
+      if (!_library)
+            return;
+      QFile f(addedFile());
+      if (!f.open(QIODevice::ReadOnly))
+            return;
+      for (const QJsonValue& v : QJsonDocument::fromJson(f.readAll()).array()) {
+            std::unique_ptr<SoundLib::LibInstrument> ins(new SoundLib::LibInstrument);
+            ins->name = v.toString();
+            ins->switchNumber = 32;
+            for (const SoundLib::LibInstrument& i : _library->instruments)
+                  ins->switchNumber = i.switchNumber;     // the library's switch
+            if (!ins->name.isEmpty())
+                  _added.push_back(std::move(ins));
+            }
+      }
+
+void ArticulationCheckDialog::saveAdded() const
+      {
+      QJsonArray a;
+      for (const auto& ins : _added)
+            a.append(ins->name);
+      QDir().mkpath(QFileInfo(addedFile()).absolutePath());
+      QFile f(addedFile());
+      if (f.open(QIODevice::WriteOnly))
+            f.write(QJsonDocument(a).toJson());
+      }
+
+void ArticulationCheckDialog::addPatch()
+      {
+      if (_running || !_library)
+            return;
+      bool ok = false;
+      const QString name = QInputDialog::getText(this, tr("Add a Patch"),
+         tr("The patch's name, as the plug-in lists it (e.g. \"Trombones a5\"):"), QLineEdit::Normal, QString(), &ok).trimmed();
+      if (!ok || name.isEmpty())
+            return;
+      for (const Row& row : _rows) {
+            if (row.instrument->name.compare(name, Qt::CaseInsensitive) == 0) {
+                  QMessageBox::information(this, windowTitle(), tr("%1 is in the list already.").arg(row.instrument->name));
+                  return;
+                  }
+            }
+      std::unique_ptr<SoundLib::LibInstrument> ins(new SoundLib::LibInstrument);
+      ins->name = name;
+      for (const SoundLib::LibInstrument& i : _library->instruments)
+            ins->switchNumber = i.switchNumber;
+      _added.push_back(std::move(ins));
+      saveAdded();
+      rebuild();
+      _table->scrollToBottom();
+      }
+
+void ArticulationCheckDialog::removePatch(const QString& name)
+      {
+      if (_running)
+            return;
+      for (auto i = _added.begin(); i != _added.end(); ++i) {
+            if ((*i)->name == name) {
+                  _added.erase(i);
+                  break;
+                  }
+            }
+      saveAdded();
       rebuild();
       }
 
@@ -292,27 +498,56 @@ void ArticulationCheckDialog::rebuild()
             _check->setEnabled(false);
             return;
             }
+      _rows.clear();
+      for (const SoundLib::LibInstrument& ins : _library->instruments)
+            _rows.push_back({ &ins, false });
+      for (const auto& ins : _added) {
+            // (once in the map, the map's patch)
+            bool inMap = false;
+            for (const SoundLib::LibInstrument& i : _library->instruments)
+                  inMap = inMap || i.name.compare(ins->name, Qt::CaseInsensitive) == 0;
+            if (!inMap)
+                  _rows.push_back({ ins.get(), true });
+            }
       int ready = 0;
-      for (int i = 0; i < int(_library->instruments.size()); ++i) {
-            const SoundLib::LibInstrument& ins = _library->instruments[i];
+      int due = 0;
+      for (int i = 0; i < int(_rows.size()); ++i) {
+            const SoundLib::LibInstrument& ins = *_rows[i].instrument;
             const bool setup = SoundLibraryHost::hasSetup(*_library, ins.name);
             ready += setup;
             _table->insertRow(i);
-            QTableWidgetItem* name = new QTableWidgetItem(ins.name);
+            QTableWidgetItem* name = new QTableWidgetItem(_rows[i].added ? tr("%1 (not in the map)").arg(ins.name) : ins.name);
             name->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
-            name->setCheckState(setup ? Qt::Checked : Qt::Unchecked);
+            QString last;
+            const bool needed = setup && needsCheck(i, &last);
+            due += needed;
+            name->setCheckState(needed ? Qt::Checked : Qt::Unchecked);
             _table->setItem(i, 0, name);
             QTableWidgetItem* state = new QTableWidgetItem(setup ? tr("Ready") : tr("Not set up yet"));
             state->setData(Qt::UserRole, setup);
             _table->setItem(i, 1, state);
             QPushButton* b = new QPushButton(tr("Set up…"));
             connect(b, &QPushButton::clicked, this, [this, i]() { setUp(i); });
-            _table->setCellWidget(i, 2, b);
-            _table->setItem(i, 3, new QTableWidgetItem());
+            if (_rows[i].added) {
+                  QWidget* w = new QWidget;
+                  QHBoxLayout* hl = new QHBoxLayout(w);
+                  hl->setContentsMargins(0, 0, 0, 0);
+                  hl->setSpacing(2);
+                  QPushButton* remove = new QPushButton(tr("Remove"));
+                  const QString patch = ins.name;
+                  connect(remove, &QPushButton::clicked, this, [this, patch]() { removePatch(patch); });
+                  hl->addWidget(b);
+                  hl->addWidget(remove);
+                  _table->setCellWidget(i, 2, w);
+                  }
+            else
+                  _table->setCellWidget(i, 2, b);
+            _table->setItem(i, 3, new QTableWidgetItem(setup ? last : QString()));
             }
       _table->resizeColumnsToContents();
       _table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-      _status->setText(tr("%1 of %2 patches are set up.").arg(ready).arg(_library->instruments.size()));
+      _status->setText(tr("%1 of %2 patches are set up; %3 need checking (ticked).")
+                       .arg(ready).arg(_rows.size()).arg(due));
       }
 
 //---------------------------------------------------------
@@ -340,7 +575,7 @@ void ArticulationCheckDialog::setUp(int index)
             QMessageBox::warning(this, windowTitle(), error);
             return;
             }
-      const QString name = _library->instruments[index].name;
+      const QString name = _rows[index].instrument->name;
       const QString file = SoundLibraryHost::setupFile(*_library, name);
       QFile f(file);
       if (f.open(QIODevice::ReadOnly))
@@ -425,7 +660,7 @@ void ArticulationCheckDialog::check()
             if (_table->item(row, 0)->checkState() == Qt::Checked) {
                   if (!_table->item(row, 1)->data(Qt::UserRole).toBool()) {
                         QMessageBox::warning(this, windowTitle(), tr("%1 is not set up yet: click its Set up… first, or untick it.")
-                                             .arg(_library->instruments[row].name));
+                                             .arg(_rows[row].instrument->name));
                         return;
                         }
                   chosen.push_back(row);
@@ -455,6 +690,8 @@ void ArticulationCheckDialog::check()
       _table->setEnabled(false);
       _check->setEnabled(false);
       _all->setEnabled(false);
+      _add->setEnabled(false);
+      _scan->setEnabled(false);
       _close->setText(tr("Stop"));
       QJsonArray results;
       QString summary = QString("%1 checked against %2 on %3\n\n").arg(_library->name, QFileInfo(path).fileName(), stamp);
@@ -470,6 +707,8 @@ void ArticulationCheckDialog::check()
             _table->setEnabled(true);
             _check->setEnabled(true);
             _all->setEnabled(true);
+            _add->setEnabled(true);
+            _scan->setEnabled(true);
             _close->setText(tr("Close"));
             };
       if (results.isEmpty()) {
@@ -494,6 +733,16 @@ void ArticulationCheckDialog::check()
       json.close();
       if (_cancel)
             summary += "\n(Stopped before the end.)\n";
+      summary += "\n# Every patch's last check\n";
+      for (int i = 0; i < int(_rows.size()); ++i) {
+            const QString patch = _rows[i].instrument->name;
+            QString last;
+            if (!SoundLibraryHost::hasSetup(*_library, patch))
+                  last = tr("not set up");
+            else
+                  needsCheck(i, &last);
+            summary += QString("   %1: %2\n").arg(patch, last);
+            }
       QFile txt(folder + "/summary.txt");
       if (txt.open(QIODevice::WriteOnly))
             txt.write(summary.toUtf8());
@@ -513,6 +762,7 @@ void ArticulationCheckDialog::check()
       }
 
       done();
+      rebuild();
       _status->setText(tr("Done: %1").arg(QDir::toNativeSeparators(zipPath)));
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
       QMessageBox::information(this, windowTitle(),
@@ -527,15 +777,19 @@ void ArticulationCheckDialog::check()
 bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary)
       {
 #ifdef USE_VST3
-      const SoundLib::LibInstrument& ins = _library->instruments[index];
+      const SoundLib::LibInstrument& ins = *_rows[index].instrument;
+      const bool scan = _rows[index].added || _scan->isChecked();
       QTableWidgetItem* resultItem = _table->item(index, 3);
       QJsonObject out;
       out["patch"] = ins.name;
+      const QByteArray setup = setupHash(ins.name);
+      out["setup"] = QString(setup);
       auto fail = [&](const QString& message) {
             out["error"] = message;
             results.append(out);
             summary += QString("## %1\n   %2\n\n").arg(ins.name, message);
             resultItem->setText(message);
+            record(ins.name, setup, false, "!" + message, false);
             return false;
             };
       auto status = [&](const QString& s) {
@@ -543,16 +797,26 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             QApplication::processEvents();
             };
 
-      // the map's values, each with its articulations
-      std::vector<int> values;
+      // the map's values, each with its articulations; scanning: every value
+      std::vector<int> mapValues;
       std::map<int, QStringList> names;
       for (const SoundLib::Articulation& a : ins.articulations) {
             if (!names.count(a.value))
-                  values.push_back(a.value);
+                  mapValues.push_back(a.value);
             names[a.value].append(a.name);
             }
-      if (values.empty())
+      if (mapValues.empty() && !scan)
             return fail(tr("The map has no articulations for it."));
+      std::vector<int> values = mapValues;
+      if (scan) {
+            values.clear();
+            for (int v = 0; v < 128; ++v)
+                  values.push_back(v);
+            }
+      out["scan"] = scan;
+      // a value to start from: the map's first (a patch not in the map: as it was left)
+      int start = mapValues.empty() ? -1 : mapValues[0];
+
       if (ins.switchType != SoundLib::SwitchType::CC)
             return fail(tr("Only patches switched by a CC can be checked."));
       const int pitch = testPitch(ins);
@@ -568,6 +832,10 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       if (!f.open(QIODevice::ReadOnly) || !p->setState(f.readAll()))
             return fail(tr("Its setup could not be loaded into the plug-in."));
       f.close();
+      auto switchTo = [&](int v) {
+            if (v >= 0)
+                  p->midi(ME_CONTROLLER, 0, ins.switchNumber, v);
+            };
 
       // the patch loads its samples: until a note sounds (up to 2 minutes)
       Pump pump { p.get(), double(MScore::sampleRate), &_cancel, {} };
@@ -575,7 +843,9 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       for (int i = 0; i < 100 && !_cancel && !sounds; ++i) {
             status(tr("waiting for the patch to load (%1 s)…").arg(i * 13 / 10));
             pump.peak = 0;
-            p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[0]);
+            // (a patch not in the map: as it was left, or UACC 1, "Long")
+            const int tried = start >= 0 ? start : (i % 2 ? 1 : -1);
+            switchTo(tried);
             if (_library->dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
             if (_library->dynamicsCC != 11)
@@ -584,20 +854,40 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             pump.run(1000);
             p->midi(ME_NOTEON, 0, pitch, 0);
             sounds = pump.peak > 1e-4;
+            if (sounds && start < 0)
+                  start = tried;
             pump.run(300);
             }
       if (_cancel)
             return false;
-      if (!sounds)
-            return fail(tr("It played nothing: is the patch loaded, on MIDI channel 1 (Kontakt: A1 or Omni)?"));
+      if (!sounds) {
+            // a picture of its window, to see what is loaded there
+            if (Steinberg::IPlugView* view = p->createEditor()) {
+                  QPointer<Vst3EditorWindow> w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
+                  w->show();
+                  w->raise();
+                  pump.run(2500);
+                  if (w) {
+                        QString fileBase = ins.name;
+                        fileBase.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
+                        grabPlugin(w).save(folder + "/" + fileBase + " (window).png");
+                        w->close();
+                        delete w;
+                        }
+                  }
+            return fail(tr("It played nothing: is the patch loaded, set to UACC, on MIDI channel 1 (Kontakt: A1 or Omni)? "
+                           "Its window is in the results."));
+            }
       pump.run(1500);
 
       // its window after each switch
       QString sheetNote;
       QImage base, again;
+      std::vector<QImage> sameState;      // pictures of the starting state (what changes by itself)
       std::vector<QImage> shots;
       QRect region;
       status(tr("opening its window…"));
+      bool withNotes = false;
       Steinberg::IPlugView* view = p->createEditor();
       if (view) {
             QPointer<Vst3EditorWindow> w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
@@ -605,14 +895,30 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             w->raise();
             w->activateWindow();
             pump.run(2000);
-            bool withNotes = false;
+            // until the window is still (a plug-in may still be drawing, counting …): two
+            // pictures in a row the same, up to 10 s
+            if (scan) {
+                  QImage prev = grabPlugin(w);
+                  for (int k = 0; k < 25 && w && !_cancel; ++k) {
+                        pump.run(GRAB_WAIT_MS);
+                        const QImage cur = grabPlugin(w);
+                        if (!ArticulationCheck::scanPictures(prev, {}, { prev, cur }, QRect(), { 0 })[1])
+                              break;
+                        prev = cur;
+                        }
+                  }
             for (int withNote = 0; withNote < 2 && region.isNull() && !_cancel && w; ++withNote) {
                   withNotes = withNote;
-                  p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[0]);
+                  switchTo(start);
                   pump.run(GRAB_WAIT_MS);
                   base = grabPlugin(w);
                   pump.run(GRAB_WAIT_MS);
                   again = grabPlugin(w);
+                  sameState = { again };
+                  for (int k = 0; scan && k < 3 && w; ++k) {
+                        pump.run(GRAB_WAIT_MS);
+                        sameState.push_back(grabPlugin(w));
+                        }
                   shots.clear();
                   for (int i = 0; i < int(values.size()) && !_cancel && w; ++i) {
                         status(tr("picture %1 of %2").arg(i + 1).arg(values.size()));
@@ -627,6 +933,13 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                               p->midi(ME_NOTEON, 0, pitch, 0);
                               pump.run(150);
                               }
+                        }
+                  // back to the start: what changed by itself during the scan (a memory
+                  // display …) is left out of the comparison
+                  if (scan && w && !_cancel) {
+                        switchTo(start);
+                        pump.run(2 * GRAB_WAIT_MS);
+                        sameState.push_back(grabPlugin(w));
                         }
                   if (int(shots.size()) == int(values.size()))
                         region = changedRegion(base, again, shots);
@@ -649,9 +962,79 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       if (_cancel)
             return false;
 
+      // scanning: the picture most values show is the patch's "no articulation"; the values
+      // with another picture are its articulations
+      std::vector<int> listen = values;         // the values listened to
+      std::vector<int> drawn;                   // on the sheet (indices into values)
+      std::vector<int> noneInMap;               // map values showing no articulation
+      std::vector<int> notInMap;                // articulations found the map lacks
+      for (int i = 0; i < int(values.size()); ++i)
+            drawn.push_back(i);
+      if (scan) {
+            if (int(shots.size()) != int(values.size()) || base.isNull()) {
+                  listen = mapValues;
+                  drawn.clear();
+                  sheetNote = (sheetNote + " " + tr("No pictures: nothing could be scanned.")).trimmed();
+                  }
+            else {
+                  status(tr("comparing the pictures…"));
+                  int none = 0;
+                  const std::vector<bool> isArticulation = ArticulationCheck::scanPictures(
+                     base, sameState, shots, region, { 0, 127, 126, 99, 64 }, &none);
+                  drawn.clear();
+                  listen.clear();
+                  for (int i = 0; i < int(values.size()); ++i) {
+                        const bool articulation = isArticulation[i];
+                        const bool inMap = names.count(values[i]);
+                        if (articulation) {
+                              listen.push_back(values[i]);
+                              drawn.push_back(i);
+                              if (!inMap)
+                                    notInMap.push_back(values[i]);
+                              }
+                        else if (inMap) {
+                              noneInMap.push_back(values[i]);
+                              drawn.push_back(i);           // as evidence
+                              }
+                        }
+                  // a window that doesn't show the articulation (pictures taken with the note
+                  // playing), or one where most of the map would be missing: can't tell
+                  if (withNotes || listen.empty() || (!mapValues.empty() && noneInMap.size() * 2 > mapValues.size())) {
+                        sheetNote = (sheetNote + " " + tr("Scan inconclusive: the window doesn't show which articulation is on.")).trimmed();
+                        out["scanInconclusive"] = true;
+                        listen = mapValues;
+                        noneInMap.clear();
+                        notInMap.clear();
+                        drawn.clear();
+                        for (int i = 0; i < int(values.size()); ++i)
+                              if (names.count(values[i]))
+                                    drawn.push_back(i);
+                        }
+                  QJsonArray found, none1, extra;
+                  for (int v : listen)
+                        found.append(v);
+                  for (int v : noneInMap)
+                        none1.append(v);
+                  for (int v : notInMap)
+                        extra.append(v);
+                  if (!out.contains("scanInconclusive")) {
+                        out["found"] = found;
+                        out["mapValuesShowingNone"] = none1;
+                        out["notInMap"] = extra;
+                        }
+                  out["noneValueLike"] = values[none];
+                  }
+            }
+      // the first value listened to: the map's first when found
+      if (!listen.empty() && start >= 0 && std::find(listen.begin(), listen.end(), start) != listen.end()) {
+            listen.erase(std::find(listen.begin(), listen.end(), start));
+            listen.insert(listen.begin(), start);
+            }
+      const int listenStart = listen.empty() ? start : listen[0];
+
       // listening, offline
       status(tr("listening…"));
-      p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[0]);
+      switchTo(listenStart);
       pump.run(200);
       p->setOffline(true);
 
@@ -661,7 +1044,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       for (int i = 0; i < 60 && !_cancel && !offlineSounds; ++i) {
             status(tr("waiting for the patch to play offline (%1 s)…").arg(i));
             std::vector<float> buf(size_t(2 * MScore::sampleRate), 0.f);
-            p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[0]);
+            switchTo(listenStart);
             if (_library->dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
             p->midi(ME_NOTEON, 0, pitch, 100);
@@ -707,8 +1090,10 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       QElapsedTimer events;
       events.start();
       ArticulationCheck::Report report;
-      if (offlineSounds) {
-            report = ArticulationCheck::run(p.get(), values, s, [&](int done, int total) {
+      if (offlineSounds && listen.empty())
+            report.message = tr("No articulation was found to listen to.");
+      else if (offlineSounds) {
+            report = ArticulationCheck::run(p.get(), listen, s, [&](int done, int total) {
                   if (events.elapsed() > 50) {
                         _status->setText(tr("%1: listening %2 of %3").arg(ins.name).arg(done).arg(total));
                         QApplication::processEvents();
@@ -736,7 +1121,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             const int labelH = 36;
             const int pad = 12;
             const int columns = qBound(1, 1400 / (cell.width() + pad), 4);
-            const int rows = (int(shots.size()) + columns - 1) / columns;
+            const int rows = (int(drawn.size()) + columns - 1) / columns;
             const int headH = 64;
             QImage sheet(pad + columns * (cell.width() + pad), headH + rows * (labelH + cell.height() + pad) + pad, QImage::Format_RGB32);
             sheet.fill(Qt::white);
@@ -753,9 +1138,11 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             pt.setFont(font);
             pt.drawText(QRect(pad, 34, sheet.width() - 2 * pad, 24), Qt::AlignLeft | Qt::AlignVCenter,
                         sheetNote.isEmpty() ? QString("Region x %1 y %2 w %3 h %4 of the window").arg(crop.x()).arg(crop.y()).arg(crop.width()).arg(crop.height()) : sheetNote);
-            for (int i = 0; i < int(shots.size()); ++i) {
-                  const int x = pad + (i % columns) * (cell.width() + pad);
-                  const int y = headH + (i / columns) * (labelH + cell.height() + pad);
+            for (int k = 0; k < int(drawn.size()); ++k) {
+                  const int i = drawn[k];
+                  const int x = pad + (k % columns) * (cell.width() + pad);
+                  const int y = headH + (k / columns) * (labelH + cell.height() + pad);
+                  const bool none = std::find(noneInMap.begin(), noneInMap.end(), values[i]) != noneInMap.end();
                   const ArticulationCheck::Result* r = byValue[values[i]];
                   const ArticulationCheck::Verdict v = r ? r->verdict : ArticulationCheck::Verdict::UNTESTABLE;
                   const QColor colour = v == ArticulationCheck::Verdict::SWITCHES ? QColor(0, 110, 40)
@@ -765,14 +1152,21 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   pt.setFont(font);
                   pt.setPen(Qt::black);
                   pt.drawText(QRect(x, y, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
-                              QString("CC%1 = %2 · %3").arg(ins.switchNumber).arg(values[i]).arg(names[values[i]].join(" / ")));
+                              QString("CC%1 = %2 · %3").arg(ins.switchNumber).arg(values[i])
+                              .arg(names.count(values[i]) ? names[values[i]].join(" / ") : tr("(not in the map)")));
                   font.setBold(false);
                   pt.setFont(font);
                   pt.setPen(colour);
+                  if (none) {
+                        pt.setPen(QColor(190, 0, 0));
+                        pt.drawText(QRect(x, y + 18, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
+                                    tr("picture: no articulation (the patch lacks this value)"));
+                        }
+                  else
                   pt.drawText(QRect(x, y + 18, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
                               QString("sound: %1%2%3%4").arg(ArticulationCheck::name(v))
                               .arg(r && r->ratio >= 0 ? QString(" (%1)").arg(r->ratio, 0, 'f', 2) : QString())
-                              .arg(r && r->sameAs >= 0 ? QString(", like %1").arg(r->sameAs) : QString())
+                              .arg(r && r->sameAs >= 0 ? QString(", close to %1").arg(r->sameAs) : QString())
                               .arg(r && r->pitch >= 0 && r->pitch != pitch ? QString(", at pitch %1").arg(r->pitch) : QString()));
                   QImage shot = shots[i].size() == base.size() ? shots[i] : shots[i].scaled(base.size());
                   pt.drawImage(QRect(QPoint(x, y + labelH), cell), shot.copy(crop));
@@ -791,7 +1185,8 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       for (const ArticulationCheck::Result& r : report.results) {
             QJsonObject a;
             a["value"] = r.value;
-            a["names"] = QJsonArray::fromStringList(names[r.value]);
+            a["names"] = QJsonArray::fromStringList(names.count(r.value) ? names[r.value] : QStringList());
+            a["inMap"] = bool(names.count(r.value));
             a["sound"] = ArticulationCheck::name(r.verdict);
             a["ratio"] = std::round(r.ratio * 1000) / 1000;
             a["peakDb"] = std::round(r.peakDb * 10) / 10;
@@ -801,11 +1196,11 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   problems << QString("%1 (%2): no sound at pitch %3, tested at %4: %5").arg(names[r.value].join(" / ")).arg(r.value)
                               .arg(pitch).arg(r.pitch).arg(ArticulationCheck::name(r.verdict));
                   }
-            if (r.sameAs >= 0) {
+            // (a hint only, kept in results.json: close articulations - a minor and a major
+            // second trill - can sound alike here, and a value the patch lacks plays nothing in
+            // SSO rather than a default)
+            if (r.sameAs >= 0)
                   a["soundsLike"] = r.sameAs;
-                  problems << QString("%1 (%2): sounds just like %3 (%4)").arg(names[r.value].join(" / ")).arg(r.value)
-                              .arg(names[r.sameAs].join(" / ")).arg(r.sameAs);
-                  }
             arts.append(a);
             ++counts[int(r.verdict)];
             if (r.verdict == ArticulationCheck::Verdict::SILENT)
@@ -813,6 +1208,27 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             else if (r.verdict != ArticulationCheck::Verdict::SWITCHES && (r.pitch < 0 || r.pitch == pitch))
                   problems << QString("%1 (%2): %3").arg(names[r.value].join(" / ")).arg(r.value).arg(ArticulationCheck::name(r.verdict));
             }
+      for (int v : noneInMap)
+            problems << QString("%1 (%2): the patch shows no articulation for this value").arg(names[v].join(" / ")).arg(v);
+      if (!notInMap.empty()) {
+            QStringList l;
+            for (int v : notInMap)
+                  l << QString::number(v);
+            problems << tr("%1 articulations the map lacks, values %2 (see the sheet for their names)").arg(notInMap.size()).arg(l.join(", "));
+            }
+      // passed: every value of the map switches, and shows an articulation
+      bool passed = report.switching && noneInMap.empty() && !mapValues.empty();
+      for (const ArticulationCheck::Result& r : report.results)
+            if (names.count(r.value) && r.verdict != ArticulationCheck::Verdict::SWITCHES)
+                  passed = false;
+      for (int v : mapValues)
+            if (!byValue.count(v) && std::find(noneInMap.begin(), noneInMap.end(), v) == noneInMap.end())
+                  passed = false;
+      out["passed"] = passed;
+      QJsonArray sheetOrder;              // the values on the sheet, in its order
+      for (int i : drawn)
+            sheetOrder.append(values[i]);
+      out["sheet"] = sheetOrder;
       out["articulations"] = arts;
       out["switching"] = report.switching;
       out["refA"] = report.refA;
@@ -826,10 +1242,13 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             out["region"] = QJsonArray({ region.x(), region.y(), region.width(), region.height() });
       results.append(out);
 
-      const QString line = tr("%1 switch, %2 ignored, %3 unclear, %4 silent%5")
+      QString line = tr("%1 switch, %2 ignored, %3 unclear, %4 silent%5")
          .arg(counts[0]).arg(counts[1]).arg(counts[2]).arg(counts[3])
          .arg(report.switching ? QString() : QString(" — ") + report.message);
-      resultItem->setText(line);
+      if (scan && !drawn.empty())
+            line += tr("; scan: %1 not in the map, %2 map values missing").arg(notInMap.size()).arg(noneInMap.size());
+      record(ins.name, setup, passed, offlineSounds ? line : "!" + line, scan && !drawn.empty());
+      resultItem->setText(passed ? tr("Passed: %1").arg(line) : line);
       summary += QString("## %1 (pitch %2)\n   %3\n").arg(ins.name).arg(pitch).arg(line);
       for (const QString& pr : problems)
             summary += "   - " + pr + "\n";
