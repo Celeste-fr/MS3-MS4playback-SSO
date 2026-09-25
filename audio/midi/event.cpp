@@ -427,7 +427,9 @@ void EventMap::fixupMIDI()
       while (it != end()) {
             NPlayEvent& event = it->second;
             /* ME_NOTEOFF is never emitted, no need to check for it */
-            if (event.type() == ME_NOTEON && !event.isMuted()) {
+            // MuseScore 4 notes (a layer set) go to the synth as they are: every note-off,
+            // the first releasing all the voices a key has on the channel
+            if (event.type() == ME_NOTEON && !event.isMuted() && event.layer() < 0) {
                   const int ci = event.channel() * 4 + qBound(0, event.layer(), 3);
                   unsigned short np = info[ci].nowPlaying[event.pitch()];
                   if (event.velo() == 0) {

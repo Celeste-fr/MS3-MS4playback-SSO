@@ -143,6 +143,7 @@ Sounds sounds(const Instrument* instrument)
       const int stdProgram = e ? e->program : 0;             // MS4: Program(0, 0) when unmapped
       for (int i = 0; i < n; ++i)
             s.channelSlots.push_back({ i, stdBank, stdProgram });
+      s.techniques = e && e->nArts > 0;
       if (!e || n < 2)
             return s;
 
@@ -209,6 +210,15 @@ int Sounds::slotFor(const std::vector<Art>& noteArts) const
                   if (as.first == a)
                         return as.second;
       return 0;
+      }
+
+// ChannelMap::resolveChannelForEvent: a channel per voice, except that without technique
+// mappings a note with articulations but no Standard goes to the first channel (voice 1's)
+int Sounds::layerFor(const std::vector<Art>& noteArts, int voice) const
+      {
+      if (noteArts.empty() || std::find(noteArts.begin(), noteArts.end(), Art::Standard) != noteArts.end())
+            return voice;
+      return techniques ? voice : 0;
       }
 
 //---------------------------------------------------------
@@ -525,18 +535,54 @@ static std::map<int, int> easingValueCurve(int ticksDuration, int stepsCount, in
 //   Dynamics
 //---------------------------------------------------------
 
-int Dynamics::appliable(int tick) const
+// PlaybackContext::applyDynamic: a dynamic or hairpin read from a MuseScore 3 score applies to
+// its own voice if it is in voice 2-4 (EngravingCompat::migrateDynamicPosOnVocalStaves), else to
+// the whole instrument; at a tick the more specific assignment wins
+void Dynamics::apply(const Element* e, int tick, int level)
       {
-      auto it = _levels.upper_bound(tick);
-      if (it == _levels.begin())
-            return NATURAL;
-      return std::prev(it)->second;
+      const bool ownVoice = e->voice() != 0;
+      const int priority = ownVoice ? 2 : 0;          // CURRENT_VOICE_ONLY : ALL_VOICE_IN_INSTRUMENT
+      for (int track = _strack; track < _etrack; ++track) {
+            if (ownVoice && track != e->track())
+                  continue;
+            auto r = _byTrack[track].emplace(tick, Info { level, priority });
+            if (!r.second && r.first->second.priority <= priority)
+                  r.first->second = { level, priority };
+            }
       }
 
-int Dynamics::nominal(int tick) const
+int Dynamics::appliable(int track, int tick) const
       {
-      auto it = _levels.find(tick);
-      return it == _levels.end() ? NATURAL : it->second;
+      auto t = _byTrack.find(track);
+      if (t == _byTrack.end())
+            return NATURAL;
+      auto it = t->second.upper_bound(tick);
+      if (it == t->second.begin())
+            return NATURAL;
+      return std::prev(it)->second.level;
+      }
+
+int Dynamics::nominal(int track, int tick) const
+      {
+      auto t = _byTrack.find(track);
+      if (t == _byTrack.end())
+            return NATURAL;
+      auto it = t->second.find(tick);
+      return it == t->second.end() ? NATURAL : it->second.level;
+      }
+
+// FluidSequencer sends every track's changes as CC11 to the instrument's channels; where tracks
+// change at the same time the highest level is taken
+void Dynamics::mergeTracks()
+      {
+      _merged.clear();
+      for (const auto& t : _byTrack) {
+            for (const auto& l : t.second) {
+                  auto r = _merged.emplace(l.first, l.second.level);
+                  if (!r.second)
+                        r.first->second = std::max(r.first->second, l.second.level);
+                  }
+            }
       }
 
 // the dynamic a text dynamic ("other-dynamics") spells: SMuFL dynamic glyphs (as old scores
@@ -592,32 +638,31 @@ void Dynamics::addDynamic(Score*, Dynamic* dynamic)
 
       int level = ordinaryLevel(type);
       if (level >= 0) {
-            apply(tick, level);
+            apply(dynamic, tick, level);
             return;
             }
       level = singleNoteLevel(type);
       if (level >= 0) {
-            const int prev = appliable(tick);
-            apply(tick, level);
+            const int prev = appliable(dynamic->track(), tick);
+            apply(dynamic, tick, level);
             if (Segment* next = segment->next())
-                  apply(next->tick().ticks(), prev);
+                  apply(dynamic, next->tick().ticks(), prev);
             return;
             }
       int from, to;
       if (compound(type, from, to)) {
             const int length = dynamic->velocityChangeLength().ticks();
             for (const auto& p : easingValueCurve(length, 6, to - from, ChangeMethod::NORMAL))
-                  apply(tick + p.first, from + p.second);
+                  apply(dynamic, tick + p.first, from + p.second);
             }
       }
 
-// the dynamic marking at a segment of the hairpin's staff, if any
+// the dynamic marking at a segment in the hairpin's track, if any
 static Dynamic* dynamicAt(Segment* segment, int track)
       {
       if (!segment)
             return nullptr;
-      const int strack = track - track % VOICES;
-      Element* e = segment->findAnnotation(ElementType::DYNAMIC, strack, strack + VOICES - 1);
+      Element* e = segment->findAnnotation(ElementType::DYNAMIC, track, track);
       return e ? toDynamic(e) : nullptr;
       }
 
@@ -650,7 +695,8 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
             }
 
       // MS3 hairpins carry no start dynamic of their own: the level in force
-      const int levelFrom = appliable(spannerFrom);
+      const int track = hairpin->track();
+      const int levelFrom = appliable(track, spannerFrom);
 
       Dynamic* endDynamic = dynamicAt(score->tick2segment(Fraction::fromTicks(spannerTo), true, SegmentType::ChordRest), hairpin->track());
       const int nominalLevelTo = endDynamic ? levelOf(endDynamic->dynamicTypeName(), true) : NATURAL;
@@ -659,7 +705,7 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
       const bool useNominalLevelTo = hasNominalLevelTo && (isCrescendo ? nominalLevelTo > levelFrom : nominalLevelTo < levelFrom);
       const int levelTo = useNominalLevelTo ? nominalLevelTo : levelFrom + (isCrescendo ? STEP : -STEP);
 
-      const int levelAtEnd = nominal(spannerTo);
+      const int levelAtEnd = nominal(track, spannerTo);
       const bool hasDynamicAtEndTick = levelAtEnd != NATURAL;
       if (hasDynamicAtEndTick && levelAtEnd != levelTo)
             spannerTo -= 1;                                   // Fraction::eps()
@@ -670,19 +716,46 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
 
       const int steps = std::max(durationTicks / (DIVISION / 4), 24);
       for (const auto& p : easingValueCurve(durationTicks, steps, levelTo - levelFrom, hairpin->veloChangeMethod()))
-            apply(spannerFrom + p.first, levelFrom + p.second);
+            apply(hairpin, spannerFrom + p.first, levelFrom + p.second);
 
       if (hasNominalLevelTo && !useNominalLevelTo && !hasDynamicAtEndTick)
-            apply(spannerTo, nominalLevelTo);
+            apply(hairpin, spannerTo, nominalLevelTo);
       }
 
 // PlaybackContext::update: the part's dynamic markings in score order, then its hairpins
+int Dynamics::spannerStop(const Spanner* sp) const
+      {
+      auto it = _clippedStop.find(sp);
+      return it != _clippedStop.end() ? it->second : sp->tick2().ticks();
+      }
+
 void Dynamics::build(Score* score, Part* part)
       {
-      _levels.clear();
+      _byTrack.clear();
       _subito.clear();
       const int strack = part->startTrack();
       const int etrack = part->endTrack();
+      _strack = strack;
+      _etrack = etrack;
+
+      // SpannerMap::collectIntervals: per part and spanner type, in the map's order, a spanner
+      // starting before the previous one of its type has stopped cuts that one off a tick before
+      // (unless they are linked); playback looks spanners up in these collision-free intervals
+      _clippedStop.clear();
+      std::map<ElementType, Spanner*> lastOfType;
+      for (const auto& p : score->spanner()) {
+            Spanner* sp = p.second;
+            if (sp->part() != part)
+                  continue;
+            const int start = sp->tick().ticks();
+            auto it = lastOfType.find(sp->type());
+            if (it != lastOfType.end()) {
+                  Spanner* last = it->second;
+                  if (spannerStop(last) >= start && !last->isLinked(sp))
+                        _clippedStop[last] = start - 1;
+                  }
+            lastOfType[sp->type()] = sp;
+            }
 
       for (Segment* s = score->firstSegment(SegmentType::All); s; s = s->next1()) {
             for (Element* e : s->annotations()) {
@@ -704,11 +777,13 @@ void Dynamics::build(Score* score, Part* part)
       for (Hairpin* h : hairpins)
             addHairpin(score, h);
 
-      if (!_levels.count(0))
-            _levels.emplace(0, NATURAL);
+      for (int track = strack; track < etrack; ++track)
+            _byTrack[track].emplace(0, Info { NATURAL, 0 });
+      mergeTracks();
       if (qEnvironmentVariableIsSet("MS4_DEBUG_DYNAMICS")) {
-            for (const auto& l : _levels)
-                  qDebug("MS4DYN part %s tick %d level %d", qPrintable(part->partName()), l.first, l.second);
+            for (const auto& t : _byTrack)
+                  for (const auto& l : t.second)
+                        qDebug("MS4DYN part %s track %d tick %d level %d", qPrintable(part->partName()), t.first, l.first, l.second.level);
             }
       }
 
@@ -808,7 +883,7 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
             if (sp->staffIdx() != staffIdx && !(sp->isPedal() && sp->part() == chord->part()))
                   continue;
             const int from = sp->tick().ticks();
-            const int to = sp->tick2().ticks();
+            const int to = dynamics.spannerStop(sp);
             if (sp->isSlur()) {
                   if (!legato && from <= tick && tick <= to) {
                         arts.push_back({ Art::Legato, false });

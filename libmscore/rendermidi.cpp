@@ -87,6 +87,7 @@ struct SndConfig {
       int ms4Ts = 0;
       int ms4Offset = 0;          // ticks the note starts late (arpeggio, grace notes before), taken off its length
       int ms4Cut = 0;             // ticks taken off the note's end (grace notes after)
+      int ms4Layer = -1;          // FluidSynth channel layer (-1: the note's voice)
       int ms4SwingOn = 0;         // swing: on-time offset, per mille of the chord's length
       int ms4SwingGate = 100;     // swing: the chord's length, percent
 
@@ -423,7 +424,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             const int swungTicks = (ticks * config.ms4SwingGate) / 100 + (chainTicks - ticks);
             int on  = tick1 + (ticks * config.ms4SwingOn) / 1000 + offset + ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
             int off = on + int((qint64(swungTicks - offset - config.ms4Cut) * config.ms4Dur) / Ms4::HUNDRED);   // MS4 ends the note there (MS3 one tick early)
-            playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx, note->voice());
+            playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx, config.ms4Layer >= 0 ? config.ms4Layer : note->voice());
             nels = 0;                             // done; bends below still apply
             }
       for (int i = 0, pitch = note->ppitch(); i < nels; ++i) {
@@ -450,7 +451,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             int velo;
             Fraction nonUnwoundTick = Fraction::fromTicks(on - tickOffset);
             if (config.ms4) {
-                  playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, off, staffIdx, note->voice());
+                  playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, off, staffIdx, config.ms4Layer >= 0 ? config.ms4Layer : note->voice());
                   continue;
                   }
             if (config.useSND) {
@@ -1042,7 +1043,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               continue;
                         events->registerChannel(hc->channel());
                         const int htick = h->tick().ticks();
-                        const Ms4::NoteResult r = Ms4::note(Ms4::Family::Keyboards, {}, hpc->second.dynamics.levelAt(htick), false);
+                        const Ms4::NoteResult r = Ms4::note(Ms4::Family::Keyboards, {}, hpc->second.dynamics.levelAt(h->track(), htick), false);
                         RealizedHarmony rh = h->getRealizedHarmony();
                         const int on = htick + tickOffset;
                         const int length = rh.getActualDuration(on).ticks();
@@ -1076,7 +1077,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   if (pc == ms4Parts.end())
                         continue;
                   const Ms4::PartContext& ctx = pc->second;
-                  const int level = ctx.dynamics.levelAt(tick.ticks());
+                  const int level = ctx.dynamics.levelAt(chord->track(), tick.ticks());
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics);
 
                   auto sit = ctx.sounds.find(instr);
@@ -1105,9 +1106,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         // the preset MS4 plays this note with -> the channel slot programmed with it
                         int noteChannel = channel;
+                        int layer = note->voice();
                         if (sit != ctx.sounds.end()) {
                               const Ms4::Slot& slot = sit->second.channelSlots[sit->second.slotFor(r.arts)];
                               noteChannel = instr->channel(slot.channel)->channel();
+                              layer = sit->second.layerFor(r.arts, layer);
                               events->registerChannel(noteChannel);
                               }
                         SndConfig config;
@@ -1118,6 +1121,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Ts = r.ts;
                         config.ms4Offset = offset;
                         config.ms4Cut = cut;
+                        config.ms4Layer = layer;
                         ms4Swing(note->chord(), config.ms4SwingOn, config.ms4SwingGate);
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
                         if (r.bend && !note->chord()->isGrace() && !note->tieBack()) {
@@ -1126,7 +1130,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const int artStart = ch->tick().ticks() + tickOffset;
                               const int on = artStart + (ticks * r.ts) / Ms4::HUNDRED;
                               const int off = on + (ticks * r.dur) / Ms4::HUNDRED;
-                              addMs4PitchCurve(events, noteChannel, st1->idx(), artStart, ticks, off, r.pitchCurve, note->voice());
+                              addMs4PitchCurve(events, noteChannel, st1->idx(), artStart, ticks, off, r.pitchCurve, layer);
                               }
                         };
 
@@ -1140,15 +1144,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // (glissando notes need the tieBack exemption: they play their later steps)
                         if (!note->play() || length <= 0)
                               return;
-                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(start), ctx.snd);
+                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(note->track(), start), ctx.snd);
                         int noteChannel = channel;
-                        if (sit != ctx.sounds.end())
+                        int layer = note->voice();
+                        if (sit != ctx.sounds.end()) {
                               noteChannel = instr->channel(sit->second.channelSlots[sit->second.slotFor(r.arts)].channel)->channel();
+                              layer = sit->second.layerFor(r.arts, layer);
+                              }
                         events->registerChannel(noteChannel);
                         const int on = start + tickOffset + (length * r.ts) / Ms4::HUNDRED;
                         const int off = on + (length * r.dur) / Ms4::HUNDRED;
                         playNote(events, note, noteChannel, qBound(0, note->ppitch() + pitchOffset, 127), qBound(1, r.velocity, 127),
-                                 on, qMax(on, off), st1->idx(), note->voice());
+                                 on, qMax(on, off), st1->idx(), layer);
                         };
 
                   renderAtFn = [&](const Note* n, const std::vector<Ms4::ArtRef>& a, int st, int len, int po, int) { renderAt(n, a, st, len, po); };
@@ -1421,7 +1428,10 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                         }
                   };
             const std::map<int, int>& levels = ctx.dynamics.levels();
-            put(tick1, ctx.dynamics.levelAt(tick1));
+            {
+                  auto it = levels.upper_bound(tick1);
+                  put(tick1, it == levels.begin() ? Ms4::NATURAL : std::prev(it)->second);
+            }
             for (auto it = levels.upper_bound(tick1); it != levels.end() && it->first < tick2; ++it)
                   put(it->first, it->second);
             }

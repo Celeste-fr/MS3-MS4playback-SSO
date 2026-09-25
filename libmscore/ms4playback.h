@@ -31,11 +31,13 @@ namespace Ms {
 
 class Chord;
 class Dynamic;
+class Element;
 class Hairpin;
 class Instrument;
 class Note;
 class Part;
 class Score;
+class Spanner;
 
 namespace Ms4 {
 
@@ -71,22 +73,31 @@ NoteResult note(Family family, const std::vector<ArtRef>& arts, int dynamicLevel
 //---------------------------------------------------------
 
 class Dynamics {
-      std::map<int, int> _levels;
+      // per track (PlaybackContext::m_dynamicsByTrack): tick -> level and the priority of the
+      // voice assignment that set it
+      struct Info { int level; int priority; };
+      std::map<int, std::map<int, Info>> _byTrack;
+      int _strack { 0 };
+      int _etrack { 0 };
+      std::map<int, int> _merged;
 
-      void apply(int tick, int level) { _levels[tick] = level; }
-      int appliable(int tick) const;
-      int nominal(int tick) const;
+      void apply(const Element* e, int tick, int level);
+      int appliable(int track, int tick) const;
+      int nominal(int track, int tick) const;
       void addDynamic(Score*, Dynamic*);
       void addHairpin(Score*, Hairpin*);
+      void mergeTracks();
 
    public:
       void build(Score* score, Part* part);
-      int levelAt(int tick) const { return appliable(tick); }
-      const std::map<int, int>& levels() const { return _levels; }
+      int levelAt(int track, int tick) const { return appliable(track, tick); }
+      const std::map<int, int>& levels() const { return _merged; }     // all tracks' changes (FluidSequencer::updateDynamicEvents)
       bool subitoAt(int tick, int staffIdx) const { return _subito.count({ staffIdx, tick }) > 0; }
+      int spannerStop(const Spanner* sp) const;     // tick2, clipped as MS4's collision-free intervals
 
    private:
       std::set<std::pair<int, int>> _subito;      // (staff, tick) of an sf-type dynamic (AnnotationsMetaParser: Subito)
+      std::map<const Spanner*, int> _clippedStop;
       };
 
 //---------------------------------------------------------
@@ -106,7 +117,9 @@ struct Slot {
 struct Sounds {
       std::vector<Slot> channelSlots;            // one per channel of the instrument, slots[0] = standard
       std::vector<std::pair<Art, int>> artSlot;     // technique -> index into slots
+      bool techniques { false };                   // MS4 maps playing techniques for the instrument
       int slotFor(const std::vector<Art>& noteArts) const;    // FluidSequencer's channel choice
+      int layerFor(const std::vector<Art>& noteArts, int voice) const;
       };
 
 Sounds sounds(const Instrument* instrument);

@@ -326,24 +326,20 @@ QVariant Fermata::propertyDefault(Pid propertyId) const
             case Pid::PLACEMENT:
                   return int(track() & 1 ? Placement::BELOW : Placement::ABOVE);
             case Pid::TIME_STRETCH: {
-                  QString programVersion = masterScore()->mscoreVersion();
-                  if ((programVersion.isEmpty() && !MScore::testMode) || programVersion > "3.6.2") { // new score or newer than from 3.6.3 (3.7 from before this change)
-                        switch (subtype()) {
-                              case int(SymId::fermataVeryShortAbove):
-                                    return 1.25;
-                              case int(SymId::fermataShortAbove):
-                              case int(SymId::fermataShortHenzeAbove):
-                                    return 1.5;
-                              case int(SymId::fermataAbove):
-                                    return 2.0;
-                              case int(SymId::fermataLongAbove):
-                              case int(SymId::fermataLongHenzeAbove):
-                                    return 3.0;
-                              case int(SymId::fermataVeryLongAbove):
-                                    return 4.0;
-                              }
-                        }
-                  return 1.0; // articulationList[int(articulationType())].timeStretch;
+                  // as MuseScore 4 (Fermata::propertyDefault by FermataType): whatever the score's
+                  // version and placement; MS3 gave scores up to 3.6.2 no stretch at all
+                  QString name = Sym::id2name(symId());
+                  if (name.endsWith("Above") || name.endsWith("Below"))
+                        name.chop(5);
+                  if (name == "fermataVeryShort")
+                        return 1.25;
+                  if (name == "fermataShort" || name == "fermataShortHenze")
+                        return 1.5;
+                  if (name == "fermataLong" || name == "fermataLongHenze")
+                        return 3.0;
+                  if (name == "fermataVeryLong")
+                        return 4.0;
+                  return 2.0;
                   }
             case Pid::PLAY:
                   return true;
