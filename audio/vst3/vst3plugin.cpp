@@ -158,28 +158,29 @@ void Vst3PluginPrivate::mapControllers()
             }
       }
 
-// the buses an instrument needs: the first event input and the main output (stereo)
+// the buses an instrument needs: the first event input and the main output (stereo). Runs
+// again for offline mode or another sample rate: the buses chosen first stay on (a second
+// run used to switch them all off, and Kontakt then heard and played nothing)
 bool Vst3PluginPrivate::setup()
       {
-      for (int i = 0; i < component->getBusCount(kEvent, kInput); ++i) {
-            const bool on = eventBus < 0;
-            component->activateBus(kEvent, kInput, i, on);
-            if (on)
-                  eventBus = i;
-            }
+      const int eventIns = component->getBusCount(kEvent, kInput);
+      if (eventBus < 0 && eventIns > 0)
+            eventBus = 0;
+      for (int i = 0; i < eventIns; ++i)
+            component->activateBus(kEvent, kInput, i, i == eventBus);
       for (int i = 0; i < component->getBusCount(kAudio, kInput); ++i)
             component->activateBus(kAudio, kInput, i, false);
       const int outs = component->getBusCount(kAudio, kOutput);
-      for (int i = 0; i < outs; ++i) {
+      for (int i = 0; i < outs && outputBus < 0; ++i) {
             BusInfo info;
             component->getBusInfo(kAudio, kOutput, i, info);
-            const bool main = outputBus < 0 && info.busType == kMain;
-            component->activateBus(kAudio, kOutput, i, main);
-            if (main)
+            if (info.busType == kMain)
                   outputBus = i;
             }
       if (outputBus < 0)
             return false;
+      for (int i = 0; i < outs; ++i)
+            component->activateBus(kAudio, kOutput, i, i == outputBus);
 
       // stereo main out where the plug-in accepts it
       std::vector<SpeakerArrangement> outArr(outs, SpeakerArr::kStereo);

@@ -172,10 +172,20 @@ Tested here:
     6 switch, 99 silent (the SFZ has no region for it), a sheet and a zip. *Stop* works.
     sfizz's window doesn't show CC32, so its pictures were retaken with the note playing.
 
-**Not tried: Kontakt, SSO, Windows (the HWND editor, the MSVC build, PrintWindow grabs).**
-Nobody knows yet whether Kontakt's window shows the UACC switch (if not, the pictures are
-taken with the note playing), or whether Kontakt keeps the articulation or plays a default
-for a value the patch lacks (the check handles both).
+**Tried by the owner (Windows, Kontakt 8, SSO), 2026-09-25: first Check articulations run on
+Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
+- The MSVC build ran. *Set up…*, the Kontakt editor (HWND) and the pictures worked.
+- Kontakt's window shows each switch. The patch prints the selected articulation's name,
+  with "UACC CC# n" under it. The crop found that region.
+- All 22 Violins 1 values match the map, by name and by Kontakt's own UACC number.
+- The listening check was all silence (−200 dB): Kontakt played in real time but not after
+  `setOffline(true)`. Cause: `Vst3PluginPrivate::setup()` switched off every bus when it ran
+  a second time. Fixed; the test synth now honours bus activation like Kontakt, and the
+  tests caught it. The same bug would have made audio export with Kontakt silent. The check
+  now waits for an offline note to sound (up to a minute) before listening.
+
+Still unknown: whether Kontakt keeps the articulation or plays a default for a value the
+patch lacks (the check handles both).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. It isn't on the default branch, so *Run workflow* can't start it, and
 this environment can't push tags. It runs on a push to a `claude/` branch whose last commit

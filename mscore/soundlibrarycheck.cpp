@@ -654,6 +654,41 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[0]);
       pump.run(200);
       p->setOffline(true);
+
+      // offline too, a note has to sound before listening (a plug-in may reload its samples
+      // when its processing restarts): up to a minute, else nothing to listen to
+      bool offlineSounds = false;
+      for (int i = 0; i < 60 && !_cancel && !offlineSounds; ++i) {
+            status(tr("waiting for the patch to play offline (%1 s)…").arg(i));
+            std::vector<float> buf(size_t(2 * MScore::sampleRate), 0.f);
+            p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[0]);
+            if (_library->dynamicsCC >= 0)
+                  p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
+            p->midi(ME_NOTEON, 0, pitch, 100);
+            p->process(MScore::sampleRate, buf.data());
+            p->midi(ME_NOTEON, 0, pitch, 0);
+            p->process(MScore::sampleRate / 2, buf.data());
+            for (float x : buf)
+                  offlineSounds = offlineSounds || std::fabs(x) > 1e-4f;
+            if (!offlineSounds) {
+                  p->idle();
+                  QElapsedTimer t;
+                  t.start();
+                  while (t.elapsed() < 1000 && !_cancel) {
+                        QApplication::processEvents();
+                        QThread::msleep(20);
+                        }
+                  }
+            }
+      if (_cancel) {
+            p->setOffline(false);
+            return false;
+            }
+      out["offlineSounds"] = offlineSounds;
+      if (!offlineSounds) {
+            p->setOffline(false);
+            sheetNote = (sheetNote + " " + tr("Offline, the plug-in played nothing for a minute: no listening results.")).trimmed();
+            }
       ArticulationCheck::Settings s;
       s.sampleRate = MScore::sampleRate;
       s.switchCC = ins.switchNumber;
@@ -662,15 +697,20 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       s.pitch = pitch;
       QElapsedTimer events;
       events.start();
-      const ArticulationCheck::Report report = ArticulationCheck::run(p.get(), values, s, [&](int done, int total) {
-            if (events.elapsed() > 50) {
-                  _status->setText(tr("%1: listening %2 of %3").arg(ins.name).arg(done).arg(total));
-                  QApplication::processEvents();
-                  events.restart();
-                  }
-            return !_cancel;
-            });
-      p->setOffline(false);
+      ArticulationCheck::Report report;
+      if (offlineSounds) {
+            report = ArticulationCheck::run(p.get(), values, s, [&](int done, int total) {
+                  if (events.elapsed() > 50) {
+                        _status->setText(tr("%1: listening %2 of %3").arg(ins.name).arg(done).arg(total));
+                        QApplication::processEvents();
+                        events.restart();
+                        }
+                  return !_cancel;
+                  });
+            p->setOffline(false);
+            }
+      else
+            report.message = tr("Offline, the plug-in played nothing: no listening results (the pictures stand).");
       if (report.cancelled || _cancel)
             return false;
 

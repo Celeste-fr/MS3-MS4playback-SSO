@@ -14,7 +14,8 @@
 //    85-89         not in the patch: articulation 1 (a default)
 //    90-127        not in the patch: ignored, the articulation stays
 //  and round robins: each note a little louder or softer than the last, its harmonics a
-//  little different (±8 %).
+//  little different (±8 %). Like Kontakt, it hears no MIDI when its event input is not
+//  active, and it is silent when its output is not active.
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License version 3.
@@ -133,7 +134,8 @@ class Processor : public AudioEffect {
                               }
                         }
                   }
-            if (IEventList* events = data.inputEvents) {
+            const bool eventsOn = getEventInput(0) && getEventInput(0)->isActive();
+            if (IEventList* events = eventsOn ? data.inputEvents : nullptr) {
                   for (int32 i = 0; i < events->getEventCount(); ++i) {
                         Event e;
                         if (events->getEvent(i, e) != kResultOk)
@@ -152,6 +154,13 @@ class Processor : public AudioEffect {
                   }
             if (data.numOutputs < 1 || data.outputs[0].numChannels < 2)
                   return kResultOk;
+            if (!getAudioOutput(0) || !getAudioOutput(0)->isActive()) {
+                  for (int32 c = 0; c < data.outputs[0].numChannels; ++c)
+                        for (int32 i = 0; i < data.numSamples; ++i)
+                              data.outputs[0].channelBuffers32[c][i] = 0.f;
+                  data.outputs[0].silenceFlags = 3;
+                  return kResultOk;
+                  }
             float* l = data.outputs[0].channelBuffers32[0];
             float* r = data.outputs[0].channelBuffers32[1];
             for (int32 i = 0; i < data.numSamples; ++i)
