@@ -40,8 +40,7 @@ class Fluid : public Synthesizer {
       static constexpr double GLOBAL_GAIN      = 4.8;  // FLUID_GLOBAL_VOLUME_GAIN
       static constexpr int DEFAULT_MIDI_VOLUME = 100;  // CC7
       static constexpr int NATURAL_EXPRESSION  = 64;   // CC11, FluidSequencer::naturalExpressionLevel()
-      // semitones. MS4 uses 24; MuseScore 3's rendermidi scales its bends for 12
-      static constexpr int PITCH_WHEEL_SENS    = 12;
+      static constexpr int PITCH_WHEEL_SENS    = 24;   // semitones (MuseScore 3's was 12, see rendermidi ms3PitchBend)
       static constexpr int MIN_NOTE_LENGTH_MS  = 10;
       // MS4 gives each instrument its own synth with 512 voices; here all instruments share one
       static constexpr int POLYPHONY           = 4096;

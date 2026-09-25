@@ -52,7 +52,11 @@ struct NoteResult {
       int ts { 0 };                       // on-time offset, 10000 = the note's duration
       int velocity { 64 };                // 7-bit note-on velocity, as FluidSequencer sends it
       std::vector<Art> arts;              // the resolved types, MS4 enum order
+      bool bend { false };                // FluidSequencer plays a pitch curve (BEND_SUPPORTED_TYPES)
+      int pitchCurve[11] = {};            // at 0, 10 … 100 % of the note; 50 = one semitone
       };
+
+int pitchBendLevel(int pitchLevel);       // FluidSequencer::pitchBendLevel: 14-bit wheel, 24 semitones
 
 Family family(const Instrument* instrument);
 int expressionLevel(int level);           // FluidSequencer::expressionLevel: MS4 level -> CC11 / velocity

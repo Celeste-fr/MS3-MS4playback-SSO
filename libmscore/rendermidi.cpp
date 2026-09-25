@@ -254,6 +254,17 @@ bool isGlissandoFor(const Note* note) {
 //---------------------------------------------------------
 //   playNote
 //---------------------------------------------------------
+//---------------------------------------------------------
+//   ms3PitchBend
+//    MuseScore 3's bend value p (100 = a whole tone) as a 14-bit pitch wheel value. The synth
+//    uses MuseScore 4's pitch wheel range of 24 semitones (it was 12 in MuseScore 3).
+//---------------------------------------------------------
+
+static int ms3PitchBend(int p)
+      {
+      return qBound(0, (p * 8192) / 1200 + 8192, 16383);
+      }
+
 static void playNote(EventMap* events, const Note* note, int channel, int pitch,
    int velo, int onTime, int offTime, int staffIdx)
       {
@@ -286,7 +297,7 @@ static void playNote(EventMap* events, const Note* note, int channel, int pitch,
                               for (int& time : onTimes) {
                                     int p = static_cast<int>((t / nTimes) * pitchDelta);
                                     int timeStamp = std::min(onTime + time, offTime - 1);
-                                    int midiPitch = (p * 16384) / 1200 + 8192;
+                                    int midiPitch = ms3PitchBend(p);
                                     NPlayEvent evb(ME_PITCHBEND, channel, midiPitch % 128, midiPitch / 128);
                                     evb.setOriginatingStaff(staffIdx);
                                     events->insert(std::pair<int, NPlayEvent>(timeStamp, evb));
@@ -512,7 +523,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   int pitch = pitchValue.pitch;
 
                   if (pitchIndex == 0 && (pitch == nextPitch.pitch) && (pitch != lastPitch)) {
-                        int midiPitch = (pitch * 16384) / 1200 + 8192;
+                        int midiPitch = ms3PitchBend(pitch);
                         int msb = midiPitch / 128;
                         int lsb = midiPitch % 128;
                         NPlayEvent ev(ME_PITCHBEND, channel, lsb, msb);
@@ -546,7 +557,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
 
                         if (p != lastPitch) {
                               // We don't support negative pitch, but Midi does. Let's center by adding 8192.
-                              int midiPitch = (p * 16384) / 1200 + 8192;
+                              int midiPitch = ms3PitchBend(p);
                               // Representing pitch as two bytes
                               int msb = midiPitch / 128;
                               int lsb = midiPitch % 128;
@@ -888,6 +899,39 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
       }
 
 //---------------------------------------------------------
+//   addMs4PitchCurve
+//    FluidSequencer::addPitchCurve: a bend reset where the articulation (the note's nominal
+//    length) or the note ends, and the curve's segments interpolated in steps of 1/25 semitone
+//---------------------------------------------------------
+
+static void addMs4PitchCurve(EventMap* events, int channel, int staffIdx, int artStart, int artTicks, int noteEnd, const int* curve)
+      {
+      auto bend = [&](int tick, int value) {
+            NPlayEvent ev(ME_PITCHBEND, channel, value % 128, value / 128);
+            ev.setOriginatingStaff(staffIdx);
+            events->insert(std::make_pair(tick, ev));
+            };
+      const int resetAt = std::min(artStart + artTicks, noteEnd);
+      bend(resetAt, 8192);
+      int prev = -1;
+      for (int i = 0; i < 10; ++i) {
+            const int currValue = Ms4::pitchBendLevel(curve[i]);
+            const int nextValue = Ms4::pitchBendLevel(curve[i + 1]);
+            const double currTick = artStart + artTicks * (i * 1000) / double(Ms4::HUNDRED);
+            const double nextTick = artStart + artTicks * ((i + 1) * 1000) / double(Ms4::HUNDRED);
+            const size_t count = std::max<size_t>(std::abs(curve[i + 1] - curve[i]) / 2, 1);   // PITCH_LEVEL_STEP / 25
+            for (size_t k = 0; k <= count; ++k) {
+                  const double t = double(k) / count;
+                  const int tick = int(std::round(currTick + (nextTick - currTick) * t));
+                  const int value = int(std::round(currValue + (nextValue - currValue) * t));
+                  if (tick < resetAt && value != prev)
+                        bend(tick, value);
+                  prev = value;
+                  }
+            }
+      }
+
+//---------------------------------------------------------
 //   collectMeasureEventsMs4
 //    MuseScore 4's note model: each note's articulations from its context, their averaged
 //    length and dynamic pattern at the dynamic level in force, and FluidSequencer's velocity.
@@ -955,6 +999,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
+                        if (r.bend && !note->chord()->isGrace() && !note->tieBack()) {
+                              const Chord* ch = note->chord();
+                              const int ticks = ch->actualTicks().ticks();
+                              const int artStart = ch->tick().ticks() + tickOffset;
+                              const int on = artStart + (ticks * r.ts) / Ms4::HUNDRED;
+                              const int off = on + (ticks * r.dur) / Ms4::HUNDRED;
+                              addMs4PitchCurve(events, noteChannel, st1->idx(), artStart, ticks, off, r.pitchCurve);
+                              }
                         };
 
                   // tremolo (TremoloRenderer): the chord (both chords of a two-note tremolo)
@@ -1336,7 +1388,7 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                         channelPedalEvents.at(channel).push_back(std::pair<int, std::pair<bool, int> >(t, std::pair<bool, int>(false, staff)));
                         }
                   }
-            else if (s->isVibrato()) {
+            else if (s->isVibrato() && !ms4Mode) {        // MS4: a vibrato line shapes the notes (Vibrato), no bends
                   int stick = s->tick().ticks();
                   int etick = s->tick2().ticks();
                   if (stick >= tick2 || etick < tick1)
@@ -1376,7 +1428,7 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                         for (int i = lastPointTick; i <= nextPointTick; i += 16) {
                               double dx = ((i - lastPointTick) * 60) / delta;
                               int p = pitch + dx * (nextPitch - pitch) / delta;
-                              int midiPitch = (p * 16384) / 1200 + 8192;
+                              int midiPitch = ms3PitchBend(p);
                               int msb = midiPitch / 128;
                               int lsb = midiPitch % 128;
                               NPlayEvent ev(ME_PITCHBEND, channel, lsb, msb);
@@ -2623,7 +2675,8 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             sctx.renderHarmony = ctx.renderHarmony;
             renderStaffChunk(chunk, events, sctx);
             }
-      if (renderMethod == DynamicsRenderMethod::MS4)
+      ms4Mode = renderMethod == DynamicsRenderMethod::MS4;
+      if (ms4Mode)
             renderMs4Dynamics(chunk, events);
 
       events->fixupMIDI();

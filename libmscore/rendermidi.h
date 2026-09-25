@@ -67,6 +67,7 @@ class MidiRenderer {
       Score* score{nullptr};
       bool needUpdate = true;
       std::map<const Part*, Ms4::PartContext> ms4Parts;     // DynamicsRenderMethod::MS4, per part
+      bool ms4Mode { false };                               // the chunk being rendered uses it
       int minChunkSize = 0;
 
    public:

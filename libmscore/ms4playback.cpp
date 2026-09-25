@@ -14,6 +14,7 @@
 
 #include "articulation.h"
 #include "chord.h"
+#include "chordline.h"
 #include "dynamic.h"
 #include "hairpin.h"
 #include "instrument.h"
@@ -44,6 +45,38 @@ static const Pattern* pattern(Family f, Art a)
                   table[int(e.family)][int(e.art)] = &e.p;
             }
       return table[int(f)][int(a)];
+      }
+
+static const int* pitchPattern(Family f, Art a)
+      {
+      for (const PitchEntry& e : PITCH)
+            if (e.family == f && e.art == a)
+                  return e.curve;
+      return nullptr;
+      }
+
+// FluidSequencer's BEND_SUPPORTED_TYPES (those MS3 can show)
+static bool isBendType(Art a)
+      {
+      switch (a) {
+            case Art::BrassBend:
+            case Art::Fall:
+            case Art::QuickFall:
+            case Art::Doit:
+            case Art::Plop:
+            case Art::Scoop:
+                  return true;
+            default:
+                  return false;
+            }
+      }
+
+int pitchBendLevel(int pitchLevel)
+      {
+      static const int SEMITONE_STEP = 4096 / 12;
+      const float steps = pitchLevel / 50.0f;                 // PITCH_LEVEL_STEP
+      const int offset = int(steps * SEMITONE_STEP);
+      return qBound(0, 8192 + offset, 16383);
       }
 
 Family family(const Instrument* instrument)
@@ -291,6 +324,30 @@ NoteResult note(Family fam, const std::vector<ArtRef>& arts, int D, bool snd)
       NoteResult r;
       r.dur = dur;
       r.ts = ts;
+
+      // pitch curve (ArticulationMap: averaged over the articulations that bend)
+      {
+            int sum[11] = {};
+            int count = 0;
+            for (const P& q : pats) {
+                  const int* pc = pitchPattern(fam, q.art);
+                  if (!pc)
+                        continue;
+                  bool meaningful = false;
+                  for (int k = 0; k < 11; ++k)
+                        meaningful |= pc[k] != 0;
+                  if (!meaningful)
+                        continue;
+                  ++count;
+                  for (int k = 0; k < 11; ++k)
+                        sum[k] += pc[k];
+                  }
+            for (const P& q : pats)
+                  r.bend |= isBendType(q.art);
+            if (count > 0)
+                  for (int k = 0; k < 11; ++k)
+                        r.pitchCurve[k] = sum[k] / count;
+            }
       const Peak pk = peak(curve);
       if (snd) {
             // velocityFraction, as a 16-bit velocity scaled down to 7 bits
@@ -308,53 +365,34 @@ NoteResult note(Family fam, const std::vector<ArtRef>& arts, int D, bool snd)
       }
 
 //---------------------------------------------------------
-//   dynamic levels of MS3's dynamic types (mpetypes.h DynamicType)
+//   dynamic levels (mpetypes.h DynamicType, expressionutils.h), by MS3's dynamic tag.
+//    By tag, not by Dynamic::Type: MuseScore 3.7's enum lacks "pf" that its dynList has, so
+//    every type after "fp" is off by one there (an sfz reads as SFF).
 //---------------------------------------------------------
 
-static int ordinaryLevel(Dynamic::Type t)
+static int ordinaryLevel(const QString& tag)
       {
-      switch (t) {
-            case Dynamic::Type::PPPPPP: return 1750;
-            case Dynamic::Type::PPPPP:  return 2250;
-            case Dynamic::Type::PPPP:   return 2750;
-            case Dynamic::Type::PPP:    return 3250;
-            case Dynamic::Type::PP:     return 3750;
-            case Dynamic::Type::P:      return 4250;
-            case Dynamic::Type::MP:     return 4750;
-            case Dynamic::Type::MF:     return 5250;
-            case Dynamic::Type::F:      return 5750;
-            case Dynamic::Type::FF:     return 6250;
-            case Dynamic::Type::FFF:    return 6750;
-            case Dynamic::Type::FFFF:   return 7250;
-            case Dynamic::Type::FFFFF:  return 7750;
-            case Dynamic::Type::FFFFFF: return 8250;
-            default:                    return -1;
-            }
+      static const QHash<QString, int> levels {
+            { "n", 0 }, { "pppppp", 1750 }, { "ppppp", 2250 }, { "pppp", 2750 }, { "ppp", 3250 }, { "pp", 3750 },
+            { "p", 4250 }, { "mp", 4750 }, { "mf", 5250 }, { "f", 5750 }, { "ff", 6250 }, { "fff", 6750 },
+            { "ffff", 7250 }, { "fffff", 7750 }, { "ffffff", 8250 } };
+      return levels.value(tag, -1);
       }
 
-static int singleNoteLevel(Dynamic::Type t)
+static int singleNoteLevel(const QString& tag)
       {
-      switch (t) {
-            case Dynamic::Type::SF:
-            case Dynamic::Type::SFZ:
-            case Dynamic::Type::RFZ:
-            case Dynamic::Type::RF:     return 5750;    // f
-            case Dynamic::Type::SFF:
-            case Dynamic::Type::SFFZ:   return 6250;    // ff
-            case Dynamic::Type::SFFF:
-            case Dynamic::Type::SFFFZ:  return 6750;    // fff
-            default:                    return -1;
-            }
+      static const QHash<QString, int> levels {
+            { "sf", 5750 }, { "sfz", 5750 }, { "sff", 6250 }, { "sffz", 6250 }, { "sfff", 6750 }, { "sfffz", 6750 },
+            { "rfz", 5750 }, { "rf", 5750 } };
+      return levels.value(tag, -1);
       }
 
-static bool compound(Dynamic::Type t, int& from, int& to)
+static bool compound(const QString& tag, int& from, int& to)
       {
-      switch (t) {
-            case Dynamic::Type::FP:   from = 5750; to = 4250; return true;
-            case Dynamic::Type::SFP:  from = 5750; to = 4250; return true;
-            case Dynamic::Type::SFPP: from = 5750; to = 3750; return true;
-            default: return false;
-            }
+      if (tag == "fp" || tag == "sfp") { from = 5750; to = 4250; return true; }
+      if (tag == "pf")                 { from = 4250; to = 5750; return true; }
+      if (tag == "sfpp")               { from = 5750; to = 3750; return true; }
+      return false;
       }
 
 //---------------------------------------------------------
@@ -416,7 +454,7 @@ void Dynamics::addDynamic(Score*, Dynamic* dynamic)
       if (!segment)
             return;
       const int tick = segment->tick().ticks();
-      const Dynamic::Type type = dynamic->dynamicType();
+      const QString type = dynamic->dynamicTypeName();
 
       int level = ordinaryLevel(type);
       if (level >= 0) {
@@ -434,7 +472,7 @@ void Dynamics::addDynamic(Score*, Dynamic* dynamic)
             }
       int from, to;
       if (compound(type, from, to)) {
-            _subito[tick] = type != Dynamic::Type::FP;      // sfp, sfpp are sf-type too
+            _subito[tick] = type.startsWith("s");           // sfp, sfpp are sf-type too
             const int length = dynamic->velocityChangeLength().ticks();
             for (const auto& p : easingValueCurve(length, 6, to - from, ChangeMethod::NORMAL))
                   apply(tick + p.first, from + p.second);
@@ -451,7 +489,7 @@ static Dynamic* dynamicAt(Segment* segment, int track)
       return e ? toDynamic(e) : nullptr;
       }
 
-static int levelOf(Dynamic::Type type, bool atEnd)
+static int levelOf(const QString& type, bool atEnd)
       {
       int l = ordinaryLevel(type);
       if (l >= 0)
@@ -475,7 +513,7 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
       Dynamic* startDynamic = dynamicAt(score->tick2segment(hairpin->tick(), true, SegmentType::ChordRest), hairpin->track());
       if (startDynamic) {
             int from, to;
-            if (compound(startDynamic->dynamicType(), from, to))
+            if (compound(startDynamic->dynamicTypeName(), from, to))
                   spannerFrom += startDynamic->velocityChangeLength().ticks();
             }
 
@@ -483,7 +521,7 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin)
       const int levelFrom = appliable(spannerFrom);
 
       Dynamic* endDynamic = dynamicAt(score->tick2segment(Fraction::fromTicks(spannerTo), true, SegmentType::ChordRest), hairpin->track());
-      const int nominalLevelTo = endDynamic ? levelOf(endDynamic->dynamicType(), true) : NATURAL;
+      const int nominalLevelTo = endDynamic ? levelOf(endDynamic->dynamicTypeName(), true) : NATURAL;
       const bool hasNominalLevelTo = nominalLevelTo != NATURAL;
       const bool isCrescendo = hairpin->isCrescendo();
       const bool useNominalLevelTo = hasNominalLevelTo && (isCrescendo ? nominalLevelTo > levelFrom : nominalLevelTo < levelFrom);
@@ -536,6 +574,10 @@ void Dynamics::build(Score* score, Part* part)
 
       if (!_levels.count(0))
             _levels.emplace(0, NATURAL);
+      if (qEnvironmentVariableIsSet("MS4_DEBUG_DYNAMICS")) {
+            for (const auto& l : _levels)
+                  qDebug("MS4DYN part %s tick %d level %d", qPrintable(part->partName()), l.first, l.second);
+            }
       }
 
 //---------------------------------------------------------
@@ -599,12 +641,30 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
       const int tick = chord->tick().ticks();
       const int staffIdx = chord->staffIdx();
 
-      // slur over the chord (SpannersMetaParser: Legato), from its first to its last chord
+      // spanners over the chord (SpannersMetaParser); a slur from its first to its last chord,
+      // lines from their start up to their end
+      bool legato = false;
       for (const auto& iv : score->spannerMap().findOverlapping(tick, tick)) {
             Spanner* sp = iv.value;
-            if (sp->isSlur() && sp->staffIdx() == staffIdx && sp->tick().ticks() <= tick && tick <= sp->tick2().ticks()) {
-                  arts.push_back({ Art::Legato, false });
-                  break;
+            if (sp->staffIdx() != staffIdx && !(sp->isPedal() && sp->part() == chord->part()))
+                  continue;
+            const int from = sp->tick().ticks();
+            const int to = sp->tick2().ticks();
+            if (sp->isSlur()) {
+                  if (!legato && from <= tick && tick <= to) {
+                        arts.push_back({ Art::Legato, false });
+                        legato = true;
+                        }
+                  continue;
+                  }
+            if (tick < from || tick >= to)
+                  continue;
+            switch (sp->type()) {
+                  case ElementType::PEDAL:
+                  case ElementType::LET_RING:  arts.push_back({ Art::Pedal, false }); break;
+                  case ElementType::PALM_MUTE: arts.push_back({ Art::PalmMute, false }); break;
+                  case ElementType::VIBRATO:   arts.push_back({ Art::Vibrato, false }); break;
+                  default: break;
                   }
             }
       // sf-type dynamic on the chord (AnnotationsMetaParser: Subito)
@@ -621,6 +681,18 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
                         case TremoloType::BUZZ_ROLL: arts.push_back({ Art::TremoloBuzz, false }); break;
                         default: break;
                         }
+                  }
+            }
+      // chord line (ChordLineMetaParser)
+      for (Element* e : chord->el()) {
+            if (!e->isChordLine())
+                  continue;
+            switch (toChordLine(e)->chordLineType()) {
+                  case ChordLineType::FALL:  arts.push_back({ Art::Fall, false }); break;
+                  case ChordLineType::DOIT:  arts.push_back({ Art::Doit, false }); break;
+                  case ChordLineType::PLOP:  arts.push_back({ Art::Plop, false }); break;
+                  case ChordLineType::SCOOP: arts.push_back({ Art::Scoop, false }); break;
+                  default: break;
                   }
             }
       // symbols (SymbolsMetaParser)
