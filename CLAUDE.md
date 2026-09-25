@@ -199,7 +199,11 @@ MuseScore (artifact `MuseScore-soundlibrary-win64`). The test build failed becau
 can't find the target. The workflow now builds the test's vcxproj with MSBuild (found
 with vswhere). Upstream never built mtests on Windows, so more may break there. Run 3
 got to compiling `testutils`, which failed on `ft2build.h` (the same problem that needed
-CPATH on Linux). Fixed in mtest/CMakeLists.txt. Run 4 builds with the offline bus fix.
+CPATH on Linux). Fixed in mtest/CMakeLists.txt. Run 4 (run number 6 in the Actions list)
+succeeded: MuseScore with the offline bus fix, and tst_soundlibrary built and exited 0. It
+printed nothing, though, since QtTest's console output doesn't show on Windows, so the
+per-test results weren't seen. The workflow now writes them to a file and prints it (from
+the next run on).
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 

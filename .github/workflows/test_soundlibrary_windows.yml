@@ -47,7 +47,12 @@ jobs:
         cd msvc.build_x64\mtest\libmscore\soundlibrary
         FOR /R %%F IN (tst_soundlibrary.exe) DO IF EXIST "%%F" SET TST=%%F
         IF NOT DEFINED TST (DIR /S /B & exit /b 1)
-        "%TST%" || exit /b 1
+        REM (the results to a file: the console shows none of QtTest's output on Windows)
+        "%TST%" -o "%CD%\tst_soundlibrary.txt,txt"
+        SET RC=%ERRORLEVEL%
+        TYPE "%CD%\tst_soundlibrary.txt"
+        FINDSTR /C:"Totals:" "%CD%\tst_soundlibrary.txt" >NUL || exit /b 1
+        IF NOT "%RC%"=="0" exit /b 1
     - name: Upload MuseScore (installed)
       if: ${{ always() }}
       uses: actions/upload-artifact@v7
