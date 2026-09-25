@@ -38,6 +38,7 @@ class Note;
 class Part;
 class Score;
 class Spanner;
+class StaffTextBase;
 
 namespace Ms4 {
 
@@ -96,6 +97,7 @@ class Dynamics {
       int nominal(int track, int tick) const;
       void addDynamic(Score*, Dynamic*, int offset);
       void addHairpin(Score*, Hairpin*, int offset);
+      void addTechnique(const StaffTextBase* text, int utick);
       void mergeTracks();
 
    public:
@@ -104,10 +106,12 @@ class Dynamics {
       const std::map<int, int>& levels() const { return _merged; }     // all tracks' changes (FluidSequencer::updateDynamicEvents)
       bool subitoAt(int tick, int staffIdx) const { return _subito.count({ staffIdx, tick }) > 0; }
       int spannerStop(const Spanner* sp) const;     // tick2, clipped as MS4's collision-free intervals
+      Art techniqueAt(int utick) const;             // the playing technique in force (COUNT: none / natural)
 
    private:
       std::set<std::pair<int, int>> _subito;      // (staff, tick) of an sf-type dynamic (AnnotationsMetaParser: Subito)
       std::map<const Spanner*, int> _clippedStop;
+      std::map<int, Art> _techniques;             // PlaybackContext::m_playTechniquesMap, at unrolled ticks
       };
 
 //---------------------------------------------------------
@@ -165,7 +169,7 @@ struct OrnamentRule {
 const OrnamentRule* ornamentRule(Art a);
 int neighbourSemitones(const Note* note, int dir);      // chromaticPitchSteps for an automatic interval
 
-std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynamics);
+std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynamics, int tickOffset = 0);
 std::vector<ArtRef> noteArticulations(const Note* note, const std::vector<ArtRef>& chordArts);
 
 } // namespace Ms4

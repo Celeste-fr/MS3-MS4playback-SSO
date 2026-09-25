@@ -1170,7 +1170,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         continue;
                   const Ms4::PartContext& ctx = pc->second;
                   const int level = ctx.dynamics.levelAt(chord->track(), tick.ticks() + tickOffset);
-                  const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics);
+                  const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics, tickOffset);
 
                   auto sit = ctx.sounds.find(instr);
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
@@ -1218,7 +1218,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                 extra += t / int(steps.size());
                                           break;
                                           }
-                                    const std::vector<Ms4::ArtRef> nextArts = Ms4::noteArticulations(next, Ms4::chordArticulations(next->chord(), ctx.dynamics));
+                                    const std::vector<Ms4::ArtRef> nextArts = Ms4::noteArticulations(next, Ms4::chordArticulations(next->chord(), ctx.dynamics, tickOffset));
                                     const Ms4::NoteResult rn = Ms4::note(ctx.family, nextArts, level, ctx.snd);
                                     if (rn.arts.size() == 1 && rn.arts[0] == Ms4::Art::Standard)
                                           extra += t;
@@ -1489,7 +1489,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     step = overall / steps;
                                     for (int i = 0; i < steps; ++i) {
                                           const Chord* c = (i % 2) ? c2 : c1;
-                                          const std::vector<Ms4::ArtRef> arts = (c == chord) ? principalArts : Ms4::chordArticulations(c, ctx.dynamics);
+                                          const std::vector<Ms4::ArtRef> arts = (c == chord) ? principalArts : Ms4::chordArticulations(c, ctx.dynamics, tickOffset);
                                           for (const Note* note : c->notes())
                                                 renderAt(note, arts, pStart + i * step, step);
                                           }

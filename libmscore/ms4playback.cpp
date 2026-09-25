@@ -29,6 +29,7 @@
 #include "segment.h"
 #include "slur.h"
 #include "staff.h"
+#include "stafftextbase.h"
 #include "sym.h"
 #include "tremolo.h"
 #include "trill.h"
@@ -784,6 +785,35 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
       }
 
 // PlaybackContext::update: the part's dynamic markings in score order, then its hairpins
+// CompatUtils::replaceStaffTextWithPlayTechniqueAnnotation: a MuseScore 3 staff text that names a
+// technique exactly (or switches to a channel so named) is a playing technique from there on, for the
+// whole part (PlaybackContext::updatePlayTechMap; articulationFromPlayTechType)
+void Dynamics::addTechnique(const StaffTextBase* text, int utick)
+      {
+      static const std::map<QString, Art> TECHNIQUES {
+            { "natural", Art::COUNT }, { "normal", Art::COUNT }, { "arco", Art::COUNT },
+            { "open", Art::Open }, { "mute", Art::Mute }, { "distortion", Art::Distortion },
+            { "overdriven", Art::Overdrive }, { "harmonics", Art::Harmonic }, { "jazz", Art::JazzTone },
+            { "pizzicato", Art::Pizzicato }, { "tremolo", Art::Tremolo64th },
+            };
+      auto it = TECHNIQUES.find(text->plainText().toLower());
+      if (it == TECHNIQUES.end()) {
+            const QString channel = text->channelName(0).toLower();
+            if (!channel.isEmpty())
+                  it = TECHNIQUES.find(channel);
+            }
+      if (it != TECHNIQUES.end())
+            _techniques[utick] = it->second;
+      }
+
+Art Dynamics::techniqueAt(int utick) const
+      {
+      auto it = _techniques.upper_bound(utick);
+      if (it == _techniques.begin())
+            return Art::COUNT;
+      return std::prev(it)->second;
+      }
+
 int Dynamics::spannerStop(const Spanner* sp) const
       {
       auto it = _clippedStop.find(sp);
@@ -794,6 +824,7 @@ void Dynamics::build(Score* score, Part* part)
       {
       _byTrack.clear();
       _subito.clear();
+      _techniques.clear();
       const int strack = part->startTrack();
       const int etrack = part->endTrack();
       _strack = strack;
@@ -829,6 +860,8 @@ void Dynamics::build(Score* score, Part* part)
                         for (Element* e : s->annotations()) {
                               if (e->isDynamic() && e->track() >= strack && e->track() < etrack)
                                     addDynamic(score, toDynamic(e), offset);
+                              else if (e->isStaffTextBase() && e->part() == part)
+                                    addTechnique(toStaffTextBase(e), s->tick().ticks() + offset);
                               }
                         }
                   if (m == last)
@@ -939,7 +972,7 @@ static bool techniqueOfChannel(const QString& name, Art& art)
       return false;
       }
 
-std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynamics)
+std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynamics, int tickOffset)
       {
       std::vector<ArtRef> arts;
       Score* score = chord->score();
@@ -1048,14 +1081,11 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
       // playing technique in force (NoteArticulationsParser::parsePlayingTechnique)
       // (only a switch away from the instrument's first channel: a trumpet's default channel is
       // called "open", but MS4 sees a technique only where a text asks for one)
-      const Note* up = chord->upNote();
-      if (up && up->subchannel() > 0) {
-            const Instrument* instr = chord->part()->instrument(chord->tick());
-            const Channel* ch = instr->channel(up->subchannel());
-            Art art;
-            if (ch && techniqueOfChannel(ch->name(), art))
+      {
+            const Art art = dynamics.techniqueAt(tick + tickOffset);
+            if (art != Art::COUNT)
                   arts.push_back({ art, false, 1 });          // NoteArticulationsParser::parsePlayingTechnique
-            }
+      }
       return arts;
       }
 
