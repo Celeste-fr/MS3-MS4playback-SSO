@@ -3134,6 +3134,14 @@ void MidiRenderer::updateState()
 
             updateChunksPartition();
 
+            if (qEnvironmentVariableIsSet("MS4_DEBUG_REPEATS")) {
+                  for (const RepeatSegment* rs : score->repeatList()) {
+                        const Measure* m = score->tick2measure(Fraction::fromTicks(rs->tick));
+                        qDebug("MS4REPEAT bar %d tick %d len %d utick %d utime %.3f count %d", m ? m->no() + 1 : -1,
+                               rs->tick, rs->len(), rs->utick, rs->utime, rs->playbackCount);
+                        }
+                  }
+
             needUpdate = false;
             }
       }
