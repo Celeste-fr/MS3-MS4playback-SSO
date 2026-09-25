@@ -875,23 +875,27 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
       const int tick = chord->tick().ticks();
       const int staffIdx = chord->staffIdx();
 
-      // spanners over the chord (SpannersMetaParser); a slur from its first to its last chord,
-      // lines from their start up to their end
+      // spanners over any of the chord's time (ChordArticulationsParser::parseSpanners: all voices
+      // of the staff, so a slur starting inside a longer note of another voice counts): a slur
+      // from its first to its last chord, lines from their start up to their end
+      const int chordEnd = tick + std::max(1, chord->actualTicks().ticks());
       bool legato = false;
-      for (const auto& iv : score->spannerMap().findOverlapping(tick, tick)) {
+      for (const auto& iv : score->spannerMap().findOverlapping(tick, chordEnd - 1)) {
             Spanner* sp = iv.value;
             if (sp->staffIdx() != staffIdx && !(sp->isPedal() && sp->part() == chord->part()))
                   continue;
             const int from = sp->tick().ticks();
             const int to = dynamics.spannerStop(sp);
+            if (from >= chordEnd)
+                  continue;
             if (sp->isSlur()) {
-                  if (!legato && from <= tick && tick <= to) {
+                  if (!legato && tick <= to) {
                         arts.push_back({ Art::Legato, false });
                         legato = true;
                         }
                   continue;
                   }
-            if (tick < from || tick >= to)
+            if (tick >= to)
                   continue;
             switch (sp->type()) {
                   case ElementType::PEDAL:
@@ -909,8 +913,9 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
                   default: break;
                   }
             }
-      // sf-type dynamic on the chord (AnnotationsMetaParser: Subito)
-      if (dynamics.subitoAt(tick, staffIdx))
+      // sf-type dynamic on the chord (AnnotationsMetaParser: Subito); grace chords have no
+      // segment of their own and get none
+      if (!chord->isGrace() && dynamics.subitoAt(tick, staffIdx))
             arts.push_back({ Art::Subito, false });
       // tremolo on one chord (TremoloMetaParser)
       if (Tremolo* t = chord->tremolo()) {

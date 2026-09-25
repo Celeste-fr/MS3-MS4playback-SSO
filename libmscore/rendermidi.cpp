@@ -88,6 +88,7 @@ struct SndConfig {
       int ms4Offset = 0;          // ticks the note starts late (arpeggio, grace notes before), taken off its length
       int ms4Cut = 0;             // ticks taken off the note's end (grace notes after)
       int ms4Layer = -1;          // FluidSynth channel layer (-1: the note's voice)
+      int ms4TiedTicks = -1;      // what the tied notes add to the note (-1: their whole length)
       int ms4SwingOn = 0;         // swing: on-time offset, per mille of the chord's length
       int ms4SwingGate = 100;     // swing: the chord's length, percent
 
@@ -405,7 +406,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             if (tieBack)
                   return;                         // played with the note the tie comes from
             int chainTicks = ticks;
-            for (const Note* n = note; n->tieFor() && n->tieFor()->endNote(); ) {
+            for (const Note* n = note; config.ms4TiedTicks < 0 && n->tieFor() && n->tieFor()->endNote(); ) {
                   const Note* next = n->tieFor()->endNote();
                   if (next == n)
                         break;
@@ -418,12 +419,26 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   chainTicks += next->chord()->actualTicks().ticks();
                   n = next;
                   }
+            if (config.ms4TiedTicks >= 0)
+                  chainTicks = ticks + config.ms4TiedTicks;
             int p = qBound(0, note->ppitch(), 127);           // MS4: no play-event pitch offsets
             const int offset = qMin(config.ms4Offset, ticks);
             // swing on the chord's own length only, not on the tied notes' (NoteRenderer::applySwingIfNeed)
             const int swungTicks = (ticks * config.ms4SwingGate) / 100 + (chainTicks - ticks);
             int on  = tick1 + (ticks * config.ms4SwingOn) / 1000 + offset + ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
             int off = on + int((qint64(swungTicks - offset - config.ms4Cut) * config.ms4Dur) / Ms4::HUNDRED);   // MS4 ends the note there (MS3 one tick early)
+            {
+                  // MS4 takes the share of the note's time, not of its ticks: where the tempo
+                  // changes under the note (rit., fermata) the end falls elsewhere
+                  Score* sc = note->score();
+                  const int n0 = on - ((ticks - offset) * config.ms4Ts) / Ms4::HUNDRED;
+                  const int n1 = n0 + swungTicks - offset - config.ms4Cut;
+                  const qreal t0 = sc->utick2utime(n0);
+                  const qreal span = sc->utick2utime(n1) - t0;
+                  const qreal slope = sc->utick2utime(n0 + 1) - t0;
+                  if (n1 > n0 && qAbs(span - slope * (n1 - n0)) > 1e-6)
+                        off = sc->utime2utick(sc->utick2utime(on) + span * config.ms4Dur / Ms4::HUNDRED);
+            }
             playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx, config.ms4Layer >= 0 ? config.ms4Layer : note->voice());
             nels = 0;                             // done; bends below still apply
             }
@@ -1096,7 +1111,58 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     renderAtFn(note, gArts, int(std::round(start + i * step)), int(step), steps[i], 0);
                               return;
                               }
-                        Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), level, ctx.snd);
+                        std::vector<Ms4::ArtRef> noteArts = Ms4::noteArticulations(note, arts);
+                        // NoteRenderer::renderNormalTie / addTiedNote: a tied note with articulations of its
+                        // own adds its length scaled by their duration factor and hands them on to the
+                        // note (not staccato / staccatissimo); Standard goes where there are others
+                        int tiedTicks = -1;
+                        if (note->tieFor() && !note->tieBack()) {
+                              double extra = 0;
+                              for (const Note* n = note; n->tieFor() && n->tieFor()->endNote(); ) {
+                                    const Note* next = n->tieFor()->endNote();
+                                    if (next == n || !next->play())
+                                          break;
+                                    const int t = next->chord()->actualTicks().ticks();
+                                    if (isGlissandoFor(next)) {
+                                          const std::vector<int> steps = ms4DiscreteGlissando(next);
+                                          if (!steps.empty())
+                                                extra += t / int(steps.size());
+                                          break;
+                                          }
+                                    const std::vector<Ms4::ArtRef> nextArts = Ms4::noteArticulations(next, Ms4::chordArticulations(next->chord(), ctx.dynamics));
+                                    const Ms4::NoteResult rn = Ms4::note(ctx.family, nextArts, level, ctx.snd);
+                                    if (rn.arts.size() == 1 && rn.arts[0] == Ms4::Art::Standard)
+                                          extra += t;
+                                    else {
+                                          extra += t * double(rn.dur) / Ms4::HUNDRED;
+                                          for (const Ms4::ArtRef& a : nextArts) {
+                                                if (a.art == Ms4::Art::Staccato || a.art == Ms4::Art::Staccatissimo)
+                                                      continue;
+                                                bool have = false;
+                                                for (const Ms4::ArtRef& b : noteArts)
+                                                      have |= b.art == a.art;
+                                                if (!have)
+                                                      noteArts.push_back(a);
+                                                }
+                                          }
+                                    n = next;
+                                    }
+                              int kinds = 0;
+                              bool standard = false;
+                              std::vector<Ms4::Art> seen;
+                              for (const Ms4::ArtRef& a : noteArts) {
+                                    if (std::find(seen.begin(), seen.end(), a.art) == seen.end()) {
+                                          seen.push_back(a.art);
+                                          ++kinds;
+                                          }
+                                    standard |= a.art == Ms4::Art::Standard;
+                                    }
+                              if (kinds > 1 && standard)
+                                    noteArts.erase(std::remove_if(noteArts.begin(), noteArts.end(),
+                                          [](const Ms4::ArtRef& a) { return a.art == Ms4::Art::Standard; }), noteArts.end());
+                              tiedTicks = int(std::lround(extra));
+                              }
+                        Ms4::NoteResult r = Ms4::note(ctx.family, noteArts, level, ctx.snd);
                         if (qEnvironmentVariableIsSet("MS4_DEBUG_NOTES")) {
                               QString all;
                               for (Ms4::Art a : r.arts)
@@ -1122,6 +1188,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Offset = offset;
                         config.ms4Cut = cut;
                         config.ms4Layer = layer;
+                        config.ms4TiedTicks = tiedTicks;
                         ms4Swing(note->chord(), config.ms4SwingOn, config.ms4SwingGate);
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
                         if (r.bend && !note->chord()->isGrace() && !note->tieBack()) {
