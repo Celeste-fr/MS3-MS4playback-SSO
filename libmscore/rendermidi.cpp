@@ -95,6 +95,26 @@ struct SndConfig {
       };
 
 bool graceNotesMerged(Chord *chord);
+bool glissandoPitchOffsets(const Spanner* spanner, std::vector<int>& pitchOffsets);
+
+//---------------------------------------------------------
+//   ms4DiscreteGlissando
+//    the steps of a note's discrete (non-portamento) glissando, as MuseScore 4 plays them
+//    (Glissando::pitchSteps); empty if the note has none
+//---------------------------------------------------------
+
+static std::vector<int> ms4DiscreteGlissando(const Note* note)
+      {
+      std::vector<int> steps;
+      for (Spanner* sp : note->spannerFor()) {
+            if (sp->isGlissando()) {
+                  if (!glissandoPitchOffsets(sp, steps))
+                        steps.clear();
+                  break;
+                  }
+            }
+      return steps;
+      }
 
 //---------------------------------------------------------
 //   updateSwing
@@ -349,7 +369,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
       // taking NoteEvent length adjustments into account
       // but stopping at any note with multiple NoteEvents
       // and processing those notes recursively
-      if (note->tieFor()) {
+      if (note->tieFor() && !config.ms4) {       // MS4 mode walks the tie chain itself (below)
             Note* n = note->tieFor()->endNote();
             while (n) {
                   NoteEventList nel = n->playEvents();
@@ -386,8 +406,14 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             int chainTicks = ticks;
             for (const Note* n = note; n->tieFor() && n->tieFor()->endNote(); ) {
                   const Note* next = n->tieFor()->endNote();
-                  if (next == n || isGlissandoFor(next))
+                  if (next == n)
                         break;
+                  if (isGlissandoFor(next)) {
+                        const std::vector<int> steps = ms4DiscreteGlissando(next);
+                        if (!steps.empty())
+                              chainTicks += next->chord()->actualTicks().ticks() / int(steps.size());
+                        break;
+                        }
                   chainTicks += next->chord()->actualTicks().ticks();
                   n = next;
                   }
@@ -1054,7 +1080,21 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics);
 
                   auto sit = ctx.sounds.find(instr);
+                  std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0) {
+                        // a discrete glissando: its steps over the note's length, each a note of its own at the
+                        // dynamic of its time; tied into, the first step is left out (the tie took it)
+                        const std::vector<int> steps = ms4DiscreteGlissando(note);
+                        if (!steps.empty() && renderAtFn) {
+                              std::vector<Ms4::ArtRef> gArts = arts;
+                              gArts.push_back({ Ms4::Art::DiscreteGlissando, false });
+                              const int start = note->chord()->tick().ticks() + offset;
+                              const int length = note->chord()->actualTicks().ticks() - offset - cut;
+                              const double step = length / double(steps.size());
+                              for (size_t i = note->tieBack() ? 1 : 0; i < steps.size(); ++i)
+                                    renderAtFn(note, gArts, int(std::round(start + i * step)), int(step), steps[i], 0);
+                              return;
+                              }
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), level, ctx.snd);
                         if (qEnvironmentVariableIsSet("MS4_DEBUG_NOTES")) {
                               QString all;
@@ -1097,6 +1137,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
 
                   // a note of its own at a given start, length and pitch offset
                   auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length, int pitchOffset = 0) {
+                        // (glissando notes need the tieBack exemption: they play their later steps)
                         if (!note->play() || length <= 0)
                               return;
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(start), ctx.snd);
@@ -1109,6 +1150,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         playNote(events, note, noteChannel, qBound(0, note->ppitch() + pitchOffset, 127), qBound(1, r.velocity, 127),
                                  on, qMax(on, off), st1->idx(), note->voice());
                         };
+
+                  renderAtFn = [&](const Note* n, const std::vector<Ms4::ArtRef>& a, int st, int len, int po, int) { renderAt(n, a, st, len, po); };
 
                   // OrnamentsRenderer: prefix, body (repeated while it fits for trills) and suffix of
                   // sub-notes on the diatonic neighbours; too short a note plays as it is
