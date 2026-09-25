@@ -30,11 +30,15 @@ jobs:
         SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;C:\Program Files (x86)\Jack;%PATH%"
         CALL msvc_build.bat relwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
         CALL msvc_build.bat installrelwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
+    # (on MSVC mtest/ is a project of its own, not in MuseScore's solution: its vcxproj is
+    # built with MSBuild, which builds the projects it references too)
     - name: Build the sound library tests
       shell: cmd
       run: |
         SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%"
-        cmake --build msvc.build_x64 --config RelWithDebInfo --target tst_soundlibrary || exit /b 1
+        FOR /F "usebackq tokens=*" %%i IN (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) DO SET "MSBUILD=%%i"
+        ECHO MSBuild: %MSBUILD%
+        "%MSBUILD%" msvc.build_x64\mtest\libmscore\soundlibrary\tst_soundlibrary.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
     - name: Run the sound library tests
       shell: cmd
       run: |
@@ -42,6 +46,7 @@ jobs:
         SET QT_QPA_PLATFORM=offscreen
         cd msvc.build_x64\mtest\libmscore\soundlibrary
         FOR /R %%F IN (tst_soundlibrary.exe) DO IF EXIST "%%F" SET TST=%%F
+        IF NOT DEFINED TST (DIR /S /B & exit /b 1)
         "%TST%" || exit /b 1
     - name: Upload MuseScore (installed)
       if: ${{ always() }}

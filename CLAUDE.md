@@ -183,7 +183,11 @@ this environment can't push tags. It runs on a push to a `claude/` branch whose 
 message contains `[windows-build]` (only with the owner's OK, since it uses the private
 repo's minutes). Other pushes show up as skipped runs, which use no minutes. Runs so far
 are in the commit log. Run 1 compiled everything with MSVC (about 15 minutes) and failed
-only at the link (`Linux::IRunLoop` in vst3editor; now Linux-only).
+only at the link (`Linux::IRunLoop` in vst3editor; now Linux-only). Run 2 built and uploaded
+MuseScore (artifact `MuseScore-soundlibrary-win64`). The test build failed because on MSVC
+`mtest/` is a separate solution (`project(mtest)`), so `cmake --build --target tst_…`
+can't find the target. The workflow now builds the test's vcxproj with MSBuild (found
+with vswhere). Upstream never built mtests on Windows, so more may break there.
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 
