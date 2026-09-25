@@ -11,6 +11,7 @@
 #include "ms4playback.h"
 
 #include <cmath>
+#include <QRegularExpression>
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -538,6 +539,41 @@ int Dynamics::nominal(int tick) const
       return it == _levels.end() ? NATURAL : it->second;
       }
 
+// the dynamic a text dynamic ("other-dynamics") spells: SMuFL dynamic glyphs (as old scores
+// have them) and <sym> names read as the dynamic letters, the first dynamic in the text (the
+// longest one where several start at the same place) — MuseScore 4 plays such a marking
+static QString tagFromText(const QString& text)
+      {
+      static const char* const GLYPHS[] = { "dynamicPiano", "dynamicMezzo", "dynamicForte", "dynamicRinforzando",
+                                            "dynamicSforzando", "dynamicZ", "dynamicNiente" };      // U+E520 …
+      QString t;
+      for (QChar c : text) {
+            const int u = c.unicode();
+            if (u >= 0xE520 && u <= 0xE526)
+                  t += QString("<sym>%1</sym>").arg(GLYPHS[u - 0xE520]);
+            else
+                  t += c;
+            }
+      t.remove(QRegularExpression("<(?!/?sym>)[^>]*>"));         // formatting tags, keep <sym>
+      int bestIndex = -1;
+      int bestLength = 0;
+      QString best;
+      for (const Dyn& d : dynList) {
+            const QString dt = QString::fromUtf8(d.text);
+            if (dt.isEmpty())
+                  continue;
+            const int index = t.indexOf(dt);
+            if (index < 0)
+                  continue;
+            if (bestIndex < 0 || index < bestIndex || (index == bestIndex && dt.length() > bestLength)) {
+                  bestIndex = index;
+                  bestLength = dt.length();
+                  best = QString::fromUtf8(d.tag);
+                  }
+            }
+      return best;
+      }
+
 // PlaybackContext::updateDynamicMap
 void Dynamics::addDynamic(Score*, Dynamic* dynamic)
       {
@@ -545,7 +581,14 @@ void Dynamics::addDynamic(Score*, Dynamic* dynamic)
       if (!segment)
             return;
       const int tick = segment->tick().ticks();
-      const QString type = dynamic->dynamicTypeName();
+      QString type = dynamic->dynamicTypeName();
+      if (type == "other-dynamics")
+            type = tagFromText(dynamic->xmlText());
+
+      // AnnotationsMetaParser: these make the chords of their staff Subito
+      static const QSet<QString> SUBITO { "s", "sf", "sff", "sfff", "sfz", "sffz", "sfffz", "sfp", "sfpp" };
+      if (SUBITO.contains(type))
+            _subito.insert({ dynamic->staffIdx(), tick });
 
       int level = ordinaryLevel(type);
       if (level >= 0) {
@@ -556,14 +599,12 @@ void Dynamics::addDynamic(Score*, Dynamic* dynamic)
       if (level >= 0) {
             const int prev = appliable(tick);
             apply(tick, level);
-            _subito[tick] = true;
             if (Segment* next = segment->next())
                   apply(next->tick().ticks(), prev);
             return;
             }
       int from, to;
       if (compound(type, from, to)) {
-            _subito[tick] = type.startsWith("s");           // sfp, sfpp are sf-type too
             const int length = dynamic->velocityChangeLength().ticks();
             for (const auto& p : easingValueCurve(length, 6, to - from, ChangeMethod::NORMAL))
                   apply(tick + p.first, from + p.second);
@@ -794,7 +835,7 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
                   }
             }
       // sf-type dynamic on the chord (AnnotationsMetaParser: Subito)
-      if (dynamics.subitoAt(tick))
+      if (dynamics.subitoAt(tick, staffIdx))
             arts.push_back({ Art::Subito, false });
       // tremolo on one chord (TremoloMetaParser)
       if (Tremolo* t = chord->tremolo()) {

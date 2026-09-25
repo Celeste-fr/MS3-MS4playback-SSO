@@ -274,7 +274,10 @@ static void playNote(EventMap* events, const Note* note, int channel, int pitch,
       {
       if (!note->play())
             return;
-      velo = note->customizeVelocity(velo);
+      // a note's own velocity (Inspector: user value / offset); MS4 mode (layer >= 0) plays none,
+      // as MuseScore 4 ignores MuseScore 3's note velocities when it reads a score
+      if (layer < 0)
+            velo = note->customizeVelocity(velo);
       NPlayEvent ev(ME_NOTEON, channel, pitch, velo);
       ev.setOriginatingStaff(staffIdx);
       ev.setLayer(layer);
@@ -1053,6 +1056,13 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   auto sit = ctx.sounds.find(instr);
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0) {
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), level, ctx.snd);
+                        if (qEnvironmentVariableIsSet("MS4_DEBUG_NOTES")) {
+                              QString all;
+                              for (Ms4::Art a : r.arts)
+                                    all += QString(Ms4::ART_NAMES[int(a)]) + " ";
+                              qDebug("MS4NOTE tick %d pitch %d level %d snd %d velo %d dur %d arts %s", note->chord()->tick().ticks(),
+                                     note->pitch(), level, int(ctx.snd), r.velocity, r.dur, qPrintable(all));
+                              }
                         // the preset MS4 plays this note with -> the channel slot programmed with it
                         int noteChannel = channel;
                         if (sit != ctx.sounds.end()) {
@@ -2990,6 +3000,9 @@ void MidiRenderer::updateState()
                   const Instrument* instr = part->instrument();
                   ctx.family = Ms4::family(instr);
                   ctx.snd = instr->singleNoteDynamics();
+                  if (qEnvironmentVariableIsSet("MS4_DEBUG_PARTS"))
+                        qDebug("MS4PART %s id=%s musicXml=%s family=%d snd=%d", qPrintable(part->partName()), qPrintable(instr->getId()),
+                               qPrintable(instr->instrumentId()), int(ctx.family), int(ctx.snd));
                   ctx.dynamics.build(score, part);
                   for (const auto& ip : *part->instruments())
                         ctx.sounds[ip.second] = Ms4::sounds(ip.second);

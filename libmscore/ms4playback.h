@@ -22,6 +22,7 @@
 #define __MS4PLAYBACK_H__
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include "ms4tables.h"
@@ -82,10 +83,10 @@ class Dynamics {
       void build(Score* score, Part* part);
       int levelAt(int tick) const { return appliable(tick); }
       const std::map<int, int>& levels() const { return _levels; }
-      bool subitoAt(int tick) const { return _subito.count(tick); }
+      bool subitoAt(int tick, int staffIdx) const { return _subito.count({ staffIdx, tick }) > 0; }
 
    private:
-      std::map<int, bool> _subito;        // ticks with an sf-type dynamic (AnnotationsMetaParser: Subito)
+      std::set<std::pair<int, int>> _subito;      // (staff, tick) of an sf-type dynamic (AnnotationsMetaParser: Subito)
       };
 
 //---------------------------------------------------------
