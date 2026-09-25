@@ -13,6 +13,8 @@ The owner talks to agents through claude.ai sessions and reads results on GitHub
 file current when you change architecture, build steps or known issues. Put the history of
 what was done in commit messages.
 
+**Picking up this work? Read `HANDOFF.md` first** (current state and next steps).
+
 ## Branches
 
 - `ms4-playback`: the MS4 playback work (up to `ddf4c90`).
