@@ -79,10 +79,9 @@ ninja -j4 mscore                    # a full build takes about 40 minutes on 4 c
 ```
 
 - Keep `BUILD_PCH` ON (the default). Many files compile only with the precompiled header.
-- mtests (`add_subdirectory(mtest EXCLUDE_FROM_ALL)`): the `testutils` target can't find
-  `ft2build.h`. Build tests with
-  `CPATH=<repo>/thirdparty/freetype/freetype-2.14.1/include ninja tst_<name>`. Do not put it
-  in `CMAKE_CXX_FLAGS`, which triggers a full rebuild.
+- mtests (`add_subdirectory(mtest EXCLUDE_FROM_ALL)`): build with `ninja tst_<name>`.
+  `testutils` now links freetype for `ft2build.h`. The old `CPATH=…/freetype-2.14.1/include`
+  workaround is no longer needed.
 - Run tests with `QT_QPA_PLATFORM=offscreen ./tst_<name>` from
   `build.dir/mtest/libmscore/<name>`.
 - A score imported from MusicXML in a test needs `score->rebuildMidiMapping()` before
@@ -187,7 +186,9 @@ only at the link (`Linux::IRunLoop` in vst3editor; now Linux-only). Run 2 built 
 MuseScore (artifact `MuseScore-soundlibrary-win64`). The test build failed because on MSVC
 `mtest/` is a separate solution (`project(mtest)`), so `cmake --build --target tst_…`
 can't find the target. The workflow now builds the test's vcxproj with MSBuild (found
-with vswhere). Upstream never built mtests on Windows, so more may break there.
+with vswhere). Upstream never built mtests on Windows, so more may break there. Run 3
+got to compiling `testutils`, which failed on `ft2build.h` (the same problem that needed
+CPATH on Linux). Fixed in mtest/CMakeLists.txt; run 4 waits for the owner's OK.
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 
