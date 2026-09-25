@@ -125,14 +125,29 @@ macOS.
 - `Seq::putEvent`: in plugin mode, external events go to `Vst3Synth` with the slot as the
   channel.
 
-Tested here: `tst_soundlibrary` hosts `mstestsynth.vst3`
-(`mtest/libmscore/soundlibrary/testsynth`), a sine synth that maps CC32 and CC1 like
-Kontakt. The tests cover notes, CC mapping, state, offline mode and a rendered score. A
-command-line WAV export with the Spitfire map and the test synth as its plug-in played the
-violin through the plug-in and the piano on FluidSynth. **Kontakt itself, the editor window
-on Windows and SSO have not been tried.** No Windows host is available here. When the owner
-reports problems, suspect these first: Kontakt's MIDI channel (we send channel 1), its
-editor sizing, and sample loading in offline export.
+Tested here:
+- `tst_soundlibrary` hosts `mstestsynth.vst3` (`mtest/libmscore/soundlibrary/testsynth`), a
+  sine synth that maps CC32 and CC1 like Kontakt. The tests cover notes, CC mapping, state,
+  offline mode and a rendered score.
+- With sfizz, a real third-party VST 3 sampler (`tools/soundlibraries/sfizz-test`), a
+  command-line export played 12/12 violin notes on the expected UACC articulation. The
+  tremolo and trill samples each played once.
+- In the GUI under Xvfb, *View › Sound Library…* › *Show* embedded sfizz's editor (X11
+  plus IRunLoop), sized to fit. Clicks and redraws work, and closing and reopening work. The
+  first-time flow works too: load the instrument in the plug-in's window, close it, and the
+  setup is saved and marked "Ready".
+
+**Not tried: Kontakt, SSO, Windows (the HWND editor, the MSVC build).**
+`.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
+uploads the build. It is manual, has never run yet, and may need fixes on its first run.
+When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
+channel 1), its editor sizing, and sample loading in offline export.
+
+The owner reviews the UACC numbers on a claude.ai artifact page ("SSO Articulation Map",
+https://claude.ai/artifact/Y9dDEm5gpEjtpjjQmM9qBm). Marks are stored in its `reviews`
+collection, one document per `<patch>__<articulation>` with status, value and note. Read
+them with the ArtifactData tool, then fix the map through
+`tools/soundlibraries/gen_spitfire_sso.py`, not by hand.
 
 The earlier alternative, an Ableton set with every technique preconfigured, was not chosen.
 Kontakt's patch loading can't be automated from outside (its state is opaque). Hosting means

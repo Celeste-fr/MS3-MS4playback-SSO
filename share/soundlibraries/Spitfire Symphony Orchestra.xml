@@ -154,7 +154,7 @@
   </Instrument>
   <Instrument name="Solo Violin 1" ids="violin">
     <Articulation name="Long" value="1" techniques="long legato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
@@ -162,7 +162,7 @@
   </Instrument>
   <Instrument name="Solo Violin 2" ids="violin" partName="\b(2|II)\b|\bsecond\b|\b2nd\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
@@ -170,7 +170,7 @@
   </Instrument>
   <Instrument name="Solo Viola" ids="viola">
     <Articulation name="Long" value="1" techniques="long legato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>

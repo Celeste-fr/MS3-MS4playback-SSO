@@ -30,7 +30,7 @@ if (BUILD_VST3)
       target_compile_features(mstestsynth PRIVATE cxx_std_17)
       set_target_properties(mstestsynth PROPERTIES
             PREFIX ""
-            LIBRARY_OUTPUT_DIRECTORY ${TESTSYNTH_BUNDLE}/Contents/${TESTSYNTH_ARCH})
+            LIBRARY_OUTPUT_DIRECTORY ${TESTSYNTH_BUNDLE}/Contents/${TESTSYNTH_ARCH}$<0:>)   # (no per-config subfolder)
       if (WIN32)
             set_target_properties(mstestsynth PROPERTIES SUFFIX ".vst3")
       endif ()

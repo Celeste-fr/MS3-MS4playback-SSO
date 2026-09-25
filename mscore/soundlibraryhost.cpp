@@ -545,7 +545,7 @@ void SoundLibraryDialog::rebuild()
                   });
             }
       _table->resizeColumnsToContents();
-      _table->horizontalHeader()->setStretchLastSection(true);
+      _table->horizontalHeader()->setSectionResizeMode(_table->columnCount() - 1, QHeaderView::Stretch);
       }
 
 } // namespace Ms

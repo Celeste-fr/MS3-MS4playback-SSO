@@ -1,0 +1,45 @@
+name: 'Test: Sound library on Windows'
+
+# Builds MuseScore with MSVC (as "Build: Windows" does), runs the sound library tests
+# (tst_soundlibrary: the VST 3 host with the MS Test Synth plug-in), and uploads the
+# installed MuseScore for trying it. Manual only: Actions -> this workflow -> Run workflow.
+on:
+  workflow_dispatch:
+
+jobs:
+  windows_x64:
+    runs-on: windows-2022
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v7
+      with:
+        submodules: 'true'
+    - name: Setup environment
+      run: |
+        build\ci\windows\setup.bat
+    - name: Build MuseScore
+      shell: cmd
+      run: |
+        XCOPY "C:\musescore_dependencies" %CD% /E /I /Y
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;C:\Program Files (x86)\Jack;%PATH%"
+        CALL msvc_build.bat relwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
+        CALL msvc_build.bat installrelwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
+    - name: Build the sound library tests
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%PATH%"
+        cmake --build msvc.build_x64 --config RelWithDebInfo --target tst_soundlibrary || exit /b 1
+    - name: Run the sound library tests
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%CD%\dependencies\libs\Win64;%PATH%"
+        SET QT_QPA_PLATFORM=offscreen
+        cd msvc.build_x64\mtest\libmscore\soundlibrary
+        FOR /R %%F IN (tst_soundlibrary.exe) DO IF EXIST "%%F" SET TST=%%F
+        "%TST%" || exit /b 1
+    - name: Upload MuseScore (installed)
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: MuseScore-soundlibrary-win64
+        path: msvc.install_x64\

@@ -133,6 +133,9 @@ for bank,name,ids,pn in I:
         if n not in T or n in seen: continue
         seen.add(n)
         t,m=T[n]
+        # a patch with its own staccato: staccato dots play it, spiccato stays for staccatissimo
+        if n == 'Spiccato' and any(x == 'staccato' for x, _ in banks[bank]):
+            t = 'spiccato staccatissimo'
         a=f'    <Articulation name={q(n.replace("Trill (Minor 3rd","Trill (Minor 3rd)").replace("))",")").replace("Tremelo","Tremolo"))} value="{v}" techniques={q(t)}'
         if m: a+=f' modifiers={q(m)}'
         out.append(a+'/>')
