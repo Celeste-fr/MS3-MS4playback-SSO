@@ -2,12 +2,14 @@ name: 'Build: All'
 #run-name: "Build: All - ${{ inputs.build_mode }}"
 
 on:
-  schedule: # scheduled workflows will only run on the default branch. edit default values under gen1 below
-    - cron: '20 1 * * *' # At 01:20 on every day-of-month
-  push: # push.inputs field does not exist, use gen1 below
-    branches:
-      - 3.x
-  pull_request: # pull_request.inputs field does not exist, edit gen1 below
+  # Private fork: no nightly or automatic builds (they would use up the private repo's Actions
+  # minutes). Start a build by hand: Actions → "Build: All" (or "Build: Windows") → Run workflow.
+  #schedule: # scheduled workflows will only run on the default branch. edit default values under gen1 below
+  #  - cron: '20 1 * * *' # At 01:20 on every day-of-month
+  #push: # push.inputs field does not exist, use gen1 below
+  #  branches:
+  #    - 3.x
+  #pull_request: # pull_request.inputs field does not exist, edit gen1 below
   workflow_dispatch: # triggered by github web ui run "build all" workflow button
     inputs:
       platforms:
