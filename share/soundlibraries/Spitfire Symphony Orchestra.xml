@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spitfire Symphony Orchestra (Kontakt), articulations switched by UACC (CC32).
+
+  In each patch, set the articulation switching to UACC (the patch's articulation settings)
+  and set the patch to the MIDI channel/port MuseScore shows for the part
+  (Preferences > I/O > Sound library > Show routing).
+
+  The UACC values come from a community-made articulation bank for this library (Reaticulate
+  user bank "Spitfire - Symphony Orchestra", github.com/jtackaberry/reaticulate) and have not
+  been checked against the library. Each patch shows its numbers: if one differs, correct
+  its value here. Violins 2 and Solo Violin 2 are assumed to match Violins 1 / Solo Violin 1.
+
+  techniques: long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato
+              bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3 fall rip
+  modifiers:  muted harmonics sulpont sultasto flautando cuivre
+  An instrument with a partName is preferred for parts whose name matches it (a2, a6 …).
+-->
+<SoundLibrary name="Spitfire Symphony Orchestra">
+  <Switch type="cc" number="32"/>
+  <Dynamics cc="1" expression="127"/>
+  <Instrument name="Violins 1" ids="violins">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
+    <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
+    <Articulation name="Long Sul Tasto" value="17" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
+    <Articulation name="Col Legno" value="58" techniques="collegno"/>
+    <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
+    <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Tremolo" value="11" techniques="tremolo"/>
+    <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Trill (Minor 3rd)" value="72" techniques="trill-m3"/>
+    <Articulation name="Trill (Major 3rd)" value="73" techniques="trill-M3"/>
+  </Instrument>
+  <Instrument name="Violins 2" ids="violins" partName="\b(2|II)\b|\bsecond\b|\b2nd\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
+    <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
+    <Articulation name="Long Sul Tasto" value="17" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
+    <Articulation name="Col Legno" value="58" techniques="collegno"/>
+    <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
+    <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Tremolo" value="11" techniques="tremolo"/>
+    <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Trill (Minor 3rd)" value="72" techniques="trill-m3"/>
+    <Articulation name="Trill (Major 3rd)" value="73" techniques="trill-M3"/>
+  </Instrument>
+  <Instrument name="Violas" ids="violas">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
+    <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
+    <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
+    <Articulation name="Col Legno" value="58" techniques="collegno"/>
+    <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
+    <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Tremolo" value="11" techniques="tremolo"/>
+    <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
+    <Articulation name="Trem CS" value="12" techniques="tremolo" modifiers="muted"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Celli" ids="violoncellos">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
+    <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
+    <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
+    <Articulation name="Col Legno" value="58" techniques="collegno"/>
+    <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
+    <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Tremolo" value="11" techniques="tremolo"/>
+    <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
+    <Articulation name="Trem CS" value="12" techniques="tremolo" modifiers="muted"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Trill (Minor 3rd)" value="72" techniques="trill-m3"/>
+    <Articulation name="Trill (Major 3rd)" value="73" techniques="trill-M3"/>
+  </Instrument>
+  <Instrument name="Basses" ids="contrabasses contrabass double-bass">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
+    <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
+    <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
+    <Articulation name="Col Legno" value="58" techniques="collegno"/>
+    <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Tremolo" value="11" techniques="tremolo"/>
+    <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Strings Ensemble" ids="strings">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
+    <Articulation name="Col Legno" value="58" techniques="collegno"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Spiccato CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
+    <Articulation name="Long CS Sul Pont" value="18" techniques="long legato" modifiers="muted sulpont"/>
+    <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
+    <Articulation name="Tremolo" value="11" techniques="tremolo"/>
+    <Articulation name="Trem CS" value="12" techniques="tremolo" modifiers="muted"/>
+    <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+  </Instrument>
+  <Instrument name="Solo Violin 1" ids="violin">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+  </Instrument>
+  <Instrument name="Solo Violin 2" ids="violin" partName="\b(2|II)\b|\bsecond\b|\b2nd\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+  </Instrument>
+  <Instrument name="Solo Viola" ids="viola">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+  </Instrument>
+  <Instrument name="Solo Cello" ids="violoncello">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
+    <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
+    <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+  </Instrument>
+  <Instrument name="Piccolo" ids="piccolo">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Flute Solo" ids="flute">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Flutes a2" ids="flute" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Alto Flute" ids="alto-flute">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Bass Flute" ids="bass-flute">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+  </Instrument>
+  <Instrument name="Oboe Solo" ids="oboe">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Oboes a2" ids="oboe" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Cor Anglais" ids="english-horn">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+  </Instrument>
+  <Instrument name="Clarinet Solo" ids="clarinet bb-clarinet a-clarinet c-clarinet d-clarinet eb-clarinet soprano-clarinet">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Clarinets a2" ids="clarinet bb-clarinet a-clarinet c-clarinet d-clarinet eb-clarinet soprano-clarinet" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Bass Clarinet" ids="bass-clarinet bb-bass-clarinet bb-bass-clarinet-bass-clef a-bass-clarinet">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Contrabass Clarinet" ids="contrabass-clarinet">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+  </Instrument>
+  <Instrument name="Bassoon Solo" ids="bassoon">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Bassoons a2" ids="bassoon" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+  </Instrument>
+  <Instrument name="Contrabassoon" ids="contrabassoon">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+  </Instrument>
+  <Instrument name="Horn Solo" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Horns a2" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Long Stopped" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Horns a6" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Trumpet Solo" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long (Muted)" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Marcato (Muted)" value="53" techniques="marcato" modifiers="muted"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="Tenuto (Muted)" value="51" techniques="tenuto" modifiers="muted"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="staccato (Muted)" value="47" techniques="short staccatissimo" modifiers="muted"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Trumpets a2" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long (Muted)" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>
+    <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Trumpets a6" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Tenor Trombone Solo" ids="trombone tenor-trombone alto-trombone">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Long (Muted)" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Marcato (Muted)" value="53" techniques="marcato" modifiers="muted"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="Tenuto (Muted)" value="51" techniques="tenuto" modifiers="muted"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="staccato (Muted)" value="47" techniques="short staccatissimo" modifiers="muted"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Long Flutter (Muted)" value="12" techniques="tremolo" modifiers="muted"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Tenor Trombones a2" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Trombones a6" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Bass Trombone Solo" ids="bass-trombone">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Bass Trombones a2" ids="bass-trombone" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Contrabass Trombone" ids="contrabass-trombone">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Long Stopped" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="staccato (Muted)" value="47" techniques="short staccatissimo" modifiers="muted"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Cimbasso Solo" ids="cimbasso">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Cimbassi a2" ids="cimbasso" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Tuba Solo" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long Stopped" value="7" techniques="long legato" modifiers="muted"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Short Stopped" value="47" techniques="short staccatissimo" modifiers="muted"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Contrabass Tuba" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba" partName="\bcontra">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
+    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Harp" ids="harp">
+    <Articulation name="Normale" value="1" techniques="long legato"/>
+    <Articulation name="Flageolet" value="29" techniques="long legato short" modifiers="harmonics"/>
+    <Articulation name="Bisbigliando" value="11" techniques="tremolo"/>
+  </Instrument>
+</SoundLibrary>

@@ -47,6 +47,7 @@ class Driver {
       virtual void seekTransport(int) {}
       virtual int sampleRate() const = 0;
       virtual void putEvent(const NPlayEvent&, unsigned /*framePos*/) {}
+      virtual bool canOutputMidi() const { return false; }     // putEvent reaches a MIDI output
       virtual void midiRead() {}
       virtual void handleTimeSigTempoChanged() {}
       virtual void checkTransportSeek(int, int, bool) {}

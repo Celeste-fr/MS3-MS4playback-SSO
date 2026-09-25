@@ -127,6 +127,7 @@
 #include "libmscore/sig.h"
 #include "libmscore/staff.h"
 #include "libmscore/style.h"
+#include "libmscore/soundlibrary.h"
 #include "libmscore/sym.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/system.h"
@@ -480,6 +481,29 @@ void MuseScore::closeEvent(QCloseEvent* ev)
       qApp->quit();
       }
 
+//---------------------------------------------------------
+//   updateSoundLibrary
+//    the sound library map of the preference (soundlibrary.h); true if it changed
+//---------------------------------------------------------
+
+static bool updateSoundLibrary()
+      {
+      static QString loaded;
+      const QString path = preferences.getString(PREF_IO_SOUNDLIBRARY);
+      if (path == loaded)
+            return false;
+      loaded = path;
+      std::shared_ptr<const SoundLib::Library> library;
+      if (!path.isEmpty()) {
+            QString error;
+            library = SoundLib::Library::load(path, &error);
+            if (!library)
+                  qWarning("Sound library: %s", qPrintable(error));
+            }
+      SoundLib::setCurrent(library);
+      return true;
+      }
+
 void updateExternalValuesFromPreferences() {
       // set values in libmscore
       MScore::bgColor = preferences.getColor(PREF_UI_CANVAS_BG_COLOR);
@@ -497,6 +521,11 @@ void updateExternalValuesFromPreferences() {
       MScore::layoutBreakColor = preferences.getColor(PREF_UI_SCORE_LAYOUTBREAKCOLOR);
       MScore::frameMarginColor = preferences.getColor(PREF_UI_SCORE_FRAMEMARGINCOLOR);
       MScore::setVerticalOrientation(preferences.getBool(PREF_UI_CANVAS_SCROLL_VERTICALORIENTATION));
+
+      if (updateSoundLibrary() && mscore) {
+            for (MasterScore* s : mscore->scores())
+                  s->setPlaylistDirty();
+            }
 
       MScore::selectColor[0] = preferences.getColor(PREF_UI_SCORE_VOICE1_COLOR);
       MScore::selectColor[1] = preferences.getColor(PREF_UI_SCORE_VOICE2_COLOR);
@@ -7892,7 +7921,8 @@ bool MuseScore::saveMp3(Score* score, QIODevice* device, bool& wasCanceled)
                               frames    -= n;
                               }
                         const NPlayEvent& e = playPos->second;
-                        if (!(!e.velo() && e.discard()) && e.isChannelEvent()) {
+                        // (a sound library's articulation switches are for it only)
+                        if (!(!e.velo() && e.discard()) && e.isChannelEvent() && !e.librarySwitch()) {
                               int channelIdx = e.channel();
                               Channel* c = score->masterScore()->midiMapping(channelIdx)->articulation();
                               if (!c->mute()) {

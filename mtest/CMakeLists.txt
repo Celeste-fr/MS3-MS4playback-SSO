@@ -174,6 +174,7 @@ subdirs (
         libmscore/remove
         libmscore/repeat
         libmscore/rhythmicGrouping
+        libmscore/soundlibrary
         libmscore/selectionfilter
         libmscore/selectionrangedelete
         libmscore/unrollrepeats

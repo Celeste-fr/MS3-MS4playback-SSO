@@ -29,6 +29,10 @@
 #include "timeline.h"
 #include "workspace.h"
 
+#include "libmscore/part.h"
+#include "libmscore/score.h"
+#include "libmscore/soundlibrary.h"
+
 #include "audiodrivers/pa.h"
 #ifdef USE_PORTMIDI
 #include "audiodrivers/pm.h"
@@ -72,6 +76,9 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
       setModal(true);
       shortcutsChanged = false;
+
+      connect(soundLibraryBrowse, &QToolButton::clicked, this, &PreferenceDialog::selectSoundLibrary);
+      connect(soundLibraryRouting, &QPushButton::clicked, this, &PreferenceDialog::showSoundLibraryRouting);
 
       styleName->clear();
       styleName->addItem(tr("Light"));
@@ -540,8 +547,12 @@ void PreferenceDialog::start()
 #ifdef USE_PORTMIDI
                   new StringPreferenceItem(PREF_IO_PORTMIDI_INPUTDEVICE, portMidiInput, doNothing, doNothing),
                   new StringPreferenceItem(PREF_IO_PORTMIDI_OUTPUTDEVICE, portMidiOutput, doNothing, doNothing),
+                  new StringPreferenceItem(PREF_IO_PORTMIDI_OUTPUTDEVICE_B, portMidiOutputB, doNothing, doNothing),
+                  new StringPreferenceItem(PREF_IO_PORTMIDI_OUTPUTDEVICE_C, portMidiOutputC, doNothing, doNothing),
+                  new StringPreferenceItem(PREF_IO_PORTMIDI_OUTPUTDEVICE_D, portMidiOutputD, doNothing, doNothing),
                   new IntPreferenceItem(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS, portMidiOutputLatencyMilliseconds),
             #endif
+                  new StringPreferenceItem(PREF_IO_SOUNDLIBRARY, soundLibrary, doNothing, doNothing),
       };
 
       // These connections are used to enable the Apply button and to save only the changed preferences.
@@ -756,11 +767,45 @@ void PreferenceDialog::updateValues(bool useDefaultValues, bool setup)
                                     curMidiOutIdx = i + 1;
                               }
                         portMidiOutput->setCurrentIndex(curMidiOutIdx);
+
+                        // the sound library's further ports
+                        const std::pair<QComboBox*, const char*> extraOutputs[] = {
+                              { portMidiOutputB, PREF_IO_PORTMIDI_OUTPUTDEVICE_B },
+                              { portMidiOutputC, PREF_IO_PORTMIDI_OUTPUTDEVICE_C },
+                              { portMidiOutputD, PREF_IO_PORTMIDI_OUTPUTDEVICE_D } };
+                        for (const auto& eo : extraOutputs) {
+                              eo.first->clear();
+                              eo.first->addItem("", -1);
+                              eo.first->addItems(midiOutputs);
+                              const int idx = midiOutputs.indexOf(preferences.getString(eo.second));
+                              eo.first->setCurrentIndex(idx + 1);
+                              }
                         }
 #endif
                   }
             }
 #endif
+
+      // sound library: none, the maps that come with MuseScore, and the one chosen if elsewhere
+      {
+            const QString current = preferences.getString(PREF_IO_SOUNDLIBRARY);
+            soundLibrary->clear();
+            soundLibrary->addItem(tr("None (built-in synthesizer only)"), QString());
+            QDir dir(mscoreGlobalShare + "soundlibraries");
+            for (const QFileInfo& fi : dir.entryInfoList({ "*.xml" }, QDir::Files, QDir::Name))
+                  soundLibrary->addItem(fi.completeBaseName(), fi.absoluteFilePath());
+            int idx = soundLibrary->findData(current);
+            if (idx < 0 && !current.isEmpty()) {
+                  soundLibrary->addItem(QFileInfo(current).completeBaseName(), current);
+                  idx = soundLibrary->count() - 1;
+                  }
+            soundLibrary->setCurrentIndex(qMax(0, idx));
+#ifndef USE_PORTMIDI
+            for (QWidget* w : { static_cast<QWidget*>(portMidiOutputB), static_cast<QWidget*>(portMidiOutputC), static_cast<QWidget*>(portMidiOutputD),
+                                static_cast<QWidget*>(portMidiOutputBLabel), static_cast<QWidget*>(portMidiOutputCLabel), static_cast<QWidget*>(portMidiOutputDLabel) })
+                  w->setVisible(false);
+#endif
+      }
 
 #ifndef HAS_MIDI
       enableMidiInput->setEnabled(false);
@@ -778,6 +823,89 @@ void PreferenceDialog::updateValues(bool useDefaultValues, bool setup)
 
       if (useDefaultValues)
             preferences.setReturnDefaultValuesMode(false);
+      }
+
+//---------------------------------------------------------
+//   selectSoundLibrary
+//    a sound library map from anywhere
+//---------------------------------------------------------
+
+void PreferenceDialog::selectSoundLibrary()
+      {
+      const QString path = QFileDialog::getOpenFileName(this, tr("Choose Sound Library Map"),
+         mscoreGlobalShare + "soundlibraries", tr("Sound library map") + " (*.xml)",
+         nullptr, preferences.getBool(PREF_UI_APP_USENATIVEDIALOGS) ? QFileDialog::Options() : QFileDialog::DontUseNativeDialog);
+      if (path.isEmpty())
+            return;
+      QString error;
+      if (!SoundLib::Library::load(path, &error)) {
+            QMessageBox::warning(this, tr("Sound Library"), tr("This file cannot be used as a sound library map:") + "\n" + error);
+            return;
+            }
+      int idx = soundLibrary->findData(path);
+      if (idx < 0) {
+            soundLibrary->addItem(QFileInfo(path).completeBaseName(), path);
+            idx = soundLibrary->count() - 1;
+            }
+      soundLibrary->setCurrentIndex(idx);
+      }
+
+//---------------------------------------------------------
+//   showSoundLibraryRouting
+//    which part of the current score goes where: the library's patch to load on each MIDI
+//    output and channel
+//---------------------------------------------------------
+
+void PreferenceDialog::showSoundLibraryRouting()
+      {
+      const QString path = soundLibrary->currentData().toString();
+      Score* score = mscore->currentScore();
+      if (path.isEmpty() || !score) {
+            QMessageBox::information(this, tr("Sound Library"), path.isEmpty() ? tr("No sound library is chosen.") : tr("No score is open."));
+            return;
+            }
+      QString error;
+      std::shared_ptr<SoundLib::Library> library = SoundLib::Library::load(path, &error);
+      if (!library) {
+            QMessageBox::warning(this, tr("Sound Library"), error);
+            return;
+            }
+      score = score->masterScore();
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
+
+      QDialog d(this);
+      d.setWindowTitle(tr("Sound Library Routing: %1").arg(library->name));
+      QVBoxLayout* layout = new QVBoxLayout(&d);
+      QLabel* info = new QLabel(tr("Load each patch on the MIDI output (A: \"%1\", then B, C, D) and channel shown. "
+                                   "Parts without a patch play on MuseScore's built-in synthesizer.")
+                                   .arg(preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE)), &d);
+      info->setWordWrap(true);
+      layout->addWidget(info);
+      QTableWidget* table = new QTableWidget(0, 4, &d);
+      table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("MIDI output"), tr("Channel") });
+      table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      table->verticalHeader()->hide();
+      for (const Part* part : score->parts()) {
+            const int row = table->rowCount();
+            table->insertRow(row);
+            table->setItem(row, 0, new QTableWidgetItem(part->partName()));
+            auto r = std::find_if(routes.begin(), routes.end(), [part](const SoundLib::Route& rt) { return rt.part == part; });
+            if (r == routes.end()) {
+                  table->setItem(row, 1, new QTableWidgetItem(tr("(built-in synthesizer)")));
+                  continue;
+                  }
+            table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
+            table->setItem(row, 2, new QTableWidgetItem(QString(QChar('A' + r->port))));
+            table->setItem(row, 3, new QTableWidgetItem(QString::number(r->channel + 1)));
+            }
+      table->resizeColumnsToContents();
+      table->horizontalHeader()->setStretchLastSection(true);
+      layout->addWidget(table);
+      QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &d);
+      connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+      layout->addWidget(buttons);
+      d.resize(560, 420);
+      d.exec();
       }
 
 //---------------------------------------------------------
@@ -1533,8 +1661,16 @@ void PreferenceDialog::apply()
 #endif
 
 #ifdef USE_PORTMIDI
+            // a new MIDI output (A … D) is opened by a restart of the audio engine
+            const bool midiOutputsChanged = preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE) != portMidiOutput->currentText()
+               || preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE_B) != portMidiOutputB->currentText()
+               || preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE_C) != portMidiOutputC->currentText()
+               || preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE_D) != portMidiOutputD->currentText();
             preferences.setPreference(PREF_IO_PORTMIDI_INPUTDEVICE, portMidiInput->currentText());
             preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE, portMidiOutput->currentText());
+            preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE_B, portMidiOutputB->currentText());
+            preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE_C, portMidiOutputC->currentText());
+            preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE_D, portMidiOutputD->currentText());
             preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS, portMidiOutputLatencyMilliseconds->value());
             if (seq->driver() && static_cast<PortMidiDriver*>(static_cast<Portaudio*>(seq->driver())->mididriver())->isSameCoreMidiIacBus(preferences.getString(PREF_IO_PORTMIDI_INPUTDEVICE), preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE))) {
                   QMessageBox msgBox;
@@ -1543,7 +1679,10 @@ void PreferenceDialog::apply()
                   msgBox.setText(tr("Warning: You used the same CoreMIDI IAC bus for input and output. This will cause problematic loopback, whereby MuseScore's output MIDI messages will be sent back to MuseScore as input, causing confusion. To avoid this problem, access Audio MIDI Setup via Spotlight to create a dedicated virtual port for MuseScore's MIDI output, restart MuseScore, return to Preferences, and select your new virtual port for MuseScore's MIDI output. Other programs may then use that dedicated virtual port to receive MuseScore's MIDI output."));
                   msgBox.exec();
                   }
+            if (midiOutputsChanged && portAudioIsUsed && !noSeq)
+                  restartAudioEngine();
 #endif
+            preferences.setPreference(PREF_IO_SOUNDLIBRARY, soundLibrary->currentData().toString());
             }
 
       if (shortcutsChanged) {

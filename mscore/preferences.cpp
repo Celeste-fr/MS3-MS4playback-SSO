@@ -234,6 +234,10 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_IO_PORTMIDI_INPUTDEVICE,                         new StringPreference("")},
             {PREF_IO_PORTMIDI_OUTPUTBUFFERCOUNT,                   new IntPreference(65536)},
             {PREF_IO_PORTMIDI_OUTPUTDEVICE,                        new StringPreference("")},
+            {PREF_IO_PORTMIDI_OUTPUTDEVICE_B,                      new StringPreference("")},
+            {PREF_IO_PORTMIDI_OUTPUTDEVICE_C,                      new StringPreference("")},
+            {PREF_IO_PORTMIDI_OUTPUTDEVICE_D,                      new StringPreference("")},
+            {PREF_IO_SOUNDLIBRARY,                                 new StringPreference("")},
             {PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS,           new IntPreference(0)},
       #endif
             {PREF_IO_PULSEAUDIO_USEPULSEAUDIO,                     new BoolPreference(defaultUsePulseAudio, false)},

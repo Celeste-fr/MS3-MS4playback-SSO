@@ -249,6 +249,9 @@ class NPlayEvent : public PlayEvent {
       int _origin = -1;
       int _discard = 0;
       bool _portamento = false;
+      signed char _extPort = -1;          // a sound library part (soundlibrary.h): its MIDI out
+      signed char _extChannel = -1;
+      bool _libSwitch = false;            // the library's articulation switch
 
    public:
       NPlayEvent() : PlayEvent() {}
@@ -267,6 +270,12 @@ class NPlayEvent : public PlayEvent {
       void setDiscard(int d) { _discard = d; }
       int discard() const { return _discard; }
       bool isMuted() const;
+      void setExternal(int port, int channel) { _extPort = port; _extChannel = channel; }
+      int extPort() const { return _extPort; }
+      int extChannel() const { return _extChannel; }
+      bool isExternal() const { return _extPort >= 0; }
+      void setLibrarySwitch(bool v) { _libSwitch = v; }
+      bool librarySwitch() const { return _libSwitch; }
       void setPortamento(bool p) { _portamento = p; }
       bool portamento() const { 
             return (_portamento == true || 

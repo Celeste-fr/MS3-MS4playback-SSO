@@ -26,3 +26,10 @@ install (DIRECTORY
       PATTERN ".*" EXCLUDE
       )
 
+# maps of external sound libraries (libmscore/soundlibrary.h)
+install (DIRECTORY
+      soundlibraries
+      DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}
+      PATTERN ".*" EXCLUDE
+      )
+

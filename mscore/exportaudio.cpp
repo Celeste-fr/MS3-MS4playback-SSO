@@ -156,7 +156,8 @@ bool MuseScore::saveAudio(Score* score, QIODevice *device, std::function<bool(fl
                         playTime  += n;
                         frames    -= n;
                         const NPlayEvent& e = playPos->second;
-                        if (!(!e.velo() && e.discard()) && e.isChannelEvent()) {
+                        // (a sound library's articulation switches are for it only)
+                        if (!(!e.velo() && e.discard()) && e.isChannelEvent() && !e.librarySwitch()) {
                               int channelIdx = e.channel();
                               const Channel* c = score->masterScore()->midiMapping(channelIdx)->articulation();
                               if (!c->mute()) {

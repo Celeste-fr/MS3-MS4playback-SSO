@@ -49,7 +49,9 @@ add_library (libmscore STATIC
       page.cpp part.cpp pedal.cpp letring.cpp vibrato.cpp palmmute.cpp pitch.cpp pitchspelling.cpp
       rendermidi.cpp
       ms4playback.cpp
+      soundlibrary.cpp
       ms4playback.h
+      soundlibrary.h
       ms4tables.h repeat.cpp repeatlist.cpp rest.cpp
       score.cpp segment.cpp select.cpp shadownote.cpp slur.cpp tie.cpp slurtie.cpp
       spacer.cpp spanner.cpp staff.cpp staffstate.cpp
