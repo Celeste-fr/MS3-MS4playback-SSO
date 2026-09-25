@@ -1,139 +1,193 @@
-/* FluidSynth - A Software Synthesizer
- *
- * Copyright (C) 2003  Peter Hanappe and others.
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public License
- * as published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License along with this library; if not, write to the Free
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
- * 02111-1307, USA
- */
+//=============================================================================
+//  MuseScore
+//  Music Composition & Notation
+//
+//  Fluid: MuseScore 3's SoundFont synthesizer on FluidSynth 2.3.3, configured
+//  as MuseScore 4.7.5 configures it (FluidSynth::init and ::setupSound in
+//  framework/audio/engine/internal/synthesizers/fluidsynth/fluidsynth.cpp).
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 2
+//  as published by the Free Software Foundation and appearing in
+//  the file LICENCE.GPL
+//=============================================================================
 
 #include "fluid.h"
-#include "sfont.h"
-#include "conv.h"
-#include "gen.h"
-#include "voice.h"
 
-#include "midi/event.h"
-#include "midi/msynthesizer.h"
+#include <array>
+#include <cmath>
+#include <fluidsynth.h>
+
+#include "audio/midi/event.h"
+#include "audio/midi/msynthesizer.h"
 
 #include "mscore/preferences.h"
 #include "mscore/extension.h"
 
 namespace FluidS {
 
-/***************************************************************
- *
- *                         GLOBAL
- */
+//---------------------------------------------------------
+//   Instance
+//    one FluidSynth with CHANNELS_PER_SYNTH MIDI channels
+//---------------------------------------------------------
 
-bool Fluid::initialized = false;
+struct Fluid::Instance {
+      fluid_settings_t* settings { nullptr };
+      fluid_synth_t* synth { nullptr };
+      // per channel and key: the tuning offset (cents) the key is tuned to (PlayEvent::tuning)
+      std::vector<std::array<float, 128>> keyTuning;
 
-/* better than a macro to determine inappropriate values for notes*/
-bool validNote(const int input) {
-      return (input < 255 && input > -1);
-      }
-
-/* default modulators
- * SF2.01 page 52 ff:
- *
- * There is a set of predefined default modulators. They have to be
- * explicitly overridden by the sound font in order to turn them off.
- */
-
-static const Mod defaultMod[] = {
-      { GEN_ATTENUATION, FLUID_MOD_VELOCITY, FLUID_MOD_GC | FLUID_MOD_CONCAVE | FLUID_MOD_UNIPOLAR | FLUID_MOD_NEGATIVE, 0, 0, 960.0 },
-      { GEN_FILTERFC,
-         FLUID_MOD_VELOCITY, FLUID_MOD_GC | FLUID_MOD_LINEAR | FLUID_MOD_UNIPOLAR | FLUID_MOD_NEGATIVE,
-         FLUID_MOD_VELOCITY, FLUID_MOD_GC | FLUID_MOD_SWITCH | FLUID_MOD_UNIPOLAR | FLUID_MOD_POSITIVE,
-         -2400 },
-      { GEN_VIBLFOTOPITCH, FLUID_MOD_CHANNELPRESSURE, FLUID_MOD_GC | FLUID_MOD_LINEAR | FLUID_MOD_UNIPOLAR | FLUID_MOD_POSITIVE, 0, 0, 50 },
-      { GEN_VIBLFOTOPITCH, 1, FLUID_MOD_CC | FLUID_MOD_LINEAR | FLUID_MOD_UNIPOLAR | FLUID_MOD_POSITIVE, 0, 0, 50 },
-      { GEN_ATTENUATION, 7, FLUID_MOD_CC | FLUID_MOD_CONCAVE | FLUID_MOD_UNIPOLAR | FLUID_MOD_NEGATIVE, 0, 0, 960.0 },
-      { GEN_PAN, 10, FLUID_MOD_CC | FLUID_MOD_LINEAR | FLUID_MOD_BIPOLAR | FLUID_MOD_POSITIVE, 0, 0, 500.0 },
-      { GEN_ATTENUATION, 11, FLUID_MOD_CC | FLUID_MOD_CONCAVE | FLUID_MOD_UNIPOLAR | FLUID_MOD_NEGATIVE, 0, 0, 960.0 },
-      { GEN_REVERBSEND, 91, FLUID_MOD_CC | FLUID_MOD_LINEAR | FLUID_MOD_UNIPOLAR | FLUID_MOD_POSITIVE, 0, 0, 200 },
-      { GEN_CHORUSSEND, 93, FLUID_MOD_CC | FLUID_MOD_LINEAR | FLUID_MOD_UNIPOLAR | FLUID_MOD_POSITIVE, 0, 0, 200 },
-      { GEN_PITCH,
-           FLUID_MOD_PITCHWHEEL,     FLUID_MOD_GC | FLUID_MOD_LINEAR | FLUID_MOD_BIPOLAR  | FLUID_MOD_POSITIVE,
-           FLUID_MOD_PITCHWHEELSENS, FLUID_MOD_GC | FLUID_MOD_LINEAR | FLUID_MOD_UNIPOLAR | FLUID_MOD_POSITIVE,
-        12700.0 },
+      ~Instance()
+            {
+            if (synth)
+                  delete_fluid_synth(synth);
+            if (settings)
+                  delete_fluid_settings(settings);
+            }
       };
-
-static const Mod forcePanMod = { GEN_PAN, 10, FLUID_MOD_CC | FLUID_MOD_LINEAR | FLUID_MOD_BIPOLAR | FLUID_MOD_POSITIVE, 0, 0, 1000.0 };
 
 //---------------------------------------------------------
 //   Fluid
 //---------------------------------------------------------
 
 Fluid::Fluid()
-   : Synthesizer()
       {
+      static bool logSet = false;
+      if (!logSet) {
+            logSet = true;
+            fluid_log_function_t log = [](int level, const char* message, void*) {
+                  if (level <= FLUID_WARN)
+                        qDebug("FluidSynth: %s", message);
+                  };
+            for (int level : { FLUID_PANIC, FLUID_ERR, FLUID_WARN, FLUID_INFO, FLUID_DBG })
+                  fluid_set_log_function(level, level <= FLUID_WARN ? log : nullptr, nullptr);
+            }
+      }
+
+Fluid::~Fluid()
+      {
+      QMutexLocker locker(&_mutex);
+      deleteInstances();
+      qDeleteAll(_patches);
+      }
+
+void Fluid::deleteInstances()
+      {
+      for (Instance* i : _synths)
+            delete i;
+      _synths.clear();
       }
 
 //---------------------------------------------------------
 //   init
-//    instance initialization
 //---------------------------------------------------------
 
 void Fluid::init(float sampleRate)
       {
-      if (!initialized) {     // initialize all the conversion tables and other stuff
-            initialized = true;
-            fluid_conversion_config();
-            Voice::dsp_float_config();
-            }
+      QMutexLocker locker(&_mutex);
       Synthesizer::init(sampleRate);
-      sample_rate        = sampleRate;
-      sfont_id           = 0;
-
-      _state       = FLUID_SYNTH_PLAYING; // as soon as the synth is created it starts playing.
-      noteid      = 0;
-      for (int i = 0; i < 128; ++i)
-            _tuning[i] = i * 100.0;
-      _masterTuning = 440.0;
-
-      fromkey_portamento = Channel::INVALID_NOTE;
-      lastNote = Channel::INVALID_NOTE;
-
-      for (int i = 0; i < 512; i++)
-            freeVoices.append(new Voice(this));
+      deleteInstances();                  // a new sample rate needs new synths
+      _synths.push_back(newInstance());
       }
 
 //---------------------------------------------------------
-//   ~Fluid
+//   newInstance
+//    MuseScore 4's settings. Differences: more MIDI channels per synth (MS4 makes one synth per
+//    instrument, MuseScore 3 numbers the channels of all instruments together), and a larger
+//    voice pool, since MS4's 512 voices are per instrument.
 //---------------------------------------------------------
 
-Fluid::~Fluid()
+Fluid::Instance* Fluid::newInstance()
       {
-      _state = FLUID_SYNTH_STOPPED;
-      _globalTerminate = true;
-      while (!mutex.tryLock()) {}
-      qDeleteAll(activeVoices);
-      qDeleteAll(freeVoices);
-      qDeleteAll(sfonts);
-      qDeleteAll(channel);
-      qDeleteAll(patches);
+      Instance* in = new Instance;
+      fluid_settings_t* s = new_fluid_settings();
+      in->settings = s;
+      fluid_settings_setnum(s, "synth.gain", GLOBAL_GAIN);
+      fluid_settings_setint(s, "synth.audio-channels", 1);
+      fluid_settings_setint(s, "synth.audio-groups", 1);
+      fluid_settings_setint(s, "synth.lock-memory", 0);
+      fluid_settings_setint(s, "synth.threadsafe-api", 0);      // _mutex serializes access
+      fluid_settings_setint(s, "synth.midi-channels", CHANNELS_PER_SYNTH);
+      fluid_settings_setint(s, "synth.dynamic-sample-loading", 1);
+      fluid_settings_setint(s, "synth.polyphony", POLYPHONY);
+      fluid_settings_setnum(s, "synth.sample-rate", double(_sampleRate));
+      fluid_settings_setint(s, "synth.min-note-length", MIN_NOTE_LENGTH_MS);
+      fluid_settings_setint(s, "synth.chorus.active", 0);
+      fluid_settings_setint(s, "synth.reverb.active", 0);
+      // the SoundFont's low-pass filter: on, as a traced MS4 4.7.5 render sets it
+      // (its useSoundFontLowPassFilter preference, "Use SoundFont filter")
+      fluid_settings_setint(s, "synth.iir-lowpass-filter.active", 1);
+      // MuseScore 3 selects banks as MSB * 128 + LSB (drums: bank 128)
+      fluid_settings_setstr(s, "synth.midi-bank-select", "mma");
+
+      in->synth = new_fluid_synth(s);
+      in->keyTuning.resize(CHANNELS_PER_SYNTH);
+      loadAll(in);
+      for (int ch = 0; ch < CHANNELS_PER_SYNTH; ++ch)
+            setupChannel(in, ch);
+      return in;
       }
 
 //---------------------------------------------------------
-//   freeVoice
+//   setupChannel
+//    FluidSynth::setupSound's setupChannel()
 //---------------------------------------------------------
 
-void Fluid::freeVoice(Voice* v)
+void Fluid::setupChannel(Instance* in, int ch)
       {
-      if (activeVoices.removeOne(v))
-            freeVoices.append(v);
+      fluid_synth_t* s = in->synth;
+      // melodic: channel 9 would otherwise be a drum channel; MuseScore picks drums by bank 128
+      fluid_synth_set_channel_type(s, ch, CHANNEL_TYPE_MELODIC);
+      fluid_synth_set_interp_method(s, ch, FLUID_INTERP_DEFAULT);
+      fluid_synth_pitch_wheel_sens(s, ch, PITCH_WHEEL_SENS);
+      fluid_synth_cc(s, ch, 7, DEFAULT_MIDI_VOLUME);
+      fluid_synth_cc(s, ch, 11, NATURAL_EXPRESSION);
+      fluid_synth_cc(s, ch, 74, 0);
+      fluid_synth_set_portamento_mode(s, ch, FLUID_CHANNEL_PORTAMENTO_MODE_EACH_NOTE);
+      fluid_synth_set_legato_mode(s, ch, FLUID_CHANNEL_LEGATO_MODE_RETRIGGER);
+      in->keyTuning[ch].fill(0.0f);
+      applyTuning(in, ch);
+      }
+
+//---------------------------------------------------------
+//   applyTuning
+//    Each channel has its own key tuning (bank ch / 128, program ch % 128): master tuning plus
+//    the per-note offsets of PlayEvent::tuning(). MS4 retunes keys the same way, per synth.
+//---------------------------------------------------------
+
+void Fluid::applyTuning(Instance* in, int ch)
+      {
+      const double master = 1200.0 * std::log2(_masterTuning / 440.0);
+      double pitch[128];
+      for (int k = 0; k < 128; ++k)
+            pitch[k] = k * 100.0 + master + in->keyTuning[ch][k];
+      fluid_synth_activate_key_tuning(in->synth, ch / 128, ch % 128, "MuseScore", pitch, 1);
+      fluid_synth_activate_tuning(in->synth, ch, ch / 128, ch % 128, 1);
+      }
+
+void Fluid::setMasterTuning(double f)
+      {
+      QMutexLocker locker(&_mutex);
+      if (f == _masterTuning)
+            return;
+      _masterTuning = f;
+      for (Instance* in : _synths)
+            for (int ch = 0; ch < CHANNELS_PER_SYNTH; ++ch)
+                  applyTuning(in, ch);
+      }
+
+//---------------------------------------------------------
+//   synthFor
+//---------------------------------------------------------
+
+Fluid::Instance* Fluid::synthFor(int channel)
+      {
+      if (channel < 0)
+            return nullptr;
+      size_t idx = size_t(channel / CHANNELS_PER_SYNTH);
+      while (_synths.size() <= idx)
+            _synths.push_back(newInstance());
+      return _synths[idx];
       }
 
 //---------------------------------------------------------
@@ -142,480 +196,141 @@ void Fluid::freeVoice(Voice* v)
 
 void Fluid::play(const PlayEvent& event)
       {
-      bool err = false;
-      int ch   = event.channel();
+      QMutexLocker locker(&_mutex);
+      Instance* in = synthFor(event.channel());
+      if (!in)
+            return;
+      fluid_synth_t* s = in->synth;
+      const int ch = event.channel() % CHANNELS_PER_SYNTH;
+      const int a = event.dataA();
+      const int b = event.dataB();
 
-      if (ch >= channel.size()) {
-            for (int i = channel.size(); i < ch+1; i++)
-                  channel.append(new Channel(this, i));
-            }
-
-      int type    = event.type();
-      Channel* cp = channel[ch];
-
-      if (type == ME_NOTEON) {
-            int key = event.dataA();
-            int vel = event.dataB();
-            if (vel == 0) {
-                  //
-                  // process note off
-                  //
-                  for (Voice* v : qAsConst(activeVoices)) {
-                        if (v->ON() && (v->chan == ch) && (v->key == key))
-                              v->noteoff();
+      switch (event.type()) {
+            case ME_NOTEON:
+                  if (a < 0 || a > 127)
+                        break;
+                  if (b == 0) {
+                        fluid_synth_noteoff(s, ch, a);
+                        break;
                         }
-                  return;
-                  }
-            if (cp->preset() == 0) {
-                  qDebug("channel has no preset");
-                  err = true;
-                  }
-            else {
-                  /*
-                   * If the same note is hit twice on the same channel, then the older
-                   * voice process is advanced to the release stage.  Using a mechanical
-                   * MIDI controller, the only way this can happen is when the sustain
-                   * pedal is held.  In this case the behaviour implemented here is
-                   * natural for many instruments.  Note: One noteon event can trigger
-                   * several voice processes, for example a stereo sample.  Don't
-                   * release those...
-                   */
-                  for(Voice* v : qAsConst(activeVoices)) {
-                        if (v->isPlaying() && (v->chan == ch) && (v->key == key) && (v->get_id() != noteid))
-                              v->noteoff();
+                  if (in->keyTuning[ch][a] != event.tuning()) {
+                        in->keyTuning[ch][a] = event.tuning();
+                        const int key = a;
+                        const double p = a * 100.0 + 1200.0 * std::log2(_masterTuning / 440.0) + event.tuning();
+                        fluid_synth_tune_notes(s, ch / 128, ch % 128, 1, &key, &p, 1);
                         }
-                  err = !cp->preset()->noteon(this, noteid++, ch, key, vel, event.tuning());
-                  }
-            }
-      else if (type == ME_CONTROLLER) {
-            switch(event.dataA()) {
-                  case CTRL_PROGRAM:
-                        program_change(ch, event.dataB());
-                        break;
-                  case CTRL_PRESS:
-                        break;
-                  default:
-                        cp->setcc(event.dataA(), event.dataB());
-                        break;
-                  }
-            }
-      else if (type == ME_PITCHBEND){
-            int midiPitch = event.dataB() * 128 + event.dataA();  // msb * 128 + lsb
-            cp->pitchBend(midiPitch);
-            }
-      /*
-       *    MIDI spec.: One data byte follows the Status. It is the pressure amount, a value
-       *    from 0 to 127 (where 127 is the most pressure).
-       */
-      else if (type == ME_AFTERTOUCH){
-            cp->setChannelPressure(event.dataA());
-            }
-      /*
-       *    MIDI spec.: Two data bytes follow the Status. The first data is the note number.
-       *    This indicates to which note the pressure is being applied. The second data byte is the
-       *    pressure amount, a value from 0 to 127 (where 127 is the most pressure).
-       */
-      else if (type == ME_POLYAFTER){
-            cp->setKeyPressure(event.dataA(), event.dataB());
-            }
-
-      if (err) {
-            // TODO: distinguish between types of error code.
-            // Lack of a soundfont should not produce qDebug messages, because user could deliberately be using MIDI out only.
-            //qWarning("FluidSynth error: event 0x%2x channel %d: %s", type, ch, qPrintable(error()));
+                  fluid_synth_noteon(s, ch, a, b);
+                  break;
+            case ME_NOTEOFF:
+                  if (a >= 0 && a <= 127)
+                        fluid_synth_noteoff(s, ch, a);
+                  break;
+            case ME_CONTROLLER:
+                  if (a == CTRL_PROGRAM)
+                        fluid_synth_program_change(s, ch, b);
+                  else if (a == CTRL_PRESS)
+                        fluid_synth_channel_pressure(s, ch, b);
+                  else if (a == CTRL_RESET_ALL_CTRL) {
+                        fluid_synth_cc(s, ch, a, b);
+                        setupChannel(in, ch);     // back to MS4's defaults, not FluidSynth's
+                        }
+                  else if (a >= 0 && a < 128)
+                        fluid_synth_cc(s, ch, a, b);
+                  break;
+            case ME_PITCHBEND:
+                  fluid_synth_pitch_bend(s, ch, b * 128 + a);
+                  break;
+            case ME_AFTERTOUCH:
+                  fluid_synth_channel_pressure(s, ch, a);
+                  break;
+            case ME_POLYAFTER:
+                  fluid_synth_key_pressure(s, ch, a, b);
+                  break;
+            default:
+                  break;
             }
       }
 
 //---------------------------------------------------------
-//   damp_voices
+//   allNotesOff / allSoundsOff
 //---------------------------------------------------------
 
-void Fluid::damp_voices(int chan)
+void Fluid::allNotesOff(int channel)
       {
-      for(Voice* v : qAsConst(activeVoices)) {
-            if ((v->chan == chan) && v->SUSTAINED())
-                  v->noteoff();
+      QMutexLocker locker(&_mutex);
+      if (channel < 0) {
+            for (Instance* in : _synths)
+                  fluid_synth_all_notes_off(in->synth, -1);
+            return;
             }
+      if (Instance* in = synthFor(channel))
+            fluid_synth_all_notes_off(in->synth, channel % CHANNELS_PER_SYNTH);
       }
 
-//---------------------------------------------------------
-//   allNotesOff
-//---------------------------------------------------------
-
-void Fluid::allNotesOff(int chan)
+void Fluid::allSoundsOff(int channel)
       {
-      for(Voice* v : qAsConst(activeVoices)) {
-            if (chan == -1 || v->chan == chan)
-                  v->noteoff();
+      QMutexLocker locker(&_mutex);
+      if (channel < 0) {
+            for (Instance* in : _synths)
+                  fluid_synth_all_sounds_off(in->synth, -1);
+            return;
             }
-      }
-
-//---------------------------------------------------------
-//   allSoundsOff
-//    immediately stop all notes on this channel.
-//    stop all channel if chan==-1
-//---------------------------------------------------------
-
-void Fluid::allSoundsOff(int chan)
-      {
-      for(Voice* v : qAsConst(activeVoices)) {
-            if (chan == -1 || v->chan == chan)
-                  v->off();
-            }
-      }
-
-//---------------------------------------------------------
-//   system_reset
-//
-//    Purpose:
-//    Respond to the MIDI command 'system reset' (0xFF, big red 'panic' button)
-//---------------------------------------------------------
-
-void Fluid::system_reset()
-      {
-      for(Voice* v : qAsConst(activeVoices))
-            v->off();
-      for(Channel* c : qAsConst(channel))
-            c->reset();
-      }
-
-/*
- * fluid_synth_modulate_voices
- *
- * tell all synthesis processes on this channel to update their
- * synthesis parameters after a control change.
- */
-void Fluid::modulate_voices(int chan, bool is_cc, int ctrl)
-      {
-      for(Voice* v : qAsConst(activeVoices)) {
-            if (v->chan == chan)
-                  v->modulate(is_cc, ctrl);
-            }
-      }
-
-/*
- * fluid_synth_modulate_voices_all
- *
- * Tell all synthesis processes on this channel to update their
- * synthesis parameters after an all control off message (i.e. all
- * controller have been reset to their default value).
- */
-void Fluid::modulate_voices_all(int chan)
-      {
-      for(Voice* v : qAsConst(activeVoices)) {
-            if (v->chan == chan)
-                  v->modulate_all();
-            }
-      }
-
-/*
- * fluid_synth_get_pitch_bend
- */
-void Fluid::get_pitch_bend(int chan, int* ppitch_bend)
-      {
-      *ppitch_bend = channel[chan]->getPitchBend();
-      }
-
-/*
- * Fluid_synth_pitch_wheel_sens
- */
-void Fluid::pitch_wheel_sens(int chan, int val)
-      {
-      /* set the pitch-bend value in the channel */
-      channel[chan]->pitchWheelSens(val);
-      }
-
-/*
- * setFromKeyPortamento
- * requires an input for a default value, usually the TPC
- */
-void Fluid::setFromKeyPortamento(int chan, int defaultValue) {
-      int ptc = get_cc(chan, PORTAMENTO_CTRL);
-      if (validNote(ptc)) {
-            resetPortamento(chan);
-            fromkey_portamento = ptc; 
-            /*
-            // Assumedly this fixed some sort of bug in FluidSynth2
-            if (!validNote(defaultValue))
-                  defaultValue = ptc;*/
-            }
-      else {
-
-            /* determines and returns fromkey portamento */
-            fromkey_portamento = Channel::INVALID_NOTE;
-
-            if (portamentoTime(chan)) {
-                  /* Portamento when Portamento pedal is On */
-                  /* 'fromkey portamento'is determined from the portamento mode
-                   and the most recent note played (prev_note)*/
-                  if (validNote(defaultValue)) 
-                        fromkey_portamento = ptc;
-                  else 
-                        fromkey_portamento = lastNote;
-                  }
-            }
-      }
-
-/*
- * fluid_synth_get_preset
- */
-Preset* Fluid::get_preset(unsigned int sfontnum, unsigned banknum, unsigned prognum)
-      {
-      SFont* sf = get_sfont_by_id(sfontnum);
-      if (sf) {
-            Preset* preset = sf->get_preset(banknum, prognum);
-            if (preset != 0)
-                  return preset;
-            }
-      return 0;
-      }
-
-//---------------------------------------------------------
-//   find_preset
-//---------------------------------------------------------
-
-Preset* Fluid::find_preset(unsigned banknum, unsigned prognum)
-      {
-      for (SFont* sf : qAsConst(sfonts)) {
-            Preset* preset = sf->get_preset(banknum, prognum);
-            if (preset)
-                  return preset;
-            }
-      return 0;
-      }
-
-//---------------------------------------------------------
-//   program_change
-//---------------------------------------------------------
-
-void Fluid::program_change(int chan, int prognum)
-      {
-      Channel* c       = channel[chan];
-      unsigned banknum = c->getBanknum();
-      c->setPrognum(prognum);
-
-      Preset* preset = find_preset(banknum, prognum);
-      if (!preset) {
-            //Suppressing qDebug because might not have soundfont if using MIDI out only.
-            //qDebug("Fluid::program_change: preset %d %d not found", banknum, prognum);
-            preset = find_preset(0, prognum);
-            if (!preset)
-                  preset = find_preset(0, 0);
-            }
-
-      unsigned sfont_idl = preset? preset->sfont->id() : 0;
-      c->setSfontnum(sfont_idl);
-      c->setPreset(preset);
-      }
-
-/*
- * fluid_synth_get_program
- */
-void Fluid::get_program(int chan, unsigned* sfont_idl, unsigned* bank_num, unsigned* preset_num)
-      {
-      Channel* c       = channel[chan];
-      *sfont_idl       = c->getSfontnum();
-      *bank_num        = c->getBanknum();
-      *preset_num      = c->getPrognum();
-      }
-
-//---------------------------------------------------------
-//   program_select
-//---------------------------------------------------------
-
-bool Fluid::program_select(int chan, unsigned sfont_idl, unsigned bank_num, unsigned preset_num)
-      {
-      Channel* c     = channel[chan];
-      Preset* preset = get_preset(sfont_idl, bank_num, preset_num);
-      if (preset == 0) {
-            qDebug("There is no preset with bank number %d and preset number %d in SoundFont %d", bank_num, preset_num, sfont_idl);
-            return false;
-            }
-
-      /* inform the channel of the new bank and program number */
-      c->setSfontnum(sfont_idl);
-      c->setBanknum(bank_num);
-      c->setPrognum(preset_num);
-      c->setPreset(preset);
-      return true;
-      }
-
-//---------------------------------------------------------
-//   update_presets
-//---------------------------------------------------------
-
-void Fluid::update_presets()
-      {
-      for (Channel* c : qAsConst(channel))
-            c->setPreset(get_preset(c->getSfontnum(), c->getBanknum(), c->getPrognum()));
+      if (Instance* in = synthFor(channel))
+            fluid_synth_all_sounds_off(in->synth, channel % CHANNELS_PER_SYNTH);
       }
 
 //---------------------------------------------------------
 //   process
+//    adds len stereo frames to out (interleaved); effect1/effect2 are not used (MuseScore 3's
+//    old synth wrote its reverb/chorus sends there; FluidSynth's own effects are off, as in MS4)
 //---------------------------------------------------------
 
-void Fluid::process(unsigned len, float* out, float* effect1, float* effect2)
+void Fluid::process(unsigned len, float* out, float*, float*)
       {
-      if (mutex.tryLock()) {
-            //we have to copy voices array for proper output sound processing in for loop
-            auto tempVoices = activeVoices;
-            for (Voice* v : tempVoices)
-                  v->write(len, out, effect1, effect2);
-            mutex.unlock();
+      if (!_mutex.tryLock())
+            return;
+      if (_buffer.size() < len * 2)
+            _buffer.resize(len * 2);
+      for (Instance* in : _synths) {
+            float* b = _buffer.data();
+            fluid_synth_write_float(in->synth, int(len), b, 0, 2, b, 1, 2);
+            for (unsigned i = 0; i < len * 2; ++i)
+                  out[i] += b[i];
             }
-      }
-
-/*
- * fluid_synth_free_voice_by_kill
- *
- * selects a voice for killing. the selection algorithm is a refinement
- * of the algorithm previously in fluid_synth_alloc_voice.
- */
-
-void Fluid::free_voice_by_kill()
-      {
-      float best_prio = 999999.;
-      float this_voice_prio;
-      Voice* best_voice = 0;
-
-      for(Voice* v : qAsConst(activeVoices)) {
-            /* Determine, how 'important' a voice is.
-             * Start with an arbitrary number */
-            this_voice_prio = 10000.;
-
-            /* Is this voice on the drum channel?
-             * Then it is very important.
-             * Also, forget about the released-note condition:
-             * Typically, drum notes are triggered only very briefly, they run most
-             * of the time in release phase.
-             */
-            if (v->chan == 9) {
-                  this_voice_prio += 4000;
-
-                  }
-            else if (v->RELEASED()) {
-                  /* The key for this voice has been released. Consider it much less important
-                  * than a voice, which is still held.
-                  */
-                  this_voice_prio -= 2000.;
-                  }
-
-            if (v->SUSTAINED()) {
-              /* The sustain pedal is held down on this channel.
-               * Consider it less important than non-sustained channels.
-               * This decision is somehow subjective. But usually the sustain pedal
-               * is used to play 'more-voices-than-fingers', so it shouldn't hurt
-               * if we kill one voice.
-               */
-                  this_voice_prio -= 1000;
-                  }
-
-            /* We are not enthusiastic about releasing voices, which have just been started.
-             * Otherwise hitting a chord may result in killing notes belonging to that very same
-             * chord.
-             * So subtract the age of the voice from the priority - an older voice is just a little
-             * bit less important than a younger voice.
-             * This is a number between roughly 0 and 100.*/
-
-            this_voice_prio -= (noteid - v->get_id());
-
-            /* take a rough estimate of loudness into account. Louder voices are more important. */
-            if (v->volenv_section != FLUID_VOICE_ENVATTACK) {
-                  this_voice_prio += v->volenv_val * 1000.;
-                  }
-
-            /* check if this voice has less priority than the previous candidate. */
-            if (this_voice_prio < best_prio) {
-                  best_voice = v;
-                  best_prio = this_voice_prio;
-                  }
-            }
-      if (best_voice)
-            best_voice->off();
+      _mutex.unlock();
       }
 
 //---------------------------------------------------------
-//   alloc_voice
+//   loadAll
+//    loads _sfPaths into a synth: the last one loaded wins a bank/program both have. Banks are
+//    offset per SoundFont as in MuseScore 3 (patch banks count on from the previous font's).
 //---------------------------------------------------------
 
-Voice* Fluid::alloc_voice(unsigned id, Sample* sample, int chan, int key, int vel, double vt)
+bool Fluid::loadAll(Instance* in)
       {
-      Channel* c = 0;
-
-      /* check if there's an available synthesis process */
-      if (freeVoices.isEmpty())
-            free_voice_by_kill();
-
-      if (freeVoices.isEmpty()) {
-            qDebug("Failed to allocate a synthesis process. (chan=%d,key=%d)", chan, key);
-            return 0;
+      while (fluid_synth_sfcount(in->synth) > 0) {
+            fluid_sfont_t* sf = fluid_synth_get_sfont(in->synth, 0);
+            fluid_synth_sfunload(in->synth, fluid_sfont_get_id(sf), 0);
             }
-
-      Voice* v = freeVoices.takeLast();
-      activeVoices.append(v);
-
-      if (chan >= 0)
-            c = channel[chan];
-
-      v->init(sample, c, key, vel, id, vt);
-
-      /* add the default modulators to the synthesis process. */
-      for (unsigned i = 0; i < sizeof(defaultMod)/sizeof(*defaultMod); ++i)
-            v->add_mod(&defaultMod[i],  FLUID_VOICE_DEFAULT);
-      v->add_mod(&forcePanMod, FLUID_VOICE_OVERWRITE);
-      return v;
-      }
-
-//---------------------------------------------------------
-//   start_voice
-//---------------------------------------------------------
-
-void Fluid::start_voice(Voice* voice)
-      {
-      /* Find the exclusive class of this voice. If set, kill all voices
-      * that match the exclusive class and are younger than the first
-      * voice process created by this noteon event. */
-
-      /** Kill all voices on a given channel, which belong into
-          excl_class.  This function is called by a SoundFont's preset in
-          response to a noteon event.  If one noteon event results in
-          several voice processes (stereo samples), ignore_ID must name
-          the voice ID of the first generated voice (so that it is not
-          stopped). The first voice uses ignore_ID=-1, which will
-          terminate all voices on a channel belonging into the exclusive
-          class excl_class.
-      */
-
-      /* Check if the voice belongs to an exclusive class. In that case,
-         previous notes from the same class are released. */
-
-      int excl_class = voice->GEN(GEN_EXCLUSIVECLASS);
-      if (excl_class) {
-
-            /* Kill all notes on the same channel with the same exclusive class */
-
-            for(Voice* existing_voice : qAsConst(activeVoices)) {
-                  /* Existing voice does not play? Leave it alone. */
-                  if (!existing_voice->isPlaying())
-                        continue;
-
-                  /* An exclusive class is valid for a whole channel (or preset).
-                   * Is the voice on a different channel? Leave it alone. */
-                  if (existing_voice->chan != voice->chan)
-                        continue;
-
-                  /* Existing voice has a different (or no) exclusive class? Leave it alone. */
-                  if ((int)existing_voice->GEN(GEN_EXCLUSIVECLASS) != excl_class)
-                        continue;
-
-                  /* Existing voice is a voice process belonging to this noteon
-                   * event (for example: stereo sample)?  Leave it alone. */
-                  if (existing_voice->get_id() == voice->get_id())
-                        continue;
-                  existing_voice->kill_excl();
+      bool ok = true;
+      for (const QString& path : _sfPaths) {
+            if (fluid_synth_sfload(in->synth, qPrintable(path), 0) == FLUID_FAILED) {
+                  qDebug("Fluid: loading <%s> failed", qPrintable(path));
+                  ok = false;
                   }
             }
-      voice->voice_start();
+      // fluid_synth_get_sfont(0) is the top of the stack = the last loaded
+      int offset = 0;
+      for (int i = 0; i < fluid_synth_sfcount(in->synth); ++i) {
+            fluid_sfont_t* sf = fluid_synth_get_sfont(in->synth, i);
+            fluid_synth_set_bank_offset(in->synth, fluid_sfont_get_id(sf), offset);
+            int banks = 0;
+            fluid_sfont_iteration_start(sf);
+            while (fluid_preset_t* p = fluid_sfont_iteration_next(sf))
+                  banks = std::max(banks, fluid_preset_get_banknum(p));
+            offset += banks + 1;
+            }
+      return ok;
       }
 
 //---------------------------------------------------------
@@ -624,312 +339,141 @@ void Fluid::start_voice(Voice* voice)
 
 void Fluid::updatePatchList()
       {
-      qDeleteAll(patches);
-      patches.clear();
-
-      int bankOffset = 0;
-      int sfid = 0;
-      for (SFont* sf : qAsConst(sfonts)) {
-            sf->setBankOffset(bankOffset);
+      qDeleteAll(_patches);
+      _patches.clear();
+      if (_synths.empty())
+            return;
+      fluid_synth_t* s = _synths[0]->synth;
+      int offset = 0;
+      for (int i = 0; i < fluid_synth_sfcount(s); ++i) {
+            fluid_sfont_t* sf = fluid_synth_get_sfont(s, i);
             int banks = 0;
-            for (Preset* p : sf->getPresets()) {
+            fluid_sfont_iteration_start(sf);
+            while (fluid_preset_t* p = fluid_sfont_iteration_next(sf)) {
                   MidiPatch* patch = new MidiPatch;
-                  patch->drum = (p->get_banknum() == 128);
+                  patch->drum  = fluid_preset_get_banknum(p) == 128;
                   patch->synti = name();
-                  if (p->get_banknum() > banks)
-                        banks = p->get_banknum();
-                  patch->bank = p->get_banknum() + bankOffset;
-                  patch->prog = p->get_num();
-                  patch->name = p->get_name();
-                  patch->sfid = sfid;
-                  patches.append(patch);
+                  patch->bank  = fluid_preset_get_banknum(p) + offset;
+                  patch->prog  = fluid_preset_get_num(p);
+                  patch->name  = QString::fromUtf8(fluid_preset_get_name(p));
+                  patch->sfid  = i;
+                  banks = std::max(banks, fluid_preset_get_banknum(p));
+                  _patches.append(patch);
                   }
-            sfid++;
-            bankOffset += (banks + 1);
+            offset += banks + 1;
             }
-
-      /* try to set the correct presets */
-      int n = channel.size();
-      for (int i = 0; i < n; i++)
-            program_change(i, channel[i]->getPrognum());
       }
 
 //---------------------------------------------------------
-//   soundFonts
+//   soundFonts / soundFontsInfo
+//    newest first, as MuseScore 3's list shows them
 //---------------------------------------------------------
 
 QStringList Fluid::soundFonts() const
       {
-      QStringList sf;
-      for (SFont* f : sfonts)
-            sf.append(QFileInfo(f->get_name()).fileName());
-      return sf;
+      QStringList sl;
+      for (int i = _sfPaths.size() - 1; i >= 0; --i)
+            sl.append(QFileInfo(_sfPaths[i]).fileName());
+      return sl;
       }
-
-//---------------------------------------------------------
-//   soundFontsInfo
-//---------------------------------------------------------
 
 std::vector<SoundFontInfo> Fluid::soundFontsInfo() const
       {
+      QMutexLocker locker(&_mutex);
       std::vector<SoundFontInfo> sl;
-      sl.reserve(sfonts.size());
-      for (SFont* f : sfonts)
-            sl.emplace_back(QFileInfo(f->get_name()).fileName(), f->fontName());
+      if (_synths.empty())
+            return sl;
+      fluid_synth_t* s = _synths[0]->synth;
+      for (int i = 0; i < fluid_synth_sfcount(s); ++i) {
+            fluid_sfont_t* sf = fluid_synth_get_sfont(s, i);
+            QString file = QFileInfo(QString::fromUtf8(fluid_sfont_get_name(sf))).fileName();
+            sl.emplace_back(file, file);
+            }
       return sl;
       }
 
 //---------------------------------------------------------
-//   loadSoundFont
-//    return false on error
+//   loadSoundFonts
+//    sl: file names, the first one is on top of the list (wins)
 //---------------------------------------------------------
 
 bool Fluid::loadSoundFonts(const QStringList& sl)
       {
-      QStringList ol = soundFonts();
-      if (ol == sl) {
-            qDebug("Fluid:loadSoundFonts: already loaded");
+      if (soundFonts() == sl)
             return true;
-            }
-      QMutexLocker locker(&mutex);
-      for(Voice* v : qAsConst(activeVoices))
-            v->off();
-      for(Channel* c : qAsConst(channel))
-            c->reset();
-      for (SFont* sf : qAsConst(sfonts))
-            sfunload(sf->id());
-      locker.unlock();
+      QFileInfoList files = sfFiles();
+      QStringList paths;
       bool ok = true;
-
-      QFileInfoList l = sfFiles();
-      for (int i = sl.size() - 1; i >= 0; --i) {
-            QString s = sl[i];
-            if (s.isEmpty())
+      for (int i = sl.size() - 1; i >= 0; --i) {         // load the bottom one first
+            if (sl[i].isEmpty())
                   continue;
+            const QString fileName = QFileInfo(sl[i]).fileName();
             QString path;
-            QFileInfo fis(s);
-            QString fileName = fis.fileName();
-            for (const QFileInfo& fi : qAsConst(l)) {
+            for (const QFileInfo& fi : qAsConst(files)) {
                   if (fi.fileName() == fileName) {
                         path = fi.absoluteFilePath();
                         break;
                         }
                   }
             if (path.isEmpty()) {
-                  qDebug("Fluid: sf <%s> not found", qPrintable(s));
+                  qDebug("Fluid: sf <%s> not found", qPrintable(sl[i]));
                   ok = false;
+                  continue;
                   }
-            else {
-                  locker.relock();
-                  if (sfload(path) == -1) {
-                        qDebug("loading sf failed: <%s>", qPrintable(path));
-                        ok = false;
-                        }
-                  locker.unlock();
-                  }
+            paths.append(path);
             }
+      _loadProgress = 0;
+      QMutexLocker locker(&_mutex);
+      _sfPaths = paths;
+      for (Instance* in : _synths)
+            ok = loadAll(in) && ok;
+      updatePatchList();
+      _loadProgress = 100;
       return ok;
       }
 
-//---------------------------------------------------------
-//   addSoundFont
-//    return false on error
-//---------------------------------------------------------
-
-bool Fluid::addSoundFont(const QString& s)
+bool Fluid::addSoundFont(const QString& path)
       {
-      QMutexLocker locker(&mutex);
-      bool rv = (sfload(s) == -1) ? false : true;
-      return rv;
-      }
-
-//---------------------------------------------------------
-//   removeSoundFont
-//    return false on error
-//---------------------------------------------------------
-
-bool Fluid::removeSoundFont(const QString& s)
-      {
-      QMutexLocker locker(&mutex);
-      for(Voice* v : qAsConst(activeVoices))
-            v->off();
-      SFont* sf = get_sfont_by_name(s);
-      if (!sf)
+      QMutexLocker locker(&_mutex);
+      if (path.isEmpty() || !QFileInfo(path).exists())
             return false;
-      
-      sfunload(sf->id());
-      return true;
+      _sfPaths.append(path);
+      bool ok = true;
+      for (Instance* in : _synths)
+            ok = loadAll(in) && ok;
+      if (!ok)
+            _sfPaths.removeLast();
+      updatePatchList();
+      return ok;
       }
 
-//---------------------------------------------------------
-//   sfload
-//---------------------------------------------------------
-
-int Fluid::sfload(const QString& filename)
+bool Fluid::removeSoundFont(const QString& fileName)
       {
-      if (filename.isEmpty())
-            return -1;
-
-      SFont* sf = new SFont(this);
-      try {
-            if (!sf->read(filename)) {
-                  delete sf;
-                  sf = 0;
-                  return -1;
+      QMutexLocker locker(&_mutex);
+      for (int i = 0; i < _sfPaths.size(); ++i) {
+            if (QFileInfo(_sfPaths[i]).fileName() == fileName) {
+                  _sfPaths.removeAt(i);
+                  for (Instance* in : _synths)
+                        loadAll(in);
+                  updatePatchList();
+                  return true;
                   }
             }
-      catch(...) {
-            delete sf;
-            sf = 0;
-            return -1;
-            }
-
-      sf->setId(++sfont_id);
-
-      /* insert the sfont as the first one on the list */
-      sfonts.prepend(sf);
-
-      /* reset the presets for all channels */
-
-      updatePatchList();
-      return sf->id();
+      return false;
       }
 
 //---------------------------------------------------------
-//   sfunload
-//---------------------------------------------------------
-
-bool Fluid::sfunload(int id)
-      {
-      SFont* sf = get_sfont_by_id(id);
-
-      if (!sf) {
-            qDebug("No SoundFont with id = %d", id);
-            return false;
-            }
-
-      sfonts.removeAll(sf);   // remove the SoundFont from the list
-      updatePatchList();
-
-      delete sf;
-      return true;
-      }
-
-//---------------------------------------------------------
-//   get_sfont_by_id
-//---------------------------------------------------------
-
-SFont* Fluid::get_sfont_by_id(int id)
-      {
-      for(SFont* sf : qAsConst(sfonts)) {
-            if (sf->id() == id)
-                  return sf;
-            }
-      return 0;
-      }
-
-//---------------------------------------------------------
-//   get_sfont_by_name
-//---------------------------------------------------------
-
-SFont* Fluid::get_sfont_by_name(const QString& name)
-      {
-      for(SFont* sf : qAsConst(sfonts)) {
-            if (QFileInfo(sf->get_name()).fileName() == name)
-                  return sf;
-            }
-      return 0;
-      }
-
-//---------------------------------------------------------
-//   set_interp_method
-//    Sets the interpolation method to use on channel chan.
-//    If chan is < 0, then set the interpolation method on all channels.
-//---------------------------------------------------------
-
-void Fluid::set_interp_method(int chan, int interp_method)
-      {
-      for(Channel* c : qAsConst(channel)) {
-            if (chan < 0 || c->getNum() == chan)
-                  c->setInterpMethod(interp_method);
-            }
-      }
-
-//---------------------------------------------------------
-//   set_gen
-//---------------------------------------------------------
-
-void Fluid::set_gen(int chan, int param, float value)
-      {
-      channel[chan]->setGen(param, value, 0);
-      for(Voice* v : qAsConst(activeVoices)) {
-            if (v->chan == chan)
-                  v->set_param(param, value, 0);
-            }
-      }
-
-/** Change the value of a generator. This function allows to control
-    all synthesis parameters in real-time. The changes are additive,
-    i.e. they add up to the existing parameter value. This function is
-    similar to sending an NRPN message to the synthesizer. The
-    function accepts a float as the value of the parameter. The
-    parameter numbers and ranges are described in the SoundFont 2.01
-    specification, paragraph 8.1.3, page 48. See also
-    'fluid_gen_type'.
-
-    Using the fluid_synth_set_gen2() function, it is possible to set
-    the absolute value of a generator. This is an extension to the
-    SoundFont standard. If 'absolute' is non-zero, the value of the
-    generator specified in the SoundFont is completely ignored and the
-    generator is fixed to the value passed as argument. To undo this
-    behavior, you must call fluid_synth_set_gen2 again, with
-    'absolute' set to 0 (and possibly 'value' set to zero).
-
-    If 'normalized' is non-zero, the value is supposed to be
-    normalized between 0 and 1. Before applying the value, it will be
-    scaled and shifted to the range defined in the SoundFont
-    specifications.
-
- */
-void Fluid::set_gen2(int chan, int param, float value, int absolute, int normalized)
-      {
-      float v = (normalized)? fluid_gen_scale(param, value) : value;
-      channel[chan]->setGen(param, v, absolute);
-
-      for(Voice* vo : qAsConst(activeVoices)) {
-            if (vo->chan == chan)
-                  vo->set_param(param, v, absolute);
-            }
-      }
-
-float Fluid::get_gen(int chan, int param)
-      {
-      if ((param < 0) || (param >= GEN_LAST)) {
-            qDebug("Parameter number out of range");
-            return 0.0;
-            }
-      return channel[chan]->getGen(param);
-      }
-
-//---------------------------------------------------------
-//   state
+//   state / setState
 //---------------------------------------------------------
 
 SynthesizerGroup Fluid::state() const
       {
       SynthesizerGroup g;
       g.setName(name());
-
-      QStringList sfl = soundFonts();
-      for (const QString &sf : qAsConst(sfl))
+      for (const QString& sf : soundFonts())
             g.push_back(IdValue(0, sf));
-
       return g;
       }
-
-//---------------------------------------------------------
-//   setState
-//---------------------------------------------------------
 
 bool Fluid::setState(const SynthesizerGroup& sp)
       {
@@ -937,14 +481,13 @@ bool Fluid::setState(const SynthesizerGroup& sp)
       for (const IdValue& v : sp) {
             if (v.id == 0)
                   sfl.append(v.data);
-            else
-                  qDebug("Fluid::setState: unknown id %d", v.id);
             }
       return loadSoundFonts(sfl);
       }
 
 //---------------------------------------------------------
-//   collectFiles
+//   sfFiles
+//    the SoundFonts MuseScore can see: its own, the user's SoundFonts folders, extensions
 //---------------------------------------------------------
 
 static void collectFiles(QFileInfoList* l, const QString& path)
@@ -953,7 +496,6 @@ static void collectFiles(QFileInfoList* l, const QString& path)
       for (const QFileInfo& s : dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
             if (path == s.absoluteFilePath())
                   return;
-
             if (s.isDir() && !s.isHidden())
                   collectFiles(l, s.absoluteFilePath());
             else {
@@ -964,22 +506,13 @@ static void collectFiles(QFileInfoList* l, const QString& path)
             }
       }
 
-//---------------------------------------------------------
-//   sfFiles
-//---------------------------------------------------------
-
 QFileInfoList Fluid::sfFiles()
       {
       QFileInfoList l;
-
       QStringList pl = preferences.getString(PREF_APP_PATHS_MYSOUNDFONTS).split(";");
       pl.prepend(QFileInfo(QString("%1%2").arg(mscoreGlobalShare, "sound")).absoluteFilePath());
-
-      // append extensions directory
-      QStringList extensionsDir = Ms::Extension::getDirectoriesByType(Ms::Extension::soundfontsDir);
-      pl.append(extensionsDir);
-
-      foreach (const QString& s, pl) {
+      pl.append(Ms::Extension::getDirectoriesByType(Ms::Extension::soundfontsDir));
+      for (const QString& s : qAsConst(pl)) {
             QString ss(s);
             if (!s.isEmpty() && s[0] == '~')
                   ss = QDir::homePath() + s.mid(1);
@@ -987,4 +520,5 @@ QFileInfoList Fluid::sfFiles()
             }
       return l;
       }
-}
+
+} // namespace FluidS

@@ -90,7 +90,7 @@ static SynthesizerState defaultState = {
             },
             },
       { "Fluid", {
-            { 0, "MuseScore_General.sf3" },
+            { 0, "MS Basic.sf3" },     // MuseScore 4's SoundFont
             },
             },
 //      { "Zerberus", {

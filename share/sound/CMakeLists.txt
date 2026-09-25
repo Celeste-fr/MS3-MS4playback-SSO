@@ -40,3 +40,9 @@ else ()
       )
 endif ()
 
+# MuseScore 4's SoundFont (4.7.5), the default here so that playback sounds as in MuseScore 4
+install(FILES
+      "MS Basic.sf3"
+      "MS Basic_License.md"
+      DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}sound
+      )

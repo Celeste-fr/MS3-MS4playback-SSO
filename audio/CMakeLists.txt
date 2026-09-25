@@ -41,6 +41,7 @@ target_include_directories(${MODULE}
 target_link_libraries (${MODULE}
       ${QT_LIBRARIES}
       audiofile
+      fluidsynth  # thirdparty/fluidsynth: FluidSynth 2.3.3, as in MuseScore 4
       libmscore   # for libmscore/*.h and the freetype include dirs it carries
       preferences
       icons       # for the fluid and zerberus settings GUIs

@@ -4,20 +4,8 @@ set (FLUID_DIR ${CMAKE_CURRENT_LIST_DIR}/fluid)
 set (FLUID_SRC
     ${FLUID_DIR}/fluid.cpp
     ${FLUID_DIR}/fluid.h
-    ${FLUID_DIR}/chan.cpp
-    ${FLUID_DIR}/conv.cpp
-    ${FLUID_DIR}/conv.h
-    ${FLUID_DIR}/dsp.cpp
     ${FLUID_DIR}/fluidgui.cpp
     ${FLUID_DIR}/fluidgui.h
-    ${FLUID_DIR}/gen.cpp
-    ${FLUID_DIR}/gen.h
-    ${FLUID_DIR}/mod.cpp
-    ${FLUID_DIR}/sfont.cpp
-    ${FLUID_DIR}/sfont.h
-    ${FLUID_DIR}/sfont3.cpp
-    ${FLUID_DIR}/voice.cpp
-    ${FLUID_DIR}/voice.h
     )
 
 set (FLUID_UI

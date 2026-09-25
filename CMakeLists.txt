@@ -807,6 +807,7 @@ configure_file (
 ##
 ## Add subdirs
 ##
+add_subdirectory(thirdparty/fluidsynth)
 add_subdirectory(audio)
 add_subdirectory(audiofile)
 add_subdirectory(awl)

@@ -178,7 +178,7 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_APP_BACKUP_GENERATE_BACKUP,                      new BoolPreference(true)},
             {PREF_APP_BACKUP_SUBFOLDER,                            new StringPreference(".mscbackup")},
             {PREF_APP_DEBUG_LOG_ENABLED,                           new BoolPreference(false)},
-            {PREF_EXPORT_AUDIO_NORMALIZE,                          new BoolPreference(true, false)},
+            {PREF_EXPORT_AUDIO_NORMALIZE,                          new BoolPreference(false, false)}, // as MuseScore 4: exports play at playback level
             {PREF_EXPORT_AUDIO_SAMPLERATE,                         new IntPreference(44100, false)},
             {PREF_EXPORT_AUDIO_PCMRATE,                            new IntPreference(16)},
             {PREF_EXPORT_MP3_BITRATE,                              new IntPreference(128, false)},
