@@ -90,6 +90,89 @@ def family_by_musicxml(fam4):
     return {mx: c.most_common(1)[0][0] for mx, c in votes.items()}
 
 
+SOUNDMAP = os.path.join(MS4, 'framework', 'audio', 'engine', 'internal', 'synthesizers', 'fluidsynth', 'soundmapping.h')
+
+
+def ms4_setup():
+    """template id -> (SoundId, category, set of subcategories), from MS4's setup data resolvers"""
+    out = {}
+    mp = os.path.join(MS4, 'engraving', 'playback', 'mapping')
+    for f in sorted(os.listdir(mp)):
+        if f.endswith('setupdataresolver.cpp'):
+            src = open(os.path.join(mp, f)).read()
+            for iid, sid, cat, subs in re.findall(
+                    r'\{\s*"([\w.-]+)",\s*\{\s*SoundId::(\w+),\s*SoundCategory::(\w+)(?:,\s*\{([^}]*)\})?', src):
+                out.setdefault(iid, (sid, cat, frozenset(re.findall(r'SoundSubCategory::(\w+)', subs or ''))))
+    return out
+
+
+def standard_mappings():
+    """category -> {(SoundId, frozenset(subcategories)): (bank, program)} (mappingByCategory; first program)"""
+    src = open(SOUNDMAP).read()
+    out = {}
+    for cat, body in re.findall(r'static const std::map<SoundMappingKey, midi::Programs> (\w+)_MAPPINGS = \{(.*?)\n    \};', src, re.S):
+        table = {}
+        for sid, subs, progs in re.findall(
+                r'\{\s*\{\s*mpe::SoundId::(\w+),\s*\{([^}]*)\}\s*\},\s*\{([^}]*)\}\s*\}', body):
+            p = re.findall(r'midi::Program\((\d+),\s*(\d+)\)', progs)
+            if p:
+                table.setdefault((sid, frozenset(re.findall(r'SoundSubCategory::(\w+)', subs))), (int(p[0][0]), int(p[0][1])))
+        out[cat] = table
+    return out
+
+
+def articulation_mappings():
+    src = open(SOUNDMAP).read()
+    return {name: [(t, int(b), int(p)) for t, b, p in
+                   re.findall(r'ArticulationType::(\w+), midi::Program\((\d+), (\d+)\)', body)]
+            for name, body in re.findall(r'static const ArticulationMapping (\w+) = \{(.*?)\};', src, re.S)}
+
+
+CAT_KEY = {'Keyboards': 'KEYBOARDS', 'Strings': 'STRINGS', 'Winds': 'WINDS', 'Percussions': 'PERCUSSION', 'Voices': 'VOICE'}
+
+
+def articulation_table(maps, sid, cat, subs):
+    """soundmapping.h articulationSounds()"""
+    if sid == 'Guitar':
+        if 'Acoustic' in subs: return maps.get('ACOUSTIC_GUITAR', [])
+        if 'Electric' in subs: return maps.get('ELECTRIC_GUITAR', [])
+    if sid == 'BassGuitar':
+        if 'Acoustic' in subs: return maps.get('ACOUSTIC_BASS_GUITAR', [])
+        if 'Electric' in subs: return maps.get('ELECTRIC_BASS_GUITAR', [])
+    for s, name in (('Violin', 'VIOLIN'), ('Viola', 'VIOLA'), ('Violoncello', 'VIOLONCELLO'), ('Contrabass', 'CONTRABASS')):
+        if sid == s:
+            return maps.get(name + ('_SECTION' if 'Section' in subs else ''), [])
+    if cat == 'Strings':
+        return maps.get('BASIC_VIOL_SECTION' if sid in ('Viol', 'PardessusViol', 'ViolaDaGamba', 'Violone') else 'BASIC_STRING_SECTION', [])
+    if cat == 'Winds' and sid in ('Bugle', 'Euphonium', 'Horn', 'Trumpet', 'Trombone', 'Tuba'):
+        return maps.get('BRASS', [])
+    return []
+
+
+def sounds(order):
+    """template id -> (standard (bank, program), [(Art, bank, program)] in the mapping's (std::map) order)"""
+    setup, std, arts = ms4_setup(), standard_mappings(), articulation_mappings()
+    out = {}
+    for iid, (sid, cat, subs) in setup.items():
+        key = (sid, frozenset(s for s in subs if s not in ('Primary', 'Secondary')))
+        standard = std.get(CAT_KEY.get(cat, ''), {}).get(key, (0, 0))      # findPrograms: fallback Program(0, 0)
+        table = sorted(((a, b, p) for a, b, p in articulation_table(arts, sid, cat, subs) if a in order),
+                       key=lambda x: order.index(x[0]))
+        out[iid] = (standard, table)
+    return out
+
+
+def template_by_musicxml():
+    """MusicXML sound id -> the template id most instruments.xml templates with that sound id have"""
+    root = ET.parse(os.path.join(ROOT, 'share', 'instruments', 'instruments.xml')).getroot()
+    votes = defaultdict(Counter)
+    for ins in root.iter('Instrument'):
+        mx = ins.findtext('musicXMLid')
+        if mx:
+            votes[mx][ins.get('id')] += 1
+    return {mx: c.most_common(1)[0][0] for mx, c in votes.items()}
+
+
 def main():
     order = enum_order()
     prof, pitch = profiles(order)
@@ -117,6 +200,23 @@ def main():
     L += ['      };', '', '// MusicXML sound id (Instrument::instrumentId()) -> family',
           'struct FamilyEntry { const char* id; Family family; };', 'static const FamilyEntry FAMILY[] = {']
     L += ['      { "%s", Family::%s },' % (k, fam[k]) for k in sorted(fam)]
+    snd = sounds(order)
+    L += ['      };', '',
+          '// MS4 instrument template id -> the preset its FluidSynth back end plays (soundmapping.h findPrograms,',
+          '// Program(0, 0) where MS4 lists none) and the presets of its playing techniques (articulationSounds)',
+          'struct ArtProgram { Art art; int bank; int program; };',
+          'struct SoundEntry { const char* id; int bank; int program; int nArts; ArtProgram arts[8]; };',
+          'static const SoundEntry SOUNDS[] = {']
+    for iid in sorted(snd):
+        (b, p), table = snd[iid]
+        assert len(table) <= 8, iid
+        arts = ', '.join('{ Art::%s, %d, %d }' % t for t in table)
+        L.append('      { "%s", %d, %d, %d, { %s } },' % (iid, b, p, len(table), arts))
+    tm = template_by_musicxml()
+    L += ['      };', '', '// MusicXML sound id -> template id (for instruments without one, e.g. from old files)',
+          'struct TemplateEntry { const char* musicXmlId; const char* templateId; };',
+          'static const TemplateEntry TEMPLATE_OF[] = {']
+    L += ['      { "%s", "%s" },' % (k, tm[k]) for k in sorted(tm)]
     L += ['      };', '', '} // namespace Ms4', '} // namespace Ms', '#endif', '']
     out = os.path.join(ROOT, 'libmscore', 'ms4tables.h')
     open(out, 'w').write('\n'.join(L))

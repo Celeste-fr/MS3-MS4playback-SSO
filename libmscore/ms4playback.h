@@ -85,6 +85,28 @@ class Dynamics {
       };
 
 //---------------------------------------------------------
+//   Sounds
+//    MS4 picks an instrument's preset itself (soundmapping.h), ignoring the score's program,
+//    and switches preset per note for some playing techniques. Here an instrument's MuseScore 3
+//    channels serve as slots: the first plays MS4's standard preset, the others the technique
+//    presets (a channel whose name fits first: "pizzicato" for Pizzicato …, then any free one).
+//---------------------------------------------------------
+
+struct Slot {
+      int channel;                        // index into Instrument::channel()
+      int bank;
+      int program;
+      };
+
+struct Sounds {
+      std::vector<Slot> channelSlots;            // one per channel of the instrument, slots[0] = standard
+      std::vector<std::pair<Art, int>> artSlot;     // technique -> index into slots
+      int slotFor(const std::vector<Art>& noteArts) const;    // FluidSequencer's channel choice
+      };
+
+Sounds sounds(const Instrument* instrument);
+
+//---------------------------------------------------------
 //   Context
 //    what the renderer keeps per part while rendering a score
 //---------------------------------------------------------
@@ -93,6 +115,7 @@ struct PartContext {
       Family family { Family::Keyboards };
       bool snd { false };
       Dynamics dynamics;
+      std::map<const Instrument*, Sounds> sounds;
       };
 
 std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynamics);

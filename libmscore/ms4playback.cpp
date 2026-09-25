@@ -57,6 +57,123 @@ Family family(const Instrument* instrument)
       }
 
 //---------------------------------------------------------
+//   sounds
+//---------------------------------------------------------
+
+static const SoundEntry* soundEntry(const Instrument* instrument)
+      {
+      static QHash<QString, const SoundEntry*> byId;
+      static QHash<QString, QString> templateOf;
+      if (byId.isEmpty()) {
+            for (const SoundEntry& e : SOUNDS)
+                  byId.insert(QString::fromLatin1(e.id), &e);
+            for (const TemplateEntry& e : TEMPLATE_OF)
+                  templateOf.insert(QString::fromLatin1(e.musicXmlId), QString::fromLatin1(e.templateId));
+            }
+      QString id = instrument->getId();
+      if (id.isEmpty() || !byId.contains(id))
+            id = templateOf.value(instrument->instrumentId());
+      return byId.value(id, nullptr);
+      }
+
+// the MuseScore 3 channel name a technique's sound would naturally live on
+static const char* channelNameOf(Art a)
+      {
+      switch (a) {
+            case Art::Pizzicato:
+            case Art::SnapPizzicato: return "pizzicato";
+            case Art::Mute:
+            case Art::PalmMute:      return "mute";
+            case Art::Tremolo8th:
+            case Art::Tremolo16th:
+            case Art::Tremolo32nd:
+            case Art::Tremolo64th:   return "tremolo";
+            case Art::Harmonic:      return "harmonics";
+            case Art::JazzTone:      return "jazz";
+            case Art::Distortion:    return "distortion";
+            case Art::Overdrive:     return "overdriven";
+            default:                 return "";
+            }
+      }
+
+Sounds sounds(const Instrument* instrument)
+      {
+      Sounds s;
+      const SoundEntry* e = soundEntry(instrument);
+      const int n = instrument->channel().size();
+      const int stdBank = e ? e->bank : 0;
+      const int stdProgram = e ? e->program : 0;             // MS4: Program(0, 0) when unmapped
+      for (int i = 0; i < n; ++i)
+            s.channelSlots.push_back({ i, stdBank, stdProgram });
+      if (!e || n < 2)
+            return s;
+
+      // the distinct technique presets, in the mapping's order
+      std::vector<std::pair<int, int>> presets;
+      for (int k = 0; k < e->nArts; ++k) {
+            std::pair<int, int> p(e->arts[k].bank, e->arts[k].program);
+            if (p != std::make_pair(stdBank, stdProgram) && std::find(presets.begin(), presets.end(), p) == presets.end())
+                  presets.push_back(p);
+            }
+      std::vector<int> slotOfPreset(presets.size(), -1);
+      std::vector<bool> used(n, false);
+      used[0] = true;
+      // a channel whose name fits one of the preset's techniques first …
+      for (size_t pi = 0; pi < presets.size(); ++pi) {
+            for (int k = 0; k < e->nArts && slotOfPreset[pi] < 0; ++k) {
+                  if (std::make_pair(e->arts[k].bank, e->arts[k].program) != presets[pi])
+                        continue;
+                  const QString want = QString::fromLatin1(channelNameOf(e->arts[k].art));
+                  for (int i = 1; i < n && !want.isEmpty(); ++i) {
+                        if (!used[i] && instrument->channel(i)->name() == want) {
+                              used[i] = true;
+                              slotOfPreset[pi] = i;
+                              break;
+                              }
+                        }
+                  }
+            }
+      // … then any channel still free
+      for (size_t pi = 0; pi < presets.size(); ++pi) {
+            for (int i = 1; i < n && slotOfPreset[pi] < 0; ++i) {
+                  if (!used[i]) {
+                        used[i] = true;
+                        slotOfPreset[pi] = i;
+                        }
+                  }
+            if (slotOfPreset[pi] >= 0) {
+                  s.channelSlots[slotOfPreset[pi]].bank = presets[pi].first;
+                  s.channelSlots[slotOfPreset[pi]].program = presets[pi].second;
+                  }
+            }
+      for (int k = 0; k < e->nArts; ++k) {
+            std::pair<int, int> p(e->arts[k].bank, e->arts[k].program);
+            if (p == std::make_pair(stdBank, stdProgram)) {
+                  s.artSlot.push_back({ e->arts[k].art, 0 });
+                  continue;
+                  }
+            auto it = std::find(presets.begin(), presets.end(), p);
+            const int slot = slotOfPreset[it - presets.begin()];
+            if (slot >= 0)
+                  s.artSlot.push_back({ e->arts[k].art, slot });
+            }
+      return s;
+      }
+
+// ChannelMap::resolveChannelForEvent: Standard (or nothing) -> the standard preset; otherwise the
+// first of the note's articulations (enum order) that has a preset of its own
+int Sounds::slotFor(const std::vector<Art>& noteArts) const
+      {
+      if (noteArts.empty() || std::find(noteArts.begin(), noteArts.end(), Art::Standard) != noteArts.end())
+            return 0;
+      for (Art a : noteArts)
+            for (const auto& as : artSlot)
+                  if (as.first == a)
+                        return as.second;
+      return 0;
+      }
+
+//---------------------------------------------------------
 //   curve helpers
 //    curves are 11 points at 0, 1000 … 10000
 //---------------------------------------------------------

@@ -938,16 +938,64 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const int level = ctx.dynamics.levelAt(tick.ticks());
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, ctx.dynamics);
 
+                  auto sit = ctx.sounds.find(instr);
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts) {
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), level, ctx.snd);
+                        // the preset MS4 plays this note with -> the channel slot programmed with it
+                        int noteChannel = channel;
+                        if (sit != ctx.sounds.end()) {
+                              const Ms4::Slot& slot = sit->second.channelSlots[sit->second.slotFor(r.arts)];
+                              noteChannel = instr->channel(slot.channel)->channel();
+                              events->registerChannel(noteChannel);
+                              }
                         SndConfig config;
                         config.ms4 = true;
                         config.method = DynamicsRenderMethod::MS4;
                         config.ms4Velocity = r.velocity;
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
-                        collectNote(events, channel, note, 1.0, tickOffset, st1, config);
+                        collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
                         };
+
+                  // tremolo (TremoloRenderer): the chord (both chords of a two-note tremolo)
+                  // repeated in steps of DIVISION / 2^(beams + lines), each step a note of its own
+                  Tremolo* trem = chord->tremolo();
+                  if (trem && trem->tremoloType() != TremoloType::BUZZ_ROLL && (!trem->twoNotes() || trem->chord1())) {
+                        if (trem->twoNotes() && trem->chord2() == chord)
+                              continue;                               // rendered with chord1
+                        Chord* c1 = trem->twoNotes() ? trem->chord1() : chord;
+                        Chord* c2 = trem->twoNotes() ? trem->chord2() : chord;
+                        if (c1 && c2) {
+                              const int startTick = c1->tick().ticks();
+                              const int overall = trem->twoNotes() ? c1->actualTicks().ticks() + c2->actualTicks().ticks()
+                                                                   : chord->actualTicks().ticks();
+                              int step = qMax(1, DIVISION / (1 << (chord->beams() + trem->lines())));
+                              const int steps = int(std::round(overall / float(step)));
+                              if (steps > 0) {
+                                    step = overall / steps;
+                                    for (int i = 0; i < steps; ++i) {
+                                          const Chord* c = (i % 2) ? c2 : c1;
+                                          const int t = startTick + i * step;
+                                          const std::vector<Ms4::ArtRef> arts = Ms4::chordArticulations(c, ctx.dynamics);
+                                          for (const Note* note : c->notes()) {
+                                                if (!note->play() || note->hidden())
+                                                      continue;
+                                                Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts),
+                                                                              ctx.dynamics.levelAt(t), ctx.snd);
+                                                int noteChannel = channel;
+                                                if (sit != ctx.sounds.end())
+                                                      noteChannel = instr->channel(sit->second.channelSlots[sit->second.slotFor(r.arts)].channel)->channel();
+                                                events->registerChannel(noteChannel);
+                                                const int on = t + tickOffset + (step * r.ts) / Ms4::HUNDRED;
+                                                const int off = on + (step * r.dur) / Ms4::HUNDRED - 1;
+                                                playNote(events, note, noteChannel, qBound(0, note->ppitch(), 127),
+                                                         qBound(1, r.velocity, 127), on, qMax(on, off), st1->idx());
+                                                }
+                                          }
+                                    continue;
+                                    }
+                              }
+                        }
 
                   if (!graceNotesMerged(chord))
                         for (Chord*& c : chord->graceNotesBefore())
@@ -978,6 +1026,22 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
       for (const auto& pc : ms4Parts) {
             const Part* part = pc.first;
             const Ms4::PartContext& ctx = pc.second;
+
+            // the presets MS4 plays: each channel slot of each of the part's instruments
+            for (const auto& is : ctx.sounds) {
+                  const Instrument* instr = is.first;
+                  for (const Ms4::Slot& slot : is.second.channelSlots) {
+                        const int ch = score->masterScore()->playbackChannel(instr->channel(slot.channel))->channel();
+                        for (const NPlayEvent& ev : { NPlayEvent(ME_CONTROLLER, ch, CTRL_HBANK, (slot.bank >> 7) & 0x7f),
+                                                      NPlayEvent(ME_CONTROLLER, ch, CTRL_LBANK, slot.bank & 0x7f),
+                                                      NPlayEvent(ME_CONTROLLER, ch, CTRL_PROGRAM, slot.program) }) {
+                              NPlayEvent e(ev);
+                              e.setOriginatingStaff(part->staff(0)->idx());
+                              events->insert(std::make_pair(tick1 + tickOffset, e));
+                              }
+                        }
+                  }
+
             if (!ctx.snd)
                   continue;
             std::vector<int> channels;
@@ -2615,6 +2679,8 @@ void MidiRenderer::updateState()
                   ctx.family = Ms4::family(instr);
                   ctx.snd = instr->singleNoteDynamics();
                   ctx.dynamics.build(score, part);
+                  for (const auto& ip : *part->instruments())
+                        ctx.sounds[ip.second] = Ms4::sounds(ip.second);
                   }
 
             updateChunksPartition();
