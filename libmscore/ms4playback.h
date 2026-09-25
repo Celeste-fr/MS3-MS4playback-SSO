@@ -122,6 +122,25 @@ struct PartContext {
       std::map<const Instrument*, Sounds> sounds;
       };
 
+//---------------------------------------------------------
+//   OrnamentRule
+//    OrnamentsRenderer's DISCLOSURE_RULES: sub-notes as steps to the diatonic neighbours
+//    (+1 above, -1 below, 0 the note), a prefix, a body (repeated while it fits, for trills)
+//    and a suffix; the sub-note length depends on the tempo
+//---------------------------------------------------------
+
+struct OrnamentRule {
+      std::vector<int> prefix;
+      bool repeat;
+      std::vector<int> body;
+      std::vector<int> suffix;
+      float lowTempoTicks, mediumTempoTicks, highTempoTicks;
+      float subNoteTicks(double bps) const;
+      };
+
+const OrnamentRule* ornamentRule(Art a);
+int neighbourSemitones(const Note* note, int dir);      // chromaticPitchSteps for an automatic interval
+
 std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynamics);
 std::vector<ArtRef> noteArticulations(const Note* note, const std::vector<ArtRef>& chordArts);
 

@@ -28,6 +28,9 @@
 #include "staff.h"
 #include "sym.h"
 #include "tremolo.h"
+#include "trill.h"
+#include "key.h"
+#include "pitchspelling.h"
 
 namespace Ms {
 namespace Ms4 {
@@ -205,6 +208,93 @@ int Sounds::slotFor(const std::vector<Art>& noteArts) const
                   if (as.first == a)
                         return as.second;
       return 0;
+      }
+
+//---------------------------------------------------------
+//   ornaments
+//---------------------------------------------------------
+
+static const float QUAVER = 240, SEMI = 120, DEMI = 60;
+
+const OrnamentRule* ornamentRule(Art a)
+      {
+      static const std::map<Art, OrnamentRule> rules {
+            { Art::Trill,                  { {}, true, { 0, 1 }, {}, QUAVER / 10.f, DEMI, SEMI } },
+            { Art::TrillBaroque,           { {}, true, { 1, 0 }, { -1, 0 }, QUAVER / 10.f, DEMI, SEMI } },
+            { Art::LinePrall,              { { 2, 2, 2 }, true, { 1, 0 }, { 1, 0 }, DEMI, DEMI, DEMI } },
+            { Art::UpPrall,                { { -1, 0 }, true, { 1, 0 }, { 1, 0 }, DEMI, DEMI, DEMI } },
+            { Art::UpMordent,              { { -1, 0 }, true, { 1, 0 }, { -1, 0 }, SEMI, SEMI, SEMI } },
+            { Art::UpperMordent,           { { 0, 1 }, false, { 0 }, {}, DEMI / 2.f, DEMI, SEMI } },
+            { Art::LowerMordent,           { { 0, -1 }, false, { 0 }, {}, DEMI / 2.f, DEMI, SEMI } },
+            { Art::UpperMordentBaroque,    { { 1, 0, 1 }, false, { 0 }, {}, DEMI / 2.f, DEMI, SEMI } },
+            { Art::MordentWithUpperPrefix, { { 1, 1, 1, 0 }, true, { 1, 0 }, {}, SEMI, SEMI, SEMI } },
+            { Art::DownMordent,            { { 1, 1, 1, 0 }, true, { 1, 0 }, { -1, 0 }, SEMI, SEMI, SEMI } },
+            { Art::PrallUp,                { { 1, 0 }, true, { 1, 0 }, { -1, 0 }, SEMI, SEMI, SEMI } },
+            { Art::PrallDown,              { { 1, 0 }, true, { 1, 0 }, { -1, 0, 0, 0 }, SEMI, SEMI, SEMI } },
+            { Art::Turn,                   { { 1, 0, -1 }, false, { 0 }, {}, DEMI / 2.f, DEMI, SEMI } },
+            { Art::InvertedTurn,           { { -1, 0, 1 }, false, { 0 }, {}, DEMI / 2.f, DEMI, SEMI } },
+            { Art::Tremblement,            { { 1, 0 }, false, { 1, 0 }, {}, SEMI, SEMI, SEMI } },
+            { Art::PrallMordent,           { {}, false, { 1, 0, -1, 0 }, {}, SEMI, SEMI, SEMI } },
+            };
+      auto it = rules.find(a);
+      return it == rules.end() ? nullptr : &it->second;
+      }
+
+float OrnamentRule::subNoteTicks(double bps) const
+      {
+      static const double PRESTISSIMO_BPS = 3.33;       // RealRound(200 / 60, 2)
+      static const double MODERATO_BPS = 1.8;           // RealRound(108 / 60, 2)
+      if (bps >= PRESTISSIMO_BPS)
+            return highTempoTicks;
+      if (bps >= MODERATO_BPS)
+            return mediumTempoTicks;
+      return lowTempoTicks;
+      }
+
+// semitones from the note to its diatonic neighbour (dir +1 above, -1 below): the neighbour takes
+// an accidental written earlier in the bar on its line, else the key's (chromaticPitchSteps)
+int neighbourSemitones(const Note* note, int dir)
+      {
+      static const int NATURAL_PC[7] = { 0, 2, 4, 5, 7, 9, 11 };    // C D E F G A B
+      const int tpc = note->tpc();
+      const int L = tpc2step(tpc);
+      const int a = int(tpc2alter(tpc));
+      const int L2 = (L + dir + 7) % 7;
+      const int line2 = note->line() - dir;
+
+      int a2;
+      bool found = false;
+      const Chord* chord = note->chord();
+      const Measure* m = chord->measure();
+      const int staffIdx = chord->staffIdx();
+      int barAlter = 0;
+      for (Segment* seg = m->first(SegmentType::ChordRest); seg && seg->tick() < chord->tick(); seg = seg->next(SegmentType::ChordRest)) {
+            for (int tr = staffIdx * VOICES; tr < (staffIdx + 1) * VOICES; ++tr) {
+                  Element* e = seg->element(tr);
+                  if (!e || !e->isChord())
+                        continue;
+                  for (Note* n : toChord(e)->notes()) {
+                        if (n->accidental() && n->line() == line2) {
+                              barAlter = int(tpc2alter(n->tpc()));
+                              found = true;
+                              }
+                        }
+                  }
+            }
+      if (found)
+            a2 = barAlter;
+      else {
+            const int key = int(note->staff()->key(chord->tick()));
+            static const int SHARPS[7] = { 3, 0, 4, 1, 5, 2, 6 };     // F C G D A E B
+            static const int FLATS[7] = { 6, 2, 5, 1, 4, 0, 3 };      // B E A D G C F
+            a2 = 0;
+            for (int k = 0; k < key && k < 7; ++k)
+                  if (SHARPS[k] == L2) a2 = 1;
+            for (int k = 0; k < -key && k < 7; ++k)
+                  if (FLATS[k] == L2) a2 = -1;
+            }
+      const int d = dir > 0 ? (NATURAL_PC[L2] - NATURAL_PC[L] + 12) % 12 : (NATURAL_PC[L] - NATURAL_PC[L2] + 12) % 12;
+      return std::abs(d + dir * (a2 - a));
       }
 
 //---------------------------------------------------------
@@ -586,9 +676,37 @@ void Dynamics::build(Score* score, Part* part)
 //---------------------------------------------------------
 
 // SymbolsMetaParser: the symbols MS3 can show
-static void symbolTypes(SymId id, std::vector<ArtRef>& out)
+static bool ornamentType(const QString& s, MScore::OrnamentStyle style, Art& art)
       {
-      QString s = Sym::id2name(id);
+      const bool baroque = style == MScore::OrnamentStyle::BAROQUE;
+      if (s == "ornamentUpPrall") art = Art::UpPrall;
+      else if (s == "ornamentPrallDown") art = Art::PrallDown;
+      else if (s == "ornamentPrallUp") art = Art::PrallUp;
+      else if (s == "ornamentLinePrall") art = Art::LinePrall;
+      else if (s == "ornamentPrallMordent") art = Art::PrallMordent;
+      else if (s == "ornamentUpMordent") art = Art::UpMordent;
+      else if (s == "ornamentMordent" || s == "ornamentPinceCouperin") art = Art::LowerMordent;
+      else if (s == "ornamentDownMordent") art = Art::DownMordent;
+      else if (s == "ornamentTurn" || s == "ornamentTurnUp" || s == "ornamentHaydn" || s == "brassJazzTurn") art = Art::Turn;
+      else if (s == "ornamentTurnInverted" || s == "ornamentTurnUpS" || s == "ornamentTurnSlash") art = Art::InvertedTurn;
+      else if (s == "ornamentTrill" || s == "ornamentShake3" || s == "ornamentShakeMuffat1") art = baroque ? Art::TrillBaroque : Art::Trill;
+      else if (s == "ornamentShortTrill") art = baroque ? Art::UpperMordentBaroque : Art::UpperMordent;
+      else if (s == "ornamentTremblement" || s == "ornamentTremblementCouperin") art = Art::Tremblement;
+      else if (s == "ornamentPrecompMordentUpperPrefix") art = Art::MordentWithUpperPrefix;
+      else return false;
+      return true;
+      }
+
+static void symbolTypes(const Articulation* a, std::vector<ArtRef>& out)
+      {
+      QString s = Sym::id2name(a->symId());
+      {
+            Art orn;
+            if (ornamentType(s, a->ornamentStyle(), orn)) {
+                  out.push_back({ orn, true });
+                  return;
+                  }
+      }
       if (s.endsWith("Above"))
             s.chop(5);
       else if (s.endsWith("Below"))
@@ -665,6 +783,14 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
                   case ElementType::LET_RING:  arts.push_back({ Art::Pedal, false }); break;
                   case ElementType::PALM_MUTE: arts.push_back({ Art::PalmMute, false }); break;
                   case ElementType::VIBRATO:   arts.push_back({ Art::Vibrato, false }); break;
+                  case ElementType::TRILL:
+                        switch (toTrill(sp)->trillType()) {
+                              case Trill::Type::TRILL_LINE:      arts.push_back({ Art::Trill, false }); break;
+                              case Trill::Type::UPPRALL_LINE:    arts.push_back({ Art::UpPrall, false }); break;
+                              case Trill::Type::DOWNPRALL_LINE:  arts.push_back({ Art::PrallDown, false }); break;
+                              case Trill::Type::PRALLPRALL_LINE: arts.push_back({ Art::LinePrall, false }); break;
+                              }
+                        break;
                   default: break;
                   }
             }
@@ -725,7 +851,7 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
             }
       // symbols (SymbolsMetaParser)
       for (Articulation* a : chord->articulations())
-            symbolTypes(a->symId(), arts);
+            symbolTypes(a, arts);
       // playing technique in force (NoteArticulationsParser::parsePlayingTechnique)
       // (only a switch away from the instrument's first channel: a trumpet's default channel is
       // called "open", but MS4 sees a technique only where a text asks for one)

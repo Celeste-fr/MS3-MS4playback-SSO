@@ -1014,48 +1014,13 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         };
 
-                  // tremolo (TremoloRenderer): the chord (both chords of a two-note tremolo)
-                  // repeated in steps of DIVISION / 2^(beams + lines), each step a note of its own
+                  // the second chord of a two-note tremolo is played with the first
                   Tremolo* trem = chord->tremolo();
-                  if (trem && trem->tremoloType() != TremoloType::BUZZ_ROLL && (!trem->twoNotes() || trem->chord1())) {
-                        if (trem->twoNotes() && trem->chord2() == chord)
-                              continue;                               // rendered with chord1
-                        Chord* c1 = trem->twoNotes() ? trem->chord1() : chord;
-                        Chord* c2 = trem->twoNotes() ? trem->chord2() : chord;
-                        if (c1 && c2) {
-                              const int startTick = c1->tick().ticks();
-                              const int overall = trem->twoNotes() ? c1->actualTicks().ticks() + c2->actualTicks().ticks()
-                                                                   : chord->actualTicks().ticks();
-                              int step = qMax(1, DIVISION / (1 << (chord->beams() + trem->lines())));
-                              const int steps = int(std::round(overall / float(step)));
-                              if (steps > 0) {
-                                    step = overall / steps;
-                                    for (int i = 0; i < steps; ++i) {
-                                          const Chord* c = (i % 2) ? c2 : c1;
-                                          const int t = startTick + i * step;
-                                          const std::vector<Ms4::ArtRef> arts = Ms4::chordArticulations(c, ctx.dynamics);
-                                          for (const Note* note : c->notes()) {
-                                                if (!note->play() || note->hidden())
-                                                      continue;
-                                                Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts),
-                                                                              ctx.dynamics.levelAt(t), ctx.snd);
-                                                int noteChannel = channel;
-                                                if (sit != ctx.sounds.end())
-                                                      noteChannel = instr->channel(sit->second.channelSlots[sit->second.slotFor(r.arts)].channel)->channel();
-                                                events->registerChannel(noteChannel);
-                                                const int on = t + tickOffset + (step * r.ts) / Ms4::HUNDRED;
-                                                const int off = on + (step * r.dur) / Ms4::HUNDRED - 1;
-                                                playNote(events, note, noteChannel, qBound(0, note->ppitch(), 127),
-                                                         qBound(1, r.velocity, 127), on, qMax(on, off), st1->idx());
-                                                }
-                                          }
-                                    continue;
-                                    }
-                              }
-                        }
+                  if (trem && trem->twoNotes() && trem->chord2() == chord && trem->chord1() && trem->tremoloType() != TremoloType::BUZZ_ROLL)
+                        continue;
 
-                  // a note of its own at a given start and length (grace notes)
-                  auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length) {
+                  // a note of its own at a given start, length and pitch offset
+                  auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length, int pitchOffset = 0) {
                         if (!note->play() || note->hidden() || length <= 0)
                               return;
                         Ms4::NoteResult r = Ms4::note(ctx.family, Ms4::noteArticulations(note, arts), ctx.dynamics.levelAt(start), ctx.snd);
@@ -1065,7 +1030,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         events->registerChannel(noteChannel);
                         const int on = start + tickOffset + (length * r.ts) / Ms4::HUNDRED;
                         const int off = on + (length * r.dur) / Ms4::HUNDRED - 1;
-                        playNote(events, note, noteChannel, qBound(0, note->ppitch(), 127), qBound(1, r.velocity, 127), on, qMax(on, off), st1->idx());
+                        playNote(events, note, noteChannel, qBound(0, note->ppitch() + pitchOffset, 127), qBound(1, r.velocity, 127),
+                                 on, qMax(on, off), st1->idx());
                         };
 
                   // grace notes (GraceChordCtx): the first grace type of the chord (MS4 enum order) is
@@ -1121,9 +1087,103 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     }
                               }
                   }
+                  const int pStart = tick.ticks() + principalOffset;
+                  const int pLength = chord->actualTicks().ticks() - principalOffset - principalCut;
 
+                  // the principal chord: the first of its articulations (MS4 enum order) that a renderer
+                  // takes (ChordArticulationsRenderer::renderChordArticulations), else its notes as they are
+                  std::vector<Ms4::ArtRef> sorted = principalArts;
+                  std::sort(sorted.begin(), sorted.end(), [](const Ms4::ArtRef& a, const Ms4::ArtRef& b) { return a.art < b.art; });
                   Arpeggio* arp = chord->arpeggio();
-                  if (arp && arp->playArpeggio() && chord->notes().size() > 1) {
+                  enum class Special { NONE, TREMOLO, ORNAMENT, ARPEGGIO } special = Special::NONE;
+                  const Ms4::OrnamentRule* ornament = nullptr;
+                  for (const Ms4::ArtRef& a : sorted) {
+                        const bool tremoloType = a.art >= Ms4::Art::Tremolo8th && a.art <= Ms4::Art::Tremolo64th;
+                        if (tremoloType && trem && trem->tremoloType() != TremoloType::BUZZ_ROLL) {
+                              special = Special::TREMOLO;
+                              break;
+                              }
+                        if ((ornament = Ms4::ornamentRule(a.art))) {
+                              special = Special::ORNAMENT;
+                              break;
+                              }
+                        if (a.art >= Ms4::Art::Arpeggio && a.art <= Ms4::Art::ArpeggioStraightDown && arp && arp->playArpeggio()
+                            && chord->notes().size() > 1) {
+                              special = Special::ARPEGGIO;
+                              break;
+                              }
+                        }
+
+                  if (special == Special::TREMOLO) {
+                        // TremoloRenderer: the chord (both chords of a two-note tremolo) repeated in
+                        // steps of DIVISION / 2^(beams + lines), each step a note of its own
+                        Chord* c1 = trem->twoNotes() ? trem->chord1() : chord;
+                        Chord* c2 = trem->twoNotes() ? trem->chord2() : chord;
+                        if (c1 && c2) {
+                              const int overall = trem->twoNotes() ? c1->actualTicks().ticks() + c2->actualTicks().ticks() : pLength;
+                              int step = qMax(1, DIVISION / (1 << (chord->beams() + trem->lines())));
+                              const int steps = int(std::round(overall / float(step)));
+                              if (steps > 0) {
+                                    step = overall / steps;
+                                    for (int i = 0; i < steps; ++i) {
+                                          const Chord* c = (i % 2) ? c2 : c1;
+                                          const std::vector<Ms4::ArtRef> arts = (c == chord) ? principalArts : Ms4::chordArticulations(c, ctx.dynamics);
+                                          for (const Note* note : c->notes())
+                                                renderAt(note, arts, pStart + i * step, step);
+                                          }
+                                    }
+                              }
+                        }
+                  else if (special == Special::ORNAMENT) {
+                        // OrnamentsRenderer: prefix, body (repeated while it fits for trills) and suffix of
+                        // sub-notes on the diatonic neighbours; too short a note plays as it is
+                        bool isSymbol = false;
+                        for (Articulation* a : chord->articulations()) {
+                              const QString name = Sym::id2name(a->symId());
+                              if (name.startsWith("ornament") || name == "brassJazzTurn")
+                                    isSymbol = true;
+                              }
+                        const double bps = score->tempomap()->tempo(pStart);
+                        const float sub = ornament->subNoteTicks(bps);
+                        for (const Note* note : chord->notes()) {
+                              int T = pLength;
+                              if (isSymbol && note->tieFor()) {             // applyTiedNotesDuration
+                                    const Note* last = note->lastTiedNote();
+                                    if (last && last != note)
+                                          T = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks() - pStart;
+                                    }
+                              if (T <= ornament->lowTempoTicks) {
+                                    renderAt(note, principalArts, pStart, T);
+                                    continue;
+                                    }
+                              const int up = Ms4::neighbourSemitones(note, 1);
+                              const int down = Ms4::neighbourSemitones(note, -1);
+                              auto semis = [&](int step) { return step > 0 ? step * up : (step < 0 ? step * down : 0); };
+                              const int preT = int(std::round(ornament->prefix.size() * sub));
+                              const int sufT = int(std::round(ornament->suffix.size() * sub));
+                              double t = pStart;
+                              auto run = [&](const std::vector<int>& steps, double span, int times) {
+                                    const double d = span / (steps.size() * times);
+                                    for (int k = 0; k < times; ++k)
+                                          for (int step : steps) {
+                                                renderAt(note, principalArts, int(std::round(t)), int(d), semis(step));
+                                                t += d;
+                                                }
+                                    };
+                              if (!ornament->prefix.empty())
+                                    run(ornament->prefix, preT, 1);
+                              if (!ornament->body.empty()) {
+                                    const int alterations = ornament->repeat ? int(std::max((T / sub) / 2.f, 0.f)) : 1;
+                                    if (alterations == 0)
+                                          renderAt(note, principalArts, int(std::round(t)), T);     // as MS4: the whole length, from here
+                                    else
+                                          run(ornament->body, double(T - preT - sufT), alterations);
+                                    }
+                              if (!ornament->suffix.empty())
+                                    run(ornament->suffix, sufT, 1);
+                              }
+                        }
+                  else if (special == Special::ARPEGGIO) {
                         // ArpeggioRenderer: by pitch, a step later each (the note's length / the number
                         // of notes, at most 60 ms, times the stretch), each shortened by its delay
                         std::map<int, const Note*> byPitch;
@@ -1131,7 +1191,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               byPitch.emplace(note->pitch(), note);
                         const int n = int(chord->notes().size());
                         const double bps = score->tempomap()->tempo(tick.ticks());
-                        const double durMs = chord->actualTicks().ticks() / (bps * DIVISION) * 1000.0;
+                        const double durMs = pLength / (bps * DIVISION) * 1000.0;
                         const double stepMs = std::min(durMs / n, 60.0);
                         const bool up = arp->arpeggioType() != ArpeggioType::DOWN && arp->arpeggioType() != ArpeggioType::DOWN_STRAIGHT;
                         std::vector<const Note*> order;
