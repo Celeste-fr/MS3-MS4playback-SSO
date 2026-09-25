@@ -17,10 +17,10 @@ what was done in commit messages.
 
 ## Branches
 
-- `ms4-playback`: the default branch: the MS4 playback work, with the sound-library branch
-  `claude/continue-previous-work-5u4n0j` merged in (2026-09-25). SSO work continues on that branch.
-- `claude/…` branches: session branches built on top of it. Check `git log` and the latest
-  commit messages first. They are detailed on purpose and describe what each step did and
+- `ms4-playback`: the default branch and the only one. It has the MS4 playback work (essentially
+  finished) and the sound-library work, which was developed on `claude/continue-previous-work-5u4n0j`,
+  merged in on 2026-09-25 and then deleted. All work goes on `ms4-playback` now. Check `git log` and
+  the latest commit messages first. They are detailed on purpose and describe what each step did and
   how it was measured.
 - CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This keeps the
   private repo's Actions minutes.
@@ -246,9 +246,9 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
 
 A value a SSO patch lacks: its window shows "None" and it plays nothing (no default).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
-uploads the build. It isn't on the default branch, so *Run workflow* can't start it, and
-this environment can't push tags. It runs on a push to a `claude/` branch whose last commit
-message contains `[windows-build]`. The owner allows runs without asking (the free minutes),
+uploads the build. Start it with *Run workflow* (Actions › Test: Sound library on Windows), or
+with a push to `ms4-playback` (or a `claude/` branch) whose last commit message contains
+`[windows-build]`. The owner allows runs without asking (the free minutes),
 but not excessively: validate locally first, fix all you can between runs, and don't retry
 blindly. Other pushes show up as skipped runs, which use no minutes. Runs so far
 are in the commit log. Run 1 compiled everything with MSVC (about 15 minutes) and failed

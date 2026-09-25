@@ -7,8 +7,8 @@ made. The commit messages on this branch explain each step in detail.
 
 ## Where things are
 
-- Branch: `claude/continue-previous-work-5u4n0j`. Keep developing and pushing there, and don't
-  open a pull request unless the owner asks.
+- Branch: `ms4-playback`, the default and only branch (the sound-library branch was merged into
+  it and deleted on 2026-09-25). Develop and push there; no pull requests.
 - Latest Windows build: run 11 (commit 6bc3a62). All 10 `tst_soundlibrary` tests passed on
   Windows. Artifact `MuseScore-soundlibrary-win64`:
   https://github.com/Celeste-fr/musescore3-ms4-playback/actions/runs/36178930191
