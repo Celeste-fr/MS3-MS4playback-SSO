@@ -1,0 +1,391 @@
+//=============================================================================
+//  MuseScore
+//  Music Composition & Notation
+//
+//  ArticulationCheck: which articulation values switch a hosted plug-in (see
+//  articulationcheck.h).
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 3.
+//=============================================================================
+
+#include "articulationcheck.h"
+
+#include <algorithm>
+#include <cmath>
+#include <complex>
+
+#include "vst3plugin.h"
+#include "audio/midi/event.h"
+
+namespace Ms {
+
+static constexpr double PI = 3.14159265358979323846;
+static constexpr int BANDS = 24;
+static constexpr int PARTS = 5;           // 4 parts of the note, then the tail
+static constexpr int FFT = 2048;
+static constexpr double FLOOR_DB = -100.0;
+static constexpr double SILENT_DB = -80.0;
+
+const char* ArticulationCheck::name(Verdict v)
+      {
+      switch (v) {
+            case Verdict::SWITCHES:   return "switches";
+            case Verdict::IGNORED:    return "ignored";
+            case Verdict::UNCLEAR:    return "unclear";
+            case Verdict::SILENT:     return "silent";
+            case Verdict::UNTESTABLE: return "untestable";
+            }
+      return "";
+      }
+
+//---------------------------------------------------------
+//   fft
+//    in place, radix 2
+//---------------------------------------------------------
+
+static void fft(std::vector<std::complex<double>>& a)
+      {
+      const size_t n = a.size();
+      for (size_t i = 1, j = 0; i < n; ++i) {
+            size_t bit = n >> 1;
+            for (; j & bit; bit >>= 1)
+                  j ^= bit;
+            j ^= bit;
+            if (i < j)
+                  std::swap(a[i], a[j]);
+            }
+      for (size_t len = 2; len <= n; len <<= 1) {
+            const double ang = -2 * PI / double(len);
+            const std::complex<double> wl(std::cos(ang), std::sin(ang));
+            for (size_t i = 0; i < n; i += len) {
+                  std::complex<double> w(1);
+                  for (size_t j = 0; j < len / 2; ++j) {
+                        const std::complex<double> u = a[i + j];
+                        const std::complex<double> v = a[i + j + len / 2] * w;
+                        a[i + j] = u + v;
+                        a[i + j + len / 2] = u - v;
+                        w *= wl;
+                        }
+                  }
+            }
+      }
+
+static double db(double power)
+      {
+      return power > 0 ? std::max(FLOOR_DB, 10 * std::log10(power)) : FLOOR_DB;
+      }
+
+//---------------------------------------------------------
+//   features
+//    [0] the number of spectrum values; the spectrum (dB per band, per part); the loudness
+//    envelope (dB per 20 ms)
+//---------------------------------------------------------
+
+std::vector<double> ArticulationCheck::features(const std::vector<float>& clip, int noteFrames, double sampleRate)
+      {
+      const int frames = int(clip.size() / 2);
+      std::vector<double> mono(frames);
+      for (int i = 0; i < frames; ++i)
+            mono[i] = 0.5 * (double(clip[2 * i]) + double(clip[2 * i + 1]));
+      // at the same loudness (of the note): round robins differ most in level
+      double power = 0;
+      const int held = std::min(noteFrames, frames);
+      for (int i = 0; i < held; ++i)
+            power += mono[i] * mono[i];
+      if (held > 0 && power > 0) {
+            const double gain = 0.1 / std::sqrt(power / held);
+            for (double& x : mono)
+                  x *= gain;
+            }
+
+      // band edges (FFT bins), log spaced from 80 Hz
+      const double top = std::min(16000.0, sampleRate / 2);
+      std::vector<int> edge(BANDS + 1);
+      for (int b = 0; b <= BANDS; ++b) {
+            const double f = 80.0 * std::pow(top / 80.0, double(b) / BANDS);
+            edge[b] = std::max(1, int(f * FFT / sampleRate));
+            }
+      for (int b = 1; b <= BANDS; ++b)
+            edge[b] = std::max(edge[b], edge[b - 1] + 1);
+
+      std::vector<double> spectrum(PARTS * BANDS, 0.0);
+      std::vector<int> count(PARTS, 0);
+      std::vector<std::complex<double>> buf(FFT);
+      for (int at = 0; at + FFT <= frames; at += FFT / 2) {
+            const int centre = at + FFT / 2;
+            const int part = centre < noteFrames ? std::min(3, centre * 4 / std::max(1, noteFrames)) : 4;
+            for (int i = 0; i < FFT; ++i)
+                  buf[i] = mono[at + i] * (0.5 - 0.5 * std::cos(2 * PI * i / (FFT - 1)));
+            fft(buf);
+            for (int b = 0; b < BANDS; ++b) {
+                  double p = 0;
+                  for (int k = edge[b]; k < edge[b + 1] && k < FFT / 2; ++k)
+                        p += std::norm(buf[k]);
+                  spectrum[part * BANDS + b] += p / (FFT * FFT);
+                  }
+            ++count[part];
+            }
+      std::vector<double> f;
+      f.push_back(PARTS * BANDS);
+      for (int part = 0; part < PARTS; ++part)
+            for (int b = 0; b < BANDS; ++b)
+                  f.push_back(db(count[part] ? spectrum[part * BANDS + b] / count[part] : 0));
+
+      const int hop = std::max(1, int(sampleRate * 0.02));
+      for (int at = 0; at + hop <= frames; at += hop) {
+            double p = 0;
+            for (int i = at; i < at + hop; ++i)
+                  p += mono[i] * mono[i];
+            f.push_back(db(p / hop));
+            }
+      return f;
+      }
+
+//---------------------------------------------------------
+//   distance
+//    the RMS difference of the spectra plus that of the envelopes, dB
+//---------------------------------------------------------
+
+double ArticulationCheck::distance(const std::vector<double>& a, const std::vector<double>& b)
+      {
+      if (a.empty() || b.empty())
+            return 0;
+      const size_t spec = size_t(a[0]);
+      auto rms = [&](size_t from, size_t to) {
+            if (to <= from)
+                  return 0.0;
+            double s = 0;
+            for (size_t i = from; i < to; ++i)
+                  s += (a[i] - b[i]) * (a[i] - b[i]);
+            return std::sqrt(s / double(to - from));
+            };
+      const size_t n = std::min(a.size(), b.size());
+      return rms(1, 1 + spec) + rms(1 + spec, n);
+      }
+
+//---------------------------------------------------------
+//   Player
+//    one instance, rendered offline block by block
+//---------------------------------------------------------
+
+namespace {
+
+struct Clip {
+      std::vector<double> features;
+      double peakDb { -200 };
+      };
+
+struct Player {
+      Vst3Plugin* p;
+      ArticulationCheck::Settings s;
+      std::vector<float> buffer;
+
+      std::vector<float> render(int frames)
+            {
+            buffer.assign(size_t(2 * frames), 0.f);
+            if (frames > 0)
+                  p->process(frames, buffer.data());
+            return buffer;
+            }
+      int frames(double seconds) const { return int(seconds * s.sampleRate); }
+
+      // until the last note has died away (or 4 s)
+      void settle()
+            {
+            p->midi(ME_NOTEON, s.channel, s.pitch, 0);
+            p->allNotesOff();
+            const int block = frames(0.1);
+            for (int i = 0; i < 40; ++i) {
+                  const std::vector<float>& b = render(block);
+                  double peak = 0;
+                  for (float x : b)
+                        peak = std::max(peak, double(std::fabs(x)));
+                  if (db(peak * peak) < SILENT_DB && i >= 2)
+                        break;
+                  }
+            }
+
+      Clip play(int prior, int value)
+            {
+            settle();
+            if (prior >= 0) {
+                  p->midi(ME_CONTROLLER, s.channel, s.switchCC, prior);
+                  render(frames(0.1));
+                  }
+            p->midi(ME_CONTROLLER, s.channel, s.switchCC, value);
+            if (s.dynamicsCC >= 0)
+                  p->midi(ME_CONTROLLER, s.channel, s.dynamicsCC, s.dynamicsValue);
+            if (s.expressionCC >= 0 && s.expressionCC != s.dynamicsCC)
+                  p->midi(ME_CONTROLLER, s.channel, s.expressionCC, 127);
+            render(frames(0.1));
+            p->midi(ME_NOTEON, s.channel, s.pitch, s.velocity);
+            std::vector<float> clip = render(frames(s.note));
+            p->midi(ME_NOTEON, s.channel, s.pitch, 0);
+            const std::vector<float>& tail = render(frames(s.tail));
+            clip.insert(clip.end(), tail.begin(), tail.end());
+            Clip c;
+            double peak = 0;
+            for (float x : clip)
+                  peak = std::max(peak, double(std::fabs(x)));
+            c.peakDb = peak > 0 ? 20 * std::log10(peak) : -200;
+            c.features = ArticulationCheck::features(clip, frames(s.note), s.sampleRate);
+            return c;
+            }
+      };
+
+} // namespace
+
+//---------------------------------------------------------
+//   run
+//---------------------------------------------------------
+
+ArticulationCheck::Report ArticulationCheck::run(Vst3Plugin* plugin, const std::vector<int>& values, const Settings& settings, Progress progress)
+      {
+      Report report;
+      const int n = int(values.size());
+      if (!plugin || n == 0) {
+            report.message = "nothing to check";
+            return report;
+            }
+      Player player { plugin, settings, {} };
+      int done = 0;
+      int total = 3 * n;
+      auto step = [&]() {
+            ++done;
+            if (progress && !progress(done, total))
+                  report.cancelled = true;
+            return !report.cancelled;
+            };
+
+      // every value after the first
+      std::vector<Clip> first(n);
+      for (int i = 0; i < n; ++i) {
+            first[i] = player.play(values[0], values[i]);
+            if (!step())
+                  return report;
+            }
+      report.results.resize(n);
+      for (int i = 0; i < n; ++i) {
+            report.results[i].value = values[i];
+            report.results[i].peakDb = first[i].peakDb;
+            report.results[i].firstDistance = distance(first[i].features, first[0].features);
+            }
+      auto silent = [](const Clip& c) { return c.peakDb < SILENT_DB; };
+
+      // the references: A most unlike the first, B most unlike A among the others unlike the first
+      int a = -1;
+      for (int i = 1; i < n; ++i) {
+            if (!silent(first[i]) && (a < 0 || report.results[i].firstDistance > report.results[a].firstDistance))
+                  a = i;
+            }
+      // round robins of one articulation stay well under this (dB)
+      const double minDistance = 3.0;
+      if (silent(first[0]) || a < 0 || report.results[a].firstDistance < minDistance) {
+            for (Result& r : report.results)
+                  r.verdict = silent(first[&r - &report.results[0]]) ? Verdict::SILENT : Verdict::UNTESTABLE;
+            report.message = silent(first[0])
+               ? QString("The first value plays nothing: is the patch loaded, on MIDI channel %1?").arg(settings.channel + 1)
+               : QString("Every value sounds the same: is the patch set to switch articulations with CC%1 (Spitfire: UACC), on MIDI channel %2?")
+                    .arg(settings.switchCC).arg(settings.channel + 1);
+            return report;
+            }
+      report.switching = true;
+      const double aDistance = report.results[a].firstDistance;
+      auto unlike = [&](int from, int except1, int except2) {
+            int best = -1;
+            double bestD = -1;
+            for (int i = 0; i < n; ++i) {
+                  if (i == except1 || i == except2 || silent(first[i]))
+                        continue;
+                  if (i != 0 && report.results[i].firstDistance < 0.5 * aDistance)
+                        continue;         // might sound like the first because it is ignored
+                  double d = distance(first[i].features, first[from].features);
+                  if (except2 >= 0)
+                        d = std::min(d, distance(first[i].features, first[except2].features));
+                  if (d > bestD) {
+                        bestD = d;
+                        best = i;
+                        }
+                  }
+            return best;
+            };
+      const int b = unlike(a, a, -1);
+      const int c = n > 2 ? unlike(a, a, b) : -1;    // for A and B themselves
+      report.refA = values[a];
+      report.refB = values[b];
+      report.refDistance = distance(first[a].features, first[b].features);
+
+      // every value after A and after B
+      for (int i = 0; i < n; ++i) {
+            Result& r = report.results[i];
+            int p1 = a, p2 = b;
+            if (i == a)
+                  p1 = c;
+            else if (i == b)
+                  p2 = c;
+            if (p1 < 0 || p2 < 0 || p1 == p2) {
+                  // two values only: A and B are known to switch
+                  r.verdict = silent(first[i]) ? Verdict::SILENT : Verdict::SWITCHES;
+                  done += 2;
+                  continue;
+                  }
+            const double ref = distance(first[p1].features, first[p2].features);
+            double ratio = 0;
+            int tries = 0;
+            for (;;) {
+                  const Clip x = player.play(values[p1], values[i]);
+                  if (!step())
+                        return report;
+                  const Clip y = player.play(values[p2], values[i]);
+                  if (!step())
+                        return report;
+                  r.peakDb = std::max(x.peakDb, y.peakDb);
+                  if (silent(x) && silent(y)) {
+                        r.verdict = Verdict::SILENT;
+                        break;
+                        }
+                  const double d = distance(x.features, y.features);
+                  r.spread = tries ? std::min(r.spread, d) : d;
+                  ratio += d / std::max(ref, 1e-9);
+                  ++tries;
+                  r.ratio = ratio / tries;
+                  r.verdict = r.ratio < 0.5 ? Verdict::SWITCHES : r.ratio > 0.8 ? Verdict::IGNORED : Verdict::UNCLEAR;
+                  if (r.verdict != Verdict::UNCLEAR || tries > 1)
+                        break;
+                  total += 2;       // once more
+                  }
+            }
+
+      std::vector<double> spreads;
+      for (const Result& r : report.results)
+            if (r.verdict == Verdict::SWITCHES && r.spread >= 0)
+                  spreads.push_back(r.spread);
+      if (!spreads.empty()) {
+            std::nth_element(spreads.begin(), spreads.begin() + spreads.size() / 2, spreads.end());
+            report.sameDistance = std::max(0.5, 2 * spreads[spreads.size() / 2]);
+            }
+      else
+            report.sameDistance = 0.5;
+
+      // values that sound just like another that switches (an ignored one sounds like the
+      // value played before it)
+      for (int i = 0; i < n; ++i) {
+            Result& r = report.results[i];
+            if (r.verdict != Verdict::SWITCHES)
+                  continue;
+            double best = report.sameDistance;
+            for (int j = 0; j < n; ++j) {
+                  if (j == i || report.results[j].verdict != Verdict::SWITCHES)
+                        continue;
+                  const double d = distance(first[i].features, first[j].features);
+                  if (d < best) {
+                        best = d;
+                        r.sameAs = values[j];
+                        }
+                  }
+            }
+      return report;
+      }
+
+} // namespace Ms

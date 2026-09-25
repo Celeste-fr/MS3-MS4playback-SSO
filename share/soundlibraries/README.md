@@ -49,6 +49,28 @@ and the samples take a moment. The library's audio is mixed in after MuseScore's
 because SSO brings its own room. Setups are stored in MuseScore's data folder under
 `soundlibraries/<library>/<patch>.vst3state`.
 
+### Checking the map against the plug-in
+
+*View › Sound Library…* › *Check articulations…* lists every patch of the library.
+
+1. For each patch not set up yet, click *Set up…*, load the patch in Kontakt, set it to UACC
+   and close the window. This is the same setup playback uses, so it is only done once.
+2. Click *Check* (*Tick all set up* selects them all) and leave the computer alone. Kontakt's
+   window has to stay visible. It takes about a minute per patch.
+3. MuseScore opens the folder `Documents/MuseScore Sound Library Check`. Hand back the
+   `.zip` it made.
+
+For each articulation value in the map, the check keeps a picture of Kontakt's window after
+the switch. It also listens to whether the switch took. Each value's note is played after two
+different articulations, and should sound the same both times. The verdicts:
+- *switches*: the value switched the plug-in.
+- *ignored*: the patch has nothing on that value.
+- *silent*: the note plays nothing.
+- *unclear*: the listening test could not decide.
+- *sounds like N*: the value plays the same sound as value N.
+
+The picture shows which articulation the patch selected.
+
 ## Setup on Windows with a host of its own (MIDI output)
 
 Use this if the library runs in a DAW or standalone host (*Play through: MIDI output*).

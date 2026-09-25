@@ -3,9 +3,18 @@
 //  Music Composition & Notation
 //
 //  MS Test Synth: a VST 3 instrument standing in for a sound library's plug-in in the
-//  mtests (tst_soundlibrary). A sine per held note at velocity * level. Like Kontakt, it maps
-//  MIDI CCs to parameters (IMidiMapping): CC32 -> "articulation" (what UACC switches),
-//  CC1 -> "level" (the dynamics). Both are in its state. No editor.
+//  mtests (tst_soundlibrary). Like Kontakt, it maps MIDI CCs to parameters (IMidiMapping):
+//  CC32 -> "articulation" (what UACC switches), CC1 -> "level" (the dynamics). Both are in its
+//  state. No editor.
+//
+//  Each held note plays at velocity * level, with a timbre of the articulation that was
+//  current at its note on (the articulation check listens for it), like a UACC patch:
+//    1-29, 31-89   harmonics of their own; 40-60 short (decaying), 70-80 trills (tremolo)
+//    30            plays nothing
+//    85-89         not in the patch: articulation 1 (a default)
+//    90-127        not in the patch: ignored, the articulation stays
+//  and round robins: each note a little louder or softer than the last, its harmonics a
+//  little different (±8 %).
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License version 3.
@@ -36,10 +45,59 @@ static const FUID ControllerUID(0x6d737473, 0x796e7468, 0x6374726c, 0x00000001);
 //   Processor
 //---------------------------------------------------------
 
+struct Voice {
+      double phase { 0 };
+      float velocity { 0 };
+      int articulation { 1 };
+      double gain { 1 };            // the round robin
+      int roundRobin { 0 };
+      long t { 0 };                 // samples played
+      };
+
+static int articulationValue(ParamValue v)
+      {
+      return int(std::lround(v * 127));
+      }
+
+static bool inPatch(int value)
+      {
+      return value >= 1 && value < 90;
+      }
+
+static float timbre(const Voice& v, double sampleRate)
+      {
+      if (v.articulation == 30)
+            return 0.f;
+      double s = 0;
+      for (int k = 1; k <= 8; ++k) {
+            double x = std::sin(v.articulation * 12.9898 + k * 78.233) * 43758.5453;
+            x -= std::floor(x);
+            s += std::sin(k * v.phase) * (0.3 + 0.7 * x) / k * (1 + 0.08 * std::sin(v.roundRobin * 1.7 + k));
+            }
+      const double t = v.t / sampleRate;
+      if (v.articulation >= 40 && v.articulation <= 60)
+            s *= std::exp(-t / 0.1);
+      else if (v.articulation >= 70 && v.articulation <= 80)
+            s *= 0.6 + 0.4 * std::sin(2 * M_PI * 8 * t);
+      return float(s * 0.25 * v.gain);
+      }
+
 class Processor : public AudioEffect {
       ParamValue articulation { 0.0 };
       ParamValue level { 1.0 };
-      std::map<int, std::pair<double, float>> voices;       // pitch -> phase, velocity
+      int current { 1 };            // the articulation notes start with
+      int roundRobin { 0 };
+      std::map<int, Voice> voices;  // pitch -> voice
+
+      void setArticulation(ParamValue v)
+            {
+            articulation = v;
+            const int value = articulationValue(v);
+            if (value >= 85 && value < 90)
+                  current = 1;
+            else if (inPatch(value))
+                  current = value;
+            }
 
    public:
       Processor() { setControllerClass(ControllerUID); }
@@ -69,7 +127,7 @@ class Processor : public AudioEffect {
                         ParamValue v;
                         if (q && q->getPoint(q->getPointCount() - 1, offset, v) == kResultOk) {
                               if (q->getParameterId() == kArticulation)
-                                    articulation = v;
+                                    setArticulation(v);
                               else if (q->getParameterId() == kLevel)
                                     level = v;
                               }
@@ -80,8 +138,14 @@ class Processor : public AudioEffect {
                         Event e;
                         if (events->getEvent(i, e) != kResultOk)
                               continue;
-                        if (e.type == Event::kNoteOnEvent && e.noteOn.velocity > 0)
-                              voices[e.noteOn.pitch] = { 0.0, e.noteOn.velocity };
+                        if (e.type == Event::kNoteOnEvent && e.noteOn.velocity > 0) {
+                              Voice v;
+                              v.velocity = e.noteOn.velocity;
+                              v.articulation = current;
+                              v.roundRobin = roundRobin % 4;
+                              v.gain = 1.0 + 0.06 * ((roundRobin++ % 3) - 1);
+                              voices[e.noteOn.pitch] = v;
+                              }
                         else if (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent)
                               voices.erase(e.type == Event::kNoteOnEvent ? e.noteOn.pitch : e.noteOff.pitch);
                         }
@@ -94,11 +158,13 @@ class Processor : public AudioEffect {
                   l[i] = r[i] = 0.f;
             for (auto& v : voices) {
                   const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69) / 12.0) / processSetup.sampleRate;
+                  Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
-                        const float s = float(std::sin(v.second.first) * 0.2 * v.second.second * level);
+                        const float s = timbre(vc, processSetup.sampleRate) * vc.velocity * float(level);
                         l[i] += s;
                         r[i] += s;
-                        v.second.first += inc;
+                        vc.phase += inc;
+                        ++vc.t;
                         }
                   }
             data.outputs[0].silenceFlags = voices.empty() ? 3 : 0;
@@ -111,7 +177,7 @@ class Processor : public AudioEffect {
             double a, lv;
             if (!s.readDouble(a) || !s.readDouble(lv))
                   return kResultFalse;
-            articulation = a;
+            setArticulation(a);
             level = lv;
             return kResultOk;
             }

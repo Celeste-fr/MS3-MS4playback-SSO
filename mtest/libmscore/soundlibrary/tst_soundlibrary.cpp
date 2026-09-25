@@ -19,6 +19,7 @@
 #include "mtest/testutils.h"
 
 #ifdef TESTSYNTH
+#include "audio/vst3/articulationcheck.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #endif
@@ -47,6 +48,7 @@ class TestSoundLibrary : public QObject, public MTest
 #ifdef TESTSYNTH
       void vst3Plugin();
       void vst3Render();
+      void articulationCheck();
 #endif
       };
 
@@ -406,6 +408,53 @@ void TestSoundLibrary::vst3Render()
       QVERIFY(params.second < 1.0);
       SoundLib::setOutput(SoundLib::Output::MIDI);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   articulationCheck
+//    listening to the plug-in tells the values that switch it from those it ignores (the
+//    test synth: 90-127 are not in its patch), the silent one, one that plays the same as
+//    another (87: the synth's default, 1), and a patch that doesn't switch
+//---------------------------------------------------------
+
+void TestSoundLibrary::articulationCheck()
+      {
+      using AC = ArticulationCheck;
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->setOffline(true));
+      AC::Settings s;
+      s.pitch = 67;
+      const std::vector<int> values { 1, 2, 3, 12, 30, 42, 43, 71, 87, 99, 110, 127 };
+      int steps = 0;
+      AC::Report r = AC::run(p.get(), values, s, [&](int, int) { ++steps; return true; });
+      QVERIFY2(r.switching, qPrintable(r.message));
+      QVERIFY(steps >= 3 * int(values.size()) - 6);
+      QCOMPARE(r.results.size(), values.size());
+      for (const AC::Result& x : r.results) {
+            const AC::Verdict expected = x.value == 30 ? AC::Verdict::SILENT
+               : x.value >= 90 ? AC::Verdict::IGNORED : AC::Verdict::SWITCHES;
+            QVERIFY2(x.verdict == expected, qPrintable(QString("value %1: %2 (ratio %3), expected %4")
+               .arg(x.value).arg(AC::name(x.verdict)).arg(x.ratio).arg(AC::name(expected))));
+            const int sameAs = x.value == 87 ? 1 : x.value == 1 ? 87 : -1;
+            QVERIFY2(x.sameAs == sameAs, qPrintable(QString("value %1 sounds like %2, expected %3").arg(x.value).arg(x.sameAs).arg(sameAs)));
+            }
+      QVERIFY(r.refA != r.refB);
+      QVERIFY(r.refA < 90 && r.refB < 90);
+
+      // switched on another CC than the patch listens to: nothing to tell
+      s.switchCC = 33;
+      r = AC::run(p.get(), { 1, 2, 42, 71 }, s);
+      QVERIFY(!r.switching);
+      QVERIFY(!r.message.isEmpty());
+      for (const AC::Result& x : r.results)
+            QVERIFY(x.verdict == AC::Verdict::UNTESTABLE);
+
+      // cancelled
+      s.switchCC = 32;
+      r = AC::run(p.get(), { 1, 2, 42, 71 }, s, [](int done, int) { return done < 2; });
+      QVERIFY(r.cancelled);
       }
 #endif
 

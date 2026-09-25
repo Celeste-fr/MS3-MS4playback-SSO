@@ -2,13 +2,16 @@
 #  MuseScore
 #  Music Composition & Notation
 #
-#  vst3host: VST 3 plug-ins hosted for sound library parts (vst3plugin.h, vst3synth.h)
+#  vst3host: VST 3 plug-ins hosted for sound library parts (vst3plugin.h, vst3synth.h), and the
+#  articulation check (articulationcheck.h)
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 3
 #=============================================================================
 
 add_library(vst3host STATIC
+      articulationcheck.cpp
+      articulationcheck.h
       vst3plugin.cpp
       vst3plugin.h
       vst3synth.cpp

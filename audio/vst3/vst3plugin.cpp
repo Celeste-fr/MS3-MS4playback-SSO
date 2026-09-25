@@ -45,8 +45,9 @@ namespace Ms {
 
 //---------------------------------------------------------
 //   host context and modules
-//    one IHostApplication for all plug-ins; a module (the plug-in's library) stays loaded
-//    while an instance of it lives
+//    one IHostApplication for all plug-ins; a module (the plug-in's library), once loaded,
+//    stays loaded, as in DAWs: a library unloaded and loaded again can hang (sfizz: its
+//    fonts, pango types registered in GLib twice)
 //---------------------------------------------------------
 
 class MuseScoreHostApplication : public HostApplication {
@@ -66,10 +67,11 @@ static FUnknown* hostContext()
       return host;
       }
 
-static std::map<QString, std::weak_ptr<VST3::Hosting::Module>>& modules()
+static std::map<QString, std::shared_ptr<VST3::Hosting::Module>>& modules()
       {
-      static std::map<QString, std::weak_ptr<VST3::Hosting::Module>> m;
-      return m;
+      // never destroyed: no unloading at exit either, after the plug-ins' own teardown
+      static auto* m = new std::map<QString, std::shared_ptr<VST3::Hosting::Module>>;
+      return *m;
       }
 
 //---------------------------------------------------------
@@ -263,7 +265,7 @@ std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleR
       p->d->maxBlock = maxBlock;
 
       const QString key = QFileInfo(path).absoluteFilePath();
-      p->d->module = modules()[key].lock();
+      p->d->module = modules()[key];
       if (!p->d->module) {
             std::string err;
             p->d->module = VST3::Hosting::Module::create(path.toStdString(), err);
@@ -346,8 +348,13 @@ void Vst3Plugin::midi(int type, int channel, int a, int b)
             if (cc < 0 || cc >= 130 || d->ccParam.empty())
                   return;
             const ParamID id = d->ccParam[channel * 130 + cc];
-            if (id != kNoParamId)
-                  d->addParam(id, qBound(0.0, value, 1.0));
+            if (id == kNoParamId)
+                  return;
+            d->addParam(id, qBound(0.0, value, 1.0));
+            // and to the controller, as DAWs do: its editor shows the switch (idle())
+            std::unique_lock<std::mutex> lock(d->fromProcessorMutex, std::try_to_lock);
+            if (lock.owns_lock())
+                  d->fromProcessor.emplace_back(id, qBound(0.0, value, 1.0));
             };
       switch (type) {
             case ME_NOTEON:

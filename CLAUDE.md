@@ -127,6 +127,31 @@ macOS.
 - `mscore/vst3editor.*`: the plug-in's editor window (HWND, NSView or X11 plus IRunLoop).
 - `Seq::putEvent`: in plugin mode, external events go to `Vst3Synth` with the slot as the
   channel.
+- Plug-in modules (`vst3plugin.cpp`, `modules()`) stay loaded until exit, as in DAWs.
+  Unloading sfizz and loading it again hung MuseScore (pango types registered in GLib twice).
+
+Articulation check (*View › Sound Library…* › *Check articulations…*; this checks the map
+against the plug-in itself):
+- `audio/vst3/articulationcheck.*`: `ArticulationCheck::run(plugin, values, settings)`.
+  Offline, on one instance, it tells whether each map value switches the plug-in. Each
+  value's note is played twice, once after reference A and once after reference B. Both
+  notes the same means the value switched; one like A and one like B means it was ignored.
+  Ratio thresholds are 0.5 and 0.8. It also flags silent values, a patch that doesn't switch
+  at all, and "sounds like": two values that sound the same. That catches a plug-in playing
+  a default for values it lacks. The header has the details.
+- `mscore/soundlibrarycheck.*`: `ArticulationCheckDialog`.
+  - *Set up…* sets up a patch on an instance of its own, with no score needed.
+    `SoundLibraryHost::setupChanged` reloads that setup into the live instances.
+  - *Check* runs over each ticked, set-up patch. It grabs the plug-in's window after each
+    switch (PrintWindow on Windows, else QScreen), crops to the region that changed and
+    draws a contact sheet `<patch>.png` labelled with value, map name and sound verdict. If
+    the window doesn't change on a switch alone, it retakes the pictures with the note
+    playing. Then it runs the audio check.
+  - Output goes to `Documents/MuseScore Sound Library Check/<library> <date>/`: sheets,
+    `results.json` and `summary.txt`, plus a `.zip` of the folder next to it. The owner is
+    asked to hand back that zip. **When they do**, read the sheets (the patch's own
+    articulation name is on each picture) and `results.json`, then fix the map through
+    `gen_spitfire_sso.py`.
 
 Tested here:
 - `tst_soundlibrary` hosts `mstestsynth.vst3` (`mtest/libmscore/soundlibrary/testsynth`), a
@@ -139,8 +164,19 @@ Tested here:
   plus IRunLoop), sized to fit. Clicks and redraws work, and closing and reopening work. The
   first-time flow works too: load the instrument in the plug-in's window, close it, and the
   setup is saved and marked "Ready".
+- Articulation check:
+  - `tst_soundlibrary::articulationCheck` uses the test synth, which gives each articulation
+    its own timbre and has round robins. Values missing from its patch are ignored (90–127)
+    or play a default (85–89). The check tells them apart from those that switch, plus a
+    silent value and a patch switched on the wrong CC.
+  - In the GUI with sfizz, *Set up…* then *Check* on Solo Violin 1 plus a bogus value 99:
+    6 switch, 99 silent (the SFZ has no region for it), a sheet and a zip. *Stop* works.
+    sfizz's window doesn't show CC32, so its pictures were retaken with the note playing.
 
-**Not tried: Kontakt, SSO, Windows (the HWND editor, the MSVC build).**
+**Not tried: Kontakt, SSO, Windows (the HWND editor, the MSVC build, PrintWindow grabs).**
+Nobody knows yet whether Kontakt's window shows the UACC switch (if not, the pictures are
+taken with the note playing), or whether Kontakt keeps the articulation or plays a default
+for a value the patch lacks (the check handles both).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. It is manual, has never run yet, and may need fixes on its first run.
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send

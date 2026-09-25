@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "soundlibraryhost.h"
+#include "soundlibrarycheck.h"
 
 #include <QApplication>
 #include <QDialogButtonBox>
@@ -323,6 +324,36 @@ bool SoundLibraryHost::saveSetup(int slot, QString* error)
       }
 
 //---------------------------------------------------------
+//   setupChanged
+//    the instrument's setup (saved elsewhere: Check articulations › Set up…) into its instances
+//---------------------------------------------------------
+
+void SoundLibraryHost::setupChanged(const QString& instrument)
+      {
+#ifdef USE_VST3
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      Vst3Synth* vst = synth();
+      if (!library || !vst)
+            return;
+      QFile f(setupFile(*library, instrument));
+      if (!f.open(QIODevice::ReadOnly))
+            return;
+      const QByteArray state = f.readAll();
+      for (int k = 0; k < 64; ++k) {
+            if (_slots[k].instrument != instrument)
+                  continue;
+            std::unique_ptr<Vst3Plugin> p = vst->takePlugin(k);
+            if (p)
+                  _slots[k].hasSetup = p->setState(state);
+            vst->setPlugin(k, std::move(p));
+            }
+      emit changed();
+#else
+      Q_UNUSED(instrument);
+#endif
+      }
+
+//---------------------------------------------------------
 //   showEditor
 //---------------------------------------------------------
 
@@ -460,6 +491,14 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
       layout->addWidget(_table);
       QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
       connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+      if (SoundLibraryHost::available() && library) {
+            QPushButton* check = buttons->addButton(tr("Check articulations…"), QDialogButtonBox::ActionRole);
+            connect(check, &QPushButton::clicked, this, [this]() {
+                  ArticulationCheckDialog* d = new ArticulationCheckDialog(_library, parentWidget());
+                  d->setAttribute(Qt::WA_DeleteOnClose);
+                  d->show();
+                  });
+            }
       layout->addWidget(buttons);
       resize(760, 480);
       // (later: a change can come from a button of the table)
