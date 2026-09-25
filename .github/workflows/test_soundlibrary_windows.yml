@@ -2,9 +2,14 @@ name: 'Test: Sound library on Windows'
 
 # Builds MuseScore with MSVC (as "Build: Windows" does), runs the sound library tests
 # (tst_soundlibrary: the VST 3 host with the MS Test Synth plug-in), and uploads the
-# installed MuseScore for trying it. Manual only: Actions -> this workflow -> Run workflow.
+# installed MuseScore for trying it. Manual only: Actions -> this workflow -> Run workflow
+# (once the workflow is on the default branch), or push a tag test-soundlibrary-windows-<n>
+# (runs the workflow of the tagged commit, from any branch).
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'test-soundlibrary-windows-*'
 
 jobs:
   windows_x64:

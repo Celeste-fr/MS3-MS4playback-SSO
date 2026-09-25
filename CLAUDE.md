@@ -178,7 +178,9 @@ Nobody knows yet whether Kontakt's window shows the UACC switch (if not, the pic
 taken with the note playing), or whether Kontakt keeps the articulation or plays a default
 for a value the patch lacks (the check handles both).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
-uploads the build. It is manual, has never run yet, and may need fixes on its first run.
+uploads the build. It isn't on the default branch, so *Run workflow* can't start it. It
+starts when a tag `test-soundlibrary-windows-<n>` is pushed (only with the owner's OK, since
+it uses the private repo's minutes). Runs so far are in the commit log.
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 
