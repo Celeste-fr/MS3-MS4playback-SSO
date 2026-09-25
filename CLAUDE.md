@@ -189,8 +189,9 @@ patch lacks (the check handles both).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. It isn't on the default branch, so *Run workflow* can't start it, and
 this environment can't push tags. It runs on a push to a `claude/` branch whose last commit
-message contains `[windows-build]` (only with the owner's OK, since it uses the private
-repo's minutes). Other pushes show up as skipped runs, which use no minutes. Runs so far
+message contains `[windows-build]`. The owner allows runs without asking (the free minutes),
+but not excessively: validate locally first, fix all you can between runs, and don't retry
+blindly. Other pushes show up as skipped runs, which use no minutes. Runs so far
 are in the commit log. Run 1 compiled everything with MSVC (about 15 minutes) and failed
 only at the link (`Linux::IRunLoop` in vst3editor; now Linux-only). Run 2 built and uploaded
 MuseScore (artifact `MuseScore-soundlibrary-win64`). The test build failed because on MSVC
@@ -198,7 +199,7 @@ MuseScore (artifact `MuseScore-soundlibrary-win64`). The test build failed becau
 can't find the target. The workflow now builds the test's vcxproj with MSBuild (found
 with vswhere). Upstream never built mtests on Windows, so more may break there. Run 3
 got to compiling `testutils`, which failed on `ft2build.h` (the same problem that needed
-CPATH on Linux). Fixed in mtest/CMakeLists.txt; run 4 waits for the owner's OK.
+CPATH on Linux). Fixed in mtest/CMakeLists.txt. Run 4 builds with the offline bus fix.
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 
