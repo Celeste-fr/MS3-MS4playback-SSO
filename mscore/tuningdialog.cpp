@@ -130,6 +130,20 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       _justLabel = new QLabel(tr("Just intonation:"));
       form->addRow(_justLabel, _just);
 
+      // accidental families whose size is a matter of convention: the most common one first
+      _quarter = new QComboBox;
+      _quarter->addItem(tr("50 cents, as in 24-EDO (the most common)"), int(Temperament::Quarter::FIXED));
+      _quarter->addItem(tr("Half the tuning's sharp or flat (meantone, 31-EDO)"), int(Temperament::Quarter::HALF));
+      _quarter->addItem(tr("33/32, the just quarter tone (53.3 cents)"), int(Temperament::Quarter::JUST));
+      _quarter->setToolTip(tr("Stein-Zimmermann and Gould (arrow) quarter-tone accidentals. In equal temperament the "
+                              "first two are the same."));
+      form->addRow(tr("Quarter tones:"), _quarter);
+      _persian = new QComboBox;
+      _persian->addItem(tr("Vaziri's quarter tones: koron −50, sori +50 (the most common)"), int(Temperament::Persian::VAZIRI));
+      _persian->addItem(tr("As played: koron about −60, sori about +40"), int(Temperament::Persian::PRACTICE));
+      _persian->addItem(tr("As MuseScore 3.6 plays them: −67, +33"), int(Temperament::Persian::MS36));
+      form->addRow(tr("Koron and sori:"), _persian);
+
       QGridLayout* grid = new QGridLayout;
       for (int i = 0; i < 12; ++i) {
             QLabel* l = new QLabel(pitchNames[i]);
@@ -180,6 +194,18 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       for (QDoubleSpinBox* f : _final)
             connect(f, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this] { finalChanged(); });
       connect(_spelled, &QCheckBox::toggled, this, [this](bool on) { if (!_updating) { _t.spelled = on; showTemperament(_t); } });
+      connect(_quarter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
+            if (!_updating) {
+                  _t.quarter = Temperament::Quarter(_quarter->currentData().toInt());
+                  showTemperament(_t);
+                  }
+            });
+      connect(_persian, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
+            if (!_updating) {
+                  _t.persian = Temperament::Persian(_persian->currentData().toInt());
+                  showTemperament(_t);
+                  }
+            });
       connect(_just, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
             if (_updating)
                   return;
@@ -189,7 +215,12 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       connect(_useOld, &QPushButton::clicked, this, [this] { useOld(); });
       connect(loadButton, &QPushButton::clicked, this, [this] { load(); });
       connect(saveButton, &QPushButton::clicked, this, [this] { save(); });
-      connect(bb->button(QDialogButtonBox::Reset), &QPushButton::clicked, this, [this] { showTemperament(Temperament()); });
+      connect(bb->button(QDialogButtonBox::Reset), &QPushButton::clicked, this, [this] {
+            Temperament e;                // (the accidental choices stay)
+            e.quarter = _t.quarter;
+            e.persian = _t.persian;
+            showTemperament(e);
+            });
       connect(bb->button(QDialogButtonBox::Apply), &QPushButton::clicked, this, [this] { apply(); });
       connect(bb, &QDialogButtonBox::accepted, this, [this] { apply(); accept(); });
       connect(bb, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -298,6 +329,8 @@ void TuningDialog::showTemperament(const Temperament& t)
       _justLabel->setVisible(_t.name == "just");
       _just->setEnabled(just);
       _just->setCurrentIndex(_just->findData(int(just ? _t.just : Temperament::Just::KEYS)));
+      _quarter->setCurrentIndex(_quarter->findData(int(_t.quarter)));
+      _persian->setCurrentIndex(_persian->findData(int(_t.persian)));
       QString about = presetAbout(_t.name);
       if (just && _t.just == Temperament::Just::JOHNSTON)
             about += " " + tr("By spelling (Ben Johnston): the root's major scale is pure, and a sharp or flat is 25/24, "
@@ -330,6 +363,8 @@ void TuningDialog::presetChanged()
       Temperament t = Temperament::preset(name);
       t.spelled = _t.spelled;
       t.just = _t.just;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       showTemperament(t);
       }
 
@@ -341,6 +376,8 @@ void TuningDialog::rootChanged()
       Temperament t = Temperament::preset(_t.name, _root->currentIndex(), _root->currentIndex(), 0.0);
       t.spelled = _t.spelled;
       t.just = _t.just;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       showTemperament(t);
       }
 
@@ -351,6 +388,8 @@ void TuningDialog::pureOrTweakChanged()
       Temperament t = Temperament::preset(_t.name, _t.root, _pure->currentIndex(), _tweak->value());
       t.spelled = _t.spelled;
       t.just = _t.just;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       showTemperament(t);
       }
 
@@ -376,6 +415,8 @@ void TuningDialog::useOld()
       Temperament t;
       t.name = "custom";
       t.spelled = _t.spelled;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       for (int i = 0; i < 12; ++i)
             t.offsets[i] = _pluginHas[i] ? _pluginValues[i] : 0.0;
       for (const QString& name : Temperament::presetNames()) {
@@ -388,6 +429,8 @@ void TuningDialog::useOld()
                         if (same) {
                               Temperament m = p;
                               m.spelled = t.spelled;
+                              m.quarter = t.quarter;
+                              m.persian = t.persian;
                               _clearOld->setChecked(true);
                               showTemperament(m);
                               return;
@@ -440,7 +483,7 @@ void TuningDialog::apply()
       {
       MasterScore* ms = _score->masterScore();
       QMap<QString, QString> tags = ms->metaTags();
-      if (_t.isEqual() && _t.spelled)
+      if (_t.isEqual() && _t.spelled && _t.accidentalsDefault())
             tags.remove(Temperament::metaTag);
       else
             tags.insert(Temperament::metaTag, _t.toJson());

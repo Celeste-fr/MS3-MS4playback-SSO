@@ -41,6 +41,8 @@ class TuningDialog : public QDialog {
       QDoubleSpinBox* _final[12];
       QCheckBox* _spelled;
       QComboBox* _just;
+      QComboBox* _quarter;
+      QComboBox* _persian;
       QLabel* _justLabel;
       QLabel* _about;
       QLabel* _oldNotes;

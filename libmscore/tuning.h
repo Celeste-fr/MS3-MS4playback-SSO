@@ -32,7 +32,11 @@
 //                root), and each of HEJI's arrows on an accidental moves it by a syntonic comma
 //                (E with one arrow down is 5/4 above C). MuseScore 3 plays those accidentals as
 //                naturals; here they sound as written, in every tuning.
-//   accidental   the Microtonal Tuner plugin's rules: a microtonal accidental on the note, the
+//   accidental   (families, each by its own definition: quarter tones fixed 50 / half the tuning's
+//                sharp / 33/32 and koron-sori per the score's choices; Arel-Ezgi-Uzdilek and Turkish
+//                folk accidentals in Holdrian commas, 1/53 octave; Wyschnegradsky in 72-EDO steps;
+//                Sagittal and Helmholtz-Ellis in their exact ratios)
+//                the Microtonal Tuner plugin's rules: a microtonal accidental on the note, the
 //                last one on its staff line earlier in the bar (any voice), or a custom key
 //                signature's symbol on that line; cents from MuseScore 3.6.2's accidental table,
 //                relative to the note's plain spelling (a half-sharp F is +50). A tied note
@@ -72,6 +76,19 @@ struct Temperament {
             HEJI                    // by spelling: Helmholtz-Ellis, unmarked notes Pythagorean
             };
       Just just { Just::KEYS };     // how Just intonation is tuned
+      enum class Quarter : char {
+            FIXED,                  // 24-EDO: a quarter tone is 50 cents (the most used; MuseScore 3.6)
+            HALF,                   // half the tuning's own sharp or flat (meantone, 31-EDO: a semisharp)
+            JUST                    // 33/32, the undecimal quarter tone of just intonation
+            };
+      Quarter quarter { Quarter::FIXED };   // quarter-tone accidentals (Stein-Zimmermann, Gould arrows)
+      enum class Persian : char {
+            VAZIRI,                 // quarter tones, as Vaziri defined them: koron -50, sori +50
+            PRACTICE,               // as reported in performance: koron -60, sori +40
+            MS36                    // as MuseScore 3.6 plays them: -67, +33
+            };
+      Persian persian { Persian::VAZIRI };
+      bool accidentalsDefault() const { return quarter == Quarter::FIXED && persian == Persian::VAZIRI; }
 
       bool isEqual() const;
       bool isChain(double* step = nullptr) const;

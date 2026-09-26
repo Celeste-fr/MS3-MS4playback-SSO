@@ -139,6 +139,18 @@ Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3
   every tuning: `ScoreTuning::hejiAccidental`, 100 × sharps + 21.506 × arrows from the written
   natural, the temperament taken from the sharp spelling (`Target::spelled`). Tests `justSpelling`,
   `heji` (heji.mscx).
+- Accidental families (owner, 2026-09-26: one dominant convention → use it; competing ones →
+  options, the most common the default). `conventionCents` (by symbol, before 3.6.2's table):
+  Arel-Ezgi-Uzdilek and Turkish folk accidentals in Holdrian commas (1200/53; 3.6.2 had no value),
+  Wyschnegradsky exact 72-EDO steps, Sagittal exact ratios over the Pythagorean note, quarter tones
+  from the symbol (fixes 3.6.2's swapped FLAT2_ARROW_UP −250 / FLAT2_ARROW_DOWN −150). Per score
+  (temperament metaTag, left out when default): `Temperament::quarter` (JSON "quarterTones":
+  FIXED 50 default / "half" of the tuning's own sharp at that note, the 31-EDO semisharp / "33/32")
+  and `Temperament::persian` ("persian": VAZIRI ±50 default / "practice" −60 +40 / "musescore36"
+  −67 +33). The Tuning dialog has both. Test `families` (quarter.mscx); `microtonal` and
+  `pluginParity` allow the plugin's rounding (Sagittal, Wyschnegradsky) and expect the AEU values
+  the plugin didn't have. The owner's listening page for these choices:
+  https://claude.ai/artifact/V3mTgZw3L4cFR2kA64xRB6
 - Stacked accidentals (`Accidental::isStackModifier`): HEJI's prime modifiers (7: 64/63 and two, 11:
   33/32, 13: 27/26, and the combining 17 … 53 ones) applied to a note with a ♭ ♮ ♯ 𝄪 𝄫, a HEJI arrow
   or another modifier go beside it (`stackModifier` in cmd.cpp: added, replacing one of the same
@@ -160,7 +172,7 @@ Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3
 - `mscore/tuningdialog.*`: *Tools › Tuning…* (presets, final values, plugin file load/save, offers
   to clear plugin-written note values). The Inspector's note panel shows Temperament, Accidental,
   Tuning and Result.
-- `mtest/libmscore/tuning` (`tst_tuning`, 11/11): the plugin's fixture and parity with the plugin
+- `mtest/libmscore/tuning` (`tst_tuning`, 12/12): the plugin's fixture and parity with the plugin
   run in 3.6.2 (51 notes, same values but 2 with a hand-set tuning, which the fork adds to and the
   plugin overwrites). The Microtonal Tuner plugin for 3.6 (reads the same metaTag; not in this
   repository) is frozen (owner, 2026-09-26): no parity to keep. Update or drop
