@@ -68,14 +68,14 @@ MS4 playback (see the header comment of each file):
   (ALL_VOICE_IN_STAFF, `Read206::readDynamicRange`), otherwise to the whole instrument; voices
   2-4 to their own voice. (Found on the owner's "Ethanol": a piano ff on one staff.)
 - **One deliberate difference from MS4:** a MuseScore 3 hairpin with a velocity change of its
-  own and no end dynamic MS4 would take goes to the dynamic nearest the velocity MuseScore 3
-  reached (p < +63 → ff), not one step (`ms3VelocityChangeLevel`). MS4 ignores the change, so
-  such hairpins are near inaudible there; the owner's scores rely on them. Applied whenever a hairpin
-  has a velocity change, even with an end dynamic (as MuseScore 3.6; the dynamic takes over at its
-  own tick), on MS3's curves (ChangeMap::interpolateRamp), down to silence. Preference
-  `application/playback/ms3HairpinVelocityChange` (Advanced, on); `MS4_STRICT=1` in the
-  environment turns it off, and `ab/trace/regress.sh` sets it (the demos Brassed_Up and Dawn
-  change otherwise).
+  own plays as MuseScore 3.6 plays it (`Dynamics::addHairpin`, `ms3HairpinVelocity()`): CC11 from
+  the value in force by the whole change, on MS3's curves (ChangeMap::interpolateRamp), clipped to
+  0-127, down to silence (`expressionLevel` goes under ppp only then), even with a dynamic at its
+  end (which takes over at its own tick). MS4 ignores the change and goes one step, so such
+  hairpins are near inaudible there; the owner's scores rely on them (Ethanol, Prolongation:
+  matched against 3.6.2's MIDI export). Preference `application/playback/ms3HairpinVelocityChange`
+  (Advanced, on); `MS4_STRICT=1` in the environment turns it off, and `ab/trace/regress.sh` sets
+  it (the demos Brassed_Up and Dawn change otherwise).
 
 Sound libraries (`libmscore/soundlibrary.h` explains the design):
 
