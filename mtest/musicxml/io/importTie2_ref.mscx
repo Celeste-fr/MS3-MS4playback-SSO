@@ -25,6 +25,8 @@
       <hairpinWidth>0.10026</hairpinWidth>
       <smallNoteMag>0.6</smallNoteMag>
       <graceNoteMag>0.6</graceNoteMag>
+      <evenFooterC>$C</evenFooterC>
+      <oddFooterC>$C</oddFooterC>
       <voltaLineWidth>0.13021</voltaLineWidth>
       <tupletBracketWidth>0.10026</tupletBracketWidth>
       <staffFrameWidth>0.13021</staffFrameWidth>

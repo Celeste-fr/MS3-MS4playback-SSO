@@ -8,12 +8,6 @@
       <pageWidth>8.26771</pageWidth>
       <pageHeight>11.6929</pageHeight>
       <pagePrintableWidth>7.08661</pagePrintableWidth>
-      <pageEvenLeftMargin>0.590551</pageEvenLeftMargin>
-      <pageOddLeftMargin>0.590551</pageOddLeftMargin>
-      <pageEvenTopMargin>0.590551</pageEvenTopMargin>
-      <pageEvenBottomMargin>0.590551</pageEvenBottomMargin>
-      <pageOddTopMargin>0.590551</pageOddTopMargin>
-      <pageOddBottomMargin>0.590551</pageOddBottomMargin>
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
       <Spatium>1.74978</Spatium>
       </Style>
@@ -127,6 +121,7 @@
             <sigD>4</sigD>
             </TimeSig>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>19</root>
               <name>maj7</name>
@@ -224,6 +219,7 @@
               </Note>
             </Chord>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>15</root>
               <name>maj7</name>
@@ -286,6 +282,7 @@
               </Note>
             </Chord>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>12</root>
               <name>7</name>
@@ -333,6 +330,7 @@
       <Measure>
         <voice>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>11</root>
               <name>maj7</name>
@@ -378,6 +376,7 @@
             </Chord>
           <FretDiagram>
             <fretOffset>4</fretOffset>
+            <frets>4</frets>
             <Harmony>
               <root>17</root>
               <name>m7</name>
@@ -441,6 +440,7 @@
             </Chord>
           <FretDiagram>
             <fretOffset>2</fretOffset>
+            <frets>4</frets>
             <Harmony>
               <root>16</root>
               <name>7</name>
@@ -505,6 +505,7 @@
       <Measure>
         <voice>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>15</root>
               <name>maj7</name>
@@ -558,6 +559,7 @@
               </Note>
             </Chord>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>12</root>
               <name>7</name>
@@ -594,6 +596,7 @@
               </Note>
             </Chord>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>11</root>
               <name>maj7</name>
@@ -637,6 +640,7 @@
               </Note>
             </Chord>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>20</root>
               <name>7</name>
@@ -672,6 +676,7 @@
       <Measure>
         <voice>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>19</root>
               <name>maj7</name>

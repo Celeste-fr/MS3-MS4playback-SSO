@@ -1469,6 +1469,7 @@ class MStyle {
       const QVariant& value(Sid idx) const;
       qreal pvalue(Sid idx) const    { return _precomputedValues[int(idx)]; }
       void set(Sid idx, const QVariant& v);
+      static bool notInMuseScore36(Sid idx);    // a 3.7 style MuseScore 3.6 can't keep: fixed at its default
 
       bool isDefault(Sid idx) const;
       void setDefaultStyleVersion(const int defaultsVersion);

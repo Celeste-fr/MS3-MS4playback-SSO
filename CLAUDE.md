@@ -25,6 +25,26 @@ what was done in commit messages.
 - CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This keeps the
   private repo's Actions minutes.
 
+## Rule: files survive a round trip to MuseScore 3.6
+
+The owner (2026-09-26): **any file this fork touches must survive a round trip to MuseScore 3.6
+and back unchanged.** Test: `ab/roundtrip2.py [--mtest N] [--list file] [scores…]` (the fork
+saves A, 3.6.2 opens A and saves B, the fork opens B and saves C; A and C compared as XML, as
+the fork's PNG pages and as its MIDI; fresh settings per app). Where 3.7 differs from 3.6 in
+what it reads or writes, the fork follows 3.6:
+- the legacy style default files (`share/styles/legacy-style-defaults-v1/2/3.mss`) carry 3.6.2's
+  header (3.02), so pre-3.6 scores get 3.6's defaults; five built-in style defaults are 3.6.2's
+  again (footer `$:copyright:` and offset, 5 frets, square rehearsal-mark frame);
+- `MStyle::isDefault` compares doubles within 1e-6 (an imported 10 mm vs the file's 0.393701);
+- `MStyle::notInMuseScore36`: the nine styles 3.7 added stay at their defaults (reading, import,
+  the Style dialog greys them out);
+- a MuseScore 3 file's pedal line width reads as in 3.6 (not a styled property of its own);
+- a tuplet's `<Number>` carries all its properties (fonts), as 3.6 reads them;
+- a MuseScore 2 import gets its instrument id (`updateInstrumentId`), as 3.6 adds it on reading.
+Some mtest references were updated for these (compat114/206, musicxml io, tuplet save-load).
+Known leftovers: the XML of some MuseScore 1/2 imports still changes on the first round trip
+(pages and MIDI identical); MIDI export's same-instant event order is not stable run to run.
+
 ## Layout of the fork-specific code
 
 MS4 playback (see the header comment of each file):

@@ -36,7 +36,7 @@
         <barLineSpan>1</barLineSpan>
         </Staff>
       <trackName>Lead</trackName>
-      <Instrument>
+      <Instrument id="flute">
         <trackName>Flute</trackName>
         <minPitchP>59</minPitchP>
         <maxPitchP>98</maxPitchP>
@@ -85,7 +85,7 @@
         </Staff>
       <show>0</show>
       <trackName>Bass</trackName>
-      <Instrument>
+      <Instrument id="contrabass">
         <trackName>Contrabass</trackName>
         <minPitchP>28</minPitchP>
         <maxPitchP>67</maxPitchP>
@@ -153,6 +153,7 @@
             <actualNotes>3</actualNotes>
             <baseNote>eighth</baseNote>
             <Number>
+              <style>Tuplet</style>
               <text>3</text>
               </Number>
             </Tuplet>
@@ -258,7 +259,7 @@
           <defaultClef>F8vb</defaultClef>
           </Staff>
         <trackName>Contrabass</trackName>
-        <Instrument>
+        <Instrument id="contrabass">
           <trackName>Contrabass</trackName>
           <minPitchP>28</minPitchP>
           <maxPitchP>67</maxPitchP>

@@ -757,6 +757,7 @@ static void readInstrument(Instrument *i, Part* p, XmlReader& e)
 
       if (i->instrumentId().isEmpty())
             i->setInstrumentId(i->recognizeInstrumentId());
+      i->updateInstrumentId();      // the id MuseScore 3.6 gives it when it reads the file back
 
       // Read single-note dynamics from template
       i->setSingleNoteDynamicsFromTemplate();
@@ -1560,7 +1561,7 @@ static void readTuplet(Tuplet* tuplet, XmlReader& e)
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
             if (tag == "Number") {
-                  Text* _number = new Text(tuplet->score());
+                  Text* _number = new Text(tuplet->score(), Tid::TUPLET);     // as read302 does: the file reads back so
                   _number->setParent(tuplet);
                   _number->setComposition(true);
                   tuplet->setNumber(_number);

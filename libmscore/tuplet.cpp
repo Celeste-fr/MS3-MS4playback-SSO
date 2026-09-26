@@ -804,9 +804,10 @@ void Tuplet::write(XmlWriter& xml) const
             xml.tag("baseDots", dots);
 
       if (_number) {
+            // all of the number's properties, as MuseScore 3.6 writes and reads them (its font too:
+            // 3.6 doesn't read the tuplet's own, so a round trip to 3.6 would lose it)
             xml.stag("Number", _number);
-            _number->writeProperty(xml, Pid::SUB_STYLE);
-            _number->writeProperty(xml, Pid::TEXT);
+            _number->writeProperties(xml);
             xml.etag();
             }
 

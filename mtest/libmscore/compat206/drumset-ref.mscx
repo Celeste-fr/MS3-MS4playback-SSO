@@ -31,7 +31,7 @@
         <defaultClef>PERC</defaultClef>
         </Staff>
       <trackName>Drumset</trackName>
-      <Instrument>
+      <Instrument id="drumset">
         <longName>Drumset</longName>
         <shortName>Drs.</shortName>
         <trackName>Drumset</trackName>
@@ -265,7 +265,7 @@
         <defaultClef>PERC</defaultClef>
         </Staff>
       <trackName>Snare Drum</trackName>
-      <Instrument>
+      <Instrument id="snare-drum">
         <longName>Snare Drum</longName>
         <shortName>SD</shortName>
         <trackName>Snare Drum</trackName>
@@ -397,7 +397,7 @@
         <defaultClef>PERC</defaultClef>
         </Staff>
       <trackName>Tenor Drums</trackName>
-      <Instrument>
+      <Instrument id="marching-tenor-drums">
         <longName>Tenor Drums</longName>
         <shortName>TD</shortName>
         <trackName>Tenor Drums</trackName>
@@ -606,7 +606,7 @@
         <defaultClef>PERC</defaultClef>
         </Staff>
       <trackName>Bass Drums</trackName>
-      <Instrument>
+      <Instrument id="bass-drum">
         <longName>Bass Drums</longName>
         <shortName>BD</shortName>
         <trackName>Bass Drums</trackName>

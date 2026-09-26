@@ -49,8 +49,8 @@
       <line-width type="slur tip">0.5</line-width>
       <line-width type="staff">2</line-width>
       <line-width type="stem">1.8</line-width>
-      <line-width type="tie middle">2.5</line-width>
-      <line-width type="tie tip">0.5</line-width>
+      <line-width type="tie middle">2.1</line-width>
+      <line-width type="tie tip">0.7</line-width>
       <line-width type="tuplet bracket">1</line-width>
       <line-width type="wedge">1.5</line-width>
       <note-size type="cue">75</note-size>

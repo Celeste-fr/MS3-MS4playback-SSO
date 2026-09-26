@@ -108,7 +108,9 @@ void Pedal::read(XmlReader& e)
             e.addSpanner(e.intAttribute("id", -1), this);
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
-            if (readStyledProperty(e, tag))
+            // (a MuseScore 3 file reads as MuseScore 3.6 reads it: a round trip to 3.6 keeps the
+            // score as it is; 3.7 took the pedal's line width as its own there, 3.6 doesn't)
+            if (score()->mscVersion() > 302 && readStyledProperty(e, tag))
                   ;
             else if (!TextLineBase::readProperties(e))
                   e.unknown();

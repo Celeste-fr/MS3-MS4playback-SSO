@@ -99,6 +99,7 @@
             <baseNote>eighth</baseNote>
             <Number>
               <style>Tuplet</style>
+              <size>4</size>
               <text>3</text>
               </Number>
             <size>4</size>
@@ -135,6 +136,8 @@
             <baseNote>eighth</baseNote>
             <Number>
               <style>Tuplet</style>
+              <size>12</size>
+              <underline>1</underline>
               <text>3</text>
               </Number>
             <size>12</size>
@@ -172,6 +175,7 @@
             <baseNote>eighth</baseNote>
             <Number>
               <style>Tuplet</style>
+              <size>11</size>
               <text>3</text>
               </Number>
             <bracketType>1</bracketType>
@@ -210,6 +214,8 @@
             <baseNote>eighth</baseNote>
             <Number>
               <style>Tuplet</style>
+              <family>EB Garamond SC</family>
+              <size>15</size>
               <text>3:2</text>
               </Number>
             <numberType>1</numberType>

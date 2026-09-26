@@ -8,12 +8,6 @@
       <pageWidth>8.26997</pageWidth>
       <pageHeight>11.69</pageHeight>
       <pagePrintableWidth>7.08887</pagePrintableWidth>
-      <pageEvenLeftMargin>0.590551</pageEvenLeftMargin>
-      <pageOddLeftMargin>0.590551</pageOddLeftMargin>
-      <pageEvenTopMargin>0.590551</pageEvenTopMargin>
-      <pageEvenBottomMargin>0.590551</pageEvenBottomMargin>
-      <pageOddTopMargin>0.590551</pageOddTopMargin>
-      <pageOddBottomMargin>0.590551</pageOddBottomMargin>
       <lyricsDashLineThickness>0.1</lyricsDashLineThickness>
       <bracketWidth>0.45</bracketWidth>
       <stemWidth>0.1</stemWidth>
@@ -22,8 +16,6 @@
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
       <slurEndWidth>0.05</slurEndWidth>
       <slurMidWidth>0.21</slurMidWidth>
-      <tieEndWidth>0.05</tieEndWidth>
-      <tieMidWidth>0.21</tieMidWidth>
       <voltaLineWidth>0.11</voltaLineWidth>
       <ottavaLineWidth>0.11</ottavaLineWidth>
       <Spatium>1.74978</Spatium>

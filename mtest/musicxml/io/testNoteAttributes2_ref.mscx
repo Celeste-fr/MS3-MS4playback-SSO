@@ -6,6 +6,8 @@
     <Division>480</Division>
     <Style>
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
+      <evenFooterC>$C</evenFooterC>
+      <oddFooterC>$C</oddFooterC>
       <Spatium>1.74978</Spatium>
       </Style>
     <showInvisible>1</showInvisible>
@@ -127,7 +129,7 @@
             </TimeSig>
           <Fermata>
             <subtype>fermataAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>2</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>
@@ -139,7 +141,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataBelow</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>2</timeStretch>
             <placement>below</placement>
             </Fermata>
           <Chord>
@@ -519,7 +521,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataShortAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>1.5</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>
@@ -531,7 +533,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataLongAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>3</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>

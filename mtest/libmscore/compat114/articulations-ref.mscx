@@ -85,7 +85,7 @@
             </TimeSig>
           <Fermata>
             <subtype>fermataAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>2</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>
@@ -96,7 +96,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataBelow</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>2</timeStretch>
             <placement>below</placement>
             </Fermata>
           <Chord>
@@ -108,7 +108,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataShortAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>1.5</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>
@@ -119,7 +119,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataShortBelow</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>1.5</timeStretch>
             <placement>below</placement>
             </Fermata>
           <Chord>
@@ -135,7 +135,7 @@
         <voice>
           <Fermata>
             <subtype>fermataLongAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>3</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>
@@ -146,7 +146,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataLongBelow</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>3</timeStretch>
             <placement>below</placement>
             </Fermata>
           <Chord>
@@ -158,7 +158,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataVeryLongAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>4</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>
@@ -169,7 +169,7 @@
             </Chord>
           <Fermata>
             <subtype>fermataVeryLongBelow</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>4</timeStretch>
             <placement>below</placement>
             </Fermata>
           <Chord>
@@ -502,7 +502,7 @@
         <voice>
           <Fermata>
             <subtype>fermataAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>2</timeStretch>
             </Fermata>
           <Rest>
             <durationType>quarter</durationType>
@@ -522,7 +522,7 @@
         <voice>
           <Fermata>
             <subtype>fermataAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>2</timeStretch>
             </Fermata>
           <Rest>
             <durationType>measure</durationType>

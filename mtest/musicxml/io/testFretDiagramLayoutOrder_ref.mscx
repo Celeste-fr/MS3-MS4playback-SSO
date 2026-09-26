@@ -6,13 +6,6 @@
     <Division>480</Division>
     <Style>
       <pageHeight>11.6929</pageHeight>
-      <pagePrintableWidth>7.08661</pagePrintableWidth>
-      <pageEvenLeftMargin>0.590551</pageEvenLeftMargin>
-      <pageOddLeftMargin>0.590551</pageOddLeftMargin>
-      <pageEvenTopMargin>0.590551</pageEvenTopMargin>
-      <pageEvenBottomMargin>0.590551</pageEvenBottomMargin>
-      <pageOddTopMargin>0.590551</pageOddTopMargin>
-      <pageOddBottomMargin>0.590551</pageOddBottomMargin>
       <hideInstrumentNameIfOneInstrument>0</hideInstrumentNameIfOneInstrument>
       <Spatium>1.75</Spatium>
       </Style>
@@ -124,6 +117,7 @@
             </TimeSig>
           <FretDiagram>
             <fretOffset>2</fretOffset>
+            <frets>4</frets>
             <Harmony>
               <root>14</root>
               <name>m</name>
@@ -785,6 +779,7 @@
       <Measure>
         <voice>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>13</root>
               <align>center,top</align>
@@ -848,6 +843,7 @@
         <endRepeat>2</endRepeat>
         <voice>
           <FretDiagram>
+            <frets>4</frets>
             <Harmony>
               <root>16</root>
               <name>7</name>

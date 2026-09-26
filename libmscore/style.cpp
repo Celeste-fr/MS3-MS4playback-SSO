@@ -381,7 +381,7 @@ static const StyleType styleTypes[] {
       { Sid::fretMag,                 "fretMag",                 QVariant(1.0) },
       { Sid::fretPlacement,           "fretPlacement",           int(Placement::ABOVE) },
       { Sid::fretStrings,             "fretStrings",             6 },
-      { Sid::fretFrets,               "fretFrets",               4 },
+      { Sid::fretFrets,               "fretFrets",               5 },     // 3.6.2's (3.7: 4): a round trip to 3.6 keeps the value
       { Sid::fretNut,                 "fretNut",                 QVariant(true) },
       { Sid::fretDotSize,             "fretDotSize",             QVariant(1.0) },
       { Sid::fretStringSpacing,       "fretStringSpacing",       Spatium(0.7) },
@@ -482,10 +482,10 @@ static const StyleType styleTypes[] {
       { Sid::footerOddEven,           "footerOddEven",           QVariant(true) },
       { Sid::footerInsideMargins,     "footerInsideMargins",     QVariant(false) },
       { Sid::evenFooterL,             "evenFooterL",             QVariant(QString()) },
-      { Sid::evenFooterC,             "evenFooterC",             QVariant(QString("$C")) },
+      { Sid::evenFooterC,             "evenFooterC",             QVariant(QString("$:copyright:")) },     // 3.6.2's (3.7: $C)
       { Sid::evenFooterR,             "evenFooterR",             QVariant(QString()) },
       { Sid::oddFooterL,              "oddFooterL",              QVariant(QString()) },
-      { Sid::oddFooterC,              "oddFooterC",              QVariant(QString("$C")) },
+      { Sid::oddFooterC,              "oddFooterC",              QVariant(QString("$:copyright:")) },     // 3.6.2's (3.7: $C)
       { Sid::oddFooterR,              "oddFooterR",              QVariant(QString()) },
 
       { Sid::voltaPosAbove,           "voltaPosAbove",           QPointF(0.0, -3.0) },
@@ -994,7 +994,7 @@ static const StyleType styleTypes[] {
       { Sid::rehearsalMarkFontStyle,        "rehearsalMarkFontStyle",       int(FontStyle::Bold) },
       { Sid::rehearsalMarkColor,            "rehearsalMarkColor",           QColor(0, 0, 0, 255) },
       { Sid::rehearsalMarkAlign,            "rehearsalMarkAlign",           QVariant::fromValue(Align::HCENTER | Align::BASELINE) },
-      { Sid::rehearsalMarkFrameType,        "rehearsalMarkFrameType",       int(FrameType::RECTANGLE)  },
+      { Sid::rehearsalMarkFrameType,        "rehearsalMarkFrameType",       int(FrameType::SQUARE)  },     // 3.6.2's (3.7: RECTANGLE)
       { Sid::rehearsalMarkFramePadding,     "rehearsalMarkFramePadding",    0.5 },
       { Sid::rehearsalMarkFrameWidth,       "rehearsalMarkFrameWidth",      0.16 },
       { Sid::rehearsalMarkFrameRound,       "rehearsalMarkFrameRound",      0 },
@@ -1123,7 +1123,7 @@ static const StyleType styleTypes[] {
       { Sid::footerFontStyle,               "footerFontStyle",              int(FontStyle::Normal) },
       { Sid::footerColor,                   "footerColor",                  QColor(0, 0, 0, 255) },
       { Sid::footerAlign,                   "footerAlign",                  QVariant::fromValue(Align::CENTER | Align::BOTTOM) },
-      { Sid::footerOffset,                  "footerOffset",                 QPointF(0.0, 0.0) },
+      { Sid::footerOffset,                  "footerOffset",                 QPointF(0.0, 5.0) },     // 3.6.2's (3.7: 0, 0)
       { Sid::footerFrameType,               "footerFrameType",              int(FrameType::NO_FRAME) },
       { Sid::footerFramePadding,            "footerFramePadding",           0.2 },
       { Sid::footerFrameWidth,              "footerFrameWidth",             0.1 },
@@ -2778,7 +2778,13 @@ void MStyle::precomputeValues()
 
 bool MStyle::isDefault(Sid idx) const
       {
-      return value(idx) == resolveStyleDefaults(_defaultStyleVersion)->value(idx);
+      const QVariant& v = value(idx);
+      const QVariant& d = resolveStyleDefaults(_defaultStyleVersion)->value(idx);
+      // (a value computed on import, 10 mm = 0.3937007874 in, is the default written 0.393701:
+      // not written, as MuseScore 3.6 doesn't once it has read the file back)
+      if (v.type() == QVariant::Double && d.type() == QVariant::Double)
+            return qAbs(v.toDouble() - d.toDouble()) < 1e-6;
+      return v == d;
       }
 
 void MStyle::setDefaultStyleVersion(const int defaultsVersion)
@@ -2830,9 +2836,32 @@ void MStyle::setChordList(ChordList* cl, bool custom)
 //   set
 //---------------------------------------------------------
 
+// Styles MuseScore 3.7 added that MuseScore 3.6 doesn't know: a file saved here and round-tripped
+// through 3.6 would lose them, so they keep their defaults (reading a file, importing, the Style
+// dialog), as in 3.6 (the owner: every file survives a round trip to 3.6 unchanged)
+bool MStyle::notInMuseScore36(Sid idx)
+      {
+      switch (idx) {
+            case Sid::arpeggioAccidentalDistance:
+            case Sid::arpeggioAccidentalDistanceMin:
+            case Sid::footerInsideMargins:
+            case Sid::staffHeaderFooterPadding:
+            case Sid::systemTrailerRightMargin:
+            case Sid::tieDottedWidth:
+            case Sid::tieEndWidth:
+            case Sid::tieMidWidth:
+            case Sid::tieMinDistance:
+                  return true;
+            default:
+                  return false;
+            }
+      }
+
 void MStyle::set(const Sid t, const QVariant& val)
       {
       const int idx = int(t);
+      if (notInMuseScore36(t) && val != styleTypes[idx].defaultValue())
+            return;
       _values[idx] = val;
       if (t == Sid::spatium)
             precomputeValues();

@@ -411,6 +411,18 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
       { Sid::bendArrowWidth,    false, bendArrowWidth,    resetBendArrowWidth    },
       };
 
+      // styles MuseScore 3.6 can't keep stay at their defaults (MStyle::notInMuseScore36)
+      for (const StyleWidget& sw : styleWidgets) {
+            if (!MStyle::notInMuseScore36(sw.idx))
+                  continue;
+            if (QWidget* w = qobject_cast<QWidget*>(sw.widget)) {
+                  w->setEnabled(false);
+                  w->setToolTip(tr("Not in MuseScore 3.6 files: kept at its default so a score survives a round trip to 3.6"));
+                  }
+            if (sw.reset)
+                  sw.reset->setEnabled(false);
+            }
+
       for (QComboBox* cb : std::vector<QComboBox*> {
             lyricsPlacement, textLinePlacement, systemTextLinePlacement, hairpinPlacement, pedalLinePlacement,
             trillLinePlacement, vibratoLinePlacement, dynamicsPlacement,
