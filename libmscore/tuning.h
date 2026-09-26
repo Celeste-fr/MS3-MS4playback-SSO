@@ -85,7 +85,8 @@ struct Temperament {
       enum class Persian : char {
             VAZIRI,                 // quarter tones, as Vaziri defined them: koron -50, sori +50
             PRACTICE,               // as reported in performance: koron -60, sori +40
-            MS36                    // as MuseScore 3.6 plays them: -67, +33
+            MS36                    // as the Microtonal Tuner plugin played them in 3.6 (MuseScore
+                                    // PR #4452, 2019, no reason given): -67, +33
             };
       Persian persian { Persian::VAZIRI };
       bool accidentalsDefault() const { return quarter == Quarter::FIXED && persian == Persian::VAZIRI; }
