@@ -1578,6 +1578,22 @@ PalettePanel* MuseScore::newTempoPalettePanel(bool defaultPalettePanel)
                   sp->append(tt, qApp->translate("Palette", tp.name), QString(), 1.5);
                   }
             }
+
+      // gradual tempo changes: system text lines whose text the playback reads (tempochange.h),
+      // set in the Inspector like a hairpin
+      static const std::pair<const char*, const char*> gradual[] = {
+            { "rit.",   QT_TRANSLATE_NOOP("Palette", "Ritardando line") },
+            { "rall.",  QT_TRANSLATE_NOOP("Palette", "Rallentando line") },
+            { "accel.", QT_TRANSLATE_NOOP("Palette", "Accelerando line") },
+            };
+      for (const auto& g : gradual) {
+            TextLine* line = new TextLine(gscore, true);
+            line->setLen(gscore->spatium() * 8);
+            line->setBeginText(QString("<i>%1</i>").arg(g.first));
+            line->setContinueText(QString("<i>(%1)</i>").arg(g.first));
+            line->setLineStyle(Qt::DashLine);
+            sp->append(line, qApp->translate("Palette", g.second), QString(), 1.0);
+            }
       sp->setMoreElements(false);
 
       return sp;

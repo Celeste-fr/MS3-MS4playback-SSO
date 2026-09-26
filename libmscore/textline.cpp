@@ -102,7 +102,7 @@ TextLineSegment::TextLineSegment(Spanner* sp, Score* s, bool system)
 
 Element* TextLineSegment::propertyDelegate(Pid pid)
       {
-      if (pid == Pid::SYSTEM_FLAG)
+      if (pid == Pid::SYSTEM_FLAG || pid == Pid::TEMPO_CHANGE_FACTOR || pid == Pid::TEMPO_CHANGE_METHOD)
             return static_cast<TextLine*>(spanner());
       return TextLineBaseSegment::propertyDelegate(pid);
       }
@@ -296,8 +296,28 @@ QVariant TextLine::propertyDefault(Pid propertyId) const
             case Pid::BEGIN_HOOK_HEIGHT:
             case Pid::END_HOOK_HEIGHT:
                   return Spatium(1.5);
+            case Pid::TEMPO_CHANGE_FACTOR:
+                  return 0.0;
+            case Pid::TEMPO_CHANGE_METHOD:
+                  return int(ChangeMethod::NORMAL);
             default:
                   return TextLineBase::propertyDefault(propertyId);
+            }
+      }
+
+//---------------------------------------------------------
+//   getProperty
+//---------------------------------------------------------
+
+QVariant TextLine::getProperty(Pid id) const
+      {
+      switch (id) {
+            case Pid::TEMPO_CHANGE_FACTOR:
+                  return _tempoChangeFactor;
+            case Pid::TEMPO_CHANGE_METHOD:
+                  return int(_tempoChangeMethod);
+            default:
+                  return TextLineBase::getProperty(id);
             }
       }
 
@@ -311,6 +331,16 @@ bool TextLine::setProperty(Pid id, const QVariant& v)
             case Pid::PLACEMENT:
                   setPlacement(Placement(v.toInt()));
                   break;
+            case Pid::TEMPO_CHANGE_FACTOR:
+                  _tempoChangeFactor = v.toReal();
+                  score()->setLayoutAll();      // the tempo map (rebuildTempoAndTimeSigMaps)
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::TEMPO_CHANGE_METHOD:
+                  _tempoChangeMethod = ChangeMethod(v.toInt());
+                  score()->setLayoutAll();
+                  score()->setPlaylistDirty();
+                  return true;
             default:
                   return TextLineBase::setProperty(id, v);
             }

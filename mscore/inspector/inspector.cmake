@@ -145,6 +145,7 @@ set (INSPECTOR_UI
     ${CMAKE_CURRENT_LIST_DIR}/inspector_tempotext.ui
     ${CMAKE_CURRENT_LIST_DIR}/inspector_textlinebase.ui
     ${CMAKE_CURRENT_LIST_DIR}/inspector_textline.ui
+    ${CMAKE_CURRENT_LIST_DIR}/inspector_tempochange.ui
     ${CMAKE_CURRENT_LIST_DIR}/inspector_text.ui
     ${CMAKE_CURRENT_LIST_DIR}/inspector_timesig.ui
     ${CMAKE_CURRENT_LIST_DIR}/inspector_tremolobar.ui

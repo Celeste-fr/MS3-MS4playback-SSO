@@ -1156,6 +1156,7 @@ class Score : public QObject, public ScoreElement {
 
       const std::multimap<int, Spanner*>& spanner() const { return _spanner.map(); }
       SpannerMap& spannerMap() { return _spanner; }
+      const SpannerMap& spannerMap() const { return _spanner; }
       bool isSpannerStartEnd(const Fraction& tick, int track) const;
       void removeSpanner(Spanner*);
       void addSpanner(Spanner*);

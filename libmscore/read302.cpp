@@ -17,6 +17,7 @@
 #include "part.h"
 #include "revisions.h"
 #include "score.h"
+#include "tempochange.h"
 #include "scoreOrder.h"
 #include "sig.h"
 #include "spanner.h"
@@ -364,6 +365,7 @@ bool MasterScore::read(XmlReader& e)
       {
       if (!Score::read(e))
             return false;
+      TempoChange::read(this);      // the rit. / accel. lines' settings (tempochange.h)
       for (Staff*& s : staves())
             s->updateOttava();
       setCreated(false);
