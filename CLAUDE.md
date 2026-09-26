@@ -78,7 +78,8 @@ MS4 playback (see the header comment of each file):
   it (the demos Brassed_Up and Dawn change otherwise).
   When such a hairpin has faded to silence (CC11 0), `renderMs4Dynamics` sends all-sound-off
   just before the level returns, unless a note started during the silence, so what still rang
-  (a release, the pedal) isn't heard again (Ethanol bar 14; built-in synthesizer only).
+  (a release, the pedal) isn't heard again (Ethanol bar 14, confirmed by ear by the owner on
+  Windows, 2026-09-26; built-in synthesizer only).
 
 Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3.6 plugins:
 

@@ -25,7 +25,7 @@ Built-in tuning is in (see `CLAUDE.md` › Tuning) along with the all-sound-off 
 hairpin (Ethanol bar 14). Still open:
 - the playback regression (`ab/trace/regress.sh`) has not been run on edb5eec. The `ab/` harness
   is not in the repository, so a new cloud container doesn't have it;
-- the owner: listen to Ethanol bar 14 and try *Tools › Tuning…* in the Windows build;
+- the owner: try *Tools › Tuning…* in the Windows build (Ethanol bar 14 confirmed good);
 - the owner: pitches for the 49 accidentals MuseScore gives none;
 - the owner: hit lists for the unpitched drum kits (see CLAUDE.md › Eighth run: click each drum
   icon in Kickstart and screenshot its hits on the keyboard);
