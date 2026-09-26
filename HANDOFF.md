@@ -36,13 +36,17 @@ are mapped where notation can ask for them). Still open:
 1. Unzip it. Read `summary.txt` and `results.json`: per patch, `passed`, the verdicts, and for
    scans `found`, `notInMap` and `mapValuesShowingNone`. A scan marked "inconclusive" doesn't
    mean anything is missing; use its pictures only.
-2. Run `python3 tools/soundlibraries/read_check_names.py "<folder>"` (it needs tesseract and
+2. Run `python3 tools/soundlibraries/read_loaded_patches.py "<folder>"`. It reads the loaded
+   Kontakt instrument's name from each `(window).png` and says whether each patch was set up
+   with the right `.nki` (numbers must match: Violins 1 vs 2, Horns a2 vs a4). Tell the owner
+   about any "BAD" line before trusting that patch's results.
+3. Run `python3 tools/soundlibraries/read_check_names.py "<folder>"` (it needs tesseract and
    ImageMagick `convert`). It OCRs the articulation name in each picture and lists values
    whose name differs from the map's, or that show "None". The OCR misreads some names
    (Long becomes "Large"), so look at the `<patch>.png` contact sheets for anything it flags
    before changing the map. For added patches, the "map" column reads "(not in map)": the OCR
    name is what the patch calls that value.
-3. Fix or extend the map only through `tools/soundlibraries/gen_spitfire_sso.py`:
+4. Fix or extend the map only through `tools/soundlibraries/gen_spitfire_sso.py`:
    - A new patch is a row in `I` (bank, name shown, MuseScore instrument ids, partName regexp).
      Its values come from the Reaticulate bank. When the bank lacks the patch, add its
      articulations from the scan the same way `SPITFIRE_ADD` does.
@@ -52,10 +56,10 @@ are mapped where notation can ask for them). Still open:
    - Regenerate the map (the command is in the script's header; it needs a clone of
      github.com/jtackaberry/reaticulate) and diff `share/soundlibraries/Spitfire Symphony
      Orchestra.xml`. Only the intended entries should change.
-4. Update the "Tried by the owner" part of `CLAUDE.md` with what the run showed.
-5. Build and run `tst_soundlibrary` locally if you can (`CLAUDE.md` › Building). The
+5. Update the "Tried by the owner" part of `CLAUDE.md` with what the run showed.
+6. Build and run `tst_soundlibrary` locally if you can (`CLAUDE.md` › Building). The
    `spitfireMap` test checks instrument matching.
-6. Push. If code changed (not just the map) and the owner needs a new Windows build, put
+7. Push. If code changed (not just the map) and the owner needs a new Windows build, put
    `[windows-build]` in the last commit message. The workflow then builds, tests and uploads
    in about 15 minutes. The owner allows this without asking, but don't overuse it:
    - validate locally first;
