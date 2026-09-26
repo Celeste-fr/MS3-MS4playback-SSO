@@ -275,8 +275,19 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   patch names, numbered by the UACC standard: Long 1, Staccato 40, Staccatissimo 42, Tenuto
   50, Marcato 52, Multitongue 75), and one-sound entries (value 1, every technique) for Grand
   Piano, Timpani, Celeste, Glockenspiel, Xylophone, Marimba, Vibraphone, Crotales, Tubular
-  Bells, Desk Bells. Not mapped: the drum and unpitched kits (they need a per-key drum map),
-  Harp glissandi, the Curated Ensembles.
+  Bells, Desk Bells. Not mapped (checked against all 700 .nki names; only Core / Decorative
+  techniques are true subsets of All techniques):
+  - the 22 Performance / Total Performance patches: Spitfire's legato (All techniques has
+    none), Sul G / Sul C Performance, Oboe Principal (another player);
+  - 13 single-technique patches whose articulation no All techniques patch has (the full
+    scan agrees): Horn Solo / Horns a2 Legato and Staccatissimo, Horns a2 Bells up
+    Staccatissimo, Fanfare (Horns a6, Trombones a6, Trumpets a2 / a6), Trumpet Solo Fall /
+    Rip Muted, Cimbassi Long Alt, Violins 1 Long Sul Pont Distorted; plus the single Long
+    Sul G / Sul C patches that do play;
+  - drum, unpitched and toy percussion and the percussion ensembles (need a per-key drum
+    map), Harp glissandi, the Curated Ensembles (blends, no MuseScore instrument).
+  Groups 1 and 2 need a part to use more than one patch (e.g. slurred notes → Performance):
+  not supported yet (one route per part).
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
     are silent at every pitch; the report now lists such values apart ("most likely none",
