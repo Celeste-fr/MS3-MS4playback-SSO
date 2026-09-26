@@ -317,29 +317,41 @@ void TestTimesig::timesig_78216()
 
 //---------------------------------------------------------
 ///   removeRedundant
-///   delete a 4/4 that restates the 4/4 in force (timesig-02, measure 3): the measures are
+///   delete a 4/4 that restates the 4/4 in force (timesig-03, measure 3): the measures are
 ///   not rebuilt, so a line break and a stretch in the span stay (musescore#21578); undo
 ///   brings the time signature back
 //---------------------------------------------------------
 
 void TestTimesig::removeRedundant()
       {
-      MasterScore* score = readScore(DIR + "timesig-02.mscx");
+      MasterScore* score = readScore(DIR + "timesig-03.mscx");
       QVERIFY(score);
       Measure* m3 = score->firstMeasure()->nextMeasure()->nextMeasure();
       Measure* m4 = m3->nextMeasure();
+      Measure* m5 = m4->nextMeasure();
+      QVERIFY(m5);
+
+      // a 4/4 in measure 3 restating the 4/4 in force, a line break on measure 4, a stretch on 5
+      TimeSig* ts = new TimeSig(score);
+      ts->setSig(Fraction(4, 4), TimeSigType::NORMAL);
+      score->startCmd();
+      score->cmdAddTimeSig(m3, 0, ts, false);
+      score->endCmd();
+      m3 = score->firstMeasure()->nextMeasure()->nextMeasure();
+      m4 = m3->nextMeasure();
+      m5 = m4->nextMeasure();
       Segment* seg = m3->findSegment(SegmentType::TimeSig, m3->tick());
       QVERIFY(seg);
-      TimeSig* ts = toTimeSig(seg->element(0));
+      ts = toTimeSig(seg->element(0));
       QVERIFY(ts && ts->sig().identical(Fraction(4, 4)));
 
       score->startCmd();
       LayoutBreak* lb = new LayoutBreak(score);
       lb->setLayoutBreakType(LayoutBreak::Type::LINE);
       lb->setTrack(0);
-      lb->setParent(m3);
+      lb->setParent(m4);
       score->undoAddElement(lb);
-      m4->undoChangeProperty(Pid::USER_STRETCH, 1.5);
+      m5->undoChangeProperty(Pid::USER_STRETCH, 1.5);
       score->endCmd();
       const int measures = score->nmeasures();
 
@@ -351,13 +363,13 @@ void TestTimesig::removeRedundant()
       Measure* n3 = score->firstMeasure()->nextMeasure()->nextMeasure();
       QCOMPARE(n3, m3);                         // the same measures, not rebuilt ones
       QVERIFY(!n3->findSegment(SegmentType::TimeSig, n3->tick()));
-      QVERIFY(n3->lineBreak());
-      QCOMPARE(n3->nextMeasure()->userStretch(), 1.5);
+      QVERIFY(n3->nextMeasure()->lineBreak());
+      QCOMPARE(n3->nextMeasure()->nextMeasure()->userStretch(), 1.5);
       QVERIFY(n3->timesig().identical(Fraction(4, 4)));
 
       score->undoRedo(true, 0);                 // undo
       QVERIFY(n3->findSegment(SegmentType::TimeSig, n3->tick()));
-      QVERIFY(n3->lineBreak());
+      QVERIFY(n3->nextMeasure()->lineBreak());
       delete score;
       }
 

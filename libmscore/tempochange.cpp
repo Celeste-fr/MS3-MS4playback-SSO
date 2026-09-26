@@ -30,7 +30,7 @@ namespace TempoChange {
 const char* const metaTag = "tempoChanges";
 
 // a point of the tempo map every 32nd
-static const int STEP = MScore::division / 8;
+static const int STEP = DIVISION / 8;
 
 //---------------------------------------------------------
 //   defaultFactor
