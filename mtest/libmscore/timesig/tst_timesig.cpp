@@ -324,6 +324,7 @@ void TestTimesig::timesig_78216()
 
 void TestTimesig::removeRedundant()
       {
+      MScore::setError(MsError::MS_NO_ERROR);        // timesig02 leaves one: endCmd() would unwind
       MasterScore* score = readScore(DIR + "timesig-03.mscx");
       QVERIFY(score);
       Measure* m3 = score->firstMeasure()->nextMeasure()->nextMeasure();
@@ -331,18 +332,20 @@ void TestTimesig::removeRedundant()
       Measure* m5 = m4->nextMeasure();
       QVERIFY(m5);
 
-      // a 4/4 in measure 3 restating the 4/4 in force, a line break on measure 4, a stretch on 5
-      TimeSig* ts = new TimeSig(score);
-      ts->setSig(Fraction(4, 4), TimeSigType::NORMAL);
+      // a 4/4 in measure 3 restating the 4/4 in force (as a file can have it: cmdAddTimeSig
+      // adds none where the meter doesn't change), a line break on measure 4, a stretch on 5
       score->startCmd();
-      score->cmdAddTimeSig(m3, 0, ts, false);
+      for (int staffIdx = 0; staffIdx < score->nstaves(); ++staffIdx) {
+            TimeSig* t = new TimeSig(score);
+            t->setSig(Fraction(4, 4), TimeSigType::NORMAL);
+            t->setTrack(staffIdx * VOICES);
+            t->setParent(m3->undoGetSegment(SegmentType::TimeSig, m3->tick()));
+            score->undoAddElement(t);
+            }
       score->endCmd();
-      m3 = score->firstMeasure()->nextMeasure()->nextMeasure();
-      m4 = m3->nextMeasure();
-      m5 = m4->nextMeasure();
       Segment* seg = m3->findSegment(SegmentType::TimeSig, m3->tick());
       QVERIFY(seg);
-      ts = toTimeSig(seg->element(0));
+      TimeSig* ts = toTimeSig(seg->element(0));
       QVERIFY(ts && ts->sig().identical(Fraction(4, 4)));
 
       score->startCmd();

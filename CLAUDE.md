@@ -48,7 +48,9 @@ Known leftovers: the XML of some MuseScore 1/2 imports still changes on the firs
 Fixed from MuseScore 3.6 (not about files): deleting a time signature that restates the one in
 force (same nominal meter, none local) no longer rebuilds the measures up to the next one, which
 lost their breaks, spacers, stretch and volta offsets (musescore#21578; the owner used the
-RemoveRedundantSig plugin for it). `Score::cmdRemoveTimeSig`, test `tst_timesig::removeRedundant`.
+RemoveRedundantSig plugin for it). `Score::cmdRemoveTimeSig`, test `tst_timesig::removeRedundant`
+(fails without the fix). `tst_timesig::timesig05` fails since 5f65a1d (fermatas' MS4 default
+time stretch is written into the file: `<timeStretch>2</timeStretch>`), not from this.
 
 ## Layout of the fork-specific code
 
@@ -104,6 +106,18 @@ routes only parts that play the library (`playsLibrary`: their own mode, else th
 The library map stays loaded even when the global mode isn't the library (`updateSoundLibrary`),
 so `SoundLib::active()` is true; MIDI out of the built-in parts is only held back when the global
 mode is the library.
+
+Gradual tempo changes (`libmscore/tempochange.h`), replacing the TempoChanges plugin's hidden
+tempo markings: a text line whose begin text is rit., rall., accel., string. … (the Tempo palette
+has rit. / rall. / accel. lines) changes the tempo over its length, set in the Inspector's
+"Tempo Change" section like a hairpin: "Tempo at end" in % of the start (Auto = MuseScore 4's
+default per term: rit./rall. 75, accel. 133, string. 150 …) and the change method (the hairpins'
+curves; exponential is geometric). The end tempo stays; a tempo marking at the end takes over.
+`rebuildTempoAndTimeSigMaps` adds tempo-map points every 32nd before the measure's tempo
+markings and fermatas. `TextLine` has Pid::TEMPO_CHANGE_FACTOR / TEMPO_CHANGE_METHOD, not written
+in the element: the metaTag `tempoChanges` (JSON tick, tick2, track, factor, method) is written on
+save from the lines' positions and read after loading (`MasterScore::read`). Test
+`tst_tempochange` (4/4). MuseScore 3.6 plays such a line at a steady tempo.
 
 Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3.6 plugins:
 
