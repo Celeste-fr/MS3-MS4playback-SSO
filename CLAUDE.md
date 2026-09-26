@@ -149,8 +149,7 @@ Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3
   and `Temperament::persian` ("persian": VAZIRI ±50 default / "practice" −60 +40 / "musescore36"
   −67 +33). The Tuning dialog has both. Test `families` (quarter.mscx); `microtonal` and
   `pluginParity` allow the plugin's rounding (Sagittal, Wyschnegradsky) and expect the AEU values
-  the plugin didn't have. The owner's listening page for these choices:
-  https://claude.ai/artifact/V3mTgZw3L4cFR2kA64xRB6
+  the plugin didn't have. (The owner's listening page for these choices was deleted after the decision.)
 - Stacked accidentals (`Accidental::isStackModifier`): HEJI's prime modifiers (7: 64/63 and two, 11:
   33/32, 13: 27/26, and the combining 17 … 53 ones) applied to a note with a ♭ ♮ ♯ 𝄪 𝄫, a HEJI arrow
   or another modifier go beside it (`stackModifier` in cmd.cpp: added, replacing one of the same
