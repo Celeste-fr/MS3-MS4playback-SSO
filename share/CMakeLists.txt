@@ -20,11 +20,8 @@
 subdirs(templates wallpaper locale styles sound manual
    workspaces instruments tours)
 
-install (DIRECTORY
-      plugins
-      DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}
-      PATTERN ".*" EXCLUDE
-      )
+# (the example plugins in share/plugins are not installed: the owner's Plugin Manager lists only
+# their own plugins)
 
 # maps of external sound libraries (libmscore/soundlibrary.h)
 install (DIRECTORY
