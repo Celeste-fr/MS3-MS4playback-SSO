@@ -820,10 +820,10 @@ static bool blankPicture(const QImage& image)
       {
       if (image.isNull())
             return true;
-      const QImage small = image.scaled(64, 32).convertToFormat(QImage::Format_RGB32);
-      for (int y = 0; y < small.height(); ++y)
-            for (int x = 0; x < small.width(); ++x)
-                  if (qGray(small.pixel(x, y)) > 12)
+      const QImage thumb = image.scaled(64, 32).convertToFormat(QImage::Format_RGB32);
+      for (int y = 0; y < thumb.height(); ++y)
+            for (int x = 0; x < thumb.width(); ++x)
+                  if (qGray(thumb.pixel(x, y)) > 12)
                         return false;
       return true;
       }
