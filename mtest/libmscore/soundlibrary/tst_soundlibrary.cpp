@@ -178,9 +178,15 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(nameFor("violin", "Violin"), QString("Solo Violin 1"));
       QCOMPARE(nameFor("flute", "Flute"), QString("Flute Solo"));
       QCOMPARE(nameFor("flute", "Flutes 1.2"), QString("Flutes a2"));
-      QCOMPARE(nameFor("horn", "Horns 1-4 a4"), QString("Horns a6"));
+      QCOMPARE(nameFor("horn", "Horns 1-4 a4"), QString("Motif Horns a4"));
+      QCOMPARE(nameFor("horn", "Horns a6"), QString("Horns a6"));
+      QCOMPARE(nameFor("horn", "Horns tutti"), QString("Horns a6"));
+      QCOMPARE(nameFor("bb-trumpet", "Trumpets a3"), QString("Motif Trumpets a3"));
+      QCOMPARE(nameFor("trombone", "Trombones a5"), QString("Motif Trombones a5"));
       QCOMPARE(nameFor("bb-trumpet", "Trumpet in B♭"), QString("Trumpet Solo"));
-      QCOMPARE(nameFor("piano", "Piano"), QString());
+      QCOMPARE(nameFor("piano", "Piano"), QString("Grand Piano"));
+      QCOMPARE(nameFor("timpani", "Timpani"), QString("Timpani"));
+      QCOMPARE(nameFor("drumset", "Drumset"), QString());
 
       // every instrument can play a note without marks
       for (const SoundLib::LibInstrument& li : lib->instruments)

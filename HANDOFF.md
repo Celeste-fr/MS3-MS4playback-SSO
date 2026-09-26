@@ -25,12 +25,11 @@ The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the 
 and 4 of the last request are done (Oboe Solo and Solo Cello pass; the scanned articulations
 are mapped where notation can ask for them). Still open:
 
-- Patches the map lacks: the owner's `.nki` list is in (see `CLAUDE.md`). To add: Motif Brass
-  Horns a4, Trombones a5, Trumpets a3 (their UACC values: from the Reaticulate bank if it has
-  them, else a scan after *Add a patch…*), and, if wanted, SSO's Grand Piano and tuned
-  percussion (these play on the built-in synth now).
-- Violins Long Sul G / Celli Long Sul C are silent in the "All techniques" patches: the owner
-  was asked to check the articulation's load chip and Purge in Kontakt.
+- The instruments the map lacked are added (see `CLAUDE.md`). Motif Brass's UACC numbers
+  come from the standard, not from Kontakt: the owner sets up those three patches (and the
+  percussion ones they use) and runs *Check*; fix any differences through the generator.
+- Violins Long Sul G / Celli Long Sul C: settled, Spitfire's "All techniques" patch plays no
+  samples for them (Kontakt's Voices stays 0).
 
 ## When the zip arrives
 

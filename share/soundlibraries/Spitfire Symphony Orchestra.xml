@@ -406,6 +406,14 @@
     <Articulation name="Rip" value="100" techniques="rip"/>
     <Articulation name="Fall" value="101" techniques="fall"/>
   </Instrument>
+  <Instrument name="Motif Horns a4" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*4\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Short Staccato" value="40" techniques="short"/>
+    <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato"/>
+    <Articulation name="Short Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="Short Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Multitongue" value="75" techniques="tremolo" modifiers="multitongue"/>
+  </Instrument>
   <Instrument name="Horns a6" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
@@ -447,6 +455,14 @@
     <Articulation name="Rip" value="100" techniques="rip"/>
     <Articulation name="Fall" value="101" techniques="fall"/>
   </Instrument>
+  <Instrument name="Motif Trumpets a3" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*3\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Short Staccato" value="40" techniques="short"/>
+    <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato"/>
+    <Articulation name="Short Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="Short Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Multitongue" value="75" techniques="tremolo" modifiers="multitongue"/>
+  </Instrument>
   <Instrument name="Trumpets a6" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre"/>
@@ -483,6 +499,14 @@
     <Articulation name="Fx Glissandi" value="90" techniques=""/>
     <Articulation name="Rip" value="100" techniques="rip"/>
     <Articulation name="Fall" value="101" techniques="fall"/>
+  </Instrument>
+  <Instrument name="Motif Trombones a5" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*5\b">
+    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Short Staccato" value="40" techniques="short"/>
+    <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato"/>
+    <Articulation name="Short Tenuto" value="50" techniques="tenuto"/>
+    <Articulation name="Short Marcato" value="52" techniques="marcato"/>
+    <Articulation name="Multitongue" value="75" techniques="tremolo" modifiers="multitongue"/>
   </Instrument>
   <Instrument name="Trombones a6" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -570,5 +594,35 @@
     <Articulation name="Slid" value="2" techniques=""/>
     <Articulation name="Bisbigliando" value="11" techniques="tremolo"/>
     <Articulation name="Fx" value="90" techniques=""/>
+  </Instrument>
+  <Instrument name="Grand Piano" ids="piano grand-piano upright-piano">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Timpani" ids="timpani">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Celeste" ids="celesta">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Glockenspiel" ids="glockenspiel">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Xylophone" ids="xylophone">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Marimba" ids="marimba">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Vibraphone" ids="vibraphone">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Crotales" ids="crotales">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Tubular Bells" ids="tubular-bells">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+  </Instrument>
+  <Instrument name="Desk Bells" ids="hand-bells">
+    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
 </SoundLibrary>

@@ -94,12 +94,15 @@ I=[
  ('ContraBassoon: All techniques','Contrabassoon','contrabassoon',None),
  ('Horn Solo: All techniques','Horn Solo',HRN,None),
  ('Horns a2: All techniques','Horns a2',HRN,A2),
+ (None,'Motif Horns a4',HRN,r'\ba\s*4\b'),
  ('Horns a6: All techniques','Horns a6',HRN,A6),
  ('Trumpet Solo: All techniques','Trumpet Solo',TRP,None),
  ('Trumpets a2: All techniques','Trumpets a2',TRP,A2),
+ (None,'Motif Trumpets a3',TRP,r'\ba\s*3\b'),
  ('Trumpets a6: All techniques','Trumpets a6',TRP,A6),
  ('Tenor Trombone Solo: All techniques','Tenor Trombone Solo',TBN,None),
  ('Tenor Trombones a2: All techniques','Tenor Trombones a2',TBN,A2),
+ (None,'Motif Trombones a5',TBN,r'\ba\s*5\b'),
  ('Trombones a6: All techniques','Trombones a6',TBN,A6),
  ('Bass Trombone Solo: All techniques','Bass Trombone Solo','bass-trombone',None),
  ('Bass Trombones a2: All techniques','Bass Trombones a2','bass-trombone',A2),
@@ -109,6 +112,17 @@ I=[
  ('Tuba Solo: All techniques','Tuba Solo',TUB,None),
  ('Contrabass Tuba Solo: All techniques','Contrabass Tuba',TUB,r'\bcontra'),
  ('Harp','Harp','harp',None),
+ # single-sound patches of SSO's percussion folder (Symphonic Percussion › Other / Tuned)
+ (None,'Grand Piano','piano grand-piano upright-piano',None),
+ (None,'Timpani','timpani',None),
+ (None,'Celeste','celesta',None),
+ (None,'Glockenspiel','glockenspiel',None),
+ (None,'Xylophone','xylophone',None),
+ (None,'Marimba','marimba',None),
+ (None,'Vibraphone','vibraphone',None),
+ (None,'Crotales','crotales',None),
+ (None,'Tubular Bells','tubular-bells',None),
+ (None,'Desk Bells','hand-bells',None),
 ]
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
@@ -151,6 +165,20 @@ SPITFIRE_DROP = {('Violins 2', 'Long Sul Tasto'), ('Violins 2', 'Trill (Minor 3r
 SILENT = {('Violins 1', 'Long Sul G'), ('Violins 2', 'Long Sul G'), ('Celli', 'Long Sul C')}
 # in the patch (name and UACC number in Kontakt, Check articulations 2026-09-25) but not in the bank
 SPITFIRE_ADD['Flute Solo'] = [('Marcato SFZ', 54, '', '')]
+
+# Instruments the Reaticulate bank lacks (the owner's .nki list, 2026-09-25). Motif Brass: the
+# articulations of its single-technique patches, numbered by the UACC standard (as SSO's other
+# brass number them); not yet checked in Kontakt
+MOTIF = [('Long', 1, 'long legato', ''), ('Short Staccato', 40, 'short', ''),
+         ('Short Staccatissimo', 42, 'staccatissimo spiccato', ''), ('Short Tenuto', 50, 'tenuto', ''),
+         ('Short Marcato', 52, 'marcato', ''), ('Multitongue', 75, 'tremolo', 'multitongue')]
+for n in ('Motif Horns a4', 'Motif Trumpets a3', 'Motif Trombones a5'):
+    SPITFIRE_ADD[n] = MOTIF
+# one sound: everything plays it (the switch value reaches a patch without articulations)
+ONE = [('Normal', 1, 'long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno', '')]
+for n in ('Grand Piano', 'Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone',
+          'Crotales', 'Tubular Bells', 'Desk Bells'):
+    SPITFIRE_ADD[n] = ONE
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
 
 def articulation(n, v, t, m):
@@ -163,7 +191,7 @@ for bank,name,ids,pn in I:
     if pn: attrs+=f' partName={q(pn)}'
     out.append(f'  <Instrument {attrs}>')
     seen=set()
-    for n,v in banks[bank]:
+    for n,v in banks.get(bank, []):
         if n in seen or (name, n) in SPITFIRE_DROP: continue
         seen.add(n)
         t,m=T.get(n, ('', ''))
