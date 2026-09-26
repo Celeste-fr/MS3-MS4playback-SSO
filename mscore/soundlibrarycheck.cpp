@@ -701,10 +701,48 @@ void ArticulationCheckDialog::check()
       _close->setText(tr("Stop"));
       QJsonArray results;
       QString summary = QString("%1 checked against %2 on %3\n\n").arg(_library->name, QFileInfo(path).fileName(), stamp);
+      // results.json and summary.txt, rewritten after each patch (final: with the note of a stop)
+      auto save = [&](bool final) {
+            QString text = summary;
+            QJsonObject top;
+            top["library"] = _library->name;
+            top["map"] = QFileInfo(_library->path).fileName();
+            top["plugin"] = QFileInfo(path).fileName();
+            top["date"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+            top["version"] = QString(VERSION);
+            top["sampleRate"] = MScore::sampleRate;
+            top["cancelled"] = final && _cancel;
+            top["patches"] = results;
+            top["complete"] = final;
+            QFile json(folder + "/results.json");
+            if (json.open(QIODevice::WriteOnly))
+                  json.write(QJsonDocument(top).toJson());
+            json.close();
+            if (final && _cancel)
+                  text += "\n(Stopped before the end.)\n";
+            if (!final)
+                  text += "\n(Still running: written after each patch.)\n";
+            text += "\n# Every patch's last check\n";
+            for (int i = 0; i < int(_rows.size()); ++i) {
+                  const QString patch = _rows[i].instrument->name;
+                  QString last;
+                  if (!SoundLibraryHost::hasSetup(*_library, patch))
+                        last = tr("not set up");
+                  else
+                        needsCheck(i, &last);
+                  text += QString("   %1: %2\n").arg(patch, last);
+                  }
+            QFile txt(folder + "/summary.txt");
+            if (txt.open(QIODevice::WriteOnly))
+                  txt.write(text.toUtf8());
+            txt.close();
+            };
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
             checkPatch(chosen[k], path, folder, results, summary);
+            if (!results.isEmpty())
+                  save(false);      // after each patch: MuseScore closed during a long check keeps what was done
             QApplication::processEvents();
             }
       _progress->setValue(1000);
@@ -724,35 +762,7 @@ void ArticulationCheckDialog::check()
             return;
             }
 
-      QJsonObject top;
-      top["library"] = _library->name;
-      top["map"] = QFileInfo(_library->path).fileName();
-      top["plugin"] = QFileInfo(path).fileName();
-      top["date"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-      top["version"] = QString(VERSION);
-      top["sampleRate"] = MScore::sampleRate;
-      top["cancelled"] = _cancel;
-      top["patches"] = results;
-      QFile json(folder + "/results.json");
-      if (json.open(QIODevice::WriteOnly))
-            json.write(QJsonDocument(top).toJson());
-      json.close();
-      if (_cancel)
-            summary += "\n(Stopped before the end.)\n";
-      summary += "\n# Every patch's last check\n";
-      for (int i = 0; i < int(_rows.size()); ++i) {
-            const QString patch = _rows[i].instrument->name;
-            QString last;
-            if (!SoundLibraryHost::hasSetup(*_library, patch))
-                  last = tr("not set up");
-            else
-                  needsCheck(i, &last);
-            summary += QString("   %1: %2\n").arg(patch, last);
-            }
-      QFile txt(folder + "/summary.txt");
-      if (txt.open(QIODevice::WriteOnly))
-            txt.write(summary.toUtf8());
-      txt.close();
+      save(true);
 
       // all of it in one zip, to hand back
       const QString zipPath = folder + ".zip";
