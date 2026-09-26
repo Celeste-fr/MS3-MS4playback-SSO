@@ -315,11 +315,14 @@ KIT_IDS = ('drumset percussion snare-drum piccolo-snare-drum military-drum bass-
            'timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals '
            'triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells '
            'guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes '
-           'bell-plate vibraslap')
+           'bell-plate vibraslap automobile-brake-drums')
 PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - Wood', 'Other - Toys']
 # Keys from the owner's screenshots of each drum's hit list in Kickstart (2026-09-26; C3 = 60, as the
 # key scan confirms: every listed key sounds and every loud key is listed). MuseScore's pitches are
 # the GM ones its drumsets use (instruments.xml); an entry with ids is for those instruments only.
+# An entry whose name ends in " Roll" is the sound's roll key (technique="roll": a single-note tremolo or
+# buzz roll plays it once, held; a crescendo over it swells through the dynamics on CC1). SSO's rolls
+# have no key in the owner's setup yet (Kickstart leaves them off): add them here once assigned.
 # Guesses to confirm by ear: Tom 1 is the high tom, Conga 1 the high conga, Block 1 the high block.
 DRUMS = {
  'Drums - High': [
@@ -354,7 +357,9 @@ DRUMS = {
   # Mark Tree long 79 / up 81 / down 83 / push 84; Anvil 65-72, Mini Anvil 74-77
   (84, 79, 'Mark Tree Long', None), (69, 79, 'Mark Tree Long', 'metal-wind-chimes'),
   (68, 67, 'Anvil Hit Mid', 'anvil'),
-  # (Triangle 1 / 2: no key in the owner's setup; Rivet Cymbal 60, Trash Metal 86-96: no MuseScore sound)
+  # Trash Metal: Brake 1 86, Brake 2 88, Pans 89, Scafold 1 91 / 2 93, Spring Coil 95, Trash Can 96
+  (68, 86, 'Trash Metal Brake 1', 'automobile-brake-drums'),
+  # (Triangle 1 / 2: no key in the owner's setup; Rivet Cymbal 60: no MuseScore sound)
   ],
  'Unpitched - Wood': [
   # Woodblocks Block 1-5 on 60, 62, 64, 65, 67; Templeblocks Block 1-5 on 48, 50, 52, 53, 55 (Block 1
@@ -388,7 +393,8 @@ for name in PERCUSSION:
     out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
     out.append('    <Switch type="none"/>')
     for pitch, key, n, ids in drums:
-        out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + '/>')
+        roll = ' technique="roll"' if n.endswith(' Roll') else ''
+        out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + '/>')
     out.append('  </Instrument>')
 out.append('</SoundLibrary>')
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

@@ -31,6 +31,7 @@
 #include "staff.h"
 #include "stafftext.h"
 #include "sym.h"
+#include "tremolo.h"
 #include "tempo.h"
 #include "trill.h"
 
@@ -123,7 +124,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                                     return fail(QString("%1:%2: bad Switch").arg(path).arg(r.lineNumber()));
                               }
                         else if (r.name() == "Drum") {
-                              // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"]/>
+                              // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"]
+                              //       [technique="roll"]/>
                               DrumKey d;
                               bool ok1 = false, ok2 = false;
                               d.pitch = aa.value("pitch").toInt(&ok1);
@@ -132,6 +134,9 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                                     d.velocity = aa.value("velocity").toInt();
                               d.ids = words(aa.value("ids").toString().toLower());
                               d.name = aa.value("name").toString();
+                              d.technique = aa.value("technique").toString().toLower();
+                              if (!d.technique.isEmpty() && d.technique != "roll")
+                                    return fail(QString("%1:%2: bad Drum technique").arg(path).arg(r.lineNumber()));
                               if (!ok1 || !ok2 || d.pitch < 0 || d.pitch > 127 || d.key < 0 || d.key > 127 || d.velocity > 127)
                                     return fail(QString("%1:%2: bad Drum").arg(path).arg(r.lineNumber()));
                               li.drums.push_back(d);
@@ -231,13 +236,20 @@ std::vector<const LibInstrument*> LibInstrument::patches() const
       return p;
       }
 
-DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId)
+bool drumRoll(const Chord* chord)
+      {
+      const Tremolo* t = chord->tremolo();
+      return t && (!t->twoNotes() || t->tremoloType() == TremoloType::BUZZ_ROLL);
+      }
+
+DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId,
+                const QString& technique)
       {
       // an entry for the instrument before one for all
       for (int pass = 0; pass < 2; ++pass) {
             for (int p = 0; p < int(patches.size()); ++p) {
                   for (const DrumKey& d : patches[p]->drums) {
-                        if (d.pitch != pitch || (pass == 0) == d.ids.isEmpty())
+                        if (d.pitch != pitch || d.technique != technique || (pass == 0) == d.ids.isEmpty())
                               continue;
                         if (pass == 1 || d.ids.contains(instrumentId.toLower()))
                               return DrumChoice { p, &d };
@@ -425,8 +437,11 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                   const Chord* chord = toChord(e);
                   if (patches[0]->kit) {
                         const QString id = chord->part()->instrument(chord->tick())->getId();
+                        const bool roll = drumRoll(chord);
                         for (const Note* note : chord->notes()) {
-                              const DrumChoice d = drum(patches, note->pitch(), id);
+                              DrumChoice d = roll ? drum(patches, note->pitch(), id, "roll") : DrumChoice();
+                              if (d.patch < 0)
+                                    d = drum(patches, note->pitch(), id);
                               if (d.patch >= 0)
                                     used[d.patch] = true;
                               }

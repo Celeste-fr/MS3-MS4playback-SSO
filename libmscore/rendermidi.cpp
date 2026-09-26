@@ -1208,12 +1208,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               putLibrarySwitch(events, *libPatches[c.patch], libChannel, c, start + tickOffset, st1->idx());
                         return c;
                         };
-                  // a kit: the drum sound's patch and key; none: the built-in synthesizer plays it
-                  // (patch -1: not routed)
+                  // a kit: the drum sound's patch and key (rolled: its roll key, else its hit); none: the
+                  // built-in synthesizer plays it (patch -1: not routed)
                   struct LibNote { SoundLib::Choice choice; int key = -1; int velocity = -1; bool builtIn = false; };
-                  auto kitNote = [&](const Note* note) {
+                  auto kitNote = [&](const Note* note, bool roll = false) {
                         LibNote n;
-                        const SoundLib::DrumChoice d = SoundLib::drum(libPatches, note->pitch(), instr->getId());
+                        SoundLib::DrumChoice d = roll ? SoundLib::drum(libPatches, note->pitch(), instr->getId(), "roll")
+                                                      : SoundLib::DrumChoice();
+                        if (d.patch < 0)
+                              d = SoundLib::drum(libPatches, note->pitch(), instr->getId());
                         if (d.patch < 0) {
                               n.builtIn = true;
                               n.choice.patch = -1;
@@ -1307,7 +1310,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         int layer = note->voice();
                         LibNote libNote;
                         if (li && li->kit)
-                              libNote = kitNote(note);
+                              libNote = kitNote(note, once);
                         SoundLib::Choice& libChoice = libNote.choice;
                         if (li && !libNote.builtIn) {
                               noteChannel = libChannel;
@@ -1544,7 +1547,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const Ms4::OrnamentRule* ornament = nullptr;
                   // the library plays the trill or tremolo itself: the notes once, as they are
                   bool sampledOrnament = false;
-                  if (li && chord->upNote()) {
+                  if (li && li->kit) {
+                        // a rolled chord on a kit: every note has a roll key, else the tremolo's hits
+                        sampledOrnament = SoundLib::drumRoll(chord);
+                        for (const Note* note : chord->notes())
+                              sampledOrnament = sampledOrnament
+                                 && SoundLib::drum(libPatches, note->pitch(), instr->getId(), "roll").patch >= 0;
+                        }
+                  else if (li && chord->upNote()) {
                         const Note* up = chord->upNote();
                         sampledOrnament = libraryChoice(*lp, *li, up, Ms4::noteArticulations(up, principalArts), pStart, pLength).sampledOrnament();
                         }

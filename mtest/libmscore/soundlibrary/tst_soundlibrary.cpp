@@ -48,6 +48,7 @@ class TestSoundLibrary : public QObject, public MTest
       void render();
       void renderPatches();
       void renderKit();
+      void renderKitRoll();
 #ifdef TESTSYNTH
       void vst3Plugin();
       void vst3Render();
@@ -532,6 +533,53 @@ void TestSoundLibrary::renderKit()
          "<Instrument name='Metal' with='Percussion' keyScan='1'/></SoundLibrary>");
       QVERIFY(unscanned);
       QVERIFY(SoundLib::routes(score, *unscanned).empty());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   renderKitRoll
+//    a single-note tremolo on a kit: the drum's roll key once, held for the note; a drum with no
+//    roll key plays the tremolo's hits on its hit key
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderKitRoll()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Percussion' ids='drumset' kit='1'/>"
+         "<Instrument name='Drums' with='Percussion' keyScan='1'>"
+         "<Drum pitch='38' key='62' name='Snare hit'/><Drum pitch='38' key='64' name='Snare roll' technique='roll'/>"
+         "<Drum pitch='36' key='48' name='Bass drum'/><Drum pitch='35' key='48' name='Bass drum'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='Percussion' ids='drumset' kit='1'/>"
+                       "<Instrument name='D' with='Percussion'><Drum pitch='38' key='1' technique='flam'/></Instrument>"
+                       "</SoundLibrary>"));
+      SoundLib::setCurrent(lib);
+
+      MasterScore* score = readScore(DIR + "drumrolls.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);    // the kit, Drums
+
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<int, std::vector<int>> on;       // key -> note-on ticks
+      int rollOff = -1;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal() || (ev.type() != ME_NOTEON && ev.type() != ME_NOTEOFF))
+                  continue;
+            if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                  on[ev.pitch()].push_back(te.first);
+            else if (ev.pitch() == 64)
+                  rollOff = te.first;
+            }
+      QCOMPARE(int(on[62].size()), 0);                   // the snare's hit key: not used
+      QCOMPARE(int(on[64].size()), 1);                   // its roll key, once
+      QVERIFY(rollOff - on[64][0] > DIVISION);           // held for the half note
+      QVERIFY(int(on[48].size()) > 4);                   // the bass drum: the tremolo's hits
       delete score;
       }
 

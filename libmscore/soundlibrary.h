@@ -47,6 +47,7 @@
 
 namespace Ms {
 
+class Chord;
 class Instrument;
 class Note;
 class Part;
@@ -80,6 +81,7 @@ struct DrumKey {
       int velocity { -1 };                // a fixed velocity (a round robin / roll on velocity), -1: the note's
       QStringList ids;                    // only for these MuseScore instruments (empty: all)
       QString name;
+      QString technique;                  // "roll": played for a roll (tremolo); empty: a hit
       };
 
 struct LibInstrument {
@@ -149,7 +151,12 @@ struct DrumChoice {
       int patch { -1 };
       const DrumKey* key { nullptr };
       };
-DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId);
+// a kit plays a chord rolled (its roll keys, the note once) when it has a single-note tremolo or
+// a buzz roll; a two-note tremolo between drums stays repeated hits
+bool drumRoll(const Chord* chord);
+// technique "roll": the sound's roll key, none when it has none
+DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId,
+                const QString& technique = QString());
 
 // the library in use (the preference), shared by the renderer and the sequencer
 void setCurrent(std::shared_ptr<const Library> library);

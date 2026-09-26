@@ -876,7 +876,7 @@
     <Switch type="none"/>
     <Articulation name="Oboe Principal" value="1" techniques=""/>
   </Instrument>
-  <Instrument name="Percussion" ids="drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes bell-plate vibraslap" kit="1"/>
+  <Instrument name="Percussion" ids="drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes bell-plate vibraslap automobile-brake-drums" kit="1"/>
   <Instrument name="Drums - High" with="Percussion" keyScan="1">
     <Switch type="none"/>
     <Drum pitch="38" key="36" name="Snare 1 Hit"/>
@@ -919,6 +919,7 @@
     <Drum pitch="84" key="79" name="Mark Tree Long"/>
     <Drum pitch="69" key="79" name="Mark Tree Long" ids="metal-wind-chimes"/>
     <Drum pitch="68" key="67" name="Anvil Hit Mid" ids="anvil"/>
+    <Drum pitch="68" key="86" name="Trash Metal Brake 1" ids="automobile-brake-drums"/>
   </Instrument>
   <Instrument name="Unpitched - Wood" with="Percussion" keyScan="1">
     <Switch type="none"/>
