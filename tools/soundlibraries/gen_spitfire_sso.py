@@ -339,12 +339,16 @@ PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - W
 # the GM ones its drumsets use (instruments.xml); an entry with ids is for those instruments only.
 # An entry whose name ends in " Roll" is the sound's roll key (technique="roll": a single-note tremolo or
 # buzz roll plays it once, held; a crescendo over it swells through the dynamics on CC1). SSO's rolls
-# have no key in the owner's setup yet (Kickstart leaves them off): add them here once assigned.
+# are off in Kickstart until the owner assigns them a key: add them here then (Snare 1 / 2 so far).
 # Guesses to confirm by ear: Tom 1 is the high tom, Conga 1 the high conga, Block 1 the high block.
 DRUMS = {
  'Drums - High': [
-  # snares: Snare 1 hit 36 / edge 38 / rim 40, Snare 2 hit 41 / edge 43, Snare 3 hit 45
+  # snares: Snare 1 hit 36 / edge 38 / rim 40, Snare 2 hit 41 / edge 43, Snare 3 hit 45. Keys the owner
+  # switched on (2026-09-26): Snare 1 x stick 115, roll 119, flam 120, swell mf 93 / f 94; Snare 2 rim 124,
+  # x stick 1, flam 2, brush 5, roll 6, brush roll 8 (Kickstart gives a new technique the next free key)
   (38, 36, 'Snare 1 Hit', None), (40, 41, 'Snare 2 Hit', None),
+  (38, 119, 'Snare 1 Roll', None), (40, 6, 'Snare 2 Roll', None),
+  (37, 115, 'Snare 1 X Stick', 'snare-drum drumset percussion'),
   (38, 45, 'Snare 3 Hit', 'piccolo-snare-drum'), (40, 45, 'Snare 3 Hit', 'piccolo-snare-drum'),
   # bongos: hand tone 52 / hand bass 50 (hand flam 48, finger flam 53 / bass 55 / slap 57, hit 59)
   (60, 52, 'Bongos Hand Tone', None), (61, 50, 'Bongos Hand Bass', None),

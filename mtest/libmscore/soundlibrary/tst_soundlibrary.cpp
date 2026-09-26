@@ -567,14 +567,15 @@ void TestSoundLibrary::checkedAsExpected()
       QVERIFY(!SoundLib::checkedAsExpected(patch("Harp"), "0 switch, 0 ignored, 0 unclear, 1 silent — no switching", &line));
 
       // kits checked before the map had their keys: all of the map's keys sounded
-      QVERIFY(SoundLib::checkedAsExpected(patch("Drums - High"),
-         "43 keys sound (36-38, 40-43, 45, 48, 50, 52-53, 55, 57, 59-67, 69, 71-74, 76-79, 81-82, 84-92); "
-         "9 keyswitches (39, 44, 46, 54, 56, 58, 80, 83, 93); the map has no keys for it yet", &line));
-      QCOMPARE(line, QString("43 keys sound (36-38, 40-43, 45, 48, 50, 52-53, 55, 57, 59-67, 69, 71-74, 76-79, 81-82, 84-92); "
-                             "9 keyswitches (39, 44, 46, 54, 56, 58, 80, 83, 93)"));
       QVERIFY(SoundLib::checkedAsExpected(patch("Drums - Low"),
          "27 keys sound (36-39, 48, 50, 52-53, 60-65, 67, 72, 74-78, 84-89); 7 keyswitches (40, 49, 51, 55, 66, 68, 93); "
          "the map has no keys for it yet", &line));
+      QCOMPARE(line, QString("27 keys sound (36-39, 48, 50, 52-53, 60-65, 67, 72, 74-78, 84-89); "
+                             "7 keyswitches (40, 49, 51, 55, 66, 68, 93)"));
+      // keys the owner switched on later (Snare 1 x stick 115, roll 119; Snare 2 roll 6) weren't heard
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Drums - High"),
+         "43 keys sound (36-38, 40-43, 45, 48, 50, 52-53, 55, 57, 59-67, 69, 71-74, 76-79, 81-82, 84-92); "
+         "9 keyswitches (39, 44, 46, 54, 56, 58, 80, 83, 93); the map has no keys for it yet", &line));
       QVERIFY(SoundLib::checkedAsExpected(patch("Unpitched - Wood"),
          "17 keys sound (36-40, 48-53, 55, 60, 62, 64-65, 67); 5 keyswitches (54, 57, 63, 66, 68); the map has no keys for it yet", &line));
       QVERIFY(SoundLib::checkedAsExpected(patch("Other - Toys"),

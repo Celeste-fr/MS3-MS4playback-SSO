@@ -881,6 +881,9 @@
     <Switch type="none"/>
     <Drum pitch="38" key="36" name="Snare 1 Hit"/>
     <Drum pitch="40" key="41" name="Snare 2 Hit"/>
+    <Drum pitch="38" key="119" name="Snare 1 Roll" technique="roll"/>
+    <Drum pitch="40" key="6" name="Snare 2 Roll" technique="roll"/>
+    <Drum pitch="37" key="115" name="Snare 1 X Stick" ids="snare-drum drumset percussion"/>
     <Drum pitch="38" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
     <Drum pitch="40" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
     <Drum pitch="60" key="52" name="Bongos Hand Tone"/>
