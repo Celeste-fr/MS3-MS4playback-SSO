@@ -398,6 +398,25 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     instrument pictures and colours key ranges, but names no hit while a key sounds, so the key
     scan can't say which key is which hit. Needs the owner (each instrument's hit list).
 
+- Eighth run (2026-09-26 03:35, all 117 patches, build with extras and key scan):
+  - Every patch had the right `.nki` loaded (`read_loaded_patches.py`; Drums High / Low "BAD" is
+    the OCR reading Kontakt's suffix). Every mapped value's picture shows the map's name except
+    Violins 2's Trem CS MS (150BPM) (84): "None" and silent (Violins 1 has it; Violins 2 takes
+    Violins 1's bank). Dropped (SPITFIRE_DROP).
+  - The remaining "ignored"/"unclear" verdicts (Long Harmonics on Solo Viola, Piccolo, Alto Flute;
+    Flutes a2 Long Overblown; Contrabassoon Long; Motif Trumpets a3 Staccatissimo; Bass Trombone
+    Fall; Contrabass Tuba Rip) have pictures showing the right articulation. Harp Fx (90) is
+    silent at every pitch tried (no techniques, never chosen).
+  - All 57 extras (Performance, Sul G / Sul C Performance, single techniques) sound with no
+    switch sent: `<Switch type="none"/>` is right.
+  - Tuned percussion: each patch's first keyswitch (Timpani 0, Celeste 0, Marimba 0, Vibraphone
+    0, Tubular Bells 5) showed as "mapped but silent": it is selected when the patch loads, so
+    playing it changed nothing. The key scan now selects the map's last keyswitch first.
+    Silent "keyswitches" at the end of a range (Celeste 104, Marimba 100, Xylophone 99,
+    Glockenspiel 64 and 100-101) are the previous note's meter decaying.
+  - Unpitched kits: Kickstart's drum icons don't light up when a key plays, so the pictures
+    show only the coloured key ranges. The owner is asked for each drum's hit list: clicking an
+    icon shows its hits mapped on the keyboard.
 A value a SSO patch lacks: its window shows "None" and it plays nothing (no default).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. Start it with *Run workflow* (Actions › Test: Sound library on Windows), or

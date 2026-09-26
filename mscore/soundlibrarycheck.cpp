@@ -837,6 +837,11 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       for (const SoundLib::DrumKey& d : ins.drums)
             mapped[d.key] += (mapped[d.key].isEmpty() ? "" : " / ") + d.name;
 
+      std::map<int, QString> keyswitchMap;    // the map's keyswitch values (a patch switched by key)
+      if (ins.switchType == SoundLib::SwitchType::KEYSWITCH)
+            for (const SoundLib::Articulation& a : ins.articulations)
+                  keyswitchMap[a.value] += (keyswitchMap[a.value].isEmpty() ? "" : " / ") + a.name;
+
       status(tr("loading…"));
       QString error;
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
@@ -883,6 +888,14 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
             w->raise();
             w->activateWindow();
             pump.run(2500);
+            // the patch starts on its first keyswitch, which then changes nothing when the scan
+            // plays it: start from the map's last one instead (Kickstart's default, 2026-09-26)
+            if (keyswitchMap.size() > 1) {
+                  p->midi(ME_NOTEON, 0, keyswitchMap.rbegin()->first, 100);
+                  pump.run(250);
+                  p->midi(ME_NOTEON, 0, keyswitchMap.rbegin()->first, 0);
+                  pump.run(GRAB_WAIT_MS);
+                  }
             base = grabPlugin(w);
             pump.run(GRAB_WAIT_MS);
             noise = differingPixels(base, grabPlugin(w));
@@ -927,10 +940,6 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       QStringList silentMapped;
       std::vector<int> soundKeys;
       std::vector<int> switchKeys;
-      std::map<int, QString> keyswitchMap;    // the map's keyswitch values (a patch switched by key)
-      if (ins.switchType == SoundLib::SwitchType::KEYSWITCH)
-            for (const SoundLib::Articulation& a : ins.articulations)
-                  keyswitchMap[a.value] += (keyswitchMap[a.value].isEmpty() ? "" : " / ") + a.name;
       QJsonArray keys;
       const int changeThreshold = std::max(30, 3 * noise);
       for (int key = 0; key < 128; ++key) {

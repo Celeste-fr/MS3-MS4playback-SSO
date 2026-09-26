@@ -27,7 +27,10 @@ hairpin (Ethanol bar 14). Still open:
   is not in the repository, so a new cloud container doesn't have it;
 - the owner: listen to Ethanol bar 14 and try *Tools › Tuning…* in the Windows build;
 - the owner: pitches for the 49 accidentals MuseScore gives none;
-- the owner: hit lists for the unpitched drum kits.
+- the owner: hit lists for the unpitched drum kits (see CLAUDE.md › Eighth run: click each drum
+  icon in Kickstart and screenshot its hits on the keyboard);
+- the owner: re-check the tuned percussion (Timpani, Celeste, Marimba, Vibraphone, Tubular
+  Bells) with the fixed key scan.
 
 ## What the owner is doing now
 

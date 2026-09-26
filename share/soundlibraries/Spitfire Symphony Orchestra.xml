@@ -83,7 +83,6 @@
     <Articulation name="Long CS Blend" value="5" techniques=""/>
     <Articulation name="Tremolo" value="11" techniques="tremolo"/>
     <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
-    <Articulation name="Trem CS MS (150BPM)" value="84" techniques=""/>
     <Articulation name="Trem MS (150BPM)" value="81" techniques=""/>
     <Articulation name="Trem MS (180BPM)" value="82" techniques=""/>
     <Articulation name="Trill (Minor 2nd)" value="70" techniques="trill-m2"/>

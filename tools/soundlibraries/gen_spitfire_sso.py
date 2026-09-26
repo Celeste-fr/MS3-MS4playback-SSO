@@ -158,7 +158,9 @@ SPITFIRE_ADD = {}
 # Trumpets a6: SSO's "All techniques" patches have neither. In Kontakt they show "None - no
 # active technique" and play nothing: Check articulations, 2026-09-25)
 SPITFIRE_ADD['Violins 2'] = [('Trem CS', 12, 'tremolo', 'muted')]
-SPITFIRE_DROP = {('Violins 2', 'Long Sul Tasto'), ('Violins 2', 'Trill (Minor 3rd'), ('Violins 2', 'Trill (Major 3rd)')}
+SPITFIRE_DROP = {('Violins 2', 'Long Sul Tasto'), ('Violins 2', 'Trill (Minor 3rd'), ('Violins 2', 'Trill (Major 3rd)'),
+                 # shows "None" and is silent in the owner's Violins 2 (Check articulations, 2026-09-26)
+                 ('Violins 2', 'Trem CS MS (150BPM)')}
 # Long Sul G / Sul C that played nothing in the owner's "All techniques" patches at every pitch
 # the check tried (Violas' Long Sul C did play; the single "Long Sul G" patch plays), 2026-09-25:
 # listed without techniques until that is explained
