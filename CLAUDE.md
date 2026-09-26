@@ -440,6 +440,9 @@ next run (number 8, 44372f0, pitch fallback) showed **tst_soundlibrary 9/9 passe
 Windows**, including vst3Plugin, vst3Render and articulationCheck with the test synth. A
 run takes about 15 minutes. Run 11 (6bc3a62: check memory, scan, added patches, map fixes):
 **10/10 passed on Windows**, scanPictures included.
+**The owner (2026-09-26): always name a build by its run number** (the Actions list's run
+number, with its link) when asking them to try or download something. Run 32 (f5e721b) is the
+first with the tuning, the Ethanol fix and the key scan fix.
 When the owner reports problems, suspect these first: Kontakt's MIDI channel (we send
 channel 1), its editor sizing, and sample loading in offline export.
 
