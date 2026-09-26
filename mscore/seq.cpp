@@ -27,6 +27,7 @@
 #include "preferences.h"
 #include "scoreview.h"
 #include "seq.h"
+#include "libmscore/partplayback.h"
 #include "synthcontrol.h"
 
 #include "audio/midi/msynthesizer.h"
@@ -2562,8 +2563,9 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
       int syntiIdx= _synti->index(cs->midiMapping(channel)->articulation()->synti());
       _synti->play(event, syntiIdx);
 
-      // midi (with a sound library, MIDI out is the library's: its routes use the channels)
-      if (midiOut && !event.isExternal() && !SoundLib::active())
+      // midi (with a sound library, MIDI out is the library's: its routes use the channels). The
+      // library stays loaded for parts set to it (partplayback.h): only the global mode's counts
+      if (midiOut && !event.isExternal() && !(SoundLib::active() && PartPlaybackModes::libraryDefault()))
             _driver->putEvent(event, framePos);
       }
 

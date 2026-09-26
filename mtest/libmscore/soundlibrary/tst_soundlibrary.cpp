@@ -251,7 +251,7 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(valueFor("Timpani", { { "long" }, {} }), 0);
       QCOMPARE(patchFor("Grand Piano", { { "long" }, {} }), QString("Grand Piano: Direct"));
       QCOMPARE(valueFor("Glockenspiel", { { "tremolo", "long" }, {} }), 3);           // Roll
-      QCOMPARE(valueFor("Tubular Bells", { { "long" }, { "muted" } }), 6);            // Muted, from F-2
+      QCOMPARE(valueFor("Tubular Bells", { { "long" }, { "muted" } }), 1);            // Muted, C#-2 (its window: KEYSWITCHES C-2)
       QCOMPARE(valueFor("Celeste", { { "staccatissimo", "spiccato", "short" }, {} }), 2);   // Tight
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (li.name == "Xylophone")
@@ -576,6 +576,15 @@ void TestSoundLibrary::vst3Plugin()
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
       QVERIFY2(p, qPrintable(error));
       QCOMPARE(p->name(), QString("MS Test Synth"));
+
+      // the names it gives its keys (pitch names, keyswitches), as the key scan reads them
+      QString source;
+      const std::map<int, QString> names = p->keyNames(&source);
+      QVERIFY2(names.size() == 5, qPrintable(source));
+      QCOMPARE(names.at(36), QString("Kick"));
+      QCOMPARE(names.at(42), QString("Hi-Hat Closed"));
+      QCOMPARE(names.at(24), QString("KS Legato"));
+      QCOMPARE(names.at(25), QString("KS Staccato"));
 
       std::vector<float> buffer(2 * 1024, 0.f);
       p->process(1024, buffer.data());

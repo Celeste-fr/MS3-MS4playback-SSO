@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "soundlibrary.h"
+#include "partplayback.h"
 
 #include <algorithm>
 #include <atomic>
@@ -303,9 +304,14 @@ Output output()
 
 void setCurrent(std::shared_ptr<const Library> library)
       {
-      std::lock_guard<std::mutex> lock(currentMutex);
-      currentLibrary = library;
-      currentActive = bool(library);
+      {
+            std::lock_guard<std::mutex> lock(currentMutex);
+            currentLibrary = library;
+            currentActive = bool(library);
+      }
+      // a library set is the one the parts play by default; the application then says whether
+      // the global playback mode is the library (partplayback.h, mscore/playbackmode.h)
+      PartPlaybackModes::setLibraryDefault(bool(library));
       }
 
 static std::mutex availableMutex;
@@ -356,7 +362,11 @@ std::vector<Route> routes(const Score* score, const Library& library)
       {
       std::vector<Route> result;
       int k = 0;
+      // a part plays the library by its own playback mode, else by the global one (partplayback.h)
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(score->masterScore());
       for (const Part* part : score->parts()) {
+            if (!PartPlaybackModes::playsLibrary(part, modes))
+                  continue;
             const LibInstrument* li = library.match(part->instrument(), part);
             if (!li)
                   continue;

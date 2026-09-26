@@ -50,6 +50,7 @@
 #include "rest.h"
 #include "revisions.h"
 #include "score.h"
+#include "tempochange.h"
 #include "scoreOrder.h"
 #include "segment.h"
 #include "select.h"
@@ -474,6 +475,8 @@ void Score::rebuildTempoAndTimeSigMaps(Measure* measure)
                   if (!qFuzzyIsNull(length))
                         setPause(startTick, length);
                   }
+            // rit. / accel. lines (tempochange.h), before the tempo markings and fermatas below
+            TempoChange::addToTempoMap(this, startTick, measure->endTick());
             }
 
       for (Segment& segment : measure->segments()) {

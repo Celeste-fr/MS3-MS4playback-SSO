@@ -313,6 +313,7 @@ add_library(mscoreapp STATIC
       soundlibraryhost.cpp soundlibraryhost.h
       soundlibrarycheck.cpp soundlibrarycheck.h
       tuningdialog.cpp tuningdialog.h
+      playbackmode.cpp playbackmode.h
 
       ${CLOUD_SRC}
       ${IMPORTMIDIUI_SRC}

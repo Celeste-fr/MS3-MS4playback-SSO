@@ -701,10 +701,48 @@ void ArticulationCheckDialog::check()
       _close->setText(tr("Stop"));
       QJsonArray results;
       QString summary = QString("%1 checked against %2 on %3\n\n").arg(_library->name, QFileInfo(path).fileName(), stamp);
+      // results.json and summary.txt, rewritten after each patch (final: with the note of a stop)
+      auto save = [&](bool final) {
+            QString text = summary;
+            QJsonObject top;
+            top["library"] = _library->name;
+            top["map"] = QFileInfo(_library->path).fileName();
+            top["plugin"] = QFileInfo(path).fileName();
+            top["date"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+            top["version"] = QString(VERSION);
+            top["sampleRate"] = MScore::sampleRate;
+            top["cancelled"] = final && _cancel;
+            top["patches"] = results;
+            top["complete"] = final;
+            QFile json(folder + "/results.json");
+            if (json.open(QIODevice::WriteOnly))
+                  json.write(QJsonDocument(top).toJson());
+            json.close();
+            if (final && _cancel)
+                  text += "\n(Stopped before the end.)\n";
+            if (!final)
+                  text += "\n(Still running: written after each patch.)\n";
+            text += "\n# Every patch's last check\n";
+            for (int i = 0; i < int(_rows.size()); ++i) {
+                  const QString patch = _rows[i].instrument->name;
+                  QString last;
+                  if (!SoundLibraryHost::hasSetup(*_library, patch))
+                        last = tr("not set up");
+                  else
+                        needsCheck(i, &last);
+                  text += QString("   %1: %2\n").arg(patch, last);
+                  }
+            QFile txt(folder + "/summary.txt");
+            if (txt.open(QIODevice::WriteOnly))
+                  txt.write(text.toUtf8());
+            txt.close();
+            };
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
             checkPatch(chosen[k], path, folder, results, summary);
+            if (!results.isEmpty())
+                  save(false);      // after each patch: MuseScore closed during a long check keeps what was done
             QApplication::processEvents();
             }
       _progress->setValue(1000);
@@ -724,35 +762,7 @@ void ArticulationCheckDialog::check()
             return;
             }
 
-      QJsonObject top;
-      top["library"] = _library->name;
-      top["map"] = QFileInfo(_library->path).fileName();
-      top["plugin"] = QFileInfo(path).fileName();
-      top["date"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-      top["version"] = QString(VERSION);
-      top["sampleRate"] = MScore::sampleRate;
-      top["cancelled"] = _cancel;
-      top["patches"] = results;
-      QFile json(folder + "/results.json");
-      if (json.open(QIODevice::WriteOnly))
-            json.write(QJsonDocument(top).toJson());
-      json.close();
-      if (_cancel)
-            summary += "\n(Stopped before the end.)\n";
-      summary += "\n# Every patch's last check\n";
-      for (int i = 0; i < int(_rows.size()); ++i) {
-            const QString patch = _rows[i].instrument->name;
-            QString last;
-            if (!SoundLibraryHost::hasSetup(*_library, patch))
-                  last = tr("not set up");
-            else
-                  needsCheck(i, &last);
-            summary += QString("   %1: %2\n").arg(patch, last);
-            }
-      QFile txt(folder + "/summary.txt");
-      if (txt.open(QIODevice::WriteOnly))
-            txt.write(summary.toUtf8());
-      txt.close();
+      save(true);
 
       // all of it in one zip, to hand back
       const QString zipPath = folder + ".zip";
@@ -805,6 +815,19 @@ static int differingPixels(const QImage& a, const QImage& b)
       return n;
       }
 
+// a failed grab: no picture, or (nearly) all black
+static bool blankPicture(const QImage& image)
+      {
+      if (image.isNull())
+            return true;
+      const QImage thumb = image.scaled(64, 32).convertToFormat(QImage::Format_RGB32);
+      for (int y = 0; y < thumb.height(); ++y)
+            for (int x = 0; x < thumb.width(); ++x)
+                  if (qGray(thumb.pixel(x, y)) > 12)
+                        return false;
+      return true;
+      }
+
 static QString keyName(int key)
       {
       static const char* const NAMES[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -836,6 +859,11 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       std::map<int, QString> mapped;          // key -> the map's drum sounds on it
       for (const SoundLib::DrumKey& d : ins.drums)
             mapped[d.key] += (mapped[d.key].isEmpty() ? "" : " / ") + d.name;
+
+      std::map<int, QString> keyswitchMap;    // the map's keyswitch values (a patch switched by key)
+      if (ins.switchType == SoundLib::SwitchType::KEYSWITCH)
+            for (const SoundLib::Articulation& a : ins.articulations)
+                  keyswitchMap[a.value] += (keyswitchMap[a.value].isEmpty() ? "" : " / ") + a.name;
 
       status(tr("loading…"));
       QString error;
@@ -869,6 +897,17 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
             return fail(tr("It played nothing: is the patch loaded, on MIDI channel 1 (Kontakt: A1 or Omni)?"));
       pump.run(1500);
 
+      // the load check's notes can ring for seconds (bells): silence before the scan, else key 0
+      // "sounds" with their tail
+      p->allNotesOff();
+      p->midi(ME_CONTROLLER, 0, CTRL_SUSTAIN, 0);
+      pump.run(4000);
+
+      // what the plug-in itself calls its keys, if it says (a DAW's drum map / keyswitch names)
+      QString namesSource;
+      const std::map<int, QString> pluginNames = p->keyNames(&namesSource);
+      out["keyNamesSource"] = namesSource;
+
       // every key: a picture while it sounds, and its peak
       status(tr("opening its window…"));
       QImage base, again;
@@ -883,6 +922,14 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
             w->raise();
             w->activateWindow();
             pump.run(2500);
+            // the patch starts on its first keyswitch, which then changes nothing when the scan
+            // plays it: start from the map's last one instead (Kickstart's default, 2026-09-26)
+            if (keyswitchMap.size() > 1) {
+                  p->midi(ME_NOTEON, 0, keyswitchMap.rbegin()->first, 100);
+                  pump.run(250);
+                  p->midi(ME_NOTEON, 0, keyswitchMap.rbegin()->first, 0);
+                  pump.run(GRAB_WAIT_MS);
+                  }
             base = grabPlugin(w);
             pump.run(GRAB_WAIT_MS);
             noise = differingPixels(base, grabPlugin(w));
@@ -927,21 +974,24 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       QStringList silentMapped;
       std::vector<int> soundKeys;
       std::vector<int> switchKeys;
-      std::map<int, QString> keyswitchMap;    // the map's keyswitch values (a patch switched by key)
-      if (ins.switchType == SoundLib::SwitchType::KEYSWITCH)
-            for (const SoundLib::Articulation& a : ins.articulations)
-                  keyswitchMap[a.value] += (keyswitchMap[a.value].isEmpty() ? "" : " / ") + a.name;
       QJsonArray keys;
       const int changeThreshold = std::max(30, 3 * noise);
+      QImage lastGrab = base;
       for (int key = 0; key < 128; ++key) {
             const double db = peaks[key] > 0 ? 20 * std::log10(peaks[key]) : -200;
             const bool sounds = peaks[key] > 1e-5 && peaks[key] > loudest * std::pow(10.0, -50 / 20.0);
-            const bool switches = !sounds && int(released.size()) == 128
-               && differingPixels(released[key], key ? released[key - 1] : base) > changeThreshold;
-            if (sounds || switches || mapped.count(key) || keyswitchMap.count(key)) {
+            // against the last picture that was grabbed (a black one is a failed grab: Tubular Bells'
+            // key 11, 2026-09-26, made 11 and 12 look like keyswitches)
+            const bool grabbed = int(released.size()) == 128 && !blankPicture(released[key]);
+            const bool switches = !sounds && grabbed && differingPixels(released[key], lastGrab) > changeThreshold;
+            if (grabbed)
+                  lastGrab = released[key];
+            if (sounds || switches || mapped.count(key) || keyswitchMap.count(key) || pluginNames.count(key)) {
                   QJsonObject k;
                   k["key"] = key;
                   k["name"] = keyName(key);
+                  if (pluginNames.count(key))
+                        k["pluginName"] = pluginNames.at(key);
                   k["peakDb"] = std::round(db * 10) / 10;
                   k["sounds"] = sounds;
                   if (switches)
@@ -1009,7 +1059,8 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
                        .arg(keyswitchMap.count(key) ? " · " + keyswitchMap[key] : QString())
                      : QString("key %1 (%2) · %3 dB%4").arg(key).arg(keyName(key)).arg(20 * std::log10(peaks[key]), 0, 'f', 1)
                        .arg(mapped.count(key) ? " · " + mapped[key] : QString());
-                  pt.drawText(QRect(x, y, cell.width(), labelH), Qt::AlignLeft | Qt::AlignVCenter, label);
+                  const QString label2 = pluginNames.count(key) ? label + " · \"" + pluginNames.at(key) + "\"" : label;
+                  pt.drawText(QRect(x, y, cell.width(), labelH), Qt::AlignLeft | Qt::AlignVCenter, label2);
                   pt.drawImage(QRect(QPoint(x, y + labelH), cell), (ks ? released[key] : shots[key]).copy(crop));
                   pt.setPen(QColor(200, 200, 200));
                   pt.drawRect(QRect(QPoint(x, y + labelH), cell).adjusted(0, 0, -1, -1));
@@ -1022,8 +1073,11 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
 
       // passed: a kit's patch whose mapped keys all sound; a patch switched by key whose mapped
       // keyswitches all switch
+      // a patch of one sound (Xylophone, Crotales, Desk Bells: no keyswitches, not a kit's) passes
+      // when it sounds; a kit's patch needs its drum keys in the map
+      const bool oneSound = keyswitchMap.empty() && ins.drums.empty() && !ins.extra();
       const bool passed = silentMapped.isEmpty() && !soundKeys.empty()
-         && (!ins.drums.empty() || (!keyswitchMap.empty() && !switchKeys.empty()));
+         && (oneSound || !ins.drums.empty() || (!keyswitchMap.empty() && !switchKeys.empty()));
       out["passed"] = passed;
       results.append(out);
       auto rangesOf = [](const std::vector<int>& list) {
@@ -1040,9 +1094,12 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       QString line = tr("%1 keys sound (%2)").arg(soundKeys.size()).arg(rangesOf(soundKeys));
       if (!switchKeys.empty())
             line += tr("; %1 keyswitches (%2)").arg(switchKeys.size()).arg(rangesOf(switchKeys));
-      if (ins.drums.empty() && keyswitchMap.empty())
+      if (ins.drums.empty() && keyswitchMap.empty() && !oneSound)
             line += tr("; the map has no keys for it yet");
       summary += QString("## %1 (keys)\n   %2\n").arg(ins.name, line);
+      summary += "   " + tr("The plug-in's own key names: %1 (%2)").arg(pluginNames.size()).arg(namesSource) + "\n";
+      for (const auto& n : pluginNames)
+            summary += QString("      %1 (%2): %3\n").arg(n.first).arg(keyName(n.first), n.second);
       for (const QString& s : silentMapped)
             summary += "   - " + tr("mapped but silent: %1").arg(s) + "\n";
       summary += "\n";

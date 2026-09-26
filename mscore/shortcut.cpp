@@ -2974,6 +2974,39 @@ Shortcut Shortcut::_sc[] = {
          },
       {
          MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+         "playback-ms3",
+         QT_TRANSLATE_NOOP("action","MuseScore 3"),
+         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 3"),
+         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 3 (its dynamics, reverb and SoundFont)"),
+         Icons::Invalid_ICON,
+         Qt::ApplicationShortcut,
+         ShortcutFlags::A_CHECKABLE
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+         "playback-ms4",
+         QT_TRANSLATE_NOOP("action","MuseScore 4"),
+         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 4"),
+         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 4"),
+         Icons::Invalid_ICON,
+         Qt::ApplicationShortcut,
+         ShortcutFlags::A_CHECKABLE
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+         "playback-library",
+         QT_TRANSLATE_NOOP("action","Sound library"),
+         QT_TRANSLATE_NOOP("action","Playback mode: sound library"),
+         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 4 with the sound library"),
+         Icons::Invalid_ICON,
+         Qt::ApplicationShortcut,
+         ShortcutFlags::A_CHECKABLE
+         },
+      {
+         MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY,
          "tuning",
          QT_TRANSLATE_NOOP("action","Tuning…"),

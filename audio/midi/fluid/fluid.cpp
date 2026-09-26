@@ -525,6 +525,13 @@ QFileInfoList Fluid::sfFiles()
       QStringList pl = preferences.getString(PREF_APP_PATHS_MYSOUNDFONTS).split(";");
       pl.prepend(QFileInfo(QString("%1%2").arg(mscoreGlobalShare, "sound")).absoluteFilePath());
       pl.append(Ms::Extension::getDirectoriesByType(Ms::Extension::soundfontsDir));
+      // a MuseScore 3 install's own sound folder: its MuseScore_General, for the MuseScore 3
+      // playback mode (mscore/playbackmode.h)
+      for (const char* d : { "C:/Program Files/MuseScore 3/sound", "C:/Program Files (x86)/MuseScore 3/sound",
+                             "/Applications/MuseScore 3.app/Contents/Resources/sound",
+                             "/usr/share/mscore3-3.6/sound", "/usr/share/mscore-3.6/sound", "/usr/share/mscore3/sound" })
+            if (QFileInfo(d).isDir())
+                  pl.append(d);
       for (const QString& s : qAsConst(pl)) {
             QString ss(s);
             if (!s.isEmpty() && s[0] == '~')

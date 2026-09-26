@@ -17,6 +17,7 @@
 //  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 //=============================================================================
 
+#include "playbackmode.h"
 #include "musescore.h"
 #include "playpanel.h"
 #include "seq.h"
@@ -46,6 +47,7 @@ PlayPanel::PlayPanel(QWidget* parent)
       setWindowFlags(Qt::Tool);
       setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
       setAllowedAreas(Qt::DockWidgetAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea));
+      verticalLayout->insertWidget(0, PlaybackModeBox::row(dockWidgetContents));   // MS3 / MS4 / sound library
       MuseScore::restoreGeometry(this);
 
       setScore(0);

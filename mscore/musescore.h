@@ -955,6 +955,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       std::list<const char*>* playbackControlEntries()               { return &_playbackControlEntries; }
       void setPlaybackControlEntries(std::list<const char*> l)       { _playbackControlEntries = l; }
       void populatePlaybackControls();
+      void updatePlaybackMode();
 
       bool playPartOnly() const { return _playPartOnly; }
       void setPlayPartOnly(bool val);

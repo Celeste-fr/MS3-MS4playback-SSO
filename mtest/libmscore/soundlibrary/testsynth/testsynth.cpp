@@ -31,6 +31,8 @@
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
+#include "pluginterfaces/vst/ivstnoteexpression.h"
+#include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "public.sdk/source/main/pluginfactory.h"
 #include "public.sdk/source/vst/vstaudioeffect.h"
@@ -212,7 +214,19 @@ class Processor : public AudioEffect {
 //   Controller
 //---------------------------------------------------------
 
-class Controller : public EditController, public IMidiMapping {
+// the names a DAW shows for its keys (Vst3Plugin::keyNames): pitch names of its one program
+// (IUnitInfo) and two keyswitches (IKeyswitchController)
+static const std::map<int, const char16_t*> PITCH_NAMES { { 36, u"Kick" }, { 38, u"Snare" }, { 42, u"Hi-Hat Closed" } };
+
+static void copyString128(String128 to, const char16_t* from)
+      {
+      int i = 0;
+      for (; from[i] && i < 127; ++i)
+            to[i] = TChar(from[i]);
+      to[i] = 0;
+      }
+
+class Controller : public EditController, public IMidiMapping, public IUnitInfo, public IKeyswitchController {
    public:
       static FUnknown* create(void*) { return (IEditController*) new Controller; }
 
@@ -250,9 +264,79 @@ class Controller : public EditController, public IMidiMapping {
             return kResultTrue;
             }
 
+      // IUnitInfo: one unit, one program list of one program, with pitch names
+      int32 PLUGIN_API getUnitCount() override { return 1; }
+      tresult PLUGIN_API getUnitInfo(int32 unitIndex, UnitInfo& info) override
+            {
+            if (unitIndex != 0)
+                  return kResultFalse;
+            info.id = kRootUnitId;
+            info.parentUnitId = kNoParentUnitId;
+            copyString128(info.name, u"Root");
+            info.programListId = 1;
+            return kResultTrue;
+            }
+      int32 PLUGIN_API getProgramListCount() override { return 1; }
+      tresult PLUGIN_API getProgramListInfo(int32 listIndex, ProgramListInfo& info) override
+            {
+            if (listIndex != 0)
+                  return kResultFalse;
+            info.id = 1;
+            copyString128(info.name, u"Kits");
+            info.programCount = 1;
+            return kResultTrue;
+            }
+      tresult PLUGIN_API getProgramName(ProgramListID listId, int32 programIndex, String128 name) override
+            {
+            if (listId != 1 || programIndex != 0)
+                  return kResultFalse;
+            copyString128(name, u"Test Kit");
+            return kResultTrue;
+            }
+      tresult PLUGIN_API getProgramInfo(ProgramListID, int32, Steinberg::Vst::CString, String128) override { return kResultFalse; }
+      tresult PLUGIN_API hasProgramPitchNames(ProgramListID listId, int32 programIndex) override
+            {
+            return listId == 1 && programIndex == 0 ? kResultTrue : kResultFalse;
+            }
+      tresult PLUGIN_API getProgramPitchName(ProgramListID listId, int32 programIndex, int16 midiPitch, String128 name) override
+            {
+            auto it = PITCH_NAMES.find(midiPitch);
+            if (listId != 1 || programIndex != 0 || it == PITCH_NAMES.end())
+                  return kResultFalse;
+            copyString128(name, it->second);
+            return kResultTrue;
+            }
+      UnitID PLUGIN_API getSelectedUnit() override { return kRootUnitId; }
+      tresult PLUGIN_API selectUnit(UnitID) override { return kResultTrue; }
+      tresult PLUGIN_API getUnitByBus(MediaType, BusDirection, int32, int32, UnitID& unitId) override
+            {
+            unitId = kRootUnitId;
+            return kResultTrue;
+            }
+      tresult PLUGIN_API setUnitProgramData(int32, int32, IBStream*) override { return kResultFalse; }
+
+      // IKeyswitchController: Legato on key 24, Staccato on 25
+      int32 PLUGIN_API getKeyswitchCount(int32 busIndex, int16) override { return busIndex == 0 ? 2 : 0; }
+      tresult PLUGIN_API getKeyswitchInfo(int32 busIndex, int16, int32 index, KeyswitchInfo& info) override
+            {
+            if (busIndex != 0 || index < 0 || index > 1)
+                  return kResultFalse;
+            info = KeyswitchInfo {};
+            info.typeId = kNoteOnKeyswitchTypeID;
+            copyString128(info.title, index == 0 ? u"Legato" : u"Staccato");
+            copyString128(info.shortTitle, index == 0 ? u"Leg" : u"Stac");
+            info.keyswitchMin = info.keyswitchMax = 24 + index;
+            info.keyRemapped = -1;
+            info.unitId = -1;
+            info.flags = 0;
+            return kResultTrue;
+            }
+
       OBJ_METHODS(Controller, EditController)
       DEFINE_INTERFACES
             DEF_INTERFACE(IMidiMapping)
+            DEF_INTERFACE(IUnitInfo)
+            DEF_INTERFACE(IKeyswitchController)
       END_DEFINE_INTERFACES(EditController)
       REFCOUNT_METHODS(EditController)
       };

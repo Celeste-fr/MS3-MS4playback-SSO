@@ -16,6 +16,8 @@
 #include "libmscore/measure.h"
 #include "libmscore/timesig.h"
 #include "libmscore/undo.h"
+#include "libmscore/layoutbreak.h"
+#include "libmscore/segment.h"
 
 #define DIR QString("libmscore/timesig/")
 
@@ -42,6 +44,7 @@ class TestTimesig : public QObject, public MTest
       void timesig09();
       void timesig10();
       void timesig_78216();
+      void removeRedundant();
       };
 
 //---------------------------------------------------------
@@ -309,6 +312,67 @@ void TestTimesig::timesig_78216()
       QVERIFY2(!m1->findSegment(SegmentType::TimeSig, m1->endTick()), "Should be no timesig at the end of measure 1.");
       QVERIFY2(!m2->findSegment(SegmentType::TimeSig, m2->endTick()), "Should be no timesig at the end of measure 2.");
       QVERIFY2(!m3->findSegment(SegmentType::TimeSig, m3->endTick()), "Should be no timesig at the end of measure 3.");
+      delete score;
+      }
+
+//---------------------------------------------------------
+///   removeRedundant
+///   delete a 4/4 that restates the 4/4 in force (timesig-03, measure 3): the measures are
+///   not rebuilt, so a line break and a stretch in the span stay (musescore#21578); undo
+///   brings the time signature back
+//---------------------------------------------------------
+
+void TestTimesig::removeRedundant()
+      {
+      MScore::setError(MsError::MS_NO_ERROR);        // timesig02 leaves one: endCmd() would unwind
+      MasterScore* score = readScore(DIR + "timesig-03.mscx");
+      QVERIFY(score);
+      Measure* m3 = score->firstMeasure()->nextMeasure()->nextMeasure();
+      Measure* m4 = m3->nextMeasure();
+      Measure* m5 = m4->nextMeasure();
+      QVERIFY(m5);
+
+      // a 4/4 in measure 3 restating the 4/4 in force (as a file can have it: cmdAddTimeSig
+      // adds none where the meter doesn't change), a line break on measure 4, a stretch on 5
+      score->startCmd();
+      for (int staffIdx = 0; staffIdx < score->nstaves(); ++staffIdx) {
+            TimeSig* t = new TimeSig(score);
+            t->setSig(Fraction(4, 4), TimeSigType::NORMAL);
+            t->setTrack(staffIdx * VOICES);
+            t->setParent(m3->undoGetSegment(SegmentType::TimeSig, m3->tick()));
+            score->undoAddElement(t);
+            }
+      score->endCmd();
+      Segment* seg = m3->findSegment(SegmentType::TimeSig, m3->tick());
+      QVERIFY(seg);
+      TimeSig* ts = toTimeSig(seg->element(0));
+      QVERIFY(ts && ts->sig().identical(Fraction(4, 4)));
+
+      score->startCmd();
+      LayoutBreak* lb = new LayoutBreak(score);
+      lb->setLayoutBreakType(LayoutBreak::Type::LINE);
+      lb->setTrack(0);
+      lb->setParent(m4);
+      score->undoAddElement(lb);
+      m5->undoChangeProperty(Pid::USER_STRETCH, 1.5);
+      score->endCmd();
+      const int measures = score->nmeasures();
+
+      score->startCmd();
+      score->cmdRemoveTimeSig(ts);
+      score->endCmd();
+
+      QCOMPARE(score->nmeasures(), measures);
+      Measure* n3 = score->firstMeasure()->nextMeasure()->nextMeasure();
+      QCOMPARE(n3, m3);                         // the same measures, not rebuilt ones
+      QVERIFY(!n3->findSegment(SegmentType::TimeSig, n3->tick()));
+      QVERIFY(n3->nextMeasure()->lineBreak());
+      QCOMPARE(n3->nextMeasure()->nextMeasure()->userStretch(), 1.5);
+      QVERIFY(n3->timesig().identical(Fraction(4, 4)));
+
+      score->undoRedo(true, 0);                 // undo
+      QVERIFY(n3->findSegment(SegmentType::TimeSig, n3->tick()));
+      QVERIFY(n3->nextMeasure()->lineBreak());
       delete score;
       }
 

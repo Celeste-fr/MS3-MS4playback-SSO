@@ -363,6 +363,9 @@ enum class Pid : short {
 
       PREFER_SHARP_FLAT,
 
+      TEMPO_CHANGE_FACTOR,    // a rit. / accel. line (tempochange.h); not written in the element
+      TEMPO_CHANGE_METHOD,
+
       END
       };
 

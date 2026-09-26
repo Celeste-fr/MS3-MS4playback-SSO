@@ -355,6 +355,9 @@ static constexpr PropertyMetaData propertyList[] = {
 
       { Pid::PREFER_SHARP_FLAT,         P_TYPE::INT,            true,  "preferSharpFlat",        DUMMY_QT_TRANSLATE_NOOP("propertyName", "prefer sharps or flats")                        },
 
+      { Pid::TEMPO_CHANGE_FACTOR,       P_TYPE::REAL,           true,  "tempoChangeFactor",      DUMMY_QT_TRANSLATE_NOOP("propertyName", "tempo change")                                  },
+      { Pid::TEMPO_CHANGE_METHOD,       P_TYPE::CHANGE_METHOD,  true,  "tempoChangeMethod",      DUMMY_QT_TRANSLATE_NOOP("propertyName", "tempo change method")                           },
+
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

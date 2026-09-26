@@ -178,6 +178,7 @@ subdirs (
         libmscore/rhythmicGrouping
         libmscore/soundlibrary
         libmscore/tuning
+        libmscore/tempochange
         libmscore/selectionfilter
         libmscore/selectionrangedelete
         libmscore/unrollrepeats

@@ -27,6 +27,7 @@
 #include "part.h"
 #include "rest.h"
 #include "score.h"
+#include "tempochange.h"
 #include "scoreOrder.h"
 #include "segment.h"
 #include "sig.h"
@@ -172,6 +173,12 @@ void Score::writeMovement(XmlWriter& xml, bool selectionOnly)
             // do not output "platform" and "creationDate" in test and save template mode
             if ((!MScore::testMode && !MScore::saveTemplateMode) || (i.key() != "platform" && i.key() != "creationDate"))
                   xml.tag(QString("metaTag name=\"%1\"").arg(i.key().toHtmlEscaped()), i.value());
+            }
+      // the rit. / accel. lines' settings, where the lines are now (tempochange.h)
+      if (isMaster()) {
+            const QString tempoChanges = TempoChange::write(this);
+            if (!tempoChanges.isEmpty() && !_metaTags.contains(TempoChange::metaTag))
+                  xml.tag(QString("metaTag name=\"%1\"").arg(TempoChange::metaTag), tempoChanges);
             }
 
       if (_scoreOrder && !_scoreOrder->isCustom()) {

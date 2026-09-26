@@ -19,6 +19,21 @@ made. The commit messages on this branch explain each step in detail.
   - the map fixes from the owner's full 42-patch run: Legato 20 is removed from the woodwinds
     and brass, and trills 70/71 from Trumpets a6.
 
+## Tuning and Ethanol bar 14 (2026-09-26, edb5eec)
+
+Built-in tuning is in (see `CLAUDE.md` › Tuning) along with the all-sound-off after a faded MS3
+hairpin (Ethanol bar 14). Still open:
+- the playback regression (`ab/trace/regress.sh`) has not been run on edb5eec. The `ab/` harness
+  is not in the repository, so a new cloud container doesn't have it;
+- *Tools › Tuning…*: the owner won't test it for now (2026-09-26: "leave it for now"); Ethanol
+  bar 14 confirmed good;
+- the owner: try the Playback drop-down (Mixer, Play Panel) switching MS3 / MS4 / SSO;
+- the owner: pitches for the 49 accidentals MuseScore gives none;
+- the owner: hit lists for the unpitched drum kits (see CLAUDE.md › Eighth run: click each drum
+  icon in Kickstart and screenshot its hits on the keyboard);
+- the owner: re-check the tuned percussion (Timpani, Celeste, Marimba, Vibraphone, Tubular
+  Bells) with the fixed key scan.
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2

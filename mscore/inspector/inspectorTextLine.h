@@ -15,6 +15,7 @@
 
 #include "inspectorTextLineBase.h"
 #include "ui_inspector_textline.h"
+#include "ui_inspector_tempochange.h"
 
 namespace Ms {
 
@@ -26,6 +27,7 @@ class InspectorTextLine : public InspectorTextLineBase {
       Q_OBJECT
 
       Ui::InspectorTextLine ttl;
+      Ui::InspectorTempoChange tc;        // a rit. / accel. line (libmscore/tempochange.h)
 
    public:
       InspectorTextLine(QWidget* parent);

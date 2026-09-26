@@ -24,6 +24,8 @@
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstnoteexpression.h"
+#include "pluginterfaces/vst/ivstunits.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
@@ -571,6 +573,74 @@ IPlugView* Vst3Plugin::createEditor()
       if (!d->controller)
             return nullptr;
       return d->controller->createView(ViewType::kEditor);
+      }
+
+//---------------------------------------------------------
+//   keyNames
+//---------------------------------------------------------
+
+static QString fromString128(const Steinberg::Vst::String128 s)
+      {
+      return QString::fromUtf16(reinterpret_cast<const ushort*>(s)).trimmed();
+      }
+
+std::map<int, QString> Vst3Plugin::keyNames(QString* source) const
+      {
+      std::map<int, QString> names;
+      QStringList said;
+      if (!d->controller) {
+            if (source)
+                  *source = "no controller";
+            return names;
+            }
+      // pitch names of the programs (Cubase's drum maps): the first program that has any
+      FUnknownPtr<IUnitInfo> units(d->controller);
+      if (!units)
+            said << "no IUnitInfo";
+      else {
+            const int lists = units->getProgramListCount();
+            int named = 0;
+            for (int l = 0; l < lists && names.empty(); ++l) {
+                  ProgramListInfo list {};
+                  if (units->getProgramListInfo(l, list) != kResultTrue)
+                        continue;
+                  for (int p = 0; p < std::max(1, int(list.programCount)) && names.empty(); ++p) {
+                        if (units->hasProgramPitchNames(list.id, p) != kResultTrue)
+                              continue;
+                        for (int key = 0; key < 128; ++key) {
+                              String128 name {};
+                              if (units->getProgramPitchName(list.id, p, int16(key), name) == kResultTrue) {
+                                    const QString n = fromString128(name);
+                                    if (!n.isEmpty()) {
+                                          names[key] = n;
+                                          ++named;
+                                          }
+                                    }
+                              }
+                        }
+                  }
+            said << QString("IUnitInfo: %1 program list(s), %2 pitch name(s)").arg(lists).arg(named);
+            }
+      // keyswitches
+      FUnknownPtr<IKeyswitchController> keyswitches(d->controller);
+      if (!keyswitches)
+            said << "no IKeyswitchController";
+      else {
+            const int n = keyswitches->getKeyswitchCount(d->eventBus < 0 ? 0 : d->eventBus, 0);
+            for (int k = 0; k < n; ++k) {
+                  KeyswitchInfo info {};
+                  if (keyswitches->getKeyswitchInfo(d->eventBus < 0 ? 0 : d->eventBus, 0, k, info) != kResultTrue)
+                        continue;
+                  const QString title = fromString128(info.title);
+                  for (int key = std::max(0, int(info.keyswitchMin)); key <= std::min(127, int(info.keyswitchMax)); ++key)
+                        if (!names.count(key))
+                              names[key] = "KS " + title;
+                  }
+            said << QString("IKeyswitchController: %1 keyswitch(es)").arg(n);
+            }
+      if (source)
+            *source = said.join("; ");
+      return names;
       }
 
 } // namespace Ms

@@ -20,6 +20,8 @@
 #ifndef __RENDERMIDI_H__
 #define __RENDERMIDI_H__
 
+#include <set>
+
 #include "fraction.h"
 #include "measure.h"
 
@@ -69,6 +71,8 @@ class MidiRenderer {
       bool needUpdate = true;
       std::map<const Part*, Ms4::PartContext> ms4Parts;     // DynamicsRenderMethod::MS4, per part
       bool ms4Mode { false };                               // the chunk being rendered uses it
+      std::set<const Part*> ms4Active;                      // its parts that use it (partplayback.h)
+      QString partModes;                                    // the parts' playback modes as last read
 
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {

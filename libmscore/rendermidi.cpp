@@ -51,6 +51,7 @@
 #include "undo.h"
 #include "utils.h"
 #include "vibrato.h"
+#include "partplayback.h"
 #include "tuning.h"
 #include "volta.h"
 
@@ -1649,6 +1650,8 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
       for (const auto& pc : ms4Parts) {
             const Part* part = pc.first;
             const Ms4::PartContext& ctx = pc.second;
+            if (!ms4Active.count(part))         // a part in MuseScore 3's mode (partplayback.h)
+                  continue;
 
             // chord symbols: MS4 plays them on a track of their own with the piano (Program(0, 0))
             if (const Channel* hc = const_cast<Part*>(part)->harmonyChannel()) {
@@ -2144,7 +2147,7 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
             int idx = s->staff()->channel(s->tick(), 0);
             int channel = s->part()->instrument(s->tick())->channel(idx)->channel();
 
-            if (ms4Mode && (s->isPedal() || s->isLetRing())) {
+            if (ms4Mode && ms4Active.count(s->part()) && (s->isPedal() || s->isLetRing())) {
                   // FluidSequencer::addNoteEvent: the pedal's notes send it down at its start and up at
                   // its end -- the collision-free interval's (a pedal followed by another ends a tick
                   // before it) -- both ahead of the notes of that moment
@@ -2204,7 +2207,7 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                         channelPedalEvents.at(channel).push_back(std::pair<int, std::pair<bool, int> >(t, std::pair<bool, int>(false, staff)));
                         }
                   }
-            else if (s->isVibrato() && !ms4Mode) {        // MS4: a vibrato line shapes the notes (Vibrato), no bends
+            else if (s->isVibrato() && !ms4Active.count(s->part())) {        // MS4: a vibrato line shapes the notes (Vibrato), no bends
                   int stick = s->tick().ticks();
                   int etick = s->tick2().ticks();
                   if (stick >= tick2 || etick < tick1)
@@ -3445,7 +3448,9 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       score->updateChannel();
       score->updateVelo();
 
-      SynthesizerState s = score->synthesizerState();
+      // the global synthesizer's method is the playback mode's (mscore/playbackmode.h): it wins
+      // over a method saved in the score; without one (tests), the score's, else the default
+      SynthesizerState s = ctx.synthState.method() != -1 ? ctx.synthState : score->synthesizerState();
       int method = s.method();
       int cc = s.ccToUse();
 
@@ -3483,16 +3488,37 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   break;
             }
 
+      // a part's own playback mode (partplayback.h) over the global one: MS3 is MuseScore 3.6's
+      // method (SND and changes at the start of a segment) on CC2 unless the global one has a CC;
+      // MS4 and the sound library the MuseScore 4 note model
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(score->masterScore());
+      auto methodOf = [&](const Part* part) {
+            switch (PartPlaybackModes::of(part, modes)) {
+                  case PartPlayback::MS3:
+                        return DynamicsRenderMethod::SEG_START;
+                  case PartPlayback::MS4:
+                  case PartPlayback::LIBRARY:
+                        return DynamicsRenderMethod::MS4;
+                  case PartPlayback::DEFAULT:
+                        break;
+                  }
+            return renderMethod;
+            };
+      ms4Active.clear();
+      for (Part* part : score->parts())
+            if (methodOf(part) == DynamicsRenderMethod::MS4)
+                  ms4Active.insert(part);
+
       // create note & other events
       for (Staff*& st : score->staves()) {
             StaffContext sctx;
             sctx.staff = st;
-            sctx.method = renderMethod;
-            sctx.cc = cc;
+            sctx.method = methodOf(st->part());
+            sctx.cc = sctx.method == renderMethod || cc > 0 ? cc : 2;
             sctx.renderHarmony = ctx.renderHarmony;
             renderStaffChunk(chunk, events, sctx);
             }
-      ms4Mode = renderMethod == DynamicsRenderMethod::MS4;
+      ms4Mode = !ms4Active.empty();
       if (ms4Mode)
             renderMs4Dynamics(chunk, events);
 
@@ -3541,9 +3567,11 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 
 void MidiRenderer::updateState()
       {
-      if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration())
+      const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
+      if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes)
             needUpdate = true;
       if (needUpdate) {
+            partModes = modes;
             // Update the related structures inside score
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
