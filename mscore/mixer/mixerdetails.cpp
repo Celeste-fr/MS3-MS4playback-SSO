@@ -48,9 +48,9 @@ MixerDetails::MixerDetails(QWidget *parent) :
       setupUi(this);
 
       // the part's playback mode: the global one, or its own (kept in the score)
-      labelPlayback = new QLabel(tr("Playback:"), this);
+      labelPlayback = new QLabel(tr("This part plays:"), this);
       playbackCombo = new QComboBox(this);
-      playbackCombo->setToolTip(tr("How this part plays: as the Playback box above says, or MuseScore 3, MuseScore 4 or the sound library of its own (saved in the score)"));
+      playbackCombo->setToolTip(tr("How this part plays: as \"Playback, all parts\" at the top says, or MuseScore 3, MuseScore 4 or the sound library for this part only (saved in the score)"));
       labelPlayback->setBuddy(playbackCombo);
       const int row = gridLayout_2->rowCount();
       gridLayout_2->addWidget(labelPlayback, row, 0);
@@ -336,7 +336,7 @@ void MixerDetails::updatePlayback()
       {
       const QSignalBlocker block(playbackCombo);
       playbackCombo->clear();
-      playbackCombo->addItem(tr("Same as the Playback box"), int(PartPlayback::DEFAULT));
+      playbackCombo->addItem(tr("As all parts"), int(PartPlayback::DEFAULT));
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS3), int(PartPlayback::MS3));
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS4), int(PartPlayback::MS4));
       playbackCombo->addItem(playbackModeName(PlaybackMode::LIBRARY), int(PartPlayback::LIBRARY));

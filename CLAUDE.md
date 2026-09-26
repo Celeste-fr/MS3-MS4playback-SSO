@@ -88,8 +88,8 @@ MS4 playback (see the header comment of each file):
   (a release, the pedal) isn't heard again (Ethanol bar 14, confirmed by ear by the owner on
   Windows, 2026-09-26; built-in synthesizer only).
 
-Playback mode (`mscore/playbackmode.h`): a "Playback" drop-down at the top of the Mixer and of
-the Play Panel switches between MuseScore 3 (dynamics method 1 / CC2, Zita reverb,
+Playback mode (`mscore/playbackmode.h`): a "Playback, all parts" drop-down at the top of the Mixer
+and of the Play Panel switches between MuseScore 3 (dynamics method 1 / CC2, Zita reverb,
 MuseScore_General if found: SoundFonts folders or a MuseScore 3 install's `sound` folder,
 `Fluid::sfFiles`), MuseScore 4 (method 3, MuseReverb, MS Basic) and the sound library (MS4 plus
 `io/soundLibrary`; the last one is kept in `io/soundLibraryLast`). The mode is read back from the
@@ -97,8 +97,7 @@ synthesizer and the preference; a switch stops playback and saves synthesizer.xm
 `playback-ms3/-ms4/-library` exist for shortcuts. The global synthesizer's dynamics method now
 wins over one saved in a score (`renderChunk`; tests without a global state still use the score's).
 
-Per part (`libmscore/partplayback.h`): the Mixer's details panel has "Playback:" per part (same as
-the box, MuseScore 3, MuseScore 4, the sound library), saved in the score's metaTag `partPlayback`
+Per part (`libmscore/partplayback.h`): the Mixer's details panel has "This part plays:" (as all parts, MuseScore 3, MuseScore 4, the sound library), saved in the score's metaTag `partPlayback`
 (JSON: part index, name, mode; 3.6 keeps metaTags), undoable. Per part, not per staff: a part's
 staves share its channels. `renderChunk` gives each staff its part's method (`ms4Active`: the
 parts on the MS4 model; `renderMs4Dynamics`, pedals and vibrato follow it); `SoundLib::routes`
