@@ -522,6 +522,7 @@ static bool updateSoundLibrary()
                   qWarning("Sound library: %s", qPrintable(error));
             }
       SoundLib::setCurrent(library);
+      PartPlaybackModes::setLibraryDefault(on && library);     // after setCurrent, which sets it on
       return true;
       }
 

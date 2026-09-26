@@ -304,9 +304,14 @@ Output output()
 
 void setCurrent(std::shared_ptr<const Library> library)
       {
-      std::lock_guard<std::mutex> lock(currentMutex);
-      currentLibrary = library;
-      currentActive = bool(library);
+      {
+            std::lock_guard<std::mutex> lock(currentMutex);
+            currentLibrary = library;
+            currentActive = bool(library);
+      }
+      // a library set is the one the parts play by default; the application then says whether
+      // the global playback mode is the library (partplayback.h, mscore/playbackmode.h)
+      PartPlaybackModes::setLibraryDefault(bool(library));
       }
 
 static std::mutex availableMutex;
