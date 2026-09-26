@@ -262,7 +262,9 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     owner confirmed it by ear; the single "Violins 1 - Long Sul G" patch plays. So it is in
     the patch, not our switching. The owner played it in Kontakt: Kontakt's "Voices" stays
     at 0 (its load chip changed nothing), so that patch maps no samples to Long Sul G: a
-    fault of Spitfire's patch. Listed with no techniques (SILENT in gen_spitfire_sso.py).
+    fault of Spitfire's patch. The same for Celli Long Sul C (Voices 0 in "Celli - All
+    techniques", the single Long Sul C patch plays). Listed with no techniques (SILENT in
+    gen_spitfire_sso.py); a part that needs them would have to use the single patches.
 - The owner's SSO folder (`.nki` list, 2026-09-25): besides the mapped "All techniques"
   patches there are Motif Brass (Horns a4, Trombones a5, Trumpets a3 "All techniques"), the
   percussion (Timpani, Celeste, Glockenspiel, Xylophone, Marimba, Vibraphone, Crotales,
