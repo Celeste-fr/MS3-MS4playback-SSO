@@ -45,6 +45,11 @@ Some mtest references were updated for these (compat114/206, musicxml io, tuplet
 Known leftovers: the XML of some MuseScore 1/2 imports still changes on the first round trip
 (pages and MIDI identical); MIDI export's same-instant event order is not stable run to run.
 
+Fixed from MuseScore 3.6 (not about files): deleting a time signature that restates the one in
+force (same nominal meter, none local) no longer rebuilds the measures up to the next one, which
+lost their breaks, spacers, stretch and volta offsets (musescore#21578; the owner used the
+RemoveRedundantSig plugin for it). `Score::cmdRemoveTimeSig`, test `tst_timesig::removeRedundant`.
+
 ## Layout of the fork-specific code
 
 MS4 playback (see the header comment of each file):
@@ -87,7 +92,18 @@ MuseScore_General if found: SoundFonts folders or a MuseScore 3 install's `sound
 `Fluid::sfFiles`), MuseScore 4 (method 3, MuseReverb, MS Basic) and the sound library (MS4 plus
 `io/soundLibrary`; the last one is kept in `io/soundLibraryLast`). The mode is read back from the
 synthesizer and the preference; a switch stops playback and saves synthesizer.xml. Actions
-`playback-ms3/-ms4/-library` exist for shortcuts.
+`playback-ms3/-ms4/-library` exist for shortcuts. The global synthesizer's dynamics method now
+wins over one saved in a score (`renderChunk`; tests without a global state still use the score's).
+
+Per part (`libmscore/partplayback.h`): the Mixer's details panel has "Playback:" per part (same as
+the box, MuseScore 3, MuseScore 4, the sound library), saved in the score's metaTag `partPlayback`
+(JSON: part index, name, mode; 3.6 keeps metaTags), undoable. Per part, not per staff: a part's
+staves share its channels. `renderChunk` gives each staff its part's method (`ms4Active`: the
+parts on the MS4 model; `renderMs4Dynamics`, pedals and vibrato follow it); `SoundLib::routes`
+routes only parts that play the library (`playsLibrary`: their own mode, else the global one).
+The library map stays loaded even when the global mode isn't the library (`updateSoundLibrary`),
+so `SoundLib::active()` is true; MIDI out of the built-in parts is only held back when the global
+mode is the library.
 
 Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3.6 plugins:
 

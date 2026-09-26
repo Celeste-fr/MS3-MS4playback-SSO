@@ -130,6 +130,7 @@
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
 #include "tuningdialog.h"
+#include "libmscore/partplayback.h"
 #include "playbackmode.h"
 #ifdef USE_VST3
 #include "audio/vst3/vst3synth.h"
@@ -495,8 +496,21 @@ void MuseScore::closeEvent(QCloseEvent* ev)
 
 static bool updateSoundLibrary()
       {
+      // the preference is the global playback mode's library; without it the last one used (or
+      // the first that comes with MuseScore) stays loaded for parts set to play it on their own
+      // (libmscore/partplayback.h)
       static QString loaded;
-      const QString path = preferences.getString(PREF_IO_SOUNDLIBRARY);
+      static bool loadedOn = false;
+      const QString chosen = preferences.getString(PREF_IO_SOUNDLIBRARY);
+      const QString path = chosen.isEmpty() ? soundLibraryPath() : chosen;
+      const bool on = !chosen.isEmpty();
+      if (on != loadedOn) {
+            loadedOn = on;
+            PartPlaybackModes::setLibraryDefault(on);
+            SoundLib::routesChanged();
+            if (path == loaded)
+                  return true;
+            }
       if (path == loaded)
             return false;
       loaded = path;

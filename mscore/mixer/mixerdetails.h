@@ -45,8 +45,11 @@ class MixerDetails : public QWidget, public Ui::MixerDetails, public ChannelList
       QWidget* mutePerVoiceHolder;
       QGridLayout* mutePerVoiceGrid;
       QList<QPushButton*> voiceButtons;
+      QLabel* labelPlayback;
+      QComboBox* playbackCombo;           // the part's own playback mode (libmscore/partplayback.h)
 
       void updateFromTrack();
+      void updatePlayback();
 
 public slots:
       void partNameChanged();
@@ -58,6 +61,7 @@ public slots:
       void reverbChanged(double);
       void drumkitToggled(bool);
       void midiChannelChanged(int);
+      void playbackChanged(int);
 
 public:
       explicit MixerDetails(QWidget *parent);

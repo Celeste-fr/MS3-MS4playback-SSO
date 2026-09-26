@@ -933,6 +933,36 @@ void Score::cmdRemoveTimeSig(TimeSig* ts)
       Score* rScore = masterScore();
       Measure* rm = rScore->tick2measure(m->tick());
       Segment* rs = rm->findSegment(SegmentType::TimeSig, s->tick());
+
+      // a time signature that restates the one in force (same nominal meter, 4/4 is not 2/2, and
+      // no local one on any staff) changes no measure: remove it and leave the measures as they
+      // are. rewriteMeasures() would rebuild them up to the next time signature and lose their
+      // breaks, spacers, stretch and volta offsets (musescore#21578)
+      Measure* pm = m->prevMeasure();
+      Fraction ns(pm ? pm->timesig() : Fraction(4,4));
+      bool redundant = rs && rm->timesig().identical(ns);
+      if (redundant) {
+            for (Element* e : rs->elist())
+                  if (e && e->isTimeSig() && (toTimeSig(e)->isLocal() || !toTimeSig(e)->sig().identical(ns)))
+                        redundant = false;
+            }
+      if (redundant) {
+            std::vector<Element*> sigs;
+            for (Element* e : rs->elist())
+                  if (e)
+                        sigs.push_back(e);
+            if (rm->mmRest()) {
+                  if (Segment* mmRestTimesig = rm->mmRest()->findSegment(SegmentType::TimeSig, s->tick()))
+                        for (Element* e : mmRestTimesig->elist())
+                              if (e)
+                                    sigs.push_back(e);
+                  }
+            for (Element* e : sigs)
+                  rScore->undoRemoveElement(e);
+            rScore->setLayoutAll();
+            return;
+            }
+
       if (rs)
             rScore->undoRemoveElement(rs);
 
@@ -942,9 +972,6 @@ void Score::cmdRemoveTimeSig(TimeSig* ts)
             if (mmRestTimesig)
                   rScore->undoRemoveElement(mmRestTimesig);
             }
-
-      Measure* pm = m->prevMeasure();
-      Fraction ns(pm ? pm->timesig() : Fraction(4,4));
 
       if (!rScore->rewriteMeasures(rm, ns, -1)) {
             undoStack()->current()->unwind();

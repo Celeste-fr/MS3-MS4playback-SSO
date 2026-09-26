@@ -31,6 +31,8 @@
 #include "synthcontrol.h"
 #include "audio/midi/msynthesizer.h"
 #include "preferences.h"
+#include "playbackmode.h"
+#include "libmscore/partplayback.h"
 
 namespace Ms {
 
@@ -44,6 +46,16 @@ MixerDetails::MixerDetails(QWidget *parent) :
       mutePerVoiceHolder(nullptr)
       {
       setupUi(this);
+
+      // the part's playback mode: the global one, or its own (kept in the score)
+      labelPlayback = new QLabel(tr("Playback:"), this);
+      playbackCombo = new QComboBox(this);
+      playbackCombo->setToolTip(tr("How this part plays: as the Playback box above says, or MuseScore 3, MuseScore 4 or the sound library of its own (saved in the score)"));
+      labelPlayback->setBuddy(playbackCombo);
+      const int row = gridLayout_2->rowCount();
+      gridLayout_2->addWidget(labelPlayback, row, 0);
+      gridLayout_2->addWidget(playbackCombo, row, 1, 1, gridLayout_2->columnCount() - 1);
+      connect(playbackCombo, SIGNAL(activated(int)), SLOT(playbackChanged(int)));
 
       connect(partNameLineEdit,    SIGNAL(editingFinished()),              SLOT(partNameChanged()));
       connect(trackColorLabel,     SIGNAL(colorChanged(QColor)),           SLOT(trackColorChanged(QColor)));
@@ -85,6 +97,8 @@ void MixerDetails::updateFromTrack()
             mutePerVoiceHolder->deleteLater();
             mutePerVoiceHolder = nullptr;
             }
+
+      updatePlayback();
 
       if (!_mti) {
             drumkitCheck->setChecked(false);
@@ -312,6 +326,55 @@ void MixerDetails::setVoiceMute(int staffIdx, int voice, bool shouldMute)
             }
       }
 
+
+//---------------------------------------------------------
+//   updatePlayback
+//    the choices: the global mode (the Playback box), then MuseScore 3, MuseScore 4, the library
+//---------------------------------------------------------
+
+void MixerDetails::updatePlayback()
+      {
+      const QSignalBlocker block(playbackCombo);
+      playbackCombo->clear();
+      playbackCombo->addItem(tr("Same as the Playback box"), int(PartPlayback::DEFAULT));
+      playbackCombo->addItem(playbackModeName(PlaybackMode::MS3), int(PartPlayback::MS3));
+      playbackCombo->addItem(playbackModeName(PlaybackMode::MS4), int(PartPlayback::MS4));
+      playbackCombo->addItem(playbackModeName(PlaybackMode::LIBRARY), int(PartPlayback::LIBRARY));
+      const Part* part = _mti ? _mti->part() : nullptr;
+      playbackCombo->setCurrentIndex(playbackCombo->findData(int(part ? PartPlaybackModes::of(part) : PartPlayback::DEFAULT)));
+      playbackCombo->setEnabled(part);
+      labelPlayback->setEnabled(part);
+      }
+
+//---------------------------------------------------------
+//   playbackChanged
+//    the part's own mode, in the master score's metaTag (undoable)
+//---------------------------------------------------------
+
+void MixerDetails::playbackChanged(int index)
+      {
+      if (!_mti)
+            return;
+      Part* part = _mti->part();
+      Score* score = part->score();
+      MasterScore* ms = score->masterScore();
+      std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
+      modes[PartPlaybackModes::masterPart(part)] = PartPlayback(playbackCombo->itemData(index).toInt());
+      QMap<QString, QString> tags = ms->metaTags();
+      const QString value = PartPlaybackModes::write(ms, modes);
+      if (value.isEmpty())
+            tags.remove(PartPlaybackModes::metaTag);
+      else
+            tags.insert(PartPlaybackModes::metaTag, value);
+      if (tags == ms->metaTags())
+            return;
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      score->startCmd();
+      score->undo(new ChangeMetaTags(ms, tags));
+      score->endCmd();
+      ms->setPlaylistDirty();
+      }
 
 //---------------------------------------------------------
 //   partNameChanged

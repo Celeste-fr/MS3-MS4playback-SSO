@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "soundlibrary.h"
+#include "partplayback.h"
 
 #include <algorithm>
 #include <atomic>
@@ -356,7 +357,11 @@ std::vector<Route> routes(const Score* score, const Library& library)
       {
       std::vector<Route> result;
       int k = 0;
+      // a part plays the library by its own playback mode, else by the global one (partplayback.h)
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(score->masterScore());
       for (const Part* part : score->parts()) {
+            if (!PartPlaybackModes::playsLibrary(part, modes))
+                  continue;
             const LibInstrument* li = library.match(part->instrument(), part);
             if (!li)
                   continue;

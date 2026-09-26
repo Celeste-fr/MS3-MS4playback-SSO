@@ -76,12 +76,12 @@ QString playbackModeName(PlaybackMode mode)
       }
 
 //---------------------------------------------------------
-//   libraryPath
+//   soundLibraryPath
 //    the sound library the LIBRARY mode plays: the last one used, else the first that comes
 //    with MuseScore
 //---------------------------------------------------------
 
-static QString libraryPath()
+QString soundLibraryPath()
       {
       const QString last = preferences.getString(PREF_IO_SOUNDLIBRARY_LAST);
       if (!last.isEmpty() && QFileInfo::exists(last))
@@ -106,7 +106,7 @@ void setPlaybackMode(PlaybackMode mode)
       const QString current = preferences.getString(PREF_IO_SOUNDLIBRARY);
       QString library;
       if (mode == PlaybackMode::LIBRARY) {
-            library = current.isEmpty() ? libraryPath() : current;
+            library = current.isEmpty() ? soundLibraryPath() : current;
             if (library.isEmpty()) {
                   mscore->showMessage(QObject::tr("No sound library found"), 5000);
                   return;

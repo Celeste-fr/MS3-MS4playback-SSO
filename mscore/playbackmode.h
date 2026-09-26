@@ -37,6 +37,7 @@ enum class PlaybackMode : char { MS3, MS4, LIBRARY };
 PlaybackMode playbackMode();
 void setPlaybackMode(PlaybackMode mode);
 QString playbackModeName(PlaybackMode mode);
+QString soundLibraryPath();         // the library the LIBRARY mode plays (the last one used …)
 
 //---------------------------------------------------------
 //   PlaybackModeBox
