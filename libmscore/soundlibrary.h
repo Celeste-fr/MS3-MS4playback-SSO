@@ -56,7 +56,7 @@ enum class SwitchType : signed char { CC, KEYSWITCH, PROGRAM };
 
 struct Articulation {
       QString name;
-      QStringList techniques;             // the bases it plays
+      QStringList techniques;             // the bases it plays (none: never chosen, listed for reference)
       QStringList modifiers;              // with these modifiers
       int value { -1 };                   // CC value, keyswitch pitch or program
       };

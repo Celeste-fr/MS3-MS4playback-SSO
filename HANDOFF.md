@@ -25,14 +25,12 @@ The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the 
 and 4 of the last request are done (Oboe Solo and Solo Cello pass; the scanned articulations
 are mapped where notation can ask for them). Still open:
 
-- Patches the map lacks (Trombones a5 …). The owner has many and found *Add a patch…* one by
-  one too slow; they were asked for a list of their SSO `.nki` files (PowerShell
-  `Get-ChildItem -Recurse -Filter *.nki`), to tell which are instruments the map lacks rather
-  than single-articulation patches of instruments it has.
-
-**Open question:** the owner mentioned a piano. SSO has no piano as far as I know, but I'm not
-sure. Ask which library it comes from before mapping it. A different library needs its own
-map file.
+- Patches the map lacks: the owner's `.nki` list is in (see `CLAUDE.md`). To add: Motif Brass
+  Horns a4, Trombones a5, Trumpets a3 (their UACC values: from the Reaticulate bank if it has
+  them, else a scan after *Add a patch…*), and, if wanted, SSO's Grand Piano and tuned
+  percussion (these play on the built-in synth now).
+- Violins Long Sul G / Celli Long Sul C are silent in the "All techniques" patches: the owner
+  was asked to check the articulation's load chip and Purge in Kontakt.
 
 ## When the zip arrives
 

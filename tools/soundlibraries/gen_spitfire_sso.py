@@ -24,7 +24,8 @@ for i,l in enumerate(src):
 banks['Violins 2: All techniques']=banks['Violins 1: All techniques']
 banks['Solo Violin 2: All techniques']=banks['Solo Violin 1: All techniques']
 
-# name -> (techniques, modifiers); names not listed are left out (no notation asks for them)
+# name -> (techniques, modifiers); names not listed have no techniques: no notation asks for them,
+# so they are never chosen, but they are in the map for reference and the articulation check
 T={
  'Long':('long legato',''), 'Normale':('long legato',''),
  'Long CS':('long legato','muted'), 'Long (Muted)':('long legato','muted'), 'Long Stopped':('long legato','muted'),
@@ -144,9 +145,12 @@ SPITFIRE_ADD = {}
 # active technique" and play nothing: Check articulations, 2026-09-25)
 SPITFIRE_ADD['Violins 2'] = [('Trem CS', 12, 'tremolo', 'muted')]
 SPITFIRE_DROP = {('Violins 2', 'Long Sul Tasto'), ('Violins 2', 'Trill (Minor 3rd'), ('Violins 2', 'Trill (Major 3rd)')}
-# Long Sul G / Sul C that played nothing in the owner's Kontakt at every pitch the check tried
-# (Violas' Long Sul C did play), 2026-09-25
-SPITFIRE_DROP |= {('Violins 1', 'Long Sul G'), ('Violins 2', 'Long Sul G'), ('Celli', 'Long Sul C')}
+# Long Sul G / Sul C that played nothing in the owner's "All techniques" patches at every pitch
+# the check tried (Violas' Long Sul C did play; the single "Long Sul G" patch plays), 2026-09-25:
+# listed without techniques until that is explained
+SILENT = {('Violins 1', 'Long Sul G'), ('Violins 2', 'Long Sul G'), ('Celli', 'Long Sul C')}
+# in the patch (name and UACC number in Kontakt, Check articulations 2026-09-25) but not in the bank
+SPITFIRE_ADD['Flute Solo'] = [('Marcato SFZ', 54, '', '')]
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
 
 def articulation(n, v, t, m):
@@ -160,9 +164,11 @@ for bank,name,ids,pn in I:
     out.append(f'  <Instrument {attrs}>')
     seen=set()
     for n,v in banks[bank]:
-        if n not in T or n in seen or (name, n) in SPITFIRE_DROP: continue
+        if n in seen or (name, n) in SPITFIRE_DROP: continue
         seen.add(n)
-        t,m=T[n]
+        t,m=T.get(n, ('', ''))
+        if (name, n) in SILENT:
+            t, m = '', ''
         # a patch with its own staccato: staccato dots play it, spiccato stays for staccatissimo
         if n == 'Spiccato' and any(x == 'staccato' for x, _ in banks[bank]):
             t = 'spiccato staccatissimo'

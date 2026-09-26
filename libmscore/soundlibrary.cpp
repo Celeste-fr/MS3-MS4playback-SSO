@@ -121,13 +121,15 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               art.modifiers = words(aa.value("modifiers").toString());
                               bool ok = false;
                               art.value = aa.value("value").toInt(&ok);
-                              if (!ok || art.value < 0 || art.value > 127 || art.techniques.isEmpty())
+                              // (no techniques: listed for reference and checked, never chosen by notation)
+                              if (!ok || art.value < 0 || art.value > 127)
                                     return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
                               li.articulations.push_back(art);
                               }
                         r.skipCurrentElement();
                         }
-                  if (li.ids.isEmpty() || li.articulations.empty())
+                  if (li.ids.isEmpty() || std::none_of(li.articulations.begin(), li.articulations.end(),
+                                                       [](const Articulation& a) { return !a.techniques.isEmpty(); }))
                         return fail(QString("%1: instrument \"%2\" without ids or articulations").arg(path, li.name));
                   lib->instruments.push_back(li);
                   }

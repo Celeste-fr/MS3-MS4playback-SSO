@@ -250,10 +250,24 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   - Every articulation the scan found is in the Reaticulate bank with the same UACC number.
     The map had left them out because no notation asked for them. Now in the map, through
     new staff-text modifiers: Long Sul C (Violas), Bells up Long/Crotchet/Staccato (Horns a2),
-    PDLT (Harp), Multi Tongued (winds and brass, "double/triple tongue" + tremolo). Left out:
-    Violins' Long Sul G and Celli's Long Sul C (silent in Kontakt at every pitch tried), and
-    the ones no notation names (Long CS Blend, Long (Rachm.), Short 0.5, Short Brushed, the
-    measured tremolos, Long Hollow, Overblown, Mariachi, FX, Slid).
+    PDLT (Harp), Multi Tongued (winds and brass, "double/triple tongue" + tremolo).
+  - Articulations no notation names are in the map too, with no techniques (never chosen,
+    but listed and checked; the owner wants them kept for later): Long CS Blend, Long
+    (Rachm.), Short 0.5, Short Brushed (CS), Trem (CS) MS 150/180 BPM (measured), Fx, Staccato
+    Dig, Short Spicc-Pizz, Long Sul Pont (Dist), Long Sul String, Long Hollow, Long/Short
+    Overblown, Marcato SFZ, Bells up Quaver, Long Mariachi, Fx Glissandi, Slid (harp).
+  - Violins 1/2 Long Sul G and Celli Long Sul C: silent in the "All techniques" patches at
+    every pitch tried (71, then 83, 59, 78, 64, 90, 52, 95, 76, 66: several inside Sul G's
+    blue key range, G3 to about C5), although Kontakt shows them selected on UACC 112. The
+    owner confirmed it by ear; the single "Violins 1 - Long Sul G" patch plays. So it is in
+    the patch, not our switching. Suspects: the articulation's load chip (SSS manual: chips
+    under each articulation load/unload its samples) or Purge. Listed with no techniques
+    until explained; then give them `sulg`/`sulc` (SILENT in gen_spitfire_sso.py).
+- The owner's SSO folder (`.nki` list, 2026-09-25): besides the mapped "All techniques"
+  patches there are Motif Brass (Horns a4, Trombones a5, Trumpets a3 "All techniques"), the
+  percussion (Timpani, Celeste, Glockenspiel, Xylophone, Marimba, Vibraphone, Crotales,
+  Tubular Bells, Desk Bells, drums, unpitched), "Other - Grand Piano" and "Other - Harp
+  glissandi", plus Performance / Core / Decorative / single-technique patches (574).
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
     are silent at every pitch; the report now lists such values apart ("most likely none",

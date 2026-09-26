@@ -132,7 +132,8 @@ switch value of each articulation. For example:
 </SoundLibrary>
 ```
 
-- `techniques` lists what the articulation can play: `long legato short staccatissimo spiccato
+- `techniques` lists what the articulation can play (an empty list: no notation asks for it; it
+  is listed for reference and checked by *Check articulations*, but never chosen): `long legato short staccatissimo spiccato
   tenuto marcato longmarcato pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
   fall rip`.
 - `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup

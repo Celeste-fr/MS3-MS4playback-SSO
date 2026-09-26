@@ -204,6 +204,13 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(valueFor("Harp", { { "long", "legato" }, { "pdlt" } }), 18);
       QCOMPARE(valueFor("Oboe Solo", { { "tremolo" }, { "multitongue" } }), 75);
       QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, {} }), 1);
+      // listed without techniques (silent in the owner's patch): never chosen
+      QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, { "sulg" } }), 1);
+      bool listed = false;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            for (const SoundLib::Articulation& a : li.articulations)
+                  listed |= li.name == "Violins 1" && a.name == "Long Sul G" && a.value == 112 && a.techniques.isEmpty();
+      QVERIFY(listed);
       }
 
 //---------------------------------------------------------
