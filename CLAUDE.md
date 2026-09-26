@@ -473,7 +473,8 @@ uploads the build. Start it with *Run workflow* (Actions › Test: Sound library
 with a push to `ms4-playback` (or a `claude/` branch) whose last commit message contains
 `[windows-build]`. The owner allows runs without asking (the free minutes),
 but not excessively: validate locally first, fix all you can between runs, and don't retry
-blindly. Other pushes show up as skipped runs, which use no minutes. Runs so far
+blindly. A newer `[windows-build]` push doesn't cancel a build still running: cancel the
+superseded one (Actions › the run › Cancel, or the API), as the owner asked why two ran (runs 46/47). Other pushes show up as skipped runs, which use no minutes. Runs so far
 are in the commit log. Run 1 compiled everything with MSVC (about 15 minutes) and failed
 only at the link (`Linux::IRunLoop` in vst3editor; now Linux-only). Run 2 built and uploaded
 MuseScore (artifact `MuseScore-soundlibrary-win64`). The test build failed because on MSVC
