@@ -879,17 +879,73 @@
   <Instrument name="Percussion" ids="drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes bell-plate vibraslap" kit="1"/>
   <Instrument name="Drums - High" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="38" key="36" name="Snare 1 Hit"/>
+    <Drum pitch="40" key="41" name="Snare 2 Hit"/>
+    <Drum pitch="38" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
+    <Drum pitch="40" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
+    <Drum pitch="60" key="52" name="Bongos Hand Tone"/>
+    <Drum pitch="61" key="50" name="Bongos Hand Bass"/>
+    <Drum pitch="62" key="64" name="Conga 1 Slap"/>
+    <Drum pitch="63" key="62" name="Conga 1 Tone"/>
+    <Drum pitch="64" key="69" name="Conga 2 Tone"/>
+    <Drum pitch="65" key="77" name="Timbales Hi Hit"/>
+    <Drum pitch="66" key="72" name="Timbales Lo Hit"/>
   </Instrument>
   <Instrument name="Drums - Low" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="35" key="86" name="Bass Drum Soft Hit"/>
+    <Drum pitch="36" key="84" name="Bass Drum Hit"/>
+    <Drum pitch="38" key="48" name="Field Drum Hit" ids="military-drum"/>
+    <Drum pitch="37" key="53" name="Field Drum X Stick" ids="military-drum"/>
+    <Drum pitch="37" key="53" name="Field Drum X Stick"/>
+    <Drum pitch="50" key="60" name="Tom 1"/>
+    <Drum pitch="48" key="62" name="Tom 2"/>
+    <Drum pitch="47" key="64" name="Tom 3"/>
+    <Drum pitch="45" key="65" name="Tom 4"/>
+    <Drum pitch="43" key="67" name="Tom 5"/>
+    <Drum pitch="41" key="67" name="Tom 5"/>
   </Instrument>
   <Instrument name="Unpitched - Metal" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="49" key="48" name="Cymbal Med Hit"/>
+    <Drum pitch="57" key="53" name="Cymbal Hi Hit"/>
+    <Drum pitch="55" key="53" name="Cymbal Hi Hit"/>
+    <Drum pitch="57" key="59" name="Piatti Hit" ids="cymbal"/>
+    <Drum pitch="59" key="59" name="Piatti Hit" ids="percussion"/>
+    <Drum pitch="51" key="43" name="Cymbal Lo Hit" ids="ride-cymbal"/>
+    <Drum pitch="52" key="43" name="Cymbal Lo Hit" ids="chinese-cymbal"/>
+    <Drum pitch="52" key="36" name="Tam Tam Hit" ids="tam-tam"/>
+    <Drum pitch="52" key="40" name="Rain Sheet Hit" ids="thundersheet"/>
+    <Drum pitch="84" key="79" name="Mark Tree Long"/>
+    <Drum pitch="69" key="79" name="Mark Tree Long" ids="metal-wind-chimes"/>
+    <Drum pitch="68" key="67" name="Anvil Hit Mid" ids="anvil"/>
   </Instrument>
   <Instrument name="Unpitched - Wood" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="76" key="60" name="Woodblock 1"/>
+    <Drum pitch="77" key="67" name="Woodblock 5"/>
+    <Drum pitch="62" key="48" name="Templeblock 1" ids="temple-blocks"/>
+    <Drum pitch="61" key="50" name="Templeblock 2" ids="temple-blocks"/>
+    <Drum pitch="60" key="52" name="Templeblock 3" ids="temple-blocks"/>
+    <Drum pitch="59" key="53" name="Templeblock 4" ids="temple-blocks"/>
+    <Drum pitch="58" key="55" name="Templeblock 5" ids="temple-blocks"/>
+    <Drum pitch="75" key="39" name="Claves Cuban Hit"/>
   </Instrument>
   <Instrument name="Other - Toys" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="54" key="43" name="Tambourine Hit"/>
+    <Drum pitch="83" key="76" name="Sleighbells Hit 1"/>
+    <Drum pitch="82" key="67" name="Shaker Metal Closed"/>
+    <Drum pitch="70" key="64" name="Shaker Pop Closed"/>
+    <Drum pitch="73" key="69" name="Guiro Hit"/>
+    <Drum pitch="74" key="71" name="Guiro Zip"/>
+    <Drum pitch="73" key="62" name="Ratchet Short" ids="ratchet"/>
+    <Drum pitch="56" key="55" name="Cowbell 2 Open"/>
+    <Drum pitch="67" key="84" name="Agogo High"/>
+    <Drum pitch="68" key="83" name="Agogo Low"/>
+    <Drum pitch="85" key="48" name="Castanets Right Hand"/>
+    <Drum pitch="67" key="48" name="Castanets Right Hand" ids="metal-castanets"/>
+    <Drum pitch="69" key="91" name="Cabasa Shake"/>
+    <Drum pitch="58" key="86" name="Jawbone Hit"/>
   </Instrument>
 </SoundLibrary>

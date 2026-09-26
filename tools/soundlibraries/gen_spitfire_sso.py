@@ -317,7 +317,70 @@ KIT_IDS = ('drumset percussion snare-drum piccolo-snare-drum military-drum bass-
            'guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes '
            'bell-plate vibraslap')
 PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - Wood', 'Other - Toys']
-DRUMS = {}
+# Keys from the owner's screenshots of each drum's hit list in Kickstart (2026-09-26; C3 = 60, as the
+# key scan confirms: every listed key sounds and every loud key is listed). MuseScore's pitches are
+# the GM ones its drumsets use (instruments.xml); an entry with ids is for those instruments only.
+# Guesses to confirm by ear: Tom 1 is the high tom, Conga 1 the high conga, Block 1 the high block.
+DRUMS = {
+ 'Drums - High': [
+  # snares: Snare 1 hit 36 / edge 38 / rim 40, Snare 2 hit 41 / edge 43, Snare 3 hit 45
+  (38, 36, 'Snare 1 Hit', None), (40, 41, 'Snare 2 Hit', None),
+  (38, 45, 'Snare 3 Hit', 'piccolo-snare-drum'), (40, 45, 'Snare 3 Hit', 'piccolo-snare-drum'),
+  # bongos: hand tone 52 / hand bass 50 (hand flam 48, finger flam 53 / bass 55 / slap 57, hit 59)
+  (60, 52, 'Bongos Hand Tone', None), (61, 50, 'Bongos Hand Bass', None),
+  # congas: Conga 1 bass 60 / tone 62 / slap 64, Conga 2 hit 65 / bass 67 / tone 69 / slap 71
+  (62, 64, 'Conga 1 Slap', None), (63, 62, 'Conga 1 Tone', None), (64, 69, 'Conga 2 Tone', None),
+  # timbales: lo hit 72 / edge 74 / rim 76, hi hit 77 / edge 79 / rim 81
+  (65, 77, 'Timbales Hi Hit', None), (66, 72, 'Timbales Lo Hit', None),
+  ],
+ 'Drums - Low': [
+  # bass drum: hit 84, soft hit 86, mute hit 88, rute 89
+  (35, 86, 'Bass Drum Soft Hit', None), (36, 84, 'Bass Drum Hit', None),
+  # field drum (military drum): hit 48, edge 50, rim 52, x stick 53
+  (38, 48, 'Field Drum Hit', 'military-drum'), (37, 53, 'Field Drum X Stick', 'military-drum'),
+  (37, 53, 'Field Drum X Stick', None),
+  # toms: Tom 1-5 on 60, 62, 64, 65, 67 (Tom 1 taken as the highest); GM 50 high … 41 low
+  (50, 60, 'Tom 1', None), (48, 62, 'Tom 2', None), (47, 64, 'Tom 3', None), (45, 65, 'Tom 4', None),
+  (43, 67, 'Tom 5', None), (41, 67, 'Tom 5', None),
+  # (gong drum hit 36 / mute hit 38, tom ensemble 72-77: no MuseScore sound of their own)
+  ],
+ 'Unpitched - Metal': [
+  # Cymbal Hi hit 53 / choked 55 / brush 57, Med 48 / 50 / 52, Lo 43 / 45 / 47; Piatti hit 59
+  (49, 48, 'Cymbal Med Hit', None), (57, 53, 'Cymbal Hi Hit', None), (55, 53, 'Cymbal Hi Hit', None),
+  (57, 59, 'Piatti Hit', 'cymbal'), (59, 59, 'Piatti Hit', 'percussion'),
+  (51, 43, 'Cymbal Lo Hit', 'ride-cymbal'), (52, 43, 'Cymbal Lo Hit', 'chinese-cymbal'),
+  # Tam Tam hit 36 / choked 38, Gong (wind gong) hit 62 / choke 64, Rain Sheet hit 40 / choked 41
+  (52, 36, 'Tam Tam Hit', 'tam-tam'), (52, 40, 'Rain Sheet Hit', 'thundersheet'),
+  # Mark Tree long 79 / up 81 / down 83 / push 84; Anvil 65-72, Mini Anvil 74-77
+  (84, 79, 'Mark Tree Long', None), (69, 79, 'Mark Tree Long', 'metal-wind-chimes'),
+  (68, 67, 'Anvil Hit Mid', 'anvil'),
+  # (Triangle 1 / 2: no key in the owner's setup; Rivet Cymbal 60, Trash Metal 86-96: no MuseScore sound)
+  ],
+ 'Unpitched - Wood': [
+  # Woodblocks Block 1-5 on 60, 62, 64, 65, 67; Templeblocks Block 1-5 on 48, 50, 52, 53, 55 (Block 1
+  # taken as the highest); Claves Bass 36, C# 37, D 38, Cuban 39, E 40
+  (76, 60, 'Woodblock 1', None), (77, 67, 'Woodblock 5', None),
+  (62, 48, 'Templeblock 1', 'temple-blocks'), (61, 50, 'Templeblock 2', 'temple-blocks'),
+  (60, 52, 'Templeblock 3', 'temple-blocks'), (59, 53, 'Templeblock 4', 'temple-blocks'),
+  (58, 55, 'Templeblock 5', 'temple-blocks'),
+  (75, 39, 'Claves Cuban Hit', None),
+  ],
+ 'Other - Toys': [
+  # Tambourines hit 43 / alt 45; Sleighbells 76 / 77; Shakers pop closed 64, metal open 65 / closed 67
+  (54, 43, 'Tambourine Hit', None), (83, 76, 'Sleighbells Hit 1', None),
+  (82, 67, 'Shaker Metal Closed', None), (70, 64, 'Shaker Pop Closed', None),
+  # Guiro hit 69, zip 71, zip fast 72, zip sfz 74; Ratchet short 62, long 0
+  (73, 69, 'Guiro Hit', None), (74, 71, 'Guiro Zip', None), (73, 62, 'Ratchet Short', 'ratchet'),
+  # Cowbells: bell 1 open 52 / closed 53, bell 2 55 / 57, bell 3 59 / 60; Agogo low 83 / high 84
+  (56, 55, 'Cowbell 2 Open', None), (67, 84, 'Agogo High', None), (68, 83, 'Agogo Low', None),
+  # Castanets left 47, right 48, flam 50; Cabasa flick 89, shake 91, slap 93, twist 95 / 96
+  (85, 48, 'Castanets Right Hand', None), (67, 48, 'Castanets Right Hand', 'metal-castanets'),
+  (69, 91, 'Cabasa Shake', None),
+  # Jawbone hit 86 / f 88 (the vibraslap's ancestor)
+  (58, 86, 'Jawbone Hit', None),
+  # (Ships Bell 79 / 81, Gankogui 36-41: no MuseScore sound)
+  ],
+ }
 out.append(f'  <Instrument name="Percussion" ids={q(KIT_IDS)} kit="1"/>')
 for name in PERCUSSION:
     drums = DRUMS.get(name, [])

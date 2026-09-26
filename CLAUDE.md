@@ -166,8 +166,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   Cubase shows as a drum map) and keyswitches (`IKeyswitchController`, "KS " prefix). The key scan
   asks for them first: results.json `keyNamesSource` and per key `pluginName`, the sheet labels,
   and a list in summary.txt. The test synth has both (Kick/Snare/Hi-Hat Closed, KS Legato/Staccato),
-  tested in `tst_soundlibrary::vst3Plugin`. Whether Kontakt 8 answers either is not known yet
-  (asked of the owner for the unpitched kits, 2026-09-26).
+  tested in `tst_soundlibrary::vst3Plugin`. Kontakt 8 answers neither (tenth run, 2026-09-26:
+  16 program lists with no pitch names, no IKeyswitchController), so the kits' keys came from
+  the owner's screenshots of each drum's hit list in Kickstart (see Kits below).
 - Key scan (`ArticulationCheckDialog::checkKeys`, for `keyScan="1"` patches): each key 0-127
   played; a picture while it sounds and one after release; a key that sounds (within 50 dB of
   the loudest) or a silent key whose release picture differs from the previous key's (beyond
@@ -418,8 +419,14 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     map), Harp glissandi, the Curated Ensembles (blends, no MuseScore instrument).
   Groups 1 and 2 are now extra patches (57: every Performance patch as legato, UACC 20 a guess;
   Sul G / Sul C Performance and Long; the single techniques; reference-only ones). The unpitched
-  percussion is a kit with Drums - High / Low, Unpitched - Metal / Wood, Other - Toys, keys
-  still to come from the owner's key scan (DRUMS in gen_spitfire_sso.py). None of it heard in
+  percussion is a kit with Drums - High / Low, Unpitched - Metal / Wood, Other - Toys. Their keys
+  (DRUMS in gen_spitfire_sso.py, 2026-09-26) come from the owner's Kickstart screenshots of
+  each drum's hit list, C3 = 60 (checked against the key scans: every listed key sounds, every
+  loud key is listed, except rings of the previous key). MuseScore's pitches are the GM ones of
+  its drumsets; `ids` entries for instruments whose pitch means something else (tam-tam 52,
+  temple blocks 58-62, ratchet 73 …). Guesses to confirm by ear: Tom 1, Conga 1 and Block 1 are
+  the high ones. The owner's Triangles have no keys; Ships Bell, Gankogui, Rivet Cymbal, Trash
+  Metal, Gong Drum and Tom Ensemble have no MuseScore sound, and rolls / swells no notation yet. None of it heard in
   Kontakt yet.
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
