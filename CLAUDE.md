@@ -160,6 +160,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   key (`SoundLib::drum()`); an unmapped sound stays on the built-in synthesizer (event patch
   tag -1: `finishLibraryEvents` leaves it unrouted, and its preset and CC11 go there too). A
   kit none of whose patches has a sound of the part is not routed at all.
+- Key names from the plug-in (`Vst3Plugin::keyNames`): the program's pitch names (`IUnitInfo`, what
+  Cubase shows as a drum map) and keyswitches (`IKeyswitchController`, "KS " prefix). The key scan
+  asks for them first: results.json `keyNamesSource` and per key `pluginName`, the sheet labels,
+  and a list in summary.txt. The test synth has both (Kick/Snare/Hi-Hat Closed, KS Legato/Staccato),
+  tested in `tst_soundlibrary::vst3Plugin`. Whether Kontakt 8 answers either is not known yet
+  (asked of the owner for the unpitched kits, 2026-09-26).
 - Key scan (`ArticulationCheckDialog::checkKeys`, for `keyScan="1"` patches): each key 0-127
   played; a picture while it sounds and one after release; a key that sounds (within 50 dB of
   the loudest) or a silent key whose release picture differs from the previous key's (beyond

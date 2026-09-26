@@ -577,6 +577,15 @@ void TestSoundLibrary::vst3Plugin()
       QVERIFY2(p, qPrintable(error));
       QCOMPARE(p->name(), QString("MS Test Synth"));
 
+      // the names it gives its keys (pitch names, keyswitches), as the key scan reads them
+      QString source;
+      const std::map<int, QString> names = p->keyNames(&source);
+      QVERIFY2(names.size() == 5, qPrintable(source));
+      QCOMPARE(names.at(36), QString("Kick"));
+      QCOMPARE(names.at(42), QString("Hi-Hat Closed"));
+      QCOMPARE(names.at(24), QString("KS Legato"));
+      QCOMPARE(names.at(25), QString("KS Staccato"));
+
       std::vector<float> buffer(2 * 1024, 0.f);
       p->process(1024, buffer.data());
       QCOMPARE(peak(buffer), 0.f);                   // nothing played

@@ -23,6 +23,7 @@
 #ifndef __VST3PLUGIN_H__
 #define __VST3PLUGIN_H__
 
+#include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -69,6 +70,10 @@ class Vst3Plugin {
       QByteArray state() const;
       bool setState(const QByteArray& state);
       Steinberg::IPlugView* createEditor();     // nullptr: no editor; the caller releases it
+      // what the plug-in says its keys play, as DAWs show it (drum maps, keyswitch lanes): the
+      // program's pitch names (IUnitInfo) and the keyswitches (IKeyswitchController, "KS "
+      // prefix). source: which of the two answered, or why none did
+      std::map<int, QString> keyNames(QString* source = nullptr) const;
       void idle();                        // parameter changes of the processor to the controller
       };
 

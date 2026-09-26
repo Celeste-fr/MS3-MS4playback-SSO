@@ -884,6 +884,11 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
             return fail(tr("It played nothing: is the patch loaded, on MIDI channel 1 (Kontakt: A1 or Omni)?"));
       pump.run(1500);
 
+      // what the plug-in itself calls its keys, if it says (a DAW's drum map / keyswitch names)
+      QString namesSource;
+      const std::map<int, QString> pluginNames = p->keyNames(&namesSource);
+      out["keyNamesSource"] = namesSource;
+
       // every key: a picture while it sounds, and its peak
       status(tr("opening its window…"));
       QImage base, again;
@@ -957,10 +962,12 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
             const bool sounds = peaks[key] > 1e-5 && peaks[key] > loudest * std::pow(10.0, -50 / 20.0);
             const bool switches = !sounds && int(released.size()) == 128
                && differingPixels(released[key], key ? released[key - 1] : base) > changeThreshold;
-            if (sounds || switches || mapped.count(key) || keyswitchMap.count(key)) {
+            if (sounds || switches || mapped.count(key) || keyswitchMap.count(key) || pluginNames.count(key)) {
                   QJsonObject k;
                   k["key"] = key;
                   k["name"] = keyName(key);
+                  if (pluginNames.count(key))
+                        k["pluginName"] = pluginNames.at(key);
                   k["peakDb"] = std::round(db * 10) / 10;
                   k["sounds"] = sounds;
                   if (switches)
@@ -1028,7 +1035,8 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
                        .arg(keyswitchMap.count(key) ? " · " + keyswitchMap[key] : QString())
                      : QString("key %1 (%2) · %3 dB%4").arg(key).arg(keyName(key)).arg(20 * std::log10(peaks[key]), 0, 'f', 1)
                        .arg(mapped.count(key) ? " · " + mapped[key] : QString());
-                  pt.drawText(QRect(x, y, cell.width(), labelH), Qt::AlignLeft | Qt::AlignVCenter, label);
+                  const QString label2 = pluginNames.count(key) ? label + " · \"" + pluginNames.at(key) + "\"" : label;
+                  pt.drawText(QRect(x, y, cell.width(), labelH), Qt::AlignLeft | Qt::AlignVCenter, label2);
                   pt.drawImage(QRect(QPoint(x, y + labelH), cell), (ks ? released[key] : shots[key]).copy(crop));
                   pt.setPen(QColor(200, 200, 200));
                   pt.drawRect(QRect(QPoint(x, y + labelH), cell).adjusted(0, 0, -1, -1));
@@ -1065,6 +1073,9 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       if (ins.drums.empty() && keyswitchMap.empty() && !oneSound)
             line += tr("; the map has no keys for it yet");
       summary += QString("## %1 (keys)\n   %2\n").arg(ins.name, line);
+      summary += "   " + tr("The plug-in's own key names: %1 (%2)").arg(pluginNames.size()).arg(namesSource) + "\n";
+      for (const auto& n : pluginNames)
+            summary += QString("      %1 (%2): %3\n").arg(n.first).arg(keyName(n.first), n.second);
       for (const QString& s : silentMapped)
             summary += "   - " + tr("mapped but silent: %1").arg(s) + "\n";
       summary += "\n";
