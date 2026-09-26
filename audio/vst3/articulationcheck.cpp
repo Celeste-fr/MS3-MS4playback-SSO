@@ -297,11 +297,12 @@ struct Player {
       Clip play(int prior, int value, int pitch)
             {
             settle();
-            if (prior >= 0) {
+            if (prior >= 0 && s.switchCC >= 0) {
                   p->midi(ME_CONTROLLER, s.channel, s.switchCC, prior);
                   render(frames(0.1));
                   }
-            p->midi(ME_CONTROLLER, s.channel, s.switchCC, value);
+            if (s.switchCC >= 0)          // (-1: a patch without switching)
+                  p->midi(ME_CONTROLLER, s.channel, s.switchCC, value);
             if (s.dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, s.channel, s.dynamicsCC, s.dynamicsValue);
             if (s.expressionCC >= 0 && s.expressionCC != s.dynamicsCC)

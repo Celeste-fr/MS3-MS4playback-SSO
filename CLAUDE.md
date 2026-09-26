@@ -351,6 +351,25 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     are silent at every pitch; the report now lists such values apart ("most likely none",
     `silentNotInMap` in results.json) instead of as articulations the map lacks.
 
+- Sixth run (2026-09-25 18:06): Motif Brass's six values right; Grand Piano Direct (1) / Tape
+  (2). Tuned percussion has no UACC (Kickstart keyswitches).
+- Seventh run (2026-09-25 22:32, keys and Performance patches):
+  - The Performance patches take no switching: "reacts to your playing without having to switch
+    articulations". UACC 20 selected "None" and silenced the solo strings', several brass and
+    the Sul G / Sul C Performance patches (the ensemble ones happened to accept 20); the
+    single-technique patches likewise showed "None" for value 1. All extras (and the kit's
+    patches) now have `<Switch type="none"/>` (SwitchType::NONE: no switch is ever sent; the
+    check only listens to them, no scan). CHECK_VERSION 4.
+  - Tuned percussion keyswitches, from the key scan's pictures (the technique arrow in the
+    window's list) and the lists themselves: Timpani 0-5 confirmed; Celeste 0 Celeste / 1
+    Espressivo / 2 Tight; Glockenspiel 0 Normal / 1 Muted / 2 Hard Sticks / 3 Roll; Marimba 0
+    Normal / 1 Roll; Vibraphone 0 Normal / 1 Motor Sus. / 2 Roll; Tubular Bells 5 Normal / 6
+    Muted (its keyswitches start at F-2); Xylophone, Crotales, Desk Bells have one sound (none).
+    Silent keys at the ends of a range that "switch" are the previous note's meter decaying.
+  - Unpitched kits (Drums - High / Low, Unpitched Metal / Wood, Other - Toys): Kickstart shows
+    instrument pictures and colours key ranges, but names no hit while a key sounds, so the key
+    scan can't say which key is which hit. Needs the owner (each instrument's hit list).
+
 A value a SSO patch lacks: its window shows "None" and it plays nothing (no default).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. Start it with *Run workflow* (Actions › Test: Sound library on Windows), or

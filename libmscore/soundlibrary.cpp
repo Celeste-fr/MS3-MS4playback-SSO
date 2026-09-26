@@ -56,6 +56,8 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
             type = SwitchType::KEYSWITCH;
       else if (t == "program")
             type = SwitchType::PROGRAM;
+      else if (t == "none")
+            type = SwitchType::NONE;
       else
             return false;
       if (a.hasAttribute("number"))

@@ -63,7 +63,9 @@ namespace SoundLib {
 //               multitongue
 //---------------------------------------------------------
 
-enum class SwitchType : signed char { CC, KEYSWITCH, PROGRAM };
+// NONE: a patch that plays one articulation (Spitfire's single techniques) or picks it by itself
+// (Performance legato): any switch would select "None" and silence it
+enum class SwitchType : signed char { CC, KEYSWITCH, PROGRAM, NONE };
 
 struct Articulation {
       QString name;

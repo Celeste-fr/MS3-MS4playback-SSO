@@ -235,6 +235,9 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
       QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.extra())
+                  QVERIFY2(li.switchType == SoundLib::SwitchType::NONE, qPrintable(li.name));
       // tuned percussion: switched by key (Kickstart patches have no UACC)
       for (const SoundLib::LibInstrument& li : lib->instruments) {
             if (li.name == "Timpani") {
@@ -247,6 +250,12 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(valueFor("Timpani", { { "tremolo", "long" }, coperti.modifiers }), 3);       // Roll Muted
       QCOMPARE(valueFor("Timpani", { { "long" }, {} }), 0);
       QCOMPARE(patchFor("Grand Piano", { { "long" }, {} }), QString("Grand Piano: Direct"));
+      QCOMPARE(valueFor("Glockenspiel", { { "tremolo", "long" }, {} }), 3);           // Roll
+      QCOMPARE(valueFor("Tubular Bells", { { "long" }, { "muted" } }), 6);            // Muted, from F-2
+      QCOMPARE(valueFor("Celeste", { { "staccatissimo", "spiccato", "short" }, {} }), 2);   // Tight
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.name == "Xylophone")
+                  QCOMPARE(int(li.switchType), int(SoundLib::SwitchType::NONE));
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (li.extra())
                   QVERIFY2(!li.ids.isEmpty(), qPrintable(li.name));
@@ -368,6 +377,7 @@ void TestSoundLibrary::renderPatches()
          "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
          "</Instrument>"
          "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"                             // picks legato by itself: no switch
          "<Articulation name='Legato' value='20' techniques='legato'/>"
          "</Instrument>"
          "<Instrument name='Violin Sul G' with='Violin'>"
@@ -438,7 +448,9 @@ void TestSoundLibrary::renderPatches()
             QCOMPARE(notes[i].pitch, expected[i].first);
             QCOMPARE(notes[i].channel, expected[i].second);
             }
-      QCOMPARE(notes[0].sw, 20);
+      QCOMPARE(notes[0].sw, 0);                    // no switch was sent to the legato patch
+      for (const auto& te : events)
+            QVERIFY(!(te.second.librarySwitch() && te.second.isExternal() && te.second.extChannel() == 1));
       QCOMPARE(notes[4].sw, 40);
       QCOMPARE(notes[6].sw, 1);
       QCOMPARE(notes[7].sw, 1);

@@ -188,7 +188,20 @@ SPITFIRE_ADD['Grand Piano'] = [('Direct', 1, ALL, ''), ('Tape', 2, '', '')]
 # Roll, Roll Muted, Swell mf, Swell f, keyswitches marked from C-2), to be confirmed by it.
 KEYSCAN = {'Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone', 'Crotales',
            'Tubular Bells', 'Desk Bells'}
-KEYSWITCHED = {'Timpani'}
+KEYSWITCHED = {'Timpani', 'Celeste', 'Glockenspiel', 'Marimba', 'Vibraphone', 'Tubular Bells'}
+# one sound, no technique list in their window: nothing to switch
+UNSWITCHED = {'Xylophone', 'Crotales', 'Desk Bells'}
+# keyswitches by the owner's key scan (Check articulations, 2026-09-25 22:32): each key moves the
+# window's technique arrow, in the list's order from C-2 (Tubular Bells from F-2); key 0 (5) is
+# the technique the patch loads with, so the scan sees the others move away from it
+# (Tight first: within a patch the first fit wins, so staccatissimo plays it)
+SPITFIRE_ADD['Celeste'] = [('Tight', 2, 'staccatissimo spiccato', ''), ('Celeste', 0, ALL, ''),
+                           ('Espressivo', 1, '', '')]
+SPITFIRE_ADD['Glockenspiel'] = [('Normal', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), ('Hard Sticks', 2, '', ''),
+                                ('Roll', 3, 'tremolo', '')]
+SPITFIRE_ADD['Marimba'] = [('Normal', 0, ALL, ''), ('Roll', 1, 'tremolo', '')]
+SPITFIRE_ADD['Vibraphone'] = [('Normal', 0, ALL, ''), ('Motor Sus.', 1, '', ''), ('Roll', 2, 'tremolo', '')]
+SPITFIRE_ADD['Tubular Bells'] = [('Normal', 5, ALL, ''), ('Muted', 6, ALL, 'muted')]
 SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), ('Roll', 2, 'tremolo', ''),
                            ('Roll Muted', 3, 'tremolo', 'muted'), ('Swell mf', 4, '', ''), ('Swell f', 5, '', '')]
 
@@ -260,6 +273,8 @@ for bank,name,ids,pn in I:
     out.append(f'  <Instrument {attrs}>')
     if name in KEYSWITCHED:
         out.append('    <Switch type="keyswitch"/>')
+    elif name in UNSWITCHED:
+        out.append('    <Switch type="none"/>')
     seen=set()
     for n,v in banks.get(bank, []):
         if n in seen or (name, n) in SPITFIRE_DROP: continue
@@ -281,6 +296,10 @@ names = {name for _, name, _, _ in I}
 for main, name, arts in EXTRAS:
     assert main in names, main
     out.append(f'  <Instrument name={q(name)} with={q(main)}>')
+    # one articulation, or legato the patch picks by itself: a UACC value would select "None"
+    # and silence it (Check articulations, 2026-09-25: Solo strings / brass Performance, the
+    # single techniques)
+    out.append('    <Switch type="none"/>')
     for n, v, t, m in arts:
         out.append(articulation(n, v, t, m))
     out.append('  </Instrument>')
@@ -299,10 +318,11 @@ DRUMS = {}
 out.append(f'  <Instrument name="Percussion" ids={q(KIT_IDS)} kit="1"/>')
 for name in PERCUSSION:
     drums = DRUMS.get(name, [])
-    out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1"' + ('/>' if not drums else '>'))
+    # (sounds chosen by key: nothing to switch)
+    out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
+    out.append('    <Switch type="none"/>')
     for pitch, key, n, ids in drums:
         out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + '/>')
-    if drums:
-        out.append('  </Instrument>')
+    out.append('  </Instrument>')
 out.append('</SoundLibrary>')
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

@@ -1786,6 +1786,8 @@ void MidiRenderer::putLibrarySwitch(EventMap* events, const SoundLib::LibInstrum
             events->insert(std::make_pair(utick, ev));
             };
       switch (li.switchType) {
+            case SoundLib::SwitchType::NONE:          // (nothing to switch)
+                  break;
             case SoundLib::SwitchType::CC:
                   put(NPlayEvent(ME_CONTROLLER, channel, li.switchNumber, value));
                   break;

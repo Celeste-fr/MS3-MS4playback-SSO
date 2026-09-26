@@ -75,7 +75,7 @@ static const int GRAB_WAIT_MS = 400;      // after a switch, for the window to s
 
 // the check's version: raise it when a change makes earlier results stale (all patches are then
 // checked again)
-static const int CHECK_VERSION = 3;
+static const int CHECK_VERSION = 4;       // 4: patches without switching (listened to, no switch sent)
 
 //---------------------------------------------------------
 //   testPitch
@@ -1065,7 +1065,8 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       const SoundLib::LibInstrument& ins = *_rows[index].instrument;
       if (ins.keyScan || (!ins.drums.empty() && ins.articulations.empty()))
             return checkKeys(index, pluginPath, folder, results, summary);
-      const bool scan = _rows[index].added || _scan->isChecked();
+      // (nothing to scan on a patch without switching)
+      const bool scan = (_rows[index].added || _scan->isChecked()) && ins.switchType != SoundLib::SwitchType::NONE;
       QTableWidgetItem* resultItem = _table->item(index, 3);
       QJsonObject out;
       out["patch"] = ins.name;
@@ -1104,8 +1105,11 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       // a value to start from: the map's first (a patch not in the map: as it was left)
       int start = mapValues.empty() ? -1 : mapValues[0];
 
-      if (ins.switchType != SoundLib::SwitchType::CC)
+      if (ins.switchType != SoundLib::SwitchType::CC && ins.switchType != SoundLib::SwitchType::NONE)
             return fail(tr("Only patches switched by a CC can be checked."));
+      // a patch without switching: it only has to sound, and nothing is sent to it that would
+      // select another articulation (or "None")
+      const bool switching = ins.switchType == SoundLib::SwitchType::CC;
       const int pitch = testPitch(ins);
       out["pitch"] = pitch;
       out["switchCC"] = ins.switchNumber;
@@ -1120,7 +1124,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             return fail(tr("Its setup could not be loaded into the plug-in."));
       f.close();
       auto switchTo = [&](int v) {
-            if (v >= 0)
+            if (v >= 0 && switching)
                   p->midi(ME_CONTROLLER, 0, ins.switchNumber, v);
             };
 
@@ -1209,7 +1213,8 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   shots.clear();
                   for (int i = 0; i < int(values.size()) && !_cancel && w; ++i) {
                         status(tr("picture %1 of %2").arg(i + 1).arg(values.size()));
-                        p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[i]);
+                        if (switching)
+                              p->midi(ME_CONTROLLER, 0, ins.switchNumber, values[i]);
                         if (withNote) {
                               p->midi(ME_NOTEON, 0, pitch, 100);
                               pump.run(GRAB_WAIT_MS);
@@ -1361,7 +1366,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             }
       ArticulationCheck::Settings s;
       s.sampleRate = MScore::sampleRate;
-      s.switchCC = ins.switchNumber;
+      s.switchCC = switching ? ins.switchNumber : -1;
       s.dynamicsCC = _library->dynamicsCC;
       s.expressionCC = _library->dynamicsCC == 11 ? -1 : 11;
       s.pitch = pitch;

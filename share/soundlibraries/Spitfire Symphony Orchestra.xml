@@ -609,204 +609,288 @@
     <Articulation name="Swell f" value="5" techniques=""/>
   </Instrument>
   <Instrument name="Celeste" ids="celesta" keyScan="1">
-    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Switch type="keyswitch"/>
+    <Articulation name="Tight" value="2" techniques="staccatissimo spiccato"/>
+    <Articulation name="Celeste" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Espressivo" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Glockenspiel" ids="glockenspiel" keyScan="1">
-    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Switch type="keyswitch"/>
+    <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
+    <Articulation name="Hard Sticks" value="2" techniques=""/>
+    <Articulation name="Roll" value="3" techniques="tremolo"/>
   </Instrument>
   <Instrument name="Xylophone" ids="xylophone" keyScan="1">
+    <Switch type="none"/>
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
   <Instrument name="Marimba" ids="marimba" keyScan="1">
-    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Switch type="keyswitch"/>
+    <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Roll" value="1" techniques="tremolo"/>
   </Instrument>
   <Instrument name="Vibraphone" ids="vibraphone" keyScan="1">
-    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Switch type="keyswitch"/>
+    <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Motor Sus." value="1" techniques=""/>
+    <Articulation name="Roll" value="2" techniques="tremolo"/>
   </Instrument>
   <Instrument name="Crotales" ids="crotales" keyScan="1">
+    <Switch type="none"/>
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
   <Instrument name="Tubular Bells" ids="tubular-bells" keyScan="1">
-    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Switch type="keyswitch"/>
+    <Articulation name="Normal" value="5" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Muted" value="6" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
   </Instrument>
   <Instrument name="Desk Bells" ids="hand-bells" keyScan="1">
+    <Switch type="none"/>
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
   <Instrument name="Violins 1 - Performance" with="Violins 1">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Violins 2 - Performance" with="Violins 2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Violas - Performance" with="Violas">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Celli - Performance" with="Celli">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Basses - Performance" with="Basses">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Solo Violin - Performance" with="Solo Violin 1">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Solo Violin 2 - Performance" with="Solo Violin 2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Solo Viola - Performance" with="Solo Viola">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Solo Cello - Performance" with="Solo Cello">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Piccolo Flute - Performance" with="Piccolo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Flute Solo - Total Performance" with="Flute Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Flutes a2 - Performance" with="Flutes a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Alto Flute - Performance" with="Alto Flute">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Bass Flute - Performance" with="Bass Flute">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Oboe Solo - Performance" with="Oboe Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Oboes a2 - Performance" with="Oboes a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Cor Anglais - Performance" with="Cor Anglais">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Clarinet Solo - Performance" with="Clarinet Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Clarinets a2 - Performance" with="Clarinets a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Bass Clarinet - Performance" with="Bass Clarinet">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="ContraBass Clarinet - Performance" with="Contrabass Clarinet">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Bassoon Solo - Performance" with="Bassoon Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Bassoons a2 - Performance" with="Bassoons a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="ContraBassoon - Performance" with="Contrabassoon">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Horn Solo - Performance" with="Horn Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Horns a2 - Performance" with="Horns a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Horns a6 - Performance" with="Horns a6">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Trumpet Solo - Total Performance" with="Trumpet Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Trumpets a2 - Performance" with="Trumpets a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Trumpets a6 - Performance" with="Trumpets a6">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Tenor Trombone Solo - Total Performance" with="Tenor Trombone Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Tenor Trombones a2 - Performance" with="Tenor Trombones a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Trombones a6 - Performance" with="Trombones a6">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Bass Trombones a2 - Performance" with="Bass Trombones a2">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Tuba Solo - Performance" with="Tuba Solo">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Horns a4 - Performance" with="Motif Horns a4">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Trumpets a3 - Performance" with="Motif Trumpets a3">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Trombones a5 - Performance" with="Motif Trombones a5">
+    <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
   </Instrument>
   <Instrument name="Violins 1 - Sul G - Performance" with="Violins 1">
+    <Switch type="none"/>
     <Articulation name="Legato Sul G" value="20" techniques="legato" modifiers="sulg"/>
   </Instrument>
   <Instrument name="Violins 2 - Sul G - Performance" with="Violins 2">
+    <Switch type="none"/>
     <Articulation name="Legato Sul G" value="20" techniques="legato" modifiers="sulg"/>
   </Instrument>
   <Instrument name="Violas - Sul C - Performance" with="Violas">
+    <Switch type="none"/>
     <Articulation name="Legato Sul C" value="20" techniques="legato" modifiers="sulc"/>
   </Instrument>
   <Instrument name="Celli - Sul C - Performance" with="Celli">
+    <Switch type="none"/>
     <Articulation name="Legato Sul C" value="20" techniques="legato" modifiers="sulc"/>
   </Instrument>
   <Instrument name="Strings - Violins 1 - Long Sul G" with="Violins 1">
+    <Switch type="none"/>
     <Articulation name="Long Sul G" value="1" techniques="long legato" modifiers="sulg"/>
   </Instrument>
   <Instrument name="Strings - Violins 2 - Long Sul G" with="Violins 2">
+    <Switch type="none"/>
     <Articulation name="Long Sul G" value="1" techniques="long legato" modifiers="sulg"/>
   </Instrument>
   <Instrument name="Strings - Celli - Long Sul C" with="Celli">
+    <Switch type="none"/>
     <Articulation name="Long Sul C" value="1" techniques="long legato" modifiers="sulc"/>
   </Instrument>
   <Instrument name="Brass - Horn Solo - Short Staccatissimo" with="Horn Solo">
+    <Switch type="none"/>
     <Articulation name="Short Staccatissimo" value="1" techniques="staccatissimo spiccato"/>
   </Instrument>
   <Instrument name="Brass - Horns a2 - Short Staccatissimo" with="Horns a2">
+    <Switch type="none"/>
     <Articulation name="Short Staccatissimo" value="1" techniques="staccatissimo spiccato"/>
   </Instrument>
   <Instrument name="Brass - Horns a2 - Bells up Staccatissimo" with="Horns a2">
+    <Switch type="none"/>
     <Articulation name="Bells up Staccatissimo" value="1" techniques="staccatissimo spiccato" modifiers="bellsup"/>
   </Instrument>
   <Instrument name="Brass - Trumpet Solo - Fall Muted" with="Trumpet Solo">
+    <Switch type="none"/>
     <Articulation name="Fall Muted" value="1" techniques="fall" modifiers="muted"/>
   </Instrument>
   <Instrument name="Brass - Trumpet Solo - Rip Muted" with="Trumpet Solo">
+    <Switch type="none"/>
     <Articulation name="Rip Muted" value="1" techniques="rip" modifiers="muted"/>
   </Instrument>
   <Instrument name="Brass - Horns a6 - Fanfare" with="Horns a6">
+    <Switch type="none"/>
     <Articulation name="Fanfare" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Brass - Trombones a6 - Fanfare" with="Trombones a6">
+    <Switch type="none"/>
     <Articulation name="Fanfare" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Brass - Trumpets a2 - Fanfare" with="Trumpets a2">
+    <Switch type="none"/>
     <Articulation name="Fanfare" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Brass - Trumpets a6 - Fanfare" with="Trumpets a6">
+    <Switch type="none"/>
     <Articulation name="Fanfare" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Brass - Cimbassi a2 - Long Alt" with="Cimbassi a2">
+    <Switch type="none"/>
     <Articulation name="Long Alt" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Strings - Violins 1 - Long Sul Pont Distorted" with="Violins 1">
+    <Switch type="none"/>
     <Articulation name="Long Sul Pont Distorted" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Oboe Principal - Total Performance" with="Oboe Solo">
+    <Switch type="none"/>
     <Articulation name="Oboe Principal" value="1" techniques=""/>
   </Instrument>
   <Instrument name="Percussion" ids="drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes bell-plate vibraslap" kit="1"/>
-  <Instrument name="Drums - High" with="Percussion" keyScan="1"/>
-  <Instrument name="Drums - Low" with="Percussion" keyScan="1"/>
-  <Instrument name="Unpitched - Metal" with="Percussion" keyScan="1"/>
-  <Instrument name="Unpitched - Wood" with="Percussion" keyScan="1"/>
-  <Instrument name="Other - Toys" with="Percussion" keyScan="1"/>
+  <Instrument name="Drums - High" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Drums - Low" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Unpitched - Metal" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Unpitched - Wood" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Other - Toys" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
 </SoundLibrary>
