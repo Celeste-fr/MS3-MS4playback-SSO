@@ -51,6 +51,7 @@
 #include "undo.h"
 #include "utils.h"
 #include "vibrato.h"
+#include "tuning.h"
 #include "volta.h"
 
 #include "global/log.h"
@@ -383,7 +384,7 @@ static void playNote(EventMap* events, const Note* note, int channel, int pitch,
       ev.setOriginatingStaff(staffIdx);
       ev.setLayer(layer);
       ev.setLibraryPatch(libPatch);
-      ev.setTuning(note->tuning());
+      ev.setTuning(playbackTuning(note));
       ev.setNote(note);
       if (offTime < onTime)
             offTime = onTime;
@@ -1742,13 +1743,45 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                         }
                   };
             const std::map<int, int>& levels = ctx.dynamics.levels();
-            // levels are kept at unrolled ticks
+            // An MS3 hairpin can fade the channels to silence (CC11 0; MS4 never goes under ppp).
+            // When the level comes back, what still rings from before the silence (a note's
+            // release, the pedal) would sound again at the new level, so it is stopped first
+            // (all sound off, just before), unless a note started during the silence (a
+            // crescendo from nothing). Built-in synthesizer only; ticks here are unrolled.
+            int silentSince = -1;
+            for (auto it = levels.begin(); it != levels.end() && it->first <= tick1 + tickOffset; ++it) {
+                  if (Ms4::expressionLevel(it->second) > 0)
+                        silentSince = -1;
+                  else if (silentSince < 0)
+                        silentSince = it->first;
+                  }
+            auto level = [&](int utick, int lvl) {
+                  const bool sounds = Ms4::expressionLevel(lvl) > 0;
+                  if (sounds && silentSince >= 0 && !lp) {
+                        bool noteStarted = false;
+                        for (auto e = events->lower_bound(silentSince); e != events->end() && e->first < utick && !noteStarted; ++e)
+                              noteStarted = e->second.type() == ME_NOTEON && e->second.velo() > 0
+                                            && std::find(channels.begin(), channels.end(), e->second.channel()) != channels.end();
+                        if (!noteStarted) {
+                              for (int ch : channels) {
+                                    NPlayEvent ev(ME_CONTROLLER, ch, CTRL_ALL_SOUNDS_OFF, 0);
+                                    ev.setOriginatingStaff(part->staff(0)->idx());
+                                    events->insert(std::make_pair(qMax(silentSince, utick - 1), ev));
+                                    }
+                              }
+                        }
+                  if (sounds)
+                        silentSince = -1;
+                  else if (silentSince < 0)
+                        silentSince = utick;
+                  put(utick - tickOffset, lvl);
+                  };
             {
                   auto it = levels.upper_bound(tick1 + tickOffset);
                   put(tick1, it == levels.begin() ? Ms4::NATURAL : std::prev(it)->second);
             }
             for (auto it = levels.upper_bound(tick1 + tickOffset); it != levels.end() && it->first < tick2 + tickOffset; ++it)
-                  put(it->first - tickOffset, it->second);
+                  level(it->first, it->second);
             }
       }
 
@@ -3407,6 +3440,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       {
       // TODO: avoid doing it multiple times for the same measures
       score->createPlayEvents(chunk.startMeasure(), chunk.endMeasure());
+      const ScoreTuningScope tuning(score);     // each note's tuning: temperament, accidental, its own (tuning.h)
 
       score->updateChannel();
       score->updateVelo();

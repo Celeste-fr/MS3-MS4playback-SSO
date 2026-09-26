@@ -33,6 +33,7 @@ class InspectorNote : public InspectorElementBase {
       Ui::InspectorSegment s;
 
       void block(bool);
+      void setTuningParts(const Note*);
 
    private slots:
       void noteHeadSchemeChanged(int val);

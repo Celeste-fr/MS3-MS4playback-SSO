@@ -17,6 +17,7 @@
 #include "libmscore/beam.h"
 #include "libmscore/stem.h"
 #include "libmscore/hook.h"
+#include "libmscore/tuning.h"
 #include "libmscore/tuplet.h"
 #include "libmscore/staff.h"
 #include "inspector.h"
@@ -184,6 +185,30 @@ void InspectorNote::setElement()
 
       n.fixedLine->setEnabled(n.fixed->isChecked());
       n.playWidget->setVisible(n.play->isChecked());
+      setTuningParts(note);
+      }
+
+//---------------------------------------------------------
+//   setTuningParts
+//    what playback plays, part by part (libmscore/tuning.h): the score's temperament, the
+//    microtonal accidental in force, the note's own tuning (the spin box), and their sum
+//---------------------------------------------------------
+
+void InspectorNote::setTuningParts(const Note* note)
+      {
+      ScoreTuning tuning(note->score());
+      const NoteTuning t = tuning.tuning(note);
+      auto cents = [](double c) {
+            return qAbs(c) < 0.0005 ? tr("0 ¢") : tr("%1 ¢").arg(QString::asprintf("%+.1f", c).replace('-', QChar(0x2212)));
+            };
+      n.tuningTemperament->setText(cents(t.temperament));
+      n.tuningAccidental->setText(t.unvalued ? tr("none (a symbol MuseScore gives no pitch)") : cents(t.accidental));
+      QString result = tr("%1 from equal temperament").arg(cents(t.total()));
+      if (t.tied)
+            result += "\n" + tr("(as the note its tie starts from)");
+      else if (qAbs(note->tuning()) > 0.0005 && qAbs(t.manual) < 0.0005)
+            result += "\n" + tr("(Tuning holds the Microtonal Tuner plugin's value: not added again)");
+      n.tuningResult->setText(result);
       }
 
 //---------------------------------------------------------

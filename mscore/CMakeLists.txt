@@ -312,6 +312,7 @@ add_library(mscoreapp STATIC
       migration/handlers/edwinstylehandler.cpp
       soundlibraryhost.cpp soundlibraryhost.h
       soundlibrarycheck.cpp soundlibrarycheck.h
+      tuningdialog.cpp tuningdialog.h
 
       ${CLOUD_SRC}
       ${IMPORTMIDIUI_SRC}

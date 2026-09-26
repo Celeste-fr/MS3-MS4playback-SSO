@@ -32,7 +32,7 @@ add_library (libmscore STATIC
       staff.h stafflines.h staffstate.h stafftext.h stafftextbase.h stafftype.h stafftypechange.h stafftypelist.h stem.h
       stemslash.h stringdata.h style.h sym.h symbol.h synthesizerstate.h system.h systemdivider.h systemtext.h tempo.h
       tempotext.h text.h mmrestrange.h measurenumberbase.h measurenumber.h textbase.h textedit.h textframe.h textline.h textlinebase.h tie.h tiemap.h timesig.h
-      tremolo.h tremolobar.h trill.h tuplet.h tupletmap.h types.h undo.h utils.h vibrato.h volta.h xml.h
+      tremolo.h tremolobar.h trill.h tuning.h tuningtables.h tuplet.h tupletmap.h types.h undo.h utils.h vibrato.h volta.h xml.h
 
       segmentlist.cpp fingering.cpp accidental.cpp arpeggio.cpp
       fermata.cpp articulation.cpp barline.cpp beam.cpp bend.cpp box.cpp
@@ -59,7 +59,7 @@ add_library (libmscore STATIC
       sym.cpp system.cpp stringdata.cpp tempotext.cpp text.cpp
       mmrestrange.cpp measurenumber.cpp measurenumberbase.cpp textbase.cpp textedit.cpp
       textframe.cpp textline.cpp textlinebase.cpp timesig.cpp
-      tremolobar.cpp tremolo.cpp trill.cpp tuplet.cpp
+      tremolobar.cpp tremolo.cpp trill.cpp tuning.cpp tuplet.cpp
       utils.cpp volta.cpp xmlreader.cpp xmlwriter.cpp mscore.cpp
       undo.cpp cmd.cpp scorefile.cpp revisions.cpp
       check.cpp input.cpp icon.cpp ossia.cpp

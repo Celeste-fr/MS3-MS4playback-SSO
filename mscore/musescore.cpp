@@ -129,6 +129,7 @@
 #include "libmscore/style.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
+#include "tuningdialog.h"
 #ifdef USE_VST3
 #include "audio/vst3/vst3synth.h"
 #endif
@@ -139,6 +140,7 @@
 #include "libmscore/undo.h"
 #include "libmscore/utils.h"
 #include "libmscore/volta.h"
+#include "libmscore/tuning.h"
 #include "libmscore/xml.h"
 
 #ifdef Q_OS_MAC
@@ -2240,6 +2242,7 @@ MuseScore::MuseScore()
       menuTools->setObjectName("Tools");
 
       menuTools->addAction(getAction("transpose"));
+      menuTools->addAction(getAction("tuning"));
       menuTools->addSeparator();
       menuTools->addAction(getAction("explode"));
       menuTools->addAction(getAction("implode"));
@@ -5394,7 +5397,7 @@ void MuseScore::play(Element* e) const
             Instrument* instr = part->instrument(tick);
             for (Note* n : c->notes()) {
                   const int channel = instr->channel(n->subchannel())->channel();
-                  seq->startNote(channel, n->ppitch(), 80, n->tuning());
+                  seq->startNote(channel, n->ppitch(), 80, playbackTuning(n));
                   }
             seq->startNoteTimer(MScore::defaultPlayDuration);
             }
@@ -5452,7 +5455,7 @@ void MuseScore::play(Element* e, int pitch) const
             if (cc != -1)
                   seq->sendEvent(NPlayEvent(ME_CONTROLLER, channel, cc, 80));
 
-            seq->startNote(channel, pitch, 80, MScore::defaultPlayDuration, masterNote->tuning());
+            seq->startNote(channel, pitch, 80, MScore::defaultPlayDuration, playbackTuning(masterNote));
             }
       }
 
@@ -6704,9 +6707,9 @@ void MuseScore::endCmd(bool undoRedo)
                   Note* note = toNote(ee);
                   if (pitch == -1) {
                         pitch = note->ppitch();
-                        tuning = note->tuning();
+                        tuning = playbackTuning(note);
                         }
-                  else if (note->ppitch() != pitch || fabs(tuning - note->tuning()) > 0.01) {
+                  else if (note->ppitch() != pitch || fabs(tuning - playbackTuning(note)) > 0.01) {
                         samePitch = false;
                         break;
                         }
@@ -7003,6 +7006,12 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             }
       else if (cmd == "synth-control")
             showSynthControl(a->isChecked());
+      else if (cmd == "tuning") {
+            if (cs) {
+                  TuningDialog d(cs, this);
+                  d.exec();
+                  }
+            }
       else if (cmd == "sound-library") {
             // one window, shown and closed by the View menu's check mark
             static QPointer<SoundLibraryDialog> dialog;
