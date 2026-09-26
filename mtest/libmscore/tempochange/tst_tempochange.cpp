@@ -92,8 +92,8 @@ void TestTempoChange::ritardando()
 
       // the Inspector's factor and method
       score->startCmd();
-      line->undoChangeProperty(Pid::TEMPO_CHANGE_FACTOR, 50.0);
-      line->undoChangeProperty(Pid::TEMPO_CHANGE_METHOD, int(ChangeMethod::EASE_IN));
+      static_cast<ScoreElement*>(line)->undoChangeProperty(Pid::TEMPO_CHANGE_FACTOR, 50.0);
+      static_cast<ScoreElement*>(line)->undoChangeProperty(Pid::TEMPO_CHANGE_METHOD, int(ChangeMethod::EASE_IN));
       score->endCmd();
       score->doLayout();
       QVERIFY(qAbs(tm->tempo(m4->tick().ticks()) - 1.0) < 1e-9);
