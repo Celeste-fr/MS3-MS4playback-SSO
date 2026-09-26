@@ -127,19 +127,24 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               }
                         else if (r.name() == "Drum") {
                               // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"]
-                              //       [technique="roll"]/>
+                              //       [technique="roll"] [default="off"]/>; without pitch: a key no MuseScore sound plays
+                              // (listed for reference and checked, never chosen)
                               DrumKey d;
-                              bool ok1 = false, ok2 = false;
-                              d.pitch = aa.value("pitch").toInt(&ok1);
+                              bool ok1 = true, ok2 = false;
+                              if (aa.hasAttribute("pitch"))
+                                    d.pitch = aa.value("pitch").toInt(&ok1);
                               d.key = aa.value("key").toInt(&ok2);
                               if (aa.hasAttribute("velocity"))
                                     d.velocity = aa.value("velocity").toInt();
                               d.ids = words(aa.value("ids").toString().toLower());
                               d.name = aa.value("name").toString();
                               d.technique = aa.value("technique").toString().toLower();
+                              d.offByDefault = aa.value("default") == "off";
+                              if (aa.hasAttribute("default") && aa.value("default") != "off")
+                                    return fail(QString("%1:%2: bad Drum default").arg(path).arg(r.lineNumber()));
                               if (!d.technique.isEmpty() && d.technique != "roll")
                                     return fail(QString("%1:%2: bad Drum technique").arg(path).arg(r.lineNumber()));
-                              if (!ok1 || !ok2 || d.pitch < 0 || d.pitch > 127 || d.key < 0 || d.key > 127 || d.velocity > 127)
+                              if (!ok1 || !ok2 || (aa.hasAttribute("pitch") && d.pitch < 0) || d.pitch > 127 || d.key < 0 || d.key > 127 || d.velocity > 127)
                                     return fail(QString("%1:%2: bad Drum").arg(path).arg(r.lineNumber()));
                               li.drums.push_back(d);
                               }

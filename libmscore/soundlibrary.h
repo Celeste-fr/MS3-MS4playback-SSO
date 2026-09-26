@@ -78,12 +78,14 @@ struct Articulation {
       };
 
 struct DrumKey {
-      int pitch { -1 };                   // the MuseScore drum sound (the note's pitch)
+      int pitch { -1 };                   // the MuseScore drum sound (the note's pitch), -1: none (reference)
       int key { -1 };                     // the patch's key that plays it
       int velocity { -1 };                // a fixed velocity (a round robin / roll on velocity), -1: the note's
       QStringList ids;                    // only for these MuseScore instruments (empty: all)
       QString name;
       QString technique;                  // "roll": played for a roll (tremolo); empty: a hit
+      bool offByDefault { false };        // the patch has the technique switched off until the user
+                                          // gives it a key (Kickstart); a setup elsewhere must do the same
       };
 
 struct LibInstrument {

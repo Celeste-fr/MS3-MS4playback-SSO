@@ -478,7 +478,12 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   the roll key once, held; without one, the tremolo's hits; test `renderKitRoll`). Swells are a
   roll under a hairpin (CC1), not SSO's fixed-length swell samples. SSO's roll keys are off in Kickstart until the
   owner assigns them: Snare 1 (x stick 115, roll 119) and Snare 2 (roll 6) so far; a technique switched on
-  gets the next free key at the ends of the keyboard (one key each). None of it heard in
+  gets the next free key at the ends of the keyboard (one key each).
+  Every key of each kit patch is in the map (`HITS` in gen_spitfire_sso.py; keys with no MuseScore
+  sound have no `pitch`), with `default="off"` on the techniques the owner had to switch on (for a
+  later export to a DAW), and a comment listing those still off: a kit's keyboard can't hold all of
+  its techniques, so the rest need a second patch (an extra of the kit with its own keys; the owner
+  was asked which). Kickstart shows a technique with no key on C-2 (0). None of it heard in
   Kontakt yet.
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
