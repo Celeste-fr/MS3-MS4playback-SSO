@@ -45,6 +45,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void checkedAsExpected();
       void render();
       void renderPatches();
       void renderKit();
@@ -534,6 +535,55 @@ void TestSoundLibrary::renderKit()
       QVERIFY(unscanned);
       QVERIFY(SoundLib::routes(score, *unscanned).empty());
       delete score;
+      }
+
+//---------------------------------------------------------
+//   checkedAsExpected
+//    the owner's Check articulations lines (2026-09-26 run of 08:43) against the Spitfire map:
+//    reviewed verdicts and kit keys pass, anything else stays as it is
+//---------------------------------------------------------
+
+void TestSoundLibrary::checkedAsExpected()
+      {
+      QString error;
+      auto lib = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      auto patch = [&](const QString& name) -> const SoundLib::LibInstrument& {
+            for (const SoundLib::LibInstrument& li : lib->instruments)
+                  if (li.name == name)
+                        return li;
+            static SoundLib::LibInstrument none;
+            return none;
+            };
+      QString line;
+      QVERIFY(SoundLib::checkedAsExpected(patch("Violins 1"), "31 switch, 0 ignored, 0 unclear, 1 silent", &line));
+      QCOMPARE(line, QString("31 switch, 0 ignored, 0 unclear, 1 silent (as expected)"));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Solo Violin 1"), "5 switch, 1 ignored, 0 unclear, 0 silent", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Contrabassoon"), "3 switch, 0 ignored, 1 unclear, 0 silent", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Harp"), "5 switch, 0 ignored, 0 unclear, 1 silent", &line));
+      // not what was expected: another count, a patch with nothing expected, a switching problem
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Violins 1"), "30 switch, 1 ignored, 0 unclear, 1 silent", &line));
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Violas"), "20 switch, 0 ignored, 0 unclear, 1 silent", &line));
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Harp"), "0 switch, 0 ignored, 0 unclear, 1 silent — no switching", &line));
+
+      // kits checked before the map had their keys: all of the map's keys sounded
+      QVERIFY(SoundLib::checkedAsExpected(patch("Drums - High"),
+         "43 keys sound (36-38, 40-43, 45, 48, 50, 52-53, 55, 57, 59-67, 69, 71-74, 76-79, 81-82, 84-92); "
+         "9 keyswitches (39, 44, 46, 54, 56, 58, 80, 83, 93); the map has no keys for it yet", &line));
+      QCOMPARE(line, QString("43 keys sound (36-38, 40-43, 45, 48, 50, 52-53, 55, 57, 59-67, 69, 71-74, 76-79, 81-82, 84-92); "
+                             "9 keyswitches (39, 44, 46, 54, 56, 58, 80, 83, 93)"));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Drums - Low"),
+         "27 keys sound (36-39, 48, 50, 52-53, 60-65, 67, 72, 74-78, 84-89); 7 keyswitches (40, 49, 51, 55, 66, 68, 93); "
+         "the map has no keys for it yet", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Unpitched - Wood"),
+         "17 keys sound (36-40, 48-53, 55, 60, 62, 64-65, 67); 5 keyswitches (54, 57, 63, 66, 68); the map has no keys for it yet", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Other - Toys"),
+         "38 keys sound (36, 38, 40-41, 43, 45, 47-48, 50, 52-53, 55, 57, 59-60, 62, 64-65, 67, 69, 71-72, 74, 76-77, 79-81, "
+         "83-84, 86-89, 91, 93, 95-96); 12 keyswitches (39, 42, 44, 46, 49, 51, 54, 61, 63, 70, 73, 75); the map has no keys for it yet", &line));
+      // Metal: its triangle keys (103, 107) did not sound: to be checked
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Unpitched - Metal"),
+         "53 keys sound (36-50, 52-55, 57-72, 74, 76-77, 79-86, 88-89, 91, 93, 95-97); 5 keyswitches (10, 56, 73, 78, 99); "
+         "the map has no keys for it yet", &line));
       }
 
 //---------------------------------------------------------

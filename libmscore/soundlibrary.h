@@ -73,6 +73,8 @@ struct Articulation {
       QStringList techniques;             // the bases it plays (none: never chosen, listed for reference)
       QStringList modifiers;              // with these modifiers
       int value { -1 };                   // CC value, keyswitch pitch or program
+      QString expect;                     // what Check articulations hears where it isn't "switches"
+                                          // and that is right ("silent", "ignored", "unclear")
       };
 
 struct DrumKey {
@@ -151,6 +153,12 @@ struct DrumChoice {
       int patch { -1 };
       const DrumKey* key { nullptr };
       };
+// Check articulations' line for a patch (mscore/soundlibrarycheck.cpp) that recorded problems before
+// the map said they are right: true when its only non-switching values are those the map expects
+// (by their counts: Articulation::expect), or, for a kit's patch, when every drum key of the map is
+// among the keys it heard sound; newLine: the line to keep
+bool checkedAsExpected(const LibInstrument& instrument, const QString& line, QString* newLine);
+
 // a kit plays a chord rolled (its roll keys, the note once) when it has a single-note tremolo or
 // a buzz roll; a two-note tremolo between drums stays repeated hits
 bool drumRoll(const Chord* chord);

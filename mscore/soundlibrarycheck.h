@@ -79,6 +79,7 @@ class ArticulationCheckDialog : public QDialog {
       QJsonObject _records;         // the last check of each patch (checks.json)
 
       void rebuild();
+      void acceptExpected();
       void setUp(int index);
       void check();
       bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);

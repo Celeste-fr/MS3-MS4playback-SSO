@@ -382,6 +382,33 @@ void ArticulationCheckDialog::record(const QString& patch, const QByteArray& set
       saveRecords();
       }
 
+// a last check that recorded problems the map now expects (SoundLib::checkedAsExpected) counts
+// as passed, when its setup and the check are the same as then
+void ArticulationCheckDialog::acceptExpected()
+      {
+      bool changed = false;
+      for (const Row& row : _rows) {
+            const SoundLib::LibInstrument& ins = *row.instrument;
+            QJsonObject r = _records.value(ins.name).toObject();
+            if (r.value("result").toString() != "problems" || r.value("checker").toInt() != CHECK_VERSION
+                || r.value("setup").toString() != QString(setupHash(ins.name)))
+                  continue;
+            // (a kit's patch may have been checked before the map had its keys)
+            if (ins.drums.empty() && r.value("map").toString() != QString(mapHash(ins)))
+                  continue;
+            QString newLine;
+            if (!SoundLib::checkedAsExpected(ins, r.value("line").toString(), &newLine))
+                  continue;
+            r["result"] = "passed";
+            r["map"] = QString(mapHash(ins));
+            r["line"] = newLine;
+            _records[ins.name] = r;
+            changed = true;
+            }
+      if (changed)
+            saveRecords();
+      }
+
 // a set-up patch needs checking when it never was, when its setup, its map entry or the
 // check changed since, or when its last check could not run
 bool ArticulationCheckDialog::needsCheck(int index, QString* status) const
@@ -515,6 +542,7 @@ void ArticulationCheckDialog::rebuild()
             if (!inMap)
                   _rows.push_back({ ins.get(), true });
             }
+      acceptExpected();
       int ready = 0;
       int due = 0;
       for (int i = 0; i < int(_rows.size()); ++i) {
@@ -1145,10 +1173,13 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       // the map's values, each with its articulations; scanning: every value
       std::vector<int> mapValues;
       std::map<int, QStringList> names;
+      std::map<int, QString> expects;           // the verdicts the map expects (Articulation::expect)
       for (const SoundLib::Articulation& a : ins.articulations) {
             if (!names.count(a.value))
                   mapValues.push_back(a.value);
             names[a.value].append(a.name);
+            if (!a.expect.isEmpty())
+                  expects[a.value] = a.expect;
             }
       if (mapValues.empty() && !scan)
             return fail(tr("The map has no articulations for it."));
@@ -1584,9 +1615,11 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   continue;
             ++counts[int(r.verdict)];
             if (r.verdict == ArticulationCheck::Verdict::SILENT)
-                  problems << QString("%1 (%2): silent at every pitch tried").arg(names[r.value].join(" / ")).arg(r.value);
+                  problems << QString("%1 (%2): silent at every pitch tried%3").arg(names[r.value].join(" / ")).arg(r.value)
+                              .arg(expects.count(r.value) && expects.at(r.value) == "silent" ? " (expected)" : "");
             else if (r.verdict != ArticulationCheck::Verdict::SWITCHES && (r.pitch < 0 || r.pitch == pitch))
-                  problems << QString("%1 (%2): %3").arg(names[r.value].join(" / ")).arg(r.value).arg(ArticulationCheck::name(r.verdict));
+                  problems << QString("%1 (%2): %3%4").arg(names[r.value].join(" / ")).arg(r.value).arg(ArticulationCheck::name(r.verdict))
+                              .arg(expects.count(r.value) && expects.at(r.value) == ArticulationCheck::name(r.verdict) ? " (expected)" : "");
             }
       for (int v : noneInMap)
             problems << QString("%1 (%2): the patch shows no articulation for this value").arg(names[v].join(" / ")).arg(v);
@@ -1603,10 +1636,22 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             problems << tr("%1 values look different from \"no articulation\" but play nothing, most likely none: %2 (see the sheet)").arg(silentNotInMap.size()).arg(l.join(", "));
             }
       // passed: every value of the map switches, and shows an articulation
+      // (a value the map expects not to switch - silent in the patch, or a weak audio verdict its
+      // pictures confirm - passes with that verdict, or with "switches" when it isn't silent)
       bool passed = report.switching && noneInMap.empty() && !mapValues.empty();
-      for (const ArticulationCheck::Result& r : report.results)
-            if (names.count(r.value) && r.verdict != ArticulationCheck::Verdict::SWITCHES)
+      int asExpected = 0;
+      for (const ArticulationCheck::Result& r : report.results) {
+            if (!names.count(r.value) || r.verdict == ArticulationCheck::Verdict::SWITCHES)
+                  continue;
+            const bool expected = expects.count(r.value) && expects.at(r.value) == ArticulationCheck::name(r.verdict);
+            asExpected += expected;
+            if (!expected)
                   passed = false;
+            }
+      for (const auto& e : expects)
+            for (const ArticulationCheck::Result& r : report.results)
+                  if (r.value == e.first && e.second == "silent" && r.verdict != ArticulationCheck::Verdict::SILENT)
+                        passed = false;       // it sounds now: worth a look
       for (int v : mapValues)
             if (!byValue.count(v) && std::find(noneInMap.begin(), noneInMap.end(), v) == noneInMap.end())
                   passed = false;
@@ -1631,6 +1676,8 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       QString line = tr("%1 switch, %2 ignored, %3 unclear, %4 silent%5")
          .arg(counts[0]).arg(counts[1]).arg(counts[2]).arg(counts[3])
          .arg(report.switching ? QString() : QString(" — ") + report.message);
+      if (passed && asExpected)
+            line += tr(" (as expected)");
       if (scan && !drawn.empty())
             line += tr("; scan: %1 not in the map, %2 map values missing").arg(notInMap.size()).arg(noneInMap.size());
       record(ins.name, setup, passed, offlineSounds ? line : "!" + line, scan && !drawn.empty());

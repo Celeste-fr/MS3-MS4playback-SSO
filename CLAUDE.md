@@ -287,6 +287,14 @@ against the plug-in itself):
     name, compares it with the map and lists mismatches and "None". Then look at the sheets
     for what it flags, and fix the map through `gen_spitfire_sso.py`. The OCR misreads
     (Long → "Large").
+  - Expected verdicts: `<Articulation … expect="silent|ignored|unclear">` (EXPECT in
+    gen_spitfire_sso.py: the eighth run's reviewed exceptions) passes a value with that verdict
+    (ignored / unclear also with "switches"). When the dialog opens, a last check recorded as
+    problems whose counts are exactly the expected ones, or a kit patch's check (from before the
+    map had its keys) that heard every mapped key, becomes passed (`SoundLib::checkedAsExpected`,
+    `acceptExpected`; same setup and CHECK_VERSION only). Test `checkedAsExpected` uses the
+    owner's lines of 2026-09-26 08:43. Triangle 1 (open 103, closed 107) didn't sound in that
+    run: its Instrument Active switch is most likely off.
   - Memory: `<dataPath>/soundlibraries/<library>/checks.json` holds each patch's last check:
     setup SHA-1, map-entry SHA-1 (values and names), `CHECK_VERSION`, and a result of
     passed, problems or error. A patch needs checking only if something changed or its check

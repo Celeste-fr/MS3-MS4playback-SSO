@@ -14,9 +14,11 @@
 #include <algorithm>
 #include <atomic>
 #include <mutex>
+#include <set>
 
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QXmlStreamReader>
 
 #include "accidental.h"
@@ -146,8 +148,11 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               art.name = aa.value("name").toString();
                               art.techniques = words(aa.value("techniques").toString());
                               art.modifiers = words(aa.value("modifiers").toString());
+                              art.expect = aa.value("expect").toString();
                               bool ok = false;
                               art.value = aa.value("value").toInt(&ok);
+                              if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
+                                    ok = false;
                               // (no techniques: listed for reference and checked, never chosen by notation)
                               if (!ok || art.value < 0 || art.value > 127)
                                     return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
@@ -234,6 +239,47 @@ std::vector<const LibInstrument*> LibInstrument::patches() const
       std::vector<const LibInstrument*> p { this };
       p.insert(p.end(), extras.begin(), extras.end());
       return p;
+      }
+
+bool checkedAsExpected(const LibInstrument& instrument, const QString& line, QString* newLine)
+      {
+      *newLine = line;
+      if (!instrument.drums.empty()) {
+            static const QRegularExpression keysRe("^\\d+ keys sound \\(([0-9, -]*)\\)");
+            const QRegularExpressionMatch m = keysRe.match(line);
+            if (!m.hasMatch())
+                  return false;
+            std::set<int> sounding;
+            for (const QString& range : m.captured(1).split(", ", QString::SkipEmptyParts)) {
+                  const QStringList ends = range.split('-');
+                  for (int k = ends[0].toInt(); k <= ends.last().toInt(); ++k)
+                        sounding.insert(k);
+                  }
+            for (const DrumKey& d : instrument.drums)
+                  if (!sounding.count(d.key))
+                        return false;
+            newLine->remove("; the map has no keys for it yet");
+            return true;
+            }
+      static const QRegularExpression countsRe("^(\\d+) switch, (\\d+) ignored, (\\d+) unclear, (\\d+) silent"
+                                               "(; scan: \\d+ not in the map, 0 map values missing)?$");
+      const QRegularExpressionMatch m = countsRe.match(line);
+      if (!m.hasMatch())
+            return false;
+      int ignored = 0, unclear = 0, silent = 0;
+      std::set<int> values;
+      for (const Articulation& a : instrument.articulations) {
+            if (a.expect.isEmpty() || !values.insert(a.value).second)
+                  continue;
+            ignored += a.expect == "ignored";
+            unclear += a.expect == "unclear";
+            silent += a.expect == "silent";
+            }
+      if (values.empty() || m.captured(2).toInt() != ignored || m.captured(3).toInt() != unclear
+          || m.captured(4).toInt() != silent)
+            return false;
+      *newLine += " (as expected)";
+      return true;
       }
 
 bool drumRoll(const Chord* chord)

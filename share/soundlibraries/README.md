@@ -136,6 +136,10 @@ switch value of each articulation. For example:
   is listed for reference and checked by *Check articulations*, but never chosen): `long legato short staccatissimo spiccato
   tenuto marcato longmarcato pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
   fall rip`.
+- `expect` (optional: `silent`, `ignored` or `unclear`) is what *Check articulations* hears for
+  the value where that is known to be right (a patch that has no samples for it, or a sound the
+  audio comparison can't judge but the pictures confirm). The check then counts it as passed,
+  and a last check that found exactly these is shown as passed without checking again.
 - `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup
   pdlt multitongue`. When no variant matches, the plain articulation plays. Staff text sets them:
   "sul pont.", "sul tasto", "flautando", "cuivré", "sul G", "sul C", "bells up" ("campana in
