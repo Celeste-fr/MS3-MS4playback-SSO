@@ -22,6 +22,9 @@ for t in ('Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraph
     NKI[t] = 'Tuned - ' + t
 
 def expected(patch):
+    # extra patches (Performance, single techniques) are named as their .nki
+    if ' - ' in patch:
+        return patch
     return NKI.get(patch, patch + ' - All techniques')
 
 def read(png, tmp):

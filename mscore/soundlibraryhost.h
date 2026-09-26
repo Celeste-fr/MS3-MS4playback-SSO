@@ -76,6 +76,7 @@ class SoundLibraryHost : public QObject {
       bool loaded(int slot) const;
       bool saveSetup(int slot, QString* error = nullptr);
       bool showEditor(int slot, QString* error = nullptr);
+      static void routesMayChange();
       void setupChanged(const QString& instrument);   // saved elsewhere: reload it
 
    signals:

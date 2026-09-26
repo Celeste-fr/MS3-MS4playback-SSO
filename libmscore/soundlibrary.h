@@ -11,7 +11,17 @@
 //                                                  and how each is switched (UACC CC32 …)
 //    Want (want())                                what the notation asks of a note: techniques
 //                                                  in order of preference, and modifiers
-//    Route (routes())                             one MIDI port/channel per matched part
+//    Route (routes())                             one MIDI port/channel per matched part, and
+//                                                  one per extra patch its notation needs
+//
+//  A part can play several of the library's patches: its instrument's own (the main patch)
+//  and the patches listed "with" it in the map (a legato patch, single-technique patches …).
+//  Each note plays the patch whose articulation fits best; an extra patch is loaded only when
+//  the part's notation asks for one of its articulations (usedPatches()).
+//
+//  Percussion: a kit (kit="1") serves MuseScore's unpitched percussion and has no patch of its
+//  own; its extra patches say which of their keys plays each MuseScore drum sound (<Drum>).
+//  A drum sound no patch plays stays on the built-in synthesizer.
 //
 //  The renderer (rendermidi.cpp, MS4 note model) plays a matched part on its first channel,
 //  puts the articulation switch before each note that needs another one, sends the part's
@@ -25,6 +35,7 @@
 #ifndef __SOUNDLIBRARY_H__
 #define __SOUNDLIBRARY_H__
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -61,13 +72,29 @@ struct Articulation {
       int value { -1 };                   // CC value, keyswitch pitch or program
       };
 
+struct DrumKey {
+      int pitch { -1 };                   // the MuseScore drum sound (the note's pitch)
+      int key { -1 };                     // the patch's key that plays it
+      int velocity { -1 };                // a fixed velocity (a round robin / roll on velocity), -1: the note's
+      QStringList ids;                    // only for these MuseScore instruments (empty: all)
+      QString name;
+      };
+
 struct LibInstrument {
       QString name;                       // the library's name for it (the patch to load)
       QStringList ids;                    // MuseScore instrument ids it serves
+      QString with;                       // an extra patch: the main patch it plays with
+      std::vector<const LibInstrument*> extras;   // a main patch: the patches listed with it
       QRegularExpression partName;        // preferred for parts whose name matches (optional)
       SwitchType switchType { SwitchType::CC };
       int switchNumber { 32 };            // the CC number (SwitchType::CC)
       std::vector<Articulation> articulations;
+      bool kit { false };                 // percussion served by its extras' keys; no patch of its own
+      bool keyScan { false };             // a percussion patch: the articulation check scans its keys
+      std::vector<DrumKey> drums;
+
+      bool extra() const { return !with.isEmpty(); }
+      std::vector<const LibInstrument*> patches() const;    // this one, then its extras
       };
 
 //---------------------------------------------------------
@@ -106,11 +133,21 @@ class Library {
 struct Choice {
       const Articulation* articulation { nullptr };
       QString base;
+      int patch { 0 };                    // of the patches chosen from (0: the main patch)
       bool sampledOrnament() const;       // a trill or tremolo sample: play the note once
       explicit operator bool() const { return articulation; }
       };
 
 Choice choose(const LibInstrument& instrument, const Want& want);
+// of several patches: the best fit of all; of equal ones, the earlier patch
+Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want);
+
+// a kit's drum sound: the patch (of patches) and key that play it; patch -1: none does
+struct DrumChoice {
+      int patch { -1 };
+      const DrumKey* key { nullptr };
+      };
+DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId);
 
 // the library in use (the preference), shared by the renderer and the sequencer
 void setCurrent(std::shared_ptr<const Library> library);
@@ -123,6 +160,12 @@ enum class Output : signed char { MIDI, PLUGIN };
 void setOutput(Output output);
 Output output();
 
+// which extra patches can play (the hosted plug-in: those with a setup); none set: all.
+// A change of it, or of the setups, changes the routes: routesGeneration() counts them
+void setAvailable(std::function<bool(const LibInstrument&)> available);
+void routesChanged();
+int routesGeneration();
+
 //---------------------------------------------------------
 //   Route
 //    the parts played by the library, in score order, a MIDI channel each (16 per port,
@@ -133,12 +176,16 @@ constexpr int MAX_PORTS = 4;
 
 struct Route {
       const Part* part { nullptr };
-      const LibInstrument* instrument { nullptr };
+      const LibInstrument* instrument { nullptr };      // the patch played on this route
       int port { 0 };
       int channel { 0 };
+      int patch { 0 };                    // its index in the main patch's patches()
       };
 
 std::vector<Route> routes(const Score* score, const Library& library);
+
+// which of the patches (patches() of the part's main patch) the part's notation plays
+std::vector<bool> usedPatches(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches);
 
 //---------------------------------------------------------
 //   TextTechniques

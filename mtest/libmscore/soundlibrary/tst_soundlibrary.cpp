@@ -41,11 +41,13 @@ class TestSoundLibrary : public QObject, public MTest
 
    private slots:
       void initTestCase() { initMTest(); }
-      void cleanup() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); }
+      void cleanup() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); SoundLib::setAvailable(nullptr); }
       void textTechniques();
       void choose();
       void spitfireMap();
       void render();
+      void renderPatches();
+      void renderKit();
 #ifdef TESTSYNTH
       void vst3Plugin();
       void vst3Render();
@@ -186,11 +188,12 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(nameFor("bb-trumpet", "Trumpet in B♭"), QString("Trumpet Solo"));
       QCOMPARE(nameFor("piano", "Piano"), QString("Grand Piano"));
       QCOMPARE(nameFor("timpani", "Timpani"), QString("Timpani"));
-      QCOMPARE(nameFor("drumset", "Drumset"), QString());
+      QCOMPARE(nameFor("drumset", "Drumset"), QString("Percussion"));      // the kit
 
-      // every instrument can play a note without marks
+      // every main patch can play a note without marks
       for (const SoundLib::LibInstrument& li : lib->instruments)
-            QVERIFY2(SoundLib::choose(li, SoundLib::Want { { "long" }, {} }), qPrintable(li.name));
+            if (!li.extra() && !li.kit)
+                  QVERIFY2(SoundLib::choose(li, SoundLib::Want { { "long" }, {} }), qPrintable(li.name));
 
       // staff-text variants: the variant where the patch has it, else the plain articulation
       auto valueFor = [&](const QString& name, const SoundLib::Want& want) {
@@ -212,6 +215,29 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, {} }), 1);
       // listed without techniques (silent in the owner's patch): never chosen
       QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, { "sulg" } }), 1);
+      // extra patches: slurred notes on the Performance (legato) patch, a muted slur on Long CS,
+      // legato "sul G" on the Sul G Performance patch, staccatissimo on its own patch
+      auto patchFor = [&](const QString& name, const SoundLib::Want& want) {
+            for (const SoundLib::LibInstrument& li : lib->instruments) {
+                  if (li.name == name) {
+                        const std::vector<const SoundLib::LibInstrument*> p = li.patches();
+                        const SoundLib::Choice c = SoundLib::choose(p, want);
+                        return c ? p[c.patch]->name + ": " + c.articulation->name : QString();
+                        }
+                  }
+            return QString("?");
+            };
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, {} }), QString("Violins 1 - Performance: Legato"));
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "muted" } }), QString("Violins 1: Long CS"));
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "sulg" } }), QString("Violins 1 - Sul G - Performance: Legato Sul G"));
+      QCOMPARE(patchFor("Violins 1", { { "long" }, { "sulg" } }), QString("Strings - Violins 1 - Long Sul G: Long Sul G"));
+      QCOMPARE(patchFor("Violins 1", { { "long" }, {} }), QString("Violins 1: Long"));
+      QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
+               QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
+      QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.extra())
+                  QVERIFY2(!li.ids.isEmpty(), qPrintable(li.name));
       bool listed = false;
       for (const SoundLib::LibInstrument& li : lib->instruments)
             for (const SoundLib::Articulation& a : li.articulations)
@@ -311,6 +337,177 @@ void TestSoundLibrary::render()
             QCOMPARE(notes[i].first, expected[i].first);
             QCOMPARE(notes[i].second, expected[i].second);
             }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   renderPatches
+//    a part with extra patches: slurred notes on the legato patch (overlapping), "sul G" on
+//    its patch, the rest on the main one; the dynamics reach every patch; a patch no note
+//    asks for is not routed
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderPatches()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Articulation name='Legato' value='20' techniques='legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Sul G' with='Violin'>"
+         "<Articulation name='Long Sul G' value='1' techniques='long legato' modifiers='sulg'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Fanfare' with='Violin'>"
+         "<Articulation name='Fanfare' value='1' techniques=''/>"
+         "</Instrument>"
+         "<Instrument name='Violin Staccatissimo' with='Violin'>"
+         "<Articulation name='Staccatissimo' value='1' techniques='staccatissimo'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(int(lib->instruments[0].extras.size()), 4);
+      QCOMPARE(lib->instruments[1].ids, QStringList("violin"));     // an extra takes its main patch's ids
+      SoundLib::setCurrent(lib);
+
+      MasterScore* score = readScore(DIR + "patches.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      QCOMPARE(int(routes.size()), 4);                  // the Fanfare patch is not needed
+      QCOMPARE(routes[0].instrument->name, QString("Violin"));
+      QCOMPARE(routes[1].instrument->name, QString("Violin Legato"));
+      QCOMPARE(routes[2].instrument->name, QString("Violin Sul G"));
+      QCOMPARE(routes[3].instrument->name, QString("Violin Staccatissimo"));
+      for (int i = 0; i < 4; ++i)
+            QCOMPARE(routes[i].channel, i);
+
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+
+      struct N { int on; int off; int pitch; int channel; int sw; };
+      std::vector<N> notes;
+      std::map<int, int> selected;                  // MIDI out channel -> switch
+      std::map<int, int> dynamics;                  // MIDI out channel -> CC1 events
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            QCOMPARE(ev.extPort(), 0);
+            if (ev.librarySwitch())
+                  selected[ev.extChannel()] = ev.value();
+            else if (ev.type() == ME_CONTROLLER && ev.controller() == 1)
+                  ++dynamics[ev.extChannel()];
+            else if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                  notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel(), selected[ev.extChannel()] });
+            else if (ev.type() == ME_NOTEON) {
+                  for (N& n : notes)
+                        if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
+                              n.off = te.first;
+                  }
+            }
+      for (int ch = 0; ch < 3; ++ch)
+            QVERIFY2(dynamics[ch] > 0, qPrintable(QString("no dynamics on channel %1").arg(ch)));
+
+      const std::vector<std::pair<int, int>> expected = {     // pitch, MIDI out channel
+            { 72, 1 }, { 74, 1 }, { 76, 1 }, { 77, 1 },         // m1: slurred: the legato patch
+            { 69, 0 },                                          // m2: staccato: the main patch
+            { 72, 3 },                                          // staccatissimo: its own patch, over
+                                                                // the main staccato that also plays it
+            { 71, 0 },                                          // long: the main patch
+            { 62, 2 },                                          // m3: sul G
+            };
+      QCOMPARE(int(notes.size()), int(expected.size()));
+      for (size_t i = 0; i < expected.size(); ++i) {
+            QCOMPARE(notes[i].pitch, expected[i].first);
+            QCOMPARE(notes[i].channel, expected[i].second);
+            }
+      QCOMPARE(notes[0].sw, 20);
+      QCOMPARE(notes[4].sw, 40);
+      QCOMPARE(notes[6].sw, 1);
+      QCOMPARE(notes[7].sw, 1);
+      // legato: each slurred note lasts into the next
+      for (int i = 0; i < 3; ++i)
+            QVERIFY2(notes[i].off > notes[i + 1].on, qPrintable(QString("note %1 ends at %2, the next starts at %3")
+                     .arg(i).arg(notes[i].off).arg(notes[i + 1].on)));
+
+      // an extra patch that can't play (hosted without a setup): not routed, its notes on the
+      // main patch
+      SoundLib::setAvailable([](const SoundLib::LibInstrument& li) { return li.name != "Violin Sul G"; });
+      const std::vector<SoundLib::Route> routes2 = SoundLib::routes(score, *lib);
+      QCOMPARE(int(routes2.size()), 3);
+      EventMap events2;
+      score->renderMidi(&events2, false, true, ss);
+      int sulG = -1;
+      for (const auto& te : events2)
+            if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && te.second.pitch() == 62)
+                  sulG = te.second.extChannel();
+      QCOMPARE(sulG, 0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   renderKit
+//    a drum part on a kit: each drum sound on the patch and key the map gives it, unrouted
+//    (the built-in synthesizer) when none has it; the kit's own route plays nothing
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderKit()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Percussion' ids='drumset snare-drum' kit='1'/>"
+         "<Instrument name='Drums Low' with='Percussion' keyScan='1'>"
+         "<Drum pitch='36' key='48' name='Bass drum'/><Drum pitch='35' key='48' name='Bass drum'/>"
+         "</Instrument>"
+         "<Instrument name='Drums High' with='Percussion' keyScan='1'>"
+         "<Drum pitch='38' key='62' name='Snare hit' velocity='90'/>"
+         "</Instrument>"
+         "<Instrument name='Metal' with='Percussion' keyScan='1'/>"   // not scanned yet: no keys
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+
+      MasterScore* score = readScore(DIR + "drums.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(score->parts()[0]->instrument()->getId(), QString("drumset"));
+
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      QCOMPARE(int(routes.size()), 3);                  // the kit, Drums Low, Drums High (not Metal)
+      QVERIFY(routes[0].instrument->kit);
+      QCOMPARE(routes[1].instrument->name, QString("Drums Low"));
+      QCOMPARE(routes[2].instrument->name, QString("Drums High"));
+
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::vector<std::tuple<int, int, int, bool>> notes;     // key, MIDI out channel, velocity, routed
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            QVERIFY(!ev.librarySwitch());
+            if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                  notes.push_back(std::make_tuple(ev.pitch(), ev.isExternal() ? ev.extChannel() : -1, ev.velo(), ev.isExternal()));
+            }
+      QCOMPARE(int(notes.size()), 3);
+      QCOMPARE(std::get<0>(notes[0]), 48);                  // bass drum (36) on Drums Low's key 48
+      QCOMPARE(std::get<1>(notes[0]), 1);
+      QCOMPARE(std::get<0>(notes[1]), 62);                  // snare (38) on Drums High's key 62,
+      QCOMPARE(std::get<1>(notes[1]), 2);
+      QCOMPARE(std::get<2>(notes[1]), 90);                  // at its fixed velocity
+      QCOMPARE(std::get<0>(notes[2]), 49);                  // crash (49): no patch, the built-in synthesizer
+      QVERIFY(!std::get<3>(notes[2]));
+
+      // a kit whose patches have no keys yet (not scanned): the part stays built-in
+      auto unscanned = loadMap(
+         "<SoundLibrary name='t'><Instrument name='Percussion' ids='drumset' kit='1'/>"
+         "<Instrument name='Metal' with='Percussion' keyScan='1'/></SoundLibrary>");
+      QVERIFY(unscanned);
+      QVERIFY(SoundLib::routes(score, *unscanned).empty());
       delete score;
       }
 

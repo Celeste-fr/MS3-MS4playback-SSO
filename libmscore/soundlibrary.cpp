@@ -10,6 +10,7 @@
 
 #include "soundlibrary.h"
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 
@@ -29,6 +30,7 @@
 #include "staff.h"
 #include "stafftext.h"
 #include "sym.h"
+#include "tempo.h"
 #include "trill.h"
 
 namespace Ms {
@@ -104,6 +106,9 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.ids = words(a.value("ids").toString().toLower());
+                  li.with = a.value("with").toString();
+                  li.kit = a.value("kit").toString() == "1";
+                  li.keyScan = a.value("keyScan").toString() == "1";
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -113,6 +118,20 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         if (r.name() == "Switch") {
                               if (!readSwitch(aa, li.switchType, li.switchNumber))
                                     return fail(QString("%1:%2: bad Switch").arg(path).arg(r.lineNumber()));
+                              }
+                        else if (r.name() == "Drum") {
+                              // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"]/>
+                              DrumKey d;
+                              bool ok1 = false, ok2 = false;
+                              d.pitch = aa.value("pitch").toInt(&ok1);
+                              d.key = aa.value("key").toInt(&ok2);
+                              if (aa.hasAttribute("velocity"))
+                                    d.velocity = aa.value("velocity").toInt();
+                              d.ids = words(aa.value("ids").toString().toLower());
+                              d.name = aa.value("name").toString();
+                              if (!ok1 || !ok2 || d.pitch < 0 || d.pitch > 127 || d.key < 0 || d.key > 127 || d.velocity > 127)
+                                    return fail(QString("%1:%2: bad Drum").arg(path).arg(r.lineNumber()));
+                              li.drums.push_back(d);
                               }
                         else if (r.name() == "Articulation") {
                               Articulation art;
@@ -128,8 +147,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               }
                         r.skipCurrentElement();
                         }
-                  if (li.ids.isEmpty() || std::none_of(li.articulations.begin(), li.articulations.end(),
-                                                       [](const Articulation& a) { return !a.techniques.isEmpty(); }))
+                  // (an extra patch has no ids, and may hold only articulations listed for reference,
+                  // or only drum keys, or, a percussion patch not scanned yet, nothing; a kit only ids)
+                  const bool playable = std::any_of(li.articulations.begin(), li.articulations.end(),
+                                                    [](const Articulation& a) { return !a.techniques.isEmpty(); });
+                  if (li.extra() ? (li.articulations.empty() && li.drums.empty() && !li.keyScan)
+                                 : (li.ids.isEmpty() || (!li.kit && !playable)))
                         return fail(QString("%1: instrument \"%2\" without ids or articulations").arg(path, li.name));
                   lib->instruments.push_back(li);
                   }
@@ -140,6 +163,19 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
             return fail(QString("%1:%2: %3").arg(path).arg(r.lineNumber()).arg(r.errorString()));
       if (lib->name.isEmpty())
             lib->name = QFileInfo(path).completeBaseName();
+      // extra patches to their main patch (the vector is complete: the pointers stay valid);
+      // they take its instrument ids (the articulation check's test pitch; match() skips them)
+      for (LibInstrument& li : lib->instruments) {
+            if (!li.extra())
+                  continue;
+            auto main = std::find_if(lib->instruments.begin(), lib->instruments.end(),
+                                     [&li](const LibInstrument& m) { return m.name == li.with && !m.extra(); });
+            if (main == lib->instruments.end())
+                  return fail(QString("%1: \"%2\" is with \"%3\", which the map lacks").arg(path, li.name, li.with));
+            if (li.ids.isEmpty())
+                  li.ids = main->ids;
+            main->extras.push_back(&li);
+            }
       return lib;
       }
 
@@ -160,6 +196,8 @@ const LibInstrument* Library::match(const Instrument* instrument, const Part* pa
       const LibInstrument* plain = nullptr;
       const LibInstrument* first = nullptr;
       for (const LibInstrument& li : instruments) {
+            if (li.extra())
+                  continue;
             if (!(!id.isEmpty() && li.ids.contains(id)) && !(!soundId.isEmpty() && li.ids.contains(soundId)))
                   continue;
             if (!first)
@@ -183,24 +221,61 @@ bool Choice::sampledOrnament() const
       return base == "tremolo" || base.startsWith("trill");
       }
 
+std::vector<const LibInstrument*> LibInstrument::patches() const
+      {
+      std::vector<const LibInstrument*> p { this };
+      p.insert(p.end(), extras.begin(), extras.end());
+      return p;
+      }
+
+DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId)
+      {
+      // an entry for the instrument before one for all
+      for (int pass = 0; pass < 2; ++pass) {
+            for (int p = 0; p < int(patches.size()); ++p) {
+                  for (const DrumKey& d : patches[p]->drums) {
+                        if (d.pitch != pitch || (pass == 0) == d.ids.isEmpty())
+                              continue;
+                        if (pass == 1 || d.ids.contains(instrumentId.toLower()))
+                              return DrumChoice { p, &d };
+                        }
+                  }
+            }
+      return DrumChoice();
+      }
+
 Choice choose(const LibInstrument& instrument, const Want& want)
+      {
+      return choose(std::vector<const LibInstrument*> { &instrument }, want);
+      }
+
+Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want)
       {
       for (const QString& base : want.bases) {
             const Articulation* best = nullptr;
+            int bestPatch = 0;
             int bestCount = -1;
-            for (const Articulation& a : instrument.articulations) {
-                  if (!a.techniques.contains(base))
-                        continue;
-                  bool fits = true;
-                  for (const QString& m : a.modifiers)
-                        fits &= want.modifiers.contains(m);
-                  if (fits && a.modifiers.size() > bestCount) {
-                        best = &a;
-                        bestCount = a.modifiers.size();
+            for (int p = 0; p < int(patches.size()); ++p) {
+                  for (const Articulation& a : patches[p]->articulations) {
+                        if (!a.techniques.contains(base))
+                              continue;
+                        bool fits = true;
+                        for (const QString& m : a.modifiers)
+                              fits &= want.modifiers.contains(m);
+                        // of equal fits in different patches, the one made for the base (listed
+                        // first: a Staccatissimo patch over a staccato that also plays it)
+                        const bool better = a.modifiers.size() > bestCount
+                           || (a.modifiers.size() == bestCount && p != bestPatch
+                               && a.techniques.indexOf(base) < best->techniques.indexOf(base));
+                        if (fits && better) {
+                              best = &a;
+                              bestPatch = p;
+                              bestCount = a.modifiers.size();
+                              }
                         }
                   }
             if (best)
-                  return Choice { best, base };
+                  return Choice { best, base, bestPatch };
             }
       return Choice();
       }
@@ -231,6 +306,35 @@ void setCurrent(std::shared_ptr<const Library> library)
       currentActive = bool(library);
       }
 
+static std::mutex availableMutex;
+static std::function<bool(const LibInstrument&)> availableFn;
+static std::atomic<int> generation { 0 };
+
+void setAvailable(std::function<bool(const LibInstrument&)> available)
+      {
+      {
+            std::lock_guard<std::mutex> lock(availableMutex);
+            availableFn = available;
+      }
+      ++generation;
+      }
+
+void routesChanged()
+      {
+      ++generation;
+      }
+
+int routesGeneration()
+      {
+      return generation;
+      }
+
+static bool available(const LibInstrument& li)
+      {
+      std::lock_guard<std::mutex> lock(availableMutex);
+      return !availableFn || availableFn(li);
+      }
+
 std::shared_ptr<const Library> current()
       {
       std::lock_guard<std::mutex> lock(currentMutex);
@@ -254,12 +358,84 @@ std::vector<Route> routes(const Score* score, const Library& library)
             const LibInstrument* li = library.match(part->instrument(), part);
             if (!li)
                   continue;
-            if (k / 16 >= MAX_PORTS)
-                  break;
-            result.push_back(Route { part, li, k / 16, k % 16 });
-            ++k;
+            const std::vector<const LibInstrument*> patches = li->patches();
+            std::vector<const LibInstrument*> offered { li };            // the main one, and the extras that can play
+            for (const LibInstrument* e : li->extras)
+                  if (available(*e))
+                        offered.push_back(e);
+            const std::vector<bool> usedOffered = offered.size() > 1 ? usedPatches(score, part, offered)
+                                                                      : std::vector<bool>(1, true);
+            std::vector<bool> used(patches.size(), false);
+            for (size_t o = 0, p = 0; o < offered.size(); ++o) {
+                  while (patches[p] != offered[o])
+                        ++p;
+                  used[p] = usedOffered[o];
+                  }
+            // a kit none of whose patches plays a sound of the part: the part stays built-in
+            if (li->kit && std::find(used.begin() + 1, used.end(), true) == used.end())
+                  continue;
+            for (int p = 0; p < int(patches.size()); ++p) {
+                  if (p > 0 && (!used[p] || !available(*patches[p])))
+                        continue;
+                  if (k / 16 >= MAX_PORTS)
+                        return result;
+                  result.push_back(Route { part, patches[p], k / 16, k % 16, p });
+                  ++k;
+                  }
             }
       return result;
+      }
+
+//---------------------------------------------------------
+//   usedPatches
+//    what each note of the part asks for (as the renderer asks it, without repeats), chosen
+//    from all the patches: the main patch always counts as used
+//---------------------------------------------------------
+
+std::vector<bool> usedPatches(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches)
+      {
+      std::vector<bool> used(patches.size(), false);
+      if (!used.empty())
+            used[0] = true;
+      Score* sc = const_cast<Score*>(score);
+      Ms4::Dynamics dynamics;
+      dynamics.build(sc, const_cast<Part*>(part));
+      TextTechniques text;
+      text.build(sc, part);
+      const TempoMap* tm = score->tempomap();
+      const int strack = part->startTrack();
+      const int etrack = part->endTrack();
+      for (Segment* seg = sc->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+            for (int track = strack; track < etrack; ++track) {
+                  Element* e = seg->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  const Chord* chord = toChord(e);
+                  if (patches[0]->kit) {
+                        const QString id = chord->part()->instrument(chord->tick())->getId();
+                        for (const Note* note : chord->notes()) {
+                              const DrumChoice d = drum(patches, note->pitch(), id);
+                              if (d.patch >= 0)
+                                    used[d.patch] = true;
+                              }
+                        continue;
+                        }
+                  const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
+                  const int tick = chord->tick().ticks();
+                  const double seconds = tm->tick2time(tick + chord->actualTicks().ticks()) - tm->tick2time(tick);
+                  for (const Note* note : chord->notes()) {
+                        const std::vector<Ms4::ArtRef> arts = Ms4::noteArticulations(note, chordArts);
+                        int trill = 0;
+                        for (const Ms4::ArtRef& a : arts)
+                              if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
+                                    trill = trillSemitones(note);
+                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill));
+                        if (c)
+                              used[c.patch] = true;
+                        }
+                  }
+            }
+      return used;
       }
 
 //---------------------------------------------------------

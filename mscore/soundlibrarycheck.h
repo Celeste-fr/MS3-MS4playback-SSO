@@ -82,6 +82,7 @@ class ArticulationCheckDialog : public QDialog {
       void setUp(int index);
       void check();
       bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
+      bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       QString recordsFile() const;
       QString addedFile() const;
       void loadAdded();

@@ -50,12 +50,28 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   format in `share/soundlibraries/README.md`), matches instruments by
   `Instrument::getId()` (the instruments.xml id; `instrumentId()` is the MusicXML sound id),
   computes the `Want` (techniques plus modifiers) from MS4 articulations and staff text, runs
-  `choose()`, and computes `routes()` (one port and channel per matched part, in score order).
-- Renderer: library parts play on the instrument's first channel. An articulation switch
-  (`NPlayEvent::librarySwitch`) goes before each note, and `finishLibraryEvents` drops
-  redundant ones. Events carry the route (`NPlayEvent::setExternal(port, channel)`). A sampled
-  trill or tremolo plays the note once (`SndConfig::ms4Once`). Dynamics go on the library's CC
-  (CC1 for Spitfire).
+  `choose()`, and computes `routes()` (one port and channel per matched part, in score order,
+  plus one per extra patch the part uses).
+- Extra patches (`with="<main>"` in the map): a part plays its main patch and the extras listed
+  with it; `choose(patches, want)` picks across them (a tie between patches goes to the
+  articulation that lists the base first). `usedPatches()` runs the notation once so only
+  needed extras get a route (each is a Kontakt instance, ~0.7 GB). `setAvailable()` (set in
+  `musescore.cpp` for plugin mode: has a setup) keeps an unset extra out; `routesGeneration()`
+  makes the renderer rebuild when a setup is saved (`SoundLibraryHost::routesMayChange`).
+- Kits (`kit="1"`): MuseScore's unpitched percussion; no patch of its own (the host loads
+  nothing on its route). Its extras' `<Drum pitch key>` entries give each drum sound's patch and
+  key (`SoundLib::drum()`); an unmapped sound stays on the built-in synthesizer (event patch
+  tag -1: `finishLibraryEvents` leaves it unrouted, and its preset and CC11 go there too). A
+  kit none of whose patches has a sound of the part is not routed at all.
+- Renderer: library parts play on the instrument's first channel. Each note and switch carries
+  its patch (`NPlayEvent::libraryPatch`); `finishLibraryEvents` routes by channel and patch
+  (`libRoutes`: channel -> port/channel per patch), drops redundant switches per patch, and
+  copies the part's controllers (dynamics, pedal) to every patch. An articulation switch
+  (`NPlayEvent::librarySwitch`) goes before each note. Events carry the route
+  (`NPlayEvent::setExternal(port, channel)`); the old duplicate-controller pass compares routes,
+  not channels. A legato articulation's note lasts DIVISION/16 into the next (Spitfire legato
+  needs the overlap). A sampled trill or tremolo plays the note once (`SndConfig::ms4Once`).
+  Dynamics go on the library's CC (CC1 for Spitfire).
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).
@@ -286,8 +302,11 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     Sul G / Sul C patches that do play;
   - drum, unpitched and toy percussion and the percussion ensembles (need a per-key drum
     map), Harp glissandi, the Curated Ensembles (blends, no MuseScore instrument).
-  Groups 1 and 2 need a part to use more than one patch (e.g. slurred notes → Performance):
-  not supported yet (one route per part).
+  Groups 1 and 2 are now extra patches (57: every Performance patch as legato, UACC 20 a guess;
+  Sul G / Sul C Performance and Long; the single techniques; reference-only ones). The unpitched
+  percussion is a kit with Drums - High / Low, Unpitched - Metal / Wood, Other - Toys, keys
+  still to come from the owner's key scan (DRUMS in gen_spitfire_sso.py). None of it heard in
+  Kontakt yet.
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
     are silent at every pitch; the report now lists such values apart ("most likely none",

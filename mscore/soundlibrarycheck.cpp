@@ -355,6 +355,10 @@ QByteArray ArticulationCheckDialog::mapHash(const SoundLib::LibInstrument& instr
       lines << QString("switch %1 %2").arg(int(instrument.switchType)).arg(instrument.switchNumber);
       for (const SoundLib::Articulation& a : instrument.articulations)
             lines << QString("%1=%2").arg(a.value).arg(a.name);
+      for (const SoundLib::DrumKey& d : instrument.drums)
+            lines << QString("key %1=%2").arg(d.key).arg(d.name);
+      if (instrument.keyScan)
+            lines << "keys";
       lines.sort();
       return QCryptographicHash::hash(lines.join("\n").toUtf8(), QCryptographicHash::Sha1).toHex();
       }
@@ -500,7 +504,8 @@ void ArticulationCheckDialog::rebuild()
             }
       _rows.clear();
       for (const SoundLib::LibInstrument& ins : _library->instruments)
-            _rows.push_back({ &ins, false });
+            if (!ins.kit)                     // (no patch of its own)
+                  _rows.push_back({ &ins, false });
       for (const auto& ins : _added) {
             // (once in the map, the map's patch)
             bool inMap = false;
@@ -774,10 +779,229 @@ void ArticulationCheckDialog::check()
 //   checkPatch
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   checkKeys
+//    a percussion patch: every key played, with a picture of its window while it sounds (the
+//    patch highlights what the key plays) and its peak; a sheet of the keys that sound and
+//    results.json "keys" (for the map's <Drum> entries)
+//---------------------------------------------------------
+
+static QString keyName(int key)
+      {
+      static const char* const NAMES[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+      return QString("%1%2").arg(NAMES[key % 12]).arg(key / 12 - 2);   // Kontakt's octaves: 60 = C3
+      }
+
+bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary)
+      {
+#ifdef USE_VST3
+      const SoundLib::LibInstrument& ins = *_rows[index].instrument;
+      QTableWidgetItem* resultItem = _table->item(index, 3);
+      QJsonObject out;
+      out["patch"] = ins.name;
+      out["keyScan"] = true;
+      const QByteArray setup = setupHash(ins.name);
+      out["setup"] = QString(setup);
+      auto fail = [&](const QString& message) {
+            out["error"] = message;
+            results.append(out);
+            summary += QString("## %1\n   %2\n\n").arg(ins.name, message);
+            resultItem->setText(message);
+            record(ins.name, setup, false, "!" + message, false);
+            return false;
+            };
+      auto status = [&](const QString& s) {
+            _status->setText(QString("%1: %2").arg(ins.name, s));
+            QApplication::processEvents();
+            };
+      std::map<int, QString> mapped;          // key -> the map's drum sounds on it
+      for (const SoundLib::DrumKey& d : ins.drums)
+            mapped[d.key] += (mapped[d.key].isEmpty() ? "" : " / ") + d.name;
+
+      status(tr("loading…"));
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
+      if (!p)
+            return fail(error);
+      QFile f(SoundLibraryHost::setupFile(*_library, ins.name));
+      if (!f.open(QIODevice::ReadOnly) || !p->setState(f.readAll()))
+            return fail(tr("Its setup could not be loaded into the plug-in."));
+      f.close();
+      if (_library->dynamicsCC >= 0)
+            p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
+
+      // the patch loads its samples: until one of a few keys sounds (up to 2 minutes)
+      Pump pump { p.get(), double(MScore::sampleRate), &_cancel, {} };
+      bool sounds = false;
+      for (int i = 0; i < 40 && !_cancel && !sounds; ++i) {
+            status(tr("waiting for the patch to load (%1 s)…").arg(i * 3));
+            pump.peak = 0;
+            for (int key : { 36, 38, 42, 48, 60, 72 }) {
+                  p->midi(ME_NOTEON, 0, key, 100);
+                  pump.run(350);
+                  p->midi(ME_NOTEON, 0, key, 0);
+                  pump.run(150);
+                  }
+            sounds = pump.peak > 1e-4;
+            }
+      if (_cancel)
+            return false;
+      if (!sounds)
+            return fail(tr("It played nothing: is the patch loaded, on MIDI channel 1 (Kontakt: A1 or Omni)?"));
+      pump.run(1500);
+
+      // every key: a picture while it sounds, and its peak
+      status(tr("opening its window…"));
+      QImage base, again;
+      std::vector<QImage> shots;
+      std::vector<double> peaks;
+      Steinberg::IPlugView* view = p->createEditor();
+      if (view) {
+            QPointer<Vst3EditorWindow> w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
+            w->show();
+            w->raise();
+            w->activateWindow();
+            pump.run(2500);
+            base = grabPlugin(w);
+            for (int key = 0; key < 128 && !_cancel && w; ++key) {
+                  status(tr("key %1 of 128").arg(key + 1));
+                  pump.peak = 0;
+                  p->midi(ME_NOTEON, 0, key, 100);
+                  pump.run(GRAB_WAIT_MS);
+                  shots.push_back(grabPlugin(w));
+                  pump.run(500);
+                  p->midi(ME_NOTEON, 0, key, 0);
+                  pump.run(250);
+                  peaks.push_back(pump.peak);
+                  }
+            if (w) {
+                  pump.run(1000);
+                  again = grabPlugin(w);
+                  w->close();
+                  delete w;
+                  }
+            }
+      else {
+            for (int key = 0; key < 128 && !_cancel; ++key) {
+                  status(tr("key %1 of 128").arg(key + 1));
+                  pump.peak = 0;
+                  p->midi(ME_NOTEON, 0, key, 100);
+                  pump.run(GRAB_WAIT_MS + 500);
+                  p->midi(ME_NOTEON, 0, key, 0);
+                  pump.run(250);
+                  peaks.push_back(pump.peak);
+                  }
+            }
+      if (_cancel || peaks.size() < 128)
+            return false;
+
+      // the keys that sound: 50 dB under the loudest counts as nothing
+      const double loudest = *std::max_element(peaks.begin(), peaks.end());
+      std::vector<int> soundKeys;
+      QJsonArray keys;
+      for (int key = 0; key < 128; ++key) {
+            const double db = peaks[key] > 0 ? 20 * std::log10(peaks[key]) : -200;
+            const bool sounds = peaks[key] > 1e-5 && peaks[key] > loudest * std::pow(10.0, -50 / 20.0);
+            if (sounds || mapped.count(key)) {
+                  QJsonObject k;
+                  k["key"] = key;
+                  k["name"] = keyName(key);
+                  k["peakDb"] = std::round(db * 10) / 10;
+                  k["sounds"] = sounds;
+                  if (mapped.count(key))
+                        k["map"] = mapped[key];
+                  keys.append(k);
+                  }
+            if (sounds)
+                  soundKeys.push_back(key);
+            }
+      out["keys"] = keys;
+      QStringList silentMapped;
+      for (const auto& m : mapped)
+            if (std::find(soundKeys.begin(), soundKeys.end(), m.first) == soundKeys.end())
+                  silentMapped << QString("%1 (%2)").arg(m.second).arg(m.first);
+
+      // the sheet: the keys that sound, the part of the window that changed
+      QString fileBase = ins.name;
+      fileBase.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
+      if (!base.isNull() && int(shots.size()) == 128) {
+            std::vector<QImage> soundShots;
+            for (int key : soundKeys)
+                  soundShots.push_back(shots[key]);
+            QRect crop = changedRegion(base, again.isNull() ? base : again, soundShots);
+            if (crop.isNull() || crop.width() * crop.height() > 0.7 * base.width() * base.height())
+                  crop = base.rect();
+            const double scale = std::min({ 1.0, 560.0 / crop.width(), 360.0 / crop.height() });
+            const QSize cell(qMax(1, int(crop.width() * scale)), qMax(1, int(crop.height() * scale)));
+            const int labelH = 22, pad = 12, headH = 40;
+            const int columns = qBound(1, 1400 / (cell.width() + pad), 4);
+            const int rows = (int(soundKeys.size()) + columns - 1) / columns;
+            QImage sheet(pad + columns * (cell.width() + pad), headH + rows * (labelH + cell.height() + pad) + pad, QImage::Format_RGB32);
+            sheet.fill(Qt::white);
+            QPainter pt(&sheet);
+            QFont font = pt.font();
+            font.setPixelSize(20);
+            font.setBold(true);
+            pt.setFont(font);
+            pt.setPen(Qt::black);
+            pt.drawText(QRect(pad, 6, sheet.width() - 2 * pad, 28), Qt::AlignLeft | Qt::AlignVCenter,
+                        QString("%1 — %2 (keys)").arg(ins.name, _library->name));
+            font.setPixelSize(13);
+            pt.setFont(font);
+            for (int k = 0; k < int(soundKeys.size()); ++k) {
+                  const int key = soundKeys[k];
+                  const int x = pad + (k % columns) * (cell.width() + pad);
+                  const int y = headH + (k / columns) * (labelH + cell.height() + pad);
+                  pt.setPen(Qt::black);
+                  pt.drawText(QRect(x, y, cell.width(), labelH), Qt::AlignLeft | Qt::AlignVCenter,
+                              QString("key %1 (%2) · %3 dB%4").arg(key).arg(keyName(key)).arg(20 * std::log10(peaks[key]), 0, 'f', 1)
+                              .arg(mapped.count(key) ? " · " + mapped[key] : QString()));
+                  pt.drawImage(QRect(QPoint(x, y + labelH), cell), shots[key].copy(crop));
+                  pt.setPen(QColor(200, 200, 200));
+                  pt.drawRect(QRect(QPoint(x, y + labelH), cell).adjusted(0, 0, -1, -1));
+                  }
+            pt.end();
+            sheet.save(folder + "/" + fileBase + ".png");
+            base.save(folder + "/" + fileBase + " (window).png");
+            out["sheet"] = QJsonArray::fromVariantList([&]() { QVariantList l; for (int k : soundKeys) l << k; return l; }());
+            }
+
+      const bool passed = silentMapped.isEmpty() && !soundKeys.empty() && !ins.drums.empty();
+      out["passed"] = passed;
+      results.append(out);
+      QStringList ranges;
+      for (size_t i = 0; i < soundKeys.size();) {
+            size_t j = i;
+            while (j + 1 < soundKeys.size() && soundKeys[j + 1] == soundKeys[j] + 1)
+                  ++j;
+            ranges << (i == j ? QString::number(soundKeys[i]) : QString("%1-%2").arg(soundKeys[i]).arg(soundKeys[j]));
+            i = j + 1;
+            }
+      const QString line = tr("%1 keys sound (%2)").arg(soundKeys.size()).arg(ranges.join(", "))
+         + (ins.drums.empty() ? tr("; the map has no drum keys for it yet") : QString());
+      summary += QString("## %1 (keys)\n   %2\n").arg(ins.name, line);
+      for (const QString& s : silentMapped)
+            summary += "   - " + tr("mapped but silent: %1").arg(s) + "\n";
+      summary += "\n";
+      record(ins.name, setup, passed, line, true);
+      resultItem->setText(passed ? tr("Passed: %1").arg(line) : line);
+      return true;
+#else
+      Q_UNUSED(index);
+      Q_UNUSED(pluginPath);
+      Q_UNUSED(folder);
+      Q_UNUSED(results);
+      Q_UNUSED(summary);
+      return false;
+#endif
+      }
+
 bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary)
       {
 #ifdef USE_VST3
       const SoundLib::LibInstrument& ins = *_rows[index].instrument;
+      if (ins.keyScan || (!ins.drums.empty() && ins.articulations.empty()))
+            return checkKeys(index, pluginPath, folder, results, summary);
       const bool scan = _rows[index].added || _scan->isChecked();
       QTableWidgetItem* resultItem = _table->item(index, 3);
       QJsonObject out;
@@ -1102,6 +1326,14 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   return !_cancel;
                   });
             p->setOffline(false);
+            // one articulation (an extra patch of one technique): nothing to switch; it passes
+            // when it sounds
+            if (listen.size() == 1 && !report.results.empty()) {
+                  ArticulationCheck::Result& r = report.results[0];
+                  r.verdict = r.verdict == ArticulationCheck::Verdict::SILENT ? r.verdict : ArticulationCheck::Verdict::SWITCHES;
+                  report.switching = r.verdict == ArticulationCheck::Verdict::SWITCHES;
+                  report.message = report.switching ? QString() : tr("It plays nothing.");
+                  }
             }
       else
             report.message = tr("Offline, the plug-in played nothing: no listening results (the pictures stand).");

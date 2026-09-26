@@ -72,13 +72,19 @@ class MidiRenderer {
 
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {
-            SoundLib::Route route;
+            SoundLib::Route route;                          // the main patch's
             SoundLib::TextTechniques text;
             std::map<const Instrument*, const SoundLib::LibInstrument*> instruments;
+            std::vector<const SoundLib::LibInstrument*> patches;    // routed: the main one, then extras
+            // the patches a note of an instrument of the part chooses from
+            std::vector<const SoundLib::LibInstrument*> patchesFor(const SoundLib::LibInstrument* li) const {
+                  return li == route.instrument ? patches : std::vector<const SoundLib::LibInstrument*> { li };
+                  }
             };
       std::shared_ptr<const SoundLib::Library> library;
+      int libGeneration = -1;
       std::map<const Part*, LibPart> libParts;
-      std::map<int, std::pair<int, int>> libRoutes;         // channel -> MIDI out port, channel
+      std::map<int, std::vector<std::pair<int, int>>> libRoutes;  // channel -> MIDI out port, channel per patch
       int minChunkSize = 0;
 
    public:

@@ -30,6 +30,18 @@ are mapped where notation can ask for them). Still open:
   percussion ones they use) and runs *Check*; fix any differences through the generator.
 - Violins Long Sul G / Celli Long Sul C: settled, Spitfire's "All techniques" patch plays no
   samples for them (Kontakt's Voices stays 0).
+- Extra patches and percussion kits are in (see `CLAUDE.md`). The owner was asked to set up,
+  in *Check articulations*, the Performance patches of the instruments they use, and the
+  percussion patches (Drums - High / Low, Unpitched - Metal / Wood, Other - Toys), then Check
+  (tick *Scan every value* for the Performance patches: their UACC value is a guess) and send
+  the zip. From it:
+  - a Performance patch's scan: its real articulation values; fix LEGATO / PERFORMANCE in
+    `gen_spitfire_sso.py`;
+  - a percussion patch's key sheet (`<patch>.png`, `results.json` "keys"): which key plays
+    which sound; fill `DRUMS` in `gen_spitfire_sso.py` with (MuseScore drum pitch, key, name,
+    ids). MuseScore's drum pitches are GM-like (35/36 bass drum, 38 snare, 49/57 crash, 51 ride,
+    52 chinese, 55 splash, 80/81 triangle, 54 tambourine, 56 cowbell, 75 claves, 76/77 wood
+    block, 85 castanets …); check `share/instruments/instruments.xml` for each instrument.
 
 ## When the zip arrives
 

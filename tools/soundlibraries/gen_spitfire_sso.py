@@ -179,6 +179,61 @@ ONE = [('Normal', 1, 'long legato short staccatissimo spiccato tenuto marcato lo
 for n in ('Grand Piano', 'Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone',
           'Crotales', 'Tubular Bells', 'Desk Bells'):
     SPITFIRE_ADD[n] = ONE
+
+# Extra patches (soundlibrary.h): other patches a part plays alongside its main one, each loaded
+# only when the part's notation asks for one of its articulations (and, hosted, once it is set
+# up). Named as the owner's .nki files. (main patch, extra patch, articulations)
+# - Performance: Spitfire's legato (the "All techniques" patches have none) for slurred notes.
+#   Its UACC value is not known yet (20 = the standard's legato); a single-articulation patch
+#   ignores it.
+LEGATO = [('Legato', 20, 'legato', '')]
+PERFORMANCE = {
+    'Violins 1': 'Violins 1 - Performance', 'Violins 2': 'Violins 2 - Performance',
+    'Violas': 'Violas - Performance', 'Celli': 'Celli - Performance', 'Basses': 'Basses - Performance',
+    'Solo Violin 1': 'Solo Violin - Performance', 'Solo Violin 2': 'Solo Violin 2 - Performance',
+    'Solo Viola': 'Solo Viola - Performance', 'Solo Cello': 'Solo Cello - Performance',
+    'Piccolo': 'Piccolo Flute - Performance', 'Flute Solo': 'Flute Solo - Total Performance',
+    'Flutes a2': 'Flutes a2 - Performance', 'Alto Flute': 'Alto Flute - Performance',
+    'Bass Flute': 'Bass Flute - Performance', 'Oboe Solo': 'Oboe Solo - Performance',
+    'Oboes a2': 'Oboes a2 - Performance', 'Cor Anglais': 'Cor Anglais - Performance',
+    'Clarinet Solo': 'Clarinet Solo - Performance', 'Clarinets a2': 'Clarinets a2 - Performance',
+    'Bass Clarinet': 'Bass Clarinet - Performance', 'Contrabass Clarinet': 'ContraBass Clarinet - Performance',
+    'Bassoon Solo': 'Bassoon Solo - Performance', 'Bassoons a2': 'Bassoons a2 - Performance',
+    'Contrabassoon': 'ContraBassoon - Performance',
+    'Horn Solo': 'Horn Solo - Performance', 'Horns a2': 'Horns a2 - Performance', 'Horns a6': 'Horns a6 - Performance',
+    'Trumpet Solo': 'Trumpet Solo - Total Performance', 'Trumpets a2': 'Trumpets a2 - Performance',
+    'Trumpets a6': 'Trumpets a6 - Performance', 'Tenor Trombone Solo': 'Tenor Trombone Solo - Total Performance',
+    'Tenor Trombones a2': 'Tenor Trombones a2 - Performance', 'Trombones a6': 'Trombones a6 - Performance',
+    'Bass Trombones a2': 'Bass Trombones a2 - Performance', 'Tuba Solo': 'Tuba Solo - Performance',
+    'Motif Horns a4': 'Horns a4 - Performance', 'Motif Trumpets a3': 'Trumpets a3 - Performance',
+    'Motif Trombones a5': 'Trombones a5 - Performance',
+}
+EXTRAS = [(m, e, LEGATO) for m, e in PERFORMANCE.items()]
+EXTRAS += [
+    # on one string: legato and long ("sul G" / "sul C"); the All techniques patches' own Long
+    # Sul G (Violins) and Long Sul C (Celli) play nothing (Kontakt's Voices stays 0)
+    ('Violins 1', 'Violins 1 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg')]),
+    ('Violins 2', 'Violins 2 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg')]),
+    ('Violas', 'Violas - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc')]),
+    ('Celli', 'Celli - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc')]),
+    ('Violins 1', 'Strings - Violins 1 - Long Sul G', [('Long Sul G', 1, 'long legato', 'sulg')]),
+    ('Violins 2', 'Strings - Violins 2 - Long Sul G', [('Long Sul G', 1, 'long legato', 'sulg')]),
+    ('Celli', 'Strings - Celli - Long Sul C', [('Long Sul C', 1, 'long legato', 'sulc')]),
+    # articulations no All techniques patch has
+    ('Horn Solo', 'Brass - Horn Solo - Short Staccatissimo', [('Short Staccatissimo', 1, 'staccatissimo spiccato', '')]),
+    ('Horns a2', 'Brass - Horns a2 - Short Staccatissimo', [('Short Staccatissimo', 1, 'staccatissimo spiccato', '')]),
+    ('Horns a2', 'Brass - Horns a2 - Bells up Staccatissimo', [('Bells up Staccatissimo', 1, 'staccatissimo spiccato', 'bellsup')]),
+    ('Trumpet Solo', 'Brass - Trumpet Solo - Fall Muted', [('Fall Muted', 1, 'fall', 'muted')]),
+    ('Trumpet Solo', 'Brass - Trumpet Solo - Rip Muted', [('Rip Muted', 1, 'rip', 'muted')]),
+    # listed for reference, no notation asks for them (never loaded)
+    ('Horns a6', 'Brass - Horns a6 - Fanfare', [('Fanfare', 1, '', '')]),
+    ('Trombones a6', 'Brass - Trombones a6 - Fanfare', [('Fanfare', 1, '', '')]),
+    ('Trumpets a2', 'Brass - Trumpets a2 - Fanfare', [('Fanfare', 1, '', '')]),
+    ('Trumpets a6', 'Brass - Trumpets a6 - Fanfare', [('Fanfare', 1, '', '')]),
+    ('Cimbassi a2', 'Brass - Cimbassi a2 - Long Alt', [('Long Alt', 1, '', '')]),
+    ('Violins 1', 'Strings - Violins 1 - Long Sul Pont Distorted', [('Long Sul Pont Distorted', 1, '', '')]),
+    ('Oboe Solo', 'Oboe Principal - Total Performance', [('Oboe Principal', 1, '', '')]),
+]
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
 
 def articulation(n, v, t, m):
@@ -207,5 +262,32 @@ for bank,name,ids,pn in I:
     for n, v, t, m in SPITFIRE_ADD.get(name, []):
         out.append(articulation(n, v, t, m))
     out.append('  </Instrument>')
+names = {name for _, name, _, _ in I}
+for main, name, arts in EXTRAS:
+    assert main in names, main
+    out.append(f'  <Instrument name={q(name)} with={q(main)}>')
+    for n, v, t, m in arts:
+        out.append(articulation(n, v, t, m))
+    out.append('  </Instrument>')
+
+# Percussion: a kit for MuseScore's unpitched percussion, played by SSO's percussion patches.
+# Which key plays which drum sound comes from the articulation check's key scan of each patch
+# (DRUMS: patch -> [(MuseScore drum pitch, key, name, ids or None)]); until then a patch has
+# none and its sounds stay on the built-in synthesizer.
+KIT_IDS = ('drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas '
+           'timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals '
+           'triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells '
+           'guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes '
+           'bell-plate vibraslap')
+PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - Wood', 'Other - Toys']
+DRUMS = {}
+out.append(f'  <Instrument name="Percussion" ids={q(KIT_IDS)} kit="1"/>')
+for name in PERCUSSION:
+    drums = DRUMS.get(name, [])
+    out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1"' + ('/>' if not drums else '>'))
+    for pitch, key, n, ids in drums:
+        out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + '/>')
+    if drums:
+        out.append('  </Instrument>')
 out.append('</SoundLibrary>')
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

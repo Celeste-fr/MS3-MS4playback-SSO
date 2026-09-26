@@ -536,6 +536,17 @@ void updateExternalValuesFromPreferences() {
             SoundLib::setOutput(output);
             if (output == SoundLib::Output::MIDI)
                   SoundLibraryHost::instance()->release();
+            // hosted, an extra patch plays once it is set up (else the main patch plays its notes)
+            if (output == SoundLib::Output::PLUGIN)
+                  SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+                        std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+                        return library && SoundLibraryHost::hasSetup(*library, li.name);
+                        });
+            else
+                  SoundLib::setAvailable(nullptr);
+            if (mscore)
+                  for (MasterScore* s : mscore->scores())
+                        s->setPlaylistDirty();
             }
 
       MScore::selectColor[0] = preferences.getColor(PREF_UI_SCORE_VOICE1_COLOR);

@@ -145,6 +145,25 @@ switch value of each articulation. For example:
   whose name matches it.
 - For a keyswitch, `value` is the key's MIDI pitch. An `Instrument` can override `<Switch>` with
   its own `<Switch>` element inside it.
+- **Extra patches.** An `Instrument` with `with="<another instrument's name>"` is a patch the
+  parts of that instrument can also play (a legato patch, a single technique …). Each note plays
+  the articulation that fits it best of all the part's patches; of equal fits, the one made for
+  the technique (listed first). An extra patch is loaded only when the part's notation asks for
+  one of its articulations and, hosted by MuseScore, once it is set up (*Check articulations ›
+  Set up…*); until then the main patch plays those notes. A legato articulation's notes overlap
+  the next note a little, as legato patches need.
+
+  ```xml
+  <Instrument name="Violins 1 - Performance" with="Violins 1">
+    <Articulation name="Legato" value="20" techniques="legato"/>   <!-- slurred notes -->
+  </Instrument>
+  ```
+- **Percussion kits.** An `Instrument` with `kit="1"` serves MuseScore's unpitched percussion
+  and has no patch of its own. Its extra patches say which key plays each MuseScore drum sound
+  (the note's pitch in the drumset): `<Drum pitch="38" key="62" name="Snare hit"/>`, with
+  optional `velocity` (fixed) and `ids` (only for these MuseScore instruments). A sound no
+  patch has plays on the built-in synthesizer. `keyScan="1"` makes *Check articulations* play
+  every key of the patch and picture what each one plays, to find its `<Drum>` entries.
 
 **The Spitfire UACC values have not been checked against the library.** They come from a
 community articulation bank for Spitfire Symphony Orchestra

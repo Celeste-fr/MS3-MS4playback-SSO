@@ -192,6 +192,8 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
       bool ok = true;
       bool waiting = false;
       for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+            if (r.instrument->kit)            // no patch of its own: its extras play
+                  continue;
             const int k = r.port * 16 + r.channel;
             used[k] = true;
             Slot& s = _slots[k];
@@ -296,6 +298,7 @@ bool SoundLibraryHost::saveSetup(int slot, QString* error)
       const QString name = _slots[slot].instrument;
       const QByteArray state = p->state();
       const QString file = setupFile(*library, name);
+      routesMayChange();
       QDir().mkpath(QFileInfo(file).absolutePath());
       QFile f(file);
       if (!f.open(QIODevice::WriteOnly) || f.write(state) != state.size()) {
@@ -324,12 +327,27 @@ bool SoundLibraryHost::saveSetup(int slot, QString* error)
       }
 
 //---------------------------------------------------------
+//   routesMayChange
+//    a setup saved: an extra patch may play now (SoundLib::setAvailable), so the scores are
+//    rendered again
+//---------------------------------------------------------
+
+void SoundLibraryHost::routesMayChange()
+      {
+      SoundLib::routesChanged();
+      if (mscore)
+            for (MasterScore* s : mscore->scores())
+                  s->setPlaylistDirty();
+      }
+
+//---------------------------------------------------------
 //   setupChanged
 //    the instrument's setup (saved elsewhere: Check articulations › Set up…) into its instances
 //---------------------------------------------------------
 
 void SoundLibraryHost::setupChanged(const QString& instrument)
       {
+      routesMayChange();
 #ifdef USE_VST3
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       Vst3Synth* vst = synth();
@@ -424,6 +442,8 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
             _own.reset(new Vst3Synth);
             _own->init(sampleRate);
             for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+                  if (r.instrument->kit)
+                        continue;
                   std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, &error);
                   if (!p) {
                         qWarning("Sound library: %s", qPrintable(error));
@@ -542,46 +562,58 @@ void SoundLibraryDialog::rebuild()
             }
 
       for (const Part* part : score->parts()) {
-            const int row = _table->rowCount();
-            _table->insertRow(row);
-            _table->setItem(row, 0, new QTableWidgetItem(part->partName()));
-            auto r = std::find_if(routes.begin(), routes.end(), [part](const SoundLib::Route& rt) { return rt.part == part; });
-            if (r == routes.end()) {
-                  _table->setItem(row, 1, new QTableWidgetItem(tr("(built-in synthesizer)")));
-                  continue;
-                  }
-            _table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
-            if (!plugin) {
-                  _table->setItem(row, 2, new QTableWidgetItem(QString(QChar('A' + r->port))));
-                  _table->setItem(row, 3, new QTableWidgetItem(QString::number(r->channel + 1)));
-                  continue;
-                  }
-            const int slot = r->port * 16 + r->channel;
-            const bool setup = SoundLibraryHost::hasSetup(*_library, r->instrument->name);
-            _table->setItem(row, 2, new QTableWidgetItem(setup ? tr("Ready") : tr("Not set up yet")));
-            QWidget* w = new QWidget;
-            QHBoxLayout* hl = new QHBoxLayout(w);
-            hl->setContentsMargins(2, 0, 2, 0);
-            QPushButton* show = new QPushButton(tr("Show"), w);
-            QPushButton* save = new QPushButton(tr("Save setup"), w);
-            hl->addWidget(show);
-            hl->addWidget(save);
-            _table->setCellWidget(row, 3, w);
-            MasterScore* ms = score->masterScore();
-            connect(show, &QPushButton::clicked, this, [this, host, slot, ms]() {
-                  QString error;
-                  if (!host->loaded(slot) && !host->sync(ms, &error)) {
-                        QMessageBox::warning(this, windowTitle(), error);
-                        return;
+            bool any = false;
+            for (auto r = routes.begin(); r != routes.end(); ++r) {
+                  if (r->part != part)
+                        continue;
+                  any = true;
+                  // a row per patch the part plays (its own, then the extras its notation needs)
+                  const int row = _table->rowCount();
+                  _table->insertRow(row);
+                  _table->setItem(row, 0, new QTableWidgetItem(r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName())));
+                  _table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
+                  if (r->instrument->kit) {
+                        _table->setItem(row, 2, new QTableWidgetItem(tr("(its drum sounds play on the patches below)")));
+                        continue;
                         }
-                  if (!host->showEditor(slot, &error))
-                        QMessageBox::warning(this, windowTitle(), error);
-                  });
-            connect(save, &QPushButton::clicked, this, [this, host, slot]() {
-                  QString error;
-                  if (!host->saveSetup(slot, &error))
-                        QMessageBox::warning(this, windowTitle(), error);
-                  });
+                  if (!plugin) {
+                        _table->setItem(row, 2, new QTableWidgetItem(QString(QChar('A' + r->port))));
+                        _table->setItem(row, 3, new QTableWidgetItem(QString::number(r->channel + 1)));
+                        continue;
+                        }
+                  const int slot = r->port * 16 + r->channel;
+                  const bool setup = SoundLibraryHost::hasSetup(*_library, r->instrument->name);
+                  _table->setItem(row, 2, new QTableWidgetItem(setup ? tr("Ready") : tr("Not set up yet")));
+                  QWidget* w = new QWidget;
+                  QHBoxLayout* hl = new QHBoxLayout(w);
+                  hl->setContentsMargins(2, 0, 2, 0);
+                  QPushButton* show = new QPushButton(tr("Show"), w);
+                  QPushButton* save = new QPushButton(tr("Save setup"), w);
+                  hl->addWidget(show);
+                  hl->addWidget(save);
+                  _table->setCellWidget(row, 3, w);
+                  MasterScore* ms = score->masterScore();
+                  connect(show, &QPushButton::clicked, this, [this, host, slot, ms]() {
+                        QString error;
+                        if (!host->loaded(slot) && !host->sync(ms, &error)) {
+                              QMessageBox::warning(this, windowTitle(), error);
+                              return;
+                              }
+                        if (!host->showEditor(slot, &error))
+                              QMessageBox::warning(this, windowTitle(), error);
+                        });
+                  connect(save, &QPushButton::clicked, this, [this, host, slot]() {
+                        QString error;
+                        if (!host->saveSetup(slot, &error))
+                              QMessageBox::warning(this, windowTitle(), error);
+                        });
+                  }
+            if (!any) {
+                  const int row = _table->rowCount();
+                  _table->insertRow(row);
+                  _table->setItem(row, 0, new QTableWidgetItem(part->partName()));
+                  _table->setItem(row, 1, new QTableWidgetItem(tr("(built-in synthesizer)")));
+                  }
             }
       _table->resizeColumnsToContents();
       _table->horizontalHeader()->setSectionResizeMode(_table->columnCount() - 1, QHeaderView::Stretch);
