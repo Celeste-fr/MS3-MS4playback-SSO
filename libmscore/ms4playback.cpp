@@ -801,11 +801,13 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
       const bool useNominalLevelTo = hasNominalLevelTo && (isCrescendo ? nominalLevelTo > levelFrom : nominalLevelTo < levelFrom);
       int levelTo = useNominalLevelTo ? nominalLevelTo : levelFrom + (isCrescendo ? STEP : -STEP);
 
-      // Not MuseScore 4: a MuseScore 3 hairpin with a velocity change of its own and no end
-      // dynamic MS4 would take changes the volume as MuseScore 3 did: from the value in force by
+      // Not MuseScore 4: a MuseScore 3 hairpin with a velocity change of its own changes the
+      // volume as MuseScore 3 did: from the value in force by
       // the change (0-127, down to silence), on its curve (MS4 ignores the change and goes one
       // step: near inaudible). MS4's CC11 values match MuseScore 3's velocities (pp 32/33, mp 64).
-      const bool ms3 = !useNominalLevelTo && hairpin->veloChange() != 0 && ms3HairpinVelocity();
+      // (as MuseScore 3.6: the change applies even with a dynamic at the hairpin's end, which then
+      // takes over at its own tick: Ethanol m. 13, p < ... > 0 before the p of m. 14)
+      const bool ms3 = hairpin->veloChange() != 0 && ms3HairpinVelocity();
       const int v0 = expressionLevel(levelFrom);
       const int v1 = qBound(0, v0 + (isCrescendo ? 1 : -1) * std::abs(hairpin->veloChange()), 127);
       if (ms3)

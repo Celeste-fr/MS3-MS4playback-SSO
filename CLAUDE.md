@@ -70,7 +70,9 @@ MS4 playback (see the header comment of each file):
 - **One deliberate difference from MS4:** a MuseScore 3 hairpin with a velocity change of its
   own and no end dynamic MS4 would take goes to the dynamic nearest the velocity MuseScore 3
   reached (p < +63 → ff), not one step (`ms3VelocityChangeLevel`). MS4 ignores the change, so
-  such hairpins are near inaudible there; the owner's scores rely on them. Preference
+  such hairpins are near inaudible there; the owner's scores rely on them. Applied whenever a hairpin
+  has a velocity change, even with an end dynamic (as MuseScore 3.6; the dynamic takes over at its
+  own tick), on MS3's curves (ChangeMap::interpolateRamp), down to silence. Preference
   `application/playback/ms3HairpinVelocityChange` (Advanced, on); `MS4_STRICT=1` in the
   environment turns it off, and `ab/trace/regress.sh` sets it (the demos Brassed_Up and Dawn
   change otherwise).
