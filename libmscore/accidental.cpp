@@ -10,6 +10,8 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
+#include <algorithm>
+
 #include "accidental.h"
 #include "note.h"
 #include "symbol.h"
@@ -354,6 +356,67 @@ void Accidental::setSubtype(const QString& tag)
 //   layout
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   stacked accidentals
+//---------------------------------------------------------
+
+bool Accidental::isStackModifier(AccidentalType t)
+      {
+      return stackPrime(subtype2symbol(t)) != 0;
+      }
+
+bool Accidental::carriesModifiers(AccidentalType t)
+      {
+      switch (t) {
+            case AccidentalType::FLAT:
+            case AccidentalType::NATURAL:
+            case AccidentalType::SHARP:
+            case AccidentalType::SHARP2:
+            case AccidentalType::FLAT2:
+                  return true;
+            default:
+                  return (t >= AccidentalType::DOUBLE_FLAT_ONE_ARROW_DOWN && t <= AccidentalType::DOUBLE_SHARP_THREE_ARROWS_UP)
+                     || isStackModifier(t);
+            }
+      }
+
+int Accidental::stackPrime(SymId s)
+      {
+      switch (s) {
+            case SymId::accidentalLowerOneSeptimalComma:
+            case SymId::accidentalRaiseOneSeptimalComma:
+            case SymId::accidentalLowerTwoSeptimalCommas:
+            case SymId::accidentalRaiseTwoSeptimalCommas:          return 7;
+            case SymId::accidentalLowerOneUndecimalQuartertone:
+            case SymId::accidentalRaiseOneUndecimalQuartertone:    return 11;
+            case SymId::accidentalLowerOneTridecimalQuartertone:
+            case SymId::accidentalRaiseOneTridecimalQuartertone:   return 13;
+            case SymId::accidentalCombiningLower17Schisma:
+            case SymId::accidentalCombiningRaise17Schisma:         return 17;
+            case SymId::accidentalCombiningLower19Schisma:
+            case SymId::accidentalCombiningRaise19Schisma:         return 19;
+            case SymId::accidentalCombiningLower23Limit29LimitComma:
+            case SymId::accidentalCombiningRaise23Limit29LimitComma: return 23;
+            case SymId::accidentalCombiningLower31Schisma:
+            case SymId::accidentalCombiningRaise31Schisma:         return 31;
+            case SymId::accidentalCombiningLower53LimitComma:
+            case SymId::accidentalCombiningRaise53LimitComma:      return 53;
+            default:                                               return 0;
+            }
+      }
+
+QList<SymId> Accidental::stackedModifiers() const
+      {
+      QList<SymId> l;
+      if (!note())
+            return l;
+      for (const Element* e : note()->el())
+            if (e->isSymbol() && stackPrime(toSymbol(e)->sym()))
+                  l.append(toSymbol(e)->sym());
+      std::sort(l.begin(), l.end(), [](SymId a, SymId b) { return stackPrime(a) > stackPrime(b); });
+      return l;
+      }
+
 void Accidental::layout()
       {
       el.clear();
@@ -384,6 +447,34 @@ void Accidental::layout()
       else {
             layoutMultiGlyphAccidental();
             }
+
+      // stacked modifiers to the left: the accidental moves right by their width
+      const QList<SymId> mods = stackedModifiers();
+      if (!mods.isEmpty()) {
+            const qreal gap = spatium() * 0.1;
+            qreal x = 0.0;
+            QList<SymElement> left;
+            QRectF r;
+            for (SymId s : mods) {
+                  left.append(SymElement(s, x, 0.0));
+                  r |= symBbox(s).translated(x, 0.0);
+                  x += symAdvance(s) + gap;
+                  }
+            for (SymElement& e : el)
+                  e.x += x;
+            r |= bbox().translated(x, 0.0);
+            el = left + el;
+            setbbox(r);
+            }
+      }
+
+// where a stacked modifier is drawn, from the accidental's origin
+QPointF Accidental::stackedModifierPos(SymId s) const
+      {
+      for (const SymElement& e : el)
+            if (e.sym == s)
+                  return QPointF(e.x, e.y);
+      return QPointF();
       }
 
 void Accidental::layoutSingleGlyphAccidental()

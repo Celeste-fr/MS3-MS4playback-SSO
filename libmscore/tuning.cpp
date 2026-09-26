@@ -18,6 +18,7 @@
 #include "segment.h"
 #include "staff.h"
 #include "sym.h"
+#include "symbol.h"
 #include "tuningtables.h"
 
 #include <cmath>
@@ -314,6 +315,59 @@ bool ScoreTuning::hejiAccidental(AccidentalType type, int* sharps, int* arrows)
       }
 
 //---------------------------------------------------------
+//   modifierCents
+//    a Helmholtz-Ellis prime modifier (Accidental::stackPrime): 7 64/63, 11 33/32, 13 27/26 (HEJI's
+//    definitions; MuseScore 3.6 gives them no value), 17 … 53 as MuseScore 3.6.2 has them (HEJI's
+//    combining schismas and commas)
+//---------------------------------------------------------
+
+static double modifierCents(SymId s, bool* valued)
+      {
+      auto c = [](double r) { return 1200.0 * std::log2(r); };
+      *valued = true;
+      switch (s) {
+            case SymId::accidentalLowerOneSeptimalComma:          return -c(64.0 / 63.0);
+            case SymId::accidentalRaiseOneSeptimalComma:          return  c(64.0 / 63.0);
+            case SymId::accidentalLowerTwoSeptimalCommas:         return -2 * c(64.0 / 63.0);
+            case SymId::accidentalRaiseTwoSeptimalCommas:         return  2 * c(64.0 / 63.0);
+            case SymId::accidentalLowerOneUndecimalQuartertone:   return -c(33.0 / 32.0);
+            case SymId::accidentalRaiseOneUndecimalQuartertone:   return  c(33.0 / 32.0);
+            case SymId::accidentalLowerOneTridecimalQuartertone:  return -c(27.0 / 26.0);
+            case SymId::accidentalRaiseOneTridecimalQuartertone:  return  c(27.0 / 26.0);
+            default:
+                  break;
+            }
+      *valued = false;
+      return 0.0;
+      }
+
+// the stacked modifiers beside a note's accidental (their cents), valued: all have a value
+static double stackedCents(const Note* n, bool* valued)
+      {
+      double sum = 0.0;
+      *valued = true;
+      for (const Element* e : n->el()) {
+            if (!e->isSymbol() || !Accidental::stackPrime(toSymbol(e)->sym()))
+                  continue;
+            bool v;
+            double c = modifierCents(toSymbol(e)->sym(), &v);
+            if (!v)
+                  c = ScoreTuning::symbolCents(toSymbol(e)->sym(), &v);
+            *valued = *valued && v;
+            sum += c;
+            }
+      return sum;
+      }
+
+static bool hasStacked(const Note* n)
+      {
+      for (const Element* e : n->el())
+            if (e->isSymbol() && Accidental::stackPrime(toSymbol(e)->sym()))
+                  return true;
+      return false;
+      }
+
+//---------------------------------------------------------
 //   accidentalCents, symbolCents
 //    cents from the natural note: MuseScore 3.6.2's value, else a Helmholtz-Ellis accidental's
 //    (its sharps and commas; spelled: its sharps, which the note's spelling lacks)
@@ -333,6 +387,9 @@ double ScoreTuning::accidentalCents(AccidentalType type, bool* valued, int* spel
       *valued = it != table.end();
       if (*valued)
             return *it;
+      const double m = modifierCents(Accidental::subtype2symbol(type), valued);
+      if (*valued)
+            return m;
       int sharps, arrows;
       if (!hejiAccidental(type, &sharps, &arrows))
             return 0.0;
@@ -365,6 +422,9 @@ double ScoreTuning::symbolCents(SymId sym, bool* valued, int* spelled)
       *valued = it != table.end();
       if (*valued)
             return *it;
+      const double m = modifierCents(sym, valued);
+      if (*valued)
+            return m;
       auto h = hejiSyms.find(int(sym));
       if (h == hejiSyms.end())
             return 0.0;
@@ -479,11 +539,13 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
             const int plain = 100 * (((n->tpc() + 1) / 7) - 2);  // the note's spelling as MuseScore plays it
             Target target { true, double(plain), 0 };
             const AccidentalType acc = n->accidentalType();
-            if (acc != AccidentalType::NONE) {
-                  bool valued;
-                  int spelled;
-                  const double c = accidentalCents(acc, &valued, &spelled);
-                  target = { valued, c, spelled };
+            if (acc != AccidentalType::NONE || hasStacked(n)) {
+                  bool valued = true;
+                  int spelled = 0;
+                  double c = acc != AccidentalType::NONE ? accidentalCents(acc, &valued, &spelled) : double(plain);
+                  bool stackValued;
+                  c += stackedCents(n, &stackValued);           // (stacked modifiers, Accidental::isStackModifier)
+                  target = { valued && stackValued, c, spelled };
                   bar.insert(line, target);
                   }
             else if (bar.contains(line))

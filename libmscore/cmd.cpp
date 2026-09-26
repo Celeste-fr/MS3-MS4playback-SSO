@@ -16,6 +16,7 @@
 */
 
 #include "accidental.h"
+#include "symbol.h"
 #include "articulation.h"
 #include "barline.h"
 #include "beam.h"
@@ -1882,11 +1883,74 @@ static void changeAccidental2(Note* n, int pitch, int tpc)
 ///   note \a note.
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   stacked accidentals (Accidental::isStackModifier)
+//---------------------------------------------------------
+
+static Symbol* stackedModifier(Note* n, int prime)
+      {
+      for (Element* e : n->el())
+            if (e->isSymbol() && Accidental::stackPrime(toSymbol(e)->sym()) == prime)
+                  return toSymbol(e);
+      return nullptr;
+      }
+
+static void removeStackedModifiers(Note* n)
+      {
+      QList<Element*> gone;
+      for (Element* e : n->el())
+            if (e->isSymbol() && Accidental::stackPrime(toSymbol(e)->sym()))
+                  gone.append(e);
+      for (Element* e : gone)
+            n->score()->undoRemoveElement(e);
+      }
+
+// a modifier beside the note's accidental: added, or instead of one of the same prime, or taken
+// away when it is already there (for the note and its linked notes)
+static void stackModifier(Note* note, AccidentalType modifier)
+      {
+      const SymId sym = Accidental::subtype2symbol(modifier);
+      const int prime = Accidental::stackPrime(sym);
+      for (ScoreElement* se : note->linkList()) {
+            Note* ln = toNote(se);
+            Symbol* old = stackedModifier(ln, prime);
+            if (old)
+                  ln->score()->undoRemoveElement(old);
+            if (old && old->sym() == sym)
+                  continue;
+            Symbol* s = new Symbol(ln->score());
+            s->setSym(sym);
+            s->setParent(ln);
+            s->setTrack(ln->track());
+            ln->score()->undoAddElement(s);
+            }
+      }
+
 void Score::changeAccidental(Note* note, AccidentalType accidental)
       {
       Chord* chord = note->chord();
       if (!chord)
             return;
+      // a modifier on a note with an accidental it can stand beside: stacked
+      if (Accidental::isStackModifier(accidental) && !(chord->staff() && chord->staff()->isTabStaff(chord->tick()))) {
+            const Accidental* a = note->accidental();
+            if (a && a->accidentalType() != accidental && Accidental::carriesModifiers(a->accidentalType())) {
+                  stackModifier(note, accidental);
+                  setPlayNote(true);
+                  setSelectionChanged(true);
+                  return;
+                  }
+            // a sharp or flat from the key signature: written out, with the modifier beside it
+            if (!a) {
+                  const AccidentalVal v = chord->measure() ? chord->measure()->findAccidental(note) : AccidentalVal::NATURAL;
+                  if (v != AccidentalVal::NATURAL) {
+                        changeAccidental(note, Accidental::value2subtype(v));
+                        if (note->accidental())
+                              stackModifier(note, accidental);
+                        return;
+                        }
+                  }
+            }
       Segment* segment = chord->segment();
       if (!segment)
             return;
@@ -1939,12 +2003,15 @@ void Score::changeAccidental(Note* note, AccidentalType accidental)
             if (forceRemove) {
                   if (a)
                         lns->undoRemoveElement(a);
+                  removeStackedModifiers(ln);
                   if (ln->tieBack())
                         continue;
                   }
             else if (forceAdd) {
                   if (a)
                         undoRemoveElement(a);
+                  if (!Accidental::carriesModifiers(accidental))
+                        removeStackedModifiers(ln);
                   Accidental* a1 = new Accidental(lns);
                   a1->setParent(ln);
                   a1->setAccidentalType(accidental);

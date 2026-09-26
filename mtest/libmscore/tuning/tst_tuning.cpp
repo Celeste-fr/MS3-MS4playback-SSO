@@ -17,6 +17,9 @@
 #include <QJsonObject>
 
 #include "libmscore/chord.h"
+#include "libmscore/undo.h"
+#include "libmscore/symbol.h"
+#include "libmscore/accidental.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
 #include "libmscore/score.h"
@@ -41,6 +44,7 @@ class TestTuning : public QObject, public MTest
       void spelling();
       void justSpelling();
       void heji();
+      void stacked();
       void json();
       };
 
@@ -337,6 +341,115 @@ void TestTuning::heji()
       for (int i = 0; i < 8; ++i)
             QVERIFY2(qAbs(tuning.cents(ns[i]) - want[i]) < 0.002,
                      qPrintable(QString("note %1: want %2, got %3").arg(i).arg(want[i]).arg(tuning.cents(ns[i]))));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   stacked
+//    stacked accidentals: a Helmholtz-Ellis prime modifier beside a note's accidental (a Symbol
+//    on the note, which MuseScore 3.6 keeps): tuned with it and carried through the bar; drawn
+//    and spaced by the accidental; the editing rules; saved and read back
+//---------------------------------------------------------
+
+void TestTuning::stacked()
+      {
+      auto c = [](double num, double den) { return 1200.0 * std::log2(num / den); };
+      MasterScore* score = readScore(DIR + "stacked.mscx");
+      QVERIFY(score);
+      Temperament h = Temperament::preset("just");
+      h.just = Temperament::Just::HEJI;
+      score->setMetaTag(Temperament::metaTag, h.toJson());
+      score->doLayout();
+      auto notes = [](Score* sc) {
+            QList<Note*> ns;
+            for (Segment* s = sc->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  if (s->element(0) && s->element(0)->isChord())
+                        ns.append(toChord(s->element(0))->upNote());
+            return ns;
+            };
+      QList<Note*> ns = notes(score);
+      QCOMPARE(ns.size(), 4);
+      {
+      ScoreTuning tuning(score);
+      const double f = c(45, 32) - c(64, 63) - 500.0;          // F sharp, arrow down, septimal comma down
+      QVERIFY2(qAbs(tuning.cents(ns[0]) - f) < 0.002, qPrintable(QString::number(tuning.cents(ns[0]))));
+      QVERIFY(qAbs(tuning.cents(ns[1]) - f) < 0.002);          // carried through the bar
+      QVERIFY(qAbs(tuning.cents(ns[2]) - (c(81, 64) + c(33, 32) - 400.0)) < 0.002);   // E, undecimal up
+      QVERIFY(qAbs(tuning.cents(ns[3])) < 0.002);
+      }
+
+      // drawn by the accidental, to its left, and spaced with it; the symbol is saved there
+      const Accidental* a = ns[0]->accidental();
+      QVERIFY(a);
+      QCOMPARE(a->stackedModifiers().size(), 1);
+      Symbol* sym = nullptr;
+      for (Element* e : ns[0]->el())
+            if (e->isSymbol())
+                  sym = toSymbol(e);
+      QVERIFY(sym && sym->isStackedAccidental());
+      QVERIFY(sym->bbox().isEmpty());
+      QVERIFY(a->stackedModifierPos(sym->sym()).x() < 0.001);                    // leftmost
+      QVERIFY(a->width() > a->symWidth(SymId::accidentalSharpOneArrowDown) * 1.5);
+
+      // editing
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::RAISE_ONE_SEPTIMAL_COMMA);    // the other 7: replaces
+      score->endCmd();
+      QCOMPARE(ns[0]->accidentalType(), AccidentalType::SHARP_ONE_ARROW_DOWN);
+      QCOMPARE(ns[0]->accidental()->stackedModifiers(), QList<SymId>({ SymId::accidentalRaiseOneSeptimalComma }));
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::RAISE_ONE_UNDECIMAL_QUARTERTONE);   // another prime: added
+      score->endCmd();
+      QCOMPARE(ns[0]->accidental()->stackedModifiers(),
+               QList<SymId>({ SymId::accidentalRaiseOneUndecimalQuartertone, SymId::accidentalRaiseOneSeptimalComma }));
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::RAISE_ONE_SEPTIMAL_COMMA);    // the same again: taken away
+      score->endCmd();
+      QCOMPARE(ns[0]->accidental()->stackedModifiers(), QList<SymId>({ SymId::accidentalRaiseOneUndecimalQuartertone }));
+      score->undoRedo(true, nullptr);                                              // undo brings it back
+      QCOMPARE(ns[0]->accidental()->stackedModifiers().size(), 2);
+      score->startCmd();
+      score->changeAccidental(ns[3], AccidentalType::LOWER_ONE_SEPTIMAL_COMMA);    // no accidental: it is the accidental
+      score->endCmd();
+      QCOMPARE(ns[3]->accidentalType(), AccidentalType::LOWER_ONE_SEPTIMAL_COMMA);
+      QCOMPARE(ns[3]->pitch(), 60);
+
+      // saved and read back: the accidental, the symbols (where the accidental draws them, for
+      // MuseScore 3.6), the tuning
+      QVERIFY(saveScore(score, "stacked-saved.mscx"));
+      QVERIFY(saveScore(score, "stacked-saved.mscx"));          // (twice: no drift)
+      for (Element* e : ns[0]->el()) {
+            if (!e->isSymbol())
+                  continue;
+            const Accidental* acc = ns[0]->accidental();
+            const QPointF want = acc->pos() + acc->stackedModifierPos(toSymbol(e)->sym());
+            QVERIFY((e->pos() - want).manhattanLength() < 0.01);                   // (pos: with the offset)
+            QVERIFY(e->pos().x() < acc->pos().x() + acc->bbox().width() - acc->symWidth(SymId::accidentalSharpOneArrowDown));
+            }
+      MasterScore* again = readCreatedScore("stacked-saved.mscx");
+      QVERIFY(again);
+      again->doLayout();
+      QList<Note*> ns2 = notes(again);
+      QCOMPARE(ns2[0]->accidentalType(), AccidentalType::SHARP_ONE_ARROW_DOWN);
+      QCOMPARE(ns2[0]->accidental()->stackedModifiers().size(), 2);
+      {
+      ScoreTuning t1(score), t2(again);
+      for (int i = 0; i < 4; ++i)
+            QVERIFY(qAbs(t1.cents(ns[i]) - t2.cents(ns2[i])) < 1e-6);
+      QVERIFY(qAbs(t2.cents(ns2[0]) - (c(45, 32) + c(64, 63) + c(33, 32) - 500.0)) < 0.002);
+      QVERIFY(qAbs(t2.cents(ns2[3]) + c(64, 63)) < 0.002);
+      }
+
+      // the accidental taken away takes its modifiers with it
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::NONE);
+      score->endCmd();
+      QVERIFY(!ns[0]->accidental());
+      int left = 0;
+      for (Element* e : ns[0]->el())
+            left += e->isSymbol();
+      QCOMPARE(left, 0);
+      delete again;
       delete score;
       }
 
