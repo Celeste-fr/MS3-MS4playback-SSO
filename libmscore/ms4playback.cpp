@@ -600,10 +600,21 @@ static std::map<int, int> easingValueCurve(int ticksDuration, int stepsCount, in
 // the whole instrument; at a tick the more specific assignment wins
 void Dynamics::apply(const Element* e, int tick, int level)
       {
+      // VoiceAssignment: voices 2-4 CURRENT_VOICE_ONLY (EngravingCompat); voice 1 from the
+      // MuseScore 3 range (Read206::readDynamicRange): "staff" ALL_VOICE_IN_STAFF, else
+      // ALL_VOICE_IN_INSTRUMENT; the priority is the enum's value
       const bool ownVoice = e->voice() != 0;
-      const int priority = ownVoice ? 2 : 0;          // CURRENT_VOICE_ONLY : ALL_VOICE_IN_INSTRUMENT
+      Dynamic::Range range = Dynamic::Range::PART;
+      if (e->isDynamic())
+            range = toDynamic(e)->dynRange();
+      else if (e->isHairpin())
+            range = toHairpin(e)->dynRange();
+      const bool ownStaff = !ownVoice && range == Dynamic::Range::STAFF;
+      const int priority = ownVoice ? 2 : ownStaff ? 1 : 0;
       for (int track = _strack; track < _etrack; ++track) {
             if (ownVoice && track != e->track())
+                  continue;
+            if (ownStaff && track / VOICES != e->staffIdx())
                   continue;
             auto r = _byTrack[track].emplace(tick, Info { level, priority });
             if (!r.second && r.first->second.priority <= priority)
@@ -741,6 +752,30 @@ static int levelOf(const QString& type, bool atEnd)
       return NATURAL;
       }
 
+// Not MuseScore 4: a MuseScore 3 hairpin with a velocity change of its own and no end dynamic
+// MS4 takes (MS4 ignores the change and goes one step): the dynamic nearest to the velocity
+// MuseScore 3 reached, from the one nearest the level in force (MS3's velocities), and at least
+// MS4's one step. Scores written for MuseScore 3 set these to be heard (p < with +63: to ff).
+static int ms3VelocityChangeLevel(int levelFrom, int oneStep, bool crescendo, int veloChange)
+      {
+      static const std::pair<const char*, int> MS3 [] {
+            { "pppppp", 1 }, { "ppppp", 5 }, { "pppp", 10 }, { "ppp", 16 }, { "pp", 33 }, { "p", 49 },
+            { "mp", 64 }, { "mf", 80 }, { "f", 96 }, { "ff", 112 }, { "fff", 126 }, { "ffff", 127 },
+            };
+      auto nearest = [](auto key) {
+            int best = 0;
+            for (int i = 1; i < int(sizeof(MS3) / sizeof(MS3[0])); ++i)
+                  if (std::abs(key(i)) < std::abs(key(best)))
+                        best = i;
+            return best;
+            };
+      const int from = nearest([&](int i) { return levelOf(MS3[i].first, true) - levelFrom; });
+      const int velocity = qBound(1, MS3[from].second + (crescendo ? veloChange : -veloChange), 127);
+      const int to = nearest([&](int i) { return MS3[i].second - velocity; });
+      const int level = levelOf(MS3[to].first, true);
+      return crescendo ? std::max(level, oneStep) : std::min(level, oneStep);
+      }
+
 // PlaybackContext::handleHairpin: the hairpin's whole length at its place in this pass of the
 // unrolled score, even where it reaches past the pass (it then runs on into what plays next)
 void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
@@ -765,7 +800,9 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
       const bool hasNominalLevelTo = nominalLevelTo != NATURAL;
       const bool isCrescendo = hairpin->isCrescendo();
       const bool useNominalLevelTo = hasNominalLevelTo && (isCrescendo ? nominalLevelTo > levelFrom : nominalLevelTo < levelFrom);
-      const int levelTo = useNominalLevelTo ? nominalLevelTo : levelFrom + (isCrescendo ? STEP : -STEP);
+      int levelTo = useNominalLevelTo ? nominalLevelTo : levelFrom + (isCrescendo ? STEP : -STEP);
+      if (!useNominalLevelTo && hairpin->veloChange() != 0 && MScore::ms3HairpinVelocity && !qEnvironmentVariableIsSet("MS4_STRICT"))
+            levelTo = ms3VelocityChangeLevel(levelFrom, levelTo, isCrescendo, std::abs(hairpin->veloChange()));
 
       const int levelAtEnd = nominal(track, spannerTo + offset);
       const bool hasDynamicAtEndTick = levelAtEnd != NATURAL;

@@ -518,6 +518,8 @@ void updateExternalValuesFromPreferences() {
       MScore::harmonyPlayDisableCompatibility = preferences.getBool(PREF_SCORE_HARMONY_PLAY_DISABLE_COMPATIBILITY);
       MScore::harmonyPlayDisableNew = preferences.getBool(PREF_SCORE_HARMONY_PLAY_DISABLE_NEW);
       MScore::playRepeats = preferences.getBool(PREF_APP_PLAYBACK_PLAYREPEATS);
+      // (MS4_STRICT: exactly MS4, for the A/B regression)
+      MScore::ms3HairpinVelocity = preferences.getBool(PREF_APP_PLAYBACK_MS3_HAIRPIN_VELOCITY) && !qEnvironmentVariableIsSet("MS4_STRICT");
       MScore::playbackSpeedIncrement = preferences.getInt(PREF_APP_PLAYBACK_SPEEDINCREMENT);
       MScore::warnPitchRange = preferences.getBool(PREF_SCORE_NOTE_WARNPITCHRANGE);
       MScore::disableMouseEntry = preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT);

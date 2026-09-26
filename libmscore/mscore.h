@@ -349,6 +349,7 @@ class MScore {
       static bool harmonyPlayDisableCompatibility;
       static bool harmonyPlayDisableNew;
       static bool playRepeats;
+      static bool ms3HairpinVelocity;     // MS4 playback: a MuseScore 3 hairpin's velocity change (Ms4::Dynamics)
       static bool panPlayback;
       static int playbackSpeedIncrement;
       static qreal nudgeStep;

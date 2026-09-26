@@ -163,7 +163,10 @@ switch value of each articulation. For example:
   (the note's pitch in the drumset): `<Drum pitch="38" key="62" name="Snare hit"/>`, with
   optional `velocity` (fixed) and `ids` (only for these MuseScore instruments). A sound no
   patch has plays on the built-in synthesizer. `keyScan="1"` makes *Check articulations* play
-  every key of the patch and picture what each one plays, to find its `<Drum>` entries.
+  every key of the patch and picture what each one plays, to find its `<Drum>` entries, and
+  its keyswitches (a silent key that leaves the window changed): a patch with no CC switching
+  (Spitfire's "Kickstart" percussion) takes `<Switch type="keyswitch"/>` and its articulations'
+  keys as values.
 
 **The Spitfire UACC values have not been checked against the library.** They come from a
 community articulation bank for Spitfire Symphony Orchestra

@@ -176,9 +176,21 @@ for n in ('Motif Horns a4', 'Motif Trumpets a3', 'Motif Trombones a5'):
     SPITFIRE_ADD[n] = MOTIF
 # one sound: everything plays it (the switch value reaches a patch without articulations)
 ONE = [('Normal', 1, 'long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno', '')]
-for n in ('Grand Piano', 'Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone',
+for n in ('Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone',
           'Crotales', 'Tubular Bells', 'Desk Bells'):
     SPITFIRE_ADD[n] = ONE
+ALL = ONE[0][2]
+# Grand Piano: two sounds on UACC, Direct and Tape (Check articulations, 2026-09-25)
+SPITFIRE_ADD['Grand Piano'] = [('Direct', 1, ALL, ''), ('Tape', 2, '', '')]
+# SSO's tuned percussion ("Kickstart" patches) have no UACC: keyswitches from C-2 (key 0),
+# one per technique of the list on the right of its window. Their keys come from the
+# articulation check's key scan (keyScan); Timpani from the owner's screenshot (Timpani, Muted,
+# Roll, Roll Muted, Swell mf, Swell f, keyswitches marked from C-2), to be confirmed by it.
+KEYSCAN = {'Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone', 'Crotales',
+           'Tubular Bells', 'Desk Bells'}
+KEYSWITCHED = {'Timpani'}
+SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), ('Roll', 2, 'tremolo', ''),
+                           ('Roll Muted', 3, 'tremolo', 'muted'), ('Swell mf', 4, '', ''), ('Swell f', 5, '', '')]
 
 # Extra patches (soundlibrary.h): other patches a part plays alongside its main one, each loaded
 # only when the part's notation asks for one of its articulations (and, hosted, once it is set
@@ -244,7 +256,10 @@ def articulation(n, v, t, m):
 for bank,name,ids,pn in I:
     attrs=f'name={q(name)} ids={q(ids)}'
     if pn: attrs+=f' partName={q(pn)}'
+    if name in KEYSCAN: attrs+=' keyScan="1"'
     out.append(f'  <Instrument {attrs}>')
+    if name in KEYSWITCHED:
+        out.append('    <Switch type="keyswitch"/>')
     seen=set()
     for n,v in banks.get(bank, []):
         if n in seen or (name, n) in SPITFIRE_DROP: continue

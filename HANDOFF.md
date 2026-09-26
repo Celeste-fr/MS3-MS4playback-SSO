@@ -25,9 +25,12 @@ The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the 
 and 4 of the last request are done (Oboe Solo and Solo Cello pass; the scanned articulations
 are mapped where notation can ask for them). Still open:
 
-- The instruments the map lacked are added (see `CLAUDE.md`). Motif Brass's UACC numbers
-  come from the standard, not from Kontakt: the owner sets up those three patches (and the
-  percussion ones they use) and runs *Check*; fix any differences through the generator.
+- Sixth run (build before the extras): Motif Brass's six UACC values are right (names and
+  sound); Grand Piano has Direct (1) and Tape (2), now mapped; every patch had its instrument
+  loaded. The tuned percussion has no UACC setting: keyswitches from C-2 (Kickstart). The key
+  scan now finds keyswitches; the owner runs *Check* on the tuned patches they use, then map
+  them like Timpani (KEYSWITCHED and SPITFIRE_ADD in `gen_spitfire_sso.py`; techniques from the
+  names on the sheet, e.g. Roll → tremolo, Muted → muted, Swell → none).
 - Violins Long Sul G / Celli Long Sul C: settled, Spitfire's "All techniques" patch plays no
   samples for them (Kontakt's Voices stays 0).
 - Extra patches and percussion kits are in (see `CLAUDE.md`). The owner was asked to set up,

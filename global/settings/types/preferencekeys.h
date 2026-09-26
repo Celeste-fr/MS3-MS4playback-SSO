@@ -47,6 +47,7 @@
 #define PREF_APP_PLAYBACK_COUNTIN                           "application/playback/countin"
 #define PREF_APP_PLAYBACK_PANPLAYBACK                       "application/playback/panPlayback"
 #define PREF_APP_PLAYBACK_PLAYREPEATS                       "application/playback/playRepeats"
+#define PREF_APP_PLAYBACK_MS3_HAIRPIN_VELOCITY              "application/playback/ms3HairpinVelocityChange"
 #define PREF_APP_PLAYBACK_SPEEDINCREMENT                    "application/playback/speedIncrement"
 #define PREF_APP_PLAYBACK_LOOPTOSELECTIONONPLAY             "application/playback/setLoopToSelectionOnPlay"
 #define PREF_APP_PLAYBACK_DEFAULT_MASTER_VOLUME             "application/playback/defaultMasterVolume"

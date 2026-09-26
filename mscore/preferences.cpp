@@ -146,6 +146,7 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_APP_PLAYBACK_COUNTIN,                            new BoolPreference(false)},
             {PREF_APP_PLAYBACK_PANPLAYBACK,                        new BoolPreference(true, false)},
             {PREF_APP_PLAYBACK_PLAYREPEATS,                        new BoolPreference(true, false)},
+            {PREF_APP_PLAYBACK_MS3_HAIRPIN_VELOCITY,               new BoolPreference(true, true)},   // MuseScore 3 hairpins' velocity change (not MS4)
             {PREF_APP_PLAYBACK_SPEEDINCREMENT,                     new IntPreference(5)},
             {PREF_APP_PLAYBACK_LOOPTOSELECTIONONPLAY,              new BoolPreference(true)},
             {PREF_APP_PLAYBACK_DEFAULT_MASTER_VOLUME,              new DoublePreference(0.10)}, // results in -40dB

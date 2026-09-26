@@ -465,7 +465,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
             }
       if (has("\\b(senza|via|without)\\s+(sord|sordin|sordino|sordini|mute|mutes)") || has("\\b(open|aperto|offen)\\b"))
             s.modifiers.removeAll("muted");
-      else if (has("\\b(con\\s+sord|sord\\.|sordin|mute|muted|harmon|stopped|gestopft|bouche)"))
+      else if (has("\\b(con\\s+sord|sord\\.|sordin|mute|muted|harmon|stopped|gestopft|bouche|copert[oi]|muffled|damped)"))
             addModifier(s, "muted");
       if (has("\\bpizz"))
             s.pizzicato = true, s.colLegno = false;

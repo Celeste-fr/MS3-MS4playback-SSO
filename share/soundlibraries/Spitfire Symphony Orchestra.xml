@@ -596,33 +596,40 @@
     <Articulation name="Fx" value="90" techniques=""/>
   </Instrument>
   <Instrument name="Grand Piano" ids="piano grand-piano upright-piano">
+    <Articulation name="Direct" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Tape" value="2" techniques=""/>
+  </Instrument>
+  <Instrument name="Timpani" ids="timpani" keyScan="1">
+    <Switch type="keyswitch"/>
+    <Articulation name="Timpani" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
+    <Articulation name="Roll" value="2" techniques="tremolo"/>
+    <Articulation name="Roll Muted" value="3" techniques="tremolo" modifiers="muted"/>
+    <Articulation name="Swell mf" value="4" techniques=""/>
+    <Articulation name="Swell f" value="5" techniques=""/>
+  </Instrument>
+  <Instrument name="Celeste" ids="celesta" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
-  <Instrument name="Timpani" ids="timpani">
+  <Instrument name="Glockenspiel" ids="glockenspiel" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
-  <Instrument name="Celeste" ids="celesta">
+  <Instrument name="Xylophone" ids="xylophone" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
-  <Instrument name="Glockenspiel" ids="glockenspiel">
+  <Instrument name="Marimba" ids="marimba" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
-  <Instrument name="Xylophone" ids="xylophone">
+  <Instrument name="Vibraphone" ids="vibraphone" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
-  <Instrument name="Marimba" ids="marimba">
+  <Instrument name="Crotales" ids="crotales" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
-  <Instrument name="Vibraphone" ids="vibraphone">
+  <Instrument name="Tubular Bells" ids="tubular-bells" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
-  <Instrument name="Crotales" ids="crotales">
-    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
-  </Instrument>
-  <Instrument name="Tubular Bells" ids="tubular-bells">
-    <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
-  </Instrument>
-  <Instrument name="Desk Bells" ids="hand-bells">
+  <Instrument name="Desk Bells" ids="hand-bells" keyScan="1">
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
   </Instrument>
   <Instrument name="Violins 1 - Performance" with="Violins 1">

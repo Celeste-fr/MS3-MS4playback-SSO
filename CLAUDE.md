@@ -43,6 +43,17 @@ MS4 playback (see the header comment of each file):
 - `effects/musereverb`: MuseScore 4's reverb, the default master effect.
 - `libmscore/synthesizerstate.cpp`: upgrades MuseScore 3 synthesizer settings to the MS4
   defaults when they are read.
+- Dynamics scope (`Ms4::Dynamics::apply`): as MS4 reads a MuseScore 3 file, a voice-1 dynamic
+  or hairpin with the MS3 range "staff" (`<dynType>0</dynType>`) applies to its staff only
+  (ALL_VOICE_IN_STAFF, `Read206::readDynamicRange`), otherwise to the whole instrument; voices
+  2-4 to their own voice. (Found on the owner's "Ethanol": a piano ff on one staff.)
+- **One deliberate difference from MS4:** a MuseScore 3 hairpin with a velocity change of its
+  own and no end dynamic MS4 would take goes to the dynamic nearest the velocity MuseScore 3
+  reached (p < +63 → ff), not one step (`ms3VelocityChangeLevel`). MS4 ignores the change, so
+  such hairpins are near inaudible there; the owner's scores rely on them. Preference
+  `application/playback/ms3HairpinVelocityChange` (Advanced, on); `MS4_STRICT=1` in the
+  environment turns it off, and `ab/trace/regress.sh` sets it (the demos Brassed_Up and Dawn
+  change otherwise).
 
 Sound libraries (`libmscore/soundlibrary.h` explains the design):
 
@@ -63,6 +74,14 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   key (`SoundLib::drum()`); an unmapped sound stays on the built-in synthesizer (event patch
   tag -1: `finishLibraryEvents` leaves it unrouted, and its preset and CC11 go there too). A
   kit none of whose patches has a sound of the part is not routed at all.
+- Key scan (`ArticulationCheckDialog::checkKeys`, for `keyScan="1"` patches): each key 0-127
+  played; a picture while it sounds and one after release; a key that sounds (within 50 dB of
+  the loudest) or a silent key whose release picture differs from the previous key's (beyond
+  the window's own noise: a keyswitch) goes on the sheet and in results.json "keys"
+  (`keyswitch`, `map`, `mapKeyswitch`). SSO's tuned percussion (Timpani … Desk Bells, Kickstart
+  patches) has no UACC, only keyswitches from C-2: Timpani is mapped by key from the owner's
+  screenshot (0 Timpani, 1 Muted, 2 Roll, 3 Roll Muted, 4 Swell mf, 5 Swell f), the others wait
+  for their key scan.
 - Renderer: library parts play on the instrument's first channel. Each note and switch carries
   its patch (`NPlayEvent::libraryPatch`); `finishLibraryEvents` routes by channel and patch
   (`libRoutes`: channel -> port/channel per patch), drops redundant switches per patch, and

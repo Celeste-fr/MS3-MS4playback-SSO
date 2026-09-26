@@ -83,6 +83,7 @@ int     MScore::pedalEventsMinTicks;
 bool    MScore::harmonyPlayDisableCompatibility;
 bool    MScore::harmonyPlayDisableNew;
 bool    MScore::playRepeats;
+bool    MScore::ms3HairpinVelocity = true;
 bool    MScore::panPlayback;
 int     MScore::playbackSpeedIncrement;
 qreal   MScore::nudgeStep;

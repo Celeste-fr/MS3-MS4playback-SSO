@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 
 #include <QApplication>
@@ -786,6 +787,24 @@ void ArticulationCheckDialog::check()
 //    results.json "keys" (for the map's <Drum> entries)
 //---------------------------------------------------------
 
+// pixels that differ clearly between two pictures of the window
+static int differingPixels(const QImage& a, const QImage& b)
+      {
+      if (a.size() != b.size() || a.isNull())
+            return a.isNull() && b.isNull() ? 0 : std::numeric_limits<int>::max();
+      const QImage x = a.convertToFormat(QImage::Format_RGB32);
+      const QImage y = b.convertToFormat(QImage::Format_RGB32);
+      int n = 0;
+      for (int row = 0; row < x.height(); ++row) {
+            const QRgb* p = reinterpret_cast<const QRgb*>(x.constScanLine(row));
+            const QRgb* q = reinterpret_cast<const QRgb*>(y.constScanLine(row));
+            for (int col = 0; col < x.width(); ++col)
+                  n += std::abs(qRed(p[col]) - qRed(q[col])) + std::abs(qGreen(p[col]) - qGreen(q[col]))
+                     + std::abs(qBlue(p[col]) - qBlue(q[col])) > 60;
+            }
+      return n;
+      }
+
 static QString keyName(int key)
       {
       static const char* const NAMES[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -853,8 +872,10 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       // every key: a picture while it sounds, and its peak
       status(tr("opening its window…"));
       QImage base, again;
-      std::vector<QImage> shots;
+      std::vector<QImage> shots;          // while the key sounds
+      std::vector<QImage> released;       // after it: what the key changed for good (a keyswitch)
       std::vector<double> peaks;
+      int noise = 0;                      // what the window changes by itself
       Steinberg::IPlugView* view = p->createEditor();
       if (view) {
             QPointer<Vst3EditorWindow> w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
@@ -863,6 +884,8 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
             w->activateWindow();
             pump.run(2500);
             base = grabPlugin(w);
+            pump.run(GRAB_WAIT_MS);
+            noise = differingPixels(base, grabPlugin(w));
             for (int key = 0; key < 128 && !_cancel && w; ++key) {
                   status(tr("key %1 of 128").arg(key + 1));
                   pump.peak = 0;
@@ -873,6 +896,9 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
                   p->midi(ME_NOTEON, 0, key, 0);
                   pump.run(250);
                   peaks.push_back(pump.peak);
+                  pump.run(GRAB_WAIT_MS);
+                  if (w)
+                        released.push_back(grabPlugin(w));
                   }
             if (w) {
                   pump.run(1000);
@@ -895,47 +921,71 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       if (_cancel || peaks.size() < 128)
             return false;
 
-      // the keys that sound: 50 dB under the loudest counts as nothing
+      // the keys that sound: 50 dB under the loudest counts as nothing; a silent key that leaves
+      // the window changed (released, against the key before) is a keyswitch
       const double loudest = *std::max_element(peaks.begin(), peaks.end());
+      QStringList silentMapped;
       std::vector<int> soundKeys;
+      std::vector<int> switchKeys;
+      std::map<int, QString> keyswitchMap;    // the map's keyswitch values (a patch switched by key)
+      if (ins.switchType == SoundLib::SwitchType::KEYSWITCH)
+            for (const SoundLib::Articulation& a : ins.articulations)
+                  keyswitchMap[a.value] += (keyswitchMap[a.value].isEmpty() ? "" : " / ") + a.name;
       QJsonArray keys;
+      const int changeThreshold = std::max(30, 3 * noise);
       for (int key = 0; key < 128; ++key) {
             const double db = peaks[key] > 0 ? 20 * std::log10(peaks[key]) : -200;
             const bool sounds = peaks[key] > 1e-5 && peaks[key] > loudest * std::pow(10.0, -50 / 20.0);
-            if (sounds || mapped.count(key)) {
+            const bool switches = !sounds && int(released.size()) == 128
+               && differingPixels(released[key], key ? released[key - 1] : base) > changeThreshold;
+            if (sounds || switches || mapped.count(key) || keyswitchMap.count(key)) {
                   QJsonObject k;
                   k["key"] = key;
                   k["name"] = keyName(key);
                   k["peakDb"] = std::round(db * 10) / 10;
                   k["sounds"] = sounds;
+                  if (switches)
+                        k["keyswitch"] = true;
                   if (mapped.count(key))
                         k["map"] = mapped[key];
+                  if (keyswitchMap.count(key))
+                        k["mapKeyswitch"] = keyswitchMap[key];
                   keys.append(k);
                   }
             if (sounds)
                   soundKeys.push_back(key);
+            if (switches)
+                  switchKeys.push_back(key);
             }
       out["keys"] = keys;
-      QStringList silentMapped;
+      for (const auto& m : keyswitchMap)
+            if (std::find(switchKeys.begin(), switchKeys.end(), m.first) == switchKeys.end())
+                  silentMapped << QString("%1 (keyswitch %2)").arg(m.second).arg(m.first);
       for (const auto& m : mapped)
             if (std::find(soundKeys.begin(), soundKeys.end(), m.first) == soundKeys.end())
                   silentMapped << QString("%1 (%2)").arg(m.second).arg(m.first);
 
-      // the sheet: the keys that sound, the part of the window that changed
+      // the sheet: the keyswitches (after release), then the keys that sound, the part of the
+      // window that changed
+      std::vector<std::pair<int, bool>> drawn;        // key, a keyswitch
+      for (int key : switchKeys)
+            drawn.push_back({ key, true });
+      for (int key : soundKeys)
+            drawn.push_back({ key, false });
       QString fileBase = ins.name;
       fileBase.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
-      if (!base.isNull() && int(shots.size()) == 128) {
-            std::vector<QImage> soundShots;
-            for (int key : soundKeys)
-                  soundShots.push_back(shots[key]);
-            QRect crop = changedRegion(base, again.isNull() ? base : again, soundShots);
+      if (!base.isNull() && int(shots.size()) == 128 && int(released.size()) == 128) {
+            std::vector<QImage> changed;
+            for (const auto& d : drawn)
+                  changed.push_back(d.second ? released[d.first] : shots[d.first]);
+            QRect crop = changedRegion(base, again.isNull() ? base : again, changed);
             if (crop.isNull() || crop.width() * crop.height() > 0.7 * base.width() * base.height())
                   crop = base.rect();
             const double scale = std::min({ 1.0, 560.0 / crop.width(), 360.0 / crop.height() });
             const QSize cell(qMax(1, int(crop.width() * scale)), qMax(1, int(crop.height() * scale)));
             const int labelH = 22, pad = 12, headH = 40;
             const int columns = qBound(1, 1400 / (cell.width() + pad), 4);
-            const int rows = (int(soundKeys.size()) + columns - 1) / columns;
+            const int rows = (int(drawn.size()) + columns - 1) / columns;
             QImage sheet(pad + columns * (cell.width() + pad), headH + rows * (labelH + cell.height() + pad) + pad, QImage::Format_RGB32);
             sheet.fill(Qt::white);
             QPainter pt(&sheet);
@@ -948,37 +998,50 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
                         QString("%1 — %2 (keys)").arg(ins.name, _library->name));
             font.setPixelSize(13);
             pt.setFont(font);
-            for (int k = 0; k < int(soundKeys.size()); ++k) {
-                  const int key = soundKeys[k];
+            for (int k = 0; k < int(drawn.size()); ++k) {
+                  const int key = drawn[k].first;
+                  const bool ks = drawn[k].second;
                   const int x = pad + (k % columns) * (cell.width() + pad);
                   const int y = headH + (k / columns) * (labelH + cell.height() + pad);
-                  pt.setPen(Qt::black);
-                  pt.drawText(QRect(x, y, cell.width(), labelH), Qt::AlignLeft | Qt::AlignVCenter,
-                              QString("key %1 (%2) · %3 dB%4").arg(key).arg(keyName(key)).arg(20 * std::log10(peaks[key]), 0, 'f', 1)
-                              .arg(mapped.count(key) ? " · " + mapped[key] : QString()));
-                  pt.drawImage(QRect(QPoint(x, y + labelH), cell), shots[key].copy(crop));
+                  pt.setPen(ks ? QColor(0, 70, 160) : Qt::black);
+                  const QString label = ks
+                     ? QString("key %1 (%2) · keyswitch%3").arg(key).arg(keyName(key))
+                       .arg(keyswitchMap.count(key) ? " · " + keyswitchMap[key] : QString())
+                     : QString("key %1 (%2) · %3 dB%4").arg(key).arg(keyName(key)).arg(20 * std::log10(peaks[key]), 0, 'f', 1)
+                       .arg(mapped.count(key) ? " · " + mapped[key] : QString());
+                  pt.drawText(QRect(x, y, cell.width(), labelH), Qt::AlignLeft | Qt::AlignVCenter, label);
+                  pt.drawImage(QRect(QPoint(x, y + labelH), cell), (ks ? released[key] : shots[key]).copy(crop));
                   pt.setPen(QColor(200, 200, 200));
                   pt.drawRect(QRect(QPoint(x, y + labelH), cell).adjusted(0, 0, -1, -1));
                   }
             pt.end();
             sheet.save(folder + "/" + fileBase + ".png");
             base.save(folder + "/" + fileBase + " (window).png");
-            out["sheet"] = QJsonArray::fromVariantList([&]() { QVariantList l; for (int k : soundKeys) l << k; return l; }());
+            out["sheet"] = QJsonArray::fromVariantList([&]() { QVariantList l; for (const auto& d : drawn) l << d.first; return l; }());
             }
 
-      const bool passed = silentMapped.isEmpty() && !soundKeys.empty() && !ins.drums.empty();
+      // passed: a kit's patch whose mapped keys all sound; a patch switched by key whose mapped
+      // keyswitches all switch
+      const bool passed = silentMapped.isEmpty() && !soundKeys.empty()
+         && (!ins.drums.empty() || (!keyswitchMap.empty() && !switchKeys.empty()));
       out["passed"] = passed;
       results.append(out);
-      QStringList ranges;
-      for (size_t i = 0; i < soundKeys.size();) {
-            size_t j = i;
-            while (j + 1 < soundKeys.size() && soundKeys[j + 1] == soundKeys[j] + 1)
-                  ++j;
-            ranges << (i == j ? QString::number(soundKeys[i]) : QString("%1-%2").arg(soundKeys[i]).arg(soundKeys[j]));
-            i = j + 1;
-            }
-      const QString line = tr("%1 keys sound (%2)").arg(soundKeys.size()).arg(ranges.join(", "))
-         + (ins.drums.empty() ? tr("; the map has no drum keys for it yet") : QString());
+      auto rangesOf = [](const std::vector<int>& list) {
+            QStringList ranges;
+            for (size_t i = 0; i < list.size();) {
+                  size_t j = i;
+                  while (j + 1 < list.size() && list[j + 1] == list[j] + 1)
+                        ++j;
+                  ranges << (i == j ? QString::number(list[i]) : QString("%1-%2").arg(list[i]).arg(list[j]));
+                  i = j + 1;
+                  }
+            return ranges.join(", ");
+            };
+      QString line = tr("%1 keys sound (%2)").arg(soundKeys.size()).arg(rangesOf(soundKeys));
+      if (!switchKeys.empty())
+            line += tr("; %1 keyswitches (%2)").arg(switchKeys.size()).arg(rangesOf(switchKeys));
+      if (ins.drums.empty() && keyswitchMap.empty())
+            line += tr("; the map has no keys for it yet");
       summary += QString("## %1 (keys)\n   %2\n").arg(ins.name, line);
       for (const QString& s : silentMapped)
             summary += "   - " + tr("mapped but silent: %1").arg(s) + "\n";

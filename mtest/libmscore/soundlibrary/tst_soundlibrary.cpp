@@ -235,6 +235,18 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
       QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
+      // tuned percussion: switched by key (Kickstart patches have no UACC)
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            if (li.name == "Timpani") {
+                  QCOMPARE(int(li.switchType), int(SoundLib::SwitchType::KEYSWITCH));
+                  QVERIFY(li.keyScan);
+                  }
+            }
+      SoundLib::TextState coperti;
+      SoundLib::TextTechniques::apply("coperti", coperti);
+      QCOMPARE(valueFor("Timpani", { { "tremolo", "long" }, coperti.modifiers }), 3);       // Roll Muted
+      QCOMPARE(valueFor("Timpani", { { "long" }, {} }), 0);
+      QCOMPARE(patchFor("Grand Piano", { { "long" }, {} }), QString("Grand Piano: Direct"));
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (li.extra())
                   QVERIFY2(!li.ids.isEmpty(), qPrintable(li.name));
