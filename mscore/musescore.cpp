@@ -1991,7 +1991,9 @@ MuseScore::MuseScore()
       a->setCheckable(true);
       menuView->addAction(a);
 
-      menuView->addAction(getAction("sound-library"));
+      a = getAction("sound-library");         // a window that opens and closes, like the Mixer
+      a->setCheckable(true);
+      menuView->addAction(a);
 
       a = getAction("toggle-selection-window");
       a->setCheckable(true);
@@ -7002,9 +7004,19 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
       else if (cmd == "synth-control")
             showSynthControl(a->isChecked());
       else if (cmd == "sound-library") {
-            SoundLibraryDialog* d = new SoundLibraryDialog(SoundLib::current(), SoundLib::output(), this);
-            d->setAttribute(Qt::WA_DeleteOnClose);
-            d->show();
+            // one window, shown and closed by the View menu's check mark
+            static QPointer<SoundLibraryDialog> dialog;
+            if (a->isChecked()) {
+                  if (!dialog) {
+                        dialog = new SoundLibraryDialog(SoundLib::current(), SoundLib::output(), this);
+                        dialog->setAttribute(Qt::WA_DeleteOnClose);
+                        connect(dialog, &QObject::destroyed, a, [a]() { a->setChecked(false); });
+                        }
+                  dialog->show();
+                  dialog->raise();
+                  }
+            else if (dialog)
+                  dialog->close();
             }
       else if (cmd == "create-new-workspace") {
             mscore->createNewWorkspace();

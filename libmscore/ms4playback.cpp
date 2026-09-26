@@ -334,10 +334,22 @@ static Peak peak(const int* curve)
 //    FluidSequencer::expressionLevel
 //---------------------------------------------------------
 
+// the MuseScore 3 hairpin velocity change (MScore::ms3HairpinVelocity; not with MS4_STRICT)
+bool ms3HairpinVelocity()
+      {
+      static const bool strict = qEnvironmentVariableIsSet("MS4_STRICT");
+      return MScore::ms3HairpinVelocity && !strict;
+      }
+
+static const int MIN_EXPRESSION_LEVEL = 3250;      // ppp
+
 int expressionLevel(int level)
       {
-      static const int MIN_LEVEL = 3250;      // ppp
+      static const int MIN_LEVEL = MIN_EXPRESSION_LEVEL;
       static const int MAX_LEVEL = 6750;      // fff
+      // (not MS4: under ppp down to silence, where a MuseScore 3 hairpin takes it)
+      if (level < MIN_LEVEL && ms3HairpinVelocity())
+            return qBound(0, int(std::round(16.0 * level / MIN_LEVEL)), 16);
       if (level <= MIN_LEVEL)
             return 16;
       if (level >= MAX_LEVEL)
@@ -752,28 +764,15 @@ static int levelOf(const QString& type, bool atEnd)
       return NATURAL;
       }
 
-// Not MuseScore 4: a MuseScore 3 hairpin with a velocity change of its own and no end dynamic
-// MS4 takes (MS4 ignores the change and goes one step): the dynamic nearest to the velocity
-// MuseScore 3 reached, from the one nearest the level in force (MS3's velocities), and at least
-// MS4's one step. Scores written for MuseScore 3 set these to be heard (p < with +63: to ff).
-static int ms3VelocityChangeLevel(int levelFrom, int oneStep, bool crescendo, int veloChange)
+// the level expressionLevel() turns into this CC11 value (0-127)
+static int levelOfExpression(double value)
       {
-      static const std::pair<const char*, int> MS3 [] {
-            { "pppppp", 1 }, { "ppppp", 5 }, { "pppp", 10 }, { "ppp", 16 }, { "pp", 33 }, { "p", 49 },
-            { "mp", 64 }, { "mf", 80 }, { "f", 96 }, { "ff", 112 }, { "fff", 126 }, { "ffff", 127 },
-            };
-      auto nearest = [](auto key) {
-            int best = 0;
-            for (int i = 1; i < int(sizeof(MS3) / sizeof(MS3[0])); ++i)
-                  if (std::abs(key(i)) < std::abs(key(best)))
-                        best = i;
-            return best;
-            };
-      const int from = nearest([&](int i) { return levelOf(MS3[i].first, true) - levelFrom; });
-      const int velocity = qBound(1, MS3[from].second + (crescendo ? veloChange : -veloChange), 127);
-      const int to = nearest([&](int i) { return MS3[i].second - velocity; });
-      const int level = levelOf(MS3[to].first, true);
-      return crescendo ? std::max(level, oneStep) : std::min(level, oneStep);
+      if (value < 16)
+            return int(std::round(value * MIN_EXPRESSION_LEVEL / 16));
+      int level = int(std::round(MIN_EXPRESSION_LEVEL + (value - 16) * STEP / 16));
+      if (level == NATURAL)
+            ++level;                  // (NATURAL is half a step down in expressionLevel)
+      return level;
       }
 
 // PlaybackContext::handleHairpin: the hairpin's whole length at its place in this pass of the
@@ -801,8 +800,16 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
       const bool isCrescendo = hairpin->isCrescendo();
       const bool useNominalLevelTo = hasNominalLevelTo && (isCrescendo ? nominalLevelTo > levelFrom : nominalLevelTo < levelFrom);
       int levelTo = useNominalLevelTo ? nominalLevelTo : levelFrom + (isCrescendo ? STEP : -STEP);
-      if (!useNominalLevelTo && hairpin->veloChange() != 0 && MScore::ms3HairpinVelocity && !qEnvironmentVariableIsSet("MS4_STRICT"))
-            levelTo = ms3VelocityChangeLevel(levelFrom, levelTo, isCrescendo, std::abs(hairpin->veloChange()));
+
+      // Not MuseScore 4: a MuseScore 3 hairpin with a velocity change of its own and no end
+      // dynamic MS4 would take changes the volume as MuseScore 3 did: from the value in force by
+      // the change (0-127, down to silence), on its curve (MS4 ignores the change and goes one
+      // step: near inaudible). MS4's CC11 values match MuseScore 3's velocities (pp 32/33, mp 64).
+      const bool ms3 = !useNominalLevelTo && hairpin->veloChange() != 0 && ms3HairpinVelocity();
+      const int v0 = expressionLevel(levelFrom);
+      const int v1 = qBound(0, v0 + (isCrescendo ? 1 : -1) * std::abs(hairpin->veloChange()), 127);
+      if (ms3)
+            levelTo = levelOfExpression(v1);
 
       const int levelAtEnd = nominal(track, spannerTo + offset);
       const bool hasDynamicAtEndTick = levelAtEnd != NATURAL;
@@ -814,8 +821,30 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
             return;
 
       const int steps = std::max(durationTicks / (DIVISION / 4), 24);
-      for (const auto& p : easingValueCurve(durationTicks, steps, levelTo - levelFrom, hairpin->veloChangeMethod()))
-            apply(hairpin, spannerFrom + p.first + offset, levelFrom + p.second);
+      if (ms3) {
+            // as MuseScore 3 played it (ChangeMap::interpolateRamp): the whole change along its
+            // curve, clipped to 0-127 (a -127 from 68 is silent a third of the way in)
+            const int change = (isCrescendo ? 1 : -1) * std::abs(hairpin->veloChange());
+            auto part = [&](double x) {
+                  switch (hairpin->veloChangeMethod()) {
+                        case ChangeMethod::EASE_IN:     return change * (1 - std::cos(x * M_PI / 2));
+                        case ChangeMethod::EASE_OUT:    return change * std::sin(x * M_PI / 2);
+                        case ChangeMethod::EASE_IN_OUT: return change * (1 - std::cos(x * M_PI)) / 2;
+                        case ChangeMethod::EXPONENTIAL: return (change > 0 ? 1 : -1) * (std::pow(std::abs(change) + 1, x) - 1);
+                        default:                        return change * x;
+                        }
+                  };
+            const int points = std::min(std::max(steps, 2 * std::abs(change)), 256);
+            for (int i = 0; i <= points; ++i) {
+                  const double x = double(i) / points;
+                  const int value = qBound(0, v0 + int(part(x)), 127);
+                  apply(hairpin, spannerFrom + int(std::round(x * durationTicks)) + offset, levelOfExpression(value));
+                  }
+            }
+      else {
+            for (const auto& p : easingValueCurve(durationTicks, steps, levelTo - levelFrom, hairpin->veloChangeMethod()))
+                  apply(hairpin, spannerFrom + p.first + offset, levelFrom + p.second);
+            }
 
       if (hasNominalLevelTo && !useNominalLevelTo && !hasDynamicAtEndTick)
             apply(hairpin, spannerTo + offset, nominalLevelTo);

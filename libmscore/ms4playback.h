@@ -74,6 +74,7 @@ int pitchBendLevel(int pitchLevel);       // FluidSequencer::pitchBendLevel: 14-
 
 Family family(const Instrument* instrument);
 int expressionLevel(int level);           // FluidSequencer::expressionLevel: MS4 level -> CC11 / velocity
+bool ms3HairpinVelocity();                // MuseScore 3 hairpins' velocity change (not MS4)
 NoteResult note(Family family, const std::vector<ArtRef>& arts, int dynamicLevel, bool snd);
 
 //---------------------------------------------------------

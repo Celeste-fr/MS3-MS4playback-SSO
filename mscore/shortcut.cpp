@@ -2966,7 +2966,7 @@ Shortcut Shortcut::_sc[] = {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
          "sound-library",
-         QT_TRANSLATE_NOOP("action","Sound Library…"),
+         QT_TRANSLATE_NOOP("action","Sound Library"),
          0,
          QT_TRANSLATE_NOOP("action","Sound library: where each part plays, and the setup of its plug-in"),
          Icons::Invalid_ICON,
