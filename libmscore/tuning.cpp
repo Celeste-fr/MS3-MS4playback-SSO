@@ -92,10 +92,11 @@ bool Temperament::isChain(double* step) const
 //    commas), each flat 24/25.
 //---------------------------------------------------------
 
+static const double FIFTH = 1200.0 * std::log2(3.0 / 2.0) - 700.0;      // a pure fifth: +1.955
+static const double COMMA = 1200.0 * std::log2(81.0 / 80.0);             // the syntonic comma: 21.506
+
 double Temperament::johnstonCents(int tpc, int rootTpc)
       {
-      static const double FIFTH = 1200.0 * std::log2(3.0 / 2.0) - 700.0;      // +1.955
-      static const double COMMA = 1200.0 * std::log2(81.0 / 80.0);             // 21.506
       const int k = tpc - rootTpc;                           // fifths from the root
       const int a = (k + 1 >= 0) ? (k + 1) / 7 : -((6 - (k + 1)) / 7);      // sharps (flats < 0) over the major scale
       const int letter = k - 7 * a;                          // -1 (4th) … 5 (7th)
@@ -103,9 +104,15 @@ double Temperament::johnstonCents(int tpc, int rootTpc)
       return k * FIFTH - commas * COMMA;
       }
 
+// Helmholtz-Ellis' unmarked notes: pure fifths from the root
+double Temperament::pythagoreanCents(int tpc, int rootTpc)
+      {
+      return (tpc - rootTpc) * FIFTH;
+      }
+
 bool Temperament::isJustBySpelling() const
       {
-      return justSpelled && name == "just";
+      return just != Just::KEYS && name == "just";
       }
 
 //---------------------------------------------------------
@@ -118,6 +125,8 @@ double Temperament::cents(int tpc, int pitch) const
       if (isJustBySpelling() && tpcIsValid(tpc)) {
             const int rootTpc = Tpc::TPC_C + naturalFifths(mod12(root));
             const int pureTpc = Tpc::TPC_C + naturalFifths(mod12(pure));
+            if (just == Just::HEJI)
+                  return pythagoreanCents(tpc, rootTpc) - pythagoreanCents(pureTpc, rootTpc) + tweak;
             return johnstonCents(tpc, rootTpc) - johnstonCents(pureTpc, rootTpc) + tweak;
             }
       double step;
@@ -201,7 +210,8 @@ Temperament Temperament::fromJson(const QString& json, bool* ok)
       t.pure  = mod12(o.value("pure").toInt(0));
       t.tweak = o.value("tweak").toDouble(0.0);
       t.spelled = o.value("spelled").toBool(true);
-      t.justSpelled = o.value("just").toString() == "spelled";
+      const QString just = o.value("just").toString();
+      t.just = just == "spelled" ? Just::JOHNSTON : just == "heji" ? Just::HEJI : Just::KEYS;
       const QJsonArray a = o.value("offsets").toArray();
       if (a.size() == 12) {
             for (int i = 0; i < 12; ++i)
@@ -229,15 +239,15 @@ QString Temperament::toJson() const
       o["tweak"] = tweak;
       if (!spelled)
             o["spelled"] = false;
-      if (justSpelled)
-            o["just"] = "spelled";
+      if (just != Just::KEYS)
+            o["just"] = just == Just::HEJI ? "heji" : "spelled";
       return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
       }
 
 bool Temperament::operator==(const Temperament& t) const
       {
       if (name != t.name || root != t.root || pure != t.pure || qAbs(tweak - t.tweak) > 1e-9 || spelled != t.spelled
-          || justSpelled != t.justSpelled)
+          || just != t.just)
             return false;
       for (int i = 0; i < 12; ++i)
             if (qAbs(offsets[i] - t.offsets[i]) > 1e-9)
@@ -263,7 +273,53 @@ ScoreTuning::ScoreTuning(const Score* score)
       _equal = _temperament.isEqual();
       }
 
-double ScoreTuning::accidentalCents(AccidentalType type, bool* valued)
+//---------------------------------------------------------
+//   hejiAccidental
+//    the Helmholtz-Ellis accidentals with syntonic-comma arrows (one to three, up or down, on a
+//    double flat … double sharp): MuseScore 3.6 gives them no pitch (they play as naturals and
+//    have no value in its table). Their sharps and arrows, as HEJI defines them
+//---------------------------------------------------------
+
+bool ScoreTuning::hejiAccidental(AccidentalType type, int* sharps, int* arrows)
+      {
+      struct H { AccidentalType type; int sharps, arrows; };
+      static const H heji[] = {
+            { AccidentalType::DOUBLE_FLAT_ONE_ARROW_DOWN, -2, -1 }, { AccidentalType::FLAT_ONE_ARROW_DOWN, -1, -1 },
+            { AccidentalType::NATURAL_ONE_ARROW_DOWN, 0, -1 }, { AccidentalType::SHARP_ONE_ARROW_DOWN, 1, -1 },
+            { AccidentalType::DOUBLE_SHARP_ONE_ARROW_DOWN, 2, -1 },
+            { AccidentalType::DOUBLE_FLAT_ONE_ARROW_UP, -2, 1 }, { AccidentalType::FLAT_ONE_ARROW_UP, -1, 1 },
+            { AccidentalType::NATURAL_ONE_ARROW_UP, 0, 1 }, { AccidentalType::SHARP_ONE_ARROW_UP, 1, 1 },
+            { AccidentalType::DOUBLE_SHARP_ONE_ARROW_UP, 2, 1 },
+            { AccidentalType::DOUBLE_FLAT_TWO_ARROWS_DOWN, -2, -2 }, { AccidentalType::FLAT_TWO_ARROWS_DOWN, -1, -2 },
+            { AccidentalType::NATURAL_TWO_ARROWS_DOWN, 0, -2 }, { AccidentalType::SHARP_TWO_ARROWS_DOWN, 1, -2 },
+            { AccidentalType::DOUBLE_SHARP_TWO_ARROWS_DOWN, 2, -2 },
+            { AccidentalType::DOUBLE_FLAT_TWO_ARROWS_UP, -2, 2 }, { AccidentalType::FLAT_TWO_ARROWS_UP, -1, 2 },
+            { AccidentalType::NATURAL_TWO_ARROWS_UP, 0, 2 }, { AccidentalType::SHARP_TWO_ARROWS_UP, 1, 2 },
+            { AccidentalType::DOUBLE_SHARP_TWO_ARROWS_UP, 2, 2 },
+            { AccidentalType::DOUBLE_FLAT_THREE_ARROWS_DOWN, -2, -3 }, { AccidentalType::FLAT_THREE_ARROWS_DOWN, -1, -3 },
+            { AccidentalType::NATURAL_THREE_ARROWS_DOWN, 0, -3 }, { AccidentalType::SHARP_THREE_ARROWS_DOWN, 1, -3 },
+            { AccidentalType::DOUBLE_SHARP_THREE_ARROWS_DOWN, 2, -3 },
+            { AccidentalType::DOUBLE_FLAT_THREE_ARROWS_UP, -2, 3 }, { AccidentalType::FLAT_THREE_ARROWS_UP, -1, 3 },
+            { AccidentalType::NATURAL_THREE_ARROWS_UP, 0, 3 }, { AccidentalType::SHARP_THREE_ARROWS_UP, 1, 3 },
+            { AccidentalType::DOUBLE_SHARP_THREE_ARROWS_UP, 2, 3 },
+            };
+      for (const H& h : heji) {
+            if (h.type == type) {
+                  *sharps = h.sharps;
+                  *arrows = h.arrows;
+                  return true;
+                  }
+            }
+      return false;
+      }
+
+//---------------------------------------------------------
+//   accidentalCents, symbolCents
+//    cents from the natural note: MuseScore 3.6.2's value, else a Helmholtz-Ellis accidental's
+//    (its sharps and commas; spelled: its sharps, which the note's spelling lacks)
+//---------------------------------------------------------
+
+double ScoreTuning::accidentalCents(AccidentalType type, bool* valued, int* spelled)
       {
       static const QHash<int, double> table = [] {
             QHash<int, double> h;
@@ -271,12 +327,22 @@ double ScoreTuning::accidentalCents(AccidentalType type, bool* valued)
                   h.insert(int(a.type), a.cents);
             return h;
             }();
+      if (spelled)
+            *spelled = 0;
       auto it = table.find(int(type));
       *valued = it != table.end();
-      return *valued ? *it : 0.0;
+      if (*valued)
+            return *it;
+      int sharps, arrows;
+      if (!hejiAccidental(type, &sharps, &arrows))
+            return 0.0;
+      *valued = true;
+      if (spelled)
+            *spelled = sharps;
+      return 100.0 * sharps + COMMA * arrows;
       }
 
-double ScoreTuning::symbolCents(SymId sym, bool* valued)
+double ScoreTuning::symbolCents(SymId sym, bool* valued, int* spelled)
       {
       static const QHash<int, double> table = [] {
             QHash<int, double> h;
@@ -284,9 +350,25 @@ double ScoreTuning::symbolCents(SymId sym, bool* valued)
                   h.insert(int(a.sym), a.cents);
             return h;
             }();
+      static const QHash<int, AccidentalType> hejiSyms = [] {
+            QHash<int, AccidentalType> h;
+            for (int i = 0; i < int(AccidentalType::END); ++i) {
+                  int s, a;
+                  if (hejiAccidental(AccidentalType(i), &s, &a))
+                        h.insert(int(Accidental::subtype2symbol(AccidentalType(i))), AccidentalType(i));
+                  }
+            return h;
+            }();
+      if (spelled)
+            *spelled = 0;
       auto it = table.find(int(sym));
       *valued = it != table.end();
-      return *valued ? *it : 0.0;
+      if (*valued)
+            return *it;
+      auto h = hejiSyms.find(int(sym));
+      if (h == hejiSyms.end())
+            return 0.0;
+      return accidentalCents(*h, valued, spelled);
       }
 
 //---------------------------------------------------------
@@ -358,16 +440,17 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
       const bool drum = staff->isDrumStaff(tick);
       const bool pitchLines = staff->isPitchedStaff(tick);      // tablature has no staff lines of pitch
 
-      struct Target { bool valued; double cents; };
+      struct Target { bool valued; double cents; int spelled; };    // spelled: sharps the note's spelling lacks
       QHash<int, Target> keyLines;                               // line mod 7 -> the custom key signature's symbol
       if (pitchLines) {
             const KeySigEvent ke = staff->keySigEvent(tick);
             if (ke.custom()) {
                   for (const KeySym& ks : ke.keySymbols()) {
                         bool valued;
-                        const double c = symbolCents(ks.sym, &valued);
+                        int spelled;
+                        const double c = symbolCents(ks.sym, &valued, &spelled);
                         if (valued)                              // no value in MuseScore: left alone
-                              keyLines.insert(mod7(int(std::lround(ks.spos.y() * 2.0))), { true, c });
+                              keyLines.insert(mod7(int(std::lround(ks.spos.y() * 2.0))), { true, c, spelled });
                         }
                   }
             }
@@ -381,7 +464,6 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
                   _notes.insert(n, t);
                   return;
                   }
-            const double temperament = _equal ? 0.0 : _temperament.cents(n->tpc1(), n->pitch());
             if (n->tieBack() && n->firstTiedNote() && n->firstTiedNote() != n) {
                   t = tuning(n->firstTiedNote());                // sounds as the tie's start
                   t.tied = true;
@@ -393,15 +475,15 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
                   _notes.insert(n, t);
                   return;
                   }
-            t.temperament = temperament;
             const int line = n->line();
             const int plain = 100 * (((n->tpc() + 1) / 7) - 2);  // the note's spelling as MuseScore plays it
-            Target target { true, double(plain) };
+            Target target { true, double(plain), 0 };
             const AccidentalType acc = n->accidentalType();
             if (acc != AccidentalType::NONE) {
                   bool valued;
-                  const double c = accidentalCents(acc, &valued);
-                  target = { valued, c };
+                  int spelled;
+                  const double c = accidentalCents(acc, &valued, &spelled);
+                  target = { valued, c, spelled };
                   bar.insert(line, target);
                   }
             else if (bar.contains(line))
@@ -415,6 +497,9 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
                   _notes.insert(n, t);
                   return;
                   }
+            // (a Helmholtz-Ellis sharp, which MuseScore plays as a natural: the temperament of the
+            // sharp's spelling)
+            t.temperament = _equal ? 0.0 : _temperament.cents(n->tpc1() + 7 * target.spelled, n->pitch() + target.spelled);
             t.accidental = std::round((target.cents - plain) * 1000.0) / 1000.0 + 0.0;
             const double computed = t.accidental + t.temperament;
             // the note's own tuning counts, unless the Microtonal Tuner plugin wrote it in

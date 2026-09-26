@@ -40,6 +40,7 @@ class TestTuning : public QObject, public MTest
       void presets();
       void spelling();
       void justSpelling();
+      void heji();
       void json();
       };
 
@@ -248,9 +249,9 @@ void TestTuning::justSpelling()
             return 1200.0 * std::log2(num / den) - 100.0 * semitones;
             };
       Temperament j = Temperament::preset("just");
-      QVERIFY(!j.justSpelled);                                     // the plugin's keys by default
+      QVERIFY(j.just == Temperament::Just::KEYS);                                     // the plugin's keys by default
       QCOMPARE(j.cents(Tpc::TPC_D_B, 61), j.cents(Tpc::TPC_C_S, 61));
-      j.justSpelled = true;
+      j.just = Temperament::Just::JOHNSTON;
       struct { int tpc; double num, den; int semitones; } ratios[] = {
             { Tpc::TPC_C, 1, 1, 0 }, { Tpc::TPC_D, 9, 8, 2 }, { Tpc::TPC_E, 5, 4, 4 }, { Tpc::TPC_F, 4, 3, 5 },
             { Tpc::TPC_G, 3, 2, 7 }, { Tpc::TPC_A, 5, 3, 9 }, { Tpc::TPC_B, 15, 8, 11 },
@@ -265,7 +266,7 @@ void TestTuning::justSpelling()
       QVERIFY(qAbs(j.cents(Tpc::TPC_A_B, 68) - j.cents(Tpc::TPC_G_S, 68) - 1200.0 * std::log2(128.0 / 125.0)) < 1e-9);
       // root G (1), pure tone G: G's major scale, B its pure third
       Temperament g = Temperament::preset("just", 1, 1, 0.0);
-      g.justSpelled = true;
+      g.just = Temperament::Just::JOHNSTON;
       QCOMPARE(g.cents(Tpc::TPC_G, 67), 0.0);
       QVERIFY(qAbs(g.cents(Tpc::TPC_B, 71) - g.cents(Tpc::TPC_G, 67) - fromEqual(5, 4, 4)) < 1e-9);
       QVERIFY(qAbs(g.cents(Tpc::TPC_F_S, 66) - fromEqual(15, 8, 11)) < 1e-9);
@@ -278,9 +279,65 @@ void TestTuning::justSpelling()
                   QVERIFY2(qAbs(keys.cents(r.tpc, 60 + r.semitones) - j.cents(r.tpc, 60 + r.semitones)) < 1.0,
                            qPrintable(QString("tpc %1").arg(r.tpc)));
       // a JSON round trip keeps the choice, and leaves it out when off
-      QVERIFY(Temperament::fromJson(j.toJson()).justSpelled);
+      QVERIFY(Temperament::fromJson(j.toJson()).just == Temperament::Just::JOHNSTON);
+      QVERIFY(j.toJson().contains("\"just\":\"spelled\""));
       QVERIFY(!keys.toJson().contains("\"just\":"));
       QVERIFY(Temperament::fromJson(j.toJson()) == j);
+      }
+
+//---------------------------------------------------------
+//   heji
+//    Just intonation by spelling as Helmholtz-Ellis notates it: unmarked notes Pythagorean from
+//    the root, each arrow a syntonic comma; HEJI's accidentals (which MuseScore 3 plays as
+//    naturals) sound as written, carried through the bar like any accidental
+//---------------------------------------------------------
+
+void TestTuning::heji()
+      {
+      auto fromEqual = [](double num, double den, int semitones) {
+            return 1200.0 * std::log2(num / den) - 100.0 * semitones;
+            };
+      Temperament h = Temperament::preset("just");
+      h.just = Temperament::Just::HEJI;
+      QVERIFY(qAbs(h.cents(Tpc::TPC_E, 64) - fromEqual(81, 64, 4)) < 1e-9);
+      QVERIFY(qAbs(h.cents(Tpc::TPC_C_S, 61) - fromEqual(2187, 2048, 1)) < 1e-9);
+      QVERIFY(qAbs(h.cents(Tpc::TPC_D_B, 61) - fromEqual(256, 243, 1)) < 1e-9);
+      QVERIFY(Temperament::fromJson(h.toJson()).just == Temperament::Just::HEJI);
+      QVERIFY(h.toJson().contains("\"just\":\"heji\""));
+
+      // the accidentals: sharps and commas, whatever the tuning
+      bool valued;
+      int spelled;
+      QVERIFY(qAbs(ScoreTuning::accidentalCents(AccidentalType::SHARP_ONE_ARROW_DOWN, &valued, &spelled) - (100.0 - 21.5063)) < 1e-3);
+      QVERIFY(valued);
+      QCOMPARE(spelled, 1);
+      QVERIFY(qAbs(ScoreTuning::accidentalCents(AccidentalType::DOUBLE_FLAT_THREE_ARROWS_UP, &valued, &spelled) - (-200.0 + 3 * 21.5063)) < 1e-3);
+      QCOMPARE(spelled, -2);
+
+      MasterScore* score = readScore(DIR + "heji.mscx");
+      QVERIFY(score);
+      score->setMetaTag(Temperament::metaTag, h.toJson());
+      ScoreTuning tuning(score);
+      QList<const Note*> ns;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  ns.append(toChord(s->element(0))->upNote());
+      QCOMPARE(ns.size(), 8);
+      // cents from the written note's equal-tempered pitch (MuseScore plays HEJI's accidentals as naturals)
+      const double want[8] = {
+            0.0,                                       // C
+            fromEqual(81, 64, 4),                      // E: Pythagorean
+            fromEqual(5, 4, 4),                        // E, one arrow down: 5/4
+            fromEqual(45, 32, 6) + 100.0,              // F sharp, one arrow down: 45/32, above the written F
+            fromEqual(4, 3, 5),                        // F (a new bar)
+            fromEqual(16, 9, 10) + 1200.0 * std::log2(81.0 / 80.0) * 2 - 100.0,   // B flat, two arrows up
+            fromEqual(9, 8, 2),                        // D
+            fromEqual(16, 9, 10) + 1200.0 * std::log2(81.0 / 80.0) * 2 - 100.0,   // B: the bar's B flat, two up
+            };
+      for (int i = 0; i < 8; ++i)
+            QVERIFY2(qAbs(tuning.cents(ns[i]) - want[i]) < 0.002,
+                     qPrintable(QString("note %1: want %2, got %3").arg(i).arg(want[i]).arg(tuning.cents(ns[i]))));
+      delete score;
       }
 
 //---------------------------------------------------------
