@@ -20,6 +20,8 @@
 #include "sym.h"
 #include "tuningtables.h"
 
+#include <cmath>
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -82,12 +84,42 @@ bool Temperament::isChain(double* step) const
       }
 
 //---------------------------------------------------------
+//   johnstonCents
+//    Just intonation by spelling, as Ben Johnston's notation defines it, relative to the root
+//    (rootTpc as 1/1), in cents from equal temperament. A spelling k fifths from the root is
+//    k pure fifths (3/2), less a syntonic comma (81/80) for the 6th, 3rd and 7th of the root's
+//    major scale (5/3, 5/4, 15/8), and each sharp is 25/24 (a Pythagorean sharp less two
+//    commas), each flat 24/25.
+//---------------------------------------------------------
+
+double Temperament::johnstonCents(int tpc, int rootTpc)
+      {
+      static const double FIFTH = 1200.0 * std::log2(3.0 / 2.0) - 700.0;      // +1.955
+      static const double COMMA = 1200.0 * std::log2(81.0 / 80.0);             // 21.506
+      const int k = tpc - rootTpc;                           // fifths from the root
+      const int a = (k + 1 >= 0) ? (k + 1) / 7 : -((6 - (k + 1)) / 7);      // sharps (flats < 0) over the major scale
+      const int letter = k - 7 * a;                          // -1 (4th) … 5 (7th)
+      const int commas = (letter >= 3 ? 1 : 0) + 2 * a;
+      return k * FIFTH - commas * COMMA;
+      }
+
+bool Temperament::isJustBySpelling() const
+      {
+      return justSpelled && name == "just";
+      }
+
+//---------------------------------------------------------
 //   cents
 //    the temperament's offset for a note of this spelling (tpc, concert) and pitch
 //---------------------------------------------------------
 
 double Temperament::cents(int tpc, int pitch) const
       {
+      if (isJustBySpelling() && tpcIsValid(tpc)) {
+            const int rootTpc = Tpc::TPC_C + naturalFifths(mod12(root));
+            const int pureTpc = Tpc::TPC_C + naturalFifths(mod12(pure));
+            return johnstonCents(tpc, rootTpc) - johnstonCents(pureTpc, rootTpc) + tweak;
+            }
       double step;
       if (spelled && tpcIsValid(tpc) && isChain(&step)) {
             const int fr = naturalFifths(mod12(root));
@@ -169,6 +201,7 @@ Temperament Temperament::fromJson(const QString& json, bool* ok)
       t.pure  = mod12(o.value("pure").toInt(0));
       t.tweak = o.value("tweak").toDouble(0.0);
       t.spelled = o.value("spelled").toBool(true);
+      t.justSpelled = o.value("just").toString() == "spelled";
       const QJsonArray a = o.value("offsets").toArray();
       if (a.size() == 12) {
             for (int i = 0; i < 12; ++i)
@@ -196,12 +229,15 @@ QString Temperament::toJson() const
       o["tweak"] = tweak;
       if (!spelled)
             o["spelled"] = false;
+      if (justSpelled)
+            o["just"] = "spelled";
       return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
       }
 
 bool Temperament::operator==(const Temperament& t) const
       {
-      if (name != t.name || root != t.root || pure != t.pure || qAbs(tweak - t.tweak) > 1e-9 || spelled != t.spelled)
+      if (name != t.name || root != t.root || pure != t.pure || qAbs(tweak - t.tweak) > 1e-9 || spelled != t.spelled
+          || justSpelled != t.justSpelled)
             return false;
       for (int i = 0; i < 12; ++i)
             if (qAbs(offsets[i] - t.offsets[i]) > 1e-9)

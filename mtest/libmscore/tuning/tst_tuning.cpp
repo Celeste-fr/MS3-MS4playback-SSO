@@ -10,6 +10,7 @@
 // replaces: the Microtonal Tuner's own rule fixture (cases.mscx and expected.json, copied from
 // the plugin's test folder, gen_cases.py there) and billhails' Tuning plugin's temperaments.
 
+#include <cmath>
 #include <QtTest/QtTest>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -38,6 +39,7 @@ class TestTuning : public QObject, public MTest
       void microtonalTempered();
       void presets();
       void spelling();
+      void justSpelling();
       void json();
       };
 
@@ -231,6 +233,54 @@ void TestTuning::spelling()
       QCOMPARE(w.cents(DB, 61), w.cents(CS, 61));
       const Temperament e;
       QCOMPARE(e.cents(DB, 61), 0.0);
+      }
+
+//---------------------------------------------------------
+//   justSpelling
+//    Just intonation by spelling (Ben Johnston's notation): every spelling against its ratio
+//    (Johnston: the major scale 1/1 9/8 5/4 4/3 3/2 5/3 15/8, sharp / flat 25/24); off, the
+//    Tuning plugin's 12 keys
+//---------------------------------------------------------
+
+void TestTuning::justSpelling()
+      {
+      auto fromEqual = [](double num, double den, int semitones) {
+            return 1200.0 * std::log2(num / den) - 100.0 * semitones;
+            };
+      Temperament j = Temperament::preset("just");
+      QVERIFY(!j.justSpelled);                                     // the plugin's keys by default
+      QCOMPARE(j.cents(Tpc::TPC_D_B, 61), j.cents(Tpc::TPC_C_S, 61));
+      j.justSpelled = true;
+      struct { int tpc; double num, den; int semitones; } ratios[] = {
+            { Tpc::TPC_C, 1, 1, 0 }, { Tpc::TPC_D, 9, 8, 2 }, { Tpc::TPC_E, 5, 4, 4 }, { Tpc::TPC_F, 4, 3, 5 },
+            { Tpc::TPC_G, 3, 2, 7 }, { Tpc::TPC_A, 5, 3, 9 }, { Tpc::TPC_B, 15, 8, 11 },
+            { Tpc::TPC_C_S, 25, 24, 1 }, { Tpc::TPC_D_B, 27, 25, 1 },  // C# and Db: 62.6 cents apart
+            { Tpc::TPC_G_S, 25, 16, 8 }, { Tpc::TPC_A_B, 8, 5, 8 },    // G# and Ab: the diesis 128/125
+            { Tpc::TPC_F_S, 25, 18, 6 }, { Tpc::TPC_B_B, 9, 5, 10 }, { Tpc::TPC_E_B, 6, 5, 3 },
+            { Tpc::TPC_D_S, 75, 64, 3 }, { Tpc::TPC_C_SS, 625, 576, 2 }, { Tpc::TPC_E_BB, 144, 125, 2 },
+            };
+      for (const auto& r : ratios)
+            QVERIFY2(qAbs(j.cents(r.tpc, 60 + r.semitones) - fromEqual(r.num, r.den, r.semitones)) < 1e-9,
+                     qPrintable(QString("tpc %1: %2").arg(r.tpc).arg(j.cents(r.tpc, 60 + r.semitones))));
+      QVERIFY(qAbs(j.cents(Tpc::TPC_A_B, 68) - j.cents(Tpc::TPC_G_S, 68) - 1200.0 * std::log2(128.0 / 125.0)) < 1e-9);
+      // root G (1), pure tone G: G's major scale, B its pure third
+      Temperament g = Temperament::preset("just", 1, 1, 0.0);
+      g.justSpelled = true;
+      QCOMPARE(g.cents(Tpc::TPC_G, 67), 0.0);
+      QVERIFY(qAbs(g.cents(Tpc::TPC_B, 71) - g.cents(Tpc::TPC_G, 67) - fromEqual(5, 4, 4)) < 1e-9);
+      QVERIFY(qAbs(g.cents(Tpc::TPC_F_S, 66) - fromEqual(15, 8, 11)) < 1e-9);
+      // the 12 keys agree with it on 11 notes, to the plugin's rounding (within 1 cent): its F# is
+      // 45/32, Johnston's 25/18 (its black keys are C# Eb F# G# Bb)
+      const Temperament keys = Temperament::preset("just");
+      for (const auto& r : ratios)
+            if (r.semitones < 12 && r.tpc != Tpc::TPC_F_S && r.tpc != Tpc::TPC_D_B && r.tpc != Tpc::TPC_D_S
+                && r.tpc != Tpc::TPC_A_B && r.tpc != Tpc::TPC_C_SS && r.tpc != Tpc::TPC_E_BB)
+                  QVERIFY2(qAbs(keys.cents(r.tpc, 60 + r.semitones) - j.cents(r.tpc, 60 + r.semitones)) < 1.0,
+                           qPrintable(QString("tpc %1").arg(r.tpc)));
+      // a JSON round trip keeps the choice, and leaves it out when off
+      QVERIFY(Temperament::fromJson(j.toJson()).justSpelled);
+      QVERIFY(!keys.toJson().contains("\"just\":"));
+      QVERIFY(Temperament::fromJson(j.toJson()) == j);
       }
 
 //---------------------------------------------------------

@@ -21,6 +21,12 @@
 //                3.6 keeps through a round trip. Tunings built from a chain of equal fifths
 //                (Pythagorean, meantones, equal) follow the note's spelling: C# and Db differ,
 //                as those tunings define them. The others are keyboard tunings, one value per key.
+//                Just intonation can be either: the plugin's 12 keys (its default, and the one
+//                keyboards have), or by spelling ("just": "spelled" in the metaTag), as Ben
+//                Johnston notates it: the root's major scale is Ptolemy's (1/1 9/8 5/4 4/3 3/2
+//                5/3 15/8: its I, IV and V triads pure 4:5:6), a sharp raises by 25/24 and a flat
+//                lowers by it, so C# (25/24) and Db (27/25) differ; a syntonic comma (81/80) is
+//                the Sagittal 5-comma accidental. D-A stays 40/27, as in any fixed just scale.
 //   accidental   the Microtonal Tuner plugin's rules: a microtonal accidental on the note, the
 //                last one on its staff line earlier in the bar (any voice), or a custom key
 //                signature's symbol on that line; cents from MuseScore 3.6.2's accidental table,
@@ -55,9 +61,12 @@ struct Temperament {
       double tweak { 0.0 };         // cents added to every note
       double offsets[12] { };       // final cents per pitch class C, C#, D … B (the plugin's final values)
       bool spelled { true };        // follow the spelling where the tuning is a chain of fifths
+      bool justSpelled { false };   // Just: by spelling (Johnston), not the plugin's 12 keys
 
       bool isEqual() const;
       bool isChain(double* step = nullptr) const;
+      bool isJustBySpelling() const;
+      static double johnstonCents(int tpc, int rootTpc);
       double cents(int tpc, int pitch) const;
 
       static Temperament preset(const QString& name, int root, int pure, double tweak);

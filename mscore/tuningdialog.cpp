@@ -137,6 +137,9 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       _spelled = new QCheckBox(tr("Enharmonic spellings sound apart (C♯ is not D♭)"));
       _spelled->setToolTip(tr("For a tuning built from a chain of equal fifths (Pythagorean, meantones), notes spelled "
                               "past its 12 go on along the chain, as the tuning defines them.\n"
+                              "For Just intonation: tuned by spelling as Ben Johnston notates it (the root's major "
+                              "scale pure, a sharp or flat 25/24, a syntonic comma with the Sagittal 5-comma "
+                              "accidental). Off: the Tuning plugin's 12 keys, as a keyboard has them.\n"
                               "Keyboard temperaments have one value per key and ignore this."));
       top->addWidget(_spelled);
 
@@ -166,7 +169,15 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       connect(_tweak, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this] { pureOrTweakChanged(); });
       for (QDoubleSpinBox* f : _final)
             connect(f, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this] { finalChanged(); });
-      connect(_spelled, &QCheckBox::toggled, this, [this](bool on) { if (!_updating) { _t.spelled = on; showTemperament(_t); } });
+      connect(_spelled, &QCheckBox::toggled, this, [this](bool on) {
+            if (_updating)
+                  return;
+            if (_t.name == "just")
+                  _t.justSpelled = on;
+            else
+                  _t.spelled = on;
+            showTemperament(_t);
+            });
       connect(_useOld, &QPushButton::clicked, this, [this] { useOld(); });
       connect(loadButton, &QPushButton::clicked, this, [this] { load(); });
       connect(saveButton, &QPushButton::clicked, this, [this] { save(); });
@@ -265,10 +276,24 @@ void TuningDialog::showTemperament(const Temperament& t)
             _final[i]->setValue(_t.offsets[i]);
       double step = 0.0;
       const bool chain = _t.isChain(&step);
-      _spelled->setEnabled(chain && qAbs(step) > 0.05);
-      _spelled->setChecked(_t.spelled);
+      // (the preset's own values: edited ones are keys of their own)
+      bool presetValues = preset;
+      if (preset) {
+            const Temperament p = Temperament::preset(_t.name, _t.root, _t.pure, _t.tweak);
+            for (int i = 0; i < 12; ++i)
+                  presetValues = presetValues && qAbs(p.offsets[i] - _t.offsets[i]) < 1e-9;
+            }
+      const bool just = _t.name == "just" && presetValues;
+      _spelled->setEnabled((chain && qAbs(step) > 0.05) || just);
+      _spelled->setChecked(just ? _t.justSpelled : _t.spelled);
       QString about = presetAbout(_t.name);
-      if (preset && _t != Temperament::preset(_t.name, _t.root, _t.pure, _t.tweak))
+      if (just)
+            about += " " + (_t.justSpelled
+                            ? tr("By spelling (Ben Johnston): the root's major scale is pure, and a sharp or flat is 25/24, "
+                                 "so enharmonic spellings differ (from C: C♯ 25/24, D♭ 27/25). D–A is 40/27, as in any "
+                                 "fixed just scale; a Sagittal 5-comma accidental moves a note by 81/80.")
+                            : tr("12 keys, as the Tuning plugin and a keyboard have it: C♯ and D♭ are the same."));
+      if (preset && !presetValues)
             about += " " + tr("Final values edited.");
       if (chain && qAbs(step) > 0.05)
             about += " " + tr("Each fifth is %1 cents from equal.").arg(QString::asprintf("%+.2f", step));
@@ -288,6 +313,7 @@ void TuningDialog::presetChanged()
             }
       Temperament t = Temperament::preset(name);
       t.spelled = _t.spelled;
+      t.justSpelled = _t.justSpelled;
       showTemperament(t);
       }
 
@@ -298,6 +324,7 @@ void TuningDialog::rootChanged()
       // as the plugin: a new root also moves the pure tone there and clears the tweak
       Temperament t = Temperament::preset(_t.name, _root->currentIndex(), _root->currentIndex(), 0.0);
       t.spelled = _t.spelled;
+      t.justSpelled = _t.justSpelled;
       showTemperament(t);
       }
 
@@ -307,6 +334,7 @@ void TuningDialog::pureOrTweakChanged()
             return;
       Temperament t = Temperament::preset(_t.name, _t.root, _pure->currentIndex(), _tweak->value());
       t.spelled = _t.spelled;
+      t.justSpelled = _t.justSpelled;
       showTemperament(t);
       }
 
@@ -317,6 +345,7 @@ void TuningDialog::finalChanged()
       Temperament t = _t;
       for (int i = 0; i < 12; ++i)
             t.offsets[i] = _final[i]->value();
+      t.justSpelled = false;              // (edited values are keys)
       showTemperament(t);
       }
 
