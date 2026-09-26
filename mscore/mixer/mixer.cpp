@@ -23,6 +23,7 @@
 #include <qmessagebox.h>
 #include <accessibletoolbutton.h>
 
+#include "mscore/playbackmode.h"
 #include "musescore.h"
 #include "parteditbase.h"
 
@@ -86,6 +87,7 @@ Mixer::Mixer(QWidget* parent)
 
       setupUi(this);
       setAllowedAreas(Qt::DockWidgetAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea));
+      verticalLayout->insertWidget(0, PlaybackModeBox::row(dockWidgetContents));   // MS3 / MS4 / sound library
 
       trackAreaLayout = new QHBoxLayout;
       trackAreaLayout->setMargin(0);

@@ -81,6 +81,14 @@ MS4 playback (see the header comment of each file):
   (a release, the pedal) isn't heard again (Ethanol bar 14, confirmed by ear by the owner on
   Windows, 2026-09-26; built-in synthesizer only).
 
+Playback mode (`mscore/playbackmode.h`): a "Playback" drop-down at the top of the Mixer and of
+the Play Panel switches between MuseScore 3 (dynamics method 1 / CC2, Zita reverb,
+MuseScore_General if found: SoundFonts folders or a MuseScore 3 install's `sound` folder,
+`Fluid::sfFiles`), MuseScore 4 (method 3, MuseReverb, MS Basic) and the sound library (MS4 plus
+`io/soundLibrary`; the last one is kept in `io/soundLibraryLast`). The mode is read back from the
+synthesizer and the preference; a switch stops playback and saves synthesizer.xml. Actions
+`playback-ms3/-ms4/-library` exist for shortcuts.
+
 Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3.6 plugins:
 
 - `libmscore/tuning.{h,cpp}`: a note's pitch in playback, in cents from equal temperament, is the

@@ -42,7 +42,6 @@ class SynthControl : public QWidget, Ui::SynthControl {
       virtual void showEvent(QShowEvent*) override;
       virtual bool eventFilter(QObject*, QEvent*) override;
       virtual void keyPressEvent(QKeyEvent*) override;
-      void updateGui();
       void readSettings();
       void updateExpressivePatches();
       void updateMixer();
@@ -82,6 +81,7 @@ class SynthControl : public QWidget, Ui::SynthControl {
       void stop();
       void setScore(Score* s);
       void writeSettings();
+      void updateGui();
       };
 }
 

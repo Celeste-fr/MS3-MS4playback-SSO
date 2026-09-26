@@ -1031,8 +1031,11 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
 
       // passed: a kit's patch whose mapped keys all sound; a patch switched by key whose mapped
       // keyswitches all switch
+      // a patch of one sound (Xylophone, Crotales, Desk Bells: no keyswitches, not a kit's) passes
+      // when it sounds; a kit's patch needs its drum keys in the map
+      const bool oneSound = keyswitchMap.empty() && ins.drums.empty() && !ins.extra();
       const bool passed = silentMapped.isEmpty() && !soundKeys.empty()
-         && (!ins.drums.empty() || (!keyswitchMap.empty() && !switchKeys.empty()));
+         && (oneSound || !ins.drums.empty() || (!keyswitchMap.empty() && !switchKeys.empty()));
       out["passed"] = passed;
       results.append(out);
       auto rangesOf = [](const std::vector<int>& list) {
@@ -1049,7 +1052,7 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       QString line = tr("%1 keys sound (%2)").arg(soundKeys.size()).arg(rangesOf(soundKeys));
       if (!switchKeys.empty())
             line += tr("; %1 keyswitches (%2)").arg(switchKeys.size()).arg(rangesOf(switchKeys));
-      if (ins.drums.empty() && keyswitchMap.empty())
+      if (ins.drums.empty() && keyswitchMap.empty() && !oneSound)
             line += tr("; the map has no keys for it yet");
       summary += QString("## %1 (keys)\n   %2\n").arg(ins.name, line);
       for (const QString& s : silentMapped)

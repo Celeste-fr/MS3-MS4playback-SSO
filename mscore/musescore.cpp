@@ -130,6 +130,7 @@
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
 #include "tuningdialog.h"
+#include "playbackmode.h"
 #ifdef USE_VST3
 #include "audio/vst3/vst3synth.h"
 #endif
@@ -533,6 +534,7 @@ void updateExternalValuesFromPreferences() {
       if (updateSoundLibrary() && mscore) {
             for (MasterScore* s : mscore->scores())
                   s->setPlaylistDirty();
+            mscore->updatePlaybackMode();
             }
       const SoundLib::Output output = (SoundLibraryHost::available() && preferences.getString(PREF_IO_SOUNDLIBRARY_OUTPUT) != "midi")
                                       ? SoundLib::Output::PLUGIN : SoundLib::Output::MIDI;
@@ -1382,6 +1384,22 @@ void MuseScore::populatePlaybackControls()
                         }
                   }
             }
+      }
+
+//---------------------------------------------------------
+//   updatePlaybackMode
+//    the mode's check marks (shortcut actions) and the Mixer's and Play Panel's boxes
+//---------------------------------------------------------
+
+void MuseScore::updatePlaybackMode()
+      {
+      const PlaybackMode mode = playbackMode();
+      getAction("playback-ms3")->setChecked(mode == PlaybackMode::MS3);
+      getAction("playback-ms4")->setChecked(mode == PlaybackMode::MS4);
+      QAction* library = getAction("playback-library");
+      library->setChecked(mode == PlaybackMode::LIBRARY);
+      library->setText(playbackModeName(PlaybackMode::LIBRARY));
+      PlaybackModeBox::updateAll();
       }
 
 //---------------------------------------------------------
@@ -7012,6 +7030,12 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   d.exec();
                   }
             }
+      else if (cmd == "playback-ms3")
+            setPlaybackMode(PlaybackMode::MS3);
+      else if (cmd == "playback-ms4")
+            setPlaybackMode(PlaybackMode::MS4);
+      else if (cmd == "playback-library")
+            setPlaybackMode(PlaybackMode::LIBRARY);
       else if (cmd == "sound-library") {
             // one window, shown and closed by the View menu's check mark
             static QPointer<SoundLibraryDialog> dialog;
