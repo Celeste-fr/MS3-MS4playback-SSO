@@ -584,6 +584,10 @@ void TestSoundLibrary::checkedAsExpected()
       QVERIFY(!SoundLib::checkedAsExpected(patch("Unpitched - Metal"),
          "53 keys sound (36-50, 52-55, 57-72, 74, 76-77, 79-86, 88-89, 91, 93, 95-97); 5 keyswitches (10, 56, 73, 78, 99); "
          "the map has no keys for it yet", &line));
+      // … and with Triangle 1 active (09:12)
+      QVERIFY(SoundLib::checkedAsExpected(patch("Unpitched - Metal"),
+         "65 keys sound (36-50, 52-55, 57-72, 74, 76-77, 79-86, 88-89, 91, 93, 95-97, 103-114); "
+         "6 keyswitches (10, 56, 73, 78, 99, 125); the map has no keys for it yet", &line));
       }
 
 //---------------------------------------------------------

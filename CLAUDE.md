@@ -294,7 +294,7 @@ against the plug-in itself):
     map had its keys) that heard every mapped key, becomes passed (`SoundLib::checkedAsExpected`,
     `acceptExpected`; same setup and CHECK_VERSION only). Test `checkedAsExpected` uses the
     owner's lines of 2026-09-26 08:43. Triangle 1 (open 103, closed 107) didn't sound in that
-    run: its Instrument Active switch is most likely off.
+    run (Instrument Active off); in the 09:12 run it did (103-107, Triangle 2 108-112).
   - Memory: `<dataPath>/soundlibraries/<library>/checks.json` holds each patch's last check:
     setup SHA-1, map-entry SHA-1 (values and names), `CHECK_VERSION`, and a result of
     passed, problems or error. A patch needs checking only if something changed or its check
@@ -433,7 +433,7 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   loud key is listed, except rings of the previous key). MuseScore's pitches are the GM ones of
   its drumsets; `ids` entries for instruments whose pitch means something else (tam-tam 52,
   temple blocks 58-62, ratchet 73 …). Guesses to confirm by ear: Tom 1, Conga 1 and Block 1 are
-  the high ones. The owner's Triangles have no keys; Ships Bell, Gankogui, Rivet Cymbal, Trash
+  the high ones. Triangles: keys the owner assigned (Triangle 1 103-107, Triangle 2 108-112; Instrument Active on); Ships Bell, Gankogui, Rivet Cymbal, Trash
   Gong Drum and Tom Ensemble have no MuseScore sound; Trash Metal Brake 1 plays Automobile Brake Drums.
   Rolls: `<Drum … technique="roll">` (`SoundLib::drumRoll`: a single-note tremolo or buzz roll plays
   the roll key once, held; without one, the tremolo's hits; test `renderKitRoll`). Swells are a
