@@ -641,8 +641,8 @@
   </Instrument>
   <Instrument name="Tubular Bells" ids="tubular-bells" keyScan="1">
     <Switch type="keyswitch"/>
-    <Articulation name="Normal" value="5" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
-    <Articulation name="Muted" value="6" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
+    <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
   </Instrument>
   <Instrument name="Desk Bells" ids="hand-bells" keyScan="1">
     <Switch type="none"/>

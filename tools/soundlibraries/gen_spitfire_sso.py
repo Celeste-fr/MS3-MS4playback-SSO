@@ -194,8 +194,9 @@ KEYSWITCHED = {'Timpani', 'Celeste', 'Glockenspiel', 'Marimba', 'Vibraphone', 'T
 # one sound, no technique list in their window: nothing to switch
 UNSWITCHED = {'Xylophone', 'Crotales', 'Desk Bells'}
 # keyswitches by the owner's key scan (Check articulations, 2026-09-25 22:32): each key moves the
-# window's technique arrow, in the list's order from C-2 (Tubular Bells from F-2); key 0 (5) is
-# the technique the patch loads with, so the scan sees the others move away from it
+# window's technique arrow, in the list's order from C-2; key 0 is the technique the patch loads
+# with, so the scan sees the others move away from it. Tubular Bells: its window's KEYSWITCHES
+# field says C-2 and keys 0 and 1 are red (2026-09-26 check pictures); 5 / 6 were a misreading
 # (Tight first: within a patch the first fit wins, so staccatissimo plays it)
 SPITFIRE_ADD['Celeste'] = [('Tight', 2, 'staccatissimo spiccato', ''), ('Celeste', 0, ALL, ''),
                            ('Espressivo', 1, '', '')]
@@ -203,7 +204,7 @@ SPITFIRE_ADD['Glockenspiel'] = [('Normal', 0, ALL, ''), ('Muted', 1, ALL, 'muted
                                 ('Roll', 3, 'tremolo', '')]
 SPITFIRE_ADD['Marimba'] = [('Normal', 0, ALL, ''), ('Roll', 1, 'tremolo', '')]
 SPITFIRE_ADD['Vibraphone'] = [('Normal', 0, ALL, ''), ('Motor Sus.', 1, '', ''), ('Roll', 2, 'tremolo', '')]
-SPITFIRE_ADD['Tubular Bells'] = [('Normal', 5, ALL, ''), ('Muted', 6, ALL, 'muted')]
+SPITFIRE_ADD['Tubular Bells'] = [('Normal', 0, ALL, ''), ('Muted', 1, ALL, 'muted')]
 SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), ('Roll', 2, 'tremolo', ''),
                            ('Roll Muted', 3, 'tremolo', 'muted'), ('Swell mf', 4, '', ''), ('Swell f', 5, '', '')]
 

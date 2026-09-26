@@ -815,6 +815,19 @@ static int differingPixels(const QImage& a, const QImage& b)
       return n;
       }
 
+// a failed grab: no picture, or (nearly) all black
+static bool blankPicture(const QImage& image)
+      {
+      if (image.isNull())
+            return true;
+      const QImage small = image.scaled(64, 32).convertToFormat(QImage::Format_RGB32);
+      for (int y = 0; y < small.height(); ++y)
+            for (int x = 0; x < small.width(); ++x)
+                  if (qGray(small.pixel(x, y)) > 12)
+                        return false;
+      return true;
+      }
+
 static QString keyName(int key)
       {
       static const char* const NAMES[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -883,6 +896,12 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       if (!sounds)
             return fail(tr("It played nothing: is the patch loaded, on MIDI channel 1 (Kontakt: A1 or Omni)?"));
       pump.run(1500);
+
+      // the load check's notes can ring for seconds (bells): silence before the scan, else key 0
+      // "sounds" with their tail
+      p->allNotesOff();
+      p->midi(ME_CONTROLLER, 0, CTRL_SUSTAIN, 0);
+      pump.run(4000);
 
       // what the plug-in itself calls its keys, if it says (a DAW's drum map / keyswitch names)
       QString namesSource;
@@ -957,11 +976,16 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       std::vector<int> switchKeys;
       QJsonArray keys;
       const int changeThreshold = std::max(30, 3 * noise);
+      QImage lastGrab = base;
       for (int key = 0; key < 128; ++key) {
             const double db = peaks[key] > 0 ? 20 * std::log10(peaks[key]) : -200;
             const bool sounds = peaks[key] > 1e-5 && peaks[key] > loudest * std::pow(10.0, -50 / 20.0);
-            const bool switches = !sounds && int(released.size()) == 128
-               && differingPixels(released[key], key ? released[key - 1] : base) > changeThreshold;
+            // against the last picture that was grabbed (a black one is a failed grab: Tubular Bells'
+            // key 11, 2026-09-26, made 11 and 12 look like keyswitches)
+            const bool grabbed = int(released.size()) == 128 && !blankPicture(released[key]);
+            const bool switches = !sounds && grabbed && differingPixels(released[key], lastGrab) > changeThreshold;
+            if (grabbed)
+                  lastGrab = released[key];
             if (sounds || switches || mapped.count(key) || keyswitchMap.count(key) || pluginNames.count(key)) {
                   QJsonObject k;
                   k["key"] = key;

@@ -172,8 +172,8 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   the window's own noise: a keyswitch) goes on the sheet and in results.json "keys"
   (`keyswitch`, `map`, `mapKeyswitch`). SSO's tuned percussion (Timpani … Desk Bells, Kickstart
   patches) has no UACC, only keyswitches from C-2: Timpani is mapped by key from the owner's
-  screenshot (0 Timpani, 1 Muted, 2 Roll, 3 Roll Muted, 4 Swell mf, 5 Swell f), the others wait
-  for their key scan.
+  screenshot (0 Timpani, 1 Muted, 2 Roll, 3 Roll Muted, 4 Swell mf, 5 Swell f); the others from
+  their key scans (Tubular Bells 0 / 1, see the ninth run).
 - Renderer: library parts play on the instrument's first channel. Each note and switch carries
   its patch (`NPlayEvent::libraryPatch`); `finishLibraryEvents` routes by channel and patch
   (`libRoutes`: channel -> port/channel per patch), drops redundant switches per patch, and
@@ -461,6 +461,12 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   - Unpitched kits: Kickstart's drum icons don't light up when a key plays, so the pictures
     show only the coloured key ranges. The owner is asked for each drum's hit list: clicking an
     icon shows its hits mapped on the keyboard.
+- Ninth run (2026-09-26 07:00, run 42/44, four patches): Xylophone, Crotales, Desk Bells pass (one
+  sound). Tubular Bells: its window's KEYSWITCHES field says C-2 and keys 0-1 are red, in this run's
+  and the eighth run's pictures: the map's 5 / 6 (from the seventh run) were a misreading, now
+  0 Normal / 1 Muted. The scan's 11-12 came from a black (failed) grab of key 11; failed grabs are
+  now skipped, and the scan waits 4 s after all-notes-off (the load check's bells still rang on
+  keys 0-1).
 A value a SSO patch lacks: its window shows "None" and it plays nothing (no default).
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. Start it with *Run workflow* (Actions › Test: Sound library on Windows), or

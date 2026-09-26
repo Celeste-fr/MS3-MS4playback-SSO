@@ -251,7 +251,7 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(valueFor("Timpani", { { "long" }, {} }), 0);
       QCOMPARE(patchFor("Grand Piano", { { "long" }, {} }), QString("Grand Piano: Direct"));
       QCOMPARE(valueFor("Glockenspiel", { { "tremolo", "long" }, {} }), 3);           // Roll
-      QCOMPARE(valueFor("Tubular Bells", { { "long" }, { "muted" } }), 6);            // Muted, from F-2
+      QCOMPARE(valueFor("Tubular Bells", { { "long" }, { "muted" } }), 1);            // Muted, C#-2 (its window: KEYSWITCHES C-2)
       QCOMPARE(valueFor("Celeste", { { "staccatissimo", "spiccato", "short" }, {} }), 2);   // Tight
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (li.name == "Xylophone")
