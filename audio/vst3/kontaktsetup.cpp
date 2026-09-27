@@ -214,7 +214,7 @@ Item* subtree(Chunk& c)
             const QByteArray& d = c.data;
             if (d.size() < 5)
                   return nullptr;
-            c.compressed = d[4] != 0;
+            c.compressed = d.at(4) != 0;
             QByteArray inner;
             if (c.compressed) {
                   if (d.size() < 13)
@@ -395,7 +395,7 @@ struct Struct {
 
       bool read(const QByteArray& body)
             {
-            if (body.isEmpty() || body[0] != 1 || body.size() < 3)
+            if (body.isEmpty() || body.at(0) != 1 || body.size() < 3)
                   return false;
             version = qFromLittleEndian<quint16>(reinterpret_cast<const uchar*>(body.constData() + 1));
             Reader r(body, 3);
@@ -459,7 +459,7 @@ bool programScripts(const QByteArray& program, Struct& st, std::vector<PChunk>& 
       if (!st.read(program) || !chunks(st.kids, kids))
             return false;
       for (int i = 0; i < int(kids.size()); ++i)
-            if (kids[i].id == 0x06 && !kids[i].body.isEmpty() && kids[i].body[0] == 0)
+            if (kids[i].id == 0x06 && !kids[i].body.isEmpty() && kids[i].body.at(0) == 0)
                   scripts.push_back(i);
       return true;
       }
