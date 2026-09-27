@@ -10,6 +10,7 @@
 import re
 from xml.sax.saxutils import quoteattr as q
 # UACC values per SSO patch ("All techniques"), as extracted from the community bank
+import os
 import sys
 src=open(sys.argv[1]).read().splitlines()
 banks={}; bank=None
@@ -128,9 +129,10 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
 '  Spitfire Symphony Orchestra (Kontakt), articulations switched by UACC (CC32).',
 '',
-'  In each patch, set the articulation switching to UACC (the patch\'s articulation settings)',
-'  and set the patch to the MIDI channel/port MuseScore shows for the part',
-'  (Preferences > I/O > Sound library > Show routing).',
+'  Played through the plug-in, MuseScore sets each patch up by itself from its .nki (nki=, in the',
+'  folder of <Files registry>), with the script values in setup= (UACC switching). Over MIDI',
+'  out, set each patch\'s articulation switching to UACC and its MIDI channel/port to the one',
+'  MuseScore shows for the part (Preferences > I/O > Sound library > Show routing).',
 '',
 '  The UACC values come from a community-made articulation bank for this library (Reaticulate',
 '  user bank "Spitfire - Symphony Orchestra", github.com/jtackaberry/reaticulate), checked',
@@ -150,7 +152,8 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<SoundLibrary name="Spitfire Symphony Orchestra">',
 '  <Switch type="cc" number="32"/>',
 '  <Dynamics cc="1" expression="127"/>',
-'  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>']
+'  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
+'  <Files registry="Spitfire Symphony Orchestra"/>']
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
 # value in View > Sound Library > Controllers…): (id, name shown, CC or None, plug-in parameter
 # title or None, default 0-127 or None (the patch's own value stays), [(staff text regexp, value)]).
@@ -644,6 +647,52 @@ for kit in PERCUSSION:
             if key not in used:
                 out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
         out.append('  </Instrument>')
+# Setups made by MuseScore (the owner, 2026-09-27: every patch at the library's defaults, no manual
+# set-up; audio/vst3/kontaktsetup.h): each patch's .nki (sso_nki_files.txt, the owner's library; the
+# map's names found as make_setups.py finds them) and the script values set in it. SETUP_VALUES:
+# the owner's learned_settings.json (2026-09-27) had $iooxo 3 ("UACC & UI only") in every orchestral
+# patch, harp and piano included, and nothing in the tuned percussion; the kits' own values were
+# techniques switched on, left at the defaults now. The patches no map entry uses are listed as
+# <Patch> (set up and checked like the others: Check articulations lists every patch).
+import ntpath
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from make_setups import nki_for  # noqa: E402
+SETUP_VALUES = '$iooxo=3'
+NKI_FILES = [l.strip() for l in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_files.txt'),
+                                      encoding='utf-8') if l.strip() and not l.startswith('#')]
+assert len(NKI_FILES) == 700, len(NKI_FILES)
+nkiByName = {ntpath.splitext(ntpath.basename(f))[0].lower(): f for f in NKI_FILES}
+def setupValues(nki):
+    base = nki.split('/')[-1]
+    if base.startswith('Percussion - '):
+        return None
+    if '/Symphonic Percussion/' in '/' + nki and base not in ('Other - Grand Piano.nki', 'Other - Harp.nki'):
+        return None
+    return SETUP_VALUES
+used = set()
+names = set()
+for i, line in enumerate(out):
+    m = re.match(r'  <Instrument name="([^"]*)"(.*)$', line)
+    if not m or ' kit="1"' in line:
+        continue
+    name = m.group(1).replace('&amp;', '&')
+    names.add(name.lower())
+    nki = nki_for(name, nkiByName)
+    assert nki, name
+    used.add(nki)
+    v = setupValues(nki)
+    rest = m.group(2)
+    end = '/>' if rest.endswith('/>') else '>'
+    rest = rest[:-len(end)]
+    out[i] = f'  <Instrument name={q(name)}{rest} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + end
+out.append('  <!-- the library\'s other patches: set up and checked, not chosen by notation -->')
+for nki in NKI_FILES:
+    if nki in used:
+        continue
+    name = ntpath.splitext(ntpath.basename(nki))[0]
+    assert name.lower() not in names, name
+    v = setupValues(nki)
+    out.append(f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + '/>')
 out.append('</SoundLibrary>')
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed

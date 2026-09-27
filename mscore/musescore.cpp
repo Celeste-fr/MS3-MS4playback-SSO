@@ -557,7 +557,8 @@ void updateExternalValuesFromPreferences() {
             SoundLib::setOutput(output);
             if (output == SoundLib::Output::MIDI)
                   SoundLibraryHost::instance()->release();
-            // hosted, an extra patch plays once it is set up (else the main patch plays its notes)
+            // hosted, an extra patch plays when it has a setup, or MuseScore can make it (else the main
+            // patch plays its notes)
             if (output == SoundLib::Output::PLUGIN)
                   SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
                         std::shared_ptr<const SoundLib::Library> library = SoundLib::current();

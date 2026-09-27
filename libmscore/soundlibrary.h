@@ -38,6 +38,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include <QRegularExpression>
@@ -125,6 +126,10 @@ struct LibInstrument {
       std::vector<DrumKey> drums;
       std::vector<Controller> controllers;          // its own (over the library's, by id)
       std::vector<Controller> allControllers;       // the library's with its own (Library::load)
+      // its setup, made by MuseScore (KontaktSetup, audio/vst3/kontaktsetup.h): the patch's file
+      // in the library's folder (Library::registryName), and the script values set in it
+      QString nki;                        // "Instruments/Symphonic Strings/Violins 1 - All techniques.nki"
+      std::vector<std::pair<QString, QString>> setupValues;   // ("$iooxo", "3"): UACC switching
 
       bool extra() const { return !with.isEmpty(); }
       std::vector<const LibInstrument*> patches() const;    // this one, then its extras
@@ -153,6 +158,11 @@ class Library {
       int expressionValue { 127 };        // CC11 at the start (when dynamicsCC is not 11)
       std::vector<Controller> controllers;          // for all its instruments
       std::vector<LibInstrument> instruments;
+      // the library's other patches (<Patch>): none of the map's, but set up and checked (Check
+      // articulations lists them, and scans them)
+      std::vector<LibInstrument> otherPatches;
+      QString registryName;               // <Files registry>: NI's registry key of the library
+                                          // (its ContentDir is the folder the .nki paths start from)
 
       static std::shared_ptr<Library> load(const QString& path, QString* error = nullptr);
       const LibInstrument* match(const Instrument* instrument, const Part* part) const;

@@ -35,30 +35,30 @@ virtual MIDI cable, and audio export includes the library.
    *Play through* to *Its plug-in, in MuseScore*. MuseScore finds *Kontakt 8* or *Kontakt 7*
    in `C:\Program Files\Common Files\VST3` on its own. If yours is somewhere else, choose
    its `.vst3` with the *…* button next to *Plug-in*.
-2. Open a score and choose *View › Sound Library…*. The dialog lists each part with the
-   library patch it plays. For every patch marked *Not set up yet*:
-   - Click *Show*. Kontakt opens with an empty rack.
-   - Load that SSO patch (the one with all the section's articulations). Set its articulation
-     switching to **UACC** and its MIDI channel to 1 (or omni).
-   - Close the window. MuseScore keeps this setup for the instrument and loads it by itself in
-     every score from then on. To keep later changes, use *Save setup*.
-3. Play, or export audio (File › Export, or `mscore -o score.wav score.mscz`).
+2. Play, or export audio (File › Export, or `mscore -o score.wav score.mscz`).
+
+There is nothing to set up in Kontakt. MuseScore sets each patch up by itself: it finds SSO's
+folder through Native Instruments' registry entry (or the folder chosen with *View › Sound
+Library…* › *Library folder…*), reads the patch's `.nki` and loads it into Kontakt at the
+library's defaults, with articulation switching set to UACC. *View › Sound Library…* lists each
+part with the patch it plays; *Show* opens Kontakt's window to look at it (a change made there
+lasts until the patch loads again).
 
 Each library part gets its own plug-in instance. The first playback of a score loads them all,
 and the samples take a moment. The library's audio is mixed in after MuseScore's reverb,
-because SSO brings its own room. Setups are stored in MuseScore's data folder under
-`soundlibraries/<library>/<patch>.vst3state`.
+because SSO brings its own room. The setups MuseScore makes are kept in its data folder under
+`soundlibraries/<library>/<patch>.vst3state` and made again when the `.nki`, the map's values or
+Kontakt change. Setups made by hand before are moved to `old setups (not used)` there.
 
 ### Checking the map against the plug-in
 
-*View › Sound Library…* › *Check articulations…* lists every patch of the library.
+*View › Sound Library…* › *Check articulations…* lists every patch of the library: the map's,
+then all its others (SSO: all 700 `.nki`).
 
-1. For each patch not set up yet, click *Set up…*, load the patch in Kontakt, set it to
-   **UACC & UI only** and close the window. This is the same setup playback uses, so it is
-   only done once.
-2. Click *Check* and leave the computer alone. Kontakt's window has to stay visible. It takes
-   about 15 seconds per patch.
-3. MuseScore opens the folder `Documents/MuseScore Sound Library Check`. Hand back the
+1. Tick the patches to check (*Tick all*, *Tick what needs checking*, or by hand), click
+   *Check* and leave the computer alone. Kontakt's window has to stay visible. It takes about
+   15 seconds per patch.
+2. MuseScore opens the folder `Documents/MuseScore Sound Library Check`. Hand back the
    `.zip` it made.
 
 MuseScore remembers each patch's last check (the *Last check* column). A patch is ticked for
@@ -69,8 +69,9 @@ hand to check them anyway.
 - *Scan every value* also tries all 128 UACC values. It finds articulations the patch has and
   the map lacks, and map values the patch doesn't have (SSO shows "None" for them). It takes
   about a minute more per patch.
-- *Add a patch…* adds a patch the map lacks (e.g. *Trombones a5*). Set it up like the others.
-  Its check is always a scan, so its articulations can be added to the map from the results.
+- The patches the map has no articulations for are always scanned, so their articulations can
+  be added to the map from the results. (*Add a patch…*, for a library whose map doesn't list
+  its files, adds one by name; it needs a setup file of its own.)
 
 For each articulation value in the map, the check keeps a picture of Kontakt's window after
 the switch. It also listens to whether the switch took. Each value's note is played after two
@@ -123,15 +124,27 @@ switch value of each articulation. For example:
   <Switch type="cc" number="32"/>            <!-- or type="keyswitch" / type="program" -->
   <Dynamics cc="1" expression="127"/>        <!-- dynamics controller; CC11 is set to 127 -->
   <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3"/>  <!-- the plug-in to host, found in the VST3 folders -->
-  <Instrument name="Violins 1" ids="violins">
+  <Files registry="Spitfire Symphony Orchestra"/>  <!-- MuseScore sets the patches up from their .nki -->
+  <Instrument name="Violins 1" ids="violins"
+              nki="Instruments/Symphonic Strings/Violins 1 - All techniques.nki" setup="$iooxo=3">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted"/>
     <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
     …
   </Instrument>
+  <Patch name="Violins 1 - Core techniques" nki="Instruments/Symphonic Strings/Violins 1 - Core techniques.nki"
+         setup="$iooxo=3"/>
 </SoundLibrary>
 ```
 
+- **Setups made by MuseScore** (a Kontakt library hosted in MuseScore). `<Files registry>` names
+  the library's key under `HKEY_LOCAL_MACHINE\SOFTWARE\Native Instruments`; its `ContentDir` is
+  the folder the `nki` paths start from (else the one chosen in *View › Sound Library… › Library
+  folder…*). Each `Instrument` and `Patch` gives its `.nki`; `setup` lists values of the patch's
+  script to set, `name=value;…` (only where the script has the name with a value of the same
+  length: SSO's `$iooxo=3` is "UACC & UI only"). A `<Patch>` is one of the library's other
+  patches: never chosen by notation, but set up and checked (always scanned) by *Check
+  articulations*. See `audio/vst3/kontaktsetup.h` for how a setup is made.
 - `techniques` lists what the articulation can play (an empty list: no notation asks for it; it
   is listed for reference and checked by *Check articulations*, but never chosen): `long legato short staccatissimo spiccato
   tenuto marcato longmarcato pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
