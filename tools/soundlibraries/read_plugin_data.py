@@ -359,7 +359,8 @@ def main():
         j = json.load(open(os.path.join(folder, name), encoding="utf-8"))
         if "patch" not in j:
             continue
-        out(f"# {j['patch']} (pitch {j.get('pitch')}, {'sounds' if j.get('sounds') else 'played nothing'})")
+        heard = "not listened to" if "sounds" not in j else "sounds" if j["sounds"] else "played nothing"
+        out(f"# {j['patch']} (pitch {j.get('pitch')}, {heard})")
         if j.get("error"):
             out(f"  error: {j['error']}")
             out()

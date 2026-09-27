@@ -554,7 +554,10 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   `MuseScore3Evo.exe --extract-library "Spitfire Symphony Orchestra"` (`[--extract-patches all|mapped|<file>]
   [--extract-pitch-bend]`; `extractInBackground` in musescore.cpp, `ArticulationCheckDialog::runHeadless`):
   no window (noGui), no audio or MIDI device, not handed to the running MuseScore (single-instance check
-  skipped), background priority (PROCESS_MODE_BACKGROUND_BEGIN), one run at a time (a lock file). Its setups
+  skipped), below-normal priority (the first run's PROCESS_MODE_BACKGROUND_BEGIN plus `start /low` starved
+  Kontakt: setup 46-54 s, describe 25-35 s against 0.2-0.7 and 0.7-0.9 at normal priority; the owner's
+  summary, 2026-09-27), one run at a time (a lock file). Describing without pitch bend or controllers no
+  longer waits for the test note to sound (1.5 s for the patch's script to start; "sounds" left out). Its setups
   are a copy of the working MuseScore's in `Documents/MuseScore Sound Library Check/background extract setups`
   (`SoundLibraryHost::setDataFolder`; copied file by file where missing), and it writes nothing in MuseScore's
   data or settings folders (not even `workspaces/global/menubar.xml`, which every other start writes).

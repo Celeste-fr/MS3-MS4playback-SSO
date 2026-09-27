@@ -4447,8 +4447,7 @@ static bool doProcessJob(QString jsonFile)
 //    Extract plug-in data (soundlibrarycheck.h) without a window, while the owner works in another
 //    MuseScore (the owner, 2026-09-27: "have the test run in the background without interfering").
 //    It is a process of its own: a new MuseScore window isn't asked for (the single-instance check is
-//    skipped), no audio or MIDI device is opened, and the process runs at background priority (CPU,
-//    disk and memory, Windows' PROCESS_MODE_BACKGROUND_BEGIN). Its setups are a copy of the working
+//    skipped), no audio or MIDI device is opened, and the process runs at below-normal priority. Its setups are a copy of the working
 //    MuseScore's, outside MuseScore's data folder (Documents/MuseScore Sound Library Check/background
 //    extract setups): what it makes or resaves stays there, and nothing of the working MuseScore's is
 //    written (not even workspaces/global/menubar.xml). Progress on stderr and in background
@@ -4458,8 +4457,11 @@ static bool doProcessJob(QString jsonFile)
 static bool extractInBackground()
       {
 #ifdef Q_OS_WIN
-      if (!SetPriorityClass(GetCurrentProcess(), PROCESS_MODE_BACKGROUND_BEGIN))
-            SetPriorityClass(GetCurrentProcess(), IDLE_PRIORITY_CLASS);
+      // below normal: the MuseScore one works in comes first for the processor; disk and memory as
+      // usual (the owner's first run with PROCESS_MODE_BACKGROUND_BEGIN and "start /low", 2026-09-27:
+      // loading a patch 46-54 s instead of 0.2-0.7, describing it 25-35 s instead of 0.7-0.9: the
+      // lowest disk and memory priority starved Kontakt)
+      SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
 #endif
       // the library's map: a file, a name in share/soundlibraries, else the one Preferences name
       QString path = extractLibrary;

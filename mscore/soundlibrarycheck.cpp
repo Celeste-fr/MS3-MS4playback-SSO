@@ -2121,10 +2121,20 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       const int pitch = testPitch(ins);
       out["pitch"] = pitch;
 
-      // the patch loads its samples: until a note sounds (up to 2 minutes)
+      // the patch loads its samples: until a note sounds (up to 2 minutes), only when something is to
+      // be heard (pitch bend, every controller). Describing it needs no sound: its script's controls
+      // are there once the setup is set; a moment for the script to start (the owner, 2026-09-27: the
+      // background run of 700 patches estimated 16 hours; patches silent at the test note, one-drum,
+      // glissandi, effects, waited the full 2 minutes each)
       Pump pump { p, double(MScore::sampleRate), &_cancel, {} };
+      const bool listen = _pitchBend->isChecked() || _tryAll->isChecked();
       bool sounds = false;
-      for (int i = 0; i < 60 && !_cancel && !sounds; ++i) {
+      if (!listen) {
+            status(tr("letting the patch start…"));
+            prepare();
+            pump.run(1500);
+            }
+      for (int i = 0; listen && i < 60 && !_cancel && !sounds; ++i) {
             status(tr("waiting for the patch to load (%1 s)…").arg(i * 2));
             pump.peak = 0;
             prepare();
@@ -2136,9 +2146,13 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             }
       if (_cancel)
             return false;
-      out["sounds"] = sounds;
-      pump.run(1000);
-      lap("until it sounds");
+      if (listen) {
+            out["sounds"] = sounds;
+            pump.run(1000);
+            lap("until it sounds");
+            }
+      else
+            lap("start");
 
       status(tr("asking the plug-in…"));
       // (only what differs from the plug-in with nothing loaded; no state files: MuseScore makes the
@@ -2147,7 +2161,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       lap("describe");
       out["describe"] = d;
       const QByteArray patchState = p->state();              // (Quick: put back after each controller)
-      summary += QString("## %1 (%2.json)%3\n").arg(ins.name, fileBase, sounds ? QString() : QString(" — it played nothing"));
+      summary += QString("## %1 (%2.json)%3\n").arg(ins.name, fileBase, !listen || sounds ? QString() : QString(" — it played nothing"));
       summary += empty.isEmpty() ? describeSummary(d) : patchSummary(d, empty);
 
       // what pitch bend does to its pitch (the owner, 2026-09-27: microtones through the library, as
