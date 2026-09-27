@@ -343,11 +343,20 @@ struct Preset {
             data = chunk->data.mid(20, int(size));
             return true;
             }
-      void set(const QByteArray& d)
+      // what follows the preset data: 4 bytes, then a marker of what it is (not a checksum): an
+      // .nki's and a multi with a program loaded end in a7636734, Kontakt with nothing loaded in
+      // 8565620d; a multi with a program but the empty marker is refused ("The project could not
+      // be recalled for unknown reasons", the owner, run 107)
+      QByteArray tail() const
+            {
+            return chunk->data.mid(20 + int(get32(chunk->data, 12)));
+            }
+      void set(const QByteArray& d, const QByteArray& newTail = QByteArray())
             {
             const QByteArray& old = chunk->data;
             const quint32 size = get32(old, 12);
-            chunk->data = old.left(12) + le32(quint32(d.size())) + old.mid(16, 4) + d + old.mid(20 + int(size));
+            chunk->data = old.left(12) + le32(quint32(d.size())) + old.mid(16, 4) + d
+                          + (newTail.isEmpty() ? old.mid(20 + int(size)) : newTail);
             for (Chunk* c : path)
                   c->changed = true;
             }
@@ -679,7 +688,7 @@ bool readRoot(const QByteArray& data, Item& root, Preset& preset, QString* error
       return true;
       }
 
-bool nkiParts(Item& root, QByteArray* program, QByteArray* files, QString* error)
+bool nkiParts(Item& root, QByteArray* program, QByteArray* files, QString* error, QByteArray* tail = nullptr)
       {
       Preset preset;
       std::vector<PChunk> top;
@@ -687,6 +696,8 @@ bool nkiParts(Item& root, QByteArray* program, QByteArray* files, QString* error
             *error = "the .nki has no preset data (encrypted?)";
             return false;
             }
+      if (tail)
+            *tail = preset.tail();
       for (const PChunk& c : top) {
             if (c.id == PROGRAM)
                   *program = c.body;
@@ -886,8 +897,8 @@ QByteArray fromEmpty(const QByteArray& emptyComponent, const QByteArray& nki, co
             *error = "the .nki is not an NI container";
             return QByteArray();
             }
-      QByteArray program, files;
-      if (!nkiParts(nkiRoot, &program, &files, error))
+      QByteArray program, files, nkiTail;
+      if (!nkiParts(nkiRoot, &program, &files, error, &nkiTail))
             return QByteArray();
       int count = 0;
       if (!set.empty())
@@ -967,7 +978,7 @@ QByteArray fromEmpty(const QByteArray& emptyComponent, const QByteArray& nki, co
             *error = "Kontakt's state has no slot list";
             return QByteArray();
             }
-      preset.set(join(top));
+      preset.set(join(top), nkiTail);             // (the marker of a preset with a program: the .nki's)
       rebuild(root);
       return root.toBytes();
       }
@@ -1033,6 +1044,15 @@ std::map<QString, QByteArray> scriptValues(const QByteArray& program)
                   if (!out.count(v.first))
                         out[v.first] = v.second.value;
       return out;
+      }
+
+QByteArray presetTail(const QByteArray& data)
+      {
+      Item root;
+      Preset preset;
+      if (!root.parse(data, 0) || !preset.read(root))
+            return QByteArray();
+      return preset.tail();
       }
 
 QStringList samplePaths(const QByteArray& component, QString* error)

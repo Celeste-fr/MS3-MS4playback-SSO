@@ -193,7 +193,7 @@ bool SoundLibraryHost::hasSetup(const SoundLib::Library& library, const QString&
 //---------------------------------------------------------
 
 // raise it when a change to the making makes the setups made before stale
-static const int MAKER_VERSION = 1;
+static const int MAKER_VERSION = 2;       // 2: the preset marker of a loaded program (run 107)
 
 bool SoundLibraryHost::makesSetups(const SoundLib::Library& library)
       {

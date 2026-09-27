@@ -379,8 +379,13 @@ macOS.
   score moved three hand-made files to `old setups (not used)` and made both setups (1.1 s each: the
   program, `$iooxo` 3, 32,472 absolute sample paths), reused on the next start; the dialogs show "Loaded" /
   "Made by MuseScore", *Library folder…*, no *Save setup*, *Set up…* or *Add a patch…*. Tests
-  `kontaktSetup`, `kontaktSetupReal`. Not yet loaded by Kontakt from MuseScore itself (the Python tool's
-  setups were, run 91); the owner's first try decides.
+  `kontaktSetup`, `kontaktSetupReal`. **Run 107 (the owner, 2026-09-27): Kontakt refused every made setup**
+  ("The project could not be recalled for unknown reasons", Solo Violin 1 / 2, Viola, Cello). The last 4 bytes
+  after the Preset Chunk Item's data are a marker, not a checksum: a7636734 in an `.nki` and a multi with a
+  program, 8565620d in Kontakt with nothing loaded; the setups kept the empty one. They take the `.nki`'s now
+  (`Preset::set(data, tail)`; make_setups.py's from-empty path too), `MAKER_VERSION` 2 remakes them; tests
+  compare the marker (the fixtures' `.nki` now carries a7636734). Against the owner's hand-made Violins 1
+  every chunk is now the same but ids, the save time, the browser state, the program and the paths.
 - Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
   a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
   bar "Loading … in the background"); a play before that's done loads the rest (`sync`). The owner,

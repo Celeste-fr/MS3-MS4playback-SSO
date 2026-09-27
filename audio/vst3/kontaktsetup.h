@@ -18,7 +18,8 @@
 //      its script's saved values set where asked (SSO: "$iooxo" 3, UACC switching);
 //    - the .nki's sample list, every path made absolute from the .nki's folder;
 //    - the .nki's authorization (the library's SNPID) and the library fields of its sound header;
-//    - the multi marked as not empty.
+//    - the multi marked as not empty (MULTI_CONFIGURATION, and the marker after the preset data:
+//      the .nki's, a7636734; Kontakt's with nothing loaded, 8565620d, makes Kontakt refuse it).
 //  Compared with the owner's own setup of Violins 1 (Kontakt 8.9) only the save time and two ids
 //  differ. The script's code is copied as it is, never read out. Nothing is decrypted: an .nki
 //  whose preset data is encrypted can't be used (SSO's aren't).
@@ -55,6 +56,7 @@ QByteArray nkiProgram(const QByteArray& nki, QString* error);
 QString programName(const QByteArray& program);
 std::map<QString, QByteArray> scriptValues(const QByteArray& program); // all its scripts' values
 QStringList samplePaths(const QByteArray& component, QString* error);   // a state's sample list
+QByteArray presetTail(const QByteArray& data);  // what follows a state's or an .nki's preset data (its marker)
 
 } // namespace KontaktSetup
 } // namespace Ms

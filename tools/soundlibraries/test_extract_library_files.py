@@ -87,8 +87,13 @@ def authorization(snpids):
     return u32(1) + u32(1) + u32(1) + u32(len(snpids)) + b"".join(utf16(s) for s in snpids) + bytes(8) + u32(0x8565620D)
 
 
-def preset_chunk_item(data):
-    return u32(1) + u32(1) + u32(1) + u32(len(data)) + u32(0) + data + u32(0) + u32(0x8565620D)
+# the marker after the preset data: 0x8565620D as Kontakt writes it with nothing loaded (and as the
+# documentation gives it), 0xA7636734 in an .nki and in a multi with a program loaded
+EMPTY_MARKER, PROGRAM_MARKER = 0x8565620D, 0xA7636734
+
+
+def preset_chunk_item(data, marker=EMPTY_MARKER):
+    return u32(1) + u32(1) + u32(1) + u32(len(data)) + u32(0) + data + u32(0) + u32(marker)
 
 
 def subtree(inner, compressed=True, garbage=False):
@@ -101,13 +106,13 @@ def subtree(inner, compressed=True, garbage=False):
     return u32(1) + u8(1) + u32(len(inner)) + u32(len(packed)) + packed
 
 
-def nki(preset=None, snpids=(), encrypted=False, name="Violins 1 - All techniques"):
+def nki(preset=None, snpids=(), encrypted=False, name="Violins 1 - All techniques", marker=EMPTY_MARKER):
     info = item([("DSIN", 108, soundinfo(name, tags=["Strings"], attributes=["Ensemble"],
                                          props={"\\@verl": "1.7.14"}, description="All the techniques."))])
     if encrypted:
         body = item([("DSIN", 116, u32(1) + u8(1)), ("DSIN", 115, subtree(b"", garbage=True))])
     else:
-        inner = item([("DSIN", 109, preset_chunk_item(preset))])
+        inner = item([("DSIN", 109, preset_chunk_item(preset, marker))])
         body = item([("DSIN", 116, u32(1) + u8(0)), ("DSIN", 115, subtree(inner))])
     sound = item([("4KIN", 3, b"\x00\x00"), ("4KIN", 101, app()), ("4KIN", 106, authorization([]))],
                  [("DSIN", 108, info), ("DSIN", 116, body)])

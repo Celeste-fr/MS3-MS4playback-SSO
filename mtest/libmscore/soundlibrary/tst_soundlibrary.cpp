@@ -862,6 +862,10 @@ void TestSoundLibrary::kontaktSetup()
       QCOMPARE(paths.size(), 2 + 2);
       QCOMPARE(paths[0], QString("D:/Libs/SSO/Samples/Lib_Strings.nkr"));
       QCOMPARE(paths[2], QString("D:/Libs/SSO/Samples/Strings_V.nkxSamples/v2_C3.ncw"));
+      // the marker after the preset data: a program's (the .nki's), not Kontakt's with nothing loaded
+      // (which Kontakt refuses around a program: the owner, run 107)
+      QCOMPARE(presetTail(state).right(4), presetTail(nki).right(4));
+      QVERIFY(presetTail(state).right(4) != presetTail(empty).right(4));
       // made again from its own result: nothing loaded is needed (a slot already used is replaced)
       QVERIFY(!fromEmpty(state, nki, "D:/x", {}, &error).isEmpty());
       // what can't be used
@@ -901,6 +905,7 @@ void TestSoundLibrary::kontaktSetupReal()
       QCOMPARE(set, 1);
       const QByteArray program = slotProgram(state, &error);
       QCOMPARE(programName(program), programName(nkiProgram(nki, nullptr)));
+      QCOMPARE(presetTail(state).right(4), QByteArray::fromHex("346763a7"));
       QCOMPARE(scriptValues(program).at("$iooxo"), QByteArray("3"));
       const QStringList paths = samplePaths(state, &error);
       QVERIFY(paths.size() > 100);
