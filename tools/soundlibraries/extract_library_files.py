@@ -1495,6 +1495,11 @@ def report(target):
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")  # a console in cp1252 and a name it can't show
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("paths", nargs="*", help="library folders or files (default: found in the registry)")
     ap.add_argument("--match", default=r"spitfire|symphon", help="regular expression naming the library")
