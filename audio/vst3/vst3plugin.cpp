@@ -887,6 +887,14 @@ std::vector<Vst3Plugin::Parameter> Vst3Plugin::parameters() const
       return params;
       }
 
+long Vst3Plugin::parameterId(const QString& title) const
+      {
+      for (const Parameter& p : parameters())
+            if (p.title.compare(title, Qt::CaseInsensitive) == 0)
+                  return long(p.id);
+      return -1;
+      }
+
 double Vst3Plugin::parameter(unsigned id) const
       {
       return d->controller ? d->controller->getParamNormalized(id) : 0.0;

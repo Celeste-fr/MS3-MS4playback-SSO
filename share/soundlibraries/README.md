@@ -178,6 +178,27 @@ switch value of each articulation. For example:
   (Spitfire's "Kickstart" percussion) takes `<Switch type="keyswitch"/>` and its articulations'
   keys as values.
 
+- **Controllers.** A `<Controller>` is something of the library MuseScore sets per part: a MIDI
+  controller (`cc`, 0–119) or a parameter of the hosted plug-in, found by its title (`param`,
+  plug-in hosting only). Values are 0–127 (a parameter gets value / 127). `default` is what a
+  part plays it at unless it has a value of its own; without it the patch keeps its own
+  setting. `<Text>` children are staff texts (the whole text, as a regular expression,
+  case-insensitive) that change a MIDI controller from their note on. A `<Controller>` at the
+  top is for every instrument; one inside an `Instrument` replaces the top one of the same `id`
+  (or adds to them).
+
+  ```xml
+  <Controller id="vibrato" name="Vibrato" cc="21" default="64">
+    <Text match="senza vib\.?" value="0"/>
+    <Text match="molto vib\.?" value="127"/>
+  </Controller>
+  <Controller id="release" name="Release" param="Release"/>
+  ```
+
+  *View › Sound Library…* › *Controllers…* sets a part's values. They are kept in the score
+  (as the metaTag `partControllers`, which MuseScore 3.6 keeps) by controller `id`, so a value
+  stays with the part when the library changes.
+
 **The Spitfire UACC values have not been checked against the library.** They come from a
 community articulation bank for Spitfire Symphony Orchestra
 ([Reaticulate](https://github.com/jtackaberry/reaticulate), `userbanks/Spitfire`). Each Spitfire

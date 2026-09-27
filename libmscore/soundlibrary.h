@@ -88,6 +88,29 @@ struct DrumKey {
                                           // gives it a key (Kickstart); a setup elsewhere must do the same
       };
 
+//---------------------------------------------------------
+//   Controller
+//    something of the library's MuseScore sets per part (vibrato, release, tightness, a mic
+//    mix …): a MIDI controller, or a parameter of the hosted plug-in, found by its title.
+//    Values are 0-127 for both (a parameter gets value / 127). Its value: the part's own
+//    (partcontrollers.h), else the map's default; staff text can change it from its tick on
+//    (a MIDI controller only: a parameter keeps the part's value)
+//---------------------------------------------------------
+
+struct ControllerText {
+      QRegularExpression match;           // staff text that sets it (the whole text, case-insensitive)
+      int value { 0 };
+      };
+
+struct Controller {
+      QString id;                         // the key in the map and in the score (vibrato …)
+      QString name;                       // shown
+      int cc { -1 };                      // a MIDI controller (0-119)
+      QString param;                      // else a plug-in parameter's title (hosted plug-in only)
+      int defaultValue { -1 };            // 0-127; -1: MuseScore leaves the patch's own value
+      std::vector<ControllerText> texts;
+      };
+
 struct LibInstrument {
       QString name;                       // the library's name for it (the patch to load)
       QStringList ids;                    // MuseScore instrument ids it serves
@@ -100,6 +123,8 @@ struct LibInstrument {
       bool kit { false };                 // percussion served by its extras' keys; no patch of its own
       bool keyScan { false };             // a percussion patch: the articulation check scans its keys
       std::vector<DrumKey> drums;
+      std::vector<Controller> controllers;          // its own (over the library's, by id)
+      std::vector<Controller> allControllers;       // the library's with its own (Library::load)
 
       bool extra() const { return !with.isEmpty(); }
       std::vector<const LibInstrument*> patches() const;    // this one, then its extras
@@ -126,6 +151,7 @@ class Library {
       int dynamicsCC { 1 };               // single-note dynamics (Spitfire: CC1); -1: velocity only
       QStringList plugins;                // the plug-in to host, by file name, in order of preference
       int expressionValue { 127 };        // CC11 at the start (when dynamicsCC is not 11)
+      std::vector<Controller> controllers;          // for all its instruments
       std::vector<LibInstrument> instruments;
 
       static std::shared_ptr<Library> load(const QString& path, QString* error = nullptr);
@@ -227,6 +253,9 @@ class TextTechniques {
       TextState at(int tick) const;
       static void apply(const QString& text, TextState& state);
       };
+
+// the staff texts of the part that set the controller (Controller::texts): tick -> value
+std::map<int, int> controllerTexts(Score* score, const Part* part, const Controller& controller);
 
 //---------------------------------------------------------
 //   want

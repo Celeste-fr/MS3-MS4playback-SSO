@@ -73,11 +73,20 @@ class MidiRenderer {
       bool ms4Mode { false };                               // the chunk being rendered uses it
       std::set<const Part*> ms4Active;                      // its parts that use it (partplayback.h)
       QString partModes;                                    // the parts' playback modes as last read
+      QString partControllers;                              // the parts' library controllers as last read
 
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {
             SoundLib::Route route;                          // the main patch's
             SoundLib::TextTechniques text;
+            // the main patch's MIDI controllers (vibrato …): the part's value (-1: the patch's
+            // own), and the staff text that changes it (tick -> value)
+            struct Ctrl {
+                  int cc;
+                  int value;
+                  std::map<int, int> texts;
+                  };
+            std::vector<Ctrl> controllers;
             std::map<const Instrument*, const SoundLib::LibInstrument*> instruments;
             std::vector<const SoundLib::LibInstrument*> patches;    // routed: the main one, then extras
             // the patches a note of an instrument of the part chooses from

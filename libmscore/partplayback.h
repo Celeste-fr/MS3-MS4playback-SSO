@@ -28,6 +28,7 @@
 //   its MIDI channels (MS4's dynamics are a controller of the channel).
 //---------------------------------------------------------
 
+#include <functional>
 #include <map>
 #include <QString>
 
@@ -47,6 +48,9 @@ extern const char* const metaTag;
 std::map<const Part*, PartPlayback> read(const MasterScore* score);
 // the metaTag's value for these modes (empty: none)
 QString write(const MasterScore* score, const std::map<const Part*, PartPlayback>& modes);
+// the part a score's record of it names: by its index when the name matches there, else by its
+// name, else (renamed) by its index; never one taken already (partcontrollers.h uses it too)
+const Part* findPart(const MasterScore* score, int index, const QString& name, const std::function<bool(const Part*)>& taken);
 // the master score's part a part plays for (itself in the master score)
 const Part* masterPart(const Part* part);
 // a part's own mode, from modes as read()

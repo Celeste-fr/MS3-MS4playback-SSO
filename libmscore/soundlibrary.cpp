@@ -69,6 +69,58 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
       return number >= 0 && number < 128;
       }
 
+// <Controller id="vibrato" name="Vibrato" cc="21" default="64">
+//   <Text match="senza vib\.?" value="0"/>
+// </Controller>
+// or param="<the plug-in parameter's title>" instead of cc; the reader is on the element
+static bool readController(QXmlStreamReader& r, Controller& c)
+      {
+      const QXmlStreamAttributes a = r.attributes();
+      c.id = a.value("id").toString();
+      c.name = a.value("name").toString();
+      if (c.name.isEmpty())
+            c.name = c.id;
+      bool ok = true;
+      if (a.hasAttribute("cc"))
+            c.cc = a.value("cc").toInt(&ok);
+      c.param = a.value("param").toString();
+      if (a.hasAttribute("default")) {
+            bool okd = false;
+            c.defaultValue = a.value("default").toInt(&okd);
+            ok = ok && okd && c.defaultValue >= 0 && c.defaultValue <= 127;
+            }
+      if (!ok || c.id.isEmpty() || (c.cc < 0) == c.param.isEmpty() || c.cc > 119)
+            return false;
+      while (r.readNextStartElement()) {
+            if (r.name() == "Text") {
+                  const QXmlStreamAttributes aa = r.attributes();
+                  ControllerText t;
+                  t.match = QRegularExpression("^(?:" + aa.value("match").toString() + ")$", QRegularExpression::CaseInsensitiveOption);
+                  bool okv = false;
+                  t.value = aa.value("value").toInt(&okv);
+                  if (aa.value("match").isEmpty() || !t.match.isValid() || !okv || t.value < 0 || t.value > 127 || c.cc < 0)
+                        return false;
+                  c.texts.push_back(t);
+                  }
+            r.skipCurrentElement();
+            }
+      return true;
+      }
+
+// the library's controllers, then the instrument's own: one of the same id replaces it
+static std::vector<Controller> mergeControllers(const std::vector<Controller>& library, const std::vector<Controller>& own)
+      {
+      std::vector<Controller> all = library;
+      for (const Controller& c : own) {
+            auto it = std::find_if(all.begin(), all.end(), [&c](const Controller& x) { return x.id == c.id; });
+            if (it != all.end())
+                  *it = c;
+            else
+                  all.push_back(c);
+            }
+      return all;
+      }
+
 std::shared_ptr<Library> Library::load(const QString& path, QString* error)
       {
       auto fail = [error](const QString& msg) {
@@ -107,6 +159,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   if (a.hasAttribute("expression"))
                         lib->expressionValue = a.value("expression").toInt();
                   r.skipCurrentElement();
+                  }
+            else if (r.name() == "Controller") {
+                  Controller c;
+                  if (!readController(r, c))
+                        return fail(QString("%1:%2: bad Controller").arg(path).arg(r.lineNumber()));
+                  lib->controllers.push_back(c);
                   }
             else if (r.name() == "Instrument") {
                   LibInstrument li;
@@ -163,6 +221,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                                     return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
                               li.articulations.push_back(art);
                               }
+                        else if (r.name() == "Controller") {
+                              Controller c;
+                              if (!readController(r, c))
+                                    return fail(QString("%1:%2: bad Controller").arg(path).arg(r.lineNumber()));
+                              li.controllers.push_back(c);
+                              continue;         // (readController read the element to its end)
+                              }
                         r.skipCurrentElement();
                         }
                   // (an extra patch has no ids, and may hold only articulations listed for reference,
@@ -181,6 +246,9 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
             return fail(QString("%1:%2: %3").arg(path).arg(r.lineNumber()).arg(r.errorString()));
       if (lib->name.isEmpty())
             lib->name = QFileInfo(path).completeBaseName();
+      // (a <Controller> of the library may come after the instruments)
+      for (LibInstrument& li : lib->instruments)
+            li.allControllers = mergeControllers(lib->controllers, li.controllers);
       // extra patches to their main patch (the vector is complete: the pointers stay valid);
       // they take its instrument ids (the articulation check's test pitch; match() skips them)
       for (LibInstrument& li : lib->instruments) {
@@ -611,6 +679,33 @@ TextState TextTechniques::at(int tick) const
       if (it == _states.begin())
             return TextState();
       return std::prev(it)->second;
+      }
+
+//---------------------------------------------------------
+//   controllerTexts
+//---------------------------------------------------------
+
+std::map<int, int> controllerTexts(Score* score, const Part* part, const Controller& controller)
+      {
+      std::map<int, int> ticks;
+      if (controller.texts.empty())
+            return ticks;
+      const int strack = part->startTrack();
+      const int etrack = part->endTrack();
+      for (Segment* seg = score->firstSegment(SegmentType::All); seg; seg = seg->next1()) {
+            for (Element* e : seg->annotations()) {
+                  if (!e->isStaffText() || e->track() < strack || e->track() >= etrack)
+                        continue;
+                  const QString text = toStaffText(e)->plainText().simplified();
+                  for (const ControllerText& t : controller.texts) {
+                        if (t.match.match(text).hasMatch()) {
+                              ticks[seg->tick().ticks()] = t.value;
+                              break;
+                              }
+                        }
+                  }
+            }
+      return ticks;
       }
 
 //---------------------------------------------------------

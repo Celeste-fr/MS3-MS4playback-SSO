@@ -151,6 +151,35 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  <Switch type="cc" number="32"/>',
 '  <Dynamics cc="1" expression="127"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>']
+# Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
+# value in View > Sound Library > Controllers…): (id, name shown, CC or None, plug-in parameter
+# title or None, default 0-127 or None (the patch's own value stays), [(staff text regexp, value)]).
+# From Extract plug-in data: tools/soundlibraries/controllers_from_extract.py <extract folder>
+# prints what each CC and parameter did, as lines for these tables. Only what an extract showed;
+# no guesses.
+CONTROLLERS = []            # for every patch
+PATCH_CONTROLLERS = {}      # patch name -> [...], over CONTROLLERS (same id: replaces it)
+
+def controller(c, indent):
+    cid, name, cc, param, default, texts = c
+    assert (cc is None) != (param is None), c
+    assert cc is None or 0 <= cc <= 119, c
+    assert default is None or 0 <= default <= 127, c
+    assert not texts or cc is not None, c           # (staff text: MIDI controllers only)
+    a = f'{indent}<Controller id={q(cid)} name={q(name)}'
+    a += f' cc="{cc}"' if cc is not None else f' param={q(param)}'
+    if default is not None:
+        a += f' default="{default}"'
+    if not texts:
+        return [a + '/>']
+    return [a + '>'] + [f'{indent}  <Text match={q(m)} value="{v}"/>' for m, v in texts] + [f'{indent}</Controller>']
+
+out += [x for c in CONTROLLERS for x in controller(c, '  ')]
+patchControllersUsed = set()
+def patchControllers(name):
+    patchControllersUsed.add(name)
+    return [x for c in PATCH_CONTROLLERS.get(name, []) for x in controller(c, '    ')]
+
 # Corrections from Spitfire's own Cubase expression maps for SSS / SSB / SSW (legacy downloads,
 # CC32 = UACC; see check_spitfire_expressionmaps.py), where they differ from the community bank
 SPITFIRE_ADD = {}
@@ -311,6 +340,7 @@ for bank,name,ids,pn in I:
         out.append(articulation(shown, v, t, m, name))
     for n, v, t, m in SPITFIRE_ADD.get(name, []):
         out.append(articulation(n, v, t, m, name))
+    out += patchControllers(name)
     out.append('  </Instrument>')
 names = {name for _, name, _, _ in I}
 for main, name, arts in EXTRAS:
@@ -322,6 +352,7 @@ for main, name, arts in EXTRAS:
     out.append('    <Switch type="none"/>')
     for n, v, t, m in arts:
         out.append(articulation(n, v, t, m))
+    out += patchControllers(name)
     out.append('  </Instrument>')
 
 # Percussion: a kit for MuseScore's unpitched percussion, played by SSO's percussion patches.
@@ -559,4 +590,5 @@ for kit in PERCUSSION:
         out.append('  </Instrument>')
 out.append('</SoundLibrary>')
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
+assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

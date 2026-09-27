@@ -14,6 +14,7 @@
 #include "audio/midi/event.h"
 #include "libmscore/instrument.h"
 #include "libmscore/part.h"
+#include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/synthesizerstate.h"
@@ -51,6 +52,7 @@ class TestSoundLibrary : public QObject, public MTest
       void renderPatches();
       void renderKit();
       void renderKitRoll();
+      void controllers();
 #ifdef TESTSYNTH
       void vst3Plugin();
       void vst3Render();
@@ -477,6 +479,133 @@ void TestSoundLibrary::renderPatches()
             if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && te.second.pitch() == 62)
                   sulG = te.second.extChannel();
       QCOMPARE(sulG, 0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   controllers
+//    the map's <Controller>s (the library's, an instrument's own over them by id), the part's
+//    values in the score (metaTag partControllers), and what the renderer sends: the value at
+//    the start, on every patch of the part, and the staff text's change; a plug-in parameter
+//    is not a MIDI event
+//---------------------------------------------------------
+
+void TestSoundLibrary::controllers()
+      {
+      // bad ones: a CC and a parameter, neither, a staff text on a parameter, a CC over 119
+      for (const char* bad : { "<Controller id='x' cc='21' param='Vibrato'/>", "<Controller id='x'/>",
+                               "<Controller id='x' param='P'><Text match='a' value='1'/></Controller>",
+                               "<Controller id='x' cc='120'/>", "<Controller id='x' cc='21' default='128'/>" }) {
+            QTemporaryFile f;
+            f.open();
+            f.write(QString("<SoundLibrary name='t'>%1<Instrument name='Violin' ids='violin'>"
+                            "<Articulation name='Long' value='1' techniques='long'/></Instrument></SoundLibrary>").arg(bad).toUtf8());
+            f.close();
+            QVERIFY2(!SoundLib::Library::load(f.fileName()), bad);
+            }
+
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Controller id='vibrato' name='Vibrato' cc='21' default='64'>"
+         "<Text match='molto vib\\.' value='127'/>"
+         "</Controller>"
+         "<Controller id='release' name='Release' param='Release'/>"
+         "<Controller id='tightness' name='Tightness' cc='18' default='10'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
+         "<Controller id='vibrato' name='Vibrato' cc='21' default='64'>"   // its own: sul G takes it away
+         "<Text match='sul G' value='5'/>"
+         "</Controller>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Sul G' with='Violin'>"
+         "<Articulation name='Long Sul G' value='1' techniques='long legato' modifiers='sulg'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Staccatissimo' with='Violin'>"
+         "<Articulation name='Staccatissimo' value='1' techniques='staccatissimo'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::LibInstrument& violin = lib->instruments[0];
+      QCOMPARE(int(lib->controllers.size()), 3);
+      QCOMPARE(int(violin.allControllers.size()), 3);
+      QCOMPARE(violin.allControllers[0].id, QString("vibrato"));
+      QCOMPARE(int(violin.allControllers[0].texts.size()), 1);          // its own, not the library's
+      QVERIFY(violin.allControllers[0].texts[0].match.match("Sul G").hasMatch());
+      QVERIFY(!violin.allControllers[0].texts[0].match.match("sul G and more").hasMatch());   // the whole text
+      QCOMPARE(violin.allControllers[1].param, QString("Release"));
+      QCOMPARE(violin.allControllers[1].defaultValue, -1);
+      QCOMPARE(lib->instruments[1].allControllers.size(), size_t(3));   // an extra: the library's
+      QCOMPARE(int(lib->instruments[1].allControllers[0].texts.size()), 1);
+      QCOMPARE(lib->instruments[1].allControllers[0].texts[0].value, 127);
+      SoundLib::setCurrent(lib);
+
+      MasterScore* score = readScore(DIR + "patches.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts().front();
+
+      // the part's values in the score: vibrato 100, tightness at the map's default
+      std::map<const Part*, PartControllers::Values> values;
+      values[part] = { { "vibrato", 100 }, { "other-library", 3 } };
+      const QString tag = PartControllers::write(score, values);
+      QVERIFY(!tag.isEmpty());
+      score->setMetaTag(PartControllers::metaTag, tag);
+      const std::map<const Part*, PartControllers::Values> read = PartControllers::read(score);
+      QCOMPARE(int(read.size()), 1);
+      QCOMPARE(read.at(part).at("vibrato"), 100);
+      QCOMPARE(read.at(part).at("other-library"), 3);
+      QCOMPARE(PartControllers::value(part, violin.allControllers[0], read), 100);
+      QCOMPARE(PartControllers::value(part, violin.allControllers[2], read), 10);
+      QCOMPARE(PartControllers::value(part, violin.allControllers[1], read), -1);
+
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      QCOMPARE(int(routes.size()), 4);
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<int, std::vector<std::pair<int, int>>> vibrato;         // MIDI out channel -> (tick, value)
+      std::map<int, int> tightness;                                     // MIDI out channel -> value
+      int firstNote = -1;
+      int sulG = -1;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            if (ev.type() == ME_CONTROLLER && ev.controller() == 21)
+                  vibrato[ev.extChannel()].push_back({ te.first, ev.value() });
+            else if (ev.type() == ME_CONTROLLER && ev.controller() == 18)
+                  tightness[ev.extChannel()] = ev.value();
+            else if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                  if (firstNote < 0)
+                        firstNote = te.first;
+                  if (ev.pitch() == 62)
+                        sulG = te.first;
+                  }
+            }
+      QVERIFY(firstNote >= 0 && sulG > 0);
+      for (int ch = 0; ch < 4; ++ch) {
+            QVERIFY2(!vibrato[ch].empty(), qPrintable(QString("no vibrato on channel %1").arg(ch)));
+            QCOMPARE(vibrato[ch].front().first, 0);
+            QCOMPARE(vibrato[ch].front().second, 100);
+            QCOMPARE(tightness[ch], 10);
+            }
+      // the staff text "sul G": 5 from its note on, on the main patch (and so on every patch)
+      int changedAt = -1;
+      for (const auto& v : vibrato[0])
+            if (v.first > firstNote && v.second == 5)
+                  changedAt = v.first;
+      QVERIFY2(changedAt > 0 && changedAt <= sulG, qPrintable(QString("changed at %1, sul G note at %2").arg(changedAt).arg(sulG)));
+      // before the note: the controller comes first at its tick
+      for (auto it = events.lower_bound(sulG); it != events.end() && it->first == sulG; ++it) {
+            if (it->second.isExternal() && it->second.type() == ME_NOTEON && it->second.velo() > 0)
+                  QFAIL("the note came before the controller");
+            if (it->second.isExternal() && it->second.type() == ME_CONTROLLER && it->second.controller() == 21)
+                  break;
+            }
       delete score;
       }
 
@@ -943,6 +1072,13 @@ void TestSoundLibrary::pluginDescribe()
             params[v.toObject().value("title").toString()] = v.toObject();
       QCOMPARE(int(params.size()), 3 + 12);
       QCOMPARE(params["Tone"].value("units").toString(), QString("%"));
+      // a map's parameter controller (SoundLib::Controller::param) finds it by title, whatever the case
+      QCOMPARE(p->parameterId("tone"), 3L);
+      QCOMPARE(p->parameterId("No such"), -1L);
+      const double tone = p->parameter(3);
+      p->setParameter(unsigned(p->parameterId("Tone")), 64 / 127.0);
+      QVERIFY(qAbs(p->parameter(3) - 64 / 127.0) < 1e-6);
+      p->setParameter(3, tone);
       QCOMPARE(params["Level"].value("value").toDouble(), 1.0);
       QVERIFY(!params["Articulation"].value("texts").toArray().isEmpty());
       const QJsonObject bus0 = d.value("midiMapping").toObject().value("bus 0").toObject();

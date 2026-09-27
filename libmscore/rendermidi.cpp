@@ -51,6 +51,7 @@
 #include "undo.h"
 #include "utils.h"
 #include "vibrato.h"
+#include "partcontrollers.h"
 #include "partplayback.h"
 #include "tuning.h"
 #include "volta.h"
@@ -1719,6 +1720,25 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                               if (libraryPlays(ip.second) && lp->instruments.at(ip.second)->kit)
                                     for (const Channel* c : ip.second->channel())
                                           builtInChannels.push_back(score->masterScore()->playbackChannel(c)->channel());
+                  // the library's controllers (vibrato …): the value in force at the chunk's start,
+                  // ahead of its notes, then the staff text's changes
+                  for (const LibPart::Ctrl& c : lp->controllers) {
+                        auto putCtrl = [&](int tick, int value) {
+                              for (const auto& ip : *part->instruments()) {
+                                    if (!libraryPlays(ip.second))
+                                          continue;
+                                    NPlayEvent ev(ME_CONTROLLER, ip.second->channel(0)->channel(), c.cc, value);
+                                    ev.setOriginatingStaff(part->staff(0)->idx());
+                                    events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
+                                    }
+                              };
+                        auto t = c.texts.upper_bound(tick1);
+                        const int start = t == c.texts.begin() ? c.value : std::prev(t)->second;
+                        if (start >= 0)
+                              putCtrl(tick1, start);
+                        for (; t != c.texts.end() && t->first < tick2; ++t)
+                              putCtrl(t->first, t->second);
+                        }
                   if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
                         continue;
                   controller = library->dynamicsCC;
@@ -3578,10 +3598,13 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
-      if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes)
+      const QString controllers = score->masterScore()->metaTag(PartControllers::metaTag);
+      if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
+          || controllers != partControllers)
             needUpdate = true;
       if (needUpdate) {
             partModes = modes;
+            partControllers = controllers;
             // Update the related structures inside score
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
@@ -3592,6 +3615,7 @@ void MidiRenderer::updateState()
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {
+                  const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
                   for (const SoundLib::Route& r : routes) {
                         if (r.patch != 0)
@@ -3600,6 +3624,12 @@ void MidiRenderer::updateState()
                         LibPart& lp = libParts[part];
                         lp.route = r;
                         lp.text.build(score, part);
+                        for (const SoundLib::Controller& c : r.instrument->allControllers) {
+                              if (c.cc < 0)       // a plug-in parameter: set on the instance (SoundLibraryHost)
+                                    continue;
+                              lp.controllers.push_back({ c.cc, PartControllers::value(part, c, values),
+                                                         SoundLib::controllerTexts(score, part, c) });
+                              }
                         // the main patch's instrument plays all the part's routed patches, an
                         // instrument change only its own on the part's route
                         std::vector<std::pair<int, int>> outs;

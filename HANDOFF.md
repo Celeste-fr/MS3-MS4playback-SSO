@@ -43,7 +43,14 @@ The owner asked for all the data the SSO plug-in gives, for more control of it. 
 brass, tuned percussion, a Performance patch, Grand Piano) and hands back the zip. From it: which CCs
 Spitfire's patches answer (expression, vibrato, release, tightness, reverb …) and their values, which
 parameters Kontakt exposes by name, and whether its state holds anything readable. Then decide with the
-owner which of those MuseScore should drive (a map element for controllers per library or patch).
+owner which of those MuseScore should drive.
+
+The MuseScore side for that is in (2026-09-27, see `CLAUDE.md` › Controllers): map `<Controller>`
+(a CC or a plug-in parameter by title, default, staff texts), per-part values in the score, sent
+in playback and export, set in *View › Sound Library…* › *Controllers…*. When an extract with
+*Try every controller* arrives: run `tools/soundlibraries/controllers_from_extract.py <zip>`,
+choose with the owner which controllers MuseScore should set and what they are called, put them
+in `CONTROLLERS` / `PATCH_CONTROLLERS` of `gen_spitfire_sso.py`, regenerate the map.
 
 ## What the owner is doing now
 

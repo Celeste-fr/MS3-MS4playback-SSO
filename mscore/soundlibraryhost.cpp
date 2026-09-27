@@ -12,6 +12,10 @@
 #include "soundlibrarycheck.h"
 
 #include <QApplication>
+#include <QCheckBox>
+#include <QGridLayout>
+#include <QSlider>
+#include <QSpinBox>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDirIterator>
@@ -29,7 +33,11 @@
 #include "audio/midi/event.h"
 #include "audio/midi/msynthesizer.h"
 #include "libmscore/part.h"
+#include "libmscore/partcontrollers.h"
+#include "libmscore/partplayback.h"
 #include "libmscore/score.h"
+#include "libmscore/undo.h"
+#include "seq.h"
 
 #ifdef USE_VST3
 #include "audio/vst3/vst3plugin.h"
@@ -167,6 +175,31 @@ static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QSt
       qWarning("Sound library: the setup of %s could not be loaded", qPrintable(instrument));
       return false;
       }
+
+//---------------------------------------------------------
+//   applyParameters
+//    the route's controllers that are plug-in parameters (SoundLib::Controller::param), at the
+//    part's values; found by title (case-insensitive). A controller with no value (-1) and
+//    none of the part's leaves the parameter as the setup has it
+//---------------------------------------------------------
+
+static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values)
+      {
+      for (const SoundLib::Controller& c : r.instrument->allControllers) {
+            if (c.param.isEmpty())
+                  continue;
+            const int value = PartControllers::value(r.part, c, values);
+            if (value < 0)
+                  continue;
+            const long id = p->parameterId(c.param);
+            if (id < 0) {
+                  qWarning("Sound library: %s has no parameter \"%s\" (controller %s)", qPrintable(p->name()),
+                           qPrintable(c.param), qPrintable(c.id));
+                  continue;
+                  }
+            p->setParameter(unsigned(id), value / 127.0);
+            }
+      }
 #endif
 
 //---------------------------------------------------------
@@ -228,6 +261,14 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
             s.instrument = name;
             s.hasSetup = setup && loadSetup(p.get(), *library, name);
             vst->setPlugin(k, std::move(p));
+            }
+      // the parts' plug-in parameters, on every sync (a setup loaded since resets them)
+      if (ok) {
+            const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
+            for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library))
+                  if (!r.instrument->kit)
+                        if (Vst3Plugin* p = vst->plugin(r.port * 16 + r.channel))
+                              applyParameters(p, r, values);
             }
       for (int k = 0; k < 64; ++k) {
             if (!used[k] && (vst->plugin(k) || !_slots[k].instrument.isEmpty())) {
@@ -451,6 +492,7 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                         }
                   if (SoundLibraryHost::hasSetup(*library, r.instrument->name))
                         loadSetup(p.get(), *library, r.instrument->name);
+                  applyParameters(p.get(), r, PartControllers::read(score->masterScore()));
                   _own->setPlugin(r.port * 16 + r.channel, std::move(p));
                   }
             _vst = _own.get();
@@ -494,6 +536,90 @@ bool SoundLibraryExport::play(const NPlayEvent& event)
 //---------------------------------------------------------
 //   SoundLibraryDialog
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   editControllers
+//    the part's values for its patch's controllers (SoundLib::Controller), kept in the score
+//    (partcontrollers.h, undoable); unticked: the map's default (or the patch's own value)
+//---------------------------------------------------------
+
+static void editControllers(QWidget* parent, MasterScore* ms, const Part* part, const SoundLib::LibInstrument* li)
+      {
+      QDialog d(parent);
+      d.setWindowTitle(QObject::tr("Controllers: %1").arg(part->partName()));
+      QVBoxLayout* layout = new QVBoxLayout(&d);
+      QLabel* info = new QLabel(QObject::tr("What %1 plays these at. Unticked: the library map's default, else the "
+                                             "patch's own setting. Staff text can change a MIDI controller from its note on.")
+                                   .arg(li->name), &d);
+      info->setWordWrap(true);
+      layout->addWidget(info);
+      QGridLayout* grid = new QGridLayout;
+      layout->addLayout(grid);
+      std::map<const Part*, PartControllers::Values> all = PartControllers::read(ms);
+      const Part* mp = PartPlaybackModes::masterPart(part);
+      const PartControllers::Values own = all.count(mp) ? all[mp] : PartControllers::Values();
+      struct Row { QCheckBox* on; QSpinBox* value; };
+      std::vector<Row> rows;
+      int r = 0;
+      for (const SoundLib::Controller& c : li->allControllers) {
+            QCheckBox* on = new QCheckBox(c.name, &d);
+            QSlider* slider = new QSlider(Qt::Horizontal, &d);
+            slider->setRange(0, 127);
+            QSpinBox* spin = new QSpinBox(&d);
+            spin->setRange(0, 127);
+            QLabel* where = new QLabel(c.cc >= 0 ? QObject::tr("CC %1").arg(c.cc) : QObject::tr("parameter \"%1\"").arg(c.param), &d);
+            QObject::connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
+            QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), slider, &QSlider::setValue);
+            QObject::connect(on, &QCheckBox::toggled, slider, &QWidget::setEnabled);
+            QObject::connect(on, &QCheckBox::toggled, spin, &QWidget::setEnabled);
+            auto it = own.find(c.id);
+            spin->setValue(it != own.end() ? it->second : qMax(0, c.defaultValue));
+            on->setChecked(it != own.end());
+            slider->setEnabled(on->isChecked());
+            spin->setEnabled(on->isChecked());
+            grid->addWidget(on, r, 0);
+            grid->addWidget(slider, r, 1);
+            grid->addWidget(spin, r, 2);
+            grid->addWidget(where, r, 3);
+            rows.push_back({ on, spin });
+            ++r;
+            }
+      QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
+      QObject::connect(buttons, &QDialogButtonBox::accepted, &d, &QDialog::accept);
+      QObject::connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+      layout->addWidget(buttons);
+      d.resize(560, d.sizeHint().height());
+      if (d.exec() != QDialog::Accepted)
+            return;
+
+      // the part's values: those of other controllers (another library's) stay
+      PartControllers::Values values = own;
+      for (size_t i = 0; i < rows.size(); ++i) {
+            const QString& id = li->allControllers[i].id;
+            if (rows[i].on->isChecked())
+                  values[id] = rows[i].value->value();
+            else
+                  values.erase(id);
+            }
+      all[mp] = values;
+      QMap<QString, QString> tags = ms->metaTags();
+      const QString value = PartControllers::write(ms, all);
+      if (value.isEmpty())
+            tags.remove(PartControllers::metaTag);
+      else
+            tags.insert(PartControllers::metaTag, value);
+      if (tags == ms->metaTags())
+            return;
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      ms->startCmd();
+      ms->undo(new ChangeMetaTags(ms, tags));
+      ms->endCmd();
+      ms->setPlaylistDirty();
+      // (the plug-in parameters: on the instances now, when they are loaded)
+      if (SoundLib::output() == SoundLib::Output::PLUGIN && SoundLibraryHost::available())
+            SoundLibraryHost::instance()->sync(ms);
+      }
 
 SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> library, SoundLib::Output output, QWidget* parent)
    : QDialog(parent), _library(library), _output(output)
@@ -550,15 +676,15 @@ void SoundLibraryDialog::rebuild()
                     "load the patch in the plug-in and set its articulation switching (Spitfire: UACC), then close the "
                     "window: the setup is kept and loads by itself in every score from then on. Save setup keeps the "
                     "plug-in's state again after a change.").arg(QDir::toNativeSeparators(path)));
-            _table->setColumnCount(4);
-            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Setup"), QString() });
+            _table->setColumnCount(5);
+            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("Setup"), QString() });
             }
       else {
             _info->setText(tr("Load each patch on the MIDI output (A: \"%1\", then B, C, D) and channel shown. "
                               "Parts without a patch play on MuseScore's built-in synthesizer.")
                               .arg(preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE)));
-            _table->setColumnCount(4);
-            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("MIDI output"), tr("Channel") });
+            _table->setColumnCount(5);
+            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("MIDI output"), tr("Channel") });
             }
 
       for (const Part* part : score->parts()) {
@@ -572,18 +698,26 @@ void SoundLibraryDialog::rebuild()
                   _table->insertRow(row);
                   _table->setItem(row, 0, new QTableWidgetItem(r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName())));
                   _table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
+                  // the part's controllers: those of its main patch (the renderer sends them to all)
+                  if (r->patch == 0 && !r->instrument->allControllers.empty()) {
+                        QPushButton* ctrl = new QPushButton(tr("Controllers…"));
+                        _table->setCellWidget(row, 2, ctrl);
+                        MasterScore* ms = score->masterScore();
+                        const SoundLib::LibInstrument* li = r->instrument;
+                        connect(ctrl, &QPushButton::clicked, this, [this, ms, part, li]() { editControllers(this, ms, part, li); });
+                        }
                   if (r->instrument->kit) {
-                        _table->setItem(row, 2, new QTableWidgetItem(tr("(its drum sounds play on the patches below)")));
+                        _table->setItem(row, 3, new QTableWidgetItem(tr("(its drum sounds play on the patches below)")));
                         continue;
                         }
                   if (!plugin) {
-                        _table->setItem(row, 2, new QTableWidgetItem(QString(QChar('A' + r->port))));
-                        _table->setItem(row, 3, new QTableWidgetItem(QString::number(r->channel + 1)));
+                        _table->setItem(row, 3, new QTableWidgetItem(QString(QChar('A' + r->port))));
+                        _table->setItem(row, 4, new QTableWidgetItem(QString::number(r->channel + 1)));
                         continue;
                         }
                   const int slot = r->port * 16 + r->channel;
                   const bool setup = SoundLibraryHost::hasSetup(*_library, r->instrument->name);
-                  _table->setItem(row, 2, new QTableWidgetItem(setup ? tr("Ready") : tr("Not set up yet")));
+                  _table->setItem(row, 3, new QTableWidgetItem(setup ? tr("Ready") : tr("Not set up yet")));
                   QWidget* w = new QWidget;
                   QHBoxLayout* hl = new QHBoxLayout(w);
                   hl->setContentsMargins(2, 0, 2, 0);
@@ -591,7 +725,7 @@ void SoundLibraryDialog::rebuild()
                   QPushButton* save = new QPushButton(tr("Save setup"), w);
                   hl->addWidget(show);
                   hl->addWidget(save);
-                  _table->setCellWidget(row, 3, w);
+                  _table->setCellWidget(row, 4, w);
                   MasterScore* ms = score->masterScore();
                   connect(show, &QPushButton::clicked, this, [this, host, slot, ms]() {
                         QString error;

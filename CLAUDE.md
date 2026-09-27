@@ -230,6 +230,19 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   not channels. A legato articulation's note lasts DIVISION/16 into the next (Spitfire legato
   needs the overlap). A sampled trill or tremolo plays the note once (`SndConfig::ms4Once`).
   Dynamics go on the library's CC (CC1 for Spitfire).
+- Controllers (the way extracted plug-in data reaches playback; README › Controllers):
+  `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
+  `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,
+  with a default and staff texts (`<Text match value>`, CC only). A part's values:
+  `libmscore/partcontrollers.*`, metaTag `partControllers` (by controller id; parts found by
+  `PartPlaybackModes::findPart`). The renderer (`renderMs4Dynamics`, `LibPart::controllers`)
+  sends each CC's value at every chunk's start, ahead of the notes, and the staff text's changes;
+  `finishLibraryEvents` copies them to the part's extra patches. Parameters are set on the hosted
+  instances by `SoundLibraryHost::sync` (and the command-line export), `applyParameters`, via
+  `Vst3Plugin::parameterId(title)`. UI: *View › Sound Library…* › *Controllers…* per part
+  (undoable). From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
+  suggested `CONTROLLERS` / `PATCH_CONTROLLERS` lines for `gen_spitfire_sso.py` (both empty
+  until an SSO extract says what its CCs do). Test: `tst_soundlibrary::controllers`.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).

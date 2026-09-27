@@ -38,7 +38,6 @@ std::map<const Part*, PartPlayback> read(const MasterScore* score)
       if (tag.isEmpty())
             return modes;
       const QJsonArray list = QJsonDocument::fromJson(tag.toUtf8()).array();
-      const QList<Part*>& parts = score->parts();
       for (const QJsonValue& v : list) {
             const QJsonObject o = v.toObject();
             PartPlayback mode = PartPlayback::DEFAULT;
@@ -47,20 +46,29 @@ std::map<const Part*, PartPlayback> read(const MasterScore* score)
                         mode = PartPlayback(i);
             if (mode == PartPlayback::DEFAULT)
                   continue;
-            const int index = o.value("part").toInt(-1);
-            const QString name = o.value("name").toString();
-            const Part* part = nullptr;
-            if (index >= 0 && index < parts.size() && parts[index]->partName() == name && !modes.count(parts[index]))
-                  part = parts[index];
-            for (int i = 0; !part && i < parts.size(); ++i)
-                  if (parts[i]->partName() == name && !modes.count(parts[i]))
-                        part = parts[i];
-            if (!part && index >= 0 && index < parts.size() && !modes.count(parts[index]))
-                  part = parts[index];            // renamed
+            const Part* part = findPart(score, o.value("part").toInt(-1), o.value("name").toString(),
+                                        [&modes](const Part* p) { return modes.count(p) > 0; });
             if (part)
                   modes[part] = mode;
             }
       return modes;
+      }
+
+//---------------------------------------------------------
+//   findPart
+//---------------------------------------------------------
+
+const Part* findPart(const MasterScore* score, int index, const QString& name, const std::function<bool(const Part*)>& taken)
+      {
+      const QList<Part*>& parts = score->parts();
+      if (index >= 0 && index < parts.size() && parts[index]->partName() == name && !taken(parts[index]))
+            return parts[index];
+      for (const Part* p : parts)
+            if (p->partName() == name && !taken(p))
+                  return p;
+      if (index >= 0 && index < parts.size() && !taken(parts[index]))
+            return parts[index];            // renamed
+      return nullptr;
       }
 
 //---------------------------------------------------------
