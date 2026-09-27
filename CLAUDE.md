@@ -42,7 +42,8 @@ a contact sheet), publish a claude.ai artifact that shows each source picture (o
 next to what was read from it and what that reading is used for, so the owner can check every
 reading by eye before it changes code or the map. Draw musical symbols in Bravura (subset
 `fonts/bravura/Bravura.otf` with `pyftsubset` and embed it) so the page shows the glyphs
-themselves, and say which sources could not be read. Example: "Unpitched HEJI accidentals"
+themselves, and say which sources could not be read. Open the page with a short "What to check"
+list: each reading to confirm, where to look for it, then the decision asked. Example: "Unpitched HEJI accidentals"
 (https://claude.ai/artifact/CPfVu3qdHzMr5xPKiJFD2Y), the HEJI 2020 legend behind the 10
 accidentals' pitches.
 
