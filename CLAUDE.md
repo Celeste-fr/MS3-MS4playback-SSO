@@ -388,6 +388,36 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   MS_EXTRACT_OUT=<file.json> [MS_EXTRACT_STATE=<.vst3state>] [MS_EXTRACT_TRY=1] ./tst_soundlibrary
   externalPlugin` (skipped when unset).
 
+Extract library files (`tools/soundlibraries/extract_library_files.py`; the owner, 2026-09-27: "completely
+extract all data possible from SSO so we can fully integrate it into Muse in the future"): the files'
+half, without Kontakt. Python 3.8+, standard library only; the owner runs `ExtractLibraryFiles.exe` (artifact
+`ExtractLibraryFiles-win64` of the workflow "Tool: Extract library files", `tool_extract_library_files.yml`:
+tests, a try on the runner, PyInstaller; it runs on pushes that change the extractor). With no argument it
+finds the library (registry `Native Instruments\<library>` ContentDir, `--match "spitfire|symphon"`) or asks
+for the folder. It reads:
+- Kontakt 5+ `.nki .nkm .nkb .nksn` (NI container, "hsin" items, FastLZ sub-trees): application and
+  version, library SNPIDs, Soundinfo (name, author, vendor, description, tags, attributes, properties), the
+  container tree; when the preset data isn't encrypted, programs (key range, default keyswitch, library id
+  …), groups (name, release trigger, voice group …), zones (keys, velocities, root, sample, rate, length,
+  loops) and the sample file list;
+- NI file containers (`.nicnt` with its ProductHints XML, monolith `.nki`, some `.nkr`): table of contents,
+  instruments and data files inside; the older NKS archives (`.nkx` sample monoliths, `.nkr`, `.nkc`): every
+  entry's name (sample names: articulation, dynamic, round robin, note) and the sizes stored plainly;
+- NKS presets (`.nksf`, RIFF NIKS: NISI summary, NICA knob pages, PLID), loose WAVs (format, loops), `.nka`
+  arrays, XML/JSON/text; on Windows also NI's registry keys, Native Access's Service Center XMLs, NI's
+  databases (rows naming the library) and Spitfire's folders.
+Formats as documented by ConvertWithMoss (LGPL) and PresetConverter, re-written, not copied. On purpose it
+decrypts nothing (encrypted presets, samples and resources: only what their headers say in the clear) and
+copies no script source (KSP in PAR_SCRIPT or a `scripts` folder: counted only); serials, licences, tokens,
+e-mails and NI's HU/JDX key values are left out, the home folder is written `%USERPROFILE%`. Output:
+`Documents/MuseScore Sound Library Check/<library> files <date>/` (`library.json`, `inventory.csv`,
+`summary.txt`, `archives/<archive>.txt` with the names inside each, `extracted/`) and a zip. **When the owner
+hands it back**, `extract_library_files.py --report <zip>` prints the summary; the rest is in `library.json`.
+Tested with `test_extract_library_files.py` (12 tests: files built in each layout, and with `KONTAKT_NKI=` a
+real Kontakt 6.7 `.nki`, ConvertWithMoss's template: 61 zones, 61 samples, 5 script slots). Not run on SSO:
+whether its `.nki` presets are encrypted (then only names, tags and SNPIDs) and how its `.nkx` names read is
+what the first run will show.
+
 Tested here:
 - `tst_soundlibrary` hosts `mstestsynth.vst3` (`mtest/libmscore/soundlibrary/testsynth`), a
   sine synth that maps CC32 and CC1 like Kontakt. The tests cover notes, CC mapping, state,
