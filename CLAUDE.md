@@ -419,7 +419,7 @@ macOS.
   with the test synth: only the part with notes loaded; its state (not Kontakt's) was not resaved, as it should.
 - Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
   a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
-  bar "Loading … in the background"), each only after 1.5 s without a key, click or wheel
+  bar "Loading … in the background"), each after a pause of `INPUT_PAUSE_MS` without a key, click or wheel (0 since the owner asked, 2026-09-27: no wait; it was 1.5 s)
   (`eventFilter`, `INPUT_PAUSE_MS`: an instance blocks the window while it loads, and VST 3 wants that
   on the UI thread); a play before that's done loads the rest (`sync`). The owner's full orchestra
   (2026-09-27, `load times.log`): first loads from the made setups 2-43 s per patch (Trumpet Solo 43 s,

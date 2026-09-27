@@ -91,7 +91,7 @@ class SoundLibraryHost : public QObject {
       std::set<const Part*> _synced;      // the parts with notes at the last complete sync
       QPointer<MasterScore> _syncedScore;
       QElapsedTimer _lastInput;           // since the user's last key, click or wheel
-      static constexpr int INPUT_PAUSE_MS = 1500;  // a background load waits for this long a pause
+      static constexpr int INPUT_PAUSE_MS = 0;     // a background load waits for this long a pause (the owner, 2026-09-27: 0, no wait)
       void preloadStep();
       bool syncSome(Score* score, QString* error, int maxLoads, int* remaining);
 
