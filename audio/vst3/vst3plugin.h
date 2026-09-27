@@ -97,7 +97,8 @@ class Vst3Plugin {
       double parameter(unsigned id) const;                        // normalized, the controller's
       QString parameterText(unsigned id, double normalized) const;
       void setParameter(unsigned id, double normalized);          // processor (next process()) and controller
-      long parameterId(const QString& title) const;               // by title (case-insensitive), -1: none
+      long parameterId(const QString& title) const;               // by title (loosely: case, spacing, a slot
+                                                                  // number in front don't count), -1: none
       long controllerParameter(int channel, int cc) const;        // a MIDI controller's (0-129) parameter, -1: none
       // what the plug-in changed by itself since the last call: its processor's output
       // parameter changes and its controller's edits (performEdit)

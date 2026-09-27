@@ -10,6 +10,8 @@
 
 #include "vst3plugin.h"
 
+#include <QRegularExpression>
+
 #include <algorithm>
 #include <cstring>
 #include <map>
@@ -889,8 +891,19 @@ std::vector<Vst3Plugin::Parameter> Vst3Plugin::parameters() const
 
 long Vst3Plugin::parameterId(const QString& title) const
       {
+      // loosely: letters and digits only, lower case, and a slot number in front left out
+      // ("Mic 1 level" = "MIC 1 Level" = "07 Mic 1 level"; Kontakt's own titles aren't known here)
+      auto norm = [](const QString& t) {
+            QString s = t.toLower();
+            s.remove(QRegularExpression("^\\s*#?\\d+\\s*[:.)-]?\\s+"));
+            s.remove(QRegularExpression("[^a-z0-9]"));
+            return s;
+            };
+      const QString want = norm(title);
+      if (want.isEmpty())
+            return -1;
       for (const Parameter& p : parameters())
-            if (p.title.compare(title, Qt::CaseInsensitive) == 0)
+            if (norm(p.title) == want)
                   return long(p.id);
       return -1;
       }

@@ -267,8 +267,19 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   instances by `SoundLibraryHost::sync` (and the command-line export), `applyParameters`, via
   `Vst3Plugin::parameterId(title)`. UI: *View › Sound Library…* › *Controllers…* per part
   (undoable). From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
-  suggested `CONTROLLERS` / `PATCH_CONTROLLERS` lines for `gen_spitfire_sso.py` (both empty
-  until an SSO extract says what its CCs do). Test: `tst_soundlibrary::controllers`.
+  suggested `CONTROLLERS` / `PATCH_CONTROLLERS` lines for `gen_spitfire_sso.py`. Test:
+  `tst_soundlibrary::controllers`. SSO's map has them since 2026-09-27 (the owner: "build the
+  controls"), all as Kontakt parameters by title (`PATCH_CONTROLLERS` by family, from the second
+  plug-in extract): strings Vibrato, Release, Tightness, Mic 1-5, Mic Mix Distance; woodwinds Vibrato,
+  Release, Variation, Mic 1-4, Mic Mix Distance; brass Release, Tightness, Variation, Mic 1-4, Mic Mix
+  Distance; Performance extras without Release, strings' with Mute; Grand Piano Pedal Vol, Pedal Dyn,
+  Mic 1-4, Mic Mix Distance; the kits Releases, Variation, Mic 1-3. No defaults (the patch keeps its
+  own until a part has a value). Not Dynamics, Expression (MuseScore's CC1 / CC11) nor Articulation
+  Controller (UACC). The titles are guesses from the extract's summary ("Mic 1 level" …):
+  `Vst3Plugin::parameterId` matches loosely (case, spacing, punctuation, a slot number in front), and
+  the Controllers window lists the controls of all the part's patches and says "not in <patch>"
+  for a loaded patch without that title. The mic names (Close, Tree, Ambient, Outrigger, Leader, the
+  NKS page's order) are shown with "?" until the owner confirms them in Kontakt.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).

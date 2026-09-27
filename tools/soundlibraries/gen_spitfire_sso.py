@@ -293,6 +293,51 @@ EXTRAS += [
 ]
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
 
+# SSO's own controls, driven as Kontakt parameters by title (Extract plug-in data, the owner's second
+# run, 2026-09-27 04:20: the named automation slots of Flutes a2, Horn Solo, Horn Solo Short
+# Staccatissimo, Violins 1, Violins 1 Long Sul G / Performance, Grand Piano and the five kits; the
+# other patches take their family's, which is a guess: a patch that lacks one shows "not in this
+# patch" in the Controllers window and skips it). Dynamics and Expression are left out (MuseScore
+# plays them from the score: CC1, CC11), and so is Articulation Controller (the UACC switch). No
+# defaults: until a part is given a value, the patch keeps its own. The mic names are the patches'
+# NKS page order, not yet confirmed in Kontakt.
+def _p(cid, name, title=None):
+    return (cid, name, None, title or name, None, [])
+MICS = ['Close', 'Tree', 'Ambient', 'Outrigger', 'Leader']
+def mics(n, named=True):
+    return [_p(f'mic{i}', f'Mic {i}' + (f' ({MICS[i - 1]}?)' if named else ''), f'Mic {i} level') for i in range(1, n + 1)]
+MIX = [_p('micmix', 'Mic Mix Distance')]
+STRINGS = ['Violins 1', 'Violins 2', 'Violas', 'Celli', 'Basses', 'Strings Ensemble',
+           'Solo Violin 1', 'Solo Violin 2', 'Solo Viola', 'Solo Cello']
+WOODWINDS = ['Piccolo', 'Flute Solo', 'Flutes a2', 'Alto Flute', 'Bass Flute', 'Oboe Solo', 'Oboes a2', 'Cor Anglais',
+             'Clarinet Solo', 'Clarinets a2', 'Bass Clarinet', 'Contrabass Clarinet', 'Bassoon Solo', 'Bassoons a2',
+             'Contrabassoon']
+BRASS = ['Horn Solo', 'Horns a2', 'Horns a6', 'Trumpet Solo', 'Trumpets a2', 'Trumpets a6', 'Tenor Trombone Solo',
+         'Tenor Trombones a2', 'Trombones a6', 'Bass Trombone Solo', 'Bass Trombones a2', 'Contrabass Trombone',
+         'Cimbasso Solo', 'Cimbassi a2', 'Tuba Solo', 'Contrabass Tuba', 'Motif Horns a4', 'Motif Trumpets a3',
+         'Motif Trombones a5']
+VIB, REL, TIGHT, VAR, MUTE = _p('vibrato', 'Vibrato'), _p('release', 'Release'), _p('tightness', 'Tightness'), \
+    _p('variation', 'Variation'), _p('mute', 'Mute')
+FAMILY = {}
+for n in STRINGS:
+    FAMILY[n] = [VIB, REL, TIGHT] + mics(5) + MIX
+for n in WOODWINDS:
+    FAMILY[n] = [VIB, REL, VAR] + mics(4) + MIX
+for n in BRASS:
+    FAMILY[n] = [REL, TIGHT, VAR] + mics(4) + MIX
+PATCH_CONTROLLERS.update(FAMILY)
+# the extras: a Performance patch has no Release, a strings one has Mute; a single technique its family's
+for main, name, _ in EXTRAS:
+    if main not in FAMILY:
+        continue
+    fam = [c for c in FAMILY[main] if not ('Performance' in name and c[0] == 'release')]
+    if 'Performance' in name and main in STRINGS:
+        fam = fam[:2] + [MUTE] + fam[2:]
+    PATCH_CONTROLLERS[name] = fam
+PATCH_CONTROLLERS['Grand Piano'] = [_p('pedalvol', 'Pedal Vol'), _p('pedaldyn', 'Pedal Dyn')] + mics(4) + MIX
+for n in ('Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - Wood', 'Other - Toys'):
+    PATCH_CONTROLLERS[n] = [_p('releases', 'Releases'), VAR] + mics(3, named=False)
+
 # What Check articulations hears on the owner's Kontakt where it isn't "switches", and why that is
 # right (eighth run, 2026-09-26; each one looked at in the pictures): the check counts these as
 # expected, so the patch passes. (patch, value) -> verdict
@@ -542,6 +587,7 @@ for name in PERCUSSION:
     # (sounds chosen by key: nothing to switch)
     out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
     out.append('    <Switch type="none"/>')
+    out += patchControllers(name)
     for pitch, key, n, ids in drums:
         roll = ' technique="roll"' if n.endswith(' Roll') else ''
         off = '' if hits[key][1] else ' default="off"'

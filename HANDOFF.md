@@ -71,6 +71,14 @@ and hands back the zip it names. From it (`--report`, then `library.json` and `a
 Then decide with the owner what goes into the map (ranges per articulation, round-robin counts, release
 samples) and what MuseScore should drive.
 
+## SSO's controls in MuseScore (2026-09-27)
+
+The map drives SSO's named controls as Kontakt parameters (see `CLAUDE.md` › Controllers): per part in
+*View › Sound Library… › Controllers…*. Next: the owner tries them on a build with this, checks which
+controls say "not in <patch>" (a wrong title guess: fix `_p(...)` in `gen_spitfire_sso.py` with the title
+Kontakt shows) and which mic "Mic 1" … "Mic 5" is, then the "?" names become real ones. Untried with
+Kontakt: whether Spitfire's script keeps a value set this way.
+
 ## Plug-in extract, first run (2026-09-27 03:58)
 
 Violins 1 only (see `CLAUDE.md` › Extract plug-in data › First run on SSO). Its 15 named automation slots

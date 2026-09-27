@@ -1075,6 +1075,9 @@ void TestSoundLibrary::pluginDescribe()
       // a map's parameter controller (SoundLib::Controller::param) finds it by title, whatever the case
       QCOMPARE(p->parameterId("tone"), 3L);
       QCOMPARE(p->parameterId("No such"), -1L);
+      QCOMPARE(p->parameterId(" TO-NE "), 3L);                  // loosely: case, spacing, punctuation
+      QCOMPARE(p->parameterId("07 Tone"), 3L);                   // and a slot number in front
+      QCOMPARE(p->parameterId(""), -1L);
       const double tone = p->parameter(3);
       p->setParameter(unsigned(p->parameterId("Tone")), 64 / 127.0);
       QVERIFY(qAbs(p->parameter(3) - 64 / 127.0) < 1e-6);

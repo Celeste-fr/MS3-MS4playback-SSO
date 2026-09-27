@@ -11,6 +11,8 @@
 #include "soundlibraryhost.h"
 #include "soundlibrarycheck.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QGridLayout>
@@ -543,13 +545,43 @@ bool SoundLibraryExport::play(const NPlayEvent& event)
 //    (partcontrollers.h, undoable); unticked: the map's default (or the patch's own value)
 //---------------------------------------------------------
 
-static void editControllers(QWidget* parent, MasterScore* ms, const Part* part, const SoundLib::LibInstrument* li)
+// the part's patches: each with its slot in Vst3Synth, -1: none (MIDI output, a kit)
+using PartPatches = std::vector<std::pair<const SoundLib::LibInstrument*, int>>;
+
+static void editControllers(QWidget* parent, MasterScore* ms, const Part* part, const PartPatches& patches)
       {
+      const SoundLib::LibInstrument* li = patches.front().first;
+      // the controllers of all its patches, by id (a value is the part's, for every patch that has it)
+      std::vector<SoundLib::Controller> controllers;
+      for (const auto& pp : patches)
+            for (const SoundLib::Controller& c : pp.first->allControllers)
+                  if (std::none_of(controllers.begin(), controllers.end(), [&c](const SoundLib::Controller& x) { return x.id == c.id; }))
+                        controllers.push_back(c);
+      // a plug-in parameter a loaded patch doesn't have (its title as the map guesses it)
+      auto missing = [&patches](const SoundLib::Controller& c) {
+            QStringList names;
+#ifdef USE_VST3
+            Vst3Synth* vst = SoundLibraryHost::instance()->synth();
+            for (const auto& pp : patches) {
+                  if (c.param.isEmpty() || pp.second < 0 || !vst || !vst->plugin(pp.second))
+                        continue;
+                  const bool has = std::any_of(pp.first->allControllers.begin(), pp.first->allControllers.end(),
+                                               [&c](const SoundLib::Controller& x) { return x.id == c.id; });
+                  if (has && vst->plugin(pp.second)->parameterId(c.param) < 0)
+                        names << pp.first->name;
+                  }
+#else
+            Q_UNUSED(c);
+#endif
+            return names;
+            };
       QDialog d(parent);
       d.setWindowTitle(QObject::tr("Controllers: %1").arg(part->partName()));
       QVBoxLayout* layout = new QVBoxLayout(&d);
       QLabel* info = new QLabel(QObject::tr("What %1 plays these at. Unticked: the library map's default, else the "
-                                             "patch's own setting. Staff text can change a MIDI controller from its note on.")
+                                             "patch's own setting. Staff text can change a MIDI controller from its note on. "
+                                             "A plug-in parameter is set when playback starts; \"not in\" names a loaded "
+                                             "patch that has no parameter of that title.")
                                    .arg(li->name), &d);
       info->setWordWrap(true);
       layout->addWidget(info);
@@ -561,13 +593,17 @@ static void editControllers(QWidget* parent, MasterScore* ms, const Part* part, 
       struct Row { QCheckBox* on; QSpinBox* value; };
       std::vector<Row> rows;
       int r = 0;
-      for (const SoundLib::Controller& c : li->allControllers) {
+      for (const SoundLib::Controller& c : controllers) {
             QCheckBox* on = new QCheckBox(c.name, &d);
             QSlider* slider = new QSlider(Qt::Horizontal, &d);
             slider->setRange(0, 127);
             QSpinBox* spin = new QSpinBox(&d);
             spin->setRange(0, 127);
-            QLabel* where = new QLabel(c.cc >= 0 ? QObject::tr("CC %1").arg(c.cc) : QObject::tr("parameter \"%1\"").arg(c.param), &d);
+            const QStringList lacking = missing(c);
+            QLabel* where = new QLabel(c.cc >= 0 ? QObject::tr("CC %1").arg(c.cc)
+                                     : lacking.isEmpty() ? QObject::tr("parameter \"%1\"").arg(c.param)
+                                     : QObject::tr("parameter \"%1\": not in %2").arg(c.param, lacking.join(", ")), &d);
+            where->setWordWrap(true);
             QObject::connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
             QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), slider, &QSlider::setValue);
             QObject::connect(on, &QCheckBox::toggled, slider, &QWidget::setEnabled);
@@ -595,7 +631,7 @@ static void editControllers(QWidget* parent, MasterScore* ms, const Part* part, 
       // the part's values: those of other controllers (another library's) stay
       PartControllers::Values values = own;
       for (size_t i = 0; i < rows.size(); ++i) {
-            const QString& id = li->allControllers[i].id;
+            const QString& id = controllers[i].id;
             if (rows[i].on->isChecked())
                   values[id] = rows[i].value->value();
             else
@@ -698,13 +734,23 @@ void SoundLibraryDialog::rebuild()
                   _table->insertRow(row);
                   _table->setItem(row, 0, new QTableWidgetItem(r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName())));
                   _table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
-                  // the part's controllers: those of its main patch (the renderer sends them to all)
-                  if (r->patch == 0 && !r->instrument->allControllers.empty()) {
-                        QPushButton* ctrl = new QPushButton(tr("Controllers…"));
-                        _table->setCellWidget(row, 2, ctrl);
-                        MasterScore* ms = score->masterScore();
-                        const SoundLib::LibInstrument* li = r->instrument;
-                        connect(ctrl, &QPushButton::clicked, this, [this, ms, part, li]() { editControllers(this, ms, part, li); });
+                  // the part's controllers: those of all its patches (a MIDI controller goes to all of
+                  // them, a plug-in parameter to each that has it)
+                  if (r->patch == 0) {
+                        PartPatches patches;
+                        bool any = false;
+                        for (const SoundLib::Route& e : routes) {
+                              if (e.part != part)
+                                    continue;
+                              patches.push_back({ e.instrument, plugin && !e.instrument->kit ? e.port * 16 + e.channel : -1 });
+                              any = any || !e.instrument->allControllers.empty();
+                              }
+                        if (any) {
+                              QPushButton* ctrl = new QPushButton(tr("Controllers…"));
+                              _table->setCellWidget(row, 2, ctrl);
+                              MasterScore* ms = score->masterScore();
+                              connect(ctrl, &QPushButton::clicked, this, [this, ms, part, patches]() { editControllers(this, ms, part, patches); });
+                              }
                         }
                   if (r->instrument->kit) {
                         _table->setItem(row, 3, new QTableWidgetItem(tr("(its drum sounds play on the patches below)")));
