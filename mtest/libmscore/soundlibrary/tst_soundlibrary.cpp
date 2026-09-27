@@ -1352,6 +1352,22 @@ void TestSoundLibrary::pluginDescribe()
 
       // what it asked of MuseScore
       QVERIFY(!Vst3Plugin::hostQueries().isEmpty());
+
+      // against an earlier description (Extract plug-in data, each patch against the empty plug-in):
+      // unchanged parameters take their texts from it, one whose value changed asks the plug-in
+      p->setParameter(2, 0.2);                          // (Level)
+      const QJsonObject again = p->describe(&d);
+      const int count = again.value("parameters").toArray().size();
+      QCOMPARE(count, d.value("parameters").toArray().size());
+      QCOMPARE(again.value("parameterTextsFromBase").toInt(), count - 1);
+      for (int i = 0; i < count; ++i) {
+            const QJsonObject a = again.value("parameters").toArray()[i].toObject();
+            const QJsonObject b = d.value("parameters").toArray()[i].toObject();
+            if (a.value("value") == b.value("value"))
+                  QCOMPARE(a, b);
+            else
+                  QCOMPARE(a.value("title").toString(), QString("Level"));
+            }
       }
 
 //---------------------------------------------------------

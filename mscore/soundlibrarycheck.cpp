@@ -288,6 +288,11 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _quick->setEnabled(false);
       connect(_tryAll, &QCheckBox::toggled, _quick, &QCheckBox::setEnabled);
       layout->addWidget(_quick);
+      // (off by default: about 25 s a patch, and most likely the same across a library; the owner,
+      // 2026-09-27: measure it on one patch per family, not on all 700)
+      _pitchBend = new QCheckBox(tr("Measure pitch bend: with Extract plug-in data, how far pitch bend bends each ticked patch "
+                                    "(about 25 s more per patch; one patch per family is enough)"), this);
+      layout->addWidget(_pitchBend);
       // scanning: the set-up patches never scanned (else: what needs checking)
       connect(_scan, &QCheckBox::toggled, this, [this](bool on) {
             for (int row = 0; row < _table->rowCount(); ++row) {
@@ -1911,8 +1916,12 @@ void ArticulationCheckDialog::extract()
       _status->setText(tr("The plug-in itself…"));
       QApplication::processEvents();
       QJsonObject empty;
+      // one instance for every patch, each patch's setup set on it (the owner, 2026-09-27: 700 patches
+      // would take 10 hours or so; a new Kontakt per patch costs its start each time), the first the one
+      // described with nothing loaded; a new one after a patch that failed
+      std::unique_ptr<Vst3Plugin> instance = Vst3Plugin::load(path, MScore::sampleRate, 4096, &error);
       {
-            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, MScore::sampleRate, 4096, &error);
+            Vst3Plugin* const p = instance.get();
             if (!p)
                   summary += QString("## the plug-in, nothing loaded\n   cannot load it: %1\n\n").arg(error);
             else {
@@ -1926,14 +1935,24 @@ void ArticulationCheckDialog::extract()
       }
       writeFile(folder + "/summary.txt", summary.toUtf8());
 
+      QElapsedTimer total;
+      total.start();
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
-            extractPatch(chosen[k], path, folder, empty, summary);
+            if (k > 0) {
+                  const qint64 each = total.elapsed() / k;
+                  _progress->setFormat(tr("%p% — about %1 min left").arg((each * (int(chosen.size()) - k) + 59999) / 60000));
+                  }
+            if (!extractPatch(chosen[k], path, folder, empty, instance, summary))
+                  instance.reset();
             writeFile(folder + "/summary.txt", (summary + "\n(Still running: written after each patch.)\n").toUtf8());
             QApplication::processEvents();
             }
+      instance.reset();
       _progress->setValue(1000);
+      _progress->setFormat("%p%");
+      summary += QString("\n%1 patches in %2 min\n").arg(chosen.size()).arg(total.elapsed() / 60000.0, 0, 'f', 1);
       if (_cancel)
             summary += "\n(Stopped before the end.)\n";
       summary += "\nRead it with: python3 tools/soundlibraries/read_plugin_data.py \"<this folder>\"\n";
@@ -1952,7 +1971,7 @@ void ArticulationCheckDialog::extract()
 //---------------------------------------------------------
 
 bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty,
-                                           QString& summary)
+                                           std::unique_ptr<Vst3Plugin>& instance, QString& summary)
       {
 #ifdef USE_VST3
       const SoundLib::LibInstrument& ins = *_rows[index].instrument;
@@ -1971,13 +1990,29 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             return false;
             };
 
+      // how long each step took (the summary's "times" line, the JSON's "timesMs")
+      QElapsedTimer clock;
+      clock.start();
+      QJsonObject times;
+      QStringList timeLine;
+      auto lap = [&](const char* step) {
+            const qint64 ms = clock.restart();
+            times[step] = double(ms);
+            timeLine << QString("%1 %2 s").arg(step).arg(ms / 1000.0, 0, 'f', 1);
+            };
+
       status(tr("loading…"));
       QString error;
-      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
-      if (!p)
+      if (!instance) {
+            instance = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
+            if (!instance)
+                  return fail(error);
+            lap("new instance");
+            }
+      Vst3Plugin* const p = instance.get();
+      if (!SoundLibraryHost::loadSetup(p, *_library, ins.name, pluginPath, &error))
             return fail(error);
-      if (!SoundLibraryHost::loadSetup(p.get(), *_library, ins.name, pluginPath, &error))
-            return fail(error);
+      lap("setup");
 
       // a long articulation (the map's first), the library's dynamics
       const bool switching = ins.switchType == SoundLib::SwitchType::CC;
@@ -1997,7 +2032,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       out["pitch"] = pitch;
 
       // the patch loads its samples: until a note sounds (up to 2 minutes)
-      Pump pump { p.get(), double(MScore::sampleRate), &_cancel, {} };
+      Pump pump { p, double(MScore::sampleRate), &_cancel, {} };
       bool sounds = false;
       for (int i = 0; i < 60 && !_cancel && !sounds; ++i) {
             status(tr("waiting for the patch to load (%1 s)…").arg(i * 2));
@@ -2013,11 +2048,13 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             return false;
       out["sounds"] = sounds;
       pump.run(1000);
+      lap("until it sounds");
 
       status(tr("asking the plug-in…"));
       // (only what differs from the plug-in with nothing loaded; no state files: MuseScore makes the
       // patches' setups from their .nki, and the state is in its setups folder)
-      const QJsonObject d = describeAgainst(p->describe(), empty);
+      const QJsonObject d = describeAgainst(p->describe(empty.isEmpty() ? nullptr : &empty), empty);
+      lap("describe");
       out["describe"] = d;
       const QByteArray patchState = p->state();              // (Quick: put back after each controller)
       summary += QString("## %1 (%2.json)%3\n").arg(ins.name, fileBase, sounds ? QString() : QString(" — it played nothing"));
@@ -2026,7 +2063,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       // what pitch bend does to its pitch (the owner, 2026-09-27: microtones through the library, as
       // Kontakt ignores a note's own tuning): the test note at each bend, its spectrum against the
       // unbent note's (PluginExtract::centsShift). The unbent note twice (start, end): the noise
-      if (sounds && !_cancel) {
+      if (sounds && !_cancel && _pitchBend->isChecked()) {
             PluginExtract::Settings s;
             s.pitch = pitch;
             s.sampleRate = MScore::sampleRate;
@@ -2036,7 +2073,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                   pump.capture = nullptr;
                   return !_cancel;
                   };
-            const QJsonObject pb = PluginExtract::pitchBend(p.get(), s, capture, prepare, status);
+            const QJsonObject pb = PluginExtract::pitchBend(p, s, capture, prepare, status);
             out["pitchBend"] = pb;
             QStringList line;
             for (const QJsonValue& v : pb.value("bends").toArray()) {
@@ -2048,6 +2085,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             if (pb.contains("rangeUp"))
                   summary += QString("   pitch bend range: about %1 semitones up\n").arg(pb.value("rangeUp").toDouble() / 100.0, 0, 'f', 2);
             }
+      if (_pitchBend->isChecked())
+            lap("pitch bend");
 
       if (_tryAll->isChecked() && !_cancel) {
             QPointer<Vst3EditorWindow> w;
@@ -2091,11 +2130,11 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             std::vector<PluginExtract::Found> found;
             bool stopped = false;
             prepare();
-            out["controllers"] = PluginExtract::controllers(p.get(), s, run, grab, status, &found, &stopped);
+            out["controllers"] = PluginExtract::controllers(p, s, run, grab, status, &found, &stopped);
             if (!stopped)
-                  out["parameters"] = PluginExtract::parameters(p.get(), s, run, grab, status, &found, &stopped);
+                  out["parameters"] = PluginExtract::parameters(p, s, run, grab, status, &found, &stopped);
             if (!stopped && switching)
-                  out["switches"] = PluginExtract::switches(p.get(), s, run, status, &stopped);
+                  out["switches"] = PluginExtract::switches(p, s, run, status, &stopped);
             if (!stopped)
                   out["controllersToControls"] = controllersToControls(out.value("controllers").toObject(), out.value("parameters").toObject());
             if (w) {
@@ -2182,6 +2221,10 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                   summary += QString("   articulation values that change a parameter: %1 of %2\n")
                              .arg(sw.value("valuesChangingParameters").toInt()).arg(switchValues.size());
             }
+      if (_tryAll->isChecked())
+            lap("controllers");
+      out["timesMs"] = times;
+      summary += QString("   times: %1\n").arg(timeLine.join(", "));
       writeFile(folder + "/" + fileBase + ".json", QJsonDocument(out).toJson());
       summary += "\n";
       return true;

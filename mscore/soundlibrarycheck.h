@@ -60,6 +60,8 @@ class QTableWidget;
 
 namespace Ms {
 
+class Vst3Plugin;
+
 class ArticulationCheckDialog : public QDialog {
       Q_OBJECT
 
@@ -78,6 +80,7 @@ class ArticulationCheckDialog : public QDialog {
       QCheckBox* _scan;
       QCheckBox* _tryAll;
       QCheckBox* _quick;
+      QCheckBox* _pitchBend;
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;
@@ -97,7 +100,8 @@ class ArticulationCheckDialog : public QDialog {
       void check();
       void setRunning(bool running);
       void extract();
-      bool extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty, QString& summary);
+      bool extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty,
+                        std::unique_ptr<Vst3Plugin>& instance, QString& summary);
       bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       QString recordsFile() const;

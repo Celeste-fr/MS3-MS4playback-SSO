@@ -531,7 +531,15 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   no state is written per patch (MuseScore makes them from the `.nki`): the owner's run of 5 patches
   (2026-09-27 11:15, run 124) was 7 MB a patch, nearly all Kontakt's 4145 parameters as with nothing
   loaded; the same data diffed is 12 KB a patch (so 700 patches about 8 MB before zipping). The summary
-  lists each patch's named controls. **When the owner hands it back**, run
+  lists each patch's named controls. For long runs (the owner, 2026-09-27: all 700 patches, estimated 10-12
+  hours): one Kontakt instance for every patch (the one described with nothing loaded; each patch's setup set
+  on it; a new one only after a patch that failed), `describe(&empty)` takes the texts of parameters unchanged
+  since the empty plug-in from it (`parameterTextsFromBase`), pitch bend only with *Measure pitch bend* ticked
+  (off by default: about 25 s a patch; one patch per family), and each patch's times (`timesMs`, summary
+  "times": new instance, setup, until it sounds, describe, pitch bend, controllers), the run's total and a
+  minutes-left estimate on the progress bar. Tried here in the GUI with the test synth: 3 patches with pitch
+  bend in 1.5 min (setup 0-1.8 s, until it sounds 3 s, pitch bend 27 s each), one instance.
+  **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
   plug-in, what each CC and parameter does, and the state blobs' zlib streams and strings (`_decoded/`).

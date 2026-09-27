@@ -981,7 +981,7 @@ static const char* ccName(int cc)
             }
       }
 
-QJsonObject Vst3Plugin::describe() const
+QJsonObject Vst3Plugin::describe(const QJsonObject* base) const
       {
       QJsonObject out;
       out["path"] = d->path;
@@ -1142,6 +1142,11 @@ QJsonObject Vst3Plugin::describe() const
       // parameters, with the text of their values
       std::map<ParamID, QString> titles;
       {
+            std::map<double, QJsonObject> before;
+            if (base)
+                  for (const QJsonValue& v : base->value("parameters").toArray())
+                        before[v.toObject().value("id").toDouble()] = v.toObject();
+            int fromBase = 0;
             QJsonArray params;
             const int32 n = ctl->getParameterCount();
             for (int32 i = 0; i < n; ++i) {
@@ -1165,6 +1170,16 @@ QJsonObject Vst3Plugin::describe() const
                         { ParameterInfo::kIsBypass, "bypass" } });
                   const ParamValue now = ctl->getParamNormalized(info.id);
                   p["value"] = now;
+                  auto b = before.find(double(info.id));
+                  if (b != before.end() && b->second.value("title") == p.value("title") && b->second.value("stepCount") == p.value("stepCount")
+                      && b->second.value("value").toDouble() == now && b->second.value("default").toDouble() == info.defaultNormalizedValue
+                      && b->second.value("shortTitle") == p.value("shortTitle") && b->second.value("units") == p.value("units")) {
+                        for (const char* key : { "valueText", "defaultText", "plainMin", "plainMax", "texts" })
+                              p[key] = b->second.value(key);
+                        ++fromBase;
+                        params.append(p);
+                        continue;
+                        }
                   p["valueText"] = parameterText(info.id, now);
                   p["defaultText"] = parameterText(info.id, info.defaultNormalizedValue);
                   p["plainMin"] = ctl->normalizedParamToPlain(info.id, 0.0);
@@ -1185,6 +1200,8 @@ QJsonObject Vst3Plugin::describe() const
                   params.append(p);
                   }
             out["parameters"] = params;
+            if (base)
+                  out["parameterTextsFromBase"] = fromBase;
       }
 
       // the MIDI controllers' parameters (IMidiMapping), per event bus and channel

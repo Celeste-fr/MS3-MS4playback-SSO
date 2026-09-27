@@ -84,7 +84,10 @@ class Vst3Plugin {
       // of their values), the MIDI controllers' mapping, units and programs (their pitch names),
       // keyswitches, note expressions, its editor, which optional interfaces it has and what
       // they answer
-      QJsonObject describe() const;
+      // base (optional): an earlier describe() of this plug-in (with nothing loaded); a parameter with
+      // the same title, steps, value and default as there takes its value texts from it, not from the
+      // plug-in (Kontakt: 4145 parameters × 17 texts per patch, nearly all placeholders)
+      QJsonObject describe(const QJsonObject* base = nullptr) const;
       QByteArray componentState() const;  // as the plug-in gives it (state() wraps both)
       QByteArray controllerState() const;
       struct Parameter {
