@@ -10,6 +10,8 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
+#include <cmath>
+
 #include "key.h"
 #include "xml.h"
 #include "utils.h"
@@ -18,6 +20,8 @@
 #include "keylist.h"
 #include "accidental.h"
 #include "part.h"
+#include "clef.h"
+#include "tuning.h"
 
 namespace Ms {
 
@@ -131,6 +135,39 @@ Interval calculateInterval(Key key1, Key key2)
       if (chromatic < 0)
             chromatic += 12;
       return Interval(chromatic);
+      }
+
+//---------------------------------------------------------
+//   forClef
+//---------------------------------------------------------
+
+KeySigEvent KeySigEvent::forClef(ClefType from, ClefType to) const
+      {
+      if (!_custom || from == to || from == ClefType::INVALID || to == ClefType::INVALID)
+            return *this;
+      // the standard key signature's line of each step (C … B) for a clef: sharps F C G D A E B,
+      // then flats B E A D G C F (ClefInfo::lines)
+      auto standard = [](ClefType clef, int step, bool flat) {
+            static const int sharpSteps[7] = { 3, 0, 4, 1, 5, 2, 6 };
+            static const int flatSteps[7]  = { 6, 2, 5, 1, 4, 0, 3 };
+            const signed char* lines = ClefInfo::lines(clef);
+            for (int i = 0; i < 7; ++i)
+                  if ((flat ? flatSteps : sharpSteps)[i] == step)
+                        return int(lines[i + (flat ? 7 : 0)]);
+            return 0;
+            };
+      KeySigEvent e = *this;
+      for (KeySym& ks : e.keySymbols()) {
+            const int line = int(std::lround(ks.spos.y() * 2.0));
+            const int step = ((absStep(line, from) % 7) + 7) % 7;
+            bool valued = false;
+            const AccidentalVal v = sym2accidentalVal(ks.sym);
+            const bool flat = int(v) < 0 || (v == AccidentalVal::NATURAL && ScoreTuning::symbolCents(ks.sym, &valued) < 0.0);
+            const int octaves = line - standard(from, step, flat);     // a multiple of 7
+            const int newLine = standard(to, step, flat) + octaves;
+            ks.spos.ry() = newLine * 0.5;
+            }
+      return e;
       }
 
 //---------------------------------------------------------

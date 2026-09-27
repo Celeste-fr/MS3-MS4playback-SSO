@@ -1535,14 +1535,15 @@ Element* Measure::drop(EditData& data)
                   KeySigEvent k = toKeySig(e)->keySigEvent();
                   delete e;
 
+                  // a custom one is made on a treble staff (the palette's): each staff gets it for its clef
                   if (data.modifiers & Qt::ControlModifier) {
                         // apply only to this stave
-                        score()->undoChangeKeySig(staff, tick(), k);
+                        score()->undoChangeKeySig(staff, tick(), k.forClef(ClefType::G, staff->clef(tick())));
                         }
                   else {
                         // apply to all staves:
                         for (Staff*& s : score()->staves())
-                              score()->undoChangeKeySig(s, tick(), k);
+                              score()->undoChangeKeySig(s, tick(), k.forClef(ClefType::G, s->clef(tick())));
                         }
 
                   break;

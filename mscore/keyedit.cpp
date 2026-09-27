@@ -17,6 +17,8 @@
 //  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 //=============================================================================
 
+#include <cmath>
+
 #include "musescore.h"
 #include "palette.h"
 #include "keyedit.h"
@@ -35,6 +37,10 @@ extern Palette* newAccidentalsPalette();
 extern Palette* newKeySigPalette();
 
 static const qreal editScale = 1.0;
+// the canvas's staff: twice the palettes' (the owner: accidentals were too small to place), with
+// room for three ledger lines above and below
+static const qreal canvasScale = 2.0;
+static const qreal canvasSpaces = 11.0;
 
 //---------------------------------------------------------
 //   KeyCanvas
@@ -44,7 +50,8 @@ KeyCanvas::KeyCanvas(QWidget* parent)
    : QFrame(parent)
       {
       setAcceptDrops(true);
-      extraMag   = editScale * guiScaling;
+      extraMag   = canvasScale * guiScaling;
+      setMinimumHeight(int(canvasSpaces * PALETTE_SPATIUM * extraMag));
       qreal mag  = PALETTE_SPATIUM * extraMag / gscore->spatium();
       _matrix    = QTransform(mag, 0.0, 0.0, mag, 0.0, 0.0);
       imatrix    = _matrix.inverted();
@@ -257,13 +264,12 @@ void KeyCanvas::snap(Accidental* a)
       double x        = a->ipos().x();
       double _spatium = gscore->spatium();
       double spatium2 = _spatium * .5;
-      int line        = int(y / spatium2 + .5);
-      int stepx       = int(x / _spatium + .5);
+      // to a line or space; horizontally where it was put (the owner: a whole-space grid left no
+      // good spacing)
+      int line        = int(std::floor(y / spatium2 + .5));
       y               = line * spatium2;
-      x               = stepx * _spatium;
       a->rypos()      = y;
-      if (!QGuiApplication::keyboardModifiers().testFlag(Qt::ControlModifier))
-            a->rxpos() = x;
+      a->rxpos()      = x;
       }
 
 //---------------------------------------------------------

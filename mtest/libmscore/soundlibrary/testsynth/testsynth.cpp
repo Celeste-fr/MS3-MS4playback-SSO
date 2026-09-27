@@ -58,6 +58,7 @@ struct Voice {
       float velocity { 0 };
       int articulation { 1 };
       int pitch { 60 };
+      float tuning { 0 };           // cents (NoteOnEvent::tuning), as Kontakt may or may not honour it
       double gain { 1 };            // the round robin
       int roundRobin { 0 };
       long t { 0 };                 // samples played
@@ -160,6 +161,7 @@ class Processor : public AudioEffect {
                               v.velocity = e.noteOn.velocity;
                               v.articulation = current;
                               v.pitch = e.noteOn.pitch;
+                              v.tuning = e.noteOn.tuning;
                               v.roundRobin = roundRobin % 4;
                               v.gain = 1.0 + 0.06 * ((roundRobin++ % 3) - 1);
                               voices[e.noteOn.pitch] = v;
@@ -182,7 +184,7 @@ class Processor : public AudioEffect {
             for (int32 i = 0; i < data.numSamples; ++i)
                   l[i] = r[i] = 0.f;
             for (auto& v : voices) {
-                  const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69) / 12.0) / processSetup.sampleRate;
+                  const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + v.second.tuning / 100.0) / 12.0) / processSetup.sampleRate;
                   Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
                         const float s = timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);

@@ -120,6 +120,11 @@ class KeySigEvent {
       void setForInstrumentChange(bool forInstrumentChange) { _forInstrumentChange = forInstrumentChange; }
       bool forInstrumentChange() const{ return _forInstrumentChange; }
       void initFromSubtype(int);    // for backward compatibility
+      // a custom key signature made for clef "from" (the palette's: treble) as a staff with clef
+      // "to" writes it: each accidental where that clef puts the same note in a standard key
+      // signature, an octave apart as it was (the positions are stored per staff, as MuseScore 3.6
+      // reads them)
+      KeySigEvent forClef(ClefType from, ClefType to) const;
       QList<KeySym>& keySymbols()             { return _keySymbols; }
       const QList<KeySym>& keySymbols() const { return _keySymbols; }
       };

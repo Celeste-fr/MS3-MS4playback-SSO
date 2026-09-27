@@ -1650,6 +1650,26 @@ void Score::upDown(bool up, UpDownMode mode)
                               case UpDownMode::DIATONIC:
                                     {
                                     int tpc = oNote->tpc();
+                                    const KeySigEvent kse = staff->keySigEvent(tick);
+                                    if (kse.custom()) {
+                                          // a custom key signature: the next step with the accidental the
+                                          // signature gives it (the key is C there, which ignored them, and
+                                          // the note then got an accidental against the signature); written
+                                          // pitch and spelling, as the signature applies to what is written
+                                          AccidentalState as;
+                                          as.init(kse, staff->clef(tick));
+                                          const int written = oNote->epitch();
+                                          const int step = absStep(tpc, written) + (up ? 1 : -1);
+                                          if (step < MIN_ACC_STATE || step >= MAX_ACC_STATE)
+                                                break;
+                                          const AccidentalVal a = as.accidentalVal(step);
+                                          const int p = pitch + (step / 7) * 12 + step2pitch(step) + int(a) - written;
+                                          if (p < 0 || p > 127)
+                                                break;
+                                          newPitch = p;
+                                          setTpc(oNote, step2tpc(step % 7, a), newTpc1, newTpc2);
+                                          break;
+                                          }
                                     if (up) {
                                           if (tpc > Tpc::TPC_A + int(key)) {
                                                 if (pitch < 127) {

@@ -493,7 +493,7 @@ QString Vst3Plugin::path() const
 //    audio thread: for the next process()
 //---------------------------------------------------------
 
-void Vst3Plugin::midi(int type, int channel, int a, int b)
+void Vst3Plugin::midi(int type, int channel, int a, int b, float tuning)
       {
       channel = qBound(0, channel, 15);
       auto note = [&](bool on, int pitch, int velo) {
@@ -505,6 +505,7 @@ void Vst3Plugin::midi(int type, int channel, int a, int b)
                   e.noteOn.channel = int16(channel);
                   e.noteOn.pitch = int16(pitch);
                   e.noteOn.velocity = velo / 127.f;
+                  e.noteOn.tuning = tuning;
                   e.noteOn.noteId = -1;
                   }
             else {

@@ -50,6 +50,8 @@ class TestTuning : public QObject, public MTest
       void stacked();
       void temperedAndEnharmonic();
       void families();
+      void diatonicCustomKey();
+      void customKeyForClef();
       void json();
       };
 
@@ -681,6 +683,83 @@ void TestTuning::json()
       QVERIFY(Temperament::fromJson(s.toJson()) == s);
       Temperament::fromJson("not json", &ok);
       QVERIFY(!ok);
+      }
+
+//---------------------------------------------------------
+//   diatonicCustomKey
+//    Alt+Shift+Up / Down (pitch-up/down-diatonic) under a custom key signature (a flat on B, a
+//    quarter-tone flat on E): the next step takes the signature's accidental (A up: B flat, not
+//    B natural with a natural sign); a step with a microtonal accidental is its natural (the
+//    signature's symbol is its tuning); no accidental is added
+//---------------------------------------------------------
+
+void TestTuning::diatonicCustomKey()
+      {
+      MasterScore* score = readScore(DIR + "keysig-updown.mscx");
+      QVERIFY(score);
+      QVERIFY(score->staff(0)->keySigEvent(Fraction(0, 1)).custom());
+      std::vector<Note*> ns;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  ns.push_back(toChord(s->element(0))->upNote());
+      QCOMPARE(int(ns.size()), 4);
+      struct Case { int index; bool up; int pitch; int tpc; };
+      const Case cases[] = {
+            { 0, true,  70, 12 },         // A4 up: B flat 4
+            { 1, true,  76, 18 },         // D5 up: E5 (the signature's quarter-tone flat)
+            { 2, false, 70, 12 },         // C5 down: B flat 4
+            { 3, false, 74, 16 },         // E5 down: D5
+            };
+      for (const Case& c : cases) {
+            Note* n = ns[c.index];
+            score->select(n, SelectType::SINGLE, 0);
+            score->startCmd();
+            score->upDown(c.up, UpDownMode::DIATONIC);
+            score->endCmd();
+            QCOMPARE(n->pitch(), c.pitch);
+            QCOMPARE(n->tpc(), c.tpc);
+            QVERIFY2(!n->accidental(), qPrintable(QString("note %1 got an accidental").arg(c.index)));
+            }
+      // and back
+      score->select(ns[0], SelectType::SINGLE, 0);
+      score->startCmd();
+      score->upDown(false, UpDownMode::DIATONIC);
+      score->endCmd();
+      QCOMPARE(ns[0]->pitch(), 69);
+      QCOMPARE(ns[0]->tpc(), 17);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   customKeyForClef
+//    a custom key signature made on a treble staff (the palette's), dropped on staves with other
+//    clefs: each gets it for its clef, so it alters the same notes (the owner: the bass staff had
+//    the treble's positions, a wrong key signature); a standard-looking one lands where that
+//    clef's standard key signature puts it
+//---------------------------------------------------------
+
+void TestTuning::customKeyForClef()
+      {
+      KeySigEvent e;
+      e.setCustom(true);
+      auto add = [&e](SymId sym, double y) { KeySym k; k.sym = sym; k.spos = QPointF(0.0, y); e.keySymbols().append(k); };
+      add(SymId::accidentalSharp, 0.0);                       // F5
+      add(SymId::accidentalFlat, 2.0);                        // B4
+      add(SymId::accidentalQuarterToneFlatStein, 0.5);        // E5, a quarter-tone flat
+      QCOMPARE(e.forClef(ClefType::G, ClefType::G), e);
+      const KeySigEvent bass = e.forClef(ClefType::G, ClefType::F);
+      QCOMPARE(bass.keySymbols()[0].spos.y(), 1.0);            // F3: bass F sharp's line
+      QCOMPARE(bass.keySymbols()[1].spos.y(), 3.0);            // B2: bass B flat's line
+      QCOMPARE(bass.keySymbols()[2].spos.y(), 1.5);            // E3: bass E flat's line
+      AccidentalState treble;
+      treble.init(e, ClefType::G);
+      for (ClefType c : { ClefType::F, ClefType::C3, ClefType::C4, ClefType::G8_VB }) {
+            AccidentalState other;
+            other.init(e.forClef(ClefType::G, c), c);
+            for (int step = 7; step < MAX_ACC_STATE - 7; ++step)
+                  QVERIFY2(treble.accidentalVal(step) == other.accidentalVal(step),
+                           qPrintable(QString("clef %1, step %2").arg(int(c)).arg(step)));
+            }
       }
 
 QTEST_MAIN(TestTuning)
