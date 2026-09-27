@@ -3,7 +3,7 @@
 #  Music Composition & Notation
 #
 #  vst3host: VST 3 plug-ins hosted for sound library parts (vst3plugin.h, vst3synth.h), and the
-#  articulation check (articulationcheck.h)
+#  articulation check (articulationcheck.h) and the plug-in extract (pluginextract.h)
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License version 3
@@ -12,6 +12,8 @@
 add_library(vst3host STATIC
       articulationcheck.cpp
       articulationcheck.h
+      pluginextract.cpp
+      pluginextract.h
       vst3plugin.cpp
       vst3plugin.h
       vst3synth.cpp

@@ -5,7 +5,9 @@
 //  MS Test Synth: a VST 3 instrument standing in for a sound library's plug-in in the
 //  mtests (tst_soundlibrary). Like Kontakt, it maps MIDI CCs to parameters (IMidiMapping):
 //  CC32 -> "articulation" (what UACC switches), CC1 -> "level" (the dynamics). Both are in its
-//  state. No editor.
+//  state. No editor. Like Kontakt's host automation, parameters no CC is mapped to: "Tone"
+//  (the output's level: 0 is 20 %; not in its state) and twelve placeholders "Macro 1" …
+//  "Macro 12" that do nothing (Extract: tst_soundlibrary::pluginExtract).
 //
 //  Each held note plays at velocity * level, with a timbre of the articulation that was
 //  current at its note on (the articulation check listens for it), like a UACC patch:
@@ -26,6 +28,7 @@
 #define _USE_MATH_DEFINES           // M_PI with MSVC
 #include <cmath>
 #include <map>
+#include <string>
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ibstream.h"
@@ -41,7 +44,7 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-enum : ParamID { kArticulation = 1, kLevel = 2 };
+enum : ParamID { kArticulation = 1, kLevel = 2, kTone = 3, kMacro = 100 };
 
 static const FUID ProcessorUID(0x6d737473, 0x796e7468, 0x70726f63, 0x00000001);
 static const FUID ControllerUID(0x6d737473, 0x796e7468, 0x6374726c, 0x00000001);
@@ -95,6 +98,7 @@ static float timbre(const Voice& v, double sampleRate)
 class Processor : public AudioEffect {
       ParamValue articulation { 0.0 };
       ParamValue level { 1.0 };
+      ParamValue tone { 1.0 };
       int current { 1 };            // the articulation notes start with
       int roundRobin { 0 };
       std::map<int, Voice> voices;  // pitch -> voice
@@ -140,6 +144,8 @@ class Processor : public AudioEffect {
                                     setArticulation(v);
                               else if (q->getParameterId() == kLevel)
                                     level = v;
+                              else if (q->getParameterId() == kTone)
+                                    tone = v;
                               }
                         }
                   }
@@ -179,7 +185,7 @@ class Processor : public AudioEffect {
                   const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69) / 12.0) / processSetup.sampleRate;
                   Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
-                        const float s = timbre(vc, processSetup.sampleRate) * vc.velocity * float(level);
+                        const float s = timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
                         l[i] += s;
                         r[i] += s;
                         vc.phase += inc;
@@ -237,6 +243,14 @@ class Controller : public EditController, public IMidiMapping, public IUnitInfo,
                   return r;
             parameters.addParameter(STR16("Articulation"), nullptr, 0, 0.0, ParameterInfo::kCanAutomate, kArticulation);
             parameters.addParameter(STR16("Level"), nullptr, 0, 1.0, ParameterInfo::kCanAutomate, kLevel);
+            parameters.addParameter(STR16("Tone"), STR16("%"), 0, 1.0, ParameterInfo::kCanAutomate, kTone);
+            for (int i = 0; i < 12; ++i) {
+                  char16_t title[16];
+                  const std::string t = "Macro " + std::to_string(i + 1);
+                  for (size_t k = 0; k <= t.size(); ++k)
+                        title[k] = char16_t(t.c_str()[k]);
+                  parameters.addParameter(reinterpret_cast<const TChar*>(title), nullptr, 0, 0.0, ParameterInfo::kCanAutomate, kMacro + i);
+                  }
             return kResultOk;
             }
 

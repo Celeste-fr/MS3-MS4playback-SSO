@@ -21,6 +21,7 @@
 
 #ifdef TESTSYNTH
 #include "audio/vst3/articulationcheck.h"
+#include "audio/vst3/pluginextract.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #endif
@@ -55,6 +56,9 @@ class TestSoundLibrary : public QObject, public MTest
       void vst3Render();
       void articulationCheck();
       void scanPictures();
+      void pluginDescribe();
+      void pluginExtract();
+      void externalPlugin();
 #endif
       };
 
@@ -893,6 +897,222 @@ void TestSoundLibrary::scanPictures()
       QVERIFY(!patch.count(none));
       for (int v = 0; v < 128; ++v)
             QVERIFY2(found[v] == bool(patch.count(v)), qPrintable(QString("value %1").arg(v)));
+      }
+//---------------------------------------------------------
+//   pluginDescribe
+//    all the test synth says about itself (Extract plug-in data)
+//---------------------------------------------------------
+
+void TestSoundLibrary::pluginDescribe()
+      {
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      const QJsonObject d = p->describe();
+      QCOMPARE(d.value("name").toString(), QString("MS Test Synth"));
+
+      // module and classes
+      const QJsonArray classes = d.value("module").toObject().value("classes").toArray();
+      QVERIFY(classes.size() >= 2);
+      QStringList categories;
+      for (const QJsonValue& c : classes)
+            categories << c.toObject().value("category").toString();
+      QVERIFY(categories.contains("Audio Module Class"));
+
+      // interfaces
+      QStringList ifs;
+      for (const QJsonValue& v : d.value("interfaces").toObject().value("controller").toArray())
+            ifs << v.toString();
+      for (const char* i : { "IEditController", "IMidiMapping", "IUnitInfo", "IKeyswitchController" })
+            QVERIFY2(ifs.contains(i), i);
+      QVERIFY(!ifs.contains("INoteExpressionController"));
+
+      // buses: the stereo output and the MIDI input MuseScore uses
+      int used = 0;
+      for (const QJsonValue& v : d.value("component").toObject().value("buses").toArray()) {
+            const QJsonObject b = v.toObject();
+            used += b.value("usedByMuseScore").toBool();
+            if (b.value("media").toString() == "audio")
+                  QCOMPARE(b.value("channels").toInt(), 2);
+            }
+      QCOMPARE(used, 2);
+
+      // parameters with their texts; the MIDI mapping on every channel
+      std::map<QString, QJsonObject> params;
+      for (const QJsonValue& v : d.value("parameters").toArray())
+            params[v.toObject().value("title").toString()] = v.toObject();
+      QCOMPARE(int(params.size()), 3 + 12);
+      QCOMPARE(params["Tone"].value("units").toString(), QString("%"));
+      QCOMPARE(params["Level"].value("value").toDouble(), 1.0);
+      QVERIFY(!params["Articulation"].value("texts").toArray().isEmpty());
+      const QJsonObject bus0 = d.value("midiMapping").toObject().value("bus 0").toObject();
+      QCOMPARE(bus0.size(), 16);
+      const QJsonObject ch1 = bus0.value("channel 1").toObject();
+      QCOMPARE(ch1.size(), 2);
+      QCOMPARE(ch1.value("32").toObject().value("title").toString(), QString("Articulation"));
+      QCOMPARE(ch1.value("1").toObject().value("title").toString(), QString("Level"));
+
+      // programs, their pitch names, keyswitches
+      const QJsonArray lists = d.value("units").toObject().value("programLists").toArray();
+      QCOMPARE(lists.size(), 1);
+      const QJsonObject program = lists[0].toObject().value("programs").toArray()[0].toObject();
+      QCOMPARE(program.value("pitchNames").toObject().value("36").toString(), QString("Kick"));
+      const QJsonArray ks = d.value("channels").toObject().value("bus 0 channel 1").toObject().value("keyswitches").toArray();
+      QCOMPARE(ks.size(), 2);
+      QCOMPARE(ks[0].toObject().value("title").toString(), QString("Legato"));
+      QCOMPARE(ks[0].toObject().value("keyMin").toInt(), 24);
+
+      // state (the test synth's: two doubles)
+      QCOMPARE(p->componentState().size(), 16);
+      QCOMPARE(d.value("component").toObject().value("state").toObject().value("bytes").toInt(), 16);
+      QVERIFY(d.value("editor").isNull());
+
+      // what it asked of MuseScore
+      QVERIFY(!Vst3Plugin::hostQueries().isEmpty());
+      }
+
+//---------------------------------------------------------
+//   pluginExtract
+//    every controller and parameter tried on the test synth (offline, no window): CC1 changes
+//    the sound, and its value is found back; CC32 is the switch, left alone; "Tone" is found
+//    among the parameters, the twelve "Macro n" are placeholders
+//---------------------------------------------------------
+
+void TestSoundLibrary::pluginExtract()
+      {
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->setOffline(true));
+      p->midi(ME_CONTROLLER, 0, 32, 1);
+      p->midi(ME_CONTROLLER, 0, 1, 100);
+      int ran = 0;
+      PluginExtract::Run run = [&](int ms, PluginExtract::Level* level) {
+            std::vector<float> all;
+            std::vector<float> buffer;
+            for (int done = 0; done < ms * 48; done += 512) {
+                  buffer.assign(2 * 512, 0.f);
+                  p->process(512, buffer.data());
+                  all.insert(all.end(), buffer.begin(), buffer.end());
+                  }
+            p->idle();
+            if (level)
+                  *level = PluginExtract::level(all);
+            ++ran;
+            return true;
+            };
+      PluginExtract::Grab grab = []() { return QImage(); };
+      PluginExtract::Settings s;
+      s.pitch = 67;
+      s.switchCC = 32;
+      s.switchValues = { 1, 42, 71 };
+      bool cancelled = false;
+
+      const QJsonObject c = PluginExtract::controllers(p.get(), s, run, grab, nullptr, nullptr, &cancelled);
+      QVERIFY(!cancelled);
+      QVERIFY(ran > 0);
+      const QJsonArray effects = c.value("effects").toArray();
+      QCOMPARE(effects.size(), 1);
+      const QJsonObject cc1 = effects[0].toObject();
+      QCOMPARE(cc1.value("cc").toInt(), 1);
+      QVERIFY(cc1.value("changes").toArray().contains("sound"));
+      QVERIFY2(std::abs(cc1.value("patchValue").toInt() - 100) <= 3, qPrintable(QString::number(cc1.value("patchValue").toInt())));
+      // every other controller is not mapped (the switch is not tried)
+      QCOMPARE(c.value("notMapped").toArray().size(), 120 - 2 + 2);
+      QVERIFY(!c.value("notMapped").toArray().contains(32));
+      QVERIFY(c.value("noEffect").toArray().isEmpty());
+      QCOMPARE(testSynthState(p->state()).second, cc1.value("patchValue").toInt() / 127.0);
+
+      const QJsonObject par = PluginExtract::parameters(p.get(), s, run, grab, nullptr, nullptr, &cancelled);
+      QVERIFY(!cancelled);
+      QCOMPARE(par.value("controllerParameters").toInt(), 2);
+      QCOMPARE(par.value("placeholders").toObject().value("Macro #").toInt(), 12);
+      const QJsonArray pe = par.value("effects").toArray();
+      QCOMPARE(pe.size(), 1);
+      QCOMPARE(pe[0].toObject().value("title").toString(), QString("Tone"));
+      QVERIFY(pe[0].toObject().value("changes").toArray().contains("sound"));
+      QCOMPARE(p->parameter(3), 1.0);            // put back
+
+      // no parameter follows the articulation (its own, CC32's, is left out)
+      const QJsonObject sw = PluginExtract::switches(p.get(), s, run, nullptr, &cancelled);
+      QCOMPARE(sw.value("values").toObject().size(), 3);
+      QCOMPARE(sw.value("valuesChangingParameters").toInt(), 0);
+
+      // pictures: where two differ
+      QImage a(100, 50, QImage::Format_RGB32);
+      a.fill(Qt::black);
+      QImage b = a.copy();
+      b.setPixel(40, 20, qRgb(255, 255, 255));
+      QCOMPARE(PluginExtract::differingPixels(a, b), 1);
+      QCOMPARE(PluginExtract::changedRect(a, b), QRect(24, 4, 33, 33));
+      QVERIFY(PluginExtract::changedRect(a, a).isNull());
+      }
+//---------------------------------------------------------
+//   externalPlugin
+//    Extract plug-in data without the GUI, on any plug-in (for agents; skipped unless set):
+//      MS_EXTRACT_PLUGIN=<a .vst3>  MS_EXTRACT_OUT=<file.json>  [MS_EXTRACT_STATE=<a .vst3state>]
+//      [MS_EXTRACT_PITCH=60] [MS_EXTRACT_TRY=1: every controller and parameter, offline]
+//---------------------------------------------------------
+
+void TestSoundLibrary::externalPlugin()
+      {
+      const QString path = qEnvironmentVariable("MS_EXTRACT_PLUGIN");
+      const QString outFile = qEnvironmentVariable("MS_EXTRACT_OUT");
+      if (path.isEmpty() || outFile.isEmpty())
+            QSKIP("MS_EXTRACT_PLUGIN and MS_EXTRACT_OUT not set");
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      const QString stateFile = qEnvironmentVariable("MS_EXTRACT_STATE");
+      if (!stateFile.isEmpty()) {
+            QFile f(stateFile);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            QVERIFY(p->setState(f.readAll()));
+            }
+      QVERIFY(p->setOffline(true));
+      PluginExtract::Run run = [&](int ms, PluginExtract::Level* level) {
+            std::vector<float> all;
+            std::vector<float> buffer;
+            for (int done = 0; done < ms * 48; done += 512) {
+                  buffer.assign(2 * 512, 0.f);
+                  p->process(512, buffer.data());
+                  all.insert(all.end(), buffer.begin(), buffer.end());
+                  }
+            p->idle();
+            if (level)
+                  *level = PluginExtract::level(all);
+            return true;
+            };
+      // a sampler loads in the background, in real time: until a note sounds (UACC 1, dynamics
+      // on CC1 as Spitfire's), up to 30 s
+      const int pitch = qEnvironmentVariableIsSet("MS_EXTRACT_PITCH") ? qEnvironmentVariableIntValue("MS_EXTRACT_PITCH") : 60;
+      p->midi(ME_CONTROLLER, 0, 32, 1);
+      p->midi(ME_CONTROLLER, 0, 1, 100);
+      QElapsedTimer waited;
+      waited.start();
+      PluginExtract::Level heard;
+      while (waited.elapsed() < 30000 && heard.db < -90) {
+            p->midi(ME_NOTEON, 0, pitch, 100);
+            run(300, &heard);
+            p->midi(ME_NOTEON, 0, pitch, 0);
+            run(200, nullptr);
+            QThread::msleep(200);
+            }
+      QJsonObject out;
+      out["loadedAfterMs"] = double(waited.elapsed());
+      out["describe"] = p->describe();
+      if (qEnvironmentVariableIntValue("MS_EXTRACT_TRY")) {
+            PluginExtract::Settings s;
+            s.pitch = pitch;
+            s.switchCC = 32;
+            PluginExtract::Grab grab = []() { return QImage(); };
+            bool cancelled = false;
+            out["controllers"] = PluginExtract::controllers(p.get(), s, run, grab, nullptr, nullptr, &cancelled);
+            out["parameters"] = PluginExtract::parameters(p.get(), s, run, grab, nullptr, nullptr, &cancelled);
+            }
+      QFile f(outFile);
+      QVERIFY(f.open(QIODevice::WriteOnly));
+      f.write(QJsonDocument(out).toJson());
       }
 #endif
 
