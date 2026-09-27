@@ -13,6 +13,8 @@
 #include <QPainter>
 
 #include "audio/midi/event.h"
+#include "libmscore/rendermidi.h"
+#include "libmscore/accidental.h"
 #include "libmscore/instrument.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
@@ -1237,6 +1239,30 @@ void TestSoundLibrary::tuningLanes()
       QVERIFY(found);
       d5->setTuning(0.0);
 
+      // the accidental taken away (as in the score view, the sequencer's renderer kept): the note
+      // plays untuned again
+      {
+            MidiRenderer renderer(score);
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            auto d5Tuning = [&]() {
+                  EventMap ev;
+                  renderer.renderScore(&ev, ctx);
+                  for (const auto& te : ev)
+                        if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && te.second.note() == d5)
+                              return double(te.second.tuning());
+                  return -999.0;
+                  };
+            QVERIFY(std::fabs(d5Tuning() - 50) < 0.01);
+            score->startCmd();
+            score->changeAccidental(d5, AccidentalType::NONE);
+            score->endCmd();
+            QVERIFY(!d5->accidental() || d5->accidental()->accidentalType() == AccidentalType::NONE);
+            renderer.setScoreChanged();
+            const double after = d5Tuning();
+            QVERIFY2(std::fabs(after) < 0.01, qPrintable(QString("after the accidental's removal: %1 cents").arg(after)));
+            }
+
       // played: Vst3Synth sets the slot's speed from the tuning (the test synth, which would honour
       // the note's own tuning, gets none, so a shift heard is the speed's)
       QString error;
@@ -1266,6 +1292,9 @@ void TestSoundLibrary::tuningLanes()
       const std::vector<float> reference = play(0);
       QVERIFY(std::fabs(PluginExtract::centsShift(reference, play(50), 48000) - 50) < 6);
       QVERIFY(std::fabs(PluginExtract::centsShift(reference, play(-50), 48000) + 50) < 6);
+      QVERIFY(std::fabs(PluginExtract::centsShift(reference, play(50), 48000) - 50) < 6);
+      const double back = PluginExtract::centsShift(reference, play(0), 48000);    // untuned again
+      QVERIFY2(std::fabs(back) < 6, qPrintable(QString("back to %1 cents").arg(back)));
       SoundLib::setCurrent(nullptr);
       delete score;
       }
