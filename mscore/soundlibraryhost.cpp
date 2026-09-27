@@ -615,28 +615,6 @@ static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::
 #endif
 
 //---------------------------------------------------------
-//   partsWithNotes
-//    the parts that have a note anywhere: only those get an instance (the owner, 2026-09-27:
-//    a new score from the Symphony Orchestra template, no notes yet, loaded 25 Kontakt
-//    instances); a part that gets its first notes is loaded a moment after the edit (preloadSoon)
-//---------------------------------------------------------
-
-static std::set<const Part*> partsWithNotes(Score* score)
-      {
-      std::set<const Part*> parts;
-      const int tracks = score->ntracks();
-      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s && int(parts.size()) < score->parts().size();
-           s = s->next1(SegmentType::ChordRest)) {
-            for (int t = 0; t < tracks; ++t) {
-                  Element* e = s->element(t);
-                  if (e && e->isChord())
-                        parts.insert(e->part());
-                  }
-            }
-      return parts;
-      }
-
-//---------------------------------------------------------
 //   sync
 //    an instance in the slot of each of the score's routes, with its instrument's setup; the
 //    others go
@@ -650,11 +628,10 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
 
 //---------------------------------------------------------
 //   preloadSoon
-//    the score's instances loaded ahead of its first playback (the owner, 2026-09-27: the first
-//    play of an orchestral score waited for 25 Kontakt instances), one at a time from the event
-//    loop so MuseScore stays usable; starts a moment after the score is shown (browsing tabs
-//    loads nothing) and after an edit that gives a part its first notes (edited), so it waits
-//    while one types. A play before it's done loads the rest (sync)
+//    the score's instances loaded when it is opened (or shown), every part's, with or without
+//    notes (the owner, 2026-09-27: "just load everything at score open", no loading as parts get
+//    notes), one per event-loop turn so the window repaints and shows what loads. A play before
+//    it's done loads the rest (sync)
 //---------------------------------------------------------
 
 void SoundLibraryHost::preloadSoon(Score* score)
@@ -665,31 +642,7 @@ void SoundLibraryHost::preloadSoon(Score* score)
       _preloadFrom = _loads;
       if (!_preloadScore || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
             return;
-      _preloadTimer.start(2000);
-#else
-      Q_UNUSED(score);
-#endif
-      }
-
-//---------------------------------------------------------
-//   edited
-//    after each edit (MuseScore::endCmd): a part that got its first notes is loaded a moment
-//    later, as a score is when shown (the owner, 2026-09-27: an empty score loaded nothing until
-//    play). Only a part with notes that the last sync didn't have starts it, so other edits cost
-//    a scan of the score's chords
-//---------------------------------------------------------
-
-void SoundLibraryHost::edited(Score* score)
-      {
-#ifdef USE_VST3
-      if (!score || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
-            return;
-      if (!_preloadTimer.isActive() && score->masterScore() == _syncedScore) {
-            const std::set<const Part*> playing = partsWithNotes(score->masterScore());
-            if (std::includes(_synced.begin(), _synced.end(), playing.begin(), playing.end()))
-                  return;
-            }
-      preloadSoon(score);
+      _preloadTimer.start(0);
 #else
       Q_UNUSED(score);
 #endif
@@ -775,11 +728,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       std::array<bool, 64> used {};
       std::vector<Need> needs;
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
-      const std::set<const Part*> playing = partsWithNotes(score->masterScore());
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
-                  continue;
-            if (!playing.count(r.part))       // nothing to play (a new score from a template)
                   continue;
             const int k = r.port * 16 + r.channel;
             used[k] = true;
@@ -910,8 +860,6 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   }
             }
       _spares.clear();
-      _synced = playing;
-      _syncedScore = score->masterScore();
       if (waiting)
             QApplication::restoreOverrideCursor();
       if (!_idle.isActive())
@@ -938,8 +886,6 @@ void SoundLibraryHost::release()
             _slots[k] = Slot();
             }
       _spares.clear();
-      _synced.clear();
-      _syncedScore = nullptr;
       _idle.stop();
       emit changed();
 #endif

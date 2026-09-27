@@ -88,8 +88,6 @@ class SoundLibraryHost : public QObject {
       QPointer<MasterScore> _preloadScore;
       int _loads { 0 };                   // instances loaded so far
       int _preloadFrom { 0 };             // _loads when the preload started
-      std::set<const Part*> _synced;      // the parts with notes at the last complete sync
-      QPointer<MasterScore> _syncedScore;
       QElapsedTimer _lastInput;           // since the user's last key, click or wheel
       static constexpr int INPUT_PAUSE_MS = 0;     // a background load waits for this long a pause (the owner, 2026-09-27: 0, no wait)
       void preloadStep();
@@ -121,8 +119,7 @@ class SoundLibraryHost : public QObject {
 
       Vst3Synth* synth() const;
       bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
-      void preloadSoon(Score* score);     // load them ahead of the first play, in the background
-      void edited(Score* score);          // after an edit: load a part that got its first notes
+      void preloadSoon(Score* score);     // load them all when the score is opened or shown
       void release();                     // no instances
       bool loaded(int slot) const;
       bool showEditor(int slot, QString* error = nullptr);

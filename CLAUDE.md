@@ -414,11 +414,11 @@ macOS.
   (`"resaved": true` in `made setups.json`; the record's other fields still say when to make it again). So a
   patch's first load stays slow, later ones should be like the hand-made setups': run 119's `load times.log` (the owner, 4 solo strings): made 92-106 ms, first load 0.3-2.4 s (from the .nki), resaved 60-88 ms (386 → 298 KB), next load 92-109 ms (Kontakt's own state), about 20 times faster. setState's time only: Kontakt may still stream samples after it returns.
   `load times.log` (setups folder) records making, loading ("made from the .nki" / "Kontakt's own state") and
-  resaving per patch, since qDebug doesn't show on Windows. Parts with no note get no instance
-  (`partsWithNotes`; a new score from a template loaded 25): loaded a moment after the edit that gives them notes (`SoundLibraryHost::edited`, from `MuseScore::endCmd`: only when a part with notes wasn't in the last sync, else a scan of the chords). Tried here
-  with the test synth: only the part with notes loaded; its state (not Kontakt's) was not resaved, as it should.
-- Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
-  a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
+  resaving per patch, since qDebug doesn't show on Windows. Every part gets its instance, with or without notes
+  (the owner, 2026-09-27: "just load everything at score open"; loading only parts with notes, and a part once it
+  got notes, was tried and removed).
+- Loading at score open (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): as soon as
+  a score is opened or shown, all its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
   bar "Loading … in the background"), each after a pause of `INPUT_PAUSE_MS` without a key, click or wheel (0 since the owner asked, 2026-09-27: no wait; it was 1.5 s)
   (`eventFilter`, `INPUT_PAUSE_MS`: an instance blocks the window while it loads, and VST 3 wants that
   on the UI thread); a play before that's done loads the rest (`sync`). The owner's full orchestra

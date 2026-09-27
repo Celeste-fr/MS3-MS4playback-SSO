@@ -6740,7 +6740,6 @@ void MuseScore::endCmd(bool undoRedo)
       if (MScore::_error != MS_NO_ERROR)
             showError();
       if (cs) {
-            SoundLibraryHost::instance()->edited(cs);         // (a part may have got its first notes)
             setPos(cs->inputState().tick());
             updateInputState(cs);
             updateUndoRedo();
