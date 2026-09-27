@@ -2,7 +2,8 @@ name: 'Tool: Extract library files'
 
 # Runs tools/soundlibraries/test_extract_library_files.py on Windows, tries the extractor there
 # (registry and folder discovery, on a runner that has no library), and builds it into one
-# ExtractLibraryFiles.exe (PyInstaller) that the owner runs without installing Python.
+# ExtractLibraryFiles.exe and MakeSetups.exe (PyInstaller) that the owner runs without installing
+# Python (make_setups.py: MuseScore's Kontakt setups made from the .nki files).
 # Artifact: ExtractLibraryFiles-win64. A few minutes; runs on a push to main or a claude/ branch
 # that changes the extractor, or by hand (Actions -> this workflow -> Run workflow).
 on:
@@ -14,6 +15,8 @@ on:
     paths:
       - 'tools/soundlibraries/extract_library_files.py'
       - 'tools/soundlibraries/test_extract_library_files.py'
+      - 'tools/soundlibraries/make_setups.py'
+      - 'tools/soundlibraries/test_make_setups.py'
       - '.github/workflows/tool_extract_library_files.yml'
 
 jobs:
@@ -27,6 +30,7 @@ jobs:
       run: |
         python --version
         python -W error::ResourceWarning tools\soundlibraries\test_extract_library_files.py -v || exit /b 1
+        python -W error::ResourceWarning tools\soundlibraries\test_make_setups.py -v || exit /b 1
     - name: Try it on this runner
       shell: cmd
       run: |
@@ -37,7 +41,10 @@ jobs:
         python -m pip install --disable-pip-version-check pyinstaller || exit /b 1
         python -m PyInstaller --onefile --console --name ExtractLibraryFiles tools\soundlibraries\extract_library_files.py || exit /b 1
         dist\ExtractLibraryFiles.exe --help || exit /b 1
+        python -m PyInstaller --onefile --console --name MakeSetups --add-data "share\soundlibraries\Spitfire Symphony Orchestra.xml;." tools\soundlibraries\make_setups.py || exit /b 1
+        dist\MakeSetups.exe --help || exit /b 1
         copy tools\soundlibraries\extract_library_files.py dist\ || exit /b 1
+        copy tools\soundlibraries\make_setups.py dist\ || exit /b 1
     - name: Upload
       uses: actions/upload-artifact@v7
       with:

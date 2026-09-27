@@ -461,6 +461,29 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   (`PATCH_CONTROLLERS`): which mic "Mic n" is (the patches' NKS page lists Close, Tree, Ambient, Outrigger,
   Leader in that order, likely the same) is unconfirmed.
 
+Setups made from the `.nki` files (`tools/soundlibraries/make_setups.py`, `MakeSetups.exe` from the same
+workflow; the owner, 2026-09-27: set up every SSO patch without loading each by hand, then extract from all):
+a setup (`.vst3state`: "MSV3", name, Kontakt's component state, controller state) holds an NI container
+whose preset is a Kontakt multi: BANK (SAVE_SETTINGS, five multi-script slots, OUTPUT_CONFIGURATION,
+SLOT_LIST, MULTI_CONFIGURATION, 0x49), 0xF02 (Kontakt 8's browser state) and the bank's FILENAME_LIST_EX
+(version 3, absolute paths). SLOT_LIST = 8 bytes of used slots, then PROGRAM_CONTAINER (0x2B, SAVE_SETTINGS,
+PROGRAM_LIST = count + the program). Compared on Violins 1 - All techniques (the owner's `.nki`, Kontakt
+7.5.2, and its setup, Kontakt 8.9): the program is the `.nki`'s (1219 groups, 32470 zones identical, only
+the zones' sample numbers shifted by the bank list's first entries), re-saved by 8.9 (a longer header,
+parameter arrays; the main script's code newer, from the library's resources), and the script's saved
+values (after its code, "<u32 length><$name value>") differ in exactly three: `$zdiqz` 0 → 1, `$iooxo` 0 → 3
+(the owner's "UACC & UI only", most likely) and `$stgrp` 127 → 100. So a setup = a hand-made setup as the
+template (the multi around the program, kept byte for byte), with the slot's program replaced by the
+`.nki`'s, the values the owner changed in the template (same slot, name and length) set in it, and the
+`.nki`'s sample list (version 2) with every path made absolute from the `.nki`'s folder. The script code
+is copied as it is, never read out. Compressed with `fastlz_compress` (Violins 1: 26.3 MB → 2.5 MB in
+1.7 s; Kontakt's 1.9 MB). Map patches get their map name (`MAP_ALIASES` for the `.nki` names that differ:
+Tuned - …, Piccolo Flute, Solo Violin, Ensembles …), the others their `.nki` name and an entry in
+`addedpatches.json`; `generated.json` lists what was made (never used as templates). Hand-made setups are
+kept unless `--overwrite` (then `.bak`). Tests `test_make_setups.py` (7: built files; with `SSO_NKI=` /
+`SSO_SETUP=` the owner's Violins 1: both files read and written back byte for byte, the three values
+found, a generated setup reads back). **Not yet loaded by Kontakt**: the owner's first try decides.
+
 Extract library files (`tools/soundlibraries/extract_library_files.py`; the owner, 2026-09-27: "completely
 extract all data possible from SSO so we can fully integrate it into Muse in the future"): the files'
 half, without Kontakt. Python 3.8+, standard library only; the owner runs `ExtractLibraryFiles.exe` (artifact

@@ -88,6 +88,16 @@ slots (a quick Extract plug-in data without *Try every controller* on one patch 
 generating setups from the `.nki` files (Kontakt's state embeds the whole patch in a multi: a writer for
 that multi, then one generated setup tried by the owner).
 
+## Setups made from the .nki files (2026-09-27)
+
+`tools/soundlibraries/make_setups.py` (see `CLAUDE.md` › Setups made from the `.nki` files). Next: the owner
+runs `MakeSetups.exe` (artifact `ExtractLibraryFiles-win64`) and makes one setup of a patch not in the map
+(e.g. "Violins 1 - Core techniques"), then in MuseScore (run 72) *Check articulations* shows it "(not in the
+map)", Ready; *Set up…* opens it in Kontakt: the patch loaded, its samples found, "UACC & UI only". If so:
+`all`, then (a MuseScore build for this) tick all and a describe-only Extract plug-in data of every patch.
+If Kontakt refuses it or its samples are missing: look at the sample list first (absolute version 2 paths
+in a multi, where Kontakt 8 itself writes version 3).
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2
