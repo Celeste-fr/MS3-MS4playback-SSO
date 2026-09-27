@@ -20,6 +20,16 @@
 //              is the patch's "no articulation" (SSO: "None"); the others are its
 //              articulations. Reports those the map lacks and map values that show none, and
 //              listens to all it found
+//    Extract   (Extract plug-in data) all there is to know of the plug-in, for more control of it:
+//              what it says of itself (Vst3Plugin::describe(): parameters and the text of
+//              their values, the MIDI controllers' mapping, programs, keyswitches, note
+//              expressions, buses, interfaces …) with nothing loaded and with each ticked
+//              patch's setup, and its raw state; with "Try every controller" also what each
+//              MIDI controller and parameter does to the patch (PluginExtract,
+//              audio/vst3/pluginextract.h: window, sound, parameters; its own value) and which
+//              parameters each articulation value changes. Written to Documents/MuseScore
+//              Sound Library Check/<library> extract <date>/ and a .zip of it; read it with
+//              tools/soundlibraries/read_plugin_data.py
 //    memory    each patch's last check is kept (<data>/soundlibraries/<library>/checks.json):
 //              its setup, its map entries and the check's version, and whether it passed.
 //              A patch needs checking again only when one of those changed, or its last
@@ -65,7 +75,9 @@ class ArticulationCheckDialog : public QDialog {
 
       QLabel* _info;
       QCheckBox* _scan;
+      QCheckBox* _tryAll;
       QPushButton* _add;
+      QPushButton* _extract;
       QTableWidget* _table;
       QLabel* _status;
       QProgressBar* _progress;
@@ -81,6 +93,9 @@ class ArticulationCheckDialog : public QDialog {
       void rebuild();
       void setUp(int index);
       void check();
+      void setRunning(bool running);
+      void extract();
+      bool extractPatch(int index, const QString& pluginPath, const QString& folder, QString& summary);
       bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       QString recordsFile() const;

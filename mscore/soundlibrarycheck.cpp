@@ -56,6 +56,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/articulationcheck.h"
+#include "audio/vst3/pluginextract.h"
 #include "audio/vst3/vst3plugin.h"
 #include "vst3editor.h"
 #endif
@@ -221,6 +222,7 @@ struct Pump {
       const bool* cancel;
       std::vector<float> buffer;
       double peak { 0 };
+      std::vector<float>* capture { nullptr };  // what it plays, when set
 
       void run(int ms)
             {
@@ -235,6 +237,8 @@ struct Pump {
                         p->process(n, buffer.data());
                         for (float x : buffer)
                               peak = std::max(peak, double(std::fabs(x)));
+                        if (capture)
+                              capture->insert(capture->end(), buffer.begin(), buffer.end());
                         frames += n;
                         }
                   p->idle();
@@ -271,6 +275,9 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       layout->addWidget(_table);
       _scan = new QCheckBox(tr("Scan every value (0–127) too, to find articulations the map lacks (about a minute more per patch)"), this);
       layout->addWidget(_scan);
+      _tryAll = new QCheckBox(tr("Try every controller: with Extract plug-in data, also try every MIDI controller and parameter "
+                                 "on each ticked patch (about 10 minutes per patch; its window opens)"), this);
+      layout->addWidget(_tryAll);
       // scanning: the set-up patches never scanned (else: what needs checking)
       connect(_scan, &QCheckBox::toggled, this, [this](bool on) {
             for (int row = 0; row < _table->rowCount(); ++row) {
@@ -292,6 +299,10 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       QDialogButtonBox* buttons = new QDialogButtonBox(this);
       _add = buttons->addButton(tr("Add a patch…"), QDialogButtonBox::ActionRole);
       connect(_add, &QPushButton::clicked, this, &ArticulationCheckDialog::addPatch);
+      _extract = buttons->addButton(tr("Extract plug-in data"), QDialogButtonBox::ActionRole);
+      _extract->setToolTip(tr("Everything the plug-in tells about itself, empty and with each ticked patch (and, ticked above, "
+                              "what every controller does), in a .zip to hand back"));
+      connect(_extract, &QPushButton::clicked, this, &ArticulationCheckDialog::extract);
       _all = buttons->addButton(tr("Tick what needs checking"), QDialogButtonBox::ActionRole);
       _check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
       _close = buttons->addButton(QDialogButtonBox::Close);
@@ -647,6 +658,40 @@ void ArticulationCheckDialog::closeEvent(QCloseEvent* e)
       }
 
 //---------------------------------------------------------
+//   setRunning
+//---------------------------------------------------------
+
+void ArticulationCheckDialog::setRunning(bool running)
+      {
+      _running = running;
+      if (running)
+            _cancel = false;
+      _table->setEnabled(!running);
+      _check->setEnabled(!running);
+      _extract->setEnabled(!running);
+      _all->setEnabled(!running);
+      _add->setEnabled(!running);
+      _scan->setEnabled(!running);
+      _tryAll->setEnabled(!running);
+      _close->setText(running ? tr("Stop") : tr("Close"));
+      }
+
+// a folder's files in <folder>.zip, to hand back
+static QString zipFolder(const QString& folder)
+      {
+      const QString zipPath = folder + ".zip";
+      MQZipWriter zip(zipPath);
+      const QString base = QFileInfo(folder).fileName();
+      for (const QFileInfo& fi : QDir(folder).entryInfoList(QDir::Files, QDir::Name)) {
+            QFile in(fi.absoluteFilePath());
+            if (in.open(QIODevice::ReadOnly))
+                  zip.addFile(base + "/" + fi.fileName(), in.readAll());
+            }
+      zip.close();
+      return zipPath;
+      }
+
+//---------------------------------------------------------
 //   check
 //---------------------------------------------------------
 
@@ -691,14 +736,7 @@ void ArticulationCheckDialog::check()
             return;
             }
 
-      _running = true;
-      _cancel = false;
-      _table->setEnabled(false);
-      _check->setEnabled(false);
-      _all->setEnabled(false);
-      _add->setEnabled(false);
-      _scan->setEnabled(false);
-      _close->setText(tr("Stop"));
+      setRunning(true);
       QJsonArray results;
       QString summary = QString("%1 checked against %2 on %3\n\n").arg(_library->name, QFileInfo(path).fileName(), stamp);
       // results.json and summary.txt, rewritten after each patch (final: with the note of a stop)
@@ -746,15 +784,7 @@ void ArticulationCheckDialog::check()
             QApplication::processEvents();
             }
       _progress->setValue(1000);
-      auto done = [this]() {
-            _running = false;
-            _table->setEnabled(true);
-            _check->setEnabled(true);
-            _all->setEnabled(true);
-            _add->setEnabled(true);
-            _scan->setEnabled(true);
-            _close->setText(tr("Close"));
-            };
+      auto done = [this]() { setRunning(false); };
       if (results.isEmpty()) {
             QDir(folder).removeRecursively();
             done();
@@ -765,17 +795,7 @@ void ArticulationCheckDialog::check()
       save(true);
 
       // all of it in one zip, to hand back
-      const QString zipPath = folder + ".zip";
-      {
-            MQZipWriter zip(zipPath);
-            const QString base = QFileInfo(folder).fileName();
-            for (const QFileInfo& fi : QDir(folder).entryInfoList(QDir::Files, QDir::Name)) {
-                  QFile in(fi.absoluteFilePath());
-                  if (in.open(QIODevice::ReadOnly))
-                        zip.addFile(base + "/" + fi.fileName(), in.readAll());
-                  }
-            zip.close();
-      }
+      const QString zipPath = zipFolder(folder);
 
       done();
       rebuild();
@@ -1647,6 +1667,358 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       Q_UNUSED(pluginPath);
       Q_UNUSED(folder);
       Q_UNUSED(results);
+      Q_UNUSED(summary);
+      return false;
+#endif
+      }
+
+//---------------------------------------------------------
+//   extract
+//    all there is to know of the plug-in (see the header): with nothing loaded, then with each
+//    ticked patch
+//---------------------------------------------------------
+
+static QString safeFileName(QString name)
+      {
+      name.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
+      return name;
+      }
+
+static bool writeFile(const QString& path, const QByteArray& data)
+      {
+      QFile f(path);
+      return f.open(QIODevice::WriteOnly) && f.write(data) == data.size();
+      }
+
+// a line per part of what the plug-in said of itself
+static QString describeSummary(const QJsonObject& d)
+      {
+      QStringList lines;
+      const QJsonArray params = d.value("parameters").toArray();
+      std::map<QString, int> families;
+      for (const QJsonValue& v : params) {
+            QString f = v.toObject().value("title").toString();
+            f.replace(QRegularExpression("\\d+"), "#");
+            ++families[f.trimmed()];
+            }
+      QStringList big;
+      int named = 0;
+      for (const auto& f : families) {
+            if (f.second > 8)
+                  big << QString("\"%1\" x%2").arg(f.first).arg(f.second);
+            else
+                  named += f.second;
+            }
+      lines << QString("parameters: %1 (%2 named alike: %3; %4 others)").arg(params.size()).arg(params.size() - named)
+               .arg(big.isEmpty() ? QString("none") : big.join(", ")).arg(named);
+      int mapped = 0;
+      const QJsonObject mm = d.value("midiMapping").toObject();
+      for (const QJsonValue& b : mm)
+            for (const QJsonValue& ch : b.toObject())
+                  mapped += ch.toObject().size();
+      lines << QString("MIDI controllers mapped to parameters: %1%2").arg(mapped).arg(d.contains("midiMapping") ? "" : " (no IMidiMapping)");
+      const QJsonObject units = d.value("units").toObject();
+      int programs = 0;
+      for (const QJsonValue& l : units.value("programLists").toArray())
+            programs += l.toObject().value("programs").toArray().size();
+      lines << QString("units: %1, program lists: %2, programs: %3").arg(units.value("units").toArray().size())
+               .arg(units.value("programLists").toArray().size()).arg(programs);
+      int keyswitches = 0, expressions = 0;
+      for (const QJsonValue& c : d.value("channels").toObject()) {
+            keyswitches += c.toObject().value("keyswitches").toArray().size();
+            expressions += c.toObject().value("noteExpressions").toArray().size();
+            }
+      lines << QString("keyswitches: %1, note expressions: %2 (all channels)").arg(keyswitches).arg(expressions);
+      QStringList ifs;
+      for (const QJsonValue& v : d.value("interfaces").toObject().value("controller").toArray())
+            ifs << v.toString();
+      lines << QString("controller interfaces: %1").arg(ifs.join(", "));
+      lines << QString("state: component %1 bytes, controller %2 bytes")
+               .arg(d.value("component").toObject().value("state").toObject().value("bytes").toInt())
+               .arg(d.value("controllerState").toObject().value("bytes").toInt());
+      return "   " + lines.join("\n   ") + "\n";
+      }
+
+void ArticulationCheckDialog::extract()
+      {
+#ifdef USE_VST3
+      if (_running || !_library)
+            return;
+      QString error;
+      const QString path = SoundLibraryHost::pluginPath(*_library, &error);
+      if (path.isEmpty()) {
+            QMessageBox::warning(this, windowTitle(), error);
+            return;
+            }
+      std::vector<int> chosen;
+      QStringList notSetUp;
+      for (int row = 0; row < _table->rowCount(); ++row) {
+            if (_table->item(row, 0)->checkState() != Qt::Checked)
+                  continue;
+            if (_table->item(row, 1)->data(Qt::UserRole).toBool())
+                  chosen.push_back(row);
+            else
+                  notSetUp << _rows[row].instrument->name;
+            }
+      if (!notSetUp.isEmpty()) {
+            QMessageBox::warning(this, windowTitle(), tr("Not set up yet (click Set up… first, or untick): %1").arg(notSetUp.join(", ")));
+            return;
+            }
+      if (_tryAll->isChecked() && chosen.empty()) {
+            QMessageBox::information(this, windowTitle(), tr("Tick the patches whose controllers to try."));
+            return;
+            }
+      if (_setupWindow)
+            _setupWindow->close();
+      if (seq && seq->isPlaying())
+            seq->stop();
+
+      const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HHmm");
+      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      const QString folder = root + "/" + safeFileName(_library->name) + " extract " + stamp;
+      if (!QDir().mkpath(folder)) {
+            QMessageBox::warning(this, windowTitle(), tr("Cannot create %1").arg(folder));
+            return;
+            }
+      setRunning(true);
+      QString summary = QString("%1: plug-in data of %2, %3 (MuseScore %4)\n%5\n\n")
+                        .arg(_library->name, QFileInfo(path).fileName(), stamp, QString(VERSION),
+                             _tryAll->isChecked() ? QString("with every controller and parameter tried") : QString("described only"));
+
+      // the plug-in itself, nothing loaded
+      _status->setText(tr("The plug-in itself…"));
+      QApplication::processEvents();
+      {
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, MScore::sampleRate, 4096, &error);
+            if (!p)
+                  summary += QString("## the plug-in, nothing loaded\n   cannot load it: %1\n\n").arg(error);
+            else {
+                  const QJsonObject d = p->describe();
+                  writeFile(folder + "/plugin.json", QJsonDocument(d).toJson());
+                  writeFile(folder + "/plugin component.bin", p->componentState());
+                  writeFile(folder + "/plugin controller.bin", p->controllerState());
+                  summary += "## the plug-in, nothing loaded (plugin.json)\n" + describeSummary(d) + "\n";
+                  }
+      }
+      writeFile(folder + "/summary.txt", summary.toUtf8());
+
+      for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
+            _progress->setValue(1000 * k / int(chosen.size()));
+            _table->scrollToItem(_table->item(chosen[k], 0));
+            extractPatch(chosen[k], path, folder, summary);
+            writeFile(folder + "/summary.txt", (summary + "\n(Still running: written after each patch.)\n").toUtf8());
+            QApplication::processEvents();
+            }
+      _progress->setValue(1000);
+      if (_cancel)
+            summary += "\n(Stopped before the end.)\n";
+      summary += "\nRead it with: python3 tools/soundlibraries/read_plugin_data.py \"<this folder>\"\n";
+      writeFile(folder + "/summary.txt", summary.toUtf8());
+      const QString zipPath = zipFolder(folder);
+      setRunning(false);
+      _status->setText(tr("Done: %1").arg(QDir::toNativeSeparators(zipPath)));
+      QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+      QMessageBox::information(this, windowTitle(),
+         tr("The plug-in's data is in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
+#endif
+      }
+
+//---------------------------------------------------------
+//   extractPatch
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath, const QString& folder, QString& summary)
+      {
+#ifdef USE_VST3
+      const SoundLib::LibInstrument& ins = *_rows[index].instrument;
+      const QString fileBase = safeFileName(ins.name);
+      auto status = [&](const QString& s) {
+            _status->setText(QString("%1: %2").arg(ins.name, s));
+            QApplication::processEvents();
+            };
+      QJsonObject out;
+      out["patch"] = ins.name;
+      out["setup"] = QString(setupHash(ins.name));
+      auto fail = [&](const QString& message) {
+            out["error"] = message;
+            writeFile(folder + "/" + fileBase + ".json", QJsonDocument(out).toJson());
+            summary += QString("## %1\n   %2\n\n").arg(ins.name, message);
+            return false;
+            };
+
+      status(tr("loading…"));
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
+      if (!p)
+            return fail(error);
+      QFile f(SoundLibraryHost::setupFile(*_library, ins.name));
+      if (!f.open(QIODevice::ReadOnly) || !p->setState(f.readAll()))
+            return fail(tr("Its setup could not be loaded into the plug-in."));
+      f.close();
+
+      // a long articulation (the map's first), the library's dynamics
+      const bool switching = ins.switchType == SoundLib::SwitchType::CC;
+      std::vector<int> switchValues;
+      for (const SoundLib::Articulation& a : ins.articulations)
+            if (a.value >= 0 && std::find(switchValues.begin(), switchValues.end(), a.value) == switchValues.end())
+                  switchValues.push_back(a.value);
+      auto prepare = [&]() {
+            if (switching && !switchValues.empty())
+                  p->midi(ME_CONTROLLER, 0, ins.switchNumber, switchValues.front());
+            if (_library->dynamicsCC >= 0)
+                  p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
+            if (_library->dynamicsCC != 11)
+                  p->midi(ME_CONTROLLER, 0, 11, _library->expressionValue);
+            };
+      const int pitch = testPitch(ins);
+      out["pitch"] = pitch;
+
+      // the patch loads its samples: until a note sounds (up to 2 minutes)
+      Pump pump { p.get(), double(MScore::sampleRate), &_cancel, {} };
+      bool sounds = false;
+      for (int i = 0; i < 60 && !_cancel && !sounds; ++i) {
+            status(tr("waiting for the patch to load (%1 s)…").arg(i * 2));
+            pump.peak = 0;
+            prepare();
+            p->midi(ME_NOTEON, 0, pitch, 100);
+            pump.run(1200);
+            p->midi(ME_NOTEON, 0, pitch, 0);
+            pump.run(800);
+            sounds = pump.peak > 1e-5;
+            }
+      if (_cancel)
+            return false;
+      out["sounds"] = sounds;
+      pump.run(1000);
+
+      status(tr("asking the plug-in…"));
+      const QJsonObject d = p->describe();
+      out["describe"] = d;
+      writeFile(folder + "/" + fileBase + " component.bin", p->componentState());
+      writeFile(folder + "/" + fileBase + " controller.bin", p->controllerState());
+      summary += QString("## %1 (%2.json)%3\n").arg(ins.name, fileBase, sounds ? QString() : QString(" — it played nothing"));
+      summary += describeSummary(d);
+
+      if (_tryAll->isChecked() && !_cancel) {
+            QPointer<Vst3EditorWindow> w;
+            if (Steinberg::IPlugView* view = p->createEditor()) {
+                  w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
+                  w->show();
+                  w->raise();
+                  w->activateWindow();
+                  }
+            pump.run(2500);
+            const QImage window = w ? grabPlugin(w) : QImage();
+            if (!window.isNull())
+                  window.save(folder + "/" + fileBase + " (window).png");
+
+            PluginExtract::Settings s;
+            s.channel = 0;
+            s.pitch = pitch;
+            s.velocity = 100;
+            s.switchCC = switching ? ins.switchNumber : -1;
+            s.switchValues = switching ? switchValues : std::vector<int>();
+            s.grabWait = GRAB_WAIT_MS;
+            PluginExtract::Run run = [&](int ms, PluginExtract::Level* level) {
+                  std::vector<float> captured;
+                  pump.capture = level ? &captured : nullptr;
+                  pump.run(ms);
+                  pump.capture = nullptr;
+                  if (level)
+                        *level = PluginExtract::level(captured);
+                  return !_cancel;
+                  };
+            PluginExtract::Grab grab = [&]() { return w ? grabPlugin(w) : QImage(); };
+            std::vector<PluginExtract::Found> found;
+            bool stopped = false;
+            prepare();
+            out["controllers"] = PluginExtract::controllers(p.get(), s, run, grab, status, &found, &stopped);
+            if (!stopped)
+                  out["parameters"] = PluginExtract::parameters(p.get(), s, run, grab, status, &found, &stopped);
+            if (!stopped && switching)
+                  out["switches"] = PluginExtract::switches(p.get(), s, run, status, &stopped);
+            if (w) {
+                  w->close();
+                  delete w;
+                  }
+
+            // what changed the window: a row per controller or parameter, its low and high pictures
+            if (!found.empty()) {
+                  const int pad = 12, labelH = 22, headH = 40, maxW = 640, maxH = 260;
+                  std::vector<QSize> sizes;
+                  int height = headH;
+                  int width = 0;
+                  for (const PluginExtract::Found& fd : found) {
+                        const double scale = std::min({ 1.0, double(maxW) / std::max(1, fd.low.width()), double(maxH) / std::max(1, fd.low.height()) });
+                        const QSize cell(std::max(1, int(fd.low.width() * scale)), std::max(1, int(fd.low.height() * scale)));
+                        sizes.push_back(cell);
+                        height += labelH + cell.height() + pad;
+                        width = std::max(width, 2 * cell.width() + 3 * pad);
+                        }
+                  QImage sheet(std::max(width, 900), height + pad, QImage::Format_RGB32);
+                  sheet.fill(Qt::white);
+                  QPainter pt(&sheet);
+                  QFont font = pt.font();
+                  font.setPixelSize(20);
+                  font.setBold(true);
+                  pt.setFont(font);
+                  pt.setPen(Qt::black);
+                  pt.drawText(QRect(pad, 6, sheet.width() - 2 * pad, 28), Qt::AlignLeft | Qt::AlignVCenter,
+                              QString("%1 — what each controller shows (left: 0, right: 127 / 1)").arg(ins.name));
+                  font.setPixelSize(13);
+                  pt.setFont(font);
+                  int y = headH;
+                  for (size_t k = 0; k < found.size(); ++k) {
+                        const QSize cell = sizes[k];
+                        pt.setPen(Qt::black);
+                        pt.drawText(QRect(pad, y, sheet.width() - 2 * pad, labelH), Qt::AlignLeft | Qt::AlignVCenter, found[k].label);
+                        pt.drawImage(QRect(QPoint(pad, y + labelH), cell), found[k].low);
+                        pt.drawImage(QRect(QPoint(2 * pad + cell.width(), y + labelH), cell), found[k].high);
+                        pt.setPen(QColor(200, 200, 200));
+                        pt.drawRect(QRect(QPoint(pad, y + labelH), cell).adjusted(0, 0, -1, -1));
+                        pt.drawRect(QRect(QPoint(2 * pad + cell.width(), y + labelH), cell).adjusted(0, 0, -1, -1));
+                        y += labelH + cell.height() + pad;
+                        }
+                  pt.end();
+                  sheet.save(folder + "/" + fileBase + " controllers.png");
+                  }
+
+            // the summary: what each controller and parameter does
+            for (const char* part : { "controllers", "parameters" }) {
+                  const QJsonObject r = out.value(part).toObject();
+                  QStringList lines;
+                  for (const QJsonValue& v : r.value("effects").toArray()) {
+                        const QJsonObject e = v.toObject();
+                        QStringList what;
+                        for (const QJsonValue& x : e.value("changes").toArray())
+                              what << x.toString();
+                        const QJsonArray level = e.value("levelDb").toArray();
+                        const QString levels = level.size() == 3
+                           ? QString("%1 → %2 dB").arg(level[1].toDouble()).arg(level[2].toDouble())
+                           : QString("%1 → %2 dB").arg(level[0].toDouble()).arg(level[1].toDouble());
+                        lines << (e.contains("cc")
+                           ? QString("CC %1%2: %3 · %4 · patch value %5").arg(e.value("cc").toInt())
+                             .arg(e.contains("name") ? " (" + e.value("name").toString() + ")" : QString())
+                             .arg(what.join(", "), levels).arg(e.value("patchValue").toInt())
+                           : QString("%1 \"%2\": %3 · %4").arg(e.value("id").toDouble()).arg(e.value("title").toString())
+                             .arg(what.join(", "), levels));
+                        }
+                  summary += QString("   %1 that change something: %2\n").arg(part).arg(lines.size());
+                  for (const QString& l : lines)
+                        summary += "      " + l + "\n";
+                  }
+            const QJsonObject sw = out.value("switches").toObject();
+            if (!sw.isEmpty())
+                  summary += QString("   articulation values that change a parameter: %1 of %2\n")
+                             .arg(sw.value("valuesChangingParameters").toInt()).arg(switchValues.size());
+            }
+      writeFile(folder + "/" + fileBase + ".json", QJsonDocument(out).toJson());
+      summary += "\n";
+      return true;
+#else
+      Q_UNUSED(index);
+      Q_UNUSED(pluginPath);
+      Q_UNUSED(folder);
       Q_UNUSED(summary);
       return false;
 #endif

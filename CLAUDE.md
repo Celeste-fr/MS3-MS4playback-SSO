@@ -298,6 +298,36 @@ against the plug-in itself):
     listened to. `results.json` gets `found`, `notInMap`, `mapValuesShowingNone` and
     `sheet` (the sheet's order). Not tried with Kontakt yet.
 
+Extract plug-in data (*Check articulations…* › *Extract plug-in data*; the owner, 2026-09-27: "extract all
+data possible from the SSO plugin, I need way more control of the plugin"):
+- `Vst3Plugin::describe()` (`audio/vst3/vst3plugin.cpp`): everything VST 3 lets a host ask. Module
+  (moduleinfo.json, snapshots, factory, classes, the compatibility class's JSON), which of ~60 optional
+  interfaces the component and controller have, buses and arrangements, latency, tail, process-context
+  needs, every parameter (title, units, steps, flags, unit, value, default, the text of every step or of 17
+  points), the MIDI mapping on every event bus and channel (0-129 plus program change, poly pressure) and
+  IMidiMapping2, units, program lists (names, preset attributes, pitch names, program data), unit data,
+  keyswitches and note expressions per channel, physical UI mapping, orchestral articulation info
+  (VST 3.8.1), parameter functions, the XML representation, the editor (size, platforms), the component's
+  and controller's state. `hostQueries()`: what plug-ins asked MuseScore for (host context, component
+  handler, IPlugInterfaceSupport), logged since start.
+- `PluginExtract` (`audio/vst3/pluginextract.*`), with *Try every controller* ticked: on each ticked patch,
+  with its window open and a note held, every CC 0-119 (not the switch), channel pressure and pitch bend at
+  0 then 127: window pixels and region, level and brightness, parameters changed, parameters the plug-in
+  reported (processor output, performEdit). Then the value that looks (else sounds) like before, searched
+  (the patch's own value, `patchValue`), is sent back; a CC with no effect goes to 0. Then the parameters
+  no CC maps to (not families of more than 8 alike: Kontakt's placeholders), each at 0, 1 and back. Then
+  which parameters each articulation value changes. Sheet `<patch> controllers.png`.
+- Output: `Documents/MuseScore Sound Library Check/<library> extract <date>/` (`plugin.json`, `<patch>.json`,
+  state `.bin`s, sheet, window, summary.txt) and a zip. **When the owner hands it back**, run
+  `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
+  the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
+  plug-in, what each CC and parameter does, and the state blobs' zlib streams and strings (`_decoded/`).
+- Tested with the test synth (`tst_soundlibrary::pluginDescribe`, `pluginExtract`: it now has a "Tone"
+  parameter no CC maps to and twelve placeholder "Macro n"). Not run with Kontakt yet.
+- Without the GUI, on any plug-in (offline, no window pictures): `MS_EXTRACT_PLUGIN=<.vst3>
+  MS_EXTRACT_OUT=<file.json> [MS_EXTRACT_STATE=<.vst3state>] [MS_EXTRACT_TRY=1] ./tst_soundlibrary
+  externalPlugin` (skipped when unset).
+
 Tested here:
 - `tst_soundlibrary` hosts `mstestsynth.vst3` (`mtest/libmscore/soundlibrary/testsynth`), a
   sine synth that maps CC32 and CC1 like Kontakt. The tests cover notes, CC mapping, state,

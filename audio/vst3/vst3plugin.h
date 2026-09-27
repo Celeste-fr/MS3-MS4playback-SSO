@@ -29,6 +29,7 @@
 #include <vector>
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QString>
 
 namespace Steinberg {
@@ -75,6 +76,35 @@ class Vst3Plugin {
       // prefix). source: which of the two answered, or why none did
       std::map<int, QString> keyNames(QString* source = nullptr) const;
       void idle();                        // parameter changes of the processor to the controller
+
+      // for Extract (mscore/soundlibrarycheck.h), GUI thread:
+      // all the plug-in says about itself: module and classes, buses, parameters (with the text
+      // of their values), the MIDI controllers' mapping, units and programs (their pitch names),
+      // keyswitches, note expressions, its editor, which optional interfaces it has and what
+      // they answer
+      QJsonObject describe() const;
+      QByteArray componentState() const;  // as the plug-in gives it (state() wraps both)
+      QByteArray controllerState() const;
+      struct Parameter {
+            unsigned id;
+            QString title;
+            QString units;
+            int stepCount;
+            int flags;                    // ParameterInfo::ParameterFlags
+            int unitId;
+            };
+      std::vector<Parameter> parameters() const;
+      double parameter(unsigned id) const;                        // normalized, the controller's
+      QString parameterText(unsigned id, double normalized) const;
+      void setParameter(unsigned id, double normalized);          // processor (next process()) and controller
+      long controllerParameter(int channel, int cc) const;        // a MIDI controller's (0-129) parameter, -1: none
+      // what the plug-in changed by itself since the last call: its processor's output
+      // parameter changes and its controller's edits (performEdit)
+      std::vector<std::pair<unsigned, double>> takeReported();
+      // the interfaces plug-ins asked MuseScore for (their host context and component
+      // handler), and those they asked whether MuseScore supports (IPlugInterfaceSupport):
+      // what a plug-in would use
+      static QJsonObject hostQueries();
       };
 
 } // namespace Ms

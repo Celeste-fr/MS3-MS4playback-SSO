@@ -34,6 +34,16 @@ hairpin (Ethanol bar 14). Still open:
 - the owner: re-check the tuned percussion (Timpani, Celeste, Marimba, Vibraphone, Tubular
   Bells) with the fixed key scan.
 
+## Extract plug-in data (2026-09-27)
+
+The owner asked for all the data the SSO plug-in gives, for more control of it. *Check articulations…* ›
+*Extract plug-in data* (see `CLAUDE.md` › Extract plug-in data). Next: the owner runs it (first without
+*Try every controller* on all patches: fast; then with it on one patch per family: strings, woodwinds,
+brass, tuned percussion, a Performance patch, Grand Piano) and hands back the zip. From it: which CCs
+Spitfire's patches answer (expression, vibrato, release, tightness, reverb …) and their values, which
+parameters Kontakt exposes by name, and whether its state holds anything readable. Then decide with the
+owner which of those MuseScore should drive (a map element for controllers per library or patch).
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2
