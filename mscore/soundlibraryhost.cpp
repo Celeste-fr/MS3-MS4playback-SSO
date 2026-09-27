@@ -12,6 +12,7 @@
 #include "soundlibrarycheck.h"
 
 #include <algorithm>
+#include <set>
 
 #include <QApplication>
 #include <QCryptographicHash>
@@ -49,6 +50,7 @@
 #include "libmscore/partcontrollers.h"
 #include "libmscore/partplayback.h"
 #include "libmscore/score.h"
+#include "libmscore/segment.h"
 #include "libmscore/undo.h"
 #include "seq.h"
 
@@ -326,6 +328,15 @@ static bool writeFile(const QString& path, const QByteArray& data)
       return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() && f.commit();
       }
 
+// a line in "load times.log" (setups folder): how long making and loading setups takes on the
+// owner's computer (qDebug doesn't show on Windows)
+static void logTime(const SoundLib::Library& library, const QString& line)
+      {
+      QFile f(setupFolder(library) + "/load times.log");
+      if (f.open(QIODevice::Append | QIODevice::Text))
+            f.write((QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss ") + line + "\n").toUtf8());
+      }
+
 // once per library and session: setups not made by MuseScore (by hand, or by make_setups.py)
 // are moved to "old setups (not used)"
 static void setAsideOldSetups(const SoundLib::Library& library, const QJsonObject& made)
@@ -435,7 +446,9 @@ QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const 
       QJsonObject from = madeFrom(library, *li);
       from["empty"] = QString(QCryptographicHash::hash(empty, QCryptographicHash::Sha1).toHex());
       QFile f(file);
-      if (made.value(patch).toObject() == from && f.open(QIODevice::ReadOnly))
+      QJsonObject have = made.value(patch).toObject();
+      have.remove("resaved");                     // (Kontakt's own state since: loadSetup)
+      if (have == from && f.open(QIODevice::ReadOnly))
             return f.readAll();
 
       QString name;
@@ -468,7 +481,54 @@ QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const 
       made[patch] = from;
       writeFile(madeFile(library), QJsonDocument(made).toJson());
       qDebug("Sound library: made the setup of %s in %lld ms", qPrintable(patch), t.elapsed());
+      logTime(library, QString("%1: setup made in %2 ms").arg(patch).arg(t.elapsed()));
       return state;
+      }
+
+//---------------------------------------------------------
+//   resave
+//    a made setup replaced by the plug-in's own state once it has loaded it (the owner, run 112:
+//    made setups loaded about 100 times slower than the ones made by hand). A made setup has the
+//    .nki's program and its sample list (version 2: absolute paths, the dates in the .nki);
+//    Kontakt 8 writes its program again and a version 3 list (paths from the library, each
+//    sample's date and number as on disk), which it most likely reads without checking every
+//    sample again. Kept only when it is Kontakt's state with the same program loaded
+//---------------------------------------------------------
+
+static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundLib::LibInstrument& li, const QByteArray& made)
+      {
+      QElapsedTimer t;
+      t.start();
+      const QByteArray state = p->state();
+      QString name, madeName;
+      QByteArray component, controller, madeComponent;
+      if (!readState(state, &name, &component, &controller) || !readState(made, &madeName, &madeComponent, &controller)) {
+            logTime(library, QString("%1: not resaved (the plug-in's state could not be read)").arg(li.name));
+            return;
+            }
+      const QByteArray program = KontaktSetup::slotProgram(component, nullptr);
+      const QString programName = KontaktSetup::programName(program);
+      bool ok = !program.isEmpty() && programName == KontaktSetup::programName(KontaktSetup::slotProgram(madeComponent, nullptr))
+                && KontaktSetup::presetTail(component).right(4) == KontaktSetup::presetTail(madeComponent).right(4);
+      // (the script values set, still set)
+      const std::map<QString, QByteArray> values = KontaktSetup::scriptValues(program);
+      for (const auto& v : li.setupValues) {
+            auto i = values.find(v.first);
+            ok = ok && (i == values.end() || i->second == v.second.toUtf8());
+            }
+      if (!ok) {
+            logTime(library, QString("%1: not resaved (the plug-in's state has not the same program: \"%2\")").arg(li.name, programName));
+            return;
+            }
+      if (!writeFile(SoundLibraryHost::setupFile(library, li.name), state))
+            return;
+      QJsonObject all = readMade(library);
+      QJsonObject rec = all.value(li.name).toObject();
+      rec["resaved"] = true;
+      all[li.name] = rec;
+      writeFile(madeFile(library), QJsonDocument(all).toJson());
+      logTime(library, QString("%1: resaved from the plug-in (%2 KB, was %3 KB) in %4 ms")
+              .arg(li.name).arg(state.size() / 1024).arg(made.size() / 1024).arg(t.elapsed()));
       }
 
 //---------------------------------------------------------
@@ -482,8 +542,17 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library
       const QByteArray state = setupState(library, patch, pluginPath, error);
       if (state.isEmpty())
             return false;
-      if (p->setState(state))
+      QElapsedTimer t;
+      t.start();
+      if (p->setState(state)) {
+            const SoundLib::LibInstrument* li = findPatch(library, patch);
+            const bool resaved = readMade(library).value(patch).toObject().value("resaved").toBool();
+            logTime(library, QString("%1: loaded into the plug-in in %2 ms (%3)").arg(patch).arg(t.elapsed())
+                    .arg(!makesSetups(library) ? "a setup file" : resaved ? "Kontakt's own state" : "made from the .nki"));
+            if (makesSetups(library) && li && !li->nki.isEmpty() && !resaved)
+                  resave(p, library, *li, state);
             return true;
+            }
       if (error)
             *error = tr("The setup of %1 could not be loaded into the plug-in.").arg(patch);
       qWarning("Sound library: the setup of %s could not be loaded", qPrintable(patch));
@@ -542,6 +611,28 @@ static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::
             }
       }
 #endif
+
+//---------------------------------------------------------
+//   partsWithNotes
+//    the parts that have a note anywhere: only those get an instance (the owner, 2026-09-27:
+//    a new score from the Symphony Orchestra template, no notes yet, loaded 25 Kontakt
+//    instances); a part that gets its first notes is loaded at the next play
+//---------------------------------------------------------
+
+static std::set<const Part*> partsWithNotes(Score* score)
+      {
+      std::set<const Part*> parts;
+      const int tracks = score->ntracks();
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s && int(parts.size()) < score->parts().size();
+           s = s->next1(SegmentType::ChordRest)) {
+            for (int t = 0; t < tracks; ++t) {
+                  Element* e = s->element(t);
+                  if (e && e->isChord())
+                        parts.insert(e->part());
+                  }
+            }
+      return parts;
+      }
 
 //---------------------------------------------------------
 //   sync
@@ -628,8 +719,11 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       std::array<bool, 64> used {};
       std::vector<Need> needs;
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      const std::set<const Part*> playing = partsWithNotes(score->masterScore());
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
+                  continue;
+            if (!playing.count(r.part))       // nothing to play (a new score from a template)
                   continue;
             const int k = r.port * 16 + r.channel;
             used[k] = true;
@@ -823,7 +917,7 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
       Vst3Plugin* p = vst ? vst->plugin(slot) : nullptr;
       if (!p) {
             if (error)
-                  *error = tr("No plug-in is loaded for this part.");
+                  *error = tr("No plug-in is loaded for this part: a part is loaded once it has notes (and the score plays).");
             return false;
             }
       Slot& s = _slots[slot];
