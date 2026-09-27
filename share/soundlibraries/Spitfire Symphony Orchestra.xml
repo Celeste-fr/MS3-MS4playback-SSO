@@ -1698,9 +1698,6 @@
     <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
     <Drum pitch="38" key="36" name="Snare 1 Hit"/>
     <Drum pitch="40" key="41" name="Snare 2 Hit"/>
-    <Drum pitch="38" key="119" name="Snare 1 Roll" technique="roll" default="off"/>
-    <Drum pitch="40" key="6" name="Snare 2 Roll" technique="roll" default="off"/>
-    <Drum pitch="37" key="115" name="Snare 1 X Stick" ids="snare-drum drumset percussion" default="off"/>
     <Drum pitch="38" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
     <Drum pitch="40" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
     <Drum pitch="60" key="52" name="Bongos Hand Tone"/>
@@ -1710,10 +1707,6 @@
     <Drum pitch="64" key="69" name="Conga 2 Tone"/>
     <Drum pitch="65" key="77" name="Timbales Hi Hit"/>
     <Drum pitch="66" key="72" name="Timbales Lo Hit"/>
-    <Drum key="1" name="Snare 2 X Stick" default="off"/>
-    <Drum key="2" name="Snare 2 Flam" default="off"/>
-    <Drum key="5" name="Snare 2 Brush" default="off"/>
-    <Drum key="8" name="Snare 2 Brush Roll" default="off"/>
     <Drum key="38" name="Snare 1 Edge"/>
     <Drum key="40" name="Snare 1 Rim"/>
     <Drum key="43" name="Snare 2 Edge"/>
@@ -1735,11 +1728,7 @@
     <Drum key="88" name="Rototom 3"/>
     <Drum key="89" name="Rototom 4"/>
     <Drum key="91" name="Rototom 5"/>
-    <Drum key="93" name="Snare 1 Swell mf" default="off"/>
-    <Drum key="94" name="Snare 1 Swell f" default="off"/>
-    <Drum key="120" name="Snare 1 Flam" default="off"/>
-    <Drum key="124" name="Snare 2 Rim" default="off"/>
-    <!-- off in Kickstart, no key: Timbales Lo / Hi X Stick, Lo / Hi Flam, Hi Side, Lo / Hi Swell mf / f; Rototoms Swell 1-5; Conga 1 / 2 Flam, Roll, Roll SFP, Roll Side, Swell mf / f; Bongos Hand Roll (SFP), Finger Roll (SFP), Side Roll, Hand / Bass Swell mf / f -->
+    <!-- off in Kickstart by default (from the drum's own patch): Snare 2 X Stick, Snare 2 Flam, Snare 2 Brush, Snare 2 Roll, Snare 2 Brush Roll, Snare 1 Swell mf, Snare 1 Swell f, Snare 1 X Stick, Snare 1 Roll, Snare 1 Flam, Snare 2 Rim; Timbales Lo / Hi X Stick, Lo / Hi Flam, Hi Side, Lo / Hi Swell mf / f; Rototoms Swell 1-5; Conga 1 / 2 Flam, Roll, Roll SFP, Roll Side, Swell mf / f; Bongos Hand Roll (SFP), Finger Roll (SFP), Side Roll, Hand / Bass Swell mf / f -->
   </Instrument>
   <Instrument name="Drums - Low" with="Percussion" keyScan="1">
     <Switch type="none"/>
@@ -1769,7 +1758,7 @@
     <Drum key="77" name="Tom Ensemble Eth Hit Loose"/>
     <Drum key="88" name="Bass Drum Mute Hit"/>
     <Drum key="89" name="Bass Drum Rute"/>
-    <!-- off in Kickstart, no key: Toms Swell 1-5 mf / f; Gong Drum Swell, Fx Drag, Fx Various; Field Drum Flam, Roll, Swell mf / f; Bass Drum Roll, Fx Rub, Swell -->
+    <!-- off in Kickstart by default (from the drum's own patch): Toms Swell 1-5 mf / f; Gong Drum Swell, Fx Drag, Fx Various; Field Drum Flam, Roll, Swell mf / f; Bass Drum Roll, Fx Rub, Swell -->
   </Instrument>
   <Instrument name="Unpitched - Metal" with="Percussion" keyScan="1">
     <Switch type="none"/>
@@ -1791,8 +1780,6 @@
     <Drum pitch="69" key="79" name="Mark Tree Long" ids="metal-wind-chimes"/>
     <Drum pitch="68" key="67" name="Anvil Hit Mid" ids="anvil"/>
     <Drum pitch="68" key="86" name="Trash Metal Brake 1" ids="automobile-brake-drums"/>
-    <Drum pitch="81" key="103" name="Triangle 1 Open Hit 1" ids="triangle drumset percussion" default="off"/>
-    <Drum pitch="80" key="107" name="Triangle 1 Closed Hit" ids="triangle drumset percussion" default="off"/>
     <Drum key="38" name="Tam Tam Choked Hit"/>
     <Drum key="41" name="Rain Sheet Choked Hit"/>
     <Drum key="45" name="Cymbal Lo Choked Hit"/>
@@ -1820,15 +1807,7 @@
     <Drum key="93" name="Trash Metal Scafold 2"/>
     <Drum key="95" name="Trash Metal Spring Coil"/>
     <Drum key="96" name="Trash Metal Trash Can"/>
-    <Drum key="104" name="Triangle 1 Open Hit 2" default="off"/>
-    <Drum key="105" name="Triangle 1 Open Hit 3" default="off"/>
-    <Drum key="106" name="Triangle 1 Open Hit 4" default="off"/>
-    <Drum key="108" name="Triangle 2 Open Hit 1" default="off"/>
-    <Drum key="109" name="Triangle 2 Open Hit 2" default="off"/>
-    <Drum key="110" name="Triangle 2 Open Hit 3" default="off"/>
-    <Drum key="111" name="Triangle 2 Open Hit 4" default="off"/>
-    <Drum key="112" name="Triangle 2 Closed Hit" default="off"/>
-    <!-- off in Kickstart, no key: Gong Swell mf / f, Fx Bow; Tam Tam Roll, Swell mf / f, Superball, Fx Scrape; Rivet Cymbal Roll, Swell; Rain Sheet Roll, Swell mp / mf / f, Superball; Piatti Choked Hit, Choked Alt, Fx Scrape, Fx Sizzle; Cymbal Hi / Lo Roll, Swell mf / f, Fx Scrape, Fx Bow; Cymbal Med Roll, Swell mf / f; Mark Tree Sweep low / mid / high; Anvil Hit Face, Steel Sheet, Horn Pipe, Rear Pipe -->
+    <!-- off in Kickstart by default (from the drum's own patch): Triangle 1 Open Hit 1, Triangle 1 Open Hit 2, Triangle 1 Open Hit 3, Triangle 1 Open Hit 4, Triangle 1 Closed Hit, Triangle 2 Open Hit 1, Triangle 2 Open Hit 2, Triangle 2 Open Hit 3, Triangle 2 Open Hit 4, Triangle 2 Closed Hit; Gong Swell mf / f, Fx Bow; Tam Tam Roll, Swell mf / f, Superball, Fx Scrape; Rivet Cymbal Roll, Swell; Rain Sheet Roll, Swell mp / mf / f, Superball; Piatti Choked Hit, Choked Alt, Fx Scrape, Fx Sizzle; Cymbal Hi / Lo Roll, Swell mf / f, Fx Scrape, Fx Bow; Cymbal Med Roll, Swell mf / f; Mark Tree Sweep low / mid / high; Anvil Hit Face, Steel Sheet, Horn Pipe, Rear Pipe -->
   </Instrument>
   <Instrument name="Unpitched - Wood" with="Percussion" keyScan="1">
     <Switch type="none"/>
@@ -1852,7 +1831,7 @@
     <Drum key="62" name="Woodblock 2"/>
     <Drum key="64" name="Woodblock 3"/>
     <Drum key="65" name="Woodblock 4"/>
-    <!-- off in Kickstart, no key: (not yet known) -->
+    <!-- off in Kickstart by default (from the drum's own patch): (not yet known) -->
   </Instrument>
   <Instrument name="Other - Toys" with="Percussion" keyScan="1">
     <Switch type="none"/>
@@ -1898,7 +1877,7 @@
     <Drum key="93" name="Cabasa Slap"/>
     <Drum key="95" name="Cabasa Twist 1"/>
     <Drum key="96" name="Cabasa Twist 2"/>
-    <!-- off in Kickstart, no key: Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll -->
+    <!-- off in Kickstart by default (from the drum's own patch): Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll -->
   </Instrument>
   <Instrument name="Percussion - Drums - High - Bongos" with="Percussion" keyScan="1">
     <Switch type="none"/>

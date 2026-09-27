@@ -169,7 +169,8 @@ switch value of each articulation. For example:
   patch has plays on the built-in synthesizer. A `<Drum>` without `pitch` is a key no MuseScore
   sound plays: listed (and checked) so the map has every key of the patch, never chosen.
   `default="off"` marks a technique the patch has switched off until it is given a key
-  (Spitfire's Kickstart): a setup made elsewhere, in a DAW, must switch it on too. `technique="roll"` marks the sound's roll key: a
+  (Spitfire's Kickstart): a setup made elsewhere, in a DAW, must switch it on too. (SSO's map leaves such
+  keys out: MuseScore sets patches up at the library's defaults.) `technique="roll"` marks the sound's roll key: a
   note with a single-note tremolo or a buzz roll plays it once, held for the note (a crescendo
   over it swells through the dynamics controller); a sound with no roll key plays the tremolo
   as repeated hits. `keyScan="1"` makes *Check articulations* play
