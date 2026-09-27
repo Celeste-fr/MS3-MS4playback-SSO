@@ -1213,6 +1213,30 @@ void TestSoundLibrary::tuningLanes()
       QVERIFY(cc1[0] > 0 && cc1[1] > 0);
       QVERIFY(switches[0] > 0 && switches[1] > 0);
 
+      // a note within the tolerance of its lane plays at the lane's tuning (nothing on it moves):
+      // D5+ 2 cents higher on the +50 lane; with a tolerance of 0.5 it keeps its own
+      Note* d5 = nullptr;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s && !d5; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord() && toChord(s->element(0))->upNote()->pitch() == 74)
+                  d5 = toChord(s->element(0))->upNote();
+      QVERIFY(d5);
+      d5->setTuning(2.0);
+      QCOMPARE(SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, 0.5).cents.at(d5), 50.0);
+      QVERIFY(std::fabs(SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 0.5, 0.5).cents.at(d5) - 52) < 0.01);
+      EventMap tolerated;
+      score->renderMidi(&tolerated, false, true, ss);
+      bool found = false;
+      for (const auto& te : tolerated) {
+            const NPlayEvent& ev = te.second;
+            if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0 && ev.note() == d5) {
+                  QCOMPARE(ev.extChannel(), 1);
+                  QVERIFY2(std::fabs(ev.tuning() - 50) < 0.01, qPrintable(QString("%1 cents").arg(ev.tuning())));
+                  found = true;
+                  }
+            }
+      QVERIFY(found);
+      d5->setTuning(0.0);
+
       // played: Vst3Synth sets the slot's speed from the tuning (the test synth, which would honour
       // the note's own tuning, gets none, so a shift heard is the speed's)
       QString error;

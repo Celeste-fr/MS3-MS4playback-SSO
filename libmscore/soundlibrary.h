@@ -160,9 +160,10 @@ class Library {
       // (Kontakt), so a part's notes are spread over copies of its patch ("lanes", Lanes below),
       // each played faster or slower by its tuning (Vst3Plugin::setPitch). A lane changes its
       // tuning only once silent: after its last note's end plus laneTail seconds (the release,
-      // the room); notes within laneTolerance cents of a lane's tuning share it
+      // the room); a note within laneTolerance cents of a lane's tuning shares it and plays at the
+      // lane's tuning (what sounds on it never moves); 0.5 merges rounding only, not the schisma
       bool varispeed { false };
-      double laneTolerance { 3.0 };       // cents
+      double laneTolerance { 0.5 };       // cents
       double laneTail { 1.5 };            // seconds
       int maxLanes { 4 };                 // per patch: past it, the lane quiet longest is retuned (its tail with it)
       std::vector<Controller> controllers;          // for all its instruments

@@ -321,10 +321,11 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     2^(cents/1200) through a windowed-sinc resampler (Lanczos, 8 taps each side): exact pitch, no
     pitch-shifter artifacts, 8 samples of latency once engaged; the plug-in's own time runs as much faster
     (3 % for a quarter tone: vibrato and attacks). Glides for legato.
-  - `SoundLib::lanes` (map `<Tuning method="varispeed" tolerance="3" tail="1.5" maxLanes="4"/>`, SSO's
+  - `SoundLib::lanes` (map `<Tuning method="varispeed" tolerance="0.5" tail="1.5" maxLanes="4"/>`, SSO's
     since 2026-09-27): a part's notes over copies ("lanes") of their patch. In order of start: a slurred
     note stays on its previous note's lane (the legato transition needs one instrument; it glides), else a
-    lane at its tuning (within the tolerance, cents), else a lane silent by then (its notes' end plus the
+    lane at its tuning (within the tolerance, cents; the note then plays at the lane's tuning, `Lanes::cents`,
+    `libLaneCents`, so nothing sounding on it moves; 0.5 merges rounding only, not HEJI's 1.95-cent schisma), else a lane silent by then (its notes' end plus the
     tail, seconds), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
     Tied notes follow their first note, grace notes their chord. `routes()` gives each patch one route
     per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer

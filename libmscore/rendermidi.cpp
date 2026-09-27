@@ -1926,6 +1926,11 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                         }
                   }
             ev.setExternal(lanes[size_t(lane)].first, lanes[size_t(lane)].second);
+            if (ev.type() == ME_NOTEON && ev.note() && !ev.librarySwitch()) {
+                  auto c = libLaneCents.find(ev.note());
+                  if (c != libLaneCents.end())
+                        ev.setTuning(float(c->second));
+                  }
             // a switch goes to every lane of its patch (whichever plays the next note)
             if (ev.librarySwitch() && i->first < utick2) {
                   for (int l = 1; l < int(lanes.size()); ++l) {
@@ -3630,6 +3635,7 @@ void MidiRenderer::updateState()
             libParts.clear();
             libRoutes.clear();
             libLanes.clear();
+            libLaneCents.clear();
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {
@@ -3661,14 +3667,15 @@ void MidiRenderer::updateState()
                                     }
                               outs.back().push_back({ e.port, e.channel });
                               }
-                        bool severalLanes = false;
-                        for (const auto& o : outs)
-                              severalLanes = severalLanes || o.size() > 1;
-                        if (severalLanes) {
+                        // varispeed: a note plays at its lane's tuning (within the tolerance of its own),
+                        // so a note joining a lane never retunes what still sounds on it
+                        if (library->varispeed && !r.instrument->kit) {
                               const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, library->laneTolerance, library->laneTail, library->maxLanes);
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
+                              for (const auto& nc : l.cents)
+                                    libLaneCents[nc.first] = nc.second;
                               }
                         for (const auto& ip : *part->instruments()) {
                               const SoundLib::LibInstrument* li = library->match(ip.second, part);
