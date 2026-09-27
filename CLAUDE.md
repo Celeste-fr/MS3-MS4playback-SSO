@@ -403,6 +403,19 @@ data possible from the SSO plugin, I need way more control of the plugin"):
 - Without the GUI, on any plug-in (offline, no window pictures): `MS_EXTRACT_PLUGIN=<.vst3>
   MS_EXTRACT_OUT=<file.json> [MS_EXTRACT_STATE=<.vst3state>] [MS_EXTRACT_TRY=1] ./tst_soundlibrary
   externalPlugin` (skipped when unset).
+- First run on SSO (the owner, 2026-09-27 03:58, run 72, *Try every controller* on Violins 1 only; it
+  takes very long per patch, and Strings Ensemble was stopped): Kontakt 8.9 exposes 4145 parameters, most
+  placeholders ("##" x2033, "CC #n" per channel); Violins 1 - All techniques names 15 automation slots:
+  0 Dynamics, 1 Vibrato, 3 Release, 4 Tightness, 6 Expression, 7-11 Mic 1-5 level, 13 Articulation
+  Controller, 14 Mic Mix Distance (2, 5 "Unused CC", 12 "Unused mic"). Those can be driven as plug-in
+  parameters by title (`<Controller param=…>`), no CC needed. 25 CCs change something (1, 7, 10, 11, 17,
+  21-25, 103, 105-114, 116, 118, 119, pitch bend), but Kontakt reports no named parameter moving with them
+  (the CC to knob link is in Spitfire's script) and the sheet's crops are too small to read which slider
+  moved. Kontakt's state (`component.bin`, the `.vst3state` setup) is an NI container like an `.nki`: a
+  Kontakt multi (BANK, SLOT_LIST) that embeds the whole patch (Violins 1: 1.9 MB, 26.8 MB of preset data
+  unpacked, authorization N51), not a reference to it; `read_kontakt_preset` doesn't read its slot list
+  yet ("read past the end"). So setups could in principle be generated from the `.nki` files (a multi with
+  the patch in slot 1), keeping what the owner sets at setup (UACC & UI only) from a template; not tried.
 
 Extract library files (`tools/soundlibraries/extract_library_files.py`; the owner, 2026-09-27: "completely
 extract all data possible from SSO so we can fully integrate it into Muse in the future"): the files'

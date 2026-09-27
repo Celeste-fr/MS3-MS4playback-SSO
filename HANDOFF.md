@@ -71,6 +71,15 @@ and hands back the zip it names. From it (`--report`, then `library.json` and `a
 Then decide with the owner what goes into the map (ranges per articulation, round-robin counts, release
 samples) and what MuseScore should drive.
 
+## Plug-in extract, first run (2026-09-27 03:58)
+
+Violins 1 only (see `CLAUDE.md` › Extract plug-in data › First run on SSO). Its 15 named automation slots
+(Dynamics, Vibrato, Release, Tightness, Expression, Mic 1-5, Mic Mix Distance, Articulation Controller)
+are what the Controllers map should drive, by parameter title. Open: whether every patch names the same
+slots (a quick Extract plug-in data without *Try every controller* on one patch per family answers it), and
+generating setups from the `.nki` files (Kontakt's state embeds the whole patch in a multi: a writer for
+that multi, then one generated setup tried by the owner).
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2
