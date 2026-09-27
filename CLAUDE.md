@@ -372,8 +372,15 @@ macOS.
   memory is `setupId` (what it's made from), so it is known before the setup is made. A library
   without `<Files>` still uses a `.vst3state` put there (the tests' plug-ins). The map lists SSO's other
   541 patches as `<Patch>` (from `tools/soundlibraries/sso_nki_files.txt`, the owner's 700 `.nki`):
-  Check articulations lists all 700 (*Tick all*) and scans the others. Not yet loaded by Kontakt from
-  MuseScore itself (the Python tool's setups were, run 91); the owner's first try decides.
+  Check articulations lists all 700 (*Tick all*, then *Untick all*) and scans the others.
+  Tried here in the GUI under Xvfb (PulseAudio null sink, the test synth as the plug-in, a library folder
+  with the owner's Violins 1 `.nki` under the Solo Violin and Grand Piano paths, Kontakt 8.9's empty state
+  seeded as `Kontakt empty.vst3state` since the test synth's isn't Kontakt's): opening a violin and piano
+  score moved three hand-made files to `old setups (not used)` and made both setups (1.1 s each: the
+  program, `$iooxo` 3, 32,472 absolute sample paths), reused on the next start; the dialogs show "Loaded" /
+  "Made by MuseScore", *Library folder…*, no *Save setup*, *Set up…* or *Add a patch…*. Tests
+  `kontaktSetup`, `kontaktSetupReal`. Not yet loaded by Kontakt from MuseScore itself (the Python tool's
+  setups were, run 91); the owner's first try decides.
 - Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
   a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
   bar "Loading … in the background"); a play before that's done loads the rest (`sync`). The owner,

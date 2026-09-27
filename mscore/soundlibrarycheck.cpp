@@ -300,23 +300,24 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _progress->setValue(0);
       layout->addWidget(_progress);
       QDialogButtonBox* buttons = new QDialogButtonBox(this);
-      _add = buttons->addButton(tr("Add a patch…"), QDialogButtonBox::ActionRole);
+      // (not when MuseScore makes the setups: the map lists all the library's patches)
+      _add = makes ? new QPushButton(this) : buttons->addButton(tr("Add a patch…"), QDialogButtonBox::ActionRole);
+      _add->setVisible(!makes);
       connect(_add, &QPushButton::clicked, this, &ArticulationCheckDialog::addPatch);
-      _add->setVisible(!makes);           // (the map lists all the library's patches)
       _extract = buttons->addButton(tr("Extract plug-in data"), QDialogButtonBox::ActionRole);
       _extract->setToolTip(tr("Everything the plug-in tells about itself, empty and with each ticked patch (and, ticked above, "
                               "what every controller does), in a .zip to hand back"));
       connect(_extract, &QPushButton::clicked, this, &ArticulationCheckDialog::extract);
       _tickAll = buttons->addButton(tr("Tick all"), QDialogButtonBox::ActionRole);
+      // (ticks every patch that has a setup; clicked again, unticks them)
       connect(_tickAll, &QPushButton::clicked, this, [this]() {
-            bool all = true;
-            for (int row = 0; row < _table->rowCount(); ++row)
-                  all = all && (_table->item(row, 0)->checkState() == Qt::Checked || !_table->item(row, 1)->data(Qt::UserRole).toBool());
+            const bool tick = !_tickAll->property("ticked").toBool();
             for (int row = 0; row < _table->rowCount(); ++row) {
                   const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
-                  _table->item(row, 0)->setCheckState(setup && !all ? Qt::Checked : Qt::Unchecked);
+                  _table->item(row, 0)->setCheckState(setup && tick ? Qt::Checked : Qt::Unchecked);
                   }
-            _tickAll->setText(all ? tr("Tick all") : tr("Untick all"));
+            _tickAll->setProperty("ticked", tick);
+            _tickAll->setText(tick ? tr("Untick all") : tr("Tick all"));
             });
       _all = buttons->addButton(tr("Tick what needs checking"), QDialogButtonBox::ActionRole);
       _check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
@@ -601,6 +602,7 @@ void ArticulationCheckDialog::rebuild()
                   }
             _table->setItem(i, 3, new QTableWidgetItem(setup ? last : QString()));
             }
+      _table->setColumnHidden(2, SoundLibraryHost::makesSetups(*_library));    // (no buttons: nothing added)
       _table->resizeColumnsToContents();
       _table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
       const QString folder = SoundLibraryHost::libraryFolder(*_library);
