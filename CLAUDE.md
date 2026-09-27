@@ -403,6 +403,19 @@ macOS.
   (`Preset::set(data, tail)`; make_setups.py's from-empty path too), `MAKER_VERSION` 2 remakes them; tests
   compare the marker (the fixtures' `.nki` now carries a7636734). Against the owner's hand-made Violins 1
   every chunk is now the same but ids, the save time, the browser state, the program and the paths.
+  **Run 112: they load, but about 100 times slower than the hand-made ones** (the owner). Most likely the sample
+  list: a made setup has the `.nki`'s (version 2: absolute paths, the `.nki`'s dates and numbers), Kontakt 8
+  writes version 3 (each entry: u32 kind, u32 library id 0x8515 for "from the library", u32 segments, the
+  segments, then u32 0, u64 the file's date, u32 a number, u32 0; the preset's folder, Kontakt's user folder, the
+  `.nkr`, the `.nki`, then the samples), and likely re-checks every sample when the dates don't match. Not
+  written by us: after a made setup's first load, `resave` (soundlibraryhost.cpp) replaces it with Kontakt's own
+  state (getState), kept only when it has the same program, the program marker and the script values
+  (`"resaved": true` in `made setups.json`; the record's other fields still say when to make it again). So a
+  patch's first load stays slow, later ones should be like the hand-made setups': to be confirmed by the owner.
+  `load times.log` (setups folder) records making, loading ("made from the .nki" / "Kontakt's own state") and
+  resaving per patch, since qDebug doesn't show on Windows. Parts with no note get no instance
+  (`partsWithNotes`; a new score from a template loaded 25): loaded at the play after they get notes. Tried here
+  with the test synth: only the part with notes loaded; its state (not Kontakt's) was not resaved, as it should.
 - Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
   a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
   bar "Loading … in the background"); a play before that's done loads the rest (`sync`). The owner,
