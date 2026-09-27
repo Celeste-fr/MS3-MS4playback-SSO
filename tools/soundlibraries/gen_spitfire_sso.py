@@ -521,6 +521,42 @@ for name in PERCUSSION:
             out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
     out.append(f'    <!-- off in Kickstart, no key: {STILL_OFF[name]} -->')
     out.append('  </Instrument>')
+# One patch per drum (the owner's folder, 2026-09-27: "Percussion - <kit> - <drum>.nki"). A kit patch's
+# keyboard can't hold every technique of all its drums; the drum's own patch can. Extras of the kit
+# after the five kit patches: a sound both have plays on the kit patch (one instance for many drums),
+# a technique only the drum's patch has loads that patch. Keys from the owner's screenshots of each
+# patch's technique list with every technique switched on (SINGLE_HITS: patch -> [(key, name, on)],
+# as HITS); until then a patch has none and is only listed (and key-scanned by Check articulations).
+SINGLES = {
+ 'Drums - High': ['Bongos', 'Conga 1', 'Conga 2', 'Rototoms', 'Snare 1', 'Snare 2', 'Snare 3', 'Timbales'],
+ 'Drums - Low': ['Bass Drum', 'Field Drum', 'Gong Drum', 'Tom Ensemble', 'Toms'],
+ 'Other - Toys': ['Agogo', 'Cabasa', 'Castanets', 'Cowbells', 'Gankogui', 'Guiro', 'Jawbone', 'Ratchet',
+                  'Shakers', 'Ships Bell', 'Sleighbells', 'Tambourines'],
+ 'Unpitched - Metal': ['Anvil', 'Cymbal Hi', 'Cymbal Lo', 'Cymbal Med', 'Mark Tree', 'Mini Anvil', 'Piatti',
+                       'Rain Sheet', 'Rivet Cymbal', 'Tam Tam', 'Trash Metals', 'Triangle 1', 'Triangle 2',
+                       'Wind Gong'],
+ 'Unpitched - Wood': ['Claves', 'Temple Blocks', 'Woodblocks'],
+ }
+SINGLE_HITS = {}
+# (MuseScore drum pitch, key, name, ids) as DRUMS, for a single patch's keys MuseScore sounds use
+SINGLE_DRUMS = {}
+for kit in PERCUSSION:
+    for drum in SINGLES[kit]:
+        name = f'Percussion - {kit} - {drum}'
+        hits = {k: (n, on) for k, n, on in SINGLE_HITS.get(name, [])}
+        drums = SINGLE_DRUMS.get(name, [])
+        out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
+        out.append('    <Switch type="none"/>')
+        for pitch, key, n, ids in drums:
+            assert key in hits and hits[key][0] == n, (name, key, n)
+            roll = ' technique="roll"' if n.endswith(' Roll') else ''
+            off = '' if hits[key][1] else ' default="off"'
+            out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + off + '/>')
+        used = {key for _, key, _, _ in drums}
+        for key, (n, on) in sorted(hits.items()):
+            if key not in used:
+                out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
+        out.append('  </Instrument>')
 out.append('</SoundLibrary>')
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

@@ -1063,4 +1063,130 @@
     <Drum key="96" name="Cabasa Twist 2"/>
     <!-- off in Kickstart, no key: Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll -->
   </Instrument>
+  <Instrument name="Percussion - Drums - High - Bongos" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Conga 1" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Conga 2" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Rototoms" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Snare 1" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Snare 2" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Snare 3" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Timbales" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Bass Drum" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Field Drum" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Gong Drum" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Tom Ensemble" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Toms" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Anvil" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Hi" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Lo" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Med" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Mark Tree" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Mini Anvil" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Piatti" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Rain Sheet" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Rivet Cymbal" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Tam Tam" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Trash Metals" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Triangle 1" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Triangle 2" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Wind Gong" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Wood - Claves" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Wood - Temple Blocks" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Wood - Woodblocks" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Agogo" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Cabasa" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Castanets" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Cowbells" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Gankogui" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Guiro" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Jawbone" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Ratchet" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Shakers" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Ships Bell" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Sleighbells" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Tambourines" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
 </SoundLibrary>
