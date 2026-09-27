@@ -551,6 +551,29 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             if (!reportedLow.isEmpty() || !reportedHigh.isEmpty())
                   e["reportedByPlugin"] = QJsonArray { reportedLow, reportedHigh };
 
+            // Quick: the patch reloaded, as it was before (its own value of every controller); the
+            // controller's own value is not known then ("patchValue" left out)
+            if (s.restore && cc != PITCHBEND) {
+                  if (!s.restore())
+                        return stop();
+                  e["restored"] = true;
+                  if (!run(s.grabWait, nullptr))
+                        return stop();
+                  c.reported(skip);
+                  effects.append(e);
+                  if (found && window && !r.isNull()) {
+                        QStringList bits;
+                        for (const QJsonValue& w : what)
+                              bits << w.toString();
+                        found->push_back({ QString("%1%2: %3 · level %4 → %5 dB")
+                                           .arg(cc < 128 ? QString("CC %1").arg(cc) : name)
+                                           .arg(cc < 128 && !name.isEmpty() ? " (" + name + ")" : QString())
+                                           .arg(bits.join(", ")).arg(round1(lLow.db)).arg(round1(lHigh.db)),
+                                           gLow.copy(r), gHigh.copy(r) });
+                        }
+                  continue;
+                  }
+
             // back to the patch's own value: the one that looks (else sounds) most like before
             int best = -1;
             double bestDistance = 0;

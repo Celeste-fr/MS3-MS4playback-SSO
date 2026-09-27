@@ -15,7 +15,9 @@
 //                  that looks (else sounds: 3 notes averaged against 6, for round robins) most
 //                  like before it was touched: the patch's own value for it ("patchValue").
 //                  One that changes nothing goes back to the value its parameter had (the
-//                  plug-in's default: nothing was sent before)
+//                  plug-in's default: nothing was sent before). Quick (Settings::restore
+//                  set): no search, the patch's state is set again instead (every controller
+//                  back at the patch's own value, "patchValue" unknown, "restored": true)
 //    parameters    the parameters that no MIDI controller is mapped to (Kontakt's host
 //                  automation), each set to 0 then 1 and back to its value; the same
 //                  observations. Placeholders (many parameters titled alike, "#12" …) are
@@ -73,6 +75,9 @@ class PluginExtract {
             int grabWait { 400 };               // ms after a change, for the window to show it
             int listen { 250 };                 // ms of sound measured
             double sampleRate { 44100 };        // the plug-in's (pitchBend)
+            // Quick (set: controllers() puts the patch back with it, reloading its state, instead
+            // of searching each controller's own value; false: it failed)
+            std::function<bool()> restore;
             };
 
       // something that changed the window: its pictures at the low and the high value (the

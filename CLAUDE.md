@@ -517,8 +517,21 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   value. Parameters that change by themselves (meters) are learnt first and left out. Then the parameters
   no CC maps to (not families of more than 8 alike: Kontakt's placeholders), each at 0, 1 and back. Then
   which parameters each articulation value changes. Sheet `<patch> controllers.png`.
-- Output: `Documents/MuseScore Sound Library Check/<library> extract <date>/` (`plugin.json`, `<patch>.json`,
-  state `.bin`s, sheet, window, summary.txt) and a zip. **When the owner hands it back**, run
+  **Quick** (on by default under *Try every controller*; the owner, 2026-09-27: "a more efficient way"): no
+  value search; the patch's state, taken after it loaded, is set again after each CC that changed something
+  (`Settings::restore`: setState, 1.5 s, the articulation and dynamics again), so every CC is back at the
+  patch's own value but `patchValue` is unknown (`"restored": true`). Then `controllersToControls`: each CC's
+  window region against the named parameters' (IoU over 0.3), or a parameter the CC's own try changed, gives
+  which named control it moves ("?" when none: the CCs that do something no named control does). An
+  estimate of about 5 minutes a patch instead of 15-20; not timed with Kontakt yet. Tried here in the GUI
+  with the test synth (one patch in a minute) and in `tst_soundlibrary::pluginExtract`.
+- Output: `Documents/MuseScore Sound Library Check/<library> extract <date>/` (`plugin.json` and its state
+  `.bin`s, `<patch>.json`, sheet, window, summary.txt) and a zip. A patch's `describe` holds only what
+  differs from `plugin.json` (`describeAgainst`: `sameAsPlugin`, `parametersChanged`, `parameterCount`) and
+  no state is written per patch (MuseScore makes them from the `.nki`): the owner's run of 5 patches
+  (2026-09-27 11:15, run 124) was 7 MB a patch, nearly all Kontakt's 4145 parameters as with nothing
+  loaded; the same data diffed is 12 KB a patch (so 700 patches about 8 MB before zipping). The summary
+  lists each patch's named controls. **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
   plug-in, what each CC and parameter does, and the state blobs' zlib streams and strings (`_decoded/`).

@@ -1422,6 +1422,32 @@ void TestSoundLibrary::pluginExtract()
       QCOMPARE(sw.value("values").toObject().size(), 3);
       QCOMPARE(sw.value("valuesChangingParameters").toInt(), 0);
 
+      // Quick (the owner, 2026-09-27): the patch reloaded instead of searching CC1's own value
+      p->midi(ME_CONTROLLER, 0, 32, 1);
+      p->midi(ME_CONTROLLER, 0, 1, 100);
+      run(50, nullptr);
+      const QByteArray saved = p->state();
+      const int fullRuns = ran;
+      ran = 0;
+      int restored = 0;
+      s.restore = [&]() {
+            ++restored;
+            return p->setState(saved);
+            };
+      const QJsonObject q = PluginExtract::controllers(p.get(), s, run, grab, nullptr, nullptr, &cancelled);
+      QVERIFY(!cancelled);
+      const QJsonArray qe = q.value("effects").toArray();
+      // (pitch bend, heard here by a brightness change of 1.6 dB against a threshold of 1.5, may
+      // or may not be found again: it is not reloaded, it goes back to its centre as before)
+      QVERIFY(qe.size() >= 1);
+      QCOMPARE(qe[0].toObject().value("cc").toInt(), 1);
+      QVERIFY(qe[0].toObject().value("restored").toBool());
+      QVERIFY(!qe[0].toObject().contains("patchValue"));
+      QCOMPARE(restored, 1);
+      QCOMPARE(testSynthState(p->state()).second, 100 / 127.0);     // CC1 back to the patch's
+      QVERIFY2(ran < fullRuns, qPrintable(QString("%1 runs, %2 without Quick").arg(ran).arg(fullRuns)));
+      s.restore = nullptr;
+
       // pictures: where two differ
       QImage a(100, 50, QImage::Format_RGB32);
       a.fill(Qt::black);

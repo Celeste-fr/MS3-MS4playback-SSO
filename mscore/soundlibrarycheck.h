@@ -77,6 +77,7 @@ class ArticulationCheckDialog : public QDialog {
       QLabel* _info;
       QCheckBox* _scan;
       QCheckBox* _tryAll;
+      QCheckBox* _quick;
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;
@@ -96,7 +97,7 @@ class ArticulationCheckDialog : public QDialog {
       void check();
       void setRunning(bool running);
       void extract();
-      bool extractPatch(int index, const QString& pluginPath, const QString& folder, QString& summary);
+      bool extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty, QString& summary);
       bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       QString recordsFile() const;

@@ -5,11 +5,13 @@
 
 What MuseScore wrote (mscore/soundlibrarycheck.h, Extract):
   plugin.json                 Vst3Plugin::describe() of the plug-in with nothing loaded
-  <patch>.json                the same with the patch's setup ("describe"), and with "Try every
-                              controller": "controllers", "parameters", "switches"
-                              (audio/vst3/pluginextract.h)
-  <patch> component.bin       the plug-in's own state (what a DAW keeps in a project)
-  <patch> controller.bin
+  <patch>.json                the same with the patch's setup ("describe"; since 2026-09-27 only
+                              what differs from plugin.json: "sameAsPlugin", "parametersChanged",
+                              put back together here), and with "Try every controller":
+                              "controllers", "parameters", "switches", "controllersToControls"
+                              (audio/vst3/pluginextract.h; "restored": Quick, the patch reloaded)
+  <patch> component.bin       the plug-in's own state (what a DAW keeps in a project; before
+  <patch> controller.bin      2026-09-27 only: MuseScore makes the setups from the .nki)
   <patch> controllers.png     what each controller or parameter shows in the window (0 | 127)
   <patch> (window).png
   summary.txt
@@ -251,6 +253,19 @@ def compare(base, d):
         out(f"    value {b['id']:.0f} \"{b['title']}\": {a.get('valueText')} → {b.get('valueText')}")
 
 
+def expand(base, d):
+    """A patch's description written against the empty plug-in's, whole again."""
+    if not base or "sameAsPlugin" not in d:
+        return d
+    full = {k: base[k] for k in d["sameAsPlugin"] if k in base}
+    full.update({k: v for k, v in d.items() if k not in ("sameAsPlugin", "parametersChanged", "parameterCount")})
+    if "parametersChanged" in d:
+        changed = {p["id"]: p for p in d["parametersChanged"]}
+        full["parameters"] = [changed.get(p["id"], p) for p in base.get("parameters", [])] + \
+            [p for i, p in changed.items() if i not in {q["id"] for q in base.get("parameters", [])}]
+    return full
+
+
 def describe_tries(j):
     c = j.get("controllers")
     if c:
@@ -262,11 +277,16 @@ def describe_tries(j):
             out(f"    CC {e['cc']}{' (' + e['name'] + ')' if e.get('name') else ''}: {', '.join(e.get('changes', []))} · "
                 f"level {lv[1] if len(lv) > 2 else '?'} → {lv[2] if len(lv) > 2 else '?'} dB · brightness {e.get('brightnessDb')} · "
                 f"balance {e.get('balanceDb')} · "
-                f"patch value {e.get('patchValue')}" + (f" ({e['patchValueMatch']})" if e.get('patchValueMatch') else "")
+                + (f"patch value {e.get('patchValue')}" if "patchValue" in e else "patch reloaded")
+                + (f" ({e['patchValueMatch']})" if e.get('patchValueMatch') else "")
                 + (f" · region {e['region']}" if e.get("region") else "") + (f" · params: {params}" if params else ""))
             if e.get("reportedByPlugin"):
                 out(f"      reported by the plug-in: {e['reportedByPlugin']}")
         out(f"    no effect: {ranges(c.get('noEffect', []))}  (128 channel pressure, 129 pitch bend)")
+    m = j.get("controllersToControls")
+    if m:
+        out("  which control each controller moves: " + ", ".join(
+            f"CC {x['cc']} → {x.get('control') or '?'}" + (f" ({x['by']})" if x.get("by") else "") for x in m))
         if c.get("notMapped"):
             out(f"    not mapped (can't reach the plug-in): {ranges(c.get('notMapped'))}")
     p = j.get("parameters")
@@ -344,7 +364,7 @@ def main():
             out(f"  error: {j['error']}")
             out()
             continue
-        d = j.get("describe", {})
+        d = expand(base, j.get("describe", {}))
         if base:
             compare(base, d)
         if FULL or not base:

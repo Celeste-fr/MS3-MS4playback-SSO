@@ -279,8 +279,15 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _scan = new QCheckBox(tr("Scan every value (0–127) too, to find articulations the map lacks (about a minute more per patch)"), this);
       layout->addWidget(_scan);
       _tryAll = new QCheckBox(tr("Try every controller: with Extract plug-in data, also try every MIDI controller and parameter "
-                                 "on each ticked patch (about 10 minutes per patch; its window opens)"), this);
+                                 "on each ticked patch (its window opens)"), this);
       layout->addWidget(_tryAll);
+      // (the owner, 2026-09-27: a faster way than searching each controller's value in the patch)
+      _quick = new QCheckBox(tr("Quick: put the patch back by reloading it instead of searching each controller's own value, "
+                                "and tell which named control each controller moves (about 5 minutes per patch instead of 15-20)"), this);
+      _quick->setChecked(true);
+      _quick->setEnabled(false);
+      connect(_tryAll, &QCheckBox::toggled, _quick, &QCheckBox::setEnabled);
+      layout->addWidget(_quick);
       // scanning: the set-up patches never scanned (else: what needs checking)
       connect(_scan, &QCheckBox::toggled, this, [this](bool on) {
             for (int row = 0; row < _table->rowCount(); ++row) {
@@ -1736,6 +1743,122 @@ static QString describeSummary(const QJsonObject& d)
       return "   " + lines.join("\n   ") + "\n";
       }
 
+// a patch's description, only what differs from the plug-in with nothing loaded (the owner's first
+// run of 5 patches: 7 MB each, nearly all of it Kontakt's 4145 parameters as with nothing loaded;
+// 700 patches would not go through the chat): parts the same are named in "sameAsPlugin", the
+// parameters that differ are in "parametersChanged" (by id), "parameterCount" is their number.
+// read_plugin_data.py puts it back together from plugin.json
+static QJsonObject describeAgainst(const QJsonObject& d, const QJsonObject& empty)
+      {
+      if (empty.isEmpty())
+            return d;
+      QJsonObject out;
+      QJsonArray same;
+      for (auto i = d.begin(); i != d.end(); ++i) {
+            if (empty.contains(i.key()) && empty.value(i.key()) == i.value()) {
+                  same.append(i.key());
+                  continue;
+                  }
+            if (i.key() != "parameters") {
+                  out[i.key()] = i.value();
+                  continue;
+                  }
+            std::map<double, QJsonObject> before;
+            for (const QJsonValue& v : empty.value("parameters").toArray())
+                  before[v.toObject().value("id").toDouble()] = v.toObject();
+            QJsonArray changed;
+            const QJsonArray params = i.value().toArray();
+            for (const QJsonValue& v : params) {
+                  const QJsonObject o = v.toObject();
+                  auto b = before.find(o.value("id").toDouble());
+                  if (b == before.end() || b->second != o)
+                        changed.append(o);
+                  }
+            out["parametersChanged"] = changed;
+            out["parameterCount"] = params.size();
+            }
+      out["sameAsPlugin"] = same;
+      return out;
+      }
+
+// a patch in the summary: its controls (the parameters it named: Kontakt's "#000" … become
+// "Dynamics" …) and its state's size
+static QString patchSummary(const QJsonObject& d, const QJsonObject& empty)
+      {
+      std::map<double, QString> titles;
+      for (const QJsonValue& v : empty.value("parameters").toArray())
+            titles[v.toObject().value("id").toDouble()] = v.toObject().value("title").toString();
+      QStringList named, other;
+      const QJsonArray changed = d.contains("parametersChanged") ? d.value("parametersChanged").toArray() : d.value("parameters").toArray();
+      for (const QJsonValue& v : changed) {
+            const QJsonObject o = v.toObject();
+            const double id = o.value("id").toDouble();
+            const QString t = o.value("title").toString();
+            auto b = titles.find(id);
+            if (b == titles.end() || b->second != t)
+                  named << QString("%1 %2 (%3)").arg(id).arg(t, o.value("valueText").toString());
+            else
+                  other << QString("%1 (%2)").arg(t, o.value("valueText").toString());
+            }
+      QString s = QString("   controls: %1\n").arg(named.isEmpty() ? QString("none named") : named.join(", "));
+      if (!other.isEmpty())
+            s += QString("   other values changed: %1\n").arg(other.join(", "));
+      QStringList same;
+      for (const QJsonValue& v : d.value("sameAsPlugin").toArray())
+            same << v.toString();
+      if (!same.isEmpty())
+            s += QString("   as with nothing loaded: %1\n").arg(same.join(", "));
+      s += QString("   state: component %1 bytes\n").arg(d.value("component").toObject().value("state").toObject().value("bytes").toInt());
+      return s;
+      }
+
+// which named control each controller moves: a controller's window region against each
+// parameter's (PluginExtract's effects), the most overlap (intersection over union) over 0.3
+static QJsonArray controllersToControls(const QJsonObject& controllers, const QJsonObject& parameters)
+      {
+      auto rect = [](const QJsonObject& e) {
+            const QJsonArray r = e.value("region").toArray();
+            return r.size() == 4 ? QRect(r[0].toInt(), r[1].toInt(), r[2].toInt(), r[3].toInt()) : QRect();
+            };
+      QJsonArray out;
+      for (const QJsonValue& cv : controllers.value("effects").toArray()) {
+            const QJsonObject c = cv.toObject();
+            const QRect cr = rect(c);
+            QJsonObject m;
+            m["cc"] = c.value("cc");
+            double best = 0;
+            for (const QJsonValue& pv : parameters.value("effects").toArray()) {
+                  const QJsonObject p = pv.toObject();
+                  // (a parameter that the controller's own try changed: that is the answer)
+                  for (const char* key : { "parametersLowToHigh", "parametersBeforeToLow" })
+                        for (const QJsonValue& x : c.value(key).toArray())
+                              if (x.toObject().value("id") == p.value("id")) {
+                                    best = 2;
+                                    m["control"] = p.value("title");
+                                    m["id"] = p.value("id");
+                                    m["by"] = "parameter";
+                                    }
+                  const QRect pr = rect(p);
+                  if (cr.isNull() || pr.isNull())
+                        continue;
+                  const QRect i = cr & pr;
+                  const double inter = double(i.width()) * i.height();
+                  const double uni = double(cr.width()) * cr.height() + double(pr.width()) * pr.height() - inter;
+                  const double iou = uni > 0 ? inter / uni : 0;
+                  if (iou > 0.3 && iou > best) {
+                        best = iou;
+                        m["control"] = p.value("title");
+                        m["id"] = p.value("id");
+                        m["by"] = QString("window %1").arg(std::round(iou * 100) / 100);
+                        }
+                  }
+            if (!m.contains("control"))
+                  m["control"] = QJsonValue();
+            out.append(m);
+            }
+      return out;
+      }
+
 #endif
 
 void ArticulationCheckDialog::extract()
@@ -1780,17 +1903,21 @@ void ArticulationCheckDialog::extract()
       setRunning(true);
       QString summary = QString("%1: plug-in data of %2, %3 (MuseScore %4)\n%5\n\n")
                         .arg(_library->name, QFileInfo(path).fileName(), stamp, QString(VERSION),
-                             _tryAll->isChecked() ? QString("with every controller and parameter tried") : QString("described only"));
+                             !_tryAll->isChecked() ? QString("described only")
+                             : _quick->isChecked() ? QString("with every controller and parameter tried (quick: the patch reloaded, no value search)")
+                             : QString("with every controller and parameter tried"));
 
       // the plug-in itself, nothing loaded
       _status->setText(tr("The plug-in itself…"));
       QApplication::processEvents();
+      QJsonObject empty;
       {
             std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, MScore::sampleRate, 4096, &error);
             if (!p)
                   summary += QString("## the plug-in, nothing loaded\n   cannot load it: %1\n\n").arg(error);
             else {
                   const QJsonObject d = p->describe();
+                  empty = d;
                   writeFile(folder + "/plugin.json", QJsonDocument(d).toJson());
                   writeFile(folder + "/plugin component.bin", p->componentState());
                   writeFile(folder + "/plugin controller.bin", p->controllerState());
@@ -1802,7 +1929,7 @@ void ArticulationCheckDialog::extract()
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
-            extractPatch(chosen[k], path, folder, summary);
+            extractPatch(chosen[k], path, folder, empty, summary);
             writeFile(folder + "/summary.txt", (summary + "\n(Still running: written after each patch.)\n").toUtf8());
             QApplication::processEvents();
             }
@@ -1824,7 +1951,8 @@ void ArticulationCheckDialog::extract()
 //   extractPatch
 //---------------------------------------------------------
 
-bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath, const QString& folder, QString& summary)
+bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty,
+                                           QString& summary)
       {
 #ifdef USE_VST3
       const SoundLib::LibInstrument& ins = *_rows[index].instrument;
@@ -1887,12 +2015,13 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       pump.run(1000);
 
       status(tr("asking the plug-in…"));
-      const QJsonObject d = p->describe();
+      // (only what differs from the plug-in with nothing loaded; no state files: MuseScore makes the
+      // patches' setups from their .nki, and the state is in its setups folder)
+      const QJsonObject d = describeAgainst(p->describe(), empty);
       out["describe"] = d;
-      writeFile(folder + "/" + fileBase + " component.bin", p->componentState());
-      writeFile(folder + "/" + fileBase + " controller.bin", p->controllerState());
+      const QByteArray patchState = p->state();              // (Quick: put back after each controller)
       summary += QString("## %1 (%2.json)%3\n").arg(ins.name, fileBase, sounds ? QString() : QString(" — it played nothing"));
-      summary += describeSummary(d);
+      summary += empty.isEmpty() ? describeSummary(d) : patchSummary(d, empty);
 
       // what pitch bend does to its pitch (the owner, 2026-09-27: microtones through the library, as
       // Kontakt ignores a note's own tuning): the test note at each bend, its spectrum against the
@@ -1940,6 +2069,15 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             s.switchCC = switching ? ins.switchNumber : -1;
             s.switchValues = switching ? switchValues : std::vector<int>();
             s.grabWait = GRAB_WAIT_MS;
+            if (_quick->isChecked()) {
+                  s.restore = [&]() {
+                        if (!p->setState(patchState))
+                              return false;
+                        pump.run(1500);                     // (Kontakt: the script's values back)
+                        prepare();
+                        return !_cancel;
+                        };
+                  }
             PluginExtract::Run run = [&](int ms, PluginExtract::Level* level) {
                   std::vector<float> captured;
                   pump.capture = level ? &captured : nullptr;
@@ -1958,6 +2096,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                   out["parameters"] = PluginExtract::parameters(p.get(), s, run, grab, status, &found, &stopped);
             if (!stopped && switching)
                   out["switches"] = PluginExtract::switches(p.get(), s, run, status, &stopped);
+            if (!stopped)
+                  out["controllersToControls"] = controllersToControls(out.value("controllers").toObject(), out.value("parameters").toObject());
             if (w) {
                   w->close();
                   delete w;
@@ -2020,7 +2160,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                         lines << (e.contains("cc")
                            ? QString("CC %1%2: %3 · %4 · patch value %5").arg(e.value("cc").toInt())
                              .arg(e.contains("name") ? " (" + e.value("name").toString() + ")" : QString())
-                             .arg(what.join(", "), levels).arg(e.value("patchValue").toInt())
+                             .arg(what.join(", "), levels).arg(e.contains("patchValue") ? QString::number(e.value("patchValue").toInt()) : QString("(reloaded)"))
                            : QString("%1 \"%2\": %3 · %4").arg(e.value("id").toDouble()).arg(e.value("title").toString())
                              .arg(what.join(", "), levels));
                         }
@@ -2028,6 +2168,15 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                   for (const QString& l : lines)
                         summary += "      " + l + "\n";
                   }
+            QStringList moves;
+            for (const QJsonValue& v : out.value("controllersToControls").toArray()) {
+                  const QJsonObject m = v.toObject();
+                  const int cc = m.value("cc").toInt();
+                  moves << QString("%1 → %2").arg(cc == 128 ? QString("pressure") : cc == 129 ? QString("pitch bend") : QString("CC %1").arg(cc))
+                           .arg(m.value("control").isNull() ? QString("?") : m.value("control").toString());
+                  }
+            if (!moves.isEmpty())
+                  summary += QString("   which control each controller moves: %1\n").arg(moves.join(", "));
             const QJsonObject sw = out.value("switches").toObject();
             if (!sw.isEmpty())
                   summary += QString("   articulation values that change a parameter: %1 of %2\n")
