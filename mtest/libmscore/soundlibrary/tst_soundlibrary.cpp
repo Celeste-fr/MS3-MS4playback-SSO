@@ -980,14 +980,27 @@ void TestSoundLibrary::externalPlugin()
                   *level = PluginExtract::level(all);
             return true;
             };
-      // (a sampler loads in the background: let it)
-      for (int i = 0; i < 20; ++i)
-            run(100, nullptr);
+      // a sampler loads in the background, in real time: until a note sounds (UACC 1, dynamics
+      // on CC1 as Spitfire's), up to 30 s
+      const int pitch = qEnvironmentVariableIsSet("MS_EXTRACT_PITCH") ? qEnvironmentVariableIntValue("MS_EXTRACT_PITCH") : 60;
+      p->midi(ME_CONTROLLER, 0, 32, 1);
+      p->midi(ME_CONTROLLER, 0, 1, 100);
+      QElapsedTimer waited;
+      waited.start();
+      PluginExtract::Level heard;
+      while (waited.elapsed() < 30000 && heard.db < -90) {
+            p->midi(ME_NOTEON, 0, pitch, 100);
+            run(300, &heard);
+            p->midi(ME_NOTEON, 0, pitch, 0);
+            run(200, nullptr);
+            QThread::msleep(200);
+            }
       QJsonObject out;
+      out["loadedAfterMs"] = double(waited.elapsed());
       out["describe"] = p->describe();
       if (qEnvironmentVariableIntValue("MS_EXTRACT_TRY")) {
             PluginExtract::Settings s;
-            s.pitch = qEnvironmentVariableIsSet("MS_EXTRACT_PITCH") ? qEnvironmentVariableIntValue("MS_EXTRACT_PITCH") : 60;
+            s.pitch = pitch;
             s.switchCC = 32;
             PluginExtract::Grab grab = []() { return QImage(); };
             bool cancelled = false;

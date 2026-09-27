@@ -89,10 +89,12 @@ PluginExtract::Level PluginExtract::level(const std::vector<float>& buffer)
       const size_t frames = buffer.size() / 2;
       if (frames < 2)
             return l;
-      double power = 0, diffPower = 0;
+      double power = 0, diffPower = 0, left = 0, right = 0;
       double prev = 0.5 * (double(buffer[0]) + double(buffer[1]));
       for (size_t i = 0; i < frames; ++i) {
             const double x = 0.5 * (double(buffer[2 * i]) + double(buffer[2 * i + 1]));
+            left += double(buffer[2 * i]) * double(buffer[2 * i]);
+            right += double(buffer[2 * i + 1]) * double(buffer[2 * i + 1]);
             power += x * x;
             if (i > 0)
                   diffPower += (x - prev) * (x - prev);
@@ -102,6 +104,8 @@ PluginExtract::Level PluginExtract::level(const std::vector<float>& buffer)
       diffPower /= double(frames - 1);
       l.db = power > 1e-20 ? 10 * std::log10(power) : -200;
       l.brightness = power > 1e-20 && diffPower > 1e-20 ? 10 * std::log10(diffPower / power) : 0;
+      // (one side silent: ±60 dB)
+      l.balance = left + right > 1e-20 ? 10 * std::log10(std::max(left, 1e-6 * right) / std::max(right, 1e-6 * left)) : 0;
       return l;
       }
 
@@ -127,6 +131,31 @@ struct Context {
       PluginExtract::Grab& grab;
       std::map<unsigned, QString> titles;
       std::set<unsigned> controllerParams;      // the MIDI controllers' parameters (any channel)
+      std::set<unsigned> selfChanging;          // what changes by itself (meters …): left out
+
+      // what changes (or is reported) while nothing is touched, over what() (a few notes)
+      bool learnSelfChanging(const std::function<bool()>& what)
+            {
+            p->takeReported();
+            const Snapshot a = snapshot();
+            if (!what())
+                  return false;
+            const Snapshot b = snapshot();
+            for (const auto& v : a.values)
+                  if (b.values.count(v.first) && std::fabs(b.values.at(v.first) - v.second) >= 1e-6)
+                        selfChanging.insert(v.first);
+            for (const auto& r : p->takeReported())
+                  selfChanging.insert(r.first);
+            return true;
+            }
+
+      QJsonArray selfChangingList() const
+            {
+            QJsonArray list;
+            for (unsigned id : selfChanging)
+                  list.append(QString("%1 %2").arg(id).arg(titles.count(id) ? titles.at(id) : QString("(not listed)")));
+            return list;
+            }
 
       Snapshot snapshot() const
             {
@@ -141,7 +170,7 @@ struct Context {
             {
             QJsonArray list;
             for (const auto& v : a.values) {
-                  if (skip.count(v.first))
+                  if (skip.count(v.first) || selfChanging.count(v.first))
                         continue;
                   auto it = b.values.find(v.first);
                   if (it == b.values.end() || std::fabs(it->second - v.second) < 1e-6)
@@ -162,7 +191,7 @@ struct Context {
             {
             std::map<unsigned, double> last;
             for (const auto& r : p->takeReported())
-                  if (!skip.count(r.first))
+                  if (!skip.count(r.first) && !selfChanging.count(r.first))
                         last[r.first] = r.second;
             QJsonArray list;
             for (const auto& r : last)
@@ -231,7 +260,8 @@ bool restartNote(Vst3Plugin* p, const PluginExtract::Settings& s, PluginExtract:
 
 double levelDistance(const PluginExtract::Level& a, const PluginExtract::Level& b)
       {
-      return std::fabs(a.db - b.db) + (a.db > -90 && b.db > -90 ? std::fabs(a.brightness - b.brightness) : 0.0);
+      const bool both = a.db > -90 && b.db > -90;
+      return std::fabs(a.db - b.db) + (both ? std::fabs(a.brightness - b.brightness) + std::fabs(a.balance - b.balance) : 0.0);
       }
 
 } // namespace
@@ -247,19 +277,39 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
       auto stop = [&]() { if (cancelled) *cancelled = true; out["cancelled"] = true; return out; };
 
       // what changes by itself: the window (meters …) and the sound (vibrato, round robins)
-      if (!restartNote(p, s, run))
-            return stop();
       Level a, b;
-      if (!run(s.listen, &a))
+      if (!restartNote(p, s, run) || !run(std::max(0, s.grabWait - 550), nullptr) || !run(s.listen, &a))
             return stop();
       const QImage g1 = grab();
-      if (!run(s.grabWait, nullptr) || !run(s.listen, &b))
+      if (!restartNote(p, s, run) || !run(std::max(0, s.grabWait - 550), nullptr) || !run(s.listen, &b))
             return stop();
       const QImage g2 = grab();
       const int pixelNoise = g1.isNull() ? 0 : differingPixels(g1, g2);
       const int pixelThreshold = std::max(30, 3 * pixelNoise);
       const double soundNoise = levelDistance(a, b);
       const double soundThreshold = std::max(1.5, 3 * soundNoise);
+      // a sound averaged over some notes (round robins differ in level): the patch as it is (a
+      // controller put back sounds like it again), and each try of a search by sound
+      auto listen = [&](int notes, Level* l) {
+            double db = 0, brightness = 0, balance = 0;
+            for (int i = 0; i < notes; ++i) {
+                  Level x;
+                  if (!restartNote(p, s, run) || !run(std::max(0, s.grabWait - 550), nullptr) || !run(s.listen, &x))
+                        return false;
+                  db += x.db;
+                  brightness += x.brightness;
+                  balance += x.balance;
+                  }
+            l->db = db / notes;
+            l->brightness = brightness / notes;
+            l->balance = balance / notes;
+            return true;
+            };
+      Level baseline;
+      if (!c.learnSelfChanging([&]() { return listen(6, &baseline); }))
+            return stop();
+      out["selfChangingParameters"] = c.selfChangingList();
+      out["baselineDb"] = QJsonArray { round1(baseline.db), round1(baseline.brightness), round1(baseline.balance) };
       out["windowNoisePixels"] = pixelNoise;
       out["soundNoiseDb"] = round1(soundNoise);
       out["noteLevelDb"] = round1(a.db);
@@ -289,18 +339,20 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                   status(QString("controller %1%2 (%3 of %4)").arg(cc < 128 ? QString("CC %1").arg(cc) : name)
                          .arg(cc < 128 && !name.isEmpty() ? " " + name : QString()).arg(done).arg(ccs.size()));
             std::set<unsigned> skip { unsigned(proxy) };
-            if (!restartNote(p, s, run))
+            if (!restartNote(p, s, run) || !run(std::max(0, s.grabWait - 550), nullptr))
                   return stop();
             c.reported(skip);
             const Snapshot before = c.snapshot();
             Level l0, lLow, lHigh;
-            const QImage g0 = grab();
             if (!run(s.listen, &l0))
                   return stop();
+            const QImage g0 = grab();
 
+            // each value on a new note, measured as long after its start as l0 (a decaying
+            // sample would otherwise sound softer at every try)
             auto tryValue = [&](int value, Level* l, QImage* g) {
                   sendController(p, s.channel, cc, value);
-                  if (!run(s.grabWait, nullptr) || !run(s.listen, l))
+                  if (!restartNote(p, s, run) || !run(std::max(0, s.grabWait - 550), nullptr) || !run(s.listen, l))
                         return false;
                   if (g)
                         *g = grab();
@@ -322,9 +374,11 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             QJsonArray params = c.changed(low, high, skip);
             const QJsonArray fromBefore = c.changed(before, low, skip);
             const bool paramsChanged = !params.isEmpty() || !fromBefore.isEmpty();
+            // (the value its parameter had: the plug-in's default, nothing was sent before)
+            const int previous = int(std::lround(before.values.count(unsigned(proxy)) ? before.values.at(unsigned(proxy)) * 127 : 0));
             if (!window && !sound && !paramsChanged && reportedLow.isEmpty() && reportedHigh.isEmpty()) {
                   none.append(cc);
-                  sendController(p, s.channel, cc, cc == PITCHBEND ? 64 : 0);
+                  sendController(p, s.channel, cc, cc == PITCHBEND ? 64 : previous);
                   continue;
                   }
 
@@ -349,6 +403,7 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                   e["region"] = QJsonArray { r.x(), r.y(), r.width(), r.height() };
             e["levelDb"] = QJsonArray { round1(l0.db), round1(lLow.db), round1(lHigh.db) };
             e["brightnessDb"] = QJsonArray { round1(l0.brightness), round1(lLow.brightness), round1(lHigh.brightness) };
+            e["balanceDb"] = QJsonArray { round1(l0.balance), round1(lLow.balance), round1(lHigh.balance) };
             if (!params.isEmpty())
                   e["parametersLowToHigh"] = params;
             if (!fromBefore.isEmpty())
@@ -371,15 +426,25 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                               }
                         Level l;
                         QImage g;
-                        if (!tryValue(value, &l, window ? &g : nullptr))
-                              return false;
-                        *d = window ? double(differingPixels(g, g0)) : levelDistance(l, l0);
+                        if (window) {
+                              if (!tryValue(value, &l, &g))
+                                    return false;
+                              *d = double(differingPixels(g, g0));
+                              }
+                        else {
+                              sendController(p, s.channel, cc, value);
+                              if (!listen(3, &l))
+                                    return false;
+                              *d = levelDistance(l, baseline);
+                              }
                         tried[value] = *d;
                         return true;
                         };
-                  tried[0] = window ? double(differingPixels(gLow, g0)) : levelDistance(lLow, l0);
-                  tried[127] = window ? double(differingPixels(gHigh, g0)) : levelDistance(lHigh, l0);
-                  for (int v = 16; v < 127; v += 16) {
+                  if (window) {
+                        tried[0] = double(differingPixels(gLow, g0));
+                        tried[127] = double(differingPixels(gHigh, g0));
+                        }
+                  for (int v = 0; v <= 127; v = v == 112 ? 127 : v + 16) {
                         double d;
                         if (!distance(v, &d))
                               return stop();
@@ -407,8 +472,8 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                                                 : QString("%1 dB").arg(round1(bestDistance));
                   }
             else {
-                  // parameters only: the value its parameter had (what was last sent)
-                  best = int(std::lround(before.values.count(unsigned(proxy)) ? before.values.at(unsigned(proxy)) * 127 : 0));
+                  // parameters only: the value its parameter had
+                  best = previous;
                   }
             e["patchValue"] = best;
             sendController(p, s.channel, cc, best);
@@ -482,11 +547,15 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
             }
 
       Level a, b;
-      if (!restartNote(p, s, run) || !run(s.listen, &a))
+      QImage g1;
+      if (!c.learnSelfChanging([&]() {
+                  if (!restartNote(p, s, run) || !run(std::max(0, s.grabWait - 550), nullptr) || !run(s.listen, &a))
+                        return false;
+                  g1 = grab();
+                  return restartNote(p, s, run) && run(std::max(0, s.grabWait - 550), nullptr) && run(s.listen, &b);
+                  }))
             return stop();
-      const QImage g1 = grab();
-      if (!run(s.grabWait, nullptr) || !run(s.listen, &b))
-            return stop();
+      out["selfChangingParameters"] = c.selfChangingList();
       const int pixelThreshold = std::max(30, 3 * (g1.isNull() ? 0 : differingPixels(g1, grab())));
       const double soundThreshold = std::max(1.5, 3 * levelDistance(a, b));
 
@@ -498,13 +567,11 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
             if (status)
                   status(QString("parameter %1 \"%2\" (%3 of %4)").arg(par.id).arg(par.title).arg(done).arg(tried.size()));
             std::set<unsigned> skip { par.id };
-            if (!restartNote(p, s, run))
-                  return stop();
             c.reported(skip);
             const double original = p->parameter(par.id);
             auto tryValue = [&](double v, Level* l, QImage* g) {
                   p->setParameter(par.id, v);
-                  if (!run(s.grabWait, nullptr) || !run(s.listen, l))
+                  if (!restartNote(p, s, run) || !run(std::max(0, s.grabWait - 550), nullptr) || !run(s.listen, l))
                         return false;
                   *g = grab();
                   return true;
@@ -553,6 +620,7 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
                   e["region"] = QJsonArray { r.x(), r.y(), r.width(), r.height() };
             e["levelDb"] = QJsonArray { round1(lLow.db), round1(lHigh.db) };
             e["brightnessDb"] = QJsonArray { round1(lLow.brightness), round1(lHigh.brightness) };
+            e["balanceDb"] = QJsonArray { round1(lLow.balance), round1(lHigh.balance) };
             if (!params.isEmpty())
                   e["parametersLowToHigh"] = params;
             if (!reportedLow.isEmpty() || !reportedHigh.isEmpty())
@@ -586,6 +654,15 @@ QJsonObject PluginExtract::switches(Vst3Plugin* p, const Settings& s, Run run, S
             skip.insert(unsigned(proxy));
       out["switchCC"] = s.switchCC;
       out["switchParameter"] = double(proxy);
+      if (!c.learnSelfChanging([&]() { return restartNote(p, s, run) && run(600, nullptr); })) {
+            if (cancelled)
+                  *cancelled = true;
+            out["cancelled"] = true;
+            return out;
+            }
+      p->midi(ME_NOTEON, s.channel, s.pitch, 0);
+      run(300, nullptr);
+      out["selfChangingParameters"] = c.selfChangingList();
       c.reported(skip);
       Snapshot last = c.snapshot();
       QJsonObject changes;

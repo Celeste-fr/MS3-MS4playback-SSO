@@ -314,7 +314,8 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   with its window open and a note held, every CC 0-119 (not the switch), channel pressure and pitch bend at
   0 then 127: window pixels and region, level and brightness, parameters changed, parameters the plug-in
   reported (processor output, performEdit). Then the value that looks (else sounds) like before, searched
-  (the patch's own value, `patchValue`), is sent back; a CC with no effect goes to 0. Then the parameters
+  (the patch's own value, `patchValue`), is sent back; a CC with no effect goes back to its parameter's
+  value. Parameters that change by themselves (meters) are learnt first and left out. Then the parameters
   no CC maps to (not families of more than 8 alike: Kontakt's placeholders), each at 0, 1 and back. Then
   which parameters each articulation value changes. Sheet `<patch> controllers.png`.
 - Output: `Documents/MuseScore Sound Library Check/<library> extract <date>/` (`plugin.json`, `<patch>.json`,
@@ -323,7 +324,13 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
   plug-in, what each CC and parameter does, and the state blobs' zlib streams and strings (`_decoded/`).
 - Tested with the test synth (`tst_soundlibrary::pluginDescribe`, `pluginExtract`: it now has a "Tone"
-  parameter no CC maps to and twelve placeholder "Macro n"). Not run with Kontakt yet.
+  parameter no CC maps to and twelve placeholder "Macro n"). In the GUI under Xvfb with sfizz (Solo Violin 1
+  set to the UACC SFZ, *Try every controller*, 7 minutes): 543 parameters (512 "Controller n" and 16 "Level n"
+  placeholders), 130 CCs mapped per channel; CC 1, 7 (its Volume knob), 10 (its Pan knob), 11, 64, 66 and
+  pitch bend found, put back at 100/104, 100, 64, 127, 0, 0, 64; parameters Volume, Polyphony, Preload size,
+  Tuning frequency; its meters ("Level 1/2") learnt as changing by themselves. Things learnt on the way:
+  each value needs a new note (a decaying sample), a sound search needs notes averaged (round robins), and
+  pan needs the stereo balance. Not run with Kontakt yet.
 - Without the GUI, on any plug-in (offline, no window pictures): `MS_EXTRACT_PLUGIN=<.vst3>
   MS_EXTRACT_OUT=<file.json> [MS_EXTRACT_STATE=<.vst3state>] [MS_EXTRACT_TRY=1] ./tst_soundlibrary
   externalPlugin` (skipped when unset).

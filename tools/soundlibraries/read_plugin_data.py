@@ -261,7 +261,8 @@ def describe_tries(j):
             params = "; ".join(f"{x['title']}: {x['fromText']}→{x['toText']}" for x in e.get("parametersLowToHigh", []))
             out(f"    CC {e['cc']}{' (' + e['name'] + ')' if e.get('name') else ''}: {', '.join(e.get('changes', []))} · "
                 f"level {lv[1] if len(lv) > 2 else '?'} → {lv[2] if len(lv) > 2 else '?'} dB · brightness {e.get('brightnessDb')} · "
-                f"patch value {e.get('patchValue')} ({e.get('patchValueMatch', '')})"
+                f"balance {e.get('balanceDb')} · "
+                f"patch value {e.get('patchValue')}" + (f" ({e['patchValueMatch']})" if e.get('patchValueMatch') else "")
                 + (f" · region {e['region']}" if e.get("region") else "") + (f" · params: {params}" if params else ""))
             if e.get("reportedByPlugin"):
                 out(f"      reported by the plug-in: {e['reportedByPlugin']}")

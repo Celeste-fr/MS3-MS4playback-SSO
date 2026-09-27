@@ -7,19 +7,24 @@
 //  plug-in says of itself is Vst3Plugin::describe(); this is what it does:
 //
 //    controllers   every MIDI controller (0-119, channel pressure, pitch bend) set to 0 then
-//                  127 while a note is held. What it moves: the window (the region that
-//                  changed, pictures of both), the sound (level, brightness), the plug-in's
-//                  parameters (those that changed, those it reported itself). A controller that
-//                  changes something is then set back to the value that looks (else sounds)
-//                  most like before it was touched: the patch's own value for it (reported as
-//                  "patchValue"). One that changes nothing goes back to 0 (a sustain pedal
-//                  left down would hold every later note)
+//                  127, each value on a new note measured as long after its start (a decaying
+//                  sample would sound softer at every try). What it moves: the window (the
+//                  region that changed, pictures of both), the sound (level, brightness,
+//                  balance), the plug-in's parameters (those that changed, those it reported
+//                  itself). A controller that changes something is then set back to the value
+//                  that looks (else sounds: 3 notes averaged against 6, for round robins) most
+//                  like before it was touched: the patch's own value for it ("patchValue").
+//                  One that changes nothing goes back to the value its parameter had (the
+//                  plug-in's default: nothing was sent before)
 //    parameters    the parameters that no MIDI controller is mapped to (Kontakt's host
 //                  automation), each set to 0 then 1 and back to its value; the same
 //                  observations. Placeholders (many parameters titled alike, "#12" …) are
 //                  only counted
 //    switches      the parameters each articulation value (the library's switch controller)
 //                  changes: whether the plug-in exposes its articulation as a parameter
+//
+//  Parameters that change by themselves while nothing is touched (meters: sfizz's "Level 1")
+//  are learnt first and left out of every comparison ("selfChangingParameters").
 //
 //  The plug-in runs through run() (the dialog: in real time with its window open; the tests:
 //  offline), and its window is grabbed through grab() (a null picture: no window, sound and
@@ -46,11 +51,13 @@ class Vst3Plugin;
 
 class PluginExtract {
    public:
-      // what the plug-in played meanwhile: RMS level (dB), and brightness: the level of its
-      // first difference against its own (dB; higher is brighter)
+      // what the plug-in played meanwhile: RMS level (dB), brightness: the level of its first
+      // difference against its own (dB; higher is brighter), and balance: left against right
+      // (dB; a pan)
       struct Level {
             double db { -200 };
             double brightness { 0 };
+            double balance { 0 };
             };
       // runs the plug-in for ms; level (may be null): what it played. false: stop
       using Run = std::function<bool(int ms, Level* level)>;

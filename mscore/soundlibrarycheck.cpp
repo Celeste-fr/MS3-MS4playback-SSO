@@ -676,6 +676,7 @@ void ArticulationCheckDialog::setRunning(bool running)
       _close->setText(running ? tr("Stop") : tr("Close"));
       }
 
+#ifdef USE_VST3
 // a folder's files in <folder>.zip, to hand back
 static QString zipFolder(const QString& folder)
       {
@@ -690,6 +691,7 @@ static QString zipFolder(const QString& folder)
       zip.close();
       return zipPath;
       }
+#endif
 
 //---------------------------------------------------------
 //   check
@@ -1678,6 +1680,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
 //    ticked patch
 //---------------------------------------------------------
 
+#ifdef USE_VST3
 static QString safeFileName(QString name)
       {
       name.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
@@ -1738,6 +1741,8 @@ static QString describeSummary(const QJsonObject& d)
                .arg(d.value("controllerState").toObject().value("bytes").toInt());
       return "   " + lines.join("\n   ") + "\n";
       }
+
+#endif
 
 void ArticulationCheckDialog::extract()
       {
