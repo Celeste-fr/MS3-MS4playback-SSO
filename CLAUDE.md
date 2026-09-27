@@ -355,6 +355,15 @@ macOS.
   `SoundLibraryExport` handles audio export. Without a sequencer (command-line `-o`), it
   loads its own instances. `SoundLibraryDialog` is *View › Sound Library…*: parts, patches,
   Show (the plug-in's editor) and Save setup.
+- Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
+  a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
+  bar "Loading … in the background"); a play before that's done loads the rest (`sync`). The owner,
+  2026-09-27: a full orchestra (25+ Kontakt instances, ~0.7 GB each at Kontakt's default 60 kB
+  preload) made the first play wait long. Tried here under Xvfb with the test synth: 5 parts, 5
+  instances loaded one by one (`qDebug` "preloaded one instance, n to go"). **Crackle live, not in
+  the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;
+  Kontakt's *Options › Memory › Override instrument's preload size* at 30 kB fixed it. Suggest that
+  first when the owner reports crackles or a slow load.
 - `mscore/vst3editor.*`: the plug-in's editor window (HWND, NSView or X11 plus IRunLoop).
 - `Seq::putEvent`: in plugin mode, external events go to `Vst3Synth` with the slot as the
   channel.

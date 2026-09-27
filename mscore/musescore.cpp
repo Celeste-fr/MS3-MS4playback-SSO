@@ -3288,6 +3288,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
 
       if (seq)
             seq->setScoreView(cv);
+      SoundLibraryHost::instance()->preloadSoon(cs);    // the sound library's instances, ahead of play
       if (playPanel)
             playPanel->setScore(cs);
       if (synthControl)
