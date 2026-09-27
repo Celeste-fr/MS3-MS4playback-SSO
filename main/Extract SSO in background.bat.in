@@ -1,0 +1,20 @@
+@echo off
+rem Extract plug-in data of every patch of Spitfire Symphony Orchestra, in the background.
+rem
+rem Double-click this file. It starts a MuseScore of its own with no window
+rem (MuseScore --extract-library, mscore/musescore.cpp): every patch, one after the other, in
+rem one Kontakt instance, at background priority. It leaves the MuseScore you work in alone:
+rem its setups are a copy, kept in Documents\MuseScore Sound Library Check\background extract
+rem setups (outside MuseScore's own folders, which it doesn't write to at all), it opens no audio
+rem or MIDI device and asks for no window. Only one runs at a time.
+rem
+rem Progress: Documents\MuseScore Sound Library Check\background extract.log
+rem When it is done, that folder opens; hand back the newest "... extract <date>.zip".
+rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
+
+start "" /low "%~dp0@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --extract-patches all
+
+echo The extract runs in the background (all patches of Spitfire Symphony Orchestra).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background extract.log
+echo That folder opens when it is done. You can close this window and keep working.
+timeout /t 15

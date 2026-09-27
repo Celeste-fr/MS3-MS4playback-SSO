@@ -129,6 +129,8 @@
 #include "libmscore/style.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
+#include "soundlibrarycheck.h"
+#include <QLockFile>
 #include "tuningdialog.h"
 #include "libmscore/partplayback.h"
 #include "playbackmode.h"
@@ -237,6 +239,10 @@ static bool scriptTestMode = false;
 bool processJob = false;
 bool externalIcons = false;
 bool pluginMode = false;
+static bool extractMode = false;           // --extract-library: Extract plug-in data in the background
+static QString extractLibrary;
+static QString extractPatches = "all";
+static bool extractPitchBend = false;
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -2512,7 +2518,8 @@ MuseScore::MuseScore()
       Workspace::addMenuAndString(menuHelp,        "menu-help");
       Workspace::addMenuAndString(menuTours,       "menu-tours");
 
-      Workspace::writeGlobalMenuBar(mb);
+      if (!extractMode)                   // (the background extract writes nothing of the working MuseScore's)
+            Workspace::writeGlobalMenuBar(mb);
 
       if (!MScore::noGui) {
             retranslate();
@@ -4434,8 +4441,72 @@ static bool doProcessJob(QString jsonFile)
 //   processNonGui
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   extractInBackground
+//    MuseScore --extract-library <library> [--extract-patches all|mapped|<file>] [--extract-pitch-bend]
+//    Extract plug-in data (soundlibrarycheck.h) without a window, while the owner works in another
+//    MuseScore (the owner, 2026-09-27: "have the test run in the background without interfering").
+//    It is a process of its own: a new MuseScore window isn't asked for (the single-instance check is
+//    skipped), no audio or MIDI device is opened, and the process runs at background priority (CPU,
+//    disk and memory, Windows' PROCESS_MODE_BACKGROUND_BEGIN). Its setups are a copy of the working
+//    MuseScore's, outside MuseScore's data folder (Documents/MuseScore Sound Library Check/background
+//    extract setups): what it makes or resaves stays there, and nothing of the working MuseScore's is
+//    written (not even workspaces/global/menubar.xml). Progress on stderr and in background
+//    extract.log, the zip in Documents/MuseScore Sound Library Check as from the dialog.
+//---------------------------------------------------------
+
+static bool extractInBackground()
+      {
+#ifdef Q_OS_WIN
+      if (!SetPriorityClass(GetCurrentProcess(), PROCESS_MODE_BACKGROUND_BEGIN))
+            SetPriorityClass(GetCurrentProcess(), IDLE_PRIORITY_CLASS);
+#endif
+      // the library's map: a file, a name in share/soundlibraries, else the one Preferences name
+      QString path = extractLibrary;
+      if (!QFileInfo::exists(path)) {
+            const QString shared = mscoreGlobalShare + "soundlibraries/" + extractLibrary + ".xml";
+            path = QFileInfo::exists(shared) ? shared : (extractLibrary.isEmpty() ? soundLibraryPath() : QString());
+            }
+      if (path.isEmpty()) {
+            ArticulationCheckDialog::logBackground(QString("no sound library \"%1\" (share/soundlibraries has its maps)").arg(extractLibrary));
+            return false;
+            }
+      QString error;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::Library::load(path, &error);
+      if (!library) {
+            ArticulationCheckDialog::logBackground(error);
+            return false;
+            }
+      // its own copy of the setups: what the working MuseScore has, file by file, where the copy
+      // lacks it (the copy's own made and resaved setups stay)
+      const QString mine = SoundLibraryHost::setupsFolder(*library);
+      // (outside MuseScore's data folder altogether, next to the extract's output; the owner, 2026-09-27)
+      SoundLibraryHost::setDataFolder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                      + "/MuseScore Sound Library Check/background extract setups");
+      const QString copy = SoundLibraryHost::setupsFolder(*library);
+      QDir().mkpath(copy);
+      QLockFile lock(copy + "/background extract.lock");
+      if (!lock.tryLock(0)) {
+            ArticulationCheckDialog::logBackground("a background extract is already running; this one stops");
+            return false;
+            }
+      int copied = 0;
+      for (const QFileInfo& fi : QDir(mine).entryInfoList(QDir::Files)) {
+            if (fi.fileName() == "load times.log" || QFileInfo::exists(copy + "/" + fi.fileName()))
+                  continue;
+            copied += QFile::copy(fi.absoluteFilePath(), copy + "/" + fi.fileName());
+            }
+      ArticulationCheckDialog::logBackground(QString("background extract started; setups in %1 (%2 copied from %3)")
+                                             .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)));
+      ArticulationCheckDialog dialog(library);
+      QString zip;
+      return dialog.runHeadless(extractPatches, extractPitchBend, &zip);
+      }
+
 static bool processNonGui(const QStringList& argv)
       {
+      if (extractMode)
+            return extractInBackground();
       if (cliSaveOnline)
             return mscore->saveOnline(argv);
       if (exportScoreMedia)
@@ -8366,6 +8437,12 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption(      "no-fallback-font", "Don't use a fallback musical font"));
       parser.addOption(QCommandLineOption({"f", "force"}, "Use with '-o <file>', ignore warnings reg. score being corrupted or from wrong version"));
       parser.addOption(QCommandLineOption({"b", "bitrate"}, "Use with '-o <file>.mp3', sets bitrate, in kbps", "bitrate"));
+      parser.addOption(QCommandLineOption("extract-library", "Extract plug-in data of a sound library's patches, without a window, "
+                                          "as a process of its own that leaves the MuseScore you work in alone (name, as in "
+                                          "share/soundlibraries, or a map file)", "library"));
+      parser.addOption(QCommandLineOption("extract-patches", "Use with --extract-library: all (default), mapped, or a file with "
+                                          "one patch name a line", "which"));
+      parser.addOption(QCommandLineOption("extract-pitch-bend", "Use with --extract-library: also measure pitch bend (about 25 s a patch)"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8430,6 +8507,13 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             *pluginName = parser.value("p");
             if (pluginName->isEmpty())
                   parser.showHelp(EXIT_FAILURE);
+            }
+      if ((extractMode = parser.isSet("extract-library"))) {
+            MScore::noGui = true;
+            extractLibrary = parser.value("extract-library");
+            if (parser.isSet("extract-patches"))
+                  extractPatches = parser.value("extract-patches");
+            extractPitchBend = parser.isSet("extract-pitch-bend");
             }
       if (parser.isSet("E")) {
             MScore::noGui = true;
@@ -8592,7 +8676,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
 
       QStringList argv = parser.positionalArguments();
 
-      if (app && !converterMode && !pluginMode) {
+      if (app && !converterMode && !pluginMode && !extractMode) {
             if (!argv.isEmpty()) {
                   int ok = true;
                   for (const QString& message : qAsConst(argv)) {

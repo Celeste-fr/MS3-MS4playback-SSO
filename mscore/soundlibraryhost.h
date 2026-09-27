@@ -104,6 +104,11 @@ class SoundLibraryHost : public QObject {
       static QString pluginPath(const SoundLib::Library& library, QString* error = nullptr);
       static QString setupFile(const SoundLib::Library& library, const QString& instrument);
       static bool hasSetup(const SoundLib::Library& library, const QString& instrument);  // it has one or can make it
+      // where the setups (and made setups.json, load times.log, checks.json …) go: <dataPath>/soundlibraries,
+      // or this folder (the background extract, --extract-library: its own copy, so the MuseScore the
+      // owner works in is never touched)
+      static void setDataFolder(const QString& folder);
+      static QString setupsFolder(const SoundLib::Library& library);
 
       // setups made by MuseScore
       static bool makesSetups(const SoundLib::Library& library);        // the map has <Files>

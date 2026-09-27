@@ -72,6 +72,14 @@ if (MSCORE_OUTPUT_NAME)
       )
 endif (MSCORE_OUTPUT_NAME)
 
+# a double-click that runs Extract plug-in data on every SSO patch in the background
+# (MuseScore --extract-library; the owner, 2026-09-27)
+if (MINGW OR MSVC)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Extract SSO in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Extract SSO in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Extract SSO in background.bat" DESTINATION bin)
+endif (MINGW OR MSVC)
+
 target_include_directories(mscore PRIVATE
       ${PROJECT_SOURCE_DIR}
       ${PROJECT_SOURCE_DIR}/thirdparty

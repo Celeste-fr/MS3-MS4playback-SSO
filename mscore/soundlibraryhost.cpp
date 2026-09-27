@@ -173,9 +173,26 @@ static QString fileName(QString s)
       return s.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
       }
 
+static QString& dataFolderOverride()
+      {
+      static QString folder;
+      return folder;
+      }
+
+void SoundLibraryHost::setDataFolder(const QString& folder)
+      {
+      dataFolderOverride() = folder;
+      }
+
 static QString setupFolder(const SoundLib::Library& library)
       {
-      return dataPath + "/soundlibraries/" + fileName(library.name);
+      const QString root = dataFolderOverride().isEmpty() ? dataPath + "/soundlibraries" : dataFolderOverride();
+      return root + "/" + fileName(library.name);
+      }
+
+QString SoundLibraryHost::setupsFolder(const SoundLib::Library& library)
+      {
+      return setupFolder(library);
       }
 
 QString SoundLibraryHost::setupFile(const SoundLib::Library& library, const QString& instrument)

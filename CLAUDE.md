@@ -548,6 +548,19 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   bend in 1.5 min (setup 0-1.8 s, until it sounds 3 s, pitch bend 27 s each), one instance. With Kontakt (the
   owner, run 134, 4 patches loaded before): setup 0.2-0.7 s, until it sounds 3-5 s, describe 0.7-0.9 s, pitch
   bend 27 s; so without pitch bend about 5 s a patch, plus a patch's first load (2-43 s) when never loaded.
+  **In the background** (the owner, 2026-09-27: all 700 patches "without me having to configure or check any
+  boxes", "without interfering my ability to work on musescore projects"): `Extract SSO in background.bat`
+  next to the Windows executable (`main/Extract SSO in background.bat.in`, installed to bin) starts
+  `MuseScore3Evo.exe --extract-library "Spitfire Symphony Orchestra"` (`[--extract-patches all|mapped|<file>]
+  [--extract-pitch-bend]`; `extractInBackground` in musescore.cpp, `ArticulationCheckDialog::runHeadless`):
+  no window (noGui), no audio or MIDI device, not handed to the running MuseScore (single-instance check
+  skipped), background priority (PROCESS_MODE_BACKGROUND_BEGIN), one run at a time (a lock file). Its setups
+  are a copy of the working MuseScore's in `Documents/MuseScore Sound Library Check/background extract setups`
+  (`SoundLibraryHost::setDataFolder`; copied file by file where missing), and it writes nothing in MuseScore's
+  data or settings folders (not even `workspaces/global/menubar.xml`, which every other start writes).
+  Progress in `Documents/MuseScore Sound Library Check/background extract.log` (`logBackground`), the folder
+  opens when done. Tried here headless with the test synth, alone and beside a running MuseScore: 3 patches in
+  10 s, only the copy, the log and the extract written; a second start while one runs stops at once.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

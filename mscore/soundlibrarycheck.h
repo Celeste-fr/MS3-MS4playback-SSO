@@ -92,6 +92,9 @@ class ArticulationCheckDialog : public QDialog {
       QPushButton* _close;
       bool _running { false };
       bool _cancel { false };
+      bool _headless { false };     // runHeadless: no dialog shown, progress on stderr
+      QString _zip;                 // the last extract's zip
+      void say(const QString& line) const;
 
       QJsonObject _records;         // the last check of each patch (checks.json)
 
@@ -127,6 +130,14 @@ class ArticulationCheckDialog : public QDialog {
       static QByteArray mapHash(const SoundLib::LibInstrument& instrument);
       static QRect changedRegion(const QImage& base, const QImage& again, const std::vector<QImage>& shots);
       static int testPitch(const SoundLib::LibInstrument& instrument);
+
+      // Extract plug-in data without the dialog (MuseScore --extract-library): patches "all" (every
+      // patch with a setup), "mapped" (the map's own) or a file with one patch name a line; the zip's
+      // path in zip. false: nothing to do, or no plug-in
+      bool runHeadless(const QString& patches, bool pitchBend, QString* zip);
+      // a line of the background extract's log: stderr and Documents/MuseScore Sound Library Check/
+      // background extract.log (MuseScore on Windows has no console to show stderr)
+      static void logBackground(const QString& line);
       };
 
 } // namespace Ms

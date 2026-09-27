@@ -559,6 +559,81 @@ void ArticulationCheckDialog::removePatch(const QString& name)
       rebuild();
       }
 
+void ArticulationCheckDialog::logBackground(const QString& line)
+      {
+      const QString stamped = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss") + " " + line;
+      fprintf(stderr, "%s\n", qPrintable(stamped));
+      fflush(stderr);
+      const QString folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      QDir().mkpath(folder);
+      QFile f(folder + "/background extract.log");
+      if (f.open(QIODevice::Append | QIODevice::Text))
+            f.write((stamped + "\n").toUtf8());
+      }
+
+void ArticulationCheckDialog::say(const QString& line) const
+      {
+      if (_headless)
+            logBackground(line);
+      }
+
+//---------------------------------------------------------
+//   runHeadless
+//    the extract without the dialog: MuseScore --extract-library (musescore.cpp), a process of its
+//    own that runs in the background while the owner works in MuseScore (the owner, 2026-09-27)
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip)
+      {
+      _headless = true;
+      if (!_library) {
+            say("no sound library");
+            return false;
+            }
+      QStringList wanted;
+      if (patches != "all" && patches != "mapped") {
+            QFile f(patches);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                  say(QString("cannot read %1").arg(patches));
+                  return false;
+                  }
+            for (const QString& l : QString::fromUtf8(f.readAll()).split('\n')) {
+                  const QString n = l.trimmed();
+                  if (!n.isEmpty() && !n.startsWith('#'))
+                        wanted << n;
+                  }
+            }
+      int ticked = 0;
+      QStringList unknown = wanted;
+      for (int row = 0; row < _table->rowCount(); ++row) {
+            const QString& name = _rows[row].instrument->name;
+            const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+            bool tick = setup && (patches == "all" || (patches == "mapped" && !_rows[row].added));
+            for (const QString& w : wanted)
+                  if (name.compare(w, Qt::CaseInsensitive) == 0) {
+                        tick = setup;
+                        unknown.removeAll(w);
+                        if (!setup)
+                              say(QString("%1: no setup (its .nki was not found); left out").arg(name));
+                        }
+            _table->item(row, 0)->setCheckState(tick ? Qt::Checked : Qt::Unchecked);
+            ticked += tick;
+            }
+      for (const QString& u : unknown)
+            say(QString("%1: no such patch in the map; left out").arg(u));
+      if (!ticked) {
+            say("no patch to extract");
+            return false;
+            }
+      _tryAll->setChecked(false);       // (it needs the plug-in's window on screen)
+      _pitchBend->setChecked(pitchBend);
+      say(QString("%1: %2 patches%3").arg(_library->name).arg(ticked).arg(pitchBend ? ", with pitch bend" : ""));
+      extract();
+      if (zip)
+            *zip = _zip;
+      return !_zip.isEmpty();
+      }
+
 void ArticulationCheckDialog::rebuild()
       {
       _table->setRowCount(0);
@@ -1874,7 +1949,10 @@ void ArticulationCheckDialog::extract()
       QString error;
       const QString path = SoundLibraryHost::pluginPath(*_library, &error);
       if (path.isEmpty()) {
-            QMessageBox::warning(this, windowTitle(), error);
+            if (_headless)
+                  say(error);
+            else
+                  QMessageBox::warning(this, windowTitle(), error);
             return;
             }
       std::vector<int> chosen;
@@ -1887,7 +1965,7 @@ void ArticulationCheckDialog::extract()
             else
                   notSetUp << _rows[row].instrument->name;
             }
-      if (!notSetUp.isEmpty()) {
+      if (!notSetUp.isEmpty() && !_headless) {
             QMessageBox::warning(this, windowTitle(), tr("No setup (their .nki was not found; untick them): %1").arg(notSetUp.join(", ")));
             return;
             }
@@ -1902,7 +1980,10 @@ void ArticulationCheckDialog::extract()
       const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
       const QString folder = root + "/" + safeFileName(_library->name) + " extract " + stamp;
       if (!QDir().mkpath(folder)) {
-            QMessageBox::warning(this, windowTitle(), tr("Cannot create %1").arg(folder));
+            if (_headless)
+                  say(QString("cannot create %1").arg(folder));
+            else
+                  QMessageBox::warning(this, windowTitle(), tr("Cannot create %1").arg(folder));
             return;
             }
       setRunning(true);
@@ -1940,10 +2021,12 @@ void ArticulationCheckDialog::extract()
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
-            if (k > 0) {
-                  const qint64 each = total.elapsed() / k;
-                  _progress->setFormat(tr("%p% — about %1 min left").arg((each * (int(chosen.size()) - k) + 59999) / 60000));
-                  }
+            const QString left = k > 0 ? tr("about %1 min left").arg((total.elapsed() / k * (int(chosen.size()) - k) + 59999) / 60000)
+                                       : QString();
+            if (k > 0)
+                  _progress->setFormat(tr("%p% — %1").arg(left));
+            say(QString("[%1/%2] %3%4").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
+                .arg(left.isEmpty() ? QString() : " (" + left + ")"));
             if (!extractPatch(chosen[k], path, folder, empty, instance, summary))
                   instance.reset();
             writeFile(folder + "/summary.txt", (summary + "\n(Still running: written after each patch.)\n").toUtf8());
@@ -1958,8 +2041,14 @@ void ArticulationCheckDialog::extract()
       summary += "\nRead it with: python3 tools/soundlibraries/read_plugin_data.py \"<this folder>\"\n";
       writeFile(folder + "/summary.txt", summary.toUtf8());
       const QString zipPath = zipFolder(folder);
+      _zip = zipPath;
       setRunning(false);
       _status->setText(tr("Done: %1").arg(QDir::toNativeSeparators(zipPath)));
+      if (_headless) {
+            say(QString("done in %1 min: %2").arg(total.elapsed() / 60000.0, 0, 'f', 1).arg(QDir::toNativeSeparators(zipPath)));
+            QDesktopServices::openUrl(QUrl::fromLocalFile(root));    // (so the owner sees it's done)
+            return;
+            }
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
       QMessageBox::information(this, windowTitle(),
          tr("The plug-in's data is in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
@@ -1987,6 +2076,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             out["error"] = message;
             writeFile(folder + "/" + fileBase + ".json", QJsonDocument(out).toJson());
             summary += QString("## %1\n   %2\n\n").arg(ins.name, message);
+            say(QString("   %1: %2").arg(ins.name, message));
             return false;
             };
 
