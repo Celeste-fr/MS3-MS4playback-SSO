@@ -64,7 +64,7 @@ void Vst3Synth::play(const PlayEvent& event)
       const int slot = event.channel();
       if (slot < 0 || slot >= int(_slots.size()) || !_slots[slot])
             return;
-      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB());
+      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB(), event.tuning());
       }
 
 void Vst3Synth::process(unsigned frames, float* out, float*, float*)

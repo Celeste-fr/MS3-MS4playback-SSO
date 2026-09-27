@@ -61,7 +61,9 @@ class Vst3Plugin {
       QString path() const;
 
       // audio thread
-      void midi(int type, int channel, int a, int b);   // MuseScore's event types (ME_NOTEON …)
+      // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament
+      // (the score's tuning: tuning.h) goes in VST 3's NoteOnEvent::tuning, for the plug-ins that honour it
+      void midi(int type, int channel, int a, int b, float tuning = 0.f);
       void process(int frames, float* interleavedStereo);   // adds its output
       void allNotesOff();
 

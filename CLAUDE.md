@@ -295,6 +295,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   **Values belong to the score; the library's default is SSO's own** (the owner): a parameter a
   score doesn't set is put back to the patch's value when another score set it on the same loaded
   instance (`Slot::patchValues`).
+- Microtones (the owner, 2026-09-27): each library note's tuning (cents, `tuning.h`) goes into VST 3's
+  `NoteOnEvent::tuning` (`Vst3Plugin::midi`, from `Vst3Synth::play`); the test synth honours it
+  (`vst3Plugin` test: A4 +50 cents sounds at 452.9 Hz). Whether Kontakt / SSO honours it is untested.
+  If not, the owner's plan: an effect of our own that shifts the pitch after the plug-in, **not**
+  pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
+  output shifts all its notes together, so chords with different tunings need per-note handling.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).

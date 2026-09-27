@@ -8,6 +8,7 @@
 
 #include <set>
 
+#include <cmath>
 #include <QtTest/QtTest>
 #include <QPainter>
 
@@ -987,6 +988,36 @@ void TestSoundLibrary::vst3Plugin()
       q->process(1024, buffer.data());
       QVERIFY(peak(buffer) > 0.05f);
       QVERIFY(q->setOffline(false));
+
+      // a note's tuning (cents, the score's tuning) in the note-on (VST 3's NoteOnEvent::tuning):
+      // A4 a quarter tone up sounds at 452.9 Hz, not 440 (Goertzel over a second, left channel)
+      auto level = [](const std::vector<float>& b, double hz, double rate) {
+            const double w = 2 * M_PI * hz / rate;
+            double s1 = 0, s2 = 0;
+            for (size_t i = 0; i < b.size(); i += 2) {
+                  const double s0 = b[i] + 2 * std::cos(w) * s1 - s2;
+                  s2 = s1;
+                  s1 = s0;
+                  }
+            return s1 * s1 + s2 * s2 - 2 * std::cos(w) * s1 * s2;
+            };
+      std::unique_ptr<Vst3Plugin> t = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(t, qPrintable(error));
+      for (float cents : { 0.f, 50.f }) {
+            t->midi(ME_CONTROLLER, 0, 1, 100);
+            t->midi(ME_NOTEON, 0, 69, 100, cents);
+            std::vector<float> second(2 * 512 * 94, 0.f);            // (a second, in whole blocks)
+            for (int i = 0; i < 512 * 94; i += 512)
+                  t->process(512, second.data() + 2 * i);
+            t->midi(ME_NOTEON, 0, 69, 0);
+            std::vector<float> rest(2 * 4096, 0.f);
+            t->process(4096, rest.data());
+            const double at440 = level(second, 440.0, 48000), atQuarter = level(second, 440.0 * std::pow(2.0, 1 / 24.0), 48000);
+            if (cents == 0.f)
+                  QVERIFY2(at440 > 100 * atQuarter, qPrintable(QString("%1 %2").arg(at440).arg(atQuarter)));
+            else
+                  QVERIFY2(atQuarter > 100 * at440, qPrintable(QString("%1 %2").arg(at440).arg(atQuarter)));
+            }
       }
 
 //---------------------------------------------------------
