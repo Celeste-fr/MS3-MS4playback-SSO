@@ -22,7 +22,11 @@ library work; the tuning work is described under "Tuning" below).
   when the repository was also renamed from `musescore3-ms4-playback` to `MS3-MS4playback-SSO`.
   It has the MS4 playback work (essentially finished) and the sound-library work, which was
   developed on `claude/continue-previous-work-5u4n0j`, merged in on 2026-09-25 and then
-  deleted. All work goes on `main` now. Check `git log` and the latest commit messages first.
+  deleted. All work goes on `main` now. A cloud session that is given a `claude/…` branch of
+  its own must merge it into `main` (and push) when its work is done: on 2026-09-27 two such
+  branches (`claude/zen-heisenberg-kpqg2v`: SSO percussion, tuning, accidentals;
+  `claude/gallant-johnson-czw783`: plug-in data extraction) were found unmerged a day later
+  and merged then. Check `git log` and the latest commit messages first.
   They are detailed on purpose and describe what each step did and how it was measured.
 - CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This keeps the
   private repo's Actions minutes.

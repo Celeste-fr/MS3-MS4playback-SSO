@@ -7,9 +7,9 @@ made. The commit messages on this branch explain each step in detail.
 
 ## Where things are
 
-- Branch: `main` (called `ms4-playback` until 2026-09-27), the default and only branch (the
+- Branch: `main` (called `ms4-playback` until 2026-09-27), the default branch (the
   sound-library branch was merged into it and deleted on 2026-09-25). Develop and push there;
-  no pull requests.
+  no pull requests. A session given a `claude/…` branch merges it into `main` when done.
 - Latest Windows build: run 11 (commit 6bc3a62). All 10 `tst_soundlibrary` tests passed on
   Windows. Artifact `MuseScore-soundlibrary-win64`:
   https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36178930191
