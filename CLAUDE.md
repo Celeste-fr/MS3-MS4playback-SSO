@@ -293,7 +293,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   instance (`Slot::patchValues`), and *Save setup* saves the patch's values, not the score's.
 - Microtones (the owner, 2026-09-27): each library note's tuning (cents, `tuning.h`) goes into VST 3's
   `NoteOnEvent::tuning` (`Vst3Plugin::midi`, from `Vst3Synth::play`); the test synth honours it
-  (`vst3Plugin` test: A4 +50 cents sounds at 452.9 Hz). Whether Kontakt / SSO honours it is untested.
+  (`vst3Plugin` test: A4 +50 cents sounds at 452.9 Hz). **Kontakt / SSO ignores it** (the owner, run 115,
+  2026-09-27: "tuning doesn't affect the note pitch at all"). Next to try: VST 3 note expression (tuning
+  type) if Kontakt reports an `INoteExpressionController` (the plug-in extract's "note expressions").
   If not, the owner's plan: an effect of our own that shifts the pitch after the plug-in, **not**
   pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
   output shifts all its notes together, so chords with different tunings need per-note handling.
