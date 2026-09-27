@@ -81,6 +81,10 @@ SoundLibraryHost::SoundLibraryHost()
 #endif
       }
 
+SoundLibraryHost::~SoundLibraryHost()
+      {
+      }
+
 SoundLibraryHost* SoundLibraryHost::instance()
       {
       static SoundLibraryHost* host = new SoundLibraryHost;
@@ -615,23 +619,75 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       if (path.isEmpty())
             return false;
 
+      // what the score needs, by slot
+      struct Need {
+            int slot;
+            const QString name;
+            bool setup;
+            };
       std::array<bool, 64> used {};
-      bool ok = true;
-      bool waiting = false;
-      int loads = 0;
+      std::vector<Need> needs;
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
                   continue;
             const int k = r.port * 16 + r.channel;
             used[k] = true;
-            Slot& s = _slots[k];
-            const QString name = r.instrument->name;
-            const bool setup = hasSetup(*library, name);
+            _slots[k].part = r.part->partName();
+            needs.push_back({ k, r.instrument->name, hasSetup(*library, r.instrument->name) });
+            }
+      auto fits = [&path](const Vst3Plugin* p, const Slot& s, const Need& n) {
+            return p && p->path() == path && s.instrument == n.name && (s.hasSetup || !n.setup);
+            };
+
+      // an instance the score can't use in its slot is set aside (a spare), not released: the
+      // score may need its patch in another slot (another score, parts in another order), and a
+      // patch it doesn't need can take a patch it does. Spares are released once all is loaded
+      std::array<const Need*, 64> needAt {};
+      for (const Need& n : needs)
+            needAt[n.slot] = &n;
+      for (int k = 0; k < 64; ++k) {
             Vst3Plugin* current = vst->plugin(k);
-            s.part = r.part->partName();
-            if (current && current->path() == path && s.instrument == name && (s.hasSetup || !setup))
+            if (needAt[k] && fits(current, _slots[k], *needAt[k]))
                   continue;
+            if (_slots[k].editor)
+                  _slots[k].editor->close();
+            if (current) {
+                  Spare spare { vst->takePlugin(k), _slots[k] };
+                  spare.slot.editor.clear();
+                  _spares.push_back(std::move(spare));
+                  }
+            const QString part = _slots[k].part;
+            _slots[k] = Slot();
+            if (needAt[k])
+                  _slots[k].part = part;
+            }
+      // the patches a spare already plays: moved in, nothing to load
+      std::vector<const Need*> toLoad;
+      for (const Need& n : needs) {
+            if (vst->plugin(n.slot))
+                  continue;
+            auto i = std::find_if(_spares.begin(), _spares.end(), [&](const Spare& sp) { return fits(sp.plugin.get(), sp.slot, n); });
+            if (i == _spares.end()) {
+                  toLoad.push_back(&n);
+                  continue;
+                  }
+            const QString part = _slots[n.slot].part;
+            _slots[n.slot] = i->slot;
+            _slots[n.slot].part = part;
+            vst->setPlugin(n.slot, std::move(i->plugin));
+            _spares.erase(i);
+            qDebug("Sound library: %s kept (slot %d)", qPrintable(n.name), n.slot);
+            }
+
+      bool ok = true;
+      bool waiting = false;
+      int loads = 0;
+      for (const Need* n : toLoad) {
+            const int k = n->slot;
+            Slot& s = _slots[k];
+            const QString& name = n->name;
+            const bool setup = n->setup;
             if (maxLoads >= 0 && loads >= maxLoads) {       // (later: preloadStep)
                   if (remaining)
                         ++*remaining;
@@ -645,13 +701,21 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             if (mscore)
                   mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, name)
                                                    : tr("Loading %1 in the background: %2…").arg(library->name, name), 8000);
-            if (s.editor)
-                  s.editor->close();
 
-            // an instance to reuse when the setup replaces all it had, else a new one
-            std::unique_ptr<Vst3Plugin> p = vst->takePlugin(k);
-            if (!p || p->path() != path || !setup) {
-                  p.reset();
+            // an instance to reuse when the setup replaces all it had (a spare of a patch the
+            // score doesn't need), else a new one
+            std::unique_ptr<Vst3Plugin> p;
+            if (setup) {
+                  auto i = std::find_if(_spares.begin(), _spares.end(), [&path](const Spare& sp) {
+                        return sp.plugin && sp.plugin->path() == path;
+                        });
+                  if (i != _spares.end()) {
+                        qDebug("Sound library: the instance of %s loads %s", qPrintable(i->slot.instrument), qPrintable(name));
+                        p = std::move(i->plugin);
+                        _spares.erase(i);
+                        }
+                  }
+            if (!p) {
                   QString err;
                   p = Vst3Plugin::load(path, MScore::sampleRate, 4096, &err);
                   if (!p) {
@@ -691,6 +755,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   _slots[k] = Slot();
                   }
             }
+      _spares.clear();
       if (waiting)
             QApplication::restoreOverrideCursor();
       if (!_idle.isActive())
@@ -716,6 +781,7 @@ void SoundLibraryHost::release()
                   vst->setPlugin(k, nullptr);
             _slots[k] = Slot();
             }
+      _spares.clear();
       _idle.stop();
       emit changed();
 #endif

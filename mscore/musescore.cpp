@@ -1634,6 +1634,11 @@ MuseScore::MuseScore()
       panAction       = getAction("pan");
 
       _statusBar = new QStatusBar;
+      _messageLabel = new QLabel(this);
+      _statusBar->addWidget(_messageLabel);
+      _messageTimer = new QTimer(this);
+      _messageTimer->setSingleShot(true);
+      connect(_messageTimer, &QTimer::timeout, _messageLabel, &QLabel::clear);
       _statusBar->addPermanentWidget(new QWidget(this), 2);
       _statusBar->addPermanentWidget(new QWidget(this), 100);
       _statusBar->addPermanentWidget(_modeText, 0);
@@ -3420,7 +3425,19 @@ void MuseScore::updateViewModeCombo()
 
 void MuseScore::showMessage(const QString& s, int timeout)
       {
-      _statusBar->showMessage(s, timeout);
+      // in a label of its own: QStatusBar draws its messages left of the permanent widgets,
+      // where the stretching spacers leave no room. Shown at once, also before a long task
+      // that holds the event loop (the sound library loading its instances)
+      _messageLabel->setText(s);
+      if (timeout > 0)
+            _messageTimer->start(timeout);
+      else
+            _messageTimer->stop();
+      if (_statusBar->isVisible()) {
+            if (QLayout* l = _statusBar->layout())
+                  l->activate();
+            _statusBar->repaint();
+            }
       }
 
 //---------------------------------------------------------

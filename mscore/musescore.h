@@ -333,6 +333,8 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       KeyEditor* keyEditor                 { 0 };
       ChordStyleEditor* chordStyleEditor   { 0 };
       QStatusBar* _statusBar;
+      QLabel* _messageLabel;        // showMessage (QStatusBar's own messages get no room: the spacers)
+      QTimer* _messageTimer;
       QLabel* _modeText;
       QLabel* _positionLabel;
       NewWizard* newWizard           { 0 };

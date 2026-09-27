@@ -35,6 +35,7 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <vector>
 
 #include <QDialog>
 #include <QObject>
@@ -54,6 +55,7 @@ class NPlayEvent;
 class Vst3Plugin;
 class Score;
 class Vst3EditorWindow;
+class Vst3Plugin;
 class Vst3Synth;
 
 class SoundLibraryHost : public QObject {
@@ -70,6 +72,14 @@ class SoundLibraryHost : public QObject {
             std::map<unsigned, double> patchValues;
             };
       std::array<Slot, 64> _slots;
+      // instances set aside by syncSome: a patch the score being loaded doesn't play in their slot
+#ifdef USE_VST3
+      struct Spare {
+            std::unique_ptr<Vst3Plugin> plugin;
+            Slot slot;
+            };
+      std::vector<Spare> _spares;
+#endif
       QTimer _idle;
       QTimer _preloadTimer;
       QPointer<MasterScore> _preloadScore;
@@ -77,6 +87,7 @@ class SoundLibraryHost : public QObject {
       bool syncSome(Score* score, QString* error, int maxLoads, int* remaining);
 
       SoundLibraryHost();
+      ~SoundLibraryHost();
 
    public:
       static SoundLibraryHost* instance();
