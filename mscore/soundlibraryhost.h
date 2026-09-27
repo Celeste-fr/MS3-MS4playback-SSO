@@ -7,18 +7,12 @@
 //  routes (SoundLib::routes: one per library part) it keeps an instance in Vst3Synth's slot
 //  of the route, with the instrument's setup loaded:
 //
-//    setup     the plug-in's state with a library patch loaded (Kontakt with "Violins 1 - All
-//              techniques", UACC switching …), loaded into every instance that plays the patch.
-//              MuseScore makes it (the owner, 2026-09-27: no manual set-up): for a library whose
-//              map has <Files> (a Kontakt library), from the patch's .nki in the library's folder
-//              and Kontakt's own state with nothing loaded (a fresh instance's, kept), with the
-//              map's script values (KontaktSetup, audio/vst3/kontaktsetup.h); made again when the
-//              .nki, the values, the plug-in or the maker change ("made setups.json"). Kept in
-//              <data>/soundlibraries/<library>/<patch>.vst3state; setups made by hand earlier
-//              are moved to "old setups (not used)" there. A library without <Files> uses such a
-//              file if one is there (the tests' plug-ins)
-//    editor    the plug-in's window for a part (Vst3EditorWindow), to look at it; what is changed
-//              there lasts until the patch loads again
+//    setup     what the plug-in's editor was left with for a library instrument (Kontakt with
+//              the "Violins 1" patch, UACC switching …): its state, saved once per instrument
+//              in <data>/soundlibraries/<library>/<instrument>.vst3state and loaded into every
+//              instance that plays that instrument, in any score
+//    editor    the plug-in's window for a part (Vst3EditorWindow); closing it saves the setup
+//              of an instrument that has none yet
 //    export    SoundLibraryExport lends the instances to an audio export
 //
 //  GUI thread only.
@@ -52,7 +46,6 @@ namespace Ms {
 class MasterScore;
 class MasterSynthesizer;
 class NPlayEvent;
-class Vst3Plugin;
 class Score;
 class Vst3EditorWindow;
 class Vst3Plugin;
@@ -96,27 +89,17 @@ class SoundLibraryHost : public QObject {
       static QStringList pluginFolders(); // the system's VST 3 folders
       static QString pluginPath(const SoundLib::Library& library, QString* error = nullptr);
       static QString setupFile(const SoundLib::Library& library, const QString& instrument);
-      static bool hasSetup(const SoundLib::Library& library, const QString& instrument);  // it has one or can make it
-
-      // setups made by MuseScore
-      static bool makesSetups(const SoundLib::Library& library);        // the map has <Files>
-      static QString libraryFolder(const SoundLib::Library& library);   // where its .nki are; empty: not found
-      static void setLibraryFolder(const SoundLib::Library& library, const QString& folder);
-      static QString nkiPath(const SoundLib::Library& library, const QString& patch);
-      static const SoundLib::LibInstrument* findPatch(const SoundLib::Library& library, const QString& name);
-      static QByteArray setupId(const SoundLib::Library& library, const QString& patch);  // changes with its setup
-      static QByteArray setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                   QString* error = nullptr);            // made first when needed
-      static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
-                            const QString& pluginPath, QString* error = nullptr);
+      static bool hasSetup(const SoundLib::Library& library, const QString& instrument);
 
       Vst3Synth* synth() const;
       bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
       void preloadSoon(Score* score);     // load them ahead of the first play, in the background
       void release();                     // no instances
       bool loaded(int slot) const;
+      bool saveSetup(int slot, QString* error = nullptr);
       bool showEditor(int slot, QString* error = nullptr);
       static void routesMayChange();
+      void setupChanged(const QString& instrument);   // saved elsewhere: reload it
 
    signals:
       void changed();
@@ -143,7 +126,7 @@ class SoundLibraryExport {
 //---------------------------------------------------------
 //   SoundLibraryDialog
 //    the parts of the current score and where they play: the patch, and the MIDI output and
-//    channel, or the hosted plug-in (its setup, its window)
+//    channel, or the hosted plug-in with its setup (show / save)
 //---------------------------------------------------------
 
 class SoundLibraryDialog : public QDialog {

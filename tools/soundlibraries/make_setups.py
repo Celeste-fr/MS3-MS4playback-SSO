@@ -312,11 +312,8 @@ def preset_of(root):
     size = struct.unpack("<I", d[12:16])[0]
     data = d[20:20 + size]
 
-    def setter(new, tail=None):
-        # (tail: what follows the data, its last 4 bytes a marker, not a checksum: a7636734 with a
-        # program, as in an .nki, 8565620d in Kontakt with nothing loaded, which Kontakt refuses
-        # around a program: "The project could not be recalled for unknown reasons")
-        chunk["data"] = d[:12] + struct.pack("<I", len(new)) + d[16:20] + new + (d[20 + size:] if tail is None else tail)
+    def setter(new):
+        chunk["data"] = d[:12] + struct.pack("<I", len(new)) + d[16:20] + new + d[20 + size:]
         for c in path:
             c["changed"] = True
     return data, setter
@@ -649,9 +646,6 @@ def make_component_from_empty(empty_component, nki_path, settings=None):
         for c, owner in item.find(typ):
             return c
         return None
-    nki_data, _ = preset_of(nki)
-    nki_chunk = next(c for c, owner in nki.find(109))
-    nki_tail = nki_chunk["data"][20 + len(nki_data):]
     target = bni(root)
     nki_bni = bni(nki)
     if target is None or nki_bni is None:
@@ -695,7 +689,7 @@ def make_component_from_empty(empty_component, nki_path, settings=None):
         elif t[0] in (0x4B, 0x3D) and files is not None:
             t[0] = 0x4B
             t[1] = files
-    setter(join(top), nki_tail)                         # (a program's marker, the .nki's)
+    setter(join(top))
     rebuild_subtrees(root)
     return root.to_bytes()
 

@@ -88,19 +88,15 @@ slots (a quick Extract plug-in data without *Try every controller* on one patch 
 generating setups from the `.nki` files (Kontakt's state embeds the whole patch in a multi: a writer for
 that multi, then one generated setup tried by the owner).
 
-## Setups made by MuseScore (2026-09-27)
+## Setups made from the .nki files (2026-09-27)
 
-The owner loaded a setup made by `make_setups.py` in run 91 ("everything looks correct"), then asked for it
-in MuseScore with no manual set-up, every patch at the library's defaults. Done (see `CLAUDE.md` › Plugin
-hosting › Setups made by MuseScore): `KontaktSetup` (C++), the map's `<Files>` / `nki=` / `setup=` / `<Patch>`,
-the host making setups on demand, *Set up…* / *Save setup* / *Add a patch…* gone, all 700 patches in Check
-articulations with *Tick all*. The owner's `learned_settings.json` showed `$iooxo` 3 as the one setting.
-Next, with the next Windows build: the owner plays a score (setups made on first load; the hand-made ones
-moved to `old setups (not used)`), then *Check articulations* › *Tick all* › *Extract plug-in data* (describe
-only) for every patch, and a *Check* of the map's patches with the made setups. If Kontakt refuses a setup
-or its samples are missing: compare with make_setups.py's (which Kontakt loaded) and look at the sample
-list first. Kits: at the library's defaults now (the owner: what they have off comes from the one-drum
-patches, whose keys at their defaults aren't known yet: a key scan of those, or the owner's screenshots).
+`tools/soundlibraries/make_setups.py` (see `CLAUDE.md` › Setups made from the `.nki` files). Next: the owner
+runs `MakeSetups.exe` (artifact `ExtractLibraryFiles-win64`) and makes one setup of a patch not in the map
+(e.g. "Violins 1 - Core techniques"), then in MuseScore (run 72) *Check articulations* shows it "(not in the
+map)", Ready; *Set up…* opens it in Kontakt: the patch loaded, its samples found, "UACC & UI only". If so:
+`all`, then (a MuseScore build for this) tick all and a describe-only Extract plug-in data of every patch.
+If Kontakt refuses it or its samples are missing: look at the sample list first (absolute version 2 paths
+in a multi, where Kontakt 8 itself writes version 3).
 
 ## What the owner is doing now
 

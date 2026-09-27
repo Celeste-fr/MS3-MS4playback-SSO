@@ -14,16 +14,6 @@
 #include <algorithm>
 
 #include <QApplication>
-#include <QCryptographicHash>
-#include <QDataStream>
-#include <QDateTime>
-#include <QElapsedTimer>
-#include <QFileDialog>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QSaveFile>
-#include <QSet>
-#include <QSettings>
 #include <QCheckBox>
 #include <QGridLayout>
 #include <QSlider>
@@ -53,7 +43,6 @@
 #include "seq.h"
 
 #ifdef USE_VST3
-#include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "vst3editor.h"
@@ -169,343 +158,33 @@ static QString fileName(QString s)
       return s.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
       }
 
-static QString setupFolder(const SoundLib::Library& library)
-      {
-      return dataPath + "/soundlibraries/" + fileName(library.name);
-      }
-
 QString SoundLibraryHost::setupFile(const SoundLib::Library& library, const QString& instrument)
       {
-      return setupFolder(library) + "/" + fileName(instrument) + ".vst3state";
+      return dataPath + "/soundlibraries/" + fileName(library.name) + "/" + fileName(instrument) + ".vst3state";
       }
 
 bool SoundLibraryHost::hasSetup(const SoundLib::Library& library, const QString& instrument)
       {
-      if (makesSetups(library)) {
-            const QString nki = nkiPath(library, instrument);
-            return !nki.isEmpty() && QFileInfo::exists(nki);
-            }
       return QFileInfo::exists(setupFile(library, instrument));
       }
 
-//---------------------------------------------------------
-//   setups made by MuseScore
-//---------------------------------------------------------
-
-// raise it when a change to the making makes the setups made before stale
-static const int MAKER_VERSION = 2;       // 2: the preset marker of a loaded program (run 107)
-
-bool SoundLibraryHost::makesSetups(const SoundLib::Library& library)
-      {
-      return !library.registryName.isEmpty();
-      }
-
-// the folders chosen, read once (hasSetup asks for every patch)
-static std::map<QString, QString>& chosenFolders()
-      {
-      static std::map<QString, QString> chosen;
-      return chosen;
-      }
-
-static QString folderKey(const SoundLib::Library& library)
-      {
-      return QString("soundLibrary/%1/folder").arg(library.name);
-      }
-
-// the folder chosen in View › Sound Library… (Library folder…), else NI's registry entry of the
-// library (its ContentDir), else none
-QString SoundLibraryHost::libraryFolder(const SoundLib::Library& library)
-      {
-      if (!makesSetups(library))
-            return QString();
-      auto c = chosenFolders().find(library.name);
-      if (c == chosenFolders().end())
-            c = chosenFolders().emplace(library.name, QSettings().value(folderKey(library)).toString()).first;
-      if (!c->second.isEmpty() && QFileInfo(c->second).isDir())
-            return QDir::fromNativeSeparators(c->second);
-#ifdef Q_OS_WIN
-      static std::map<QString, QString> found;          // (the registry read once)
-      auto it = found.find(library.registryName);
-      if (it == found.end()) {
-            QString dir;
-            for (const char* base : { "HKEY_LOCAL_MACHINE\\SOFTWARE\\Native Instruments\\",
-                                      "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Native Instruments\\",
-                                      "HKEY_CURRENT_USER\\SOFTWARE\\Native Instruments\\" }) {
-                  const QString d = QSettings(QString(base) + library.registryName, QSettings::NativeFormat).value("ContentDir").toString();
-                  if (!d.isEmpty() && QFileInfo(d).isDir()) {
-                        dir = QDir::fromNativeSeparators(QDir::cleanPath(d));
-                        break;
-                        }
-                  }
-            it = found.emplace(library.registryName, dir).first;
-            }
-      return it->second;
-#else
-      return QString();
-#endif
-      }
-
-void SoundLibraryHost::setLibraryFolder(const SoundLib::Library& library, const QString& folder)
-      {
-      QSettings().setValue(folderKey(library), folder);
-      chosenFolders()[library.name] = folder;
-      routesMayChange();
-      }
-
-const SoundLib::LibInstrument* SoundLibraryHost::findPatch(const SoundLib::Library& library, const QString& name)
-      {
-      for (const SoundLib::LibInstrument& li : library.instruments)
-            if (li.name == name)
-                  return &li;
-      for (const SoundLib::LibInstrument& li : library.otherPatches)
-            if (li.name == name)
-                  return &li;
-      return nullptr;
-      }
-
-QString SoundLibraryHost::nkiPath(const SoundLib::Library& library, const QString& patch)
-      {
-      const SoundLib::LibInstrument* li = findPatch(library, patch);
-      const QString folder = libraryFolder(library);
-      if (!li || li->nki.isEmpty() || folder.isEmpty())
-            return QString();
-      return folder + "/" + li->nki;
-      }
-
-static QString valuesText(const SoundLib::LibInstrument& li)
-      {
-      QStringList v;
-      for (const auto& p : li.setupValues)
-            v << p.first + "=" + p.second;
-      return v.join(";");
-      }
-
-// what a made setup is made from, but Kontakt's empty state: the .nki (size, time), the values,
-// the maker
-static QJsonObject madeFrom(const SoundLib::Library& library, const SoundLib::LibInstrument& li)
-      {
-      const QFileInfo fi(SoundLibraryHost::nkiPath(library, li.name));
-      QJsonObject o;
-      o["nki"] = li.nki;
-      o["size"] = double(fi.size());
-      o["modified"] = fi.lastModified().toUTC().toString(Qt::ISODate);
-      o["values"] = valuesText(li);
-      o["maker"] = MAKER_VERSION;
-      return o;
-      }
-
-QByteArray SoundLibraryHost::setupId(const SoundLib::Library& library, const QString& patch)
-      {
-      const SoundLib::LibInstrument* li = findPatch(library, patch);
-      if (makesSetups(library) && li) {
-            const QByteArray made = QJsonDocument(madeFrom(library, *li)).toJson(QJsonDocument::Compact);
-            return QCryptographicHash::hash(made, QCryptographicHash::Sha1).toHex();
-            }
-      QFile f(setupFile(library, patch));
-      if (!f.open(QIODevice::ReadOnly))
-            return QByteArray();
-      return QCryptographicHash::hash(f.readAll(), QCryptographicHash::Sha1).toHex();
-      }
-
 #ifdef USE_VST3
-static QString madeFile(const SoundLib::Library& library)
-      {
-      return setupFolder(library) + "/made setups.json";
-      }
-
-static QJsonObject readMade(const SoundLib::Library& library)
-      {
-      QFile f(madeFile(library));
-      return f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll()).object() : QJsonObject();
-      }
-
-static bool writeFile(const QString& path, const QByteArray& data)
-      {
-      QDir().mkpath(QFileInfo(path).absolutePath());
-      QSaveFile f(path);
-      return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() && f.commit();
-      }
-
-// once per library and session: setups not made by MuseScore (by hand, or by make_setups.py)
-// are moved to "old setups (not used)"
-static void setAsideOldSetups(const SoundLib::Library& library, const QJsonObject& made)
-      {
-      static QSet<QString> done;
-      if (done.contains(library.name))
-            return;
-      done.insert(library.name);
-      const QString folder = setupFolder(library);
-      const QStringList files = QDir(folder).entryList({ "*.vst3state" }, QDir::Files);
-      QStringList moved;
-      for (const QString& file : files) {
-            bool ours = file == "Kontakt empty.vst3state";
-            for (auto it = made.begin(); it != made.end() && !ours; ++it)
-                  ours = fileName(it.key()) + ".vst3state" == file;
-            if (ours)
-                  continue;
-            const QString old = folder + "/old setups (not used)";
-            QDir().mkpath(old);
-            QFile::remove(old + "/" + file);
-            if (QFile::rename(folder + "/" + file, old + "/" + file))
-                  moved << file;
-            }
-      if (!moved.isEmpty())
-            qDebug("Sound library: %d setups not made by MuseScore moved to \"old setups (not used)\"", moved.size());
-      }
-
-// the plug-in's state with nothing loaded: a fresh instance's, kept in "Kontakt empty.vst3state"
-// (again when the plug-in's file changes)
-static QByteArray emptyState(const SoundLib::Library& library, const QString& pluginPath, QJsonObject& made, QString* error)
-      {
-      const QString file = setupFolder(library) + "/Kontakt empty.vst3state";
-      const QFileInfo pi(pluginPath);
-      QJsonObject from;
-      from["plugin"] = pluginPath;
-      from["modified"] = pi.lastModified().toUTC().toString(Qt::ISODate);
-      QFile f(file);
-      if (made.value("(empty)").toObject() == from && f.open(QIODevice::ReadOnly))
-            return f.readAll();
-      QString err;
-      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &err);
-      if (!p) {
-            if (error)
-                  *error = err;
-            return QByteArray();
-            }
-      const QByteArray state = p->state();
-      if (!writeFile(file, state)) {
-            if (error)
-                  *error = QObject::tr("Cannot write %1").arg(file);
-            return QByteArray();
-            }
-      made["(empty)"] = from;
-      return state;
-      }
-
-// MuseScore's setup file: "MSV3", version, the plug-in's name, its component's and controller's state
-static bool readState(const QByteArray& state, QString* name, QByteArray* component, QByteArray* controller)
-      {
-      if (!state.startsWith("MSV3"))
-            return false;
-      QDataStream ds(state.mid(4));
-      quint32 version = 0;
-      ds >> version >> *name >> *component >> *controller;
-      return ds.status() == QDataStream::Ok && version == 1;
-      }
-
-static QByteArray writeState(const QString& name, const QByteArray& component, const QByteArray& controller)
-      {
-      QByteArray result("MSV3");
-      QDataStream ds(&result, QIODevice::WriteOnly | QIODevice::Append);
-      ds << quint32(1) << name << component << controller;
-      return result;
-      }
-
-QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                        QString* error)
-      {
-      QString dummy;
-      if (!error)
-            error = &dummy;
-      const QString file = setupFile(library, patch);
-      const SoundLib::LibInstrument* li = findPatch(library, patch);
-      if (!makesSetups(library) || !li || li->nki.isEmpty()) {
-            QFile f(file);
-            if (f.open(QIODevice::ReadOnly))
-                  return f.readAll();
-            *error = tr("%1 has no setup.").arg(patch);
-            return QByteArray();
-            }
-      const QString nki = nkiPath(library, patch);
-      if (nki.isEmpty()) {
-            *error = tr("%1 was not found on this computer. Choose its folder in View › Sound Library… › Library folder….")
-                     .arg(library.name);
-            return QByteArray();
-            }
-      QFile nf(nki);
-      if (!nf.open(QIODevice::ReadOnly)) {
-            *error = tr("%1 was not found.").arg(QDir::toNativeSeparators(nki));
-            return QByteArray();
-            }
-      QJsonObject made = readMade(library);
-      setAsideOldSetups(library, made);
-      const QByteArray empty = emptyState(library, pluginPath, made, error);
-      if (empty.isEmpty())
-            return QByteArray();
-      QJsonObject from = madeFrom(library, *li);
-      from["empty"] = QString(QCryptographicHash::hash(empty, QCryptographicHash::Sha1).toHex());
-      QFile f(file);
-      if (made.value(patch).toObject() == from && f.open(QIODevice::ReadOnly))
-            return f.readAll();
-
-      QString name;
-      QByteArray component, controller;
-      if (!readState(empty, &name, &component, &controller)) {
-            *error = tr("The plug-in's state could not be read.");
-            return QByteArray();
-            }
-      std::map<QString, QByteArray> values;
-      for (const auto& v : li->setupValues)
-            values[v.first] = v.second.toUtf8();
-      QElapsedTimer t;
-      t.start();
-      int set = 0;
-      QString err;
-      const QByteArray patched = KontaktSetup::fromEmpty(component, nf.readAll(), QFileInfo(nki).absolutePath(), values, &err, &set);
-      if (patched.isEmpty()) {
-            *error = tr("The setup of %1 could not be made from %2: %3").arg(patch, QDir::toNativeSeparators(nki), err);
-            return QByteArray();
-            }
-      if (set < int(values.size()))
-            qWarning("Sound library: %s: %d of %d script values set (%s)", qPrintable(patch), set, int(values.size()),
-                     qPrintable(valuesText(*li)));
-      // the controller's state: Kontakt's with nothing loaded; it takes the patch's from the component's
-      const QByteArray state = writeState(name, patched, QByteArray());
-      if (!writeFile(file, state)) {
-            *error = tr("Cannot write %1").arg(file);
-            return QByteArray();
-            }
-      made[patch] = from;
-      writeFile(madeFile(library), QJsonDocument(made).toJson());
-      qDebug("Sound library: made the setup of %s in %lld ms", qPrintable(patch), t.elapsed());
-      return state;
-      }
-
 //---------------------------------------------------------
 //   loadSetup
-//    a patch's setup into an instance
+//    an instrument's setup into an instance
 //---------------------------------------------------------
 
-bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                 QString* error)
+static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& instrument)
       {
-      const QByteArray state = setupState(library, patch, pluginPath, error);
-      if (state.isEmpty())
+      QFile f(SoundLibraryHost::setupFile(library, instrument));
+      if (!f.open(QIODevice::ReadOnly))
             return false;
-      if (p->setState(state))
+      if (p->setState(f.readAll()))
             return true;
-      if (error)
-            *error = tr("The setup of %1 could not be loaded into the plug-in.").arg(patch);
-      qWarning("Sound library: the setup of %s could not be loaded", qPrintable(patch));
+      qWarning("Sound library: the setup of %s could not be loaded", qPrintable(instrument));
       return false;
       }
-#else
-QByteArray SoundLibraryHost::setupState(const SoundLib::Library&, const QString&, const QString&, QString* error)
-      {
-      if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
-      return QByteArray();
-      }
 
-bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const QString&, QString* error)
-      {
-      if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
-      return false;
-      }
-#endif
-
-#ifdef USE_VST3
 //---------------------------------------------------------
 //   applyParameters
 //    the route's controllers that are plug-in parameters (SoundLib::Controller::param), at the
@@ -726,10 +405,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                         }
                   }
             s.instrument = name;
-            QString err;
-            s.hasSetup = setup && loadSetup(p.get(), *library, name, path, &err);
-            if (setup && !s.hasSetup && mscore)
-                  mscore->showMessage(err, 10000);
+            s.hasSetup = setup && loadSetup(p.get(), *library, name);
             s.patchValues.clear();
             vst->setPlugin(k, std::move(p));
             }
@@ -799,8 +475,68 @@ bool SoundLibraryHost::loaded(int slot) const
       }
 
 //---------------------------------------------------------
+//   saveSetup
+//    the instance's state as its instrument's setup, and in the other instances of the
+//    instrument that have none
+//---------------------------------------------------------
+
+bool SoundLibraryHost::saveSetup(int slot, QString* error)
+      {
+#ifdef USE_VST3
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      Vst3Synth* vst = synth();
+      Vst3Plugin* p = vst ? vst->plugin(slot) : nullptr;
+      if (!library || !p || _slots[slot].instrument.isEmpty()) {
+            if (error)
+                  *error = tr("No plug-in is loaded for this part.");
+            return false;
+            }
+      const QString name = _slots[slot].instrument;
+      // without the score's values (Slot::patchValues): the setup is the library's default. The
+      // processor takes a parameter change in its next process() (the audio thread), hence the wait
+      std::map<unsigned, double> scoreValues;
+      for (const auto& pv : _slots[slot].patchValues) {
+            scoreValues[pv.first] = p->parameter(pv.first);
+            p->setParameter(pv.first, pv.second);
+            }
+      if (!scoreValues.empty())
+            QThread::msleep(250);
+      const QByteArray state = p->state();
+      for (const auto& sv : scoreValues)
+            p->setParameter(sv.first, sv.second);
+      const QString file = setupFile(*library, name);
+      routesMayChange();
+      QDir().mkpath(QFileInfo(file).absolutePath());
+      QFile f(file);
+      if (!f.open(QIODevice::WriteOnly) || f.write(state) != state.size()) {
+            if (error)
+                  *error = tr("Cannot write %1").arg(file);
+            return false;
+            }
+      f.close();
+      _slots[slot].hasSetup = true;
+      for (int k = 0; k < 64; ++k) {
+            if (k == slot || _slots[k].instrument != name || _slots[k].hasSetup)
+                  continue;
+            std::unique_ptr<Vst3Plugin> other = vst->takePlugin(k);
+            if (other)
+                  _slots[k].hasSetup = other->setState(state);
+            _slots[k].patchValues.clear();            // (the next sync sets the score's again)
+            vst->setPlugin(k, std::move(other));
+            }
+      emit changed();
+      return true;
+#else
+      Q_UNUSED(slot);
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return false;
+#endif
+      }
+
+//---------------------------------------------------------
 //   routesMayChange
-//    the library's folder chosen: an extra patch may play now (SoundLib::setAvailable), so the scores are
+//    a setup saved: an extra patch may play now (SoundLib::setAvailable), so the scores are
 //    rendered again
 //---------------------------------------------------------
 
@@ -810,6 +546,44 @@ void SoundLibraryHost::routesMayChange()
       if (mscore)
             for (MasterScore* s : mscore->scores())
                   s->setPlaylistDirty();
+      }
+
+//---------------------------------------------------------
+//   setupChanged
+//    the instrument's setup (saved elsewhere: Check articulations › Set up…) into its instances
+//---------------------------------------------------------
+
+void SoundLibraryHost::setupChanged(const QString& instrument)
+      {
+      routesMayChange();
+#ifdef USE_VST3
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      Vst3Synth* vst = synth();
+      if (!library || !vst)
+            return;
+      QFile f(setupFile(*library, instrument));
+      if (!f.open(QIODevice::ReadOnly))
+            return;
+      const QByteArray state = f.readAll();
+      for (int k = 0; k < 64; ++k) {
+            if (_slots[k].instrument != instrument)
+                  continue;
+            std::unique_ptr<Vst3Plugin> p = vst->takePlugin(k);
+            if (p)
+                  _slots[k].hasSetup = p->setState(state);
+            _slots[k].patchValues.clear();
+            vst->setPlugin(k, std::move(p));
+            }
+      for (Spare& sp : _spares) {
+            if (sp.slot.instrument != instrument || !sp.plugin)
+                  continue;
+            sp.slot.hasSetup = sp.plugin->setState(state);
+            sp.slot.patchValues.clear();
+            }
+      emit changed();
+#else
+      Q_UNUSED(instrument);
+#endif
       }
 
 //---------------------------------------------------------
@@ -839,8 +613,13 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
                   *error = tr("%1 has no editor.").arg(p->name());
             return false;
             }
-      // (to look at: MuseScore makes the setups; a change lasts until the patch loads again)
       s.editor = new Vst3EditorWindow(view, QString("%1 – %2 (%3)").arg(s.instrument, p->name(), s.part), mscore);
+      connect(s.editor, &Vst3EditorWindow::closed, this, [this, slot]() {
+            // the first setup of an instrument is kept when its window closes
+            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+            if (library && !_slots[slot].instrument.isEmpty() && !hasSetup(*library, _slots[slot].instrument))
+                  saveSetup(slot);
+            });
       s.editor->show();
       return true;
 #else
@@ -885,9 +664,8 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                         qWarning("Sound library: %s", qPrintable(error));
                         return;
                         }
-                  if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
-                      && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &error))
-                        qWarning("Sound library: %s", qPrintable(error));
+                  if (SoundLibraryHost::hasSetup(*library, r.instrument->name))
+                        loadSetup(p.get(), *library, r.instrument->name);
                   applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
                   _own->setPlugin(r.port * 16 + r.channel, std::move(p));
                   }
@@ -1067,20 +845,6 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
       layout->addWidget(_table);
       QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
       connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-      if (SoundLibraryHost::available() && library && SoundLibraryHost::makesSetups(*library)) {
-            QPushButton* folder = buttons->addButton(tr("Library folder…"), QDialogButtonBox::ActionRole);
-            folder->setToolTip(tr("Where %1 is installed (its folder with Instruments and Samples)").arg(library->name));
-            connect(folder, &QPushButton::clicked, this, [this]() {
-                  const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder of %1").arg(_library->name),
-                                                                        SoundLibraryHost::libraryFolder(*_library));
-                  if (dir.isEmpty())
-                        return;
-                  if (!QFileInfo::exists(dir + "/Instruments"))
-                        QMessageBox::warning(this, windowTitle(), tr("%1 has no Instruments folder.").arg(QDir::toNativeSeparators(dir)));
-                  SoundLibraryHost::setLibraryFolder(*_library, dir);
-                  rebuild();
-                  });
-            }
       if (SoundLibraryHost::available() && library) {
             QPushButton* check = buttons->addButton(tr("Check articulations…"), QDialogButtonBox::ActionRole);
             connect(check, &QPushButton::clicked, this, [this]() {
@@ -1115,17 +879,11 @@ void SoundLibraryDialog::rebuild()
       if (plugin) {
             QString error;
             const QString path = SoundLibraryHost::pluginPath(*_library, &error);
-            QString text = path.isEmpty() ? error
-               : tr("The library's parts play through %1, hosted by MuseScore.").arg(QDir::toNativeSeparators(path));
-            if (SoundLibraryHost::makesSetups(*_library)) {
-                  const QString folder = SoundLibraryHost::libraryFolder(*_library);
-                  text += " " + (folder.isEmpty()
-                     ? tr("%1 was not found on this computer: choose its folder (the one with Instruments and Samples) with "
-                          "Library folder….").arg(_library->name)
-                     : tr("MuseScore sets each patch up by itself from %1, at the library's defaults with its articulation "
-                          "switching (UACC); Show opens the plug-in's window, to look at it.").arg(QDir::toNativeSeparators(folder)));
-                  }
-            _info->setText(text);
+            _info->setText(path.isEmpty() ? error
+               : tr("The library's parts play through %1, hosted by MuseScore. For a patch without a setup, click Show, "
+                    "load the patch in the plug-in and set its articulation switching (Spitfire: UACC), then close the "
+                    "window: the setup is kept and loads by itself in every score from then on. Save setup keeps the "
+                    "plug-in's state again after a change.").arg(QDir::toNativeSeparators(path)));
             _table->setColumnCount(5);
             _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("Setup"), QString() });
             }
@@ -1177,11 +935,15 @@ void SoundLibraryDialog::rebuild()
                         }
                   const int slot = r->port * 16 + r->channel;
                   const bool setup = SoundLibraryHost::hasSetup(*_library, r->instrument->name);
-                  const bool makes = SoundLibraryHost::makesSetups(*_library);
-                  _table->setItem(row, 3, new QTableWidgetItem(!setup ? (makes ? tr("Its .nki was not found") : tr("No setup"))
-                                                               : host->loaded(slot) ? tr("Loaded") : tr("Ready")));
-                  QPushButton* show = new QPushButton(tr("Show"));
-                  _table->setCellWidget(row, 4, show);
+                  _table->setItem(row, 3, new QTableWidgetItem(setup ? tr("Ready") : tr("Not set up yet")));
+                  QWidget* w = new QWidget;
+                  QHBoxLayout* hl = new QHBoxLayout(w);
+                  hl->setContentsMargins(2, 0, 2, 0);
+                  QPushButton* show = new QPushButton(tr("Show"), w);
+                  QPushButton* save = new QPushButton(tr("Save setup"), w);
+                  hl->addWidget(show);
+                  hl->addWidget(save);
+                  _table->setCellWidget(row, 4, w);
                   MasterScore* ms = score->masterScore();
                   connect(show, &QPushButton::clicked, this, [this, host, slot, ms]() {
                         QString error;
@@ -1190,6 +952,11 @@ void SoundLibraryDialog::rebuild()
                               return;
                               }
                         if (!host->showEditor(slot, &error))
+                              QMessageBox::warning(this, windowTitle(), error);
+                        });
+                  connect(save, &QPushButton::clicked, this, [this, host, slot]() {
+                        QString error;
+                        if (!host->saveSetup(slot, &error))
                               QMessageBox::warning(this, windowTitle(), error);
                         });
                   }

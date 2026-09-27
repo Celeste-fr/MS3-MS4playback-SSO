@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import extract_library_files as E  # noqa: E402
 import make_setups as M  # noqa: E402
 from test_extract_library_files import (  # noqa: E402
-    PROGRAM_MARKER, group_data, nki, pchunk, program_data, pstruct, u16, u32, utf16, zone_data)
+    group_data, nki, pchunk, program_data, pstruct, u16, u32, utf16, zone_data)
 
 
 def script(values, code=b"on init\n  {the script}\nend on\n"):
@@ -65,7 +65,7 @@ def file_list(samples, own):
 
 def nki_file(name, values, samples):
     preset = pchunk(0x28, program(name, values)) + pchunk(0x47, bytes(17)) + pchunk(0x4B, file_list(samples, name + ".nki"))
-    return nki(preset, snpids=[], name=name, marker=PROGRAM_MARKER)
+    return nki(preset, snpids=[], name=name)
 
 
 def setup_component_raw(preset):
@@ -219,9 +219,6 @@ class Tests(unittest.TestCase):
         self.assertEqual(kids[0x48][:1], b"\x00")
         self.assertEqual(top[0xF02], b"browser")
         self.assertTrue(M.list_paths(top[0x4B])[2].endswith("Samples/Strings_V.nkxSamples/v2_C3.ncw"))
-        # the marker after the preset data: a program's (the .nki's), not the empty Kontakt's
-        chunk = next(c for c, owner in M.Item(comp).find(109))
-        self.assertEqual(chunk["data"][-4:], u32(PROGRAM_MARKER))
 
     def test_real(self):
         nki_path, setup_path = os.environ.get("SSO_NKI"), os.environ.get("SSO_SETUP")

@@ -121,18 +121,6 @@ static std::vector<Controller> mergeControllers(const std::vector<Controller>& l
       return all;
       }
 
-// setup="$iooxo=3;$name=value": the script values a made setup sets
-static std::vector<std::pair<QString, QString>> readSetupValues(const QString& text)
-      {
-      std::vector<std::pair<QString, QString>> values;
-      for (const QString& item : text.split(';', QString::SkipEmptyParts)) {
-            const int eq = item.indexOf('=');
-            if (eq > 0)
-                  values.emplace_back(item.left(eq).trimmed(), item.mid(eq + 1).trimmed());
-            }
-      return values;
-      }
-
 std::shared_ptr<Library> Library::load(const QString& path, QString* error)
       {
       auto fail = [error](const QString& msg) {
@@ -178,29 +166,9 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         return fail(QString("%1:%2: bad Controller").arg(path).arg(r.lineNumber()));
                   lib->controllers.push_back(c);
                   }
-            else if (r.name() == "Files") {
-                  // <Files registry="Spitfire Symphony Orchestra"/>: where the library is installed
-                  lib->registryName = a.value("registry").toString();
-                  r.skipCurrentElement();
-                  }
-            else if (r.name() == "Patch") {
-                  // <Patch name="Violins 1 - Core techniques" nki="Instruments/…/….nki" setup="$iooxo=3"/>
-                  LibInstrument li;
-                  li.name = a.value("name").toString();
-                  li.nki = a.value("nki").toString();
-                  li.setupValues = readSetupValues(a.value("setup").toString());
-                  li.switchType = defType;
-                  li.switchNumber = defNumber;
-                  if (li.name.isEmpty() || li.nki.isEmpty())
-                        return fail(QString("%1:%2: bad Patch").arg(path).arg(r.lineNumber()));
-                  lib->otherPatches.push_back(li);
-                  r.skipCurrentElement();
-                  }
             else if (r.name() == "Instrument") {
                   LibInstrument li;
                   li.name = a.value("name").toString();
-                  li.nki = a.value("nki").toString();
-                  li.setupValues = readSetupValues(a.value("setup").toString());
                   li.ids = words(a.value("ids").toString().toLower());
                   li.with = a.value("with").toString();
                   li.kit = a.value("kit").toString() == "1";
