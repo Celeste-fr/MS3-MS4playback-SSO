@@ -73,6 +73,35 @@ MAX_TEXT = 4 * 1024 * 1024        # text files copied up to this size
 MAX_READ = 64 * 1024 * 1024       # whole-file reads (containers, zlib scan) up to this size
 
 
+def documents_folder():
+    """The user's real Documents folder (on Windows it may be elsewhere, e.g. in OneDrive or on
+    another drive: asked of the shell, else the registry), else ~/Documents."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            import uuid
+            fid = uuid.UUID("{FDD39AD0-238F-46AF-ADB4-6C85480369C7}")   # FOLDERID_Documents
+            buf = ctypes.c_wchar_p()
+            guid = (ctypes.c_byte * 16).from_buffer_copy(fid.bytes_le)
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(buf)) == 0:
+                path = buf.value
+                ctypes.windll.ole32.CoTaskMemFree(buf)
+                if path and os.path.isdir(path):
+                    return path
+        except Exception:
+            pass
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders") as k:
+                path = os.path.expandvars(winreg.QueryValueEx(k, "Personal")[0])
+                if os.path.isdir(path):
+                    return path
+        except Exception:
+            pass
+    return os.path.join(HOME, "Documents")
+
+
 def private(path):
     """The path with the user's home folder hidden."""
     p = str(path)
@@ -1213,8 +1242,8 @@ def windows_sources(match):
         os.path.join(env("APPDATA", ""), "Spitfire Audio"),
         os.path.join(env("LOCALAPPDATA", ""), "Spitfire Audio"),
         os.path.join(env("PROGRAMDATA", r"C:\ProgramData"), "Spitfire Audio"),
-        os.path.join(HOME, "Documents", "Native Instruments", "User Content"),
-        os.path.join(HOME, "Documents", "Spitfire Audio"),
+        os.path.join(documents_folder(), "Native Instruments", "User Content"),
+        os.path.join(documents_folder(), "Spitfire Audio"),
     ]
     for folder in candidates:
         if not os.path.isdir(folder):
@@ -1275,7 +1304,7 @@ def sanitize_saved_text(path):
 def run(args):
     match = re.compile(args.match, re.I)
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H%M")
-    base = args.out or os.path.join(HOME, "Documents", "MuseScore Sound Library Check")
+    base = args.out or os.path.join(documents_folder(), "MuseScore Sound Library Check")
     outdir = os.path.join(base, "%s files %s" % (args.name, stamp))
     os.makedirs(outdir, exist_ok=True)
     opts = Options(outdir, args.images)
@@ -1345,7 +1374,14 @@ def run(args):
         for r in results:
             w.writerow([r["path"], r.get("size"), r.get("modified"), r.get("format", ""),
                         "yes" if r.get("encrypted") else "", r.get("error", "")])
+    sizes = []
+    for dirpath, _, filenames in os.walk(outdir):
+        for fn in filenames:
+            full = os.path.join(dirpath, fn)
+            sizes.append((os.path.getsize(full), os.path.relpath(full, outdir)))
     summary = summarize(library, sample_names)
+    summary += "\nLargest files written: " + ", ".join(
+        "%s %.1f MB" % (n, b / 1e6) for b, n in sorted(sizes, reverse=True)[:8]) + "\n"
     with open(os.path.join(outdir, "summary.txt"), "w", encoding="utf-8") as fh:
         fh.write(summary)
     zpath = outdir + ".zip"
@@ -1355,7 +1391,7 @@ def run(args):
                 full = os.path.join(dirpath, fn)
                 z.write(full, os.path.join(os.path.basename(outdir), os.path.relpath(full, outdir)))
     print(summary)
-    print("\nWritten: %s\nHand back: %s" % (outdir, zpath))
+    print("\nWritten: %s\nHand back: %s (%.1f MB)" % (outdir, zpath, os.path.getsize(zpath) / 1e6))
     return outdir
 
 
