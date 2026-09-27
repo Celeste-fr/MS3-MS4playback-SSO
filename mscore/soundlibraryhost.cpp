@@ -28,6 +28,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTableWidget>
+#include <QThread>
 #include <QVBoxLayout>
 
 #include "musescore.h"
@@ -181,19 +182,30 @@ static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QSt
 //---------------------------------------------------------
 //   applyParameters
 //    the route's controllers that are plug-in parameters (SoundLib::Controller::param), at the
-//    part's values; found by title (case-insensitive). A controller with no value (-1) and
-//    none of the part's leaves the parameter as the setup has it
+//    part's values; found by title (Vst3Plugin::parameterId). One the part has no value for
+//    plays as the patch has it: patchValues (Slot::patchValues; null: a new instance, which
+//    has nothing to put back) keeps the setup's value of each parameter set, to put it back
 //---------------------------------------------------------
 
-static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values)
+static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values,
+                            std::map<unsigned, double>* patchValues)
       {
       for (const SoundLib::Controller& c : r.instrument->allControllers) {
             if (c.param.isEmpty())
                   continue;
             const int value = PartControllers::value(r.part, c, values);
-            if (value < 0)
+            if (value < 0 && (!patchValues || patchValues->empty()))
                   continue;
             const long id = p->parameterId(c.param);
+            if (value < 0) {                        // another score's value: the patch's own again
+                  if (id >= 0 && patchValues->count(unsigned(id))) {
+                        p->setParameter(unsigned(id), patchValues->at(unsigned(id)));
+                        patchValues->erase(unsigned(id));
+                        }
+                  continue;
+                  }
+            if (id >= 0 && patchValues && !patchValues->count(unsigned(id)))
+                  (*patchValues)[unsigned(id)] = p->parameter(unsigned(id));
             if (id < 0) {
                   qWarning("Sound library: %s has no parameter \"%s\" (controller %s)", qPrintable(p->name()),
                            qPrintable(c.param), qPrintable(c.id));
@@ -262,6 +274,7 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
                   }
             s.instrument = name;
             s.hasSetup = setup && loadSetup(p.get(), *library, name);
+            s.patchValues.clear();
             vst->setPlugin(k, std::move(p));
             }
       // the parts' plug-in parameters, on every sync (a setup loaded since resets them)
@@ -270,7 +283,7 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
             for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library))
                   if (!r.instrument->kit)
                         if (Vst3Plugin* p = vst->plugin(r.port * 16 + r.channel))
-                              applyParameters(p, r, values);
+                              applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
             }
       for (int k = 0; k < 64; ++k) {
             if (!used[k] && (vst->plugin(k) || !_slots[k].instrument.isEmpty())) {
@@ -339,7 +352,18 @@ bool SoundLibraryHost::saveSetup(int slot, QString* error)
             return false;
             }
       const QString name = _slots[slot].instrument;
+      // without the score's values (Slot::patchValues): the setup is the library's default. The
+      // processor takes a parameter change in its next process() (the audio thread), hence the wait
+      std::map<unsigned, double> scoreValues;
+      for (const auto& pv : _slots[slot].patchValues) {
+            scoreValues[pv.first] = p->parameter(pv.first);
+            p->setParameter(pv.first, pv.second);
+            }
+      if (!scoreValues.empty())
+            QThread::msleep(250);
       const QByteArray state = p->state();
+      for (const auto& sv : scoreValues)
+            p->setParameter(sv.first, sv.second);
       const QString file = setupFile(*library, name);
       routesMayChange();
       QDir().mkpath(QFileInfo(file).absolutePath());
@@ -357,6 +381,7 @@ bool SoundLibraryHost::saveSetup(int slot, QString* error)
             std::unique_ptr<Vst3Plugin> other = vst->takePlugin(k);
             if (other)
                   _slots[k].hasSetup = other->setState(state);
+            _slots[k].patchValues.clear();            // (the next sync sets the score's again)
             vst->setPlugin(k, std::move(other));
             }
       emit changed();
@@ -406,6 +431,7 @@ void SoundLibraryHost::setupChanged(const QString& instrument)
             std::unique_ptr<Vst3Plugin> p = vst->takePlugin(k);
             if (p)
                   _slots[k].hasSetup = p->setState(state);
+            _slots[k].patchValues.clear();
             vst->setPlugin(k, std::move(p));
             }
       emit changed();
@@ -494,7 +520,7 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                         }
                   if (SoundLibraryHost::hasSetup(*library, r.instrument->name))
                         loadSetup(p.get(), *library, r.instrument->name);
-                  applyParameters(p.get(), r, PartControllers::read(score->masterScore()));
+                  applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
                   _own->setPlugin(r.port * 16 + r.channel, std::move(p));
                   }
             _vst = _own.get();

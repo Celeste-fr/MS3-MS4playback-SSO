@@ -61,12 +61,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Violins 2" ids="violins" partName="\b(2|II)\b|\bsecond\b|\b2nd\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -101,12 +101,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Violas" ids="violas">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -141,12 +141,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Celli" ids="violoncellos">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -184,12 +184,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Basses" ids="contrabasses contrabass double-bass">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -218,12 +218,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Strings Ensemble" ids="strings">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -252,12 +252,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Violin 1" ids="violin">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -269,12 +269,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Violin 2" ids="violin" partName="\b(2|II)\b|\bsecond\b|\b2nd\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -286,12 +286,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Viola" ids="viola">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -303,12 +303,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Cello" ids="violoncello">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -319,12 +319,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Piccolo" ids="piccolo">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -339,11 +339,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Flute Solo" ids="flute">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -360,11 +360,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Flutes a2" ids="flute" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -383,11 +383,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Alto Flute" ids="alto-flute">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -403,11 +403,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bass Flute" ids="bass-flute">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -419,11 +419,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Oboe Solo" ids="oboe">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -437,11 +437,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Oboes a2" ids="oboe" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -453,11 +453,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Cor Anglais" ids="english-horn">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -467,11 +467,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Clarinet Solo" ids="clarinet bb-clarinet a-clarinet c-clarinet d-clarinet eb-clarinet soprano-clarinet">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -483,11 +483,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Clarinets a2" ids="clarinet bb-clarinet a-clarinet c-clarinet d-clarinet eb-clarinet soprano-clarinet" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -500,11 +500,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bass Clarinet" ids="bass-clarinet bb-bass-clarinet bb-bass-clarinet-bass-clef a-bass-clarinet">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -515,11 +515,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Contrabass Clarinet" ids="contrabass-clarinet">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -529,11 +529,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bassoon Solo" ids="bassoon">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -548,11 +548,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bassoons a2" ids="bassoon" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -566,11 +566,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Contrabassoon" ids="contrabassoon">
     <Articulation name="Long" value="1" techniques="long legato" expect="unclear"/>
@@ -580,11 +580,11 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Horn Solo" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -599,11 +599,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Horns a2" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -625,11 +625,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Motif Horns a4" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*4\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -641,11 +641,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Horns a6" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -659,11 +659,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trumpet Solo" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -685,11 +685,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trumpets a2" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -706,11 +706,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Motif Trumpets a3" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*3\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -722,11 +722,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trumpets a6" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -740,11 +740,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Tenor Trombone Solo" ids="trombone tenor-trombone alto-trombone">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -764,11 +764,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Tenor Trombones a2" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -783,11 +783,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Motif Trombones a5" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*5\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -799,11 +799,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trombones a6" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*[3-8]\b|\btutti\b|\bsection\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -817,11 +817,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bass Trombone Solo" ids="bass-trombone">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -836,11 +836,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bass Trombones a2" ids="bass-trombone" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -855,11 +855,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Contrabass Trombone" ids="contrabass-trombone">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -874,11 +874,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Cimbasso Solo" ids="cimbasso">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -891,11 +891,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Cimbassi a2" ids="cimbasso" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -908,11 +908,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Tuba Solo" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -926,11 +926,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Contrabass Tuba" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba" partName="\bcontra">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -942,11 +942,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Harp" ids="harp">
     <Articulation name="Normale" value="1" techniques="long legato"/>
@@ -961,11 +961,11 @@
     <Articulation name="Tape" value="2" techniques=""/>
     <Controller id="pedalvol" name="Pedal Vol" param="Pedal Vol"/>
     <Controller id="pedaldyn" name="Pedal Dyn" param="Pedal Dyn"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Timpani" ids="timpani" keyScan="1">
     <Switch type="keyswitch"/>
@@ -1023,12 +1023,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Violins 2 - Performance" with="Violins 2">
     <Switch type="none"/>
@@ -1036,12 +1036,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Violas - Performance" with="Violas">
     <Switch type="none"/>
@@ -1049,12 +1049,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Celli - Performance" with="Celli">
     <Switch type="none"/>
@@ -1062,12 +1062,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Basses - Performance" with="Basses">
     <Switch type="none"/>
@@ -1075,12 +1075,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Violin - Performance" with="Solo Violin 1">
     <Switch type="none"/>
@@ -1088,12 +1088,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Violin 2 - Performance" with="Solo Violin 2">
     <Switch type="none"/>
@@ -1101,12 +1101,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Viola - Performance" with="Solo Viola">
     <Switch type="none"/>
@@ -1114,12 +1114,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Solo Cello - Performance" with="Solo Cello">
     <Switch type="none"/>
@@ -1127,331 +1127,331 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Piccolo Flute - Performance" with="Piccolo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Flute Solo - Total Performance" with="Flute Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Flutes a2 - Performance" with="Flutes a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Alto Flute - Performance" with="Alto Flute">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bass Flute - Performance" with="Bass Flute">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Oboe Solo - Performance" with="Oboe Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Oboes a2 - Performance" with="Oboes a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Cor Anglais - Performance" with="Cor Anglais">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Clarinet Solo - Performance" with="Clarinet Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Clarinets a2 - Performance" with="Clarinets a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bass Clarinet - Performance" with="Bass Clarinet">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="ContraBass Clarinet - Performance" with="Contrabass Clarinet">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bassoon Solo - Performance" with="Bassoon Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bassoons a2 - Performance" with="Bassoons a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="ContraBassoon - Performance" with="Contrabassoon">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Horn Solo - Performance" with="Horn Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Horns a2 - Performance" with="Horns a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Horns a6 - Performance" with="Horns a6">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trumpet Solo - Total Performance" with="Trumpet Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trumpets a2 - Performance" with="Trumpets a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trumpets a6 - Performance" with="Trumpets a6">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Tenor Trombone Solo - Total Performance" with="Tenor Trombone Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Tenor Trombones a2 - Performance" with="Tenor Trombones a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trombones a6 - Performance" with="Trombones a6">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Bass Trombones a2 - Performance" with="Bass Trombones a2">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Tuba Solo - Performance" with="Tuba Solo">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Horns a4 - Performance" with="Motif Horns a4">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trumpets a3 - Performance" with="Motif Trumpets a3">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Trombones a5 - Performance" with="Motif Trombones a5">
     <Switch type="none"/>
     <Articulation name="Legato" value="20" techniques="legato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Violins 1 - Sul G - Performance" with="Violins 1">
     <Switch type="none"/>
@@ -1459,12 +1459,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Violins 2 - Sul G - Performance" with="Violins 2">
     <Switch type="none"/>
@@ -1472,12 +1472,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Violas - Sul C - Performance" with="Violas">
     <Switch type="none"/>
@@ -1485,12 +1485,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Celli - Sul C - Performance" with="Celli">
     <Switch type="none"/>
@@ -1498,12 +1498,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="mute" name="Mute" param="Mute"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Strings - Violins 1 - Long Sul G" with="Violins 1">
     <Switch type="none"/>
@@ -1511,12 +1511,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Strings - Violins 2 - Long Sul G" with="Violins 2">
     <Switch type="none"/>
@@ -1524,12 +1524,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Strings - Celli - Long Sul C" with="Celli">
     <Switch type="none"/>
@@ -1537,12 +1537,12 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Brass - Horn Solo - Short Staccatissimo" with="Horn Solo">
     <Switch type="none"/>
@@ -1550,11 +1550,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Horns a2 - Short Staccatissimo" with="Horns a2">
     <Switch type="none"/>
@@ -1562,11 +1562,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Horns a2 - Bells up Staccatissimo" with="Horns a2">
     <Switch type="none"/>
@@ -1574,11 +1574,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Trumpet Solo - Fall Muted" with="Trumpet Solo">
     <Switch type="none"/>
@@ -1586,11 +1586,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Trumpet Solo - Rip Muted" with="Trumpet Solo">
     <Switch type="none"/>
@@ -1598,11 +1598,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Horns a6 - Fanfare" with="Horns a6">
     <Switch type="none"/>
@@ -1610,11 +1610,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Trombones a6 - Fanfare" with="Trombones a6">
     <Switch type="none"/>
@@ -1622,11 +1622,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Trumpets a2 - Fanfare" with="Trumpets a2">
     <Switch type="none"/>
@@ -1634,11 +1634,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Trumpets a6 - Fanfare" with="Trumpets a6">
     <Switch type="none"/>
@@ -1646,11 +1646,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Brass - Cimbassi a2 - Long Alt" with="Cimbassi a2">
     <Switch type="none"/>
@@ -1658,11 +1658,11 @@
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Strings - Violins 1 - Long Sul Pont Distorted" with="Violins 1">
     <Switch type="none"/>
@@ -1670,23 +1670,23 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="release" name="Release" param="Release"/>
     <Controller id="tightness" name="Tightness" param="Tightness"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="mic5" name="Mic 5 (Leader?)" param="Mic 5 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
+    <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Oboe Principal - Total Performance" with="Oboe Solo">
     <Switch type="none"/>
     <Articulation name="Oboe Principal" value="1" techniques=""/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1 (Close?)" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2 (Tree?)" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3 (Ambient?)" param="Mic 3 level"/>
-    <Controller id="mic4" name="Mic 4 (Outrigger?)" param="Mic 4 level"/>
-    <Controller id="micmix" name="Mic Mix Distance" param="Mic Mix Distance"/>
+    <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
+    <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Percussion" ids="drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes bell-plate vibraslap automobile-brake-drums" kit="1"/>
   <Instrument name="Drums - High" with="Percussion" keyScan="1">

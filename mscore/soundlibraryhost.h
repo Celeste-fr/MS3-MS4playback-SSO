@@ -27,6 +27,7 @@
 #include "config.h"
 
 #include <array>
+#include <map>
 #include <memory>
 
 #include <QDialog>
@@ -55,6 +56,10 @@ class SoundLibraryHost : public QObject {
             QString part;
             bool hasSetup { false };      // its setup was loaded
             QPointer<Vst3EditorWindow> editor;
+            // the patch's own value (its setup's) of each plug-in parameter a score has set: put
+            // back for a score that doesn't set it, and in the setup saved (a score's values
+            // stay in the score; the setup is the library's default). Cleared when a setup loads
+            std::map<unsigned, double> patchValues;
             };
       std::array<Slot, 64> _slots;
       QTimer _idle;

@@ -278,8 +278,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   Controller (UACC). The titles are guesses from the extract's summary ("Mic 1 level" …):
   `Vst3Plugin::parameterId` matches loosely (case, spacing, punctuation, a slot number in front), and
   the Controllers window lists the controls of all the part's patches and says "not in <patch>"
-  for a loaded patch without that title. The mic names (Close, Tree, Ambient, Outrigger, Leader, the
-  NKS page's order) are shown with "?" until the owner confirms them in Kontakt.
+  for a loaded patch without that title. Tried by the owner on run 91 (2026-09-27): no "not in",
+  Vibrato works; Mic 1-5 are Close, Tree, Ambient, Outrigger, Leader; Mic Mix Distance sets all
+  five faders (0: Ambient only, 127: Close only), so it is applied first and a mic level ticked wins.
+  **Values belong to the score; the library's default is SSO's own** (the owner): a parameter a
+  score doesn't set is put back to the patch's value when another score set it on the same loaded
+  instance (`Slot::patchValues`), and *Save setup* saves the patch's values, not the score's.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).

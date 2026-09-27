@@ -299,14 +299,16 @@ SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', '
 # other patches take their family's, which is a guess: a patch that lacks one shows "not in this
 # patch" in the Controllers window and skips it). Dynamics and Expression are left out (MuseScore
 # plays them from the score: CC1, CC11), and so is Articulation Controller (the UACC switch). No
-# defaults: until a part is given a value, the patch keeps its own. The mic names are the patches'
-# NKS page order, not yet confirmed in Kontakt.
+# defaults: until a part is given a value, the patch keeps its own (the owner, 2026-09-27: values
+# belong to the score, the library's default is SSO's own). Mic 1-5 are Close, Tree, Ambient,
+# Outrigger, Leader (the owner saw them move in Kontakt, 2026-09-27). Mic Mix Distance sets all the
+# mic levels (0: Ambient only, 127: Close only), so it comes first and a mic level ticked wins.
 def _p(cid, name, title=None):
     return (cid, name, None, title or name, None, [])
 MICS = ['Close', 'Tree', 'Ambient', 'Outrigger', 'Leader']
 def mics(n, named=True):
-    return [_p(f'mic{i}', f'Mic {i}' + (f' ({MICS[i - 1]}?)' if named else ''), f'Mic {i} level') for i in range(1, n + 1)]
-MIX = [_p('micmix', 'Mic Mix Distance')]
+    return [_p(f'mic{i}', f'Mic {i}' + (f' ({MICS[i - 1]})' if named else ''), f'Mic {i} level') for i in range(1, n + 1)]
+MIX = [_p('micmix', 'Mic Mix Distance (sets all mics)', 'Mic Mix Distance')]
 STRINGS = ['Violins 1', 'Violins 2', 'Violas', 'Celli', 'Basses', 'Strings Ensemble',
            'Solo Violin 1', 'Solo Violin 2', 'Solo Viola', 'Solo Cello']
 WOODWINDS = ['Piccolo', 'Flute Solo', 'Flutes a2', 'Alto Flute', 'Bass Flute', 'Oboe Solo', 'Oboes a2', 'Cor Anglais',
@@ -320,11 +322,11 @@ VIB, REL, TIGHT, VAR, MUTE = _p('vibrato', 'Vibrato'), _p('release', 'Release'),
     _p('variation', 'Variation'), _p('mute', 'Mute')
 FAMILY = {}
 for n in STRINGS:
-    FAMILY[n] = [VIB, REL, TIGHT] + mics(5) + MIX
+    FAMILY[n] = [VIB, REL, TIGHT] + MIX + mics(5)
 for n in WOODWINDS:
-    FAMILY[n] = [VIB, REL, VAR] + mics(4) + MIX
+    FAMILY[n] = [VIB, REL, VAR] + MIX + mics(4)
 for n in BRASS:
-    FAMILY[n] = [REL, TIGHT, VAR] + mics(4) + MIX
+    FAMILY[n] = [REL, TIGHT, VAR] + MIX + mics(4)
 PATCH_CONTROLLERS.update(FAMILY)
 # the extras: a Performance patch has no Release, a strings one has Mute; a single technique its family's
 for main, name, _ in EXTRAS:
@@ -334,7 +336,7 @@ for main, name, _ in EXTRAS:
     if 'Performance' in name and main in STRINGS:
         fam = fam[:2] + [MUTE] + fam[2:]
     PATCH_CONTROLLERS[name] = fam
-PATCH_CONTROLLERS['Grand Piano'] = [_p('pedalvol', 'Pedal Vol'), _p('pedaldyn', 'Pedal Dyn')] + mics(4) + MIX
+PATCH_CONTROLLERS['Grand Piano'] = [_p('pedalvol', 'Pedal Vol'), _p('pedaldyn', 'Pedal Dyn')] + MIX + mics(4)
 for n in ('Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - Wood', 'Other - Toys'):
     PATCH_CONTROLLERS[n] = [_p('releases', 'Releases'), VAR] + mics(3, named=False)
 
