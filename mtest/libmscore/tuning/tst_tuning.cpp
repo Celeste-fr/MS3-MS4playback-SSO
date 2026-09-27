@@ -48,6 +48,7 @@ class TestTuning : public QObject, public MTest
       void justSpelling();
       void heji();
       void stacked();
+      void temperedAndEnharmonic();
       void families();
       void json();
       };
@@ -441,6 +442,50 @@ void TestTuning::heji()
 //    on the note, which MuseScore 3.6 keeps): tuned with it and carried through the bar; drawn
 //    and spaced by the accidental; the editing rules; saved and read back
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   temperedAndEnharmonic
+//    Helmholtz-Ellis's tempered accidentals sound at their 12-edo pitch whatever the tuning; the
+//    tilde beside an arrow accidental moves it one schisma to its Pythagorean respelling; "="
+//    adds nothing (HEJI 2020 legend, reviewed by the owner 2026-09-27)
+//---------------------------------------------------------
+
+void TestTuning::temperedAndEnharmonic()
+      {
+      auto c = [](double num, double den) { return 1200.0 * std::log2(num / den); };
+      MasterScore* score = readScore(DIR + "enharmonic.mscx");
+      QVERIFY(score);
+      Temperament h = Temperament::preset("just");
+      h.just = Temperament::Just::HEJI;
+      score->setMetaTag(Temperament::metaTag, h.toJson());
+      score->doLayout();
+      QList<Note*> ns;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  ns.append(toChord(s->element(0))->upNote());
+      QCOMPARE(ns.size(), 4);
+      ScoreTuning tuning(score);
+      auto near = [](double a, double b) { return qAbs(a - b) < 0.002; };
+      // C, tempered flat: 100 cents under the note MuseScore plays (C), no just intonation
+      QVERIFY2(near(tuning.cents(ns[0]), -100.0), qPrintable(QString::number(tuning.cents(ns[0]))));
+      // E, tempered natural: 0, where HEJI's plain E (81/64) would be +7.82
+      QVERIFY2(near(tuning.cents(ns[1]), 0.0), qPrintable(QString::number(tuning.cents(ns[1]))));
+      // G sharp, comma down, tilde: exactly the Pythagorean A flat (4 fifths down), from G
+      const double aFlat = 3 * 1200.0 - 4 * c(3, 2);
+      QVERIFY2(near(tuning.cents(ns[2]), aFlat - 700.0), qPrintable(QString::number(tuning.cents(ns[2]))));
+      QVERIFY(near(tuning.cents(ns[2]) - (100.0 - c(81, 80) + (8 * c(3, 2) - 4 * 1200.0 - 800.0)), -c(32805, 32768)));
+      // B flat, comma up, "=": B flat raised by a comma, nothing more, from B
+      QVERIFY2(near(tuning.cents(ns[3]), (2 * 1200.0 - 2 * c(3, 2)) + c(81, 80) - 1100.0),
+               qPrintable(QString::number(tuning.cents(ns[3]))));
+      // the signs stack beside the accidental, outermost
+      QVERIFY(Accidental::isStackModifier(AccidentalType::TILDE));
+      QCOMPARE(ns[2]->accidental()->stackedModifiers(), QList<SymId>({ SymId::accidentalEnharmonicTilde }));
+      // alone: no alteration, and valued (not left out of the tuning)
+      bool valued = false;
+      QCOMPARE(ScoreTuning::accidentalCents(AccidentalType::EQUALS, &valued), 0.0);
+      QVERIFY(valued);
+      delete score;
+      }
 
 void TestTuning::stacked()
       {

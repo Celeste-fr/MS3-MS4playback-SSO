@@ -352,9 +352,42 @@ static bool quarterTone(SymId s, int* sharps, int* quarter)
       return false;
       }
 
+// Helmholtz-Ellis's tempered accidentals (the HEJI 2020 legend, "Tempered notes": "indicate the
+// respective 12-edo semitone … tempered quartertones may be written similarly"): cents from the
+// natural, played as they are whatever the score's tuning (doNote leaves its temperament out)
+static bool temperedCents(SymId s, double* cents)
+      {
+      switch (s) {
+            case SymId::accidentalDoubleFlatEqualTempered:   *cents = -200.0; return true;
+            case SymId::accidentalFlatEqualTempered:         *cents = -100.0; return true;
+            case SymId::accidentalNaturalEqualTempered:      *cents =    0.0; return true;
+            case SymId::accidentalSharpEqualTempered:        *cents =  100.0; return true;
+            case SymId::accidentalDoubleSharpEqualTempered:  *cents =  200.0; return true;
+            case SymId::accidentalQuarterFlatEqualTempered:  *cents =  -50.0; return true;
+            case SymId::accidentalQuarterSharpEqualTempered: *cents =   50.0; return true;
+            default:                                         return false;
+            }
+      }
+
+// Helmholtz-Ellis's enharmonic signs (Accidental::stackPrime): the tilde alters by one schisma
+// (32805/32768) toward the note's enharmonic respelling (HEJI 2020 legend: "~♯↓ = ♭", "~♭↑ = ♯"),
+// so down with the accidental's comma arrows down, up with them up, nothing without arrows; "="
+// and "≈" only mark a respelling (≈ is not in the legend)
+static bool isEnharmonicSign(SymId s)
+      {
+      return s == SymId::accidentalEnharmonicTilde || s == SymId::accidentalEnharmonicEquals
+             || s == SymId::accidentalEnharmonicAlmostEqualTo;
+      }
+
 // families with one definition: cents from the natural note
 static bool conventionCents(SymId s, double* cents)
       {
+      if (temperedCents(s, cents))
+            return true;
+      if (isEnharmonicSign(s)) {                                // alone on a note: no alteration
+            *cents = 0.0;
+            return true;
+            }
       auto c = [](double r) { return 1200.0 * std::log2(r); };
       const double apotome = c(2187.0 / 2048.0);
       int sharps, quarter;
@@ -464,6 +497,13 @@ static double stackedCents(const Note* n, bool* valued)
       for (const Element* e : n->el()) {
             if (!e->isSymbol() || !Accidental::stackPrime(toSymbol(e)->sym()))
                   continue;
+            if (isEnharmonicSign(toSymbol(e)->sym())) {
+                  int sharps, arrows;
+                  if (toSymbol(e)->sym() == SymId::accidentalEnharmonicTilde
+                      && ScoreTuning::hejiAccidental(n->accidentalType(), &sharps, &arrows) && arrows)
+                        sum += (arrows < 0 ? -1.0 : 1.0) * 1200.0 * std::log2(32805.0 / 32768.0);
+                  continue;
+                  }
             bool v;
             double c = modifierCents(toSymbol(e)->sym(), &v);
             if (!v)
@@ -712,7 +752,9 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
             target.cents += target.stack;
             // (a Helmholtz-Ellis sharp, which MuseScore plays as a natural: the temperament of the
             // sharp's spelling)
-            t.temperament = _equal ? 0.0 : _temperament.cents(n->tpc1() + 7 * target.spelled, n->pitch() + target.spelled);
+            double tempered;
+            t.temperament = _equal || temperedCents(target.sym, &tempered) ? 0.0
+                            : _temperament.cents(n->tpc1() + 7 * target.spelled, n->pitch() + target.spelled);
             t.accidental = std::round((target.cents - plain) * 1000.0) / 1000.0 + 0.0;
             const double computed = t.accidental + t.temperament;
             // the note's own tuning counts, unless the Microtonal Tuner plugin wrote it in

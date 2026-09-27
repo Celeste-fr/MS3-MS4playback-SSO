@@ -401,6 +401,10 @@ int Accidental::stackPrime(SymId s)
             case SymId::accidentalCombiningRaise31Schisma:         return 31;
             case SymId::accidentalCombiningLower53LimitComma:
             case SymId::accidentalCombiningRaise53LimitComma:      return 53;
+            // Helmholtz-Ellis's enharmonic signs (tuning.cpp): outermost, one of them at a time
+            case SymId::accidentalEnharmonicTilde:
+            case SymId::accidentalEnharmonicEquals:
+            case SymId::accidentalEnharmonicAlmostEqualTo:         return 1000;
             default:                                               return 0;
             }
       }
