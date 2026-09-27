@@ -6,7 +6,10 @@ This is a private fork of the MuseScore 3.7 community fork (Jojo-Schmitz/MuseSco
 1. **MS4 playback.** MuseScore 3 plays scores the way MuseScore 4 does: the same FluidSynth
    setup, soundfont, reverb, note model and dynamics.
 2. **External sound libraries.** Chosen parts play through a real sample library (the owner
-   has **Spitfire Symphony Orchestra**, the Kontakt version, on **Windows**). MuseScore picks
+   has **Spitfire Symphony Orchestra**, the Kontakt version, on **Windows**, in the free
+   **Kontakt Player** (8), not the full Kontakt: the owner, 2026-09-27; everything here goes
+   through VST 3, which the Player supports; NI's Creator Tools need the full Kontakt, and a
+   Player library is NI-licensed and encrypted). MuseScore picks
    each note's articulation from the notation.
 
 The owner talks to agents through claude.ai sessions and reads results on GitHub. Keep this
@@ -428,8 +431,10 @@ e-mails and NI's HU/JDX key values are left out, the home folder is written `%US
 hands it back**, `extract_library_files.py --report <zip>` prints the summary; the rest is in `library.json`.
 Tested with `test_extract_library_files.py` (12 tests: files built in each layout, and with `KONTAKT_NKI=` a
 real Kontakt 6.7 `.nki`, ConvertWithMoss's template: 61 zones, 61 samples, 5 script slots). Not run on SSO:
-whether its `.nki` presets are encrypted (then only names, tags and SNPIDs) and how its `.nkx` names read is
-what the first run will show.
+SSO plays in the free Kontakt Player, so it is an NI-licensed Player library and its `.nki` presets and
+`.nkx` samples are most likely encrypted: expect names, tags, SNPIDs, ProductHints and perhaps the sample
+names, not groups and zones. The first run will show; the plug-in's side (Extract plug-in data) stays the
+main source.
 
 Tested here:
 - `tst_soundlibrary` hosts `mstestsynth.vst3` (`mtest/libmscore/soundlibrary/testsynth`), a
@@ -465,7 +470,7 @@ Tested here:
     when pictures needed a note, when nothing was found, or when more than half the map's
     values would show "None".
 
-**Tried by the owner (Windows, Kontakt 8, SSO), 2026-09-25: first Check articulations run on
+**Tried by the owner (Windows, Kontakt Player 8, SSO), 2026-09-25: first Check articulations run on
 Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
 - The MSVC build ran. *Set up…*, the Kontakt editor (HWND) and the pictures worked.
 - Kontakt's window shows each switch. The patch prints the selected articulation's name,

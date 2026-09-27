@@ -59,6 +59,8 @@ The owner asked to extract all the data possible from SSO for a full integration
 (see `CLAUDE.md` › Extract library files). Next: the owner downloads `ExtractLibraryFiles-win64` from the
 workflow "Tool: Extract library files", double-clicks `ExtractLibraryFiles.exe` (or gives it the SSO folder)
 and hands back the zip it names. From it (`--report`, then `library.json` and `archives/`):
+- (the owner has the free Kontakt Player, not the full Kontakt: SSO is a Player library, so its presets
+  are most likely encrypted, and Creator Tools, which needs the full Kontakt, is no way in)
 - whether SSO's presets are readable: if so, each patch's groups (articulation × dynamic × round robin),
   zones (ranges, release triggers) and samples, to check the map's articulations, ranges and keyswitches
   against the patches themselves; if encrypted, the Soundinfo tags and SNPIDs only;
