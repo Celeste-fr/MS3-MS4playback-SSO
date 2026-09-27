@@ -26,6 +26,8 @@
 //=============================================================================
 
 #define _USE_MATH_DEFINES           // M_PI with MSVC
+#include <cstring>
+#include <vector>
 #include <cmath>
 #include <map>
 #include <string>
@@ -198,12 +200,28 @@ class Processor : public AudioEffect {
             return kResultOk;
             }
 
+      // a Kontakt state (an NI container: a 64-bit size, then 1, "hsin") is kept as it came and
+      // given back, as Kontakt gives back the patch it loaded (SoundLibraryHost's resave of a
+      // setup made from an .nki, tried in the GUI with this synth standing in for Kontakt)
+      std::vector<char> kontakt;
+
       tresult PLUGIN_API setState(IBStream* state) override
             {
-            IBStreamer s(state, kLittleEndian);
-            double a, lv;
-            if (!s.readDouble(a) || !s.readDouble(lv))
+            std::vector<char> all;
+            char buf[65536];
+            int32 got = 0;
+            while (state->read(buf, sizeof(buf), &got) == kResultOk && got > 0)
+                  all.insert(all.end(), buf, buf + got);
+            if (all.size() >= 16 && std::memcmp(all.data() + 12, "hsin", 4) == 0) {
+                  kontakt = all;
+                  return kResultOk;
+                  }
+            kontakt.clear();
+            if (all.size() < 16)
                   return kResultFalse;
+            double a, lv;
+            std::memcpy(&a, all.data(), 8);
+            std::memcpy(&lv, all.data() + 8, 8);
             setArticulation(a);
             level = lv;
             return kResultOk;
@@ -211,6 +229,10 @@ class Processor : public AudioEffect {
 
       tresult PLUGIN_API getState(IBStream* state) override
             {
+            if (!kontakt.empty()) {
+                  int32 written = 0;
+                  return state->write(kontakt.data(), int32(kontakt.size()), &written);
+                  }
             IBStreamer s(state, kLittleEndian);
             s.writeDouble(articulation);
             s.writeDouble(level);
