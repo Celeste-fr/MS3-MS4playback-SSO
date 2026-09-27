@@ -493,7 +493,13 @@ Extract plug-in data's `plugin component.bin`, Kontakt with nothing loaded): `ma
 sets MULTI_CONFIGURATION byte 0 to 0 and the absolute file list; against the owner's hand-made Violins 1 only the
 save time, patch and bank uuids differ (test `from_empty`, and `SSO_EMPTY=` in `real`). Plain defaults don't switch
 by UACC, so each family's switching values must be applied: the settings learnt from the hand-made setups are
-written to `learned_settings.json` (setups folder); keep the hand-made setups until those are known per family.
+written to `learned_settings.json` (setups folder). The owner's, 2026-09-27 (all hand-made setups; the key is the
+PAR_SCRIPT's child index in the program, 20 the main script): `$iooxo` 3 in every orchestral patch (strings, woodwinds,
+brass, harp, piano, Performance and single-technique patches alike): the switching mode, "UACC & UI only", the one
+setting MuseScore applies. `$zdiqz` 1 and `$rhlp3` 1/2/8 in some patches with no pattern by family (most likely the
+last selected articulation: state, not a setting); `$m3gq2` 0 in the woodwind and brass Performance patches' script 19
+(unknown; those take no switching); the kits' values are the techniques the owner had switched on (dropped, see Kits);
+tuned percussion changed nothing. The owner: everything else at the library's defaults, hand-made setups discarded.
 Owner, 2026-09-27: move this into MuseScore and drop manual set-up (not done yet).
 
 Extract library files (`tools/soundlibraries/extract_library_files.py`; the owner, 2026-09-27: "completely
