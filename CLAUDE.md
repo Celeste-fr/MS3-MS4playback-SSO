@@ -434,6 +434,16 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   unpacked, authorization N51), not a reference to it; `read_kontakt_preset` doesn't read its slot list
   yet ("read past the end"). So setups could in principle be generated from the `.nki` files (a multi with
   the patch in slot 1), keeping what the owner sets at setup (UACC & UI only) from a template; not tried.
+- Second run (04:20, describe only, 12 patches): the named slots differ by family and so do their numbers
+  (found by title, so that doesn't matter; a patch lacking one logs a warning and skips it). Orchestral
+  (Flutes a2, Horn Solo, Horn Solo Short Staccatissimo, Violins 1 Long Sul G, Violins 1 Performance, and the
+  Grand Piano): Dynamics 0, Expression 6, Mic 1-4 (strings also 5) level 7-11, Articulation Controller 13, Mic
+  Mix Distance 14, and by patch Vibrato 1 (strings, woodwinds), Release 3 (not Performance nor the
+  staccatissimo), Tightness 4 (Violins 1, horns), Variation 5 (Flutes a2, Horn Solo), Mute 2 (Violins 1
+  Performance), Pedal Vol 2 / Pedal Dyn 3 (Grand Piano). Kits (Drums High / Low, Unpitched Metal / Wood,
+  Toys): Dynamics 0, Releases 1, Variation 2, Expression 3, Mic 1-3 level 4-6. Not yet in the map
+  (`PATCH_CONTROLLERS`): which mic "Mic n" is (the patches' NKS page lists Close, Tree, Ambient, Outrigger,
+  Leader in that order, likely the same) is unconfirmed.
 
 Extract library files (`tools/soundlibraries/extract_library_files.py`; the owner, 2026-09-27: "completely
 extract all data possible from SSO so we can fully integrate it into Muse in the future"): the files'
