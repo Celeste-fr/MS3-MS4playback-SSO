@@ -61,3 +61,4 @@ SF_VERSION
 /SetupConfigure.local.cmake
 /builds/
 /build_overrides.cmake
+__pycache__/
