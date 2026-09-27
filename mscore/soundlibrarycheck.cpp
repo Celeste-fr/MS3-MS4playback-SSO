@@ -260,11 +260,14 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       QVBoxLayout* layout = new QVBoxLayout(this);
       _info = new QLabel(this);
       _info->setWordWrap(true);
-      _info->setText(tr("Checks the library's map against its plug-in. Once per patch, click Set up…: load the patch in "
-                        "the plug-in's window, set its articulation switching (Spitfire: UACC) and close the window. "
-                        "Then Check plays every articulation of the ticked patches: it keeps a picture of the plug-in "
-                        "after each switch and listens whether the switch took. Leave the computer alone while it runs "
-                        "(the plug-in's window has to stay visible). The results go in a .zip to hand back."));
+      const bool makes = library && SoundLibraryHost::makesSetups(*library);
+      _info->setText((makes ? tr("Checks the library's map against its plug-in, on every patch of the library: MuseScore sets each "
+                                 "one up by itself (from its .nki, at the library's defaults with UACC switching). ")
+                            : tr("Checks the library's map against its plug-in, on every patch that has a setup. "))
+                     + tr("Check plays every articulation of the ticked patches: it keeps a picture of the plug-in "
+                          "after each switch and listens whether the switch took. Leave the computer alone while it runs "
+                          "(the plug-in's window has to stay visible). The results go in a .zip to hand back. Patches "
+                          "not in the map are always scanned."));
       layout->addWidget(_info);
       _table = new QTableWidget(this);
       _table->setColumnCount(4);
@@ -299,10 +302,22 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       QDialogButtonBox* buttons = new QDialogButtonBox(this);
       _add = buttons->addButton(tr("Add a patch…"), QDialogButtonBox::ActionRole);
       connect(_add, &QPushButton::clicked, this, &ArticulationCheckDialog::addPatch);
+      _add->setVisible(!makes);           // (the map lists all the library's patches)
       _extract = buttons->addButton(tr("Extract plug-in data"), QDialogButtonBox::ActionRole);
       _extract->setToolTip(tr("Everything the plug-in tells about itself, empty and with each ticked patch (and, ticked above, "
                               "what every controller does), in a .zip to hand back"));
       connect(_extract, &QPushButton::clicked, this, &ArticulationCheckDialog::extract);
+      _tickAll = buttons->addButton(tr("Tick all"), QDialogButtonBox::ActionRole);
+      connect(_tickAll, &QPushButton::clicked, this, [this]() {
+            bool all = true;
+            for (int row = 0; row < _table->rowCount(); ++row)
+                  all = all && (_table->item(row, 0)->checkState() == Qt::Checked || !_table->item(row, 1)->data(Qt::UserRole).toBool());
+            for (int row = 0; row < _table->rowCount(); ++row) {
+                  const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+                  _table->item(row, 0)->setCheckState(setup && !all ? Qt::Checked : Qt::Unchecked);
+                  }
+            _tickAll->setText(all ? tr("Tick all") : tr("Untick all"));
+            });
       _all = buttons->addButton(tr("Tick what needs checking"), QDialogButtonBox::ActionRole);
       _check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
       _close = buttons->addButton(QDialogButtonBox::Close);
@@ -352,12 +367,10 @@ void ArticulationCheckDialog::saveRecords() const
             f.write(QJsonDocument(_records).toJson());
       }
 
+// (a setup MuseScore makes: what it is made from, known before it is made)
 QByteArray ArticulationCheckDialog::setupHash(const QString& patch) const
       {
-      QFile f(SoundLibraryHost::setupFile(*_library, patch));
-      if (!f.open(QIODevice::ReadOnly))
-            return QByteArray();
-      return QCryptographicHash::hash(f.readAll(), QCryptographicHash::Sha1).toHex();
+      return SoundLibraryHost::setupId(*_library, patch);
       }
 
 // what is checked of a patch's map entry: its switch and its values with their names
@@ -545,13 +558,18 @@ void ArticulationCheckDialog::rebuild()
       for (const SoundLib::LibInstrument& ins : _library->instruments)
             if (!ins.kit)                     // (no patch of its own)
                   _rows.push_back({ &ins, false });
-      for (const auto& ins : _added) {
-            // (once in the map, the map's patch)
-            bool inMap = false;
-            for (const SoundLib::LibInstrument& i : _library->instruments)
-                  inMap = inMap || i.name.compare(ins->name, Qt::CaseInsensitive) == 0;
-            if (!inMap)
-                  _rows.push_back({ ins.get(), true });
+      // the library's other patches (the map's <Patch>: scanned, as added ones)
+      for (const SoundLib::LibInstrument& ins : _library->otherPatches)
+            _rows.push_back({ &ins, true });
+      if (!SoundLibraryHost::makesSetups(*_library)) {
+            for (const auto& ins : _added) {
+                  // (once in the map, the map's patch)
+                  bool inMap = false;
+                  for (const Row& r : _rows)
+                        inMap = inMap || r.instrument->name.compare(ins->name, Qt::CaseInsensitive) == 0;
+                  if (!inMap)
+                        _rows.push_back({ ins.get(), true });
+                  }
             }
       acceptExpected();
       int ready = 0;
@@ -568,98 +586,30 @@ void ArticulationCheckDialog::rebuild()
             due += needed;
             name->setCheckState(needed ? Qt::Checked : Qt::Unchecked);
             _table->setItem(i, 0, name);
-            QTableWidgetItem* state = new QTableWidgetItem(setup ? tr("Ready") : tr("Not set up yet"));
+            const bool makes = SoundLibraryHost::makesSetups(*_library);
+            QTableWidgetItem* state = new QTableWidgetItem(setup ? (makes ? tr("Made by MuseScore") : tr("Ready"))
+                                                                 : (makes ? tr("Its .nki was not found") : tr("No setup")));
+            if (makes)
+                  state->setToolTip(QDir::toNativeSeparators(ins.nki));
             state->setData(Qt::UserRole, setup);
             _table->setItem(i, 1, state);
-            QPushButton* b = new QPushButton(tr("Set up…"));
-            connect(b, &QPushButton::clicked, this, [this, i]() { setUp(i); });
-            if (_rows[i].added) {
-                  QWidget* w = new QWidget;
-                  QHBoxLayout* hl = new QHBoxLayout(w);
-                  hl->setContentsMargins(0, 0, 0, 0);
-                  hl->setSpacing(2);
+            if (_rows[i].added && !makes) {
                   QPushButton* remove = new QPushButton(tr("Remove"));
                   const QString patch = ins.name;
                   connect(remove, &QPushButton::clicked, this, [this, patch]() { removePatch(patch); });
-                  hl->addWidget(b);
-                  hl->addWidget(remove);
-                  _table->setCellWidget(i, 2, w);
+                  _table->setCellWidget(i, 2, remove);
                   }
-            else
-                  _table->setCellWidget(i, 2, b);
             _table->setItem(i, 3, new QTableWidgetItem(setup ? last : QString()));
             }
       _table->resizeColumnsToContents();
       _table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-      _status->setText(tr("%1 of %2 patches are set up; %3 need checking (ticked).")
-                       .arg(ready).arg(_rows.size()).arg(due));
-      }
-
-//---------------------------------------------------------
-//   setUp
-//    the patch's plug-in window on an instance of its own; its state is the patch's setup
-//    when it closes
-//---------------------------------------------------------
-
-void ArticulationCheckDialog::setUp(int index)
-      {
-#ifdef USE_VST3
-      if (_running || !_library)
-            return;
-      if (_setupWindow) {
-            _setupWindow->raise();
-            _setupWindow->activateWindow();
-            return;
-            }
-      QString error;
-      const QString path = SoundLibraryHost::pluginPath(*_library, &error);
-      std::shared_ptr<Vst3Plugin> p;
-      if (!path.isEmpty())
-            p = Vst3Plugin::load(path, MScore::sampleRate, 4096, &error);
-      if (!p) {
-            QMessageBox::warning(this, windowTitle(), error);
-            return;
-            }
-      const QString name = _rows[index].instrument->name;
-      const QString file = SoundLibraryHost::setupFile(*_library, name);
-      QFile f(file);
-      if (f.open(QIODevice::ReadOnly))
-            p->setState(f.readAll());
-      f.close();
-      Steinberg::IPlugView* view = p->createEditor();
-      if (!view) {
-            QMessageBox::warning(this, windowTitle(), tr("%1 has no editor.").arg(p->name()));
-            return;
-            }
-      Vst3EditorWindow* w = new Vst3EditorWindow(view, tr("%1 – %2 (set up, then close)").arg(name, p->name()), this);
-      _setupWindow = w;
-      QTimer* timer = new QTimer(w);
-      auto buffer = std::make_shared<std::vector<float>>();
-      connect(timer, &QTimer::timeout, w, [p, buffer]() {
-            const int n = int(MScore::sampleRate * 0.02);
-            buffer->assign(size_t(2 * n), 0.f);
-            p->process(n, buffer->data());
-            p->idle();
-            });
-      timer->start(20);
-      connect(w, &Vst3EditorWindow::closed, this, [this, p, file, name]() {
-            const QByteArray state = p->state();
-            QDir().mkpath(QFileInfo(file).absolutePath());
-            QFile out(file);
-            if (!out.open(QIODevice::WriteOnly) || out.write(state) != state.size())
-                  QMessageBox::warning(this, windowTitle(), tr("Cannot write %1").arg(file));
-            else {
-                  out.close();
-                  SoundLibraryHost::instance()->setupChanged(name);
-                  }
-            QTimer::singleShot(0, this, &ArticulationCheckDialog::rebuild);
-            });
-      // the instance goes after the window (which releases its view)
-      connect(w, &QObject::destroyed, this, [this, p]() mutable { p.reset(); _setupWindow = nullptr; });
-      w->show();
-#else
-      Q_UNUSED(index);
-#endif
+      const QString folder = SoundLibraryHost::libraryFolder(*_library);
+      if (SoundLibraryHost::makesSetups(*_library) && folder.isEmpty())
+            _status->setText(tr("%1 was not found on this computer: choose its folder in View › Sound Library… › Library folder….")
+                             .arg(_library->name));
+      else
+            _status->setText(tr("%1 of %2 patches can be checked; %3 need checking (ticked).")
+                             .arg(ready).arg(_rows.size()).arg(due));
       }
 
 //---------------------------------------------------------
@@ -699,6 +649,7 @@ void ArticulationCheckDialog::setRunning(bool running)
       _extract->setEnabled(!running);
       _all->setEnabled(!running);
       _add->setEnabled(!running);
+      _tickAll->setEnabled(!running);
       _scan->setEnabled(!running);
       _tryAll->setEnabled(!running);
       _close->setText(running ? tr("Stop") : tr("Close"));
@@ -740,7 +691,7 @@ void ArticulationCheckDialog::check()
       for (int row = 0; row < _table->rowCount(); ++row) {
             if (_table->item(row, 0)->checkState() == Qt::Checked) {
                   if (!_table->item(row, 1)->data(Qt::UserRole).toBool()) {
-                        QMessageBox::warning(this, windowTitle(), tr("%1 is not set up yet: click its Set up… first, or untick it.")
+                        QMessageBox::warning(this, windowTitle(), tr("%1 has no setup (its .nki was not found): untick it.")
                                              .arg(_rows[row].instrument->name));
                         return;
                         }
@@ -751,8 +702,6 @@ void ArticulationCheckDialog::check()
             QMessageBox::information(this, windowTitle(), tr("Tick the patches to check."));
             return;
             }
-      if (_setupWindow)
-            _setupWindow->close();
       if (seq && seq->isPlaying())
             seq->stop();
 
@@ -795,7 +744,7 @@ void ArticulationCheckDialog::check()
                   const QString patch = _rows[i].instrument->name;
                   QString last;
                   if (!SoundLibraryHost::hasSetup(*_library, patch))
-                        last = tr("not set up");
+                        last = tr("no setup");
                   else
                         needsCheck(i, &last);
                   text += QString("   %1: %2\n").arg(patch, last);
@@ -920,10 +869,8 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
       if (!p)
             return fail(error);
-      QFile f(SoundLibraryHost::setupFile(*_library, ins.name));
-      if (!f.open(QIODevice::ReadOnly) || !p->setState(f.readAll()))
-            return fail(tr("Its setup could not be loaded into the plug-in."));
-      f.close();
+      if (!SoundLibraryHost::loadSetup(p.get(), *_library, ins.name, pluginPath, &error))
+            return fail(error);
       if (_library->dynamicsCC >= 0)
             p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
 
@@ -1229,10 +1176,8 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
       if (!p)
             return fail(error);
-      QFile f(SoundLibraryHost::setupFile(*_library, ins.name));
-      if (!f.open(QIODevice::ReadOnly) || !p->setState(f.readAll()))
-            return fail(tr("Its setup could not be loaded into the plug-in."));
-      f.close();
+      if (!SoundLibraryHost::loadSetup(p.get(), *_library, ins.name, pluginPath, &error))
+            return fail(error);
       auto switchTo = [&](int v) {
             if (v >= 0 && switching)
                   p->midi(ME_CONTROLLER, 0, ins.switchNumber, v);
@@ -1813,15 +1758,13 @@ void ArticulationCheckDialog::extract()
                   notSetUp << _rows[row].instrument->name;
             }
       if (!notSetUp.isEmpty()) {
-            QMessageBox::warning(this, windowTitle(), tr("Not set up yet (click Set up… first, or untick): %1").arg(notSetUp.join(", ")));
+            QMessageBox::warning(this, windowTitle(), tr("No setup (their .nki was not found; untick them): %1").arg(notSetUp.join(", ")));
             return;
             }
       if (_tryAll->isChecked() && chosen.empty()) {
             QMessageBox::information(this, windowTitle(), tr("Tick the patches whose controllers to try."));
             return;
             }
-      if (_setupWindow)
-            _setupWindow->close();
       if (seq && seq->isPlaying())
             seq->stop();
 
@@ -1903,10 +1846,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
       if (!p)
             return fail(error);
-      QFile f(SoundLibraryHost::setupFile(*_library, ins.name));
-      if (!f.open(QIODevice::ReadOnly) || !p->setState(f.readAll()))
-            return fail(tr("Its setup could not be loaded into the plug-in."));
-      f.close();
+      if (!SoundLibraryHost::loadSetup(p.get(), *_library, ins.name, pluginPath, &error))
+            return fail(error);
 
       // a long articulation (the map's first), the library's dynamics
       const bool switching = ins.switchType == SoundLib::SwitchType::CC;

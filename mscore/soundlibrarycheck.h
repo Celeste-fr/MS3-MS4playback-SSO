@@ -5,8 +5,9 @@
 //  ArticulationCheckDialog (Sound Library… › Check articulations…): checks the library's
 //  map against the plug-in itself, for every patch that has a setup, with one click.
 //
-//    Set up…   a patch's plug-in window, on an instance of its own (no score needed): load
-//              the patch, set its switching (Spitfire: UACC), close it; the setup is kept
+//    patches   the map's, then the library's others (<Patch>, scanned); a library without
+//              <Files>: those with a setup, and those added by name ("Add a patch…"). The
+//              setups are made by MuseScore (SoundLibraryHost::setupState: no manual set-up)
 //    Check     for each chosen patch, an instance with its setup:
 //              - its window after each articulation value of the map, grabbed; the part of
 //                the window that changes with the switches goes on a contact sheet, labelled
@@ -15,7 +16,7 @@
 //                audio/vst3/articulationcheck.h)
 //              written to Documents/MuseScore Sound Library Check/<library> <date>/ (sheets,
 //              results.json, summary.txt) and to a .zip of it next to the folder, which opens
-//    scan      (Scan every value, and patches added with "Add a patch…" that the map lacks)
+//    scan      (Scan every value, and patches the map has no articulations for)
 //              the pictures of all 128 values of the switch: the one that most of them show
 //              is the patch's "no articulation" (SSO: "None"); the others are its
 //              articulations. Reports those the map lacks and map values that show none, and
@@ -64,8 +65,8 @@ class ArticulationCheckDialog : public QDialog {
 
       std::shared_ptr<const SoundLib::Library> _library;
 
-      // the table's rows: the map's patches, then those the owner added (not in the map yet;
-      // their check is always a scan)
+      // the table's rows: the map's patches, then the library's others (<Patch>) or those the
+      // owner added (not in the map yet); their check is always a scan
       struct Row {
             const SoundLib::LibInstrument* instrument;
             bool added;
@@ -83,16 +84,15 @@ class ArticulationCheckDialog : public QDialog {
       QProgressBar* _progress;
       QPushButton* _check;
       QPushButton* _all;
+      QPushButton* _tickAll;
       QPushButton* _close;
       bool _running { false };
       bool _cancel { false };
-      QWidget* _setupWindow { nullptr };
 
       QJsonObject _records;         // the last check of each patch (checks.json)
 
       void rebuild();
       void acceptExpected();
-      void setUp(int index);
       void check();
       void setRunning(bool running);
       void extract();

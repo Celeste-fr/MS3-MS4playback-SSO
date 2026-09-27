@@ -225,7 +225,7 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   with it; `choose(patches, want)` picks across them (a tie between patches goes to the
   articulation that lists the base first). `usedPatches()` runs the notation once so only
   needed extras get a route (each is a Kontakt instance, ~0.7 GB). `setAvailable()` (set in
-  `musescore.cpp` for plugin mode: has a setup) keeps an unset extra out; `routesGeneration()`
+  `musescore.cpp` for plugin mode: has a setup, or its `.nki` is there to make one) keeps an unset extra out; `routesGeneration()`
   makes the renderer rebuild when a setup is saved (`SoundLibraryHost::routesMayChange`).
 - Kits (`kit="1"`): MuseScore's unpitched percussion; no patch of its own (the host loads
   nothing on its route). Its extras' `<Drum pitch key>` entries give each drum sound's patch and
@@ -283,7 +283,7 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   five faders (0: Ambient only, 127: Close only), so it is applied first and a mic level ticked wins.
   **Values belong to the score; the library's default is SSO's own** (the owner): a parameter a
   score doesn't set is put back to the patch's value when another score set it on the same loaded
-  instance (`Slot::patchValues`), and *Save setup* saves the patch's values, not the score's.
+  instance (`Slot::patchValues`).
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).
@@ -354,7 +354,26 @@ macOS.
   setup from `<dataPath>/soundlibraries/<library>/<instrument>.vst3state`.
   `SoundLibraryExport` handles audio export. Without a sequencer (command-line `-o`), it
   loads its own instances. `SoundLibraryDialog` is *View › Sound Library…*: parts, patches,
-  Show (the plug-in's editor) and Save setup.
+  Show (the plug-in's editor, to look at) and *Library folder…*.
+- **Setups made by MuseScore** (the owner, 2026-09-27: "the set up script should be integrated into
+  MuseScore and you should no longer be able to manually set up things", "the manually set up patch
+  configs should be discarded in favor of setting up everything automatically to their default
+  settings"). A map with `<Files registry>` (SSO) gives each patch its `.nki` (`nki=`, relative to the
+  library's folder: NI's registry `ContentDir`, or the one chosen with *Library folder…*, QSettings
+  `soundLibrary/<name>/folder`) and script values (`setup="$iooxo=3"`, UACC). `SoundLibraryHost::setupState`
+  makes the setup on demand with `KontaktSetup::fromEmpty` (`audio/vst3/kontaktsetup.*`, the C++ port of
+  make_setups.py's from-empty path; 1 s for Violins 1) from Kontakt's state with nothing loaded (a fresh
+  instance's, kept as `Kontakt empty.vst3state`), writes `<patch>.vst3state` and records what it was made
+  from in `made setups.json` (the `.nki`'s size and time, the values, `MAKER_VERSION`, the empty state's
+  SHA-1): made again when one changes. Kontakt's controller state is always empty (the extracts), so none
+  is written. The first time, every other `.vst3state` there (hand-made, or make_setups.py's) is moved to
+  `old setups (not used)`. No manual set-up: *Set up…*, *Save setup*, saving on closing the editor and
+  *Add a patch…* (for SSO) are gone. `hasSetup` = the `.nki` is there. Check articulations' "setup"
+  memory is `setupId` (what it's made from), so it is known before the setup is made. A library
+  without `<Files>` still uses a `.vst3state` put there (the tests' plug-ins). The map lists SSO's other
+  541 patches as `<Patch>` (from `tools/soundlibraries/sso_nki_files.txt`, the owner's 700 `.nki`):
+  Check articulations lists all 700 (*Tick all*) and scans the others. Not yet loaded by Kontakt from
+  MuseScore itself (the Python tool's setups were, run 91); the owner's first try decides.
 - Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
   a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
   bar "Loading … in the background"); a play before that's done loads the rest (`sync`). The owner,
@@ -380,8 +399,7 @@ against the plug-in itself):
   at all, and "sounds like": two values that sound the same. That catches a plug-in playing
   a default for values it lacks. The header has the details.
 - `mscore/soundlibrarycheck.*`: `ArticulationCheckDialog`.
-  - *Set up…* sets up a patch on an instance of its own, with no score needed.
-    `SoundLibraryHost::setupChanged` reloads that setup into the live instances.
+  - The setups are MuseScore's (above); *Set up…* is gone (2026-09-27).
   - *Check* runs over each ticked, set-up patch. It grabs the plug-in's window after each
     switch (PrintWindow on Windows, else QScreen), crops to the region that changed and
     draws a contact sheet `<patch>.png` labelled with value, map name and sound verdict. If
@@ -509,7 +527,7 @@ setting MuseScore applies. `$zdiqz` 1 and `$rhlp3` 1/2/8 in some patches with no
 last selected articulation: state, not a setting); `$m3gq2` 0 in the woodwind and brass Performance patches' script 19
 (unknown; those take no switching); the kits' values are the techniques the owner had switched on (dropped, see Kits);
 tuned percussion changed nothing. The owner: everything else at the library's defaults, hand-made setups discarded.
-Owner, 2026-09-27: move this into MuseScore and drop manual set-up (not done yet).
+Now in MuseScore itself (Plugin hosting › Setups made by MuseScore); the Python tool stays for tries outside it.
 
 Extract library files (`tools/soundlibraries/extract_library_files.py`; the owner, 2026-09-27: "completely
 extract all data possible from SSO so we can fully integrate it into Muse in the future"): the files'
