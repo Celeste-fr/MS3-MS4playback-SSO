@@ -34,6 +34,18 @@ library work; the tuning work is described under "Tuning" below).
 - CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This keeps the
   private repo's Actions minutes.
 
+## Rule: readings of music go on a review page
+
+The owner (2026-09-27): **whenever work relies on an agent's reading of sheet music** (notation,
+a legend of accidentals, a score's page, a screenshot of a plug-in's key or articulation list,
+a contact sheet), publish a claude.ai artifact that shows each source picture (or a crop of it)
+next to what was read from it and what that reading is used for, so the owner can check every
+reading by eye before it changes code or the map. Draw musical symbols in Bravura (subset
+`fonts/bravura/Bravura.otf` with `pyftsubset` and embed it) so the page shows the glyphs
+themselves, and say which sources could not be read. Example: "Unpitched HEJI accidentals"
+(https://claude.ai/artifact/CPfVu3qdHzMr5xPKiJFD2Y), the HEJI 2020 legend behind the 10
+accidentals' pitches.
+
 ## Rule: files survive a round trip to MuseScore 3.6
 
 The owner (2026-09-26): **any file this fork touches must survive a round trip to MuseScore 3.6
