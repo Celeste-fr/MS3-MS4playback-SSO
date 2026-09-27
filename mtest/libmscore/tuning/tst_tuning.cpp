@@ -18,6 +18,9 @@
 
 #include "libmscore/chord.h"
 #include "libmscore/key.h"
+#include "libmscore/keysig.h"
+#include "libmscore/page.h"
+#include "libmscore/system.h"
 #include "libmscore/staff.h"
 #include "libmscore/sym.h"
 #include "libmscore/undo.h"
@@ -52,6 +55,7 @@ class TestTuning : public QObject, public MTest
       void families();
       void diatonicCustomKey();
       void customKeyForClef();
+      void customKeyDrop();
       void json();
       };
 
@@ -760,6 +764,87 @@ void TestTuning::customKeyForClef()
                   QVERIFY2(treble.accidentalVal(step) == other.accidentalVal(step),
                            qPrintable(QString("clef %1, step %2").arg(int(c)).arg(step)));
             }
+      }
+
+//---------------------------------------------------------
+//   customKeyDrop
+//    a custom key signature (the palette's, made on a treble staff) dropped on a score of a
+//    viola (alto clef) and a cello (treble clef 15mb): each staff's signature for its clef, and
+//    the same notes take the same accidentals
+//---------------------------------------------------------
+
+void TestTuning::customKeyDrop()
+      {
+      MasterScore* score = readScore(DIR + "keysig-clefs.musicxml");
+      QVERIFY(score);
+      QCOMPARE(score->staff(0)->clef(Fraction(0, 1)), ClefType::C3);
+      KeySigEvent e;
+      e.setCustom(true);
+      KeySym k;
+      k.sym = SymId::accidentalFlat;
+      k.spos = QPointF(0.0, 0.5);                                  // E5 on a treble staff
+      e.keySymbols().append(k);
+      KeySig* ks = new KeySig(score);
+      ks->setKeySigEvent(e);
+      score->doLayout();
+      Measure* m = score->firstMeasure();
+      EditData ed;
+      ed.dropElement = ks;
+      ed.pos = m->staffabbox(1).center() + m->system()->page()->pos();          // as the palette drops it
+      score->startCmd();
+      score->firstMeasure()->drop(ed);
+      score->endCmd();
+      // E flat in every octave, whatever the clef: as the staff's key list holds it and as read
+      // for the clef in force at tick
+      auto eFlat = [score](int staffIdx, const Fraction& tick, const char* what) {
+            const ClefType clef = score->staff(staffIdx)->clef(tick);
+            const KeySigEvent se = score->staff(staffIdx)->keySigEventForClef(tick);
+            QVERIFY(se.custom());
+            AccidentalState as;
+            as.init(se, clef);
+            for (int step = 7; step < MAX_ACC_STATE - 7; ++step)
+                  QVERIFY2(as.accidentalVal(step) == (step % 7 == 2 ? AccidentalVal::FLAT : AccidentalVal::NATURAL),
+                           qPrintable(QString("%1: staff %2 clef %3 step %4 line %5").arg(what).arg(staffIdx).arg(int(clef)).arg(step).arg(se.keySymbols()[0].spos.y())));
+            };
+      const Fraction bar2 = score->firstMeasure()->nextMeasure()->tick();
+      for (int staffIdx : { 0, 1 })
+            eFlat(staffIdx, Fraction(0, 1), "dropped");
+
+      // the viola's clef changed at the signature (treble): the signature follows it
+      score->startCmd();
+      score->undoChangeClef(score->staff(0), score->firstMeasure(), ClefType::G);
+      score->endCmd();
+      QCOMPARE(score->staff(0)->clef(Fraction(0, 1)), ClefType::G);
+      QCOMPARE(score->staff(0)->keySigEvent(Fraction(0, 1)).keySymbols()[0].spos.y(), 0.5);
+      eFlat(0, Fraction(0, 1), "clef changed at the signature");
+
+      // the cello changes to bass clef in bar 2: the signature, drawn for the treble clef, is
+      // read (and drawn at a system start) for the bass clef there
+      score->startCmd();
+      score->undoChangeClef(score->staff(1), score->firstMeasure()->nextMeasure(), ClefType::F);
+      score->endCmd();
+      QCOMPARE(score->staff(1)->clef(bar2), ClefType::F);
+      QCOMPARE(score->staff(1)->keySigEvent(bar2).keySymbols()[0].spos.y(), 0.5);
+      eFlat(1, bar2, "later clef change");
+
+      // a staff added with the Instruments dialog takes the first staff's keys, for its own clef
+      KeyList km = *score->staff(1)->keyList();
+      std::map<int, ClefType> kmClefs;
+      for (const auto& k : km)
+            kmClefs[k.first] = score->staff(1)->clef(Fraction::fromTicks(k.first));
+      MasterScore* other = readScore(DIR + "keysig-clefs.musicxml");
+      QVERIFY(other);
+      other->adjustKeySigs(0, 1, km, kmClefs);                   // the viola, alto clef
+      auto eFlatOther = [other]() {
+            AccidentalState as;
+            as.init(other->staff(0)->keySigEventForClef(Fraction(0, 1)), ClefType::C3);
+            for (int step = 7; step < MAX_ACC_STATE - 7; ++step)
+                  QVERIFY2(as.accidentalVal(step) == (step % 7 == 2 ? AccidentalVal::FLAT : AccidentalVal::NATURAL),
+                           qPrintable(QString("added staff: step %1").arg(step)));
+            };
+      eFlatOther();
+      delete other;
+      delete score;
       }
 
 QTEST_MAIN(TestTuning)

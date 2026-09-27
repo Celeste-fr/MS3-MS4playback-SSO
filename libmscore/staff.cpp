@@ -573,6 +573,18 @@ KeySigEvent Staff::keySigEvent(const Fraction& tick) const
       }
 
 //---------------------------------------------------------
+//   keySigEventForClef
+//---------------------------------------------------------
+
+KeySigEvent Staff::keySigEventForClef(const Fraction& tick) const
+      {
+      const KeySigEvent e = keySigEvent(tick);
+      if (!e.custom())
+            return e;
+      return e.forClef(clef(currentKeyTick(tick)), clef(tick));
+      }
+
+//---------------------------------------------------------
 //   setKey
 //---------------------------------------------------------
 

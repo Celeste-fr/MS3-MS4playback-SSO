@@ -339,7 +339,7 @@ AccidentalVal Measure::findAccidental(Note* note) const
       Chord* chord = note->chord();
       Staff* vStaff = chord->score()->staff(chord->vStaffIdx());
       AccidentalState tversatz;  // state of already set accidentals for this measure
-      tversatz.init(vStaff->keySigEvent(tick()), chord->staff()->clef(tick()));
+      tversatz.init(vStaff->keySigEventForClef(tick()), chord->staff()->clef(tick()));
 
       int startTrack = vStaff->part()->startTrack();
       int mainTrack = chord->vStaffIdx() * VOICES;
@@ -350,7 +350,7 @@ AccidentalVal Measure::findAccidental(Note* note) const
                   KeySig* ks = toKeySig(segment->element(mainTrack));
                   if (!ks)
                         continue;
-                  tversatz.init(vStaff->keySigEvent(segment->tick()), chord->staff()->clef(segment->tick()));
+                  tversatz.init(vStaff->keySigEventForClef(segment->tick()), chord->staff()->clef(segment->tick()));
                   }
             else if (segment->segmentType() == SegmentType::ChordRest) {
                   for (int track = startTrack; track < endTrack; ++track) {
@@ -407,7 +407,7 @@ AccidentalVal Measure::findAccidental(Segment* s, int staffIdx, int line, bool &
       {
       AccidentalState tversatz;  // state of already set accidentals for this measure
       Staff* staff = score()->staff(staffIdx);
-      tversatz.init(staff->keySigEvent(tick()), staff->clef(tick()));
+      tversatz.init(staff->keySigEventForClef(tick()), staff->clef(tick()));
 
       SegmentType st = SegmentType::ChordRest;
       int startTrack = staff->part()->startTrack();
@@ -4306,7 +4306,7 @@ void Measure::addSystemHeader(bool isFirstSystem)
             // a courtesy key sig, don’t create it and switch generated flags.
             // This avoids creating an invisible KeySig which can distort layout.
 
-            KeySigEvent keyIdx = staff->keySigEvent(tick());
+            KeySigEvent keyIdx = staff->keySigEventForClef(tick());
             KeySig* ksAnnounce = 0;
             if (needKeysig && (keyIdx.key() == Key::C)) {
                   Measure* pm = prevMeasure();
@@ -4501,7 +4501,7 @@ void Measure::addSystemTrailer(Measure* nm)
                         add(s);
                         }
                   KeySig* ks = toKeySig(s->element(track));
-                  KeySigEvent key2 = staff->keySigEvent(endTick());
+                  KeySigEvent key2 = staff->keySigEventForClef(endTick());
 
                   if (!ks) {
                         ks = new KeySig(score());

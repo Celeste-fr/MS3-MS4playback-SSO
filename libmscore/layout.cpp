@@ -3210,7 +3210,7 @@ void Score::getNextMeasure(LayoutContext& lc)
             const Staff* staff     = Score::staff(staffIdx);
             const Drumset* drumset = staff->part()->instrument(measure->tick())->useDrumset() ? staff->part()->instrument(measure->tick())->drumset() : 0;
             AccidentalState as;      // list of already set accidentals for this measure
-            as.init(staff->keySigEvent(measure->tick()), staff->clef(measure->tick()));
+            as.init(staff->keySigEventForClef(measure->tick()), staff->clef(measure->tick()));
 
             for (Segment& segment : measure->segments()) {
                   // TODO? maybe we do need to process it here to make it possible to enable later
@@ -3222,7 +3222,7 @@ void Score::getNextMeasure(LayoutContext& lc)
                         if (!ks)
                               continue;
                         Fraction tick = segment.tick();
-                        as.init(staff->keySigEvent(tick), staff->clef(tick));
+                        as.init(staff->keySigEventForClef(tick), staff->clef(tick));
                         ks->layout();
                         }
                   else if (segment.isChordRestType()) {

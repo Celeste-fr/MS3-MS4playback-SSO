@@ -72,7 +72,13 @@ Custom key signatures (the owner, 2026-09-27): dropped from the palette, a custo
 (made on the editor's treble staff) is adapted to each staff's clef (`KeySigEvent::forClef`: each
 accidental where that clef's standard key signature puts the same note, an octave apart as drawn;
 `KeySig::drop`, `Measure::drop`, `ChordRest::drop`); the positions are stored per staff as before, so
-3.6 shows the same. Not adapted: a clef change after the key signature, paste. Alt+Shift+Up/Down
+3.6 shows the same. Also adapted (the owner, 2026-09-27: a viola added after the signature kept the treble
+positions): a staff added in the Instruments dialog (`adjustKeySigs` with the source staff's clefs, a new
+staff of a part), a split staff, a clef change at the signature's tick (`undoChangeClef`). A later clef
+change under a custom key: `Staff::keySigEventForClef` reads the signature for the clef in force (accidental
+states in layout, measure, cmd, tuning; the signature repeated at a system start and the courtesy one drawn
+for it); the file keeps the signature as placed. Not adapted: paste, and scores saved before (drop it again).
+Test `tst_tuning::customKeyDrop` (keysig-clefs.musicxml: viola and treble-15 cello). Alt+Shift+Up/Down
 (`Score::upDown`, DIATONIC) steps to the signature's accidental under a custom key signature (it used
 the key, C, and wrote a natural against the signature). The key signature editor (*Master Palette ›
 Key Signatures › Create Key Signature*, `mscore/keyedit.cpp`): staff twice the palettes' size, a

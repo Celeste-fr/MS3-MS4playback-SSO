@@ -1650,7 +1650,7 @@ void Score::upDown(bool up, UpDownMode mode)
                               case UpDownMode::DIATONIC:
                                     {
                                     int tpc = oNote->tpc();
-                                    const KeySigEvent kse = staff->keySigEvent(tick);
+                                    const KeySigEvent kse = staff->keySigEventForClef(tick);
                                     if (kse.custom()) {
                                           // a custom key signature: the next step with the accidental the
                                           // signature gives it (the key is C there, which ignored them, and

@@ -4082,6 +4082,7 @@ void Score::undoChangeClef(Staff* ostaff, Element* e, ClefType ct, bool forInstr
       Fraction tick = e->tick();
       Fraction rtick = e->rtick();
       bool isSmall = (st == SegmentType::Clef);
+      const ClefType oldClef = ostaff->clef(tick);
       for (Staff*& staff : ostaff->staffList()) {
       //      if (staff->staffType(tick)->group() != ClefInfo::staffGroup(ct))
       //            continue;
@@ -4166,6 +4167,12 @@ void Score::undoChangeClef(Staff* ostaff, Element* e, ClefType ct, bool forInstr
                   }
             clef->setSmall(isSmall);
             }
+      // a custom key signature at the clef's tick is placed for the clef: it follows the new one
+      // (later in its key, Staff::keySigEventForClef draws and reads it for the clef in force)
+      const KeySigEvent key = ostaff->keySigEvent(tick);
+      const ClefType newClef = ostaff->clef(tick);
+      if (key.custom() && ostaff->currentKeyTick(tick) == tick && ostaff->keyList()->count(tick.ticks()) && oldClef != newClef)
+            undoChangeKeySig(ostaff, tick, key.forClef(oldClef, newClef));
       }
 
 
