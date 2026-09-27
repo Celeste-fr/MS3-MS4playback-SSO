@@ -72,6 +72,7 @@ class PluginExtract {
             std::vector<int> switchValues;      // for switches()
             int grabWait { 400 };               // ms after a change, for the window to show it
             int listen { 250 };                 // ms of sound measured
+            double sampleRate { 44100 };        // the plug-in's (pitchBend)
             };
 
       // something that changed the window: its pictures at the low and the high value (the
@@ -90,6 +91,22 @@ class PluginExtract {
       static int differingPixels(const QImage& a, const QImage& b);
       static QRect changedRect(const QImage& a, const QImage& b);
       static Level level(const std::vector<float>& interleavedStereo);
+
+      // how far the pitch of "shifted" is from "reference" (both interleaved stereo, the same
+      // note), in cents, within ±maxCents: the shift that best lines up their spectra on a
+      // log-frequency scale (harmonics and all, so vibrato and round robins matter little).
+      // confidence: the correlation there (0-1; under ~0.5 the result means little).
+      // Used to measure what pitch bend does to a patch (Extract plug-in data)
+      // what pitch bend does to the patch's pitch: settings' pitch played at bends 0 … 16383 (centre
+      // 8192), each against the unbent note (centsShift); capture(ms, &samples) runs the plug-in and
+      // keeps what it played. {"pitch", "bends": [{bend, cents, confidence, db}], "rangeUp": cents at
+      // 16383 when confident}; the bend is left at the centre
+      using Capture = std::function<bool(int ms, std::vector<float>* captured)>;
+      static QJsonObject pitchBend(Vst3Plugin* p, const Settings& s, Capture capture,
+                                   std::function<void()> prepare, std::function<void(const QString&)> status);
+
+      static double centsShift(const std::vector<float>& reference, const std::vector<float>& shifted,
+                               double sampleRate, double maxCents = 2600, double* confidence = nullptr);
       };
 
 } // namespace Ms

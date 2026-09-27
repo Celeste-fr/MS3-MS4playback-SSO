@@ -24,10 +24,41 @@ jobs:
     - name: Setup environment
       run: |
         build\ci\windows\setup.bat
-    - name: Build MuseScore
+    - name: Copy dependencies
       shell: cmd
       run: |
         XCOPY "C:\musescore_dependencies" %CD% /E /I /Y
+    # The last build's folder (objects, precompiled headers, CMake's configuration), so only
+    # what changed since is compiled (the owner, 2026-09-27: "don't rebuild everything every
+    # time"). A fresh checkout gives every file today's time, which would make MSBuild rebuild
+    # all: every file is set back to 2000, then those changed since the cached build's commit
+    # (cached-commit.txt) to now. Without a cache, or if anything here fails, it is a full build.
+    - name: Restore the last build
+      id: restore
+      continue-on-error: true
+      uses: actions/cache/restore@v4
+      with:
+        path: msvc.build_x64
+        key: msvc-build-x64-${{ github.sha }}
+        restore-keys: msvc-build-x64-
+    - name: Compile only what changed since it
+      continue-on-error: true
+      shell: pwsh
+      run: |
+        $marker = "msvc.build_x64\cached-commit.txt"
+        if (-not (Test-Path $marker)) { Write-Host "No cached build: a full build."; exit 0 }
+        $cached = (Get-Content $marker -Raw).Trim()
+        git fetch --no-tags --depth=1 origin $cached 2>&1 | Out-Host
+        $changed = git diff --name-only $cached HEAD
+        if ($LASTEXITCODE -ne 0) { Write-Host "Cannot compare with $cached; the cached build is dropped."; Remove-Item -Recurse -Force msvc.build_x64; exit 0 }
+        $old = Get-Date "2000-01-01"
+        Get-ChildItem -Recurse -File -Force | Where-Object { $_.FullName -notmatch '\\(\.git|msvc\.build_x64|msvc\.install_x64)\\' } | ForEach-Object { $_.LastWriteTime = $old }
+        $now = Get-Date
+        foreach ($f in $changed) { if (Test-Path $f) { (Get-Item $f).LastWriteTime = $now } }
+        Write-Host "Cached build of $cached; $(@($changed).Count) files changed since."
+    - name: Build MuseScore
+      shell: cmd
+      run: |
         SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;C:\Program Files (x86)\Jack;%PATH%"
         CALL msvc_build.bat relwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
         CALL msvc_build.bat installrelwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
@@ -54,6 +85,19 @@ jobs:
         TYPE "%CD%\tst_soundlibrary.txt"
         FINDSTR /C:"Totals:" "%CD%\tst_soundlibrary.txt" >NUL || exit /b 1
         IF NOT "%RC%"=="0" exit /b 1
+    - name: Keep this build for the next run
+      if: ${{ success() }}
+      continue-on-error: true
+      shell: pwsh
+      run: |
+        Set-Content msvc.build_x64\cached-commit.txt "${{ github.sha }}"
+    - name: Save the build
+      if: ${{ success() }}
+      continue-on-error: true
+      uses: actions/cache/save@v4
+      with:
+        path: msvc.build_x64
+        key: msvc-build-x64-${{ github.sha }}
     - name: Upload MuseScore (installed)
       if: ${{ always() }}
       uses: actions/upload-artifact@v7

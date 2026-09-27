@@ -1951,6 +1951,32 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       summary += QString("## %1 (%2.json)%3\n").arg(ins.name, fileBase, sounds ? QString() : QString(" — it played nothing"));
       summary += describeSummary(d);
 
+      // what pitch bend does to its pitch (the owner, 2026-09-27: microtones through the library, as
+      // Kontakt ignores a note's own tuning): the test note at each bend, its spectrum against the
+      // unbent note's (PluginExtract::centsShift). The unbent note twice (start, end): the noise
+      if (sounds && !_cancel) {
+            PluginExtract::Settings s;
+            s.pitch = pitch;
+            s.sampleRate = MScore::sampleRate;
+            PluginExtract::Capture capture = [&](int ms, std::vector<float>* captured) {
+                  pump.capture = captured;
+                  pump.run(ms);
+                  pump.capture = nullptr;
+                  return !_cancel;
+                  };
+            const QJsonObject pb = PluginExtract::pitchBend(p.get(), s, capture, prepare, status);
+            out["pitchBend"] = pb;
+            QStringList line;
+            for (const QJsonValue& v : pb.value("bends").toArray()) {
+                  const QJsonObject o = v.toObject();
+                  line << QString("%1: %2c (%3)").arg(o.value("bend").toInt()).arg(std::lround(o.value("cents").toDouble()))
+                          .arg(o.value("confidence").toDouble(), 0, 'f', 2);
+                  }
+            summary += QString("   pitch bend (cents from unbent, correlation): %1\n").arg(line.join(", "));
+            if (pb.contains("rangeUp"))
+                  summary += QString("   pitch bend range: about %1 semitones up\n").arg(pb.value("rangeUp").toDouble() / 100.0, 0, 'f', 2);
+            }
+
       if (_tryAll->isChecked() && !_cancel) {
             QPointer<Vst3EditorWindow> w;
             if (Steinberg::IPlugView* view = p->createEditor()) {
