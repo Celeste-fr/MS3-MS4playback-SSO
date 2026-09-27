@@ -45,9 +45,11 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void checkedAsExpected();
       void render();
       void renderPatches();
       void renderKit();
+      void renderKitRoll();
 #ifdef TESTSYNTH
       void vst3Plugin();
       void vst3Render();
@@ -532,6 +534,107 @@ void TestSoundLibrary::renderKit()
          "<Instrument name='Metal' with='Percussion' keyScan='1'/></SoundLibrary>");
       QVERIFY(unscanned);
       QVERIFY(SoundLib::routes(score, *unscanned).empty());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   checkedAsExpected
+//    the owner's Check articulations lines (2026-09-26 run of 08:43) against the Spitfire map:
+//    reviewed verdicts and kit keys pass, anything else stays as it is
+//---------------------------------------------------------
+
+void TestSoundLibrary::checkedAsExpected()
+      {
+      QString error;
+      auto lib = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      auto patch = [&](const QString& name) -> const SoundLib::LibInstrument& {
+            for (const SoundLib::LibInstrument& li : lib->instruments)
+                  if (li.name == name)
+                        return li;
+            static SoundLib::LibInstrument none;
+            return none;
+            };
+      QString line;
+      QVERIFY(SoundLib::checkedAsExpected(patch("Violins 1"), "31 switch, 0 ignored, 0 unclear, 1 silent", &line));
+      QCOMPARE(line, QString("31 switch, 0 ignored, 0 unclear, 1 silent (as expected)"));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Solo Violin 1"), "5 switch, 1 ignored, 0 unclear, 0 silent", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Contrabassoon"), "3 switch, 0 ignored, 1 unclear, 0 silent", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Harp"), "5 switch, 0 ignored, 0 unclear, 1 silent", &line));
+      // not what was expected: another count, a patch with nothing expected, a switching problem
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Violins 1"), "30 switch, 1 ignored, 0 unclear, 1 silent", &line));
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Violas"), "20 switch, 0 ignored, 0 unclear, 1 silent", &line));
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Harp"), "0 switch, 0 ignored, 0 unclear, 1 silent — no switching", &line));
+
+      // kits checked before the map had their keys: all of the map's keys sounded
+      QVERIFY(SoundLib::checkedAsExpected(patch("Drums - Low"),
+         "27 keys sound (36-39, 48, 50, 52-53, 60-65, 67, 72, 74-78, 84-89); 7 keyswitches (40, 49, 51, 55, 66, 68, 93); "
+         "the map has no keys for it yet", &line));
+      QCOMPARE(line, QString("27 keys sound (36-39, 48, 50, 52-53, 60-65, 67, 72, 74-78, 84-89); "
+                             "7 keyswitches (40, 49, 51, 55, 66, 68, 93)"));
+      // keys the owner switched on later (Snare 1 x stick 115, roll 119; Snare 2 roll 6) weren't heard
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Drums - High"),
+         "43 keys sound (36-38, 40-43, 45, 48, 50, 52-53, 55, 57, 59-67, 69, 71-74, 76-79, 81-82, 84-92); "
+         "9 keyswitches (39, 44, 46, 54, 56, 58, 80, 83, 93); the map has no keys for it yet", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Unpitched - Wood"),
+         "17 keys sound (36-40, 48-53, 55, 60, 62, 64-65, 67); 5 keyswitches (54, 57, 63, 66, 68); the map has no keys for it yet", &line));
+      QVERIFY(SoundLib::checkedAsExpected(patch("Other - Toys"),
+         "38 keys sound (36, 38, 40-41, 43, 45, 47-48, 50, 52-53, 55, 57, 59-60, 62, 64-65, 67, 69, 71-72, 74, 76-77, 79-81, "
+         "83-84, 86-89, 91, 93, 95-96); 12 keyswitches (39, 42, 44, 46, 49, 51, 54, 61, 63, 70, 73, 75); the map has no keys for it yet", &line));
+      // Metal: its triangle keys (103, 107) did not sound: to be checked
+      QVERIFY(!SoundLib::checkedAsExpected(patch("Unpitched - Metal"),
+         "53 keys sound (36-50, 52-55, 57-72, 74, 76-77, 79-86, 88-89, 91, 93, 95-97); 5 keyswitches (10, 56, 73, 78, 99); "
+         "the map has no keys for it yet", &line));
+      // … and with Triangle 1 active (09:12)
+      QVERIFY(SoundLib::checkedAsExpected(patch("Unpitched - Metal"),
+         "65 keys sound (36-50, 52-55, 57-72, 74, 76-77, 79-86, 88-89, 91, 93, 95-97, 103-114); "
+         "6 keyswitches (10, 56, 73, 78, 99, 125); the map has no keys for it yet", &line));
+      }
+
+//---------------------------------------------------------
+//   renderKitRoll
+//    a single-note tremolo on a kit: the drum's roll key once, held for the note; a drum with no
+//    roll key plays the tremolo's hits on its hit key
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderKitRoll()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Percussion' ids='drumset' kit='1'/>"
+         "<Instrument name='Drums' with='Percussion' keyScan='1'>"
+         "<Drum pitch='38' key='62' name='Snare hit'/><Drum pitch='38' key='64' name='Snare roll' technique='roll'/>"
+         "<Drum pitch='36' key='48' name='Bass drum'/><Drum pitch='35' key='48' name='Bass drum'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='Percussion' ids='drumset' kit='1'/>"
+                       "<Instrument name='D' with='Percussion'><Drum pitch='38' key='1' technique='flam'/></Instrument>"
+                       "</SoundLibrary>"));
+      SoundLib::setCurrent(lib);
+
+      MasterScore* score = readScore(DIR + "drumrolls.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);    // the kit, Drums
+
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<int, std::vector<int>> on;       // key -> note-on ticks
+      int rollOff = -1;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal() || (ev.type() != ME_NOTEON && ev.type() != ME_NOTEOFF))
+                  continue;
+            if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                  on[ev.pitch()].push_back(te.first);
+            else if (ev.pitch() == 64)
+                  rollOff = te.first;
+            }
+      QCOMPARE(int(on[62].size()), 0);                   // the snare's hit key: not used
+      QCOMPARE(int(on[64].size()), 1);                   // its roll key, once
+      QVERIFY(rollOff - on[64][0] > DIVISION);           // held for the half note
+      QVERIFY(int(on[48].size()) > 4);                   // the bass drum: the tremolo's hits
       delete score;
       }
 

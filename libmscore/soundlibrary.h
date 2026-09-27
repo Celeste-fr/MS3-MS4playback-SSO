@@ -47,6 +47,7 @@
 
 namespace Ms {
 
+class Chord;
 class Instrument;
 class Note;
 class Part;
@@ -72,14 +73,19 @@ struct Articulation {
       QStringList techniques;             // the bases it plays (none: never chosen, listed for reference)
       QStringList modifiers;              // with these modifiers
       int value { -1 };                   // CC value, keyswitch pitch or program
+      QString expect;                     // what Check articulations hears where it isn't "switches"
+                                          // and that is right ("silent", "ignored", "unclear")
       };
 
 struct DrumKey {
-      int pitch { -1 };                   // the MuseScore drum sound (the note's pitch)
+      int pitch { -1 };                   // the MuseScore drum sound (the note's pitch), -1: none (reference)
       int key { -1 };                     // the patch's key that plays it
       int velocity { -1 };                // a fixed velocity (a round robin / roll on velocity), -1: the note's
       QStringList ids;                    // only for these MuseScore instruments (empty: all)
       QString name;
+      QString technique;                  // "roll": played for a roll (tremolo); empty: a hit
+      bool offByDefault { false };        // the patch has the technique switched off until the user
+                                          // gives it a key (Kickstart); a setup elsewhere must do the same
       };
 
 struct LibInstrument {
@@ -149,7 +155,18 @@ struct DrumChoice {
       int patch { -1 };
       const DrumKey* key { nullptr };
       };
-DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId);
+// Check articulations' line for a patch (mscore/soundlibrarycheck.cpp) that recorded problems before
+// the map said they are right: true when its only non-switching values are those the map expects
+// (by their counts: Articulation::expect), or, for a kit's patch, when every drum key of the map is
+// among the keys it heard sound; newLine: the line to keep
+bool checkedAsExpected(const LibInstrument& instrument, const QString& line, QString* newLine);
+
+// a kit plays a chord rolled (its roll keys, the note once) when it has a single-note tremolo or
+// a buzz roll; a two-note tremolo between drums stays repeated hits
+bool drumRoll(const Chord* chord);
+// technique "roll": the sound's roll key, none when it has none
+DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId,
+                const QString& technique = QString());
 
 // the library in use (the preference), shared by the renderer and the sequencer
 void setCurrent(std::shared_ptr<const Library> library);

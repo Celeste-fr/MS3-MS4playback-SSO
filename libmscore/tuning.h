@@ -21,7 +21,22 @@
 //                3.6 keeps through a round trip. Tunings built from a chain of equal fifths
 //                (Pythagorean, meantones, equal) follow the note's spelling: C# and Db differ,
 //                as those tunings define them. The others are keyboard tunings, one value per key.
-//   accidental   the Microtonal Tuner plugin's rules: a microtonal accidental on the note, the
+//                Just intonation can be either: the plugin's 12 keys (its default, and the one
+//                keyboards have), or by spelling ("just": "spelled" in the metaTag), as Ben
+//                Johnston notates it: the root's major scale is Ptolemy's (1/1 9/8 5/4 4/3 3/2
+//                5/3 15/8: its I, IV and V triads pure 4:5:6), a sharp raises by 25/24 and a flat
+//                lowers by it, so C# (25/24) and Db (27/25) differ; a syntonic comma (81/80) is
+//                the Sagittal 5-comma accidental. D-A stays 40/27, as in any fixed just scale.
+//                Or by spelling as the Helmholtz-Ellis JI notation (HEJI, Sabat / von Schweinitz)
+//                defines it ("just": "heji"): unmarked notes are Pythagorean (pure fifths from the
+//                root), and each of HEJI's arrows on an accidental moves it by a syntonic comma
+//                (E with one arrow down is 5/4 above C). MuseScore 3 plays those accidentals as
+//                naturals; here they sound as written, in every tuning.
+//   accidental   (families, each by its own definition: quarter tones fixed 50 / half the tuning's
+//                sharp / 33/32 and koron-sori per the score's choices; Arel-Ezgi-Uzdilek and Turkish
+//                folk accidentals in Holdrian commas, 1/53 octave; Wyschnegradsky in 72-EDO steps;
+//                Sagittal and Helmholtz-Ellis in their exact ratios)
+//                the Microtonal Tuner plugin's rules: a microtonal accidental on the note, the
 //                last one on its staff line earlier in the bar (any voice), or a custom key
 //                signature's symbol on that line; cents from MuseScore 3.6.2's accidental table,
 //                relative to the note's plain spelling (a half-sharp F is +50). A tied note
@@ -55,9 +70,32 @@ struct Temperament {
       double tweak { 0.0 };         // cents added to every note
       double offsets[12] { };       // final cents per pitch class C, C#, D … B (the plugin's final values)
       bool spelled { true };        // follow the spelling where the tuning is a chain of fifths
+      enum class Just : char {
+            KEYS,                   // the Tuning plugin's 12 keys
+            JOHNSTON,               // by spelling: the root's major scale pure, sharp / flat 25/24
+            HEJI                    // by spelling: Helmholtz-Ellis, unmarked notes Pythagorean
+            };
+      Just just { Just::KEYS };     // how Just intonation is tuned
+      enum class Quarter : char {
+            FIXED,                  // 24-EDO: a quarter tone is 50 cents (the most used; MuseScore 3.6)
+            HALF,                   // half the tuning's own sharp or flat (meantone, 31-EDO: a semisharp)
+            JUST                    // 33/32, the undecimal quarter tone of just intonation
+            };
+      Quarter quarter { Quarter::FIXED };   // quarter-tone accidentals (Stein-Zimmermann, Gould arrows)
+      enum class Persian : char {
+            VAZIRI,                 // quarter tones, as Vaziri defined them: koron -50, sori +50
+            PRACTICE,               // as reported in performance: koron -60, sori +40
+            MS36                    // as the Microtonal Tuner plugin played them in 3.6 (MuseScore
+                                    // PR #4452, 2019, no reason given): -67, +33
+            };
+      Persian persian { Persian::VAZIRI };
+      bool accidentalsDefault() const { return quarter == Quarter::FIXED && persian == Persian::VAZIRI; }
 
       bool isEqual() const;
       bool isChain(double* step = nullptr) const;
+      bool isJustBySpelling() const;
+      static double johnstonCents(int tpc, int rootTpc);
+      static double pythagoreanCents(int tpc, int rootTpc);
       double cents(int tpc, int pitch) const;
 
       static Temperament preset(const QString& name, int root, int pure, double tweak);
@@ -108,8 +146,9 @@ class ScoreTuning {
       double cents(const Note* note) { return tuning(note).total(); }
       const Temperament& temperament() const { return _temperament; }
 
-      static double accidentalCents(AccidentalType type, bool* valued);
-      static double symbolCents(SymId sym, bool* valued);
+      static double accidentalCents(AccidentalType type, bool* valued, int* spelled = nullptr);
+      static double symbolCents(SymId sym, bool* valued, int* spelled = nullptr);
+      static bool hejiAccidental(AccidentalType type, int* sharps, int* arrows);
       static bool looksLikeTunerValue(double tuning);
       };
 

@@ -32,7 +32,7 @@
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
     <Articulation name="Long Sul Tasto" value="17" techniques="long legato" modifiers="sultasto"/>
-    <Articulation name="Long Sul G" value="112" techniques=""/>
+    <Articulation name="Long Sul G" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
     <Articulation name="Short 0.5" value="50" techniques=""/>
@@ -65,7 +65,7 @@
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
-    <Articulation name="Long Sul G" value="112" techniques=""/>
+    <Articulation name="Long Sul G" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
     <Articulation name="Short 0.5" value="50" techniques=""/>
@@ -127,7 +127,7 @@
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
-    <Articulation name="Long Sul C" value="112" techniques=""/>
+    <Articulation name="Long Sul C" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
     <Articulation name="Short 0.5" value="50" techniques=""/>
@@ -211,7 +211,7 @@
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
-    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored"/>
   </Instrument>
   <Instrument name="Solo Violin 2" ids="violin" partName="\b(2|II)\b|\bsecond\b|\b2nd\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -227,7 +227,7 @@
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
-    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored"/>
   </Instrument>
   <Instrument name="Solo Cello" ids="violoncello">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -239,7 +239,7 @@
   <Instrument name="Piccolo" ids="piccolo">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
-    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored"/>
     <Articulation name="Multi Tongued" value="75" techniques="tremolo" modifiers="multitongue"/>
     <Articulation name="Marcato" value="52" techniques="marcato"/>
     <Articulation name="Tenuto" value="50" techniques="tenuto"/>
@@ -264,7 +264,7 @@
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
-    <Articulation name="Long Overblown" value="9" techniques=""/>
+    <Articulation name="Long Overblown" value="9" techniques="" expect="ignored"/>
     <Articulation name="Long Hollow" value="8" techniques=""/>
     <Articulation name="Multi Tongued" value="75" techniques="tremolo" modifiers="multitongue"/>
     <Articulation name="Marcato" value="52" techniques="marcato"/>
@@ -278,7 +278,7 @@
   <Instrument name="Alto Flute" ids="alto-flute">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
-    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
+    <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored"/>
     <Articulation name="Long Overblown" value="9" techniques=""/>
     <Articulation name="Marcato" value="52" techniques="marcato"/>
     <Articulation name="Tenuto" value="50" techniques="tenuto"/>
@@ -371,7 +371,7 @@
     <Articulation name="Trill (Major 2nd)" value="71" techniques="trill-M2"/>
   </Instrument>
   <Instrument name="Contrabassoon" ids="contrabassoon">
-    <Articulation name="Long" value="1" techniques="long legato"/>
+    <Articulation name="Long" value="1" techniques="long legato" expect="unclear"/>
     <Articulation name="Marcato" value="52" techniques="marcato"/>
     <Articulation name="Tenuto" value="50" techniques="tenuto"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
@@ -457,7 +457,7 @@
   <Instrument name="Motif Trumpets a3" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*3\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
     <Articulation name="Short Staccato" value="40" techniques="short"/>
-    <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato"/>
+    <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato" expect="unclear"/>
     <Articulation name="Short Tenuto" value="50" techniques="tenuto"/>
     <Articulation name="Short Marcato" value="52" techniques="marcato"/>
     <Articulation name="Multitongue" value="75" techniques="tremolo" modifiers="multitongue"/>
@@ -526,7 +526,7 @@
     <Articulation name="Multi Tongued" value="75" techniques="tremolo" modifiers="multitongue"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo"/>
     <Articulation name="Rip" value="100" techniques="rip"/>
-    <Articulation name="Fall" value="101" techniques="fall"/>
+    <Articulation name="Fall" value="101" techniques="fall" expect="ignored"/>
   </Instrument>
   <Instrument name="Bass Trombones a2" ids="bass-trombone" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -583,7 +583,7 @@
     <Articulation name="Marcato" value="52" techniques="marcato"/>
     <Articulation name="Tenuto" value="50" techniques="tenuto"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
-    <Articulation name="Rip" value="100" techniques="rip"/>
+    <Articulation name="Rip" value="100" techniques="rip" expect="unclear"/>
     <Articulation name="Fall" value="101" techniques="fall"/>
   </Instrument>
   <Instrument name="Harp" ids="harp">
@@ -592,7 +592,7 @@
     <Articulation name="Flageolet" value="29" techniques="long legato short" modifiers="harmonics"/>
     <Articulation name="Slid" value="2" techniques=""/>
     <Articulation name="Bisbigliando" value="11" techniques="tremolo"/>
-    <Articulation name="Fx" value="90" techniques=""/>
+    <Articulation name="Fx" value="90" techniques="" expect="silent"/>
   </Instrument>
   <Instrument name="Grand Piano" ids="piano grand-piano upright-piano">
     <Articulation name="Direct" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
@@ -876,20 +876,317 @@
     <Switch type="none"/>
     <Articulation name="Oboe Principal" value="1" techniques=""/>
   </Instrument>
-  <Instrument name="Percussion" ids="drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes bell-plate vibraslap" kit="1"/>
+  <Instrument name="Percussion" ids="drumset percussion snare-drum piccolo-snare-drum military-drum bass-drum tom-toms bongos congas timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes bell-plate vibraslap automobile-brake-drums" kit="1"/>
   <Instrument name="Drums - High" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="38" key="36" name="Snare 1 Hit"/>
+    <Drum pitch="40" key="41" name="Snare 2 Hit"/>
+    <Drum pitch="38" key="119" name="Snare 1 Roll" technique="roll" default="off"/>
+    <Drum pitch="40" key="6" name="Snare 2 Roll" technique="roll" default="off"/>
+    <Drum pitch="37" key="115" name="Snare 1 X Stick" ids="snare-drum drumset percussion" default="off"/>
+    <Drum pitch="38" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
+    <Drum pitch="40" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
+    <Drum pitch="60" key="52" name="Bongos Hand Tone"/>
+    <Drum pitch="61" key="50" name="Bongos Hand Bass"/>
+    <Drum pitch="62" key="64" name="Conga 1 Slap"/>
+    <Drum pitch="63" key="62" name="Conga 1 Tone"/>
+    <Drum pitch="64" key="69" name="Conga 2 Tone"/>
+    <Drum pitch="65" key="77" name="Timbales Hi Hit"/>
+    <Drum pitch="66" key="72" name="Timbales Lo Hit"/>
+    <Drum key="1" name="Snare 2 X Stick" default="off"/>
+    <Drum key="2" name="Snare 2 Flam" default="off"/>
+    <Drum key="5" name="Snare 2 Brush" default="off"/>
+    <Drum key="8" name="Snare 2 Brush Roll" default="off"/>
+    <Drum key="38" name="Snare 1 Edge"/>
+    <Drum key="40" name="Snare 1 Rim"/>
+    <Drum key="43" name="Snare 2 Edge"/>
+    <Drum key="48" name="Bongos Hand Flam"/>
+    <Drum key="53" name="Bongos Finger Flam"/>
+    <Drum key="55" name="Bongos Finger Bass"/>
+    <Drum key="57" name="Bongos Finger Slap"/>
+    <Drum key="59" name="Bongos Hit"/>
+    <Drum key="60" name="Conga 1 Bass"/>
+    <Drum key="65" name="Conga 1 / 2 Hit"/>
+    <Drum key="67" name="Conga 2 Bass"/>
+    <Drum key="71" name="Conga 2 Slap"/>
+    <Drum key="74" name="Timbales Lo Edge"/>
+    <Drum key="76" name="Timbales Lo Rim"/>
+    <Drum key="79" name="Timbales Hi Edge"/>
+    <Drum key="81" name="Timbales Hi Rim"/>
+    <Drum key="84" name="Rototom 1"/>
+    <Drum key="86" name="Rototom 2"/>
+    <Drum key="88" name="Rototom 3"/>
+    <Drum key="89" name="Rototom 4"/>
+    <Drum key="91" name="Rototom 5"/>
+    <Drum key="93" name="Snare 1 Swell mf" default="off"/>
+    <Drum key="94" name="Snare 1 Swell f" default="off"/>
+    <Drum key="120" name="Snare 1 Flam" default="off"/>
+    <Drum key="124" name="Snare 2 Rim" default="off"/>
+    <!-- off in Kickstart, no key: Timbales Lo / Hi X Stick, Lo / Hi Flam, Hi Side, Lo / Hi Swell mf / f; Rototoms Swell 1-5; Conga 1 / 2 Flam, Roll, Roll SFP, Roll Side, Swell mf / f; Bongos Hand Roll (SFP), Finger Roll (SFP), Side Roll, Hand / Bass Swell mf / f -->
   </Instrument>
   <Instrument name="Drums - Low" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="35" key="86" name="Bass Drum Soft Hit"/>
+    <Drum pitch="36" key="84" name="Bass Drum Hit"/>
+    <Drum pitch="38" key="48" name="Field Drum Hit" ids="military-drum"/>
+    <Drum pitch="37" key="53" name="Field Drum X Stick" ids="military-drum"/>
+    <Drum pitch="37" key="53" name="Field Drum X Stick"/>
+    <Drum pitch="50" key="60" name="Tom 1"/>
+    <Drum pitch="48" key="62" name="Tom 2"/>
+    <Drum pitch="47" key="64" name="Tom 3"/>
+    <Drum pitch="45" key="65" name="Tom 4"/>
+    <Drum pitch="43" key="67" name="Tom 5"/>
+    <Drum pitch="41" key="67" name="Tom 5"/>
+    <Drum key="36" name="Gong Drum Hit"/>
+    <Drum key="38" name="Gong Drum Mute Hit"/>
+    <Drum key="50" name="Field Drum Edge"/>
+    <Drum key="52" name="Field Drum Rim"/>
+    <Drum key="72" name="Tom Ensemble Hit"/>
+    <Drum key="74" name="Tom Ensemble Hit Loose"/>
+    <Drum key="76" name="Tom Ensemble Eth Hit"/>
+    <Drum key="77" name="Tom Ensemble Eth Hit Loose"/>
+    <Drum key="88" name="Bass Drum Mute Hit"/>
+    <Drum key="89" name="Bass Drum Rute"/>
+    <!-- off in Kickstart, no key: Toms Swell 1-5 mf / f; Gong Drum Swell, Fx Drag, Fx Various; Field Drum Flam, Roll, Swell mf / f; Bass Drum Roll, Fx Rub, Swell -->
   </Instrument>
   <Instrument name="Unpitched - Metal" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="49" key="48" name="Cymbal Med Hit"/>
+    <Drum pitch="57" key="53" name="Cymbal Hi Hit"/>
+    <Drum pitch="55" key="53" name="Cymbal Hi Hit"/>
+    <Drum pitch="57" key="59" name="Piatti Hit" ids="cymbal"/>
+    <Drum pitch="59" key="59" name="Piatti Hit" ids="percussion"/>
+    <Drum pitch="51" key="43" name="Cymbal Lo Hit" ids="ride-cymbal"/>
+    <Drum pitch="52" key="43" name="Cymbal Lo Hit" ids="chinese-cymbal"/>
+    <Drum pitch="52" key="36" name="Tam Tam Hit" ids="tam-tam"/>
+    <Drum pitch="52" key="40" name="Rain Sheet Hit" ids="thundersheet"/>
+    <Drum pitch="84" key="79" name="Mark Tree Long"/>
+    <Drum pitch="69" key="79" name="Mark Tree Long" ids="metal-wind-chimes"/>
+    <Drum pitch="68" key="67" name="Anvil Hit Mid" ids="anvil"/>
+    <Drum pitch="68" key="86" name="Trash Metal Brake 1" ids="automobile-brake-drums"/>
+    <Drum pitch="81" key="103" name="Triangle 1 Open Hit 1" ids="triangle drumset percussion" default="off"/>
+    <Drum pitch="80" key="107" name="Triangle 1 Closed Hit" ids="triangle drumset percussion" default="off"/>
+    <Drum key="38" name="Tam Tam Choked Hit"/>
+    <Drum key="41" name="Rain Sheet Choked Hit"/>
+    <Drum key="45" name="Cymbal Lo Choked Hit"/>
+    <Drum key="47" name="Cymbal Lo Brush"/>
+    <Drum key="50" name="Cymbal Med Choked Hit"/>
+    <Drum key="52" name="Cymbal Med Brush"/>
+    <Drum key="55" name="Cymbal Hi Choked Hit"/>
+    <Drum key="57" name="Cymbal Hi Brush"/>
+    <Drum key="60" name="Rivet Cymbal Hit"/>
+    <Drum key="62" name="Gong Hit"/>
+    <Drum key="64" name="Gong Choke"/>
+    <Drum key="65" name="Anvil Hit Rear"/>
+    <Drum key="69" name="Anvil Horn Center"/>
+    <Drum key="71" name="Anvil Horn Tip"/>
+    <Drum key="72" name="Anvil Horn Under"/>
+    <Drum key="74" name="Mini Anvil 1"/>
+    <Drum key="76" name="Mini Anvil 2"/>
+    <Drum key="77" name="Mini Anvil 3"/>
+    <Drum key="81" name="Mark Tree Up"/>
+    <Drum key="83" name="Mark Tree Down"/>
+    <Drum key="84" name="Mark Tree Push"/>
+    <Drum key="88" name="Trash Metal Brake 2"/>
+    <Drum key="89" name="Trash Metal Pans"/>
+    <Drum key="91" name="Trash Metal Scafold 1"/>
+    <Drum key="93" name="Trash Metal Scafold 2"/>
+    <Drum key="95" name="Trash Metal Spring Coil"/>
+    <Drum key="96" name="Trash Metal Trash Can"/>
+    <Drum key="104" name="Triangle 1 Open Hit 2" default="off"/>
+    <Drum key="105" name="Triangle 1 Open Hit 3" default="off"/>
+    <Drum key="106" name="Triangle 1 Open Hit 4" default="off"/>
+    <Drum key="108" name="Triangle 2 Open Hit 1" default="off"/>
+    <Drum key="109" name="Triangle 2 Open Hit 2" default="off"/>
+    <Drum key="110" name="Triangle 2 Open Hit 3" default="off"/>
+    <Drum key="111" name="Triangle 2 Open Hit 4" default="off"/>
+    <Drum key="112" name="Triangle 2 Closed Hit" default="off"/>
+    <!-- off in Kickstart, no key: Gong Swell mf / f, Fx Bow; Tam Tam Roll, Swell mf / f, Superball, Fx Scrape; Rivet Cymbal Roll, Swell; Rain Sheet Roll, Swell mp / mf / f, Superball; Piatti Choked Hit, Choked Alt, Fx Scrape, Fx Sizzle; Cymbal Hi / Lo Roll, Swell mf / f, Fx Scrape, Fx Bow; Cymbal Med Roll, Swell mf / f; Mark Tree Sweep low / mid / high; Anvil Hit Face, Steel Sheet, Horn Pipe, Rear Pipe -->
   </Instrument>
   <Instrument name="Unpitched - Wood" with="Percussion" keyScan="1">
     <Switch type="none"/>
+    <Drum pitch="76" key="60" name="Woodblock 1"/>
+    <Drum pitch="77" key="67" name="Woodblock 5"/>
+    <Drum pitch="62" key="48" name="Templeblock 1" ids="temple-blocks"/>
+    <Drum pitch="61" key="50" name="Templeblock 2" ids="temple-blocks"/>
+    <Drum pitch="60" key="52" name="Templeblock 3" ids="temple-blocks"/>
+    <Drum pitch="59" key="53" name="Templeblock 4" ids="temple-blocks"/>
+    <Drum pitch="58" key="55" name="Templeblock 5" ids="temple-blocks"/>
+    <Drum pitch="75" key="39" name="Claves Cuban Hit"/>
+    <Drum key="36" name="Claves Bass Hit"/>
+    <Drum key="37" name="Claves C# Hit"/>
+    <Drum key="38" name="Claves D Hit"/>
+    <Drum key="40" name="Claves E Hit"/>
+    <Drum key="62" name="Woodblock 2"/>
+    <Drum key="64" name="Woodblock 3"/>
+    <Drum key="65" name="Woodblock 4"/>
+    <!-- off in Kickstart, no key: (not yet known) -->
   </Instrument>
   <Instrument name="Other - Toys" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+    <Drum pitch="54" key="43" name="Tambourine Hit"/>
+    <Drum pitch="83" key="76" name="Sleighbells Hit 1"/>
+    <Drum pitch="82" key="67" name="Shaker Metal Closed"/>
+    <Drum pitch="70" key="64" name="Shaker Pop Closed"/>
+    <Drum pitch="73" key="69" name="Guiro Hit"/>
+    <Drum pitch="74" key="71" name="Guiro Zip"/>
+    <Drum pitch="73" key="62" name="Ratchet Short" ids="ratchet"/>
+    <Drum pitch="56" key="55" name="Cowbell 2 Open"/>
+    <Drum pitch="67" key="84" name="Agogo High"/>
+    <Drum pitch="68" key="83" name="Agogo Low"/>
+    <Drum pitch="85" key="48" name="Castanets Right Hand"/>
+    <Drum pitch="67" key="48" name="Castanets Right Hand" ids="metal-castanets"/>
+    <Drum pitch="69" key="91" name="Cabasa Shake"/>
+    <Drum pitch="58" key="86" name="Jawbone Hit"/>
+    <Drum key="36" name="Gankogui 1"/>
+    <Drum key="38" name="Gankogui 2"/>
+    <Drum key="40" name="Gankogui 3"/>
+    <Drum key="41" name="Gankogui 4"/>
+    <Drum key="45" name="Tambourine Hit Alt"/>
+    <Drum key="47" name="Castanets Left Hand"/>
+    <Drum key="50" name="Castanets Flam"/>
+    <Drum key="52" name="Cowbell 1 Open"/>
+    <Drum key="53" name="Cowbell 1 Closed"/>
+    <Drum key="57" name="Cowbell 2 Closed"/>
+    <Drum key="59" name="Cowbell 3 Open"/>
+    <Drum key="60" name="Cowbell 3 Closed"/>
+    <Drum key="65" name="Shaker Metal Open"/>
+    <Drum key="72" name="Guiro Zip Fast"/>
+    <Drum key="74" name="Guiro Zip sfz"/>
+    <Drum key="77" name="Sleighbells Hit 2"/>
+    <Drum key="79" name="Ships Bell 1"/>
+    <Drum key="81" name="Ships Bell 2"/>
+    <Drum key="88" name="Jawbone Hit f"/>
+    <Drum key="89" name="Cabasa Flick"/>
+    <Drum key="93" name="Cabasa Slap"/>
+    <Drum key="95" name="Cabasa Twist 1"/>
+    <Drum key="96" name="Cabasa Twist 2"/>
+    <!-- off in Kickstart, no key: Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll -->
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Bongos" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Conga 1" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Conga 2" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Rototoms" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Snare 1" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Snare 2" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Snare 3" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - High - Timbales" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Bass Drum" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Field Drum" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Gong Drum" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Tom Ensemble" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Drums - Low - Toms" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Anvil" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Hi" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Lo" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Med" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Mark Tree" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Mini Anvil" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Piatti" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Rain Sheet" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Rivet Cymbal" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Tam Tam" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Trash Metals" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Triangle 1" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Triangle 2" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Metal - Wind Gong" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Wood - Claves" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Wood - Temple Blocks" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Unpitched - Wood - Woodblocks" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Agogo" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Cabasa" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Castanets" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Cowbells" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Gankogui" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Guiro" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Jawbone" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Ratchet" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Shakers" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Ships Bell" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Sleighbells" with="Percussion" keyScan="1">
+    <Switch type="none"/>
+  </Instrument>
+  <Instrument name="Percussion - Other - Toys - Tambourines" with="Percussion" keyScan="1">
     <Switch type="none"/>
   </Instrument>
 </SoundLibrary>

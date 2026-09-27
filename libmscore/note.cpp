@@ -1395,6 +1395,17 @@ void Note::write(XmlWriter& xml) const
 
       if (_accidental)
             _accidental->write(xml);
+      // stacked accidental modifiers (Accidental::isStackModifier): saved where the accidental draws
+      // them, so that MuseScore 3.6, which shows them as plain symbols, puts them there too
+      if (_accidental) {
+            for (Element* e : _el) {
+                  if (!e->isSymbol() || !toSymbol(e)->isStackedAccidental())
+                        continue;
+                  Symbol* sym = toSymbol(e);
+                  const QPointF want = _accidental->pos() + _accidental->stackedModifierPos(sym->sym());   // (pos: with offset)
+                  sym->setOffset(want - sym->ipos());
+                  }
+            }
       _el.write(xml);
       bool write_dots = false;
       for (NoteDot* dot : _dots)

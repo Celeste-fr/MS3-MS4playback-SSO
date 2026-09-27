@@ -52,6 +52,7 @@ class Symbol : public BSymbol {
       void write(XmlWriter& xml) const override;
       void read(XmlReader&) override;
       void layout() override;
+      bool isStackedAccidental() const;
 
       QVariant getProperty(Pid) const override;
       bool setProperty(Pid, const QVariant&) override;

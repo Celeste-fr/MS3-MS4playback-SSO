@@ -128,6 +128,16 @@ class Accidental final : public Element {
       static AccidentalType name2subtype(const QString&);
       static bool isMicrotonal(AccidentalType t)  { return t > AccidentalType::FLAT3; }
 
+      // Stacked accidentals (this fork): Helmholtz-Ellis' prime modifiers (7, 11, 13 and the combining
+      // 17 … 53 ones) go beside a note's accidental instead of replacing it. MuseScore 3 has one
+      // accidental per note, so each modifier is a Symbol attached to the note (3.6 keeps and shows
+      // it); the accidental draws them to its left, highest prime outermost, and spaces with them.
+      static bool isStackModifier(AccidentalType t);
+      static bool carriesModifiers(AccidentalType t); // a base they can stand beside (♭ ♮ ♯, HEJI's arrows, a modifier)
+      static int stackPrime(SymId s);                 // the modifier's prime, 0: not a modifier
+      QList<SymId> stackedModifiers() const;          // the note's, outermost first
+      QPointF stackedModifierPos(SymId s) const;
+
       QString accessibleInfo() const override;
       };
 

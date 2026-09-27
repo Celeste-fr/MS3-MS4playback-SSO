@@ -264,9 +264,26 @@ EXTRAS += [
 ]
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
 
-def articulation(n, v, t, m):
+# What Check articulations hears on the owner's Kontakt where it isn't "switches", and why that is
+# right (eighth run, 2026-09-26; each one looked at in the pictures): the check counts these as
+# expected, so the patch passes. (patch, value) -> verdict
+EXPECT = {
+    # Spitfire's All techniques patches map no samples to these (Kontakt's Voices stay at 0)
+    ('Violins 1', 112): 'silent', ('Violins 2', 112): 'silent', ('Celli', 112): 'silent',
+    ('Harp', 90): 'silent',
+    # the pictures show the right articulation; the audio comparison is weak for these sounds
+    ('Solo Violin 1', 10): 'ignored', ('Solo Viola', 10): 'ignored', ('Piccolo', 10): 'ignored',
+    ('Flutes a2', 9): 'ignored', ('Alto Flute', 10): 'ignored', ('Bass Trombone Solo', 101): 'ignored',
+    ('Contrabassoon', 1): 'unclear', ('Motif Trumpets a3', 42): 'unclear', ('Contrabass Tuba', 100): 'unclear',
+}
+expectUsed = set()
+
+def articulation(n, v, t, m, patch=None):
     a=f'    <Articulation name={q(n)} value="{v}" techniques={q(t)}'
     if m: a+=f' modifiers={q(m)}'
+    if (patch, v) in EXPECT:
+        a+=f' expect={q(EXPECT[(patch, v)])}'
+        expectUsed.add((patch, v))
     return a+'/>'
 
 for bank,name,ids,pn in I:
@@ -291,9 +308,9 @@ for bank,name,ids,pn in I:
         shown = n.replace("Trill (Minor 3rd","Trill (Minor 3rd)").replace("))",")").replace("Tremelo","Tremolo")
         if (name, n) in SPITFIRE_RENAME:
             shown, t, m = SPITFIRE_RENAME[(name, n)]
-        out.append(articulation(shown, v, t, m))
+        out.append(articulation(shown, v, t, m, name))
     for n, v, t, m in SPITFIRE_ADD.get(name, []):
-        out.append(articulation(n, v, t, m))
+        out.append(articulation(n, v, t, m, name))
     out.append('  </Instrument>')
 names = {name for _, name, _, _ in I}
 for main, name, arts in EXTRAS:
@@ -315,17 +332,231 @@ KIT_IDS = ('drumset percussion snare-drum piccolo-snare-drum military-drum bass-
            'timbales tam-tam cymbal crash-cymbal ride-cymbal splash-cymbal chinese-cymbal finger-cymbals '
            'triangle tambourine wood-blocks temple-blocks claves castanets metal-castanets cowbell agogo-bells '
            'guiro cabasa shaker maracas ratchet whip anvil sleigh-bells thundersheet metal-wind-chimes '
-           'bell-plate vibraslap')
+           'bell-plate vibraslap automobile-brake-drums')
 PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - Wood', 'Other - Toys']
-DRUMS = {}
+# Keys from the owner's screenshots of each drum's hit list in Kickstart (2026-09-26; C3 = 60, as the
+# key scan confirms: every listed key sounds and every loud key is listed). MuseScore's pitches are
+# the GM ones its drumsets use (instruments.xml); an entry with ids is for those instruments only.
+# An entry whose name ends in " Roll" is the sound's roll key (technique="roll": a single-note tremolo or
+# buzz roll plays it once, held; a crescendo over it swells through the dynamics on CC1). SSO's rolls
+# are off in Kickstart until the owner assigns them a key: add them here then (Snare 1 / 2 so far).
+# Guesses to confirm by ear: Tom 1 is the high tom, Conga 1 the high conga, Block 1 the high block.
+DRUMS = {
+ 'Drums - High': [
+  # snares: Snare 1 hit 36 / edge 38 / rim 40, Snare 2 hit 41 / edge 43, Snare 3 hit 45. Keys the owner
+  # switched on (2026-09-26): Snare 1 x stick 115, roll 119, flam 120, swell mf 93 / f 94; Snare 2 rim 124,
+  # x stick 1, flam 2, brush 5, roll 6, brush roll 8 (Kickstart gives a new technique the next free key)
+  (38, 36, 'Snare 1 Hit', None), (40, 41, 'Snare 2 Hit', None),
+  (38, 119, 'Snare 1 Roll', None), (40, 6, 'Snare 2 Roll', None),
+  (37, 115, 'Snare 1 X Stick', 'snare-drum drumset percussion'),
+  (38, 45, 'Snare 3 Hit', 'piccolo-snare-drum'), (40, 45, 'Snare 3 Hit', 'piccolo-snare-drum'),
+  # bongos: hand tone 52 / hand bass 50 (hand flam 48, finger flam 53 / bass 55 / slap 57, hit 59)
+  (60, 52, 'Bongos Hand Tone', None), (61, 50, 'Bongos Hand Bass', None),
+  # congas: Conga 1 bass 60 / tone 62 / slap 64, Conga 2 hit 65 / bass 67 / tone 69 / slap 71
+  (62, 64, 'Conga 1 Slap', None), (63, 62, 'Conga 1 Tone', None), (64, 69, 'Conga 2 Tone', None),
+  # timbales: lo hit 72 / edge 74 / rim 76, hi hit 77 / edge 79 / rim 81
+  (65, 77, 'Timbales Hi Hit', None), (66, 72, 'Timbales Lo Hit', None),
+  ],
+ 'Drums - Low': [
+  # bass drum: hit 84, soft hit 86, mute hit 88, rute 89
+  (35, 86, 'Bass Drum Soft Hit', None), (36, 84, 'Bass Drum Hit', None),
+  # field drum (military drum): hit 48, edge 50, rim 52, x stick 53
+  (38, 48, 'Field Drum Hit', 'military-drum'), (37, 53, 'Field Drum X Stick', 'military-drum'),
+  (37, 53, 'Field Drum X Stick', None),
+  # toms: Tom 1-5 on 60, 62, 64, 65, 67 (Tom 1 taken as the highest); GM 50 high … 41 low
+  (50, 60, 'Tom 1', None), (48, 62, 'Tom 2', None), (47, 64, 'Tom 3', None), (45, 65, 'Tom 4', None),
+  (43, 67, 'Tom 5', None), (41, 67, 'Tom 5', None),
+  # (gong drum hit 36 / mute hit 38, tom ensemble 72-77: no MuseScore sound of their own)
+  ],
+ 'Unpitched - Metal': [
+  # Cymbal Hi hit 53 / choked 55 / brush 57, Med 48 / 50 / 52, Lo 43 / 45 / 47; Piatti hit 59
+  (49, 48, 'Cymbal Med Hit', None), (57, 53, 'Cymbal Hi Hit', None), (55, 53, 'Cymbal Hi Hit', None),
+  (57, 59, 'Piatti Hit', 'cymbal'), (59, 59, 'Piatti Hit', 'percussion'),
+  (51, 43, 'Cymbal Lo Hit', 'ride-cymbal'), (52, 43, 'Cymbal Lo Hit', 'chinese-cymbal'),
+  # Tam Tam hit 36 / choked 38, Gong (wind gong) hit 62 / choke 64, Rain Sheet hit 40 / choked 41
+  (52, 36, 'Tam Tam Hit', 'tam-tam'), (52, 40, 'Rain Sheet Hit', 'thundersheet'),
+  # Mark Tree long 79 / up 81 / down 83 / push 84; Anvil 65-72, Mini Anvil 74-77
+  (84, 79, 'Mark Tree Long', None), (69, 79, 'Mark Tree Long', 'metal-wind-chimes'),
+  (68, 67, 'Anvil Hit Mid', 'anvil'),
+  # Trash Metal: Brake 1 86, Brake 2 88, Pans 89, Scafold 1 91 / 2 93, Spring Coil 95, Trash Can 96
+  (68, 86, 'Trash Metal Brake 1', 'automobile-brake-drums'),
+  # Triangle 1 open hit 1-4 on 103-106 (G6-A#6), closed 107; Triangle 2 open 108-111, closed 112 (keys the
+  # owner assigned, 2026-09-26: Kickstart leaves them off). Only for triangles: 81 is also the finger
+  # cymbals', bell plate's and bowl gongs' pitch
+  (81, 103, 'Triangle 1 Open Hit 1', 'triangle drumset percussion'),
+  (80, 107, 'Triangle 1 Closed Hit', 'triangle drumset percussion'),
+  # (Rivet Cymbal 60: no MuseScore sound)
+  ],
+ 'Unpitched - Wood': [
+  # Woodblocks Block 1-5 on 60, 62, 64, 65, 67; Templeblocks Block 1-5 on 48, 50, 52, 53, 55 (Block 1
+  # taken as the highest); Claves Bass 36, C# 37, D 38, Cuban 39, E 40
+  (76, 60, 'Woodblock 1', None), (77, 67, 'Woodblock 5', None),
+  (62, 48, 'Templeblock 1', 'temple-blocks'), (61, 50, 'Templeblock 2', 'temple-blocks'),
+  (60, 52, 'Templeblock 3', 'temple-blocks'), (59, 53, 'Templeblock 4', 'temple-blocks'),
+  (58, 55, 'Templeblock 5', 'temple-blocks'),
+  (75, 39, 'Claves Cuban Hit', None),
+  ],
+ 'Other - Toys': [
+  # Tambourines hit 43 / alt 45; Sleighbells 76 / 77; Shakers pop closed 64, metal open 65 / closed 67
+  (54, 43, 'Tambourine Hit', None), (83, 76, 'Sleighbells Hit 1', None),
+  (82, 67, 'Shaker Metal Closed', None), (70, 64, 'Shaker Pop Closed', None),
+  # Guiro hit 69, zip 71, zip fast 72, zip sfz 74; Ratchet short 62 (long off)
+  (73, 69, 'Guiro Hit', None), (74, 71, 'Guiro Zip', None), (73, 62, 'Ratchet Short', 'ratchet'),
+  # Cowbells: bell 1 open 52 / closed 53, bell 2 55 / 57, bell 3 59 / 60; Agogo low 83 / high 84
+  (56, 55, 'Cowbell 2 Open', None), (67, 84, 'Agogo High', None), (68, 83, 'Agogo Low', None),
+  # Castanets left 47, right 48, flam 50; Cabasa flick 89, shake 91, slap 93, twist 95 / 96
+  (85, 48, 'Castanets Right Hand', None), (67, 48, 'Castanets Right Hand', 'metal-castanets'),
+  (69, 91, 'Cabasa Shake', None),
+  # Jawbone hit 86 / f 88 (the vibraslap's ancestor)
+  (58, 86, 'Jawbone Hit', None),
+  # (Ships Bell 79 / 81, Gankogui 36 / 38 / 40 / 41: no MuseScore sound)
+  ],
+ }
+# Every key each patch plays in the owner's setup, MuseScore sound or not: (key, name, on), on 0 for a
+# technique Kickstart has off until given a key (the owner switched it on; written default="off", so a
+# setup made elsewhere, a DAW's, knows to do the same). Keys without a MuseScore sound are written
+# without a pitch: listed and checked, never chosen. From the owner's Kickstart screenshots (2026-09-26).
+HITS = {
+ 'Drums - High': [
+  (72, 'Timbales Lo Hit', 1), (74, 'Timbales Lo Edge', 1), (76, 'Timbales Lo Rim', 1),
+  (77, 'Timbales Hi Hit', 1), (79, 'Timbales Hi Edge', 1), (81, 'Timbales Hi Rim', 1),
+  (45, 'Snare 3 Hit', 1),
+  (41, 'Snare 2 Hit', 1), (43, 'Snare 2 Edge', 1), (124, 'Snare 2 Rim', 0), (1, 'Snare 2 X Stick', 0),
+  (2, 'Snare 2 Flam', 0), (5, 'Snare 2 Brush', 0), (6, 'Snare 2 Roll', 0), (8, 'Snare 2 Brush Roll', 0),
+  (36, 'Snare 1 Hit', 1), (38, 'Snare 1 Edge', 1), (40, 'Snare 1 Rim', 1), (115, 'Snare 1 X Stick', 0),
+  (119, 'Snare 1 Roll', 0), (120, 'Snare 1 Flam', 0), (93, 'Snare 1 Swell mf', 0), (94, 'Snare 1 Swell f', 0),
+  (84, 'Rototom 1', 1), (86, 'Rototom 2', 1), (88, 'Rototom 3', 1), (89, 'Rototom 4', 1), (91, 'Rototom 5', 1),
+  (60, 'Conga 1 Bass', 1), (62, 'Conga 1 Tone', 1), (64, 'Conga 1 Slap', 1),
+  (65, 'Conga 1 / 2 Hit', 1),         # Kickstart gives both congas' Hit the same key
+  (67, 'Conga 2 Bass', 1), (69, 'Conga 2 Tone', 1), (71, 'Conga 2 Slap', 1),
+  (48, 'Bongos Hand Flam', 1), (50, 'Bongos Hand Bass', 1), (52, 'Bongos Hand Tone', 1),
+  (53, 'Bongos Finger Flam', 1), (55, 'Bongos Finger Bass', 1), (57, 'Bongos Finger Slap', 1), (59, 'Bongos Hit', 1),
+  ],
+ 'Drums - Low': [
+  (72, 'Tom Ensemble Hit', 1), (74, 'Tom Ensemble Hit Loose', 1), (76, 'Tom Ensemble Eth Hit', 1),
+  (77, 'Tom Ensemble Eth Hit Loose', 1),
+  (60, 'Tom 1', 1), (62, 'Tom 2', 1), (64, 'Tom 3', 1), (65, 'Tom 4', 1), (67, 'Tom 5', 1),
+  (36, 'Gong Drum Hit', 1), (38, 'Gong Drum Mute Hit', 1),
+  (48, 'Field Drum Hit', 1), (50, 'Field Drum Edge', 1), (52, 'Field Drum Rim', 1), (53, 'Field Drum X Stick', 1),
+  (84, 'Bass Drum Hit', 1), (86, 'Bass Drum Soft Hit', 1), (88, 'Bass Drum Mute Hit', 1), (89, 'Bass Drum Rute', 1),
+  ],
+ 'Unpitched - Metal': [
+  (103, 'Triangle 1 Open Hit 1', 0), (104, 'Triangle 1 Open Hit 2', 0), (105, 'Triangle 1 Open Hit 3', 0),
+  (106, 'Triangle 1 Open Hit 4', 0), (107, 'Triangle 1 Closed Hit', 0),
+  (108, 'Triangle 2 Open Hit 1', 0), (109, 'Triangle 2 Open Hit 2', 0), (110, 'Triangle 2 Open Hit 3', 0),
+  (111, 'Triangle 2 Open Hit 4', 0), (112, 'Triangle 2 Closed Hit', 0),
+  (62, 'Gong Hit', 1), (64, 'Gong Choke', 1),
+  (36, 'Tam Tam Hit', 1), (38, 'Tam Tam Choked Hit', 1),
+  (60, 'Rivet Cymbal Hit', 1),
+  (40, 'Rain Sheet Hit', 1), (41, 'Rain Sheet Choked Hit', 1),
+  (59, 'Piatti Hit', 1),
+  (53, 'Cymbal Hi Hit', 1), (55, 'Cymbal Hi Choked Hit', 1), (57, 'Cymbal Hi Brush', 1),
+  (48, 'Cymbal Med Hit', 1), (50, 'Cymbal Med Choked Hit', 1), (52, 'Cymbal Med Brush', 1),
+  (43, 'Cymbal Lo Hit', 1), (45, 'Cymbal Lo Choked Hit', 1), (47, 'Cymbal Lo Brush', 1),
+  (86, 'Trash Metal Brake 1', 1), (88, 'Trash Metal Brake 2', 1), (89, 'Trash Metal Pans', 1),
+  (91, 'Trash Metal Scafold 1', 1), (93, 'Trash Metal Scafold 2', 1), (95, 'Trash Metal Spring Coil', 1),
+  (96, 'Trash Metal Trash Can', 1),
+  (79, 'Mark Tree Long', 1), (81, 'Mark Tree Up', 1), (83, 'Mark Tree Down', 1), (84, 'Mark Tree Push', 1),
+  (74, 'Mini Anvil 1', 1), (76, 'Mini Anvil 2', 1), (77, 'Mini Anvil 3', 1),
+  (65, 'Anvil Hit Rear', 1), (67, 'Anvil Hit Mid', 1), (69, 'Anvil Horn Center', 1), (71, 'Anvil Horn Tip', 1),
+  (72, 'Anvil Horn Under', 1),
+  ],
+ 'Unpitched - Wood': [
+  (60, 'Woodblock 1', 1), (62, 'Woodblock 2', 1), (64, 'Woodblock 3', 1), (65, 'Woodblock 4', 1), (67, 'Woodblock 5', 1),
+  (48, 'Templeblock 1', 1), (50, 'Templeblock 2', 1), (52, 'Templeblock 3', 1), (53, 'Templeblock 4', 1),
+  (55, 'Templeblock 5', 1),
+  (36, 'Claves Bass Hit', 1), (37, 'Claves C# Hit', 1), (38, 'Claves D Hit', 1), (39, 'Claves Cuban Hit', 1),
+  (40, 'Claves E Hit', 1),
+  ],
+ 'Other - Toys': [
+  (43, 'Tambourine Hit', 1), (45, 'Tambourine Hit Alt', 1),
+  (76, 'Sleighbells Hit 1', 1), (77, 'Sleighbells Hit 2', 1),
+  (79, 'Ships Bell 1', 1), (81, 'Ships Bell 2', 1),          # (names not read from the screenshot)
+  (64, 'Shaker Pop Closed', 1), (65, 'Shaker Metal Open', 1), (67, 'Shaker Metal Closed', 1),
+  (62, 'Ratchet Short', 1),
+  (86, 'Jawbone Hit', 1), (88, 'Jawbone Hit f', 1),
+  (69, 'Guiro Hit', 1), (71, 'Guiro Zip', 1), (72, 'Guiro Zip Fast', 1), (74, 'Guiro Zip sfz', 1),
+  (36, 'Gankogui 1', 1), (38, 'Gankogui 2', 1), (40, 'Gankogui 3', 1), (41, 'Gankogui 4', 1),  # (names not read)
+  (52, 'Cowbell 1 Open', 1), (53, 'Cowbell 1 Closed', 1), (55, 'Cowbell 2 Open', 1), (57, 'Cowbell 2 Closed', 1),
+  (59, 'Cowbell 3 Open', 1), (60, 'Cowbell 3 Closed', 1),
+  (47, 'Castanets Left Hand', 1), (48, 'Castanets Right Hand', 1), (50, 'Castanets Flam', 1),
+  (89, 'Cabasa Flick', 1), (91, 'Cabasa Shake', 1), (93, 'Cabasa Slap', 1), (95, 'Cabasa Twist 1', 1),
+  (96, 'Cabasa Twist 2', 1),
+  (83, 'Agogo Low', 1), (84, 'Agogo High', 1),
+  ],
+ }
+# Techniques still off in the owner's setup (no key; Kickstart shows such a technique on C-2 = 0): each kit can't give every technique a key, so
+# these need a second instance of the patch set up with them (an extra of the kit, its own HITS).
+STILL_OFF = {
+ 'Drums - High': 'Timbales Lo / Hi X Stick, Lo / Hi Flam, Hi Side, Lo / Hi Swell mf / f; '
+                 'Rototoms Swell 1-5; Conga 1 / 2 Flam, Roll, Roll SFP, Roll Side, Swell mf / f; '
+                 'Bongos Hand Roll (SFP), Finger Roll (SFP), Side Roll, Hand / Bass Swell mf / f',
+ 'Drums - Low': 'Toms Swell 1-5 mf / f; Gong Drum Swell, Fx Drag, Fx Various; Field Drum Flam, Roll, '
+                'Swell mf / f; Bass Drum Roll, Fx Rub, Swell',
+ 'Unpitched - Metal': 'Gong Swell mf / f, Fx Bow; Tam Tam Roll, Swell mf / f, Superball, Fx Scrape; '
+                      'Rivet Cymbal Roll, Swell; Rain Sheet Roll, Swell mp / mf / f, Superball; Piatti Choked Hit, '
+                      'Choked Alt, Fx Scrape, Fx Sizzle; Cymbal Hi / Lo Roll, Swell mf / f, Fx Scrape, Fx Bow; '
+                      'Cymbal Med Roll, Swell mf / f; Mark Tree Sweep low / mid / high; Anvil Hit Face, '
+                      'Steel Sheet, Horn Pipe, Rear Pipe',
+ 'Unpitched - Wood': '(not yet known)',
+ 'Other - Toys': 'Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll',
+ }
 out.append(f'  <Instrument name="Percussion" ids={q(KIT_IDS)} kit="1"/>')
 for name in PERCUSSION:
     drums = DRUMS.get(name, [])
+    hits = {k: (n, on) for k, n, on in HITS[name]}
+    assert len(hits) == len(HITS[name]), name
+    for pitch, key, n, ids in drums:
+        assert key in hits and hits[key][0] == n, (name, key, n)
     # (sounds chosen by key: nothing to switch)
     out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
     out.append('    <Switch type="none"/>')
     for pitch, key, n, ids in drums:
-        out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + '/>')
+        roll = ' technique="roll"' if n.endswith(' Roll') else ''
+        off = '' if hits[key][1] else ' default="off"'
+        out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + off + '/>')
+    used = {key for _, key, _, _ in drums}
+    for key, (n, on) in sorted(hits.items()):
+        if key not in used:
+            out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
+    out.append(f'    <!-- off in Kickstart, no key: {STILL_OFF[name]} -->')
     out.append('  </Instrument>')
+# One patch per drum (the owner's folder, 2026-09-27: "Percussion - <kit> - <drum>.nki"). A kit patch's
+# keyboard can't hold every technique of all its drums; the drum's own patch can. Extras of the kit
+# after the five kit patches: a sound both have plays on the kit patch (one instance for many drums),
+# a technique only the drum's patch has loads that patch. Keys from the owner's screenshots of each
+# patch's technique list with every technique switched on (SINGLE_HITS: patch -> [(key, name, on)],
+# as HITS); until then a patch has none and is only listed (and key-scanned by Check articulations).
+SINGLES = {
+ 'Drums - High': ['Bongos', 'Conga 1', 'Conga 2', 'Rototoms', 'Snare 1', 'Snare 2', 'Snare 3', 'Timbales'],
+ 'Drums - Low': ['Bass Drum', 'Field Drum', 'Gong Drum', 'Tom Ensemble', 'Toms'],
+ 'Other - Toys': ['Agogo', 'Cabasa', 'Castanets', 'Cowbells', 'Gankogui', 'Guiro', 'Jawbone', 'Ratchet',
+                  'Shakers', 'Ships Bell', 'Sleighbells', 'Tambourines'],
+ 'Unpitched - Metal': ['Anvil', 'Cymbal Hi', 'Cymbal Lo', 'Cymbal Med', 'Mark Tree', 'Mini Anvil', 'Piatti',
+                       'Rain Sheet', 'Rivet Cymbal', 'Tam Tam', 'Trash Metals', 'Triangle 1', 'Triangle 2',
+                       'Wind Gong'],
+ 'Unpitched - Wood': ['Claves', 'Temple Blocks', 'Woodblocks'],
+ }
+SINGLE_HITS = {}
+# (MuseScore drum pitch, key, name, ids) as DRUMS, for a single patch's keys MuseScore sounds use
+SINGLE_DRUMS = {}
+for kit in PERCUSSION:
+    for drum in SINGLES[kit]:
+        name = f'Percussion - {kit} - {drum}'
+        hits = {k: (n, on) for k, n, on in SINGLE_HITS.get(name, [])}
+        drums = SINGLE_DRUMS.get(name, [])
+        out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
+        out.append('    <Switch type="none"/>')
+        for pitch, key, n, ids in drums:
+            assert key in hits and hits[key][0] == n, (name, key, n)
+            roll = ' technique="roll"' if n.endswith(' Roll') else ''
+            off = '' if hits[key][1] else ' default="off"'
+            out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + off + '/>')
+        used = {key for _, key, _, _ in drums}
+        for key, (n, on) in sorted(hits.items()):
+            if key not in used:
+                out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
+        out.append('  </Instrument>')
 out.append('</SoundLibrary>')
+assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

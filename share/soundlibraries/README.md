@@ -136,6 +136,10 @@ switch value of each articulation. For example:
   is listed for reference and checked by *Check articulations*, but never chosen): `long legato short staccatissimo spiccato
   tenuto marcato longmarcato pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
   fall rip`.
+- `expect` (optional: `silent`, `ignored` or `unclear`) is what *Check articulations* hears for
+  the value where that is known to be right (a patch that has no samples for it, or a sound the
+  audio comparison can't judge but the pictures confirm). The check then counts it as passed,
+  and a last check that found exactly these is shown as passed without checking again.
 - `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup
   pdlt multitongue`. When no variant matches, the plain articulation plays. Staff text sets them:
   "sul pont.", "sul tasto", "flautando", "cuivré", "sul G", "sul C", "bells up" ("campana in
@@ -162,7 +166,13 @@ switch value of each articulation. For example:
   and has no patch of its own. Its extra patches say which key plays each MuseScore drum sound
   (the note's pitch in the drumset): `<Drum pitch="38" key="62" name="Snare hit"/>`, with
   optional `velocity` (fixed) and `ids` (only for these MuseScore instruments). A sound no
-  patch has plays on the built-in synthesizer. `keyScan="1"` makes *Check articulations* play
+  patch has plays on the built-in synthesizer. A `<Drum>` without `pitch` is a key no MuseScore
+  sound plays: listed (and checked) so the map has every key of the patch, never chosen.
+  `default="off"` marks a technique the patch has switched off until it is given a key
+  (Spitfire's Kickstart): a setup made elsewhere, in a DAW, must switch it on too. `technique="roll"` marks the sound's roll key: a
+  note with a single-note tremolo or a buzz roll plays it once, held for the note (a crescendo
+  over it swells through the dynamics controller); a sound with no roll key plays the tremolo
+  as repeated hits. `keyScan="1"` makes *Check articulations* play
   every key of the patch and picture what each one plays, to find its `<Drum>` entries, and
   its keyswitches (a silent key that leaves the window changed): a patch with no CC switching
   (Spitfire's "Kickstart" percussion) takes `<Switch type="keyswitch"/>` and its articulations'

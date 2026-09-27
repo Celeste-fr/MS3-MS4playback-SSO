@@ -10,12 +10,19 @@
 // replaces: the Microtonal Tuner's own rule fixture (cases.mscx and expected.json, copied from
 // the plugin's test folder, gen_cases.py there) and billhails' Tuning plugin's temperaments.
 
+#include <cmath>
 #include <QtTest/QtTest>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
 #include "libmscore/chord.h"
+#include "libmscore/key.h"
+#include "libmscore/staff.h"
+#include "libmscore/sym.h"
+#include "libmscore/undo.h"
+#include "libmscore/symbol.h"
+#include "libmscore/accidental.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
 #include "libmscore/score.h"
@@ -38,6 +45,10 @@ class TestTuning : public QObject, public MTest
       void microtonalTempered();
       void presets();
       void spelling();
+      void justSpelling();
+      void heji();
+      void stacked();
+      void families();
       void json();
       };
 
@@ -74,6 +85,87 @@ static QJsonArray expected()
       }
 
 //---------------------------------------------------------
+//   pluginRounded
+//    the plugin rounded some accidentals the fork now plays exactly (Sagittal ratios to 0.1 cent,
+//    Wyschnegradsky's twelfths of a tone to whole cents): how far off the plugin's value may be for
+//    this note (its accidental, or the one before it on its line in the bar)
+//---------------------------------------------------------
+
+// the accidental in force on the note's line (its own, else the last one before it in the bar)
+static const Accidental* accidentalInForce(const Note* n)
+      {
+      const Accidental* found = nullptr;
+      const Measure* m = n->chord()->measure();
+      for (Segment* s = m->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest)) {
+            if (s->tick() > n->chord()->tick())
+                  break;
+            for (int t = n->staffIdx() * VOICES; t < (n->staffIdx() + 1) * VOICES; ++t) {
+                  Element* e = s->element(t);
+                  if (!e || !e->isChord())
+                        continue;
+                  QList<const Chord*> chords;
+                  for (const Chord* g : toChord(e)->graceNotes())
+                        chords.append(g);
+                  chords.append(toChord(e));
+                  for (const Chord* c : chords)
+                        for (const Note* o : c->notes())
+                              if (o->line() == n->line() && o->accidental() && (s->tick() < n->chord()->tick() || o == n))
+                                    found = o->accidental();
+                  }
+            }
+      return found;
+      }
+
+// Arel-Ezgi-Uzdilek accidentals, which MuseScore 3.6.2 (and so the plugin) gave no value: the fork
+// plays them, in Holdrian commas (1/53 octave)
+static bool aeuCents(const Note* n, double* cents)
+      {
+      const Accidental* a = accidentalInForce(n);
+      SymId sym = a ? a->symbol() : SymId::noSym;
+      if (!a) {                                            // a custom key signature's symbol on the line
+            const KeySigEvent ke = n->staff()->keySigEvent(n->tick());
+            if (ke.custom())
+                  for (const KeySym& ks : ke.keySymbols())
+                        if (((int(std::lround(ks.spos.y() * 2.0)) - n->line()) % 7 + 7) % 7 == 0)
+                              sym = ks.sym;
+            }
+      const double k = 1200.0 / 53.0;
+      switch (sym) {
+            case SymId::accidentalBuyukMucennebFlat:  *cents = -8 * k; return true;
+            case SymId::accidentalBakiyeFlat:         *cents = -4 * k; return true;
+            case SymId::accidentalKucukMucennebSharp: *cents =  5 * k; return true;
+            case SymId::accidentalBuyukMucennebSharp: *cents =  8 * k; return true;
+            default:                                  return false;
+            }
+      }
+
+static double pluginRounded(const Note* n)
+      {
+      const Measure* m = n->chord()->measure();
+      for (Segment* s = m->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest)) {
+            if (s->tick() > n->chord()->tick())
+                  break;
+            for (int t = n->staffIdx() * VOICES; t < (n->staffIdx() + 1) * VOICES; ++t) {
+                  Element* e = s->element(t);
+                  if (!e || !e->isChord())
+                        continue;
+                  QList<const Chord*> chords;
+                  for (const Chord* g : toChord(e)->graceNotes())
+                        chords.append(g);
+                  chords.append(toChord(e));
+                  for (const Chord* c : chords)
+                        for (const Note* o : c->notes())
+                              if (o->line() == n->line() && o->accidental()) {
+                                    const QString name = Sym::id2name(o->accidental()->symbol());
+                                    if (name.startsWith("accSagittal") || name.startsWith("accidentalWyschnegradsky"))
+                                          return 0.7;
+                                    }
+                  }
+            }
+      return 0.001;
+      }
+
+//---------------------------------------------------------
 //   microtonal
 //    every note as the plugin tunes it. One deliberate difference: a tuning the user typed in
 //    (not one the plugin wrote) is added on top here, where the plugin overwrites it.
@@ -105,7 +197,10 @@ void TestTuning::microtonal()
                         ++added;
                         }
                   }
-            QVERIFY2(qAbs(tuning.cents(n) - want) < 0.001,
+            double aeu;
+            if (aeuCents(n, &aeu))                              // the plugin left it alone; the fork plays it
+                  want = stored + aeu;
+            QVERIFY2(qAbs(tuning.cents(n) - want) < pluginRounded(n),
                      qPrintable(QString("%1: want %2, got %3").arg(key).arg(want).arg(tuning.cents(n))));
             }
       qDebug("%d notes, %d with the user's own tuning added", exp.size(), added);
@@ -143,7 +238,10 @@ void TestTuning::pluginParity()
                   }
             else
                   ++same;
-            QVERIFY2(qAbs(tuning.cents(it.value()) - want) < 0.001,
+            double aeu;
+            if (aeuCents(it.value(), &aeu))                     // the plugin left it alone; the fork plays it
+                  want = before + aeu + Temperament::ofScore(score).cents(it.value()->tpc1(), it.value()->pitch());
+            QVERIFY2(qAbs(tuning.cents(it.value()) - want) < pluginRounded(it.value()),
                      qPrintable(QString("%1: plugin %2 (before %3), fork %4").arg(it.key()).arg(after).arg(before)
                                 .arg(tuning.cents(it.value()))));
             }
@@ -231,6 +329,294 @@ void TestTuning::spelling()
       QCOMPARE(w.cents(DB, 61), w.cents(CS, 61));
       const Temperament e;
       QCOMPARE(e.cents(DB, 61), 0.0);
+      }
+
+//---------------------------------------------------------
+//   justSpelling
+//    Just intonation by spelling (Ben Johnston's notation): every spelling against its ratio
+//    (Johnston: the major scale 1/1 9/8 5/4 4/3 3/2 5/3 15/8, sharp / flat 25/24); off, the
+//    Tuning plugin's 12 keys
+//---------------------------------------------------------
+
+void TestTuning::justSpelling()
+      {
+      auto fromEqual = [](double num, double den, int semitones) {
+            return 1200.0 * std::log2(num / den) - 100.0 * semitones;
+            };
+      Temperament j = Temperament::preset("just");
+      QVERIFY(j.just == Temperament::Just::KEYS);                                     // the plugin's keys by default
+      QCOMPARE(j.cents(Tpc::TPC_D_B, 61), j.cents(Tpc::TPC_C_S, 61));
+      j.just = Temperament::Just::JOHNSTON;
+      struct { int tpc; double num, den; int semitones; } ratios[] = {
+            { Tpc::TPC_C, 1, 1, 0 }, { Tpc::TPC_D, 9, 8, 2 }, { Tpc::TPC_E, 5, 4, 4 }, { Tpc::TPC_F, 4, 3, 5 },
+            { Tpc::TPC_G, 3, 2, 7 }, { Tpc::TPC_A, 5, 3, 9 }, { Tpc::TPC_B, 15, 8, 11 },
+            { Tpc::TPC_C_S, 25, 24, 1 }, { Tpc::TPC_D_B, 27, 25, 1 },  // C# and Db: 62.6 cents apart
+            { Tpc::TPC_G_S, 25, 16, 8 }, { Tpc::TPC_A_B, 8, 5, 8 },    // G# and Ab: the diesis 128/125
+            { Tpc::TPC_F_S, 25, 18, 6 }, { Tpc::TPC_B_B, 9, 5, 10 }, { Tpc::TPC_E_B, 6, 5, 3 },
+            { Tpc::TPC_D_S, 75, 64, 3 }, { Tpc::TPC_C_SS, 625, 576, 2 }, { Tpc::TPC_E_BB, 144, 125, 2 },
+            };
+      for (const auto& r : ratios)
+            QVERIFY2(qAbs(j.cents(r.tpc, 60 + r.semitones) - fromEqual(r.num, r.den, r.semitones)) < 1e-9,
+                     qPrintable(QString("tpc %1: %2").arg(r.tpc).arg(j.cents(r.tpc, 60 + r.semitones))));
+      QVERIFY(qAbs(j.cents(Tpc::TPC_A_B, 68) - j.cents(Tpc::TPC_G_S, 68) - 1200.0 * std::log2(128.0 / 125.0)) < 1e-9);
+      // root G (1), pure tone G: G's major scale, B its pure third
+      Temperament g = Temperament::preset("just", 1, 1, 0.0);
+      g.just = Temperament::Just::JOHNSTON;
+      QCOMPARE(g.cents(Tpc::TPC_G, 67), 0.0);
+      QVERIFY(qAbs(g.cents(Tpc::TPC_B, 71) - g.cents(Tpc::TPC_G, 67) - fromEqual(5, 4, 4)) < 1e-9);
+      QVERIFY(qAbs(g.cents(Tpc::TPC_F_S, 66) - fromEqual(15, 8, 11)) < 1e-9);
+      // the 12 keys agree with it on 11 notes, to the plugin's rounding (within 1 cent): its F# is
+      // 45/32, Johnston's 25/18 (its black keys are C# Eb F# G# Bb)
+      const Temperament keys = Temperament::preset("just");
+      for (const auto& r : ratios)
+            if (r.semitones < 12 && r.tpc != Tpc::TPC_F_S && r.tpc != Tpc::TPC_D_B && r.tpc != Tpc::TPC_D_S
+                && r.tpc != Tpc::TPC_A_B && r.tpc != Tpc::TPC_C_SS && r.tpc != Tpc::TPC_E_BB)
+                  QVERIFY2(qAbs(keys.cents(r.tpc, 60 + r.semitones) - j.cents(r.tpc, 60 + r.semitones)) < 1.0,
+                           qPrintable(QString("tpc %1").arg(r.tpc)));
+      // a JSON round trip keeps the choice, and leaves it out when off
+      QVERIFY(Temperament::fromJson(j.toJson()).just == Temperament::Just::JOHNSTON);
+      QVERIFY(j.toJson().contains("\"just\":\"spelled\""));
+      QVERIFY(!keys.toJson().contains("\"just\":"));
+      QVERIFY(Temperament::fromJson(j.toJson()) == j);
+      }
+
+//---------------------------------------------------------
+//   heji
+//    Just intonation by spelling as Helmholtz-Ellis notates it: unmarked notes Pythagorean from
+//    the root, each arrow a syntonic comma; HEJI's accidentals (which MuseScore 3 plays as
+//    naturals) sound as written, carried through the bar like any accidental
+//---------------------------------------------------------
+
+void TestTuning::heji()
+      {
+      auto fromEqual = [](double num, double den, int semitones) {
+            return 1200.0 * std::log2(num / den) - 100.0 * semitones;
+            };
+      Temperament h = Temperament::preset("just");
+      h.just = Temperament::Just::HEJI;
+      QVERIFY(qAbs(h.cents(Tpc::TPC_E, 64) - fromEqual(81, 64, 4)) < 1e-9);
+      QVERIFY(qAbs(h.cents(Tpc::TPC_C_S, 61) - fromEqual(2187, 2048, 1)) < 1e-9);
+      QVERIFY(qAbs(h.cents(Tpc::TPC_D_B, 61) - fromEqual(256, 243, 1)) < 1e-9);
+      QVERIFY(Temperament::fromJson(h.toJson()).just == Temperament::Just::HEJI);
+      QVERIFY(h.toJson().contains("\"just\":\"heji\""));
+
+      // the accidentals: sharps and commas, whatever the tuning
+      bool valued;
+      int spelled;
+      QVERIFY(qAbs(ScoreTuning::accidentalCents(AccidentalType::SHARP_ONE_ARROW_DOWN, &valued, &spelled) - (100.0 - 21.5063)) < 1e-3);
+      QVERIFY(valued);
+      QCOMPARE(spelled, 1);
+      QVERIFY(qAbs(ScoreTuning::accidentalCents(AccidentalType::DOUBLE_FLAT_THREE_ARROWS_UP, &valued, &spelled) - (-200.0 + 3 * 21.5063)) < 1e-3);
+      QCOMPARE(spelled, -2);
+
+      MasterScore* score = readScore(DIR + "heji.mscx");
+      QVERIFY(score);
+      score->setMetaTag(Temperament::metaTag, h.toJson());
+      ScoreTuning tuning(score);
+      QList<const Note*> ns;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  ns.append(toChord(s->element(0))->upNote());
+      QCOMPARE(ns.size(), 8);
+      // cents from the written note's equal-tempered pitch (MuseScore plays HEJI's accidentals as naturals)
+      const double want[8] = {
+            0.0,                                       // C
+            fromEqual(81, 64, 4),                      // E: Pythagorean
+            fromEqual(5, 4, 4),                        // E, one arrow down: 5/4
+            fromEqual(45, 32, 6) + 100.0,              // F sharp, one arrow down: 45/32, above the written F
+            fromEqual(4, 3, 5),                        // F (a new bar)
+            fromEqual(16, 9, 10) + 1200.0 * std::log2(81.0 / 80.0) * 2 - 100.0,   // B flat, two arrows up
+            fromEqual(9, 8, 2),                        // D
+            fromEqual(16, 9, 10) + 1200.0 * std::log2(81.0 / 80.0) * 2 - 100.0,   // B: the bar's B flat, two up
+            };
+      for (int i = 0; i < 8; ++i)
+            QVERIFY2(qAbs(tuning.cents(ns[i]) - want[i]) < 0.002,
+                     qPrintable(QString("note %1: want %2, got %3").arg(i).arg(want[i]).arg(tuning.cents(ns[i]))));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   stacked
+//    stacked accidentals: a Helmholtz-Ellis prime modifier beside a note's accidental (a Symbol
+//    on the note, which MuseScore 3.6 keeps): tuned with it and carried through the bar; drawn
+//    and spaced by the accidental; the editing rules; saved and read back
+//---------------------------------------------------------
+
+void TestTuning::stacked()
+      {
+      auto c = [](double num, double den) { return 1200.0 * std::log2(num / den); };
+      MasterScore* score = readScore(DIR + "stacked.mscx");
+      QVERIFY(score);
+      Temperament h = Temperament::preset("just");
+      h.just = Temperament::Just::HEJI;
+      score->setMetaTag(Temperament::metaTag, h.toJson());
+      score->doLayout();
+      auto notes = [](Score* sc) {
+            QList<Note*> ns;
+            for (Segment* s = sc->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  if (s->element(0) && s->element(0)->isChord())
+                        ns.append(toChord(s->element(0))->upNote());
+            return ns;
+            };
+      QList<Note*> ns = notes(score);
+      QCOMPARE(ns.size(), 4);
+      {
+      ScoreTuning tuning(score);
+      const double f = c(45, 32) - c(64, 63) - 500.0;          // F sharp, arrow down, septimal comma down
+      QVERIFY2(qAbs(tuning.cents(ns[0]) - f) < 0.002, qPrintable(QString::number(tuning.cents(ns[0]))));
+      QVERIFY(qAbs(tuning.cents(ns[1]) - f) < 0.002);          // carried through the bar
+      QVERIFY(qAbs(tuning.cents(ns[2]) - (c(81, 64) + c(33, 32) - 400.0)) < 0.002);   // E, undecimal up
+      QVERIFY(qAbs(tuning.cents(ns[3])) < 0.002);
+      }
+
+      // drawn by the accidental, to its left, and spaced with it; the symbol is saved there
+      const Accidental* a = ns[0]->accidental();
+      QVERIFY(a);
+      QCOMPARE(a->stackedModifiers().size(), 1);
+      Symbol* sym = nullptr;
+      for (Element* e : ns[0]->el())
+            if (e->isSymbol())
+                  sym = toSymbol(e);
+      QVERIFY(sym && sym->isStackedAccidental());
+      QVERIFY(sym->bbox().isEmpty());
+      QVERIFY(a->stackedModifierPos(sym->sym()).x() < 0.001);                    // leftmost
+      QVERIFY(a->width() > a->symWidth(SymId::accidentalSharpOneArrowDown) * 1.5);
+
+      // editing
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::RAISE_ONE_SEPTIMAL_COMMA);    // the other 7: replaces
+      score->endCmd();
+      QCOMPARE(ns[0]->accidentalType(), AccidentalType::SHARP_ONE_ARROW_DOWN);
+      QCOMPARE(ns[0]->accidental()->stackedModifiers(), QList<SymId>({ SymId::accidentalRaiseOneSeptimalComma }));
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::RAISE_ONE_UNDECIMAL_QUARTERTONE);   // another prime: added
+      score->endCmd();
+      QCOMPARE(ns[0]->accidental()->stackedModifiers(),
+               QList<SymId>({ SymId::accidentalRaiseOneUndecimalQuartertone, SymId::accidentalRaiseOneSeptimalComma }));
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::RAISE_ONE_SEPTIMAL_COMMA);    // the same again: taken away
+      score->endCmd();
+      QCOMPARE(ns[0]->accidental()->stackedModifiers(), QList<SymId>({ SymId::accidentalRaiseOneUndecimalQuartertone }));
+      score->undoRedo(true, nullptr);                                              // undo brings it back
+      QCOMPARE(ns[0]->accidental()->stackedModifiers().size(), 2);
+      score->startCmd();
+      score->changeAccidental(ns[3], AccidentalType::LOWER_ONE_SEPTIMAL_COMMA);    // no accidental: it is the accidental
+      score->endCmd();
+      QCOMPARE(ns[3]->accidentalType(), AccidentalType::LOWER_ONE_SEPTIMAL_COMMA);
+      QCOMPARE(ns[3]->pitch(), 60);
+
+      // saved and read back: the accidental, the symbols (where the accidental draws them, for
+      // MuseScore 3.6), the tuning
+      QVERIFY(saveScore(score, "stacked-saved.mscx"));
+      QVERIFY(saveScore(score, "stacked-saved.mscx"));          // (twice: no drift)
+      for (Element* e : ns[0]->el()) {
+            if (!e->isSymbol())
+                  continue;
+            const Accidental* acc = ns[0]->accidental();
+            const QPointF want = acc->pos() + acc->stackedModifierPos(toSymbol(e)->sym());
+            QVERIFY((e->pos() - want).manhattanLength() < 0.01);                   // (pos: with the offset)
+            QVERIFY(e->pos().x() < acc->pos().x() + acc->bbox().width() - acc->symWidth(SymId::accidentalSharpOneArrowDown));
+            }
+      MasterScore* again = readCreatedScore("stacked-saved.mscx");
+      QVERIFY(again);
+      again->doLayout();
+      QList<Note*> ns2 = notes(again);
+      QCOMPARE(ns2[0]->accidentalType(), AccidentalType::SHARP_ONE_ARROW_DOWN);
+      QCOMPARE(ns2[0]->accidental()->stackedModifiers().size(), 2);
+      {
+      ScoreTuning t1(score), t2(again);
+      for (int i = 0; i < 4; ++i)
+            QVERIFY(qAbs(t1.cents(ns[i]) - t2.cents(ns2[i])) < 1e-6);
+      QVERIFY(qAbs(t2.cents(ns2[0]) - (c(45, 32) + c(64, 63) + c(33, 32) - 500.0)) < 0.002);
+      QVERIFY(qAbs(t2.cents(ns2[3]) + c(64, 63)) < 0.002);
+      }
+
+      // the accidental taken away takes its modifiers with it
+      score->startCmd();
+      score->changeAccidental(ns[0], AccidentalType::NONE);
+      score->endCmd();
+      QVERIFY(!ns[0]->accidental());
+      int left = 0;
+      for (Element* e : ns[0]->el())
+            left += e->isSymbol();
+      QCOMPARE(left, 0);
+      delete again;
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   families
+//    each accidental family by its own definition, and the two the score chooses: quarter tones
+//    (fixed 50, half the tuning's sharp, 33/32) and koron / sori (Vaziri, practice, MuseScore 3.6)
+//---------------------------------------------------------
+
+void TestTuning::families()
+      {
+      auto c = [](double r) { return 1200.0 * std::log2(r); };
+      const double k = 1200.0 / 53.0;
+      bool v;
+      auto acc = [&](AccidentalType t) { return ScoreTuning::accidentalCents(t, &v); };
+      QVERIFY(qAbs(acc(AccidentalType::SAGITTAL_SHARP) - c(2187.0 / 2048.0)) < 1e-9);         // the apotome, exact
+      QVERIFY(qAbs(acc(AccidentalType::SAGITTAL_5CU) - c(81.0 / 80.0)) < 1e-9);
+      QCOMPARE(acc(AccidentalType::FLAT2_ARROW_UP), -150.0);      // three quarter tones flat (3.6.2's table: -250)
+      QCOMPARE(acc(AccidentalType::FLAT2_ARROW_DOWN), -250.0);    // five quarter tones flat (3.6.2's table: -150)
+      QVERIFY(qAbs(acc(AccidentalType::FLAT_SLASH2) + 8 * k) < 1e-9);     // büyük mücenneb flat: 8 Holdrian commas
+      QVERIFY(qAbs(acc(AccidentalType::SHARP_SLASH3) - 5 * k) < 1e-9);    // küçük mücenneb sharp: 5
+      QVERIFY(qAbs(acc(AccidentalType::THREE_COMMA_FLAT) + 3 * k) < 1e-9);        // Turkish folk: 3 commas
+      QVERIFY(qAbs(acc(AccidentalType::FIVE_TWELFTH_SHARP) - 500.0 / 6.0) < 1e-9); // Wyschnegradsky: 5/12 tone
+      QVERIFY(qAbs(acc(AccidentalType::RAISE_ONE_TRIDECIMAL_QUARTERTONE) - c(27.0 / 26.0)) < 1e-9);
+
+      MasterScore* score = readScore(DIR + "quarter.mscx");
+      QVERIFY(score);
+      QList<const Note*> ns;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            ns.append(toChord(s->element(0))->upNote());
+      QCOMPARE(ns.size(), 4);                   // C half-sharp, E sesqui-sharp, A koron, F sori
+      auto play = [&](const Temperament& t) {
+            score->setMetaTag(Temperament::metaTag, t.toJson());
+            ScoreTuning tuning(score);
+            QList<double> l;
+            for (const Note* n : ns)
+                  l.append(tuning.cents(n));
+            return l;
+            };
+      // equal temperament, the defaults: 24-EDO and Vaziri
+      Temperament t;
+      QVERIFY(t.accidentalsDefault());
+      QList<double> l = play(t);
+      QVERIFY(qAbs(l[0] - 50) < 1e-3 && qAbs(l[1] - 150) < 1e-3 && qAbs(l[2] + 50) < 1e-3 && qAbs(l[3] - 50) < 1e-3);
+      t.quarter = Temperament::Quarter::HALF;                     // equal temperament: the same
+      l = play(t);
+      QVERIFY(qAbs(l[0] - 50) < 1e-3 && qAbs(l[1] - 150) < 1e-3);
+
+      // quarter-comma meantone
+      Temperament m = Temperament::preset("aaron");
+      l = play(m);                                                 // fixed: 50 above the tuned C
+      QVERIFY(qAbs(l[0] - (m.cents(Tpc::TPC_C, 60) + 50)) < 1e-3);
+      m.quarter = Temperament::Quarter::HALF;                      // half: midway between C and C#
+      l = play(m);
+      QVERIFY(qAbs(l[0] - (m.cents(Tpc::TPC_C, 60) + m.cents(Tpc::TPC_C_S, 61) + 100) / 2) < 1e-3);
+      QVERIFY(qAbs(l[1] - (m.cents(Tpc::TPC_E_S, 65) + 100 + m.cents(Tpc::TPC_E_SS, 66) + 200) / 2) < 1e-3);  // midway E# - E##
+      m.quarter = Temperament::Quarter::JUST;                      // 33/32 above the tuned C
+      l = play(m);
+      QVERIFY(qAbs(l[0] - (m.cents(Tpc::TPC_C, 60) + c(33.0 / 32.0))) < 1e-3);
+
+      // koron and sori
+      Temperament p;
+      p.persian = Temperament::Persian::PRACTICE;
+      l = play(p);
+      QVERIFY(qAbs(l[2] + 60) < 1e-3 && qAbs(l[3] - 40) < 1e-3);
+      p.persian = Temperament::Persian::MS36;
+      l = play(p);
+      QVERIFY(qAbs(l[2] + 67) < 1e-3 && qAbs(l[3] - 33) < 1e-3);
+
+      // the choices go through the metaTag, left out when default
+      const Temperament r = Temperament::fromJson(p.toJson());
+      QVERIFY(r.persian == Temperament::Persian::MS36 && r.quarter == Temperament::Quarter::FIXED);
+      QVERIFY(!Temperament().toJson().contains("persian") && !Temperament().toJson().contains("quarterTones"));
+      m.quarter = Temperament::Quarter::HALF;
+      QVERIFY(Temperament::fromJson(m.toJson()).quarter == Temperament::Quarter::HALF);
+      delete score;
       }
 
 //---------------------------------------------------------

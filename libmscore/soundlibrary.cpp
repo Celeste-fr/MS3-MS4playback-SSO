@@ -14,9 +14,11 @@
 #include <algorithm>
 #include <atomic>
 #include <mutex>
+#include <set>
 
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QXmlStreamReader>
 
 #include "accidental.h"
@@ -31,6 +33,7 @@
 #include "staff.h"
 #include "stafftext.h"
 #include "sym.h"
+#include "tremolo.h"
 #include "tempo.h"
 #include "trill.h"
 
@@ -123,16 +126,25 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                                     return fail(QString("%1:%2: bad Switch").arg(path).arg(r.lineNumber()));
                               }
                         else if (r.name() == "Drum") {
-                              // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"]/>
+                              // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"]
+                              //       [technique="roll"] [default="off"]/>; without pitch: a key no MuseScore sound plays
+                              // (listed for reference and checked, never chosen)
                               DrumKey d;
-                              bool ok1 = false, ok2 = false;
-                              d.pitch = aa.value("pitch").toInt(&ok1);
+                              bool ok1 = true, ok2 = false;
+                              if (aa.hasAttribute("pitch"))
+                                    d.pitch = aa.value("pitch").toInt(&ok1);
                               d.key = aa.value("key").toInt(&ok2);
                               if (aa.hasAttribute("velocity"))
                                     d.velocity = aa.value("velocity").toInt();
                               d.ids = words(aa.value("ids").toString().toLower());
                               d.name = aa.value("name").toString();
-                              if (!ok1 || !ok2 || d.pitch < 0 || d.pitch > 127 || d.key < 0 || d.key > 127 || d.velocity > 127)
+                              d.technique = aa.value("technique").toString().toLower();
+                              d.offByDefault = aa.value("default") == "off";
+                              if (aa.hasAttribute("default") && aa.value("default") != "off")
+                                    return fail(QString("%1:%2: bad Drum default").arg(path).arg(r.lineNumber()));
+                              if (!d.technique.isEmpty() && d.technique != "roll")
+                                    return fail(QString("%1:%2: bad Drum technique").arg(path).arg(r.lineNumber()));
+                              if (!ok1 || !ok2 || (aa.hasAttribute("pitch") && d.pitch < 0) || d.pitch > 127 || d.key < 0 || d.key > 127 || d.velocity > 127)
                                     return fail(QString("%1:%2: bad Drum").arg(path).arg(r.lineNumber()));
                               li.drums.push_back(d);
                               }
@@ -141,8 +153,11 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               art.name = aa.value("name").toString();
                               art.techniques = words(aa.value("techniques").toString());
                               art.modifiers = words(aa.value("modifiers").toString());
+                              art.expect = aa.value("expect").toString();
                               bool ok = false;
                               art.value = aa.value("value").toInt(&ok);
+                              if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
+                                    ok = false;
                               // (no techniques: listed for reference and checked, never chosen by notation)
                               if (!ok || art.value < 0 || art.value > 127)
                                     return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
@@ -231,13 +246,61 @@ std::vector<const LibInstrument*> LibInstrument::patches() const
       return p;
       }
 
-DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId)
+bool checkedAsExpected(const LibInstrument& instrument, const QString& line, QString* newLine)
+      {
+      *newLine = line;
+      if (!instrument.drums.empty()) {
+            static const QRegularExpression keysRe("^\\d+ keys sound \\(([0-9, -]*)\\)");
+            const QRegularExpressionMatch m = keysRe.match(line);
+            if (!m.hasMatch())
+                  return false;
+            std::set<int> sounding;
+            for (const QString& range : m.captured(1).split(", ", QString::SkipEmptyParts)) {
+                  const QStringList ends = range.split('-');
+                  for (int k = ends[0].toInt(); k <= ends.last().toInt(); ++k)
+                        sounding.insert(k);
+                  }
+            for (const DrumKey& d : instrument.drums)
+                  if (!sounding.count(d.key))
+                        return false;
+            newLine->remove("; the map has no keys for it yet");
+            return true;
+            }
+      static const QRegularExpression countsRe("^(\\d+) switch, (\\d+) ignored, (\\d+) unclear, (\\d+) silent"
+                                               "(; scan: \\d+ not in the map, 0 map values missing)?$");
+      const QRegularExpressionMatch m = countsRe.match(line);
+      if (!m.hasMatch())
+            return false;
+      int ignored = 0, unclear = 0, silent = 0;
+      std::set<int> values;
+      for (const Articulation& a : instrument.articulations) {
+            if (a.expect.isEmpty() || !values.insert(a.value).second)
+                  continue;
+            ignored += a.expect == "ignored";
+            unclear += a.expect == "unclear";
+            silent += a.expect == "silent";
+            }
+      if (values.empty() || m.captured(2).toInt() != ignored || m.captured(3).toInt() != unclear
+          || m.captured(4).toInt() != silent)
+            return false;
+      *newLine += " (as expected)";
+      return true;
+      }
+
+bool drumRoll(const Chord* chord)
+      {
+      const Tremolo* t = chord->tremolo();
+      return t && (!t->twoNotes() || t->tremoloType() == TremoloType::BUZZ_ROLL);
+      }
+
+DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, const QString& instrumentId,
+                const QString& technique)
       {
       // an entry for the instrument before one for all
       for (int pass = 0; pass < 2; ++pass) {
             for (int p = 0; p < int(patches.size()); ++p) {
                   for (const DrumKey& d : patches[p]->drums) {
-                        if (d.pitch != pitch || (pass == 0) == d.ids.isEmpty())
+                        if (d.pitch != pitch || d.technique != technique || (pass == 0) == d.ids.isEmpty())
                               continue;
                         if (pass == 1 || d.ids.contains(instrumentId.toLower()))
                               return DrumChoice { p, &d };
@@ -425,8 +488,11 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                   const Chord* chord = toChord(e);
                   if (patches[0]->kit) {
                         const QString id = chord->part()->instrument(chord->tick())->getId();
+                        const bool roll = drumRoll(chord);
                         for (const Note* note : chord->notes()) {
-                              const DrumChoice d = drum(patches, note->pitch(), id);
+                              DrumChoice d = roll ? drum(patches, note->pitch(), id, "roll") : DrumChoice();
+                              if (d.patch < 0)
+                                    d = drum(patches, note->pitch(), id);
                               if (d.patch >= 0)
                                     used[d.patch] = true;
                               }

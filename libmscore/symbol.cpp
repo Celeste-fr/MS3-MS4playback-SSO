@@ -17,6 +17,8 @@
 #include "staff.h"
 #include "system.h"
 #include "symbol.h"
+#include "note.h"
+#include "accidental.h"
 #include "sym.h"
 #include "xml.h"
 
@@ -83,14 +85,25 @@ void Symbol::layout()
             p.setX(-(w * .5));
       setPos(p);
       BSymbol::layout();
+      if (isStackedAccidental())
+            setbbox(QRectF());            // (drawn by the accidental)
       }
 
 //---------------------------------------------------------
 //   Symbol::draw
 //---------------------------------------------------------
 
+// a stacked accidental modifier (Accidental::isStackModifier) on a note with an accidental: the
+// accidental draws it; the symbol is only there for the file (and MuseScore 3.6)
+bool Symbol::isStackedAccidental() const
+      {
+      return parent() && parent()->isNote() && Accidental::stackPrime(_sym) && toNote(parent())->accidental();
+      }
+
 void Symbol::draw(QPainter* p) const
       {
+      if (isStackedAccidental())
+            return;
       if (!isNoteDot() || !staff()->isTabStaff(tick())) {
             p->setPen(curColor());
             if (_scoreFont)

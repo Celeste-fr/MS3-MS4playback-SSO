@@ -118,6 +118,32 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       _tweak->setToolTip(tr("Cents added to every note"));
       form->addRow(tr("Tweak:"), _tweak);
 
+      _just = new QComboBox;
+      _just->addItem(tr("12 keys, as a keyboard has them (the Tuning plugin's)"), int(Temperament::Just::KEYS));
+      _just->addItem(tr("By spelling: Ben Johnston (unmarked notes a pure major scale)"), int(Temperament::Just::JOHNSTON));
+      _just->addItem(tr("By spelling: Helmholtz-Ellis, HEJI (unmarked notes Pythagorean)"), int(Temperament::Just::HEJI));
+      _just->setToolTip(tr("12 keys: C♯ and D♭ are one key, as on a keyboard.\n"
+                           "Ben Johnston: the root's major scale is pure (1/1 9/8 5/4 4/3 3/2 5/3 15/8), a sharp or "
+                           "flat is 25/24; a Sagittal 5-comma accidental moves a note by a syntonic comma (81/80).\n"
+                           "Helmholtz-Ellis: unmarked notes are pure fifths from the root; HEJI's arrow accidentals "
+                           "move a note by a syntonic comma each (E with one arrow down is 5/4 above C)."));
+      _justLabel = new QLabel(tr("Just intonation:"));
+      form->addRow(_justLabel, _just);
+
+      // accidental families whose size is a matter of convention: the most common one first
+      _quarter = new QComboBox;
+      _quarter->addItem(tr("50 cents, as in 24-EDO (the most common)"), int(Temperament::Quarter::FIXED));
+      _quarter->addItem(tr("Half the tuning's sharp or flat (meantone, 31-EDO)"), int(Temperament::Quarter::HALF));
+      _quarter->addItem(tr("33/32, the just quarter tone (53.3 cents)"), int(Temperament::Quarter::JUST));
+      _quarter->setToolTip(tr("Stein-Zimmermann and Gould (arrow) quarter-tone accidentals. In equal temperament the "
+                              "first two are the same."));
+      form->addRow(tr("Quarter tones:"), _quarter);
+      _persian = new QComboBox;
+      _persian->addItem(tr("Vaziri's quarter tones: koron −50, sori +50 (the most common)"), int(Temperament::Persian::VAZIRI));
+      _persian->addItem(tr("As played: koron about −60, sori about +40"), int(Temperament::Persian::PRACTICE));
+      _persian->addItem(tr("As the Microtonal Tuner plugin played them in 3.6: −67, +33"), int(Temperament::Persian::MS36));
+      form->addRow(tr("Koron and sori:"), _persian);
+
       QGridLayout* grid = new QGridLayout;
       for (int i = 0; i < 12; ++i) {
             QLabel* l = new QLabel(pitchNames[i]);
@@ -137,7 +163,8 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       _spelled = new QCheckBox(tr("Enharmonic spellings sound apart (C♯ is not D♭)"));
       _spelled->setToolTip(tr("For a tuning built from a chain of equal fifths (Pythagorean, meantones), notes spelled "
                               "past its 12 go on along the chain, as the tuning defines them.\n"
-                              "Keyboard temperaments have one value per key and ignore this."));
+                              "Keyboard temperaments have one value per key and ignore this; Just intonation has "
+                              "its own choice above."));
       top->addWidget(_spelled);
 
       _oldNotes = new QLabel;
@@ -167,10 +194,33 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       for (QDoubleSpinBox* f : _final)
             connect(f, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this] { finalChanged(); });
       connect(_spelled, &QCheckBox::toggled, this, [this](bool on) { if (!_updating) { _t.spelled = on; showTemperament(_t); } });
+      connect(_quarter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
+            if (!_updating) {
+                  _t.quarter = Temperament::Quarter(_quarter->currentData().toInt());
+                  showTemperament(_t);
+                  }
+            });
+      connect(_persian, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
+            if (!_updating) {
+                  _t.persian = Temperament::Persian(_persian->currentData().toInt());
+                  showTemperament(_t);
+                  }
+            });
+      connect(_just, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] {
+            if (_updating)
+                  return;
+            _t.just = Temperament::Just(_just->currentData().toInt());
+            showTemperament(_t);
+            });
       connect(_useOld, &QPushButton::clicked, this, [this] { useOld(); });
       connect(loadButton, &QPushButton::clicked, this, [this] { load(); });
       connect(saveButton, &QPushButton::clicked, this, [this] { save(); });
-      connect(bb->button(QDialogButtonBox::Reset), &QPushButton::clicked, this, [this] { showTemperament(Temperament()); });
+      connect(bb->button(QDialogButtonBox::Reset), &QPushButton::clicked, this, [this] {
+            Temperament e;                // (the accidental choices stay)
+            e.quarter = _t.quarter;
+            e.persian = _t.persian;
+            showTemperament(e);
+            });
       connect(bb->button(QDialogButtonBox::Apply), &QPushButton::clicked, this, [this] { apply(); });
       connect(bb, &QDialogButtonBox::accepted, this, [this] { apply(); accept(); });
       connect(bb, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -265,10 +315,34 @@ void TuningDialog::showTemperament(const Temperament& t)
             _final[i]->setValue(_t.offsets[i]);
       double step = 0.0;
       const bool chain = _t.isChain(&step);
+      // (the preset's own values: edited ones are keys of their own)
+      bool presetValues = preset;
+      if (preset) {
+            const Temperament p = Temperament::preset(_t.name, _t.root, _t.pure, _t.tweak);
+            for (int i = 0; i < 12; ++i)
+                  presetValues = presetValues && qAbs(p.offsets[i] - _t.offsets[i]) < 1e-9;
+            }
+      const bool just = _t.name == "just" && presetValues;
       _spelled->setEnabled(chain && qAbs(step) > 0.05);
       _spelled->setChecked(_t.spelled);
+      _just->setVisible(_t.name == "just");
+      _justLabel->setVisible(_t.name == "just");
+      _just->setEnabled(just);
+      _just->setCurrentIndex(_just->findData(int(just ? _t.just : Temperament::Just::KEYS)));
+      _quarter->setCurrentIndex(_quarter->findData(int(_t.quarter)));
+      _persian->setCurrentIndex(_persian->findData(int(_t.persian)));
       QString about = presetAbout(_t.name);
-      if (preset && _t != Temperament::preset(_t.name, _t.root, _t.pure, _t.tweak))
+      if (just && _t.just == Temperament::Just::JOHNSTON)
+            about += " " + tr("By spelling (Ben Johnston): the root's major scale is pure, and a sharp or flat is 25/24, "
+                              "so enharmonic spellings differ (from C: C♯ 25/24, D♭ 27/25). D–A is 40/27, as in any "
+                              "fixed just scale; a Sagittal 5-comma accidental moves a note by 81/80.");
+      else if (just && _t.just == Temperament::Just::HEJI)
+            about += " " + tr("By spelling (Helmholtz-Ellis): unmarked notes are pure fifths from the root (from C: E "
+                              "81/64, C♯ 2187/2048, D♭ 256/243); each HEJI arrow on an accidental moves the note by a "
+                              "syntonic comma (81/80), so E with one arrow down is 5/4.");
+      else if (just)
+            about += " " + tr("12 keys, as the Tuning plugin and a keyboard have it: C♯ and D♭ are the same.");
+      if (preset && !presetValues)
             about += " " + tr("Final values edited.");
       if (chain && qAbs(step) > 0.05)
             about += " " + tr("Each fifth is %1 cents from equal.").arg(QString::asprintf("%+.2f", step));
@@ -288,6 +362,9 @@ void TuningDialog::presetChanged()
             }
       Temperament t = Temperament::preset(name);
       t.spelled = _t.spelled;
+      t.just = _t.just;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       showTemperament(t);
       }
 
@@ -298,6 +375,9 @@ void TuningDialog::rootChanged()
       // as the plugin: a new root also moves the pure tone there and clears the tweak
       Temperament t = Temperament::preset(_t.name, _root->currentIndex(), _root->currentIndex(), 0.0);
       t.spelled = _t.spelled;
+      t.just = _t.just;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       showTemperament(t);
       }
 
@@ -307,6 +387,9 @@ void TuningDialog::pureOrTweakChanged()
             return;
       Temperament t = Temperament::preset(_t.name, _t.root, _pure->currentIndex(), _tweak->value());
       t.spelled = _t.spelled;
+      t.just = _t.just;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       showTemperament(t);
       }
 
@@ -317,6 +400,7 @@ void TuningDialog::finalChanged()
       Temperament t = _t;
       for (int i = 0; i < 12; ++i)
             t.offsets[i] = _final[i]->value();
+      t.just = Temperament::Just::KEYS;      // (edited values are keys)
       showTemperament(t);
       }
 
@@ -331,6 +415,8 @@ void TuningDialog::useOld()
       Temperament t;
       t.name = "custom";
       t.spelled = _t.spelled;
+      t.quarter = _t.quarter;
+      t.persian = _t.persian;
       for (int i = 0; i < 12; ++i)
             t.offsets[i] = _pluginHas[i] ? _pluginValues[i] : 0.0;
       for (const QString& name : Temperament::presetNames()) {
@@ -343,6 +429,8 @@ void TuningDialog::useOld()
                         if (same) {
                               Temperament m = p;
                               m.spelled = t.spelled;
+                              m.quarter = t.quarter;
+                              m.persian = t.persian;
                               _clearOld->setChecked(true);
                               showTemperament(m);
                               return;
@@ -395,7 +483,7 @@ void TuningDialog::apply()
       {
       MasterScore* ms = _score->masterScore();
       QMap<QString, QString> tags = ms->metaTags();
-      if (_t.isEqual() && _t.spelled)
+      if (_t.isEqual() && _t.spelled && _t.accidentalsDefault())
             tags.remove(Temperament::metaTag);
       else
             tags.insert(Temperament::metaTag, _t.toJson());
