@@ -309,7 +309,14 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `pitchBend`, summary "pitch bend range"). Test `pitchShift` (the test synth now bends ±2 semitones,
   "Pitch Bend" parameter on MIDI pitch bend: measured within 6 cents; shifts of 50 … 1300 cents by
   note-on tuning; a vibrato tone a minor third up).
-  If not, the owner's plan: an effect of our own that shifts the pitch after the plug-in, **not**
+  **Measured (the owner's extract, 2026-09-27 14:44, run 134): SSO's orchestral patches ignore pitch bend.**
+  Violins 1, Flute Solo and Horn Solo play every bend 0 … 16383 at the unbent pitch (0 cents; Violins 1's
+  -14 / 0 and every patch's 0.89-0.92 / 1.00 confidence alternate note by note: two round robins, not
+  the bend). Kontakt gets the bend (its "Pitchbend" parameter moves) and Timpani (a Kickstart patch) bends
+  cleanly ±2 semitones (-196 … +195 cents, linear). So pitch bend gives microtones on SSO's tuned percussion
+  only; for the rest, Kontakt offers nothing a host can reach (no note tuning, no note expression, no
+  tuning among the named controls).
+  So the owner's plan applies: an effect of our own that shifts the pitch after the plug-in, **not**
   pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
   output shifts all its notes together, so chords with different tunings need per-note handling.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
@@ -538,7 +545,9 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   (off by default: about 25 s a patch; one patch per family), and each patch's times (`timesMs`, summary
   "times": new instance, setup, until it sounds, describe, pitch bend, controllers), the run's total and a
   minutes-left estimate on the progress bar. Tried here in the GUI with the test synth: 3 patches with pitch
-  bend in 1.5 min (setup 0-1.8 s, until it sounds 3 s, pitch bend 27 s each), one instance.
+  bend in 1.5 min (setup 0-1.8 s, until it sounds 3 s, pitch bend 27 s each), one instance. With Kontakt (the
+  owner, run 134, 4 patches loaded before): setup 0.2-0.7 s, until it sounds 3-5 s, describe 0.7-0.9 s, pitch
+  bend 27 s; so without pitch bend about 5 s a patch, plus a patch's first load (2-43 s) when never loaded.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
