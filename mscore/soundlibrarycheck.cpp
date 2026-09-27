@@ -1892,6 +1892,21 @@ static QString patchSummary(const QJsonObject& d, const QJsonObject& empty)
       return s;
       }
 
+// how many parameters the patch named (a title other than with nothing loaded: its script's controls)
+static int namedControls(const QJsonObject& d, const QJsonObject& empty)
+      {
+      std::map<double, QString> titles;
+      for (const QJsonValue& v : empty.value("parameters").toArray())
+            titles[v.toObject().value("id").toDouble()] = v.toObject().value("title").toString();
+      int n = 0;
+      for (const QJsonValue& v : d.value("parametersChanged").toArray()) {
+            const QJsonObject o = v.toObject();
+            auto b = titles.find(o.value("id").toDouble());
+            n += b == titles.end() || b->second != o.value("title").toString();
+            }
+      return n;
+      }
+
 // which named control each controller moves: a controller's window region against each
 // parameter's (PluginExtract's effects), the most overlap (intersection over union) over 0.3
 static QJsonArray controllersToControls(const QJsonObject& controllers, const QJsonObject& parameters)
@@ -2018,6 +2033,8 @@ void ArticulationCheckDialog::extract()
 
       QElapsedTimer total;
       total.start();
+      int noneInARow = 0;
+      bool sawNamed = false;
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
@@ -2027,9 +2044,35 @@ void ArticulationCheckDialog::extract()
                   _progress->setFormat(tr("%p% — %1").arg(left));
             say(QString("[%1/%2] %3%4").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
                 .arg(left.isEmpty() ? QString() : " (" + left + ")"));
-            if (!extractPatch(chosen[k], path, folder, empty, instance, summary))
+            // a patch whose script named no controls: once more on a new Kontakt instance (the owner's
+            // background run, 2026-09-27: after a warning of Kontakt's on Celli - Performance, the
+            // instance ran no patch's script any more, and 545 patches came out with none named)
+            const QString before = summary;
+            int named = -1;
+            bool ok = extractPatch(chosen[k], path, folder, empty, instance, summary, &named);
+            // (only once patches of this run named controls: a plug-in that names none, sfizz or the
+            // tests' synth, isn't retried)
+            if (ok && named == 0 && sawNamed && !_cancel) {
+                  summary = before;
+                  say("   no named controls: once more on a new Kontakt instance");
+                  instance.reset();
+                  ok = extractPatch(chosen[k], path, folder, empty, instance, summary, &named);
+                  if (ok && named == 0)
+                        say("   still no named controls");
+                  }
+            sawNamed = sawNamed || named > 0;
+            noneInARow = ok && named == 0 && sawNamed ? noneInARow + 1 : 0;
+            if (!ok)
                   instance.reset();
             writeFile(folder + "/summary.txt", (summary + "\n(Still running: written after each patch.)\n").toUtf8());
+            if (noneInARow >= 5) {
+                  const QString why = "Stopped: five patches in a row with no named controls, even on a new Kontakt instance "
+                                      "(Kontakt runs no patch script any more). Start the extract again; if it happens again, "
+                                      "open Kontakt on its own once and look at what it says.";
+                  summary += "\n(" + why + ")\n";
+                  say(why);
+                  break;
+                  }
             QApplication::processEvents();
             }
       instance.reset();
@@ -2060,7 +2103,7 @@ void ArticulationCheckDialog::extract()
 //---------------------------------------------------------
 
 bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty,
-                                           std::unique_ptr<Vst3Plugin>& instance, QString& summary)
+                                           std::unique_ptr<Vst3Plugin>& instance, QString& summary, int* named)
       {
 #ifdef USE_VST3
       const SoundLib::LibInstrument& ins = *_rows[index].instrument;
@@ -2163,6 +2206,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       const QByteArray patchState = p->state();              // (Quick: put back after each controller)
       summary += QString("## %1 (%2.json)%3\n").arg(ins.name, fileBase, !listen || sounds ? QString() : QString(" — it played nothing"));
       summary += empty.isEmpty() ? describeSummary(d) : patchSummary(d, empty);
+      if (named)
+            *named = namedControls(d, empty);
 
       // what pitch bend does to its pitch (the owner, 2026-09-27: microtones through the library, as
       // Kontakt ignores a note's own tuning): the test note at each bend, its spectrum against the

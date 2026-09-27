@@ -104,7 +104,7 @@ class ArticulationCheckDialog : public QDialog {
       void setRunning(bool running);
       void extract();
       bool extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty,
-                        std::unique_ptr<Vst3Plugin>& instance, QString& summary);
+                        std::unique_ptr<Vst3Plugin>& instance, QString& summary, int* named = nullptr);
       bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       QString recordsFile() const;

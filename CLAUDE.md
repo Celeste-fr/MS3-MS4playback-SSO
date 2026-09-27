@@ -557,7 +557,14 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   skipped), below-normal priority (the first run's PROCESS_MODE_BACKGROUND_BEGIN plus `start /low` starved
   Kontakt: setup 46-54 s, describe 25-35 s against 0.2-0.7 and 0.7-0.9 at normal priority; the owner's
   summary, 2026-09-27), one run at a time (a lock file). Describing without pitch bend or controllers no
-  longer waits for the test note to sound (1.5 s for the patch's script to start; "sounds" left out). Its setups
+  longer waits for the test note to sound (1.5 s for the patch's script to start; "sounds" left out).
+  **The owner's run of 2026-09-27 15:27 (run 139):** 700 patches in about an hour, but a warning of Kontakt's
+  on patch 59 (Celli - Performance: "something could not be loaded, open Kontakt"; the exact text unknown)
+  held it 21 minutes, and from that patch on Kontakt ran no patch's script: 545 patches with no named controls
+  (their states full size). Now a patch with none named, once earlier patches of the run had some, is done
+  again on a new Kontakt instance; five in a row still without stop the run with a log line. On Windows a
+  watchdog thread (`DialogWatch`, musescore.cpp, background run only: the process has no window of its own)
+  logs the title and texts of any visible window of the process and closes it (WM_CLOSE) after 30 s. Its setups
   are a copy of the working MuseScore's in `Documents/MuseScore Sound Library Check/background extract setups`
   (`SoundLibraryHost::setDataFolder`; copied file by file where missing), and it writes nothing in MuseScore's
   data or settings folders (not even `workspaces/global/menubar.xml`, which every other start writes).

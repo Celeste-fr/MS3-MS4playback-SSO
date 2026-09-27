@@ -131,6 +131,9 @@
 #include "soundlibraryhost.h"
 #include "soundlibrarycheck.h"
 #include <QLockFile>
+#include <atomic>
+#include <map>
+#include <thread>
 #include "tuningdialog.h"
 #include "libmscore/partplayback.h"
 #include "playbackmode.h"
@@ -4454,6 +4457,68 @@ static bool doProcessJob(QString jsonFile)
 //    extract.log, the zip in Documents/MuseScore Sound Library Check as from the dialog.
 //---------------------------------------------------------
 
+#ifdef Q_OS_WIN
+//---------------------------------------------------------
+//   DialogWatch
+//    the background extract has no window of its own, so any visible window of the process is one a
+//    plug-in opened (the owner's run, 2026-09-27: a warning of Kontakt's on Celli - Performance
+//    held the run for 21 minutes, and nobody could read it): its title and texts go into the log, and
+//    after 30 s it is closed (WM_CLOSE) so the run goes on
+//---------------------------------------------------------
+
+struct DialogWatch {
+      std::atomic<bool> stop { false };
+      std::thread thread;
+      std::map<HWND, qint64> seen;        // window -> when first seen (ms)
+
+      static BOOL CALLBACK texts(HWND h, LPARAM l)
+            {
+            wchar_t buf[1024];
+            const int n = GetWindowTextW(h, buf, 1024);
+            if (n > 0)
+                  reinterpret_cast<QStringList*>(l)->append(QString::fromWCharArray(buf, n).simplified());
+            return TRUE;
+            }
+      static BOOL CALLBACK windows(HWND h, LPARAM l)
+            {
+            DWORD pid = 0;
+            GetWindowThreadProcessId(h, &pid);
+            if (pid == GetCurrentProcessId() && IsWindowVisible(h))
+                  reinterpret_cast<std::vector<HWND>*>(l)->push_back(h);
+            return TRUE;
+            }
+      void run()
+            {
+            QElapsedTimer clock;
+            clock.start();
+            while (!stop) {
+                  std::vector<HWND> found;
+                  EnumWindows(windows, reinterpret_cast<LPARAM>(&found));
+                  for (HWND h : found) {
+                        if (!seen.count(h)) {
+                              seen[h] = clock.elapsed();
+                              QStringList t;
+                              texts(h, reinterpret_cast<LPARAM>(&t));
+                              EnumChildWindows(h, texts, reinterpret_cast<LPARAM>(&t));
+                              t.removeDuplicates();
+                              ArticulationCheckDialog::logBackground(QString("   a window of the plug-in's: \"%1\" (closed in 30 s if still open)")
+                                                                     .arg(t.join(" | ")));
+                              }
+                        else if (seen[h] >= 0 && clock.elapsed() - seen[h] > 30000) {
+                              ArticulationCheckDialog::logBackground("   closing that window");
+                              PostMessageW(h, WM_CLOSE, 0, 0);
+                              seen[h] = -1;           // (closed once)
+                              }
+                        }
+                  for (int i = 0; i < 20 && !stop; ++i)
+                        Sleep(100);
+                  }
+            }
+      DialogWatch() { thread = std::thread([this]() { run(); }); }
+      ~DialogWatch() { stop = true; thread.join(); }
+      };
+#endif
+
 static bool extractInBackground()
       {
 #ifdef Q_OS_WIN
@@ -4502,6 +4567,9 @@ static bool extractInBackground()
                                              .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)));
       ArticulationCheckDialog dialog(library);
       QString zip;
+#ifdef Q_OS_WIN
+      DialogWatch watch;
+#endif
       return dialog.runHeadless(extractPatches, extractPitchBend, &zip);
       }
 
