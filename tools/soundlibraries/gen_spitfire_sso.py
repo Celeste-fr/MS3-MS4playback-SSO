@@ -417,7 +417,11 @@ PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - W
 # the GM ones its drumsets use (instruments.xml); an entry with ids is for those instruments only.
 # An entry whose name ends in " Roll" is the sound's roll key (technique="roll": a single-note tremolo or
 # buzz roll plays it once, held; a crescendo over it swells through the dynamics on CC1). SSO's rolls
-# are off in Kickstart until the owner assigns them a key: add them here then (Snare 1 / 2 so far).
+# are off in Kickstart until given a key. The owner (2026-09-27): setups are made by MuseScore at the
+# library's defaults, and what a kit patch has off comes from the drum's own patch (SINGLES), so an
+# entry on a key HITS marks off is left out of the map (Snare 1 x stick and roll, Snare 2 roll,
+# Triangle 1: until their patches' keys are known, the snares' rolls play the tremolo's hits, the
+# side stick plays the Field Drum's x stick, and the triangle the built-in synthesizer).
 # Guesses to confirm by ear: Tom 1 is the high tom, Conga 1 the high conga, Block 1 the high block.
 DRUMS = {
  'Drums - High': [
@@ -490,10 +494,11 @@ DRUMS = {
   # (Ships Bell 79 / 81, Gankogui 36 / 38 / 40 / 41: no MuseScore sound)
   ],
  }
-# Every key each patch plays in the owner's setup, MuseScore sound or not: (key, name, on), on 0 for a
-# technique Kickstart has off until given a key (the owner switched it on; written default="off", so a
-# setup made elsewhere, a DAW's, knows to do the same). Keys without a MuseScore sound are written
-# without a pitch: listed and checked, never chosen. From the owner's Kickstart screenshots (2026-09-26).
+# Every key each patch played in the owner's hand-made setup, MuseScore sound or not: (key, name, on), on 0
+# for a technique Kickstart has off until given a key (the owner had switched it on). Only keys with on 1
+# are in the map, as setups are now at the library's defaults (the others go in the patch's comment of
+# what is off). Keys without a MuseScore sound are written without a pitch: listed and checked, never
+# chosen. From the owner's Kickstart screenshots (2026-09-26).
 HITS = {
  'Drums - High': [
   (72, 'Timbales Lo Hit', 1), (74, 'Timbales Lo Edge', 1), (76, 'Timbales Lo Rim', 1),
@@ -563,8 +568,8 @@ HITS = {
   (83, 'Agogo Low', 1), (84, 'Agogo High', 1),
   ],
  }
-# Techniques still off in the owner's setup (no key; Kickstart shows such a technique on C-2 = 0): each kit can't give every technique a key, so
-# these need a second instance of the patch set up with them (an extra of the kit, its own HITS).
+# Techniques off in the owner's setup too (no key; Kickstart shows such a technique on C-2 = 0): each kit
+# can't give every technique a key; they come from the drum's own patch (SINGLES).
 STILL_OFF = {
  'Drums - High': 'Timbales Lo / Hi X Stick, Lo / Hi Flam, Hi Side, Lo / Hi Swell mf / f; '
                  'Rototoms Swell 1-5; Conga 1 / 2 Flam, Roll, Roll SFP, Roll Side, Swell mf / f; '
@@ -586,19 +591,22 @@ for name in PERCUSSION:
     assert len(hits) == len(HITS[name]), name
     for pitch, key, n, ids in drums:
         assert key in hits and hits[key][0] == n, (name, key, n)
+    # (at the library's defaults: what is off isn't mapped)
+    drums = [d for d in drums if hits[d[1]][1]]
+    offNames = [n for k, (n, on) in sorted(hits.items()) if not on]
     # (sounds chosen by key: nothing to switch)
     out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
     out.append('    <Switch type="none"/>')
     out += patchControllers(name)
     for pitch, key, n, ids in drums:
         roll = ' technique="roll"' if n.endswith(' Roll') else ''
-        off = '' if hits[key][1] else ' default="off"'
-        out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + off + '/>')
+        out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + '/>')
     used = {key for _, key, _, _ in drums}
     for key, (n, on) in sorted(hits.items()):
-        if key not in used:
-            out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
-    out.append(f'    <!-- off in Kickstart, no key: {STILL_OFF[name]} -->')
+        if key not in used and on:
+            out.append(f'    <Drum key="{key}" name={q(n)}/>')
+    off = '; '.join(x for x in (', '.join(offNames), STILL_OFF[name]) if x)
+    out.append(f'    <!-- off in Kickstart by default (from the drum\'s own patch): {off} -->')
     out.append('  </Instrument>')
 # One patch per drum (the owner's folder, 2026-09-27: "Percussion - <kit> - <drum>.nki"). A kit patch's
 # keyboard can't hold every technique of all its drums; the drum's own patch can. Extras of the kit

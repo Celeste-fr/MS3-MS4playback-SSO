@@ -705,8 +705,9 @@ void TestSoundLibrary::checkedAsExpected()
          "the map has no keys for it yet", &line));
       QCOMPARE(line, QString("27 keys sound (36-39, 48, 50, 52-53, 60-65, 67, 72, 74-78, 84-89); "
                              "7 keyswitches (40, 49, 51, 55, 66, 68, 93)"));
-      // keys the owner switched on later (Snare 1 x stick 115, roll 119; Snare 2 roll 6) weren't heard
-      QVERIFY(!SoundLib::checkedAsExpected(patch("Drums - High"),
+      // at the library's defaults (the owner, 2026-09-27) the map has no keys Kickstart has off (Snare 1
+      // x stick 115, roll 119; Snare 2 roll 6 …), so a check of the patch at its defaults passes
+      QVERIFY(SoundLib::checkedAsExpected(patch("Drums - High"),
          "43 keys sound (36-38, 40-43, 45, 48, 50, 52-53, 55, 57, 59-67, 69, 71-74, 76-79, 81-82, 84-92); "
          "9 keyswitches (39, 44, 46, 54, 56, 58, 80, 83, 93); the map has no keys for it yet", &line));
       QVERIFY(SoundLib::checkedAsExpected(patch("Unpitched - Wood"),
@@ -714,8 +715,8 @@ void TestSoundLibrary::checkedAsExpected()
       QVERIFY(SoundLib::checkedAsExpected(patch("Other - Toys"),
          "38 keys sound (36, 38, 40-41, 43, 45, 47-48, 50, 52-53, 55, 57, 59-60, 62, 64-65, 67, 69, 71-72, 74, 76-77, 79-81, "
          "83-84, 86-89, 91, 93, 95-96); 12 keyswitches (39, 42, 44, 46, 49, 51, 54, 61, 63, 70, 73, 75); the map has no keys for it yet", &line));
-      // Metal: its triangle keys (103, 107) did not sound: to be checked
-      QVERIFY(!SoundLib::checkedAsExpected(patch("Unpitched - Metal"),
+      // Metal at its defaults (the triangles off: they come from their own patches) …
+      QVERIFY(SoundLib::checkedAsExpected(patch("Unpitched - Metal"),
          "53 keys sound (36-50, 52-55, 57-72, 74, 76-77, 79-86, 88-89, 91, 93, 95-97); 5 keyswitches (10, 56, 73, 78, 99); "
          "the map has no keys for it yet", &line));
       // … and with Triangle 1 active (09:12)

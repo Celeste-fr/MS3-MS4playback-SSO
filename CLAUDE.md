@@ -667,20 +667,24 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   loud key is listed, except rings of the previous key). MuseScore's pitches are the GM ones of
   its drumsets; `ids` entries for instruments whose pitch means something else (tam-tam 52,
   temple blocks 58-62, ratchet 73 …). Tom 1, Conga 1 and Block 1 are the high ones
-  (confirmed by ear by the owner, run 60). Triangles: keys the owner assigned (Triangle 1 103-107, Triangle 2 108-112; Instrument Active on); Ships Bell, Gankogui, Rivet Cymbal, Trash
+  (confirmed by ear by the owner, run 60). Triangles: off in the Metal kit by default (the owner's hand-made setup had them on 103-107 / 108-112), so
+  they await Triangle 1 / 2's own patches; Ships Bell, Gankogui, Rivet Cymbal, Trash
   Gong Drum and Tom Ensemble have no MuseScore sound; Trash Metal Brake 1 plays Automobile Brake Drums.
   Rolls: `<Drum … technique="roll">` (`SoundLib::drumRoll`: a single-note tremolo or buzz roll plays
   the roll key once, held; without one, the tremolo's hits; test `renderKitRoll`). Swells are a
-  roll under a hairpin (CC1), not SSO's fixed-length swell samples. SSO's roll keys are off in Kickstart until the
-  owner assigns them: Snare 1 (x stick 115, roll 119) and Snare 2 (roll 6) so far; a technique switched on
-  gets the next free key at the ends of the keyboard (one key each).
-  Every key of each kit patch is in the map (`HITS` in gen_spitfire_sso.py; keys with no MuseScore
-  sound have no `pitch`), with `default="off"` on the techniques the owner had to switch on (for a
-  later export to a DAW), and a comment listing those still off: a kit's keyboard can't hold all of
-  its techniques, so the rest come from SSO's one-drum patches ("Percussion - <kit> - <drum>", 42,
+  roll under a hairpin (CC1), not SSO's fixed-length swell samples. SSO's roll keys are off in Kickstart by default
+  (a technique switched on gets the next free key at the ends of the keyboard).
+  **The owner, 2026-09-27: kits at the library's defaults; what they have off comes from the one-drum
+  patches.** So the map has every key each kit patch plays at its defaults (`HITS` entries with on 1;
+  keys with no MuseScore sound have no `pitch`) and a comment listing what is off (the keys the owner
+  had switched on: Snare 1 x stick 115 / roll 119 / flam / swells, Snare 2 rim / x stick / flam / brush /
+  roll 6, the triangles; and those with no key). Until the one-drum patches' keys are known, the snares'
+  rolls play the tremolo's hits, the snare side stick the Field Drum's x stick, the triangle the built-in
+  synthesizer. `default="off"` stays in the format but SSO's map no longer uses it. The rest come from
+  SSO's one-drum patches ("Percussion - <kit> - <drum>", 42,
   the owner's folder of 2026-09-27; `SINGLES`): extras of the kit after the five kit patches, so a sound
   both have plays on the kit patch and only a technique the kit lacks loads the drum's own patch. Their
-  keys (`SINGLE_HITS` / `SINGLE_DRUMS`) await the owner's screenshots with every technique on. Kickstart shows a technique with no key on C-2 (0). None of it heard in
+  keys (`SINGLE_HITS` / `SINGLE_DRUMS`, at their defaults) are not known yet. Kickstart shows a technique with no key on C-2 (0). None of it heard in
   Kontakt yet.
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
