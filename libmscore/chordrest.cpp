@@ -625,8 +625,8 @@ Element* ChordRest::drop(EditData& data)
                   KeySigEvent k = ks->keySigEvent();
                   delete ks;
 
-                  // apply only to this stave
-                  score()->undoChangeKeySig(staff(), tick(), k);
+                  // apply only to this stave (a custom one for its clef: made on a treble staff)
+                  score()->undoChangeKeySig(staff(), tick(), k.forClef(ClefType::G, staff()->clef(tick())));
                   }
                   break;
 

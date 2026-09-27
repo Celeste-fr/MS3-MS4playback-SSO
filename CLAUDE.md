@@ -67,6 +67,17 @@ Some mtest references were updated for these (compat114/206, musicxml io, tuplet
 Known leftovers: the XML of some MuseScore 1/2 imports still changes on the first round trip
 (pages and MIDI identical); MIDI export's same-instant event order is not stable run to run.
 
+Custom key signatures (the owner, 2026-09-27): dropped from the palette, a custom key signature
+(made on the editor's treble staff) is adapted to each staff's clef (`KeySigEvent::forClef`: each
+accidental where that clef's standard key signature puts the same note, an octave apart as drawn;
+`KeySig::drop`, `Measure::drop`, `ChordRest::drop`); the positions are stored per staff as before, so
+3.6 shows the same. Not adapted: a clef change after the key signature, paste. Alt+Shift+Up/Down
+(`Score::upDown`, DIATONIC) steps to the signature's accidental under a custom key signature (it used
+the key, C, and wrote a natural against the signature). The key signature editor (*Master Palette ›
+Key Signatures › Create Key Signature*, `mscore/keyedit.cpp`): staff twice the palettes' size, a
+minimum height of 11 spaces, accidentals snapped to a line or space only (not to a whole-space grid
+across). Tests `tst_tuning::diatonicCustomKey`, `customKeyForClef`.
+
 Fixed from MuseScore 3.6 (not about files): deleting a time signature that restates the one in
 force (same nominal meter, none local) no longer rebuilds the measures up to the next one, which
 lost their breaks, spacers, stretch and volta offsets (musescore#21578; the owner used the
