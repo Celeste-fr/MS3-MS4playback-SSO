@@ -8,8 +8,8 @@ This is a private fork of the MuseScore 3.7 community fork (Jojo-Schmitz/MuseSco
 2. **External sound libraries.** Chosen parts play through a real sample library (the owner
    has **Spitfire Symphony Orchestra**, the Kontakt version, on **Windows**, in the free
    **Kontakt Player** (8), not the full Kontakt: the owner, 2026-09-27; everything here goes
-   through VST 3, which the Player supports; NI's Creator Tools need the full Kontakt, and a
-   Player library is NI-licensed and encrypted). MuseScore picks
+   through VST 3, which the Player supports; NI's Creator Tools need the full Kontakt; SSO's
+   patches are nevertheless readable: see Extract library files). MuseScore picks
    each note's articulation from the notation.
 
 The owner talks to agents through claude.ai sessions and reads results on GitHub. Keep this
@@ -429,12 +429,25 @@ e-mails and NI's HU/JDX key values are left out, the home folder is written `%US
 `Documents/MuseScore Sound Library Check/<library> files <date>/` (`library.json`, `inventory.csv`,
 `summary.txt`, `archives/<archive>.txt` with the names inside each, `extracted/`) and a zip. **When the owner
 hands it back**, `extract_library_files.py --report <zip>` prints the summary; the rest is in `library.json`.
-Tested with `test_extract_library_files.py` (12 tests: files built in each layout, and with `KONTAKT_NKI=` a
-real Kontakt 6.7 `.nki`, ConvertWithMoss's template: 61 zones, 61 samples, 5 script slots). Not run on SSO:
-SSO plays in the free Kontakt Player, so it is an NI-licensed Player library and its `.nki` presets and
-`.nkx` samples are most likely encrypted: expect names, tags, SNPIDs, ProductHints and perhaps the sample
-names, not groups and zones. The first run will show; the plug-in's side (Extract plug-in data) stays the
-main source.
+By default each program's zones are summed up per group (`compact_program`: its place in the group tree,
+zone count, key and velocity ranges, roots, one sample's name); `--zones` keeps every zone and the container
+trees (about 800 MB of JSON for SSO). The hand-back zip is LZMA and, over the chat's 30 MB limit, split into
+"<folder> part n of N.zip" (a file too big alone in `.partNN` pieces; `--report` and `join_parts` put them
+together). Tested with `test_extract_library_files.py` (14: files built in each layout, the group tree, the
+split; with `KONTAKT_NKI=` a real Kontakt 6.7 `.nki`, ConvertWithMoss's template: 61 zones, 61 samples, 5
+script slots).
+First run on SSO (the owner, 2026-09-27 03:27, with the first build, library.json left out as 800 MB):
+**all 700 `.nki` are readable, none encrypted** (SNPID N51, saved with Kontakt 7.5.2, library 1.4.0;
+ProductHints: RAS3, NKS-enabled), although SSO plays in the free Player. So every patch's groups and zones
+are there: Violins 1 - All techniques has 1219 groups and 32470 zones, keys 36-109; the group names spell
+out the tree: mic header (`####### Close #######` …), articulation (`Long`, `Long CS`, `Long Harmonics` …),
+variant (`Non Vib`, `Vib`, `Molto Vib`), then round robin and dynamic (`rr1 sus p`) and release triggers
+(`sus p rt`). The 279 `.nkx` archives list 432,829 sample names (e.g.
+`BML205_SoloBassTromb_dbltongue_ff_RR1_a_A#2.ncw`: articulation, dynamic, round robin, note; the samples
+themselves encrypted). It also found BBC Symphony Orchestra's NKS presets (the `symphon` match; the owner has
+it): one page Expression 0, Dynamics 1, Reverb 2, Global Tune 13, Pan 12, Gain 11. komplete.db3 has the 700
+sound-info rows. The first build's slot-list reading gave an error on every patch (fixed: only for banks) and
+wrote all of Kontakt 8's registry key (now only the values naming the library).
 
 Tested here:
 - `tst_soundlibrary` hosts `mstestsynth.vst3` (`mtest/libmscore/soundlibrary/testsynth`), a

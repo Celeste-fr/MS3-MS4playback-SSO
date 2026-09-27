@@ -283,7 +283,11 @@ class Tests(unittest.TestCase):
 
     def test_readable_nki(self):
         p = self.write("Instruments/Violins 1.nki", nki(kontakt_preset(), snpids=[]))
-        r = E.examine(p, self.opts)
+        E.FULL_ZONES = True
+        try:
+            r = E.examine(p, self.opts)
+        finally:
+            E.FULL_ZONES = False
         self.assertEqual(r["format"], "NI container")
         self.assertNotIn("error", r)
         self.assertEqual(r["application"], "Kontakt 7.10.5")
@@ -310,6 +314,61 @@ class Tests(unittest.TestCase):
         # the script is counted, its text is nowhere in the output
         self.assertEqual(len(k["scriptChunks"]), 1)
         self.assertNotIn("secret", json.dumps(r, default=str))
+
+    def test_compact_groups(self):
+        """By default the zones are summed up per group, in SSO's group tree."""
+        groups = [group_data("####### Close #######"), group_data("Long"), group_data("    Non Vib"),
+                  group_data("      rr1 sus p"), group_data("      sus p rt", True), group_data("Short")]
+        group_list = pchunk(0x33, u32(len(groups)) + b"".join(pstruct(0x9C, g) for g in groups))
+        zones = [(3, 48, 59, 1, 64, 55, 0), (3, 60, 71, 65, 127, 66, 1), (4, 48, 71, 1, 127, 60, 2)]
+        zone_list = pchunk(0x34, u32(len(zones)) + b"".join(u32(z[0]) + pstruct(0x9A, zone_data(*z[1:])) for z in zones))
+        program = pchunk(0x28, pstruct(0xAE, program_data("Violins 1 - All techniques"), group_list + zone_list))
+        names = ["vln1_long_nv_p_RR1_C3.ncw", "vln1_long_nv_p_RR1_C4.ncw", "vln1_long_rt_p_C3.ncw"]
+        files = pchunk(0x3D, s32(0) + s32(len(names)) + b"".join(path_segments("Samples", n) for n in names)
+                       + bytes(8 * len(names)) + u32(0))
+        r = E.examine(self.write("Instruments/Violins 1.nki", nki(program + files)), self.opts)
+        k = r["kontakt"][0]
+        self.assertNotIn("container", r)
+        self.assertEqual(k["fileCount"], 3)
+        prog = k["programs"][0]
+        self.assertNotIn("zones", prog)
+        self.assertEqual(prog["zoneCount"], 3)
+        g = {x["name"]: x for x in prog["groups"]}
+        self.assertEqual(g["rr1 sus p"]["path"], ["Long", "Non Vib"])
+        self.assertEqual(g["rr1 sus p"]["header"], "Close")
+        self.assertEqual(g["rr1 sus p"]["zones"], 2)
+        self.assertEqual(g["rr1 sus p"]["keys"], [48, 71])
+        self.assertEqual(g["rr1 sus p"]["velocities"], [(1, 64), (65, 127)])
+        self.assertEqual(g["rr1 sus p"]["sample"], "vln1_long_nv_p_RR1_C3.ncw")
+        self.assertTrue(g["sus p rt"]["releaseTrigger"])
+        self.assertEqual(g["sus p rt"]["path"], ["Long", "Non Vib"])
+        self.assertEqual(g["Short"]["path"], [])
+        self.assertEqual(g["Short"]["zones"], 0)
+
+    def test_handback_parts(self):
+        """Over the chat's limit the output goes in parts, a big file in pieces, joined back whole."""
+        out = os.path.join(self.dir, "Lib files 2026")
+        os.makedirs(os.path.join(out, "archives"))
+        big = os.urandom(300000)                        # doesn't compress
+        with open(os.path.join(out, "library.json"), "wb") as f:
+            f.write(big)
+        with open(os.path.join(out, "archives", "a.txt"), "wb") as f:
+            f.write(b"name\n" * 1000)
+        limit = E.HANDBACK_LIMIT
+        E.HANDBACK_LIMIT = 100000
+        try:
+            zips = E.write_handback(out)
+        finally:
+            E.HANDBACK_LIMIT = limit
+        self.assertGreater(len(zips), 1)
+        self.assertTrue(zips[0].endswith("part 1 of %d.zip" % len(zips)))
+        for z in zips:
+            self.assertLessEqual(os.path.getsize(z), 100000 * 1.1)
+        files = E.join_parts(zips[0])
+        self.assertEqual(files["Lib files 2026/library.json"], big)
+        self.assertEqual(files["Lib files 2026/archives/a.txt"], b"name\n" * 1000)
+        # a small output stays one zip
+        self.assertEqual(E.write_handback(os.path.join(out, "archives")), [os.path.join(out, "archives") + ".zip"])
 
     def test_encrypted_nki(self):
         p = self.write("Instruments/Celli.nki", nki(encrypted=True, snpids=["K42"], name="Celli - All techniques"))
@@ -416,7 +475,11 @@ class Tests(unittest.TestCase):
         path = os.environ.get("KONTAKT_NKI")
         if not path:
             self.skipTest("KONTAKT_NKI not set")
-        r = E.examine(path, self.opts)
+        E.FULL_ZONES = True
+        try:
+            r = E.examine(path, self.opts)
+        finally:
+            E.FULL_ZONES = False
         self.assertNotIn("error", r)
         progs = r["kontakt"][0]["programs"]
         self.assertTrue(progs and progs[0]["zones"], r)
@@ -436,6 +499,7 @@ def E_args(argv):
     ap.add_argument("--out")
     ap.add_argument("--images", action="store_true")
     ap.add_argument("--no-system", action="store_true")
+    ap.add_argument("--zones", action="store_true")
     return ap.parse_args(argv)
 
 

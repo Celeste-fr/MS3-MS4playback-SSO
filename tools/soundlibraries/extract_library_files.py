@@ -73,6 +73,35 @@ MAX_TEXT = 4 * 1024 * 1024        # text files copied up to this size
 MAX_READ = 64 * 1024 * 1024       # whole-file reads (containers, zlib scan) up to this size
 
 
+def documents_folder():
+    """The user's real Documents folder (on Windows it may be elsewhere, e.g. in OneDrive or on
+    another drive: asked of the shell, else the registry), else ~/Documents."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            import uuid
+            fid = uuid.UUID("{FDD39AD0-238F-46AF-ADB4-6C85480369C7}")   # FOLDERID_Documents
+            buf = ctypes.c_wchar_p()
+            guid = (ctypes.c_byte * 16).from_buffer_copy(fid.bytes_le)
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(buf)) == 0:
+                path = buf.value
+                ctypes.windll.ole32.CoTaskMemFree(buf)
+                if path and os.path.isdir(path):
+                    return path
+        except Exception:
+            pass
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders") as k:
+                path = os.path.expandvars(winreg.QueryValueEx(k, "Personal")[0])
+                if os.path.isdir(path):
+                    return path
+        except Exception:
+            pass
+    return os.path.join(HOME, "Documents")
+
+
 def private(path):
     """The path with the user's home folder hidden."""
     p = str(path)
@@ -428,7 +457,8 @@ def read_hsin(data, out):
         elif c.get("encrypted"):
             out["encrypted"] = True
     presets = [c.pop("_preset") for c in chunks if "_preset" in c]
-    out["container"] = item
+    if FULL_ZONES:
+        out["container"] = item
     if presets:
         out["kontakt"] = [read_kontakt_preset(p) for p in presets]
     elif out.get("snpids") or out.get("encrypted"):
@@ -526,22 +556,83 @@ def read_kontakt_preset(data):
             programs.append(read_program(p))
         except Exception as e:
             programs.append({"error": str(e)})
-    for slot in find_pchunks(top, 0x37):
-        try:
-            programs.extend(read_slot_list(slot))
-        except Exception as e:
-            programs.append({"error": "slot list: %s" % e})
-    out["programs"] = programs
+    if not programs:
+        # a multi (.nkm) keeps its programs in a bank's slot list; an instrument's own slot
+        # list is something else (it read as garbage on every SSO patch)
+        for slot in find_pchunks(top, 0x37):
+            try:
+                programs.extend(read_slot_list(slot))
+            except Exception as e:
+                programs.append({"error": "slot list: %s" % e})
+    files = []
     for fl in find_pchunks(top, 0x3D) + find_pchunks(top, 0x4B):
         try:
-            out["files"] = read_file_list(fl)
+            files = read_file_list(fl)
         except Exception as e:
             out["filesError"] = str(e)
+    if FULL_ZONES:
+        out["programs"] = programs
+        out["files"] = files
+    else:
+        out["programs"] = [compact_program(p, files) for p in programs]
+        out["fileCount"] = len(files)
+        out["files"] = files[:3]
     scripts = find_pchunks(top, 0x06)
     if scripts:
         out["scriptChunks"] = [{"version": s.version, "bytes": len(s.private) + len(s.public),
                                 "children": len(s.children)} for s in scripts]
     return out
+
+
+FULL_ZONES = False      # --zones: every zone of every program (SSO: ~7 million, 800 MB of JSON)
+
+
+def compact_program(p, files):
+    """A program with its zones summed up per group: SSO's group names spell out the patch
+    (mic header, articulation, variant, "rr1 sus p", "rt" for release triggers), so per group:
+    its place in that tree, how many zones, the key and velocity ranges, the roots, and one
+    sample's name."""
+    if "zones" not in p:
+        return p
+    zf = p.pop("zoneFields")
+    zones = [dict(zip(zf, z)) for z in p.pop("zones")]
+    by_group = {}
+    for z in zones:
+        by_group.setdefault(z["group"], []).append(z)
+    stack = []      # (indent, name) of the enclosing groups
+    header = None
+    groups = []
+    for i, g in enumerate(p.get("groups", [])):
+        raw = g["name"]
+        name = raw.strip()
+        indent = len(raw) - len(raw.lstrip(" "))
+        if re.match(r"^#+.*#+$", name):
+            header = name.strip("# ").strip()
+            stack = []
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        path = [n for _, n in stack]
+        stack.append((indent, name))
+        gz = by_group.get(i, [])
+        c = {"name": name, "indent": indent, "path": path, "header": header, "zones": len(gz)}
+        for k in ("releaseTrigger", "muted", "voiceGroup", "midiChannel", "volume", "tune"):
+            c[k] = g.get(k)
+        if g.get("modulators"):
+            c["modulators"] = g["modulators"]
+        if gz:
+            c["keys"] = [min(z["keyLow"] for z in gz), max(z["keyHigh"] for z in gz)]
+            c["velocities"] = sorted({(z["velLow"], z["velHigh"]) for z in gz})[:16]
+            roots = sorted({z["root"] for z in gz})
+            c["roots"] = len(roots)
+            c["rootRange"] = [roots[0], roots[-1]]
+            f = gz[0].get("file")
+            if isinstance(f, int) and 0 <= f < len(files):
+                c["sample"] = re.split(r"[\\/]", files[f])[-1]
+            c["loops"] = sum(1 for z in gz if z.get("loops"))
+        groups.append(c)
+    p["groups"] = groups
+    p["zoneCount"] = len(zones)
+    return p
 
 
 def find_pchunks(chunks, cid):
@@ -1195,8 +1286,14 @@ def windows_sources(match):
                     else:
                         values[name] = "<%s>" % type(value).__name__
                 named = match.search(sub) or any(match.search(str(v)) for v in values.values())
+                if not named:
+                    continue
+                if not match.search(sub):
+                    # another product's key (Kontakt's own settings) that mentions the library:
+                    # only the values that do
+                    values = {k: v for k, v in values.items() if match.search(str(v))}
                 registry.append({"key": "%s\\%s\\%s" % (hname, base, sub), "values": values,
-                                 "matches": bool(named)})
+                                 "matches": True})
                 if named:
                     for vn in ("ContentDir", "InstallDir", "ContentDirectory"):
                         d = values.get(vn)
@@ -1213,8 +1310,8 @@ def windows_sources(match):
         os.path.join(env("APPDATA", ""), "Spitfire Audio"),
         os.path.join(env("LOCALAPPDATA", ""), "Spitfire Audio"),
         os.path.join(env("PROGRAMDATA", r"C:\ProgramData"), "Spitfire Audio"),
-        os.path.join(HOME, "Documents", "Native Instruments", "User Content"),
-        os.path.join(HOME, "Documents", "Spitfire Audio"),
+        os.path.join(documents_folder(), "Native Instruments", "User Content"),
+        os.path.join(documents_folder(), "Spitfire Audio"),
     ]
     for folder in candidates:
         if not os.path.isdir(folder):
@@ -1275,7 +1372,7 @@ def sanitize_saved_text(path):
 def run(args):
     match = re.compile(args.match, re.I)
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H%M")
-    base = args.out or os.path.join(HOME, "Documents", "MuseScore Sound Library Check")
+    base = args.out or os.path.join(documents_folder(), "MuseScore Sound Library Check")
     outdir = os.path.join(base, "%s files %s" % (args.name, stamp))
     os.makedirs(outdir, exist_ok=True)
     opts = Options(outdir, args.images)
@@ -1345,18 +1442,94 @@ def run(args):
         for r in results:
             w.writerow([r["path"], r.get("size"), r.get("modified"), r.get("format", ""),
                         "yes" if r.get("encrypted") else "", r.get("error", "")])
+    sizes = []
+    for dirpath, _, filenames in os.walk(outdir):
+        for fn in filenames:
+            full = os.path.join(dirpath, fn)
+            sizes.append((os.path.getsize(full), os.path.relpath(full, outdir)))
     summary = summarize(library, sample_names)
+    summary += "\nLargest files written: " + ", ".join(
+        "%s %.1f MB" % (n, b / 1e6) for b, n in sorted(sizes, reverse=True)[:8]) + "\n"
     with open(os.path.join(outdir, "summary.txt"), "w", encoding="utf-8") as fh:
         fh.write(summary)
-    zpath = outdir + ".zip"
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-        for dirpath, _, filenames in os.walk(outdir):
-            for fn in filenames:
-                full = os.path.join(dirpath, fn)
-                z.write(full, os.path.join(os.path.basename(outdir), os.path.relpath(full, outdir)))
+    zips = write_handback(outdir)
     print(summary)
-    print("\nWritten: %s\nHand back: %s" % (outdir, zpath))
+    print("\nWritten: %s\nHand back (attach each):" % outdir)
+    for z in zips:
+        print("  %s (%.1f MB)" % (z, os.path.getsize(z) / 1e6))
     return outdir
+
+
+HANDBACK_LIMIT = 28 * 1000 * 1000   # the chat takes files up to 30 MB
+
+
+def write_handback(outdir):
+    """The folder as one zip (LZMA: the JSON and name lists shrink far more than with deflate),
+    or, over the chat's limit, as parts "<folder> part 1 of N.zip" that each hold whole files
+    (a file too big on its own is cut into pieces "<name>.part01" …; join_parts puts it back)."""
+    base = os.path.basename(outdir)
+    entries = []
+    for dirpath, _, filenames in os.walk(outdir):
+        for fn in sorted(filenames):
+            full = os.path.join(dirpath, fn)
+            entries.append((full, os.path.join(base, os.path.relpath(full, outdir)).replace("\\", "/")))
+    one = outdir + ".zip"
+    with zipfile.ZipFile(one, "w", zipfile.ZIP_LZMA) as z:
+        for full, arc in entries:
+            z.write(full, arc)
+    if os.path.getsize(one) <= HANDBACK_LIMIT:
+        return [one]
+    os.remove(one)
+    # compressed size per file, then pieces for the ones that can't fit a part alone
+    import lzma
+    items = []
+    for full, arc in entries:
+        with open(full, "rb") as fh:
+            data = fh.read()
+        packed = len(lzma.compress(data, preset=6))
+        if packed <= HANDBACK_LIMIT * 0.9:
+            items.append((packed, arc, data))
+            continue
+        n = int(packed / (HANDBACK_LIMIT * 0.8)) + 1
+        step = len(data) // n + 1
+        for i in range(n):
+            chunk = data[i * step:(i + 1) * step]
+            items.append((len(lzma.compress(chunk, preset=6)), "%s.part%02d" % (arc, i + 1), chunk))
+    parts, cur, size = [], [], 0
+    for packed, arc, data in items:
+        if cur and size + packed > HANDBACK_LIMIT * 0.95:
+            parts.append(cur)
+            cur, size = [], 0
+        cur.append((arc, data))
+        size += packed + 1024
+    if cur:
+        parts.append(cur)
+    names = []
+    for i, part in enumerate(parts):
+        zp = "%s part %d of %d.zip" % (outdir, i + 1, len(parts))
+        with zipfile.ZipFile(zp, "w", zipfile.ZIP_LZMA) as z:
+            for arc, data in part:
+                z.writestr(arc, data)
+        names.append(zp)
+    return names
+
+
+def join_parts(first):
+    """The files of a hand-back zip, or of all its parts, pieces joined: {name: bytes}."""
+    m = re.match(r"^(.*) part \d+ of (\d+)\.zip$", first)
+    paths = ["%s part %d of %s.zip" % (m.group(1), i, m.group(2)) for i in range(1, int(m.group(2)) + 1)] if m else [first]
+    files, pieces = {}, {}
+    for zp in paths:
+        with zipfile.ZipFile(zp) as z:
+            for n in z.namelist():
+                pm = re.match(r"^(.*)\.part(\d\d)$", n)
+                if pm:
+                    pieces.setdefault(pm.group(1), {})[int(pm.group(2))] = z.read(n)
+                else:
+                    files[n] = z.read(n)
+    for n, ps in pieces.items():
+        files[n] = b"".join(ps[i] for i in sorted(ps))
+    return files
 
 
 def summarize(lib, sample_names=None):
@@ -1424,16 +1597,26 @@ def summarize(lib, sample_names=None):
                 if "error" in p:
                     L.append("      program: error %s" % p["error"])
                     continue
-                zones = p.get("zones", [])
-                keys = [z[1] for z in zones] + [z[2] for z in zones]
+                if "zones" in p:
+                    keys = [z[1] for z in p["zones"]] + [z[2] for z in p["zones"]]
+                    nzones = len(p["zones"])
+                else:
+                    keys = [k2 for g in p["groups"] for k2 in g.get("keys", [])]
+                    nzones = p.get("zoneCount", 0)
                 L.append("      program %r: %d groups, %d zones, keys %s-%s, default keyswitch %s, library id %s"
-                         % (p["name"], len(p["groups"]), len(zones), min(keys) if keys else "-",
+                         % (p["name"], len(p["groups"]), nzones, min(keys) if keys else "-",
                             max(keys) if keys else "-", p.get("defaultKeyswitch"), p.get("libraryId")))
-                gn = [g["name"] for g in p["groups"]]
-                if gn:
-                    L.append("        groups: " + ", ".join(gn[:80]) + (" …" if len(gn) > 80 else ""))
-            if k.get("files"):
-                L.append("      %d sample files, e.g. %s" % (len(k["files"]), k["files"][0]))
+                # the top of the group tree: mic headers and articulations
+                tops = []
+                for g in p["groups"]:
+                    n = g["name"].strip()
+                    if g.get("indent", 0) == 0 and n not in tops:
+                        tops.append(n)
+                if tops:
+                    L.append("        groups: " + ", ".join(tops[:60]) + (" …" if len(tops) > 60 else ""))
+            nfiles = k.get("fileCount", len(k.get("files", [])))
+            if nfiles:
+                L.append("      %d sample files, e.g. %s" % (nfiles, k["files"][0] if k.get("files") else "?"))
             if k.get("scriptChunks"):
                 L.append("      %d script chunk(s) (not extracted)" % len(k["scriptChunks"]))
 
@@ -1485,9 +1668,9 @@ def summarize(lib, sample_names=None):
 
 def report(target):
     if target.lower().endswith(".zip"):
-        with zipfile.ZipFile(target) as z:
-            name = next(n for n in z.namelist() if n.endswith("library.json"))
-            lib = json.loads(z.read(name).decode("utf-8"))
+        files = join_parts(target)
+        name = next(n for n in files if n.endswith("library.json"))
+        lib = json.loads(files[name].decode("utf-8"))
     else:
         with open(os.path.join(target, "library.json"), encoding="utf-8") as fh:
             lib = json.load(fh)
@@ -1507,8 +1690,12 @@ def main(argv=None):
     ap.add_argument("--out", help="folder to write into (default Documents/MuseScore Sound Library Check)")
     ap.add_argument("--images", action="store_true", help="also copy pictures (GUI, wallpapers)")
     ap.add_argument("--no-system", action="store_true", help="don't look at the registry and NI's folders")
+    ap.add_argument("--zones", action="store_true",
+                    help="every zone of every program and the container trees (SSO: about 800 MB)")
     ap.add_argument("--report", metavar="FOLDER_OR_ZIP", help="print the summary of an earlier extraction")
     args = ap.parse_args(argv)
+    global FULL_ZONES
+    FULL_ZONES = args.zones
     if args.report:
         report(args.report)
         return 0
