@@ -482,7 +482,15 @@ Tuned - …, Piccolo Flute, Solo Violin, Ensembles …), the others their `.nki`
 `addedpatches.json`; `generated.json` lists what was made (never used as templates). Hand-made setups are
 kept unless `--overwrite` (then `.bak`). Tests `test_make_setups.py` (7: built files; with `SSO_NKI=` /
 `SSO_SETUP=` the owner's Violins 1: both files read and written back byte for byte, the three values
-found, a generated setup reads back). **Not yet loaded by Kontakt**: the owner's first try decides.
+found, a generated setup reads back). The owner loaded a generated "Violins 1 - Core techniques" with run 91
+(2026-09-27): "everything looks correct". Without a template (`--empty`, or found by itself: the newest
+Extract plug-in data's `plugin component.bin`, Kontakt with nothing loaded): `make_component_from_empty` puts the
+`.nki`'s program in slot 1 of the empty multi, copies its Authorization and BNI header fields (156-177, byte 36),
+sets MULTI_CONFIGURATION byte 0 to 0 and the absolute file list; against the owner's hand-made Violins 1 only the
+save time, patch and bank uuids differ (test `from_empty`, and `SSO_EMPTY=` in `real`). Plain defaults don't switch
+by UACC, so each family's switching values must be applied: the settings learnt from the hand-made setups are
+written to `learned_settings.json` (setups folder); keep the hand-made setups until those are known per family.
+Owner, 2026-09-27: move this into MuseScore and drop manual set-up (not done yet).
 
 Extract library files (`tools/soundlibraries/extract_library_files.py`; the owner, 2026-09-27: "completely
 extract all data possible from SSO so we can fully integrate it into Muse in the future"): the files'

@@ -4,7 +4,8 @@
     python3 tools/soundlibraries/test_make_setups.py [-v]
 
 SSO_NKI=<Violins 1 - All techniques.nki> SSO_SETUP=<its setup's Kontakt state (component.bin from
-Extract plug-in data, or a .vst3state)> also checks the real ones: both read and written back
+Extract plug-in data, or a .vst3state)> [SSO_EMPTY=<plugin component.bin: Kontakt with nothing loaded>]
+also checks the real ones: both read and written back
 byte for byte, the owner's settings found (2026-09-27: $zdiqz 1, $iooxo 3, $stgrp 100), and a
 setup made from the .nki reads back with that program and its samples' paths absolute.
 """
@@ -65,6 +66,10 @@ def file_list(samples, own):
 def nki_file(name, values, samples):
     preset = pchunk(0x28, program(name, values)) + pchunk(0x47, bytes(17)) + pchunk(0x4B, file_list(samples, name + ".nki"))
     return nki(preset, snpids=[], name=name)
+
+
+def setup_component_raw(preset):
+    return nki(preset, snpids=["N51"], name="New (default)")
 
 
 def setup_component(program_body):
@@ -156,7 +161,10 @@ class Tests(unittest.TestCase):
             self.assertEqual(M.main(["--setups", setups, "--library", lib, "--only", "Violins 2",
                                      "--only", "Strings - Violins 2 - Long Harmonics"]), 0)
         text = out.getvalue()
-        self.assertIn("Violins 1: settings {1: {'$zdiqz': '1', '$iooxo': '3', '$stgrp': '100'}}", text)
+        self.assertIn('settings {"1": {"$iooxo": "3", "$stgrp": "100", "$zdiqz": "1"}}: 1 setups (Violins 1)', text)
+        with open(os.path.join(setups, "learned_settings.json"), encoding="utf-8") as f:
+            learned = json.load(f)
+        self.assertIn("Violins 1", json.dumps(learned))
 
         with open(os.path.join(setups, "Violins 2.vst3state"), "rb") as f:
             version, name, component, controller = M.read_vst3state(f.read())
@@ -190,6 +198,28 @@ class Tests(unittest.TestCase):
             M.main(["--setups", setups, "--library", lib, "--only", "Violins 1", "--overwrite"])
         self.assertTrue(os.path.isfile(os.path.join(setups, "Violins 1.vst3state.bak")))
 
+    def test_from_empty(self):
+        """A setup from Kontakt's state with nothing loaded and the .nki alone."""
+        path = os.path.join(self.dir, "Violins 2 - All techniques.nki")
+        with open(path, "wb") as f:
+            f.write(nki_file("Violins 2 - All techniques", VALUES, ["v2_C3.ncw"]))
+        # empty Kontakt: no slot used, the multi's configuration starting with 1
+        bank = pchunk(0x03, pstruct(0x77, bytes(42), pchunk(0x47, bytes(17)) + pchunk(0x37, bytes(8))
+                                    + pchunk(0x48, b"\x01" + bytes(63)), private=b"uuid"))
+        empty = setup_component_raw(bank + pchunk(0xF02, b"browser") + pchunk(0x4B, u16(3) + b"x"))
+        comp = M.make_component_from_empty(empty, path, {1: {"$iooxo": b"3"}})
+        prog = M.setup_parts(comp)
+        self.assertEqual(M.program_name(prog), "Violins 2 - All techniques")
+        self.assertEqual(M.script_values(dict(M.program_scripts(prog))[1])["$iooxo"][1], b"3")
+        data, _ = M.preset_of(M.Item(comp))
+        top = dict(M.chunks(data))
+        bank = M.struct_parts(top[0x03])
+        kids = dict(M.chunks(bank[3]))
+        self.assertEqual(kids[0x37][:8], b"\x01" + bytes(7))
+        self.assertEqual(kids[0x48][:1], b"\x00")
+        self.assertEqual(top[0xF02], b"browser")
+        self.assertTrue(M.list_paths(top[0x4B])[2].endswith("Samples/Strings_V.nkxSamples/v2_C3.ncw"))
+
     def test_real(self):
         nki_path, setup_path = os.environ.get("SSO_NKI"), os.environ.get("SSO_SETUP")
         if not (nki_path and setup_path):
@@ -213,6 +243,28 @@ class Tests(unittest.TestCase):
         self.assertLess(len(comp), 4e6)
         paths = M.list_paths(dict(M.chunks(M.preset_of(M.Item(comp))[0]))[0x4B])
         self.assertTrue(all(p.startswith("D:/SSO/") for p in paths if p), paths[:3])
+        empty_path = os.environ.get("SSO_EMPTY")
+        if empty_path:
+            with open(empty_path, "rb") as f:
+                empty = f.read()
+            made = M.make_component_from_empty(empty, nki_path, edits)
+            # the same multi as Kontakt's own but for its instance's ids: the bank's private data,
+            # the sound header's time and patch id, and the program itself (Kontakt 8 re-saves it)
+            a, b = M.Item(made), M.Item(sb)
+            ca = dict(M.chunks(M.preset_of(a)[0]))
+            cb = dict(M.chunks(M.preset_of(b)[0]))
+            ba, bb = M.struct_parts(ca[0x03]), M.struct_parts(cb[0x03])
+            self.assertEqual(ba[2], bb[2])
+            ka, kb = M.chunks(ba[3]), M.chunks(bb[3])
+            self.assertEqual([k for k, _ in ka], [k for k, _ in kb])
+            for (x, y), (_, z) in zip(ka, kb):
+                if x == 0x37:
+                    ya, za = M.chunks(y[8:])[0][1], M.chunks(z[8:])[0][1]
+                    self.assertEqual(M.struct_parts(ya)[:3], M.struct_parts(za)[:3])
+                    self.assertEqual(y[:8], z[:8])
+                else:
+                    self.assertEqual(y, z, hex(x))
+            self.assertEqual(M.setup_parts(made), prog2)
 
 
 if __name__ == "__main__":

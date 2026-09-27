@@ -603,6 +603,98 @@ def make_component(template_component, program, files):
 
 
 # ---------------------------------------------------------------------------------------------
+# A setup from an empty Kontakt (its state with nothing loaded) and the .nki alone
+
+# The first slot's container as Kontakt 8.9 writes it (Violins 1's setup, 2026-09-27): PROGRAM_CONTAINER
+# (version 81, its private and public data), 0x2B and SAVE_SETTINGS before the PROGRAM_LIST
+SLOT_CONTAINER = (81, bytes.fromhex("01000000000000000000000000000000 0200".replace(" ", "")),
+                  bytes.fromhex("00000000000000 3f00000000".replace(" ", "")))
+SLOT_0x2B = bytes.fromhex("0060000000000001000140000000 0a000000ffffffff".replace(" ", ""))
+SLOT_SAVE_SETTINGS = bytes.fromhex("0010000100 0000ffffffff00000000000001".replace(" ", ""))
+
+
+def make_component_from_empty(empty_component, nki_path, settings=None):
+    """Kontakt's state with the patch loaded, from Kontakt's state with nothing loaded: the patch's
+    program in the first slot (with settings: {slot: {name: value}} set in its script), its
+    samples' paths absolute, the library's authorization and the sound header's library fields
+    from the .nki."""
+    with open(nki_path, "rb") as f:
+        nki = Item(f.read())
+    program, files = nki_parts(nki_path)
+    if settings:
+        program, _ = apply_settings(program, settings)
+    files = absolute_file_list(files, os.path.dirname(nki_path)) if files else None
+    root = Item(empty_component)
+
+    # the BNI sound preset item (at any depth): its authorization and sound header from the .nki's
+    def bni(item):
+        for ch in item.children:
+            if ch[2] == 3:
+                return ch[3]
+        for c in item.chunks:
+            if c["type"] == 115 and subtree(c) is not None:
+                found = bni(c["item"])
+                if found:
+                    return found
+        for ch in item.children:
+            found = bni(ch[3])
+            if found:
+                return found
+        return None
+
+    def first(item, typ):
+        for c, owner in item.find(typ):
+            return c
+        return None
+    target = bni(root)
+    nki_bni = bni(nki)
+    if target is None or nki_bni is None:
+        raise ValueError("no sound preset item")
+    for c in target.chunks:
+        if c["type"] == 106:
+            src = next(x for x in nki_bni.chunks if x["type"] == 106)
+            c["data"] = src["data"]
+    header = first(target, 4)
+    nki_header = first(nki_bni, 4)
+    if header is not None and nki_header is not None and len(header["data"]) >= 178 <= len(nki_header["data"]):
+        h = bytearray(header["data"])
+        h[36] = 1                                       # (a patch loaded)
+        h[156:178] = nki_header["data"][156:178]        # the library's id, flags and the patch's id
+        header["data"] = bytes(h)
+
+    def mark(item):                                     # every sub-tree written again
+        for c in item.chunks:
+            if c["type"] == 115 and c.get("item") is not None:
+                c["changed"] = True
+                mark(c["item"])
+        for ch in item.children:
+            mark(ch[3])
+    mark(root)
+
+    data, setter = preset_of(root)
+    top = chunks(data)
+    for t in top:
+        if t[0] == 0x03:
+            version, private, public, kids = struct_parts(t[1])
+            kcs = chunks(kids)
+            for k in kcs:
+                if k[0] == 0x37:
+                    container = struct_body(SLOT_CONTAINER[0], SLOT_CONTAINER[1], SLOT_CONTAINER[2],
+                                            join([[0x2B, SLOT_0x2B], [0x47, SLOT_SAVE_SETTINGS],
+                                                  [0x36, struct.pack("<I", 1) + program]]))
+                    k[1] = b"\x01" + bytes(7) + join([[0x29, container]])
+                elif k[0] == 0x48 and k[1]:
+                    k[1] = b"\x00" + k[1][1:]                # (1 with nothing loaded, 0 with a patch)
+            t[1] = struct_body(version, private, public, join(kcs))
+        elif t[0] in (0x4B, 0x3D) and files is not None:
+            t[0] = 0x4B
+            t[1] = files
+    setter(join(top))
+    rebuild_subtrees(root)
+    return root.to_bytes()
+
+
+# ---------------------------------------------------------------------------------------------
 # Where things are
 
 def find_setups_folder():
@@ -621,6 +713,20 @@ def find_setups_folder():
                os.path.basename(os.path.dirname(dirpath)) == "soundlibraries":
                 n = sum(1 for f in filenames if f.endswith(".vst3state"))
                 found.append((n, dirpath))
+    found.sort(reverse=True)
+    return found[0][1] if found else None
+
+
+def find_empty_state():
+    """Kontakt's state with nothing loaded: "plugin component.bin" of the newest Extract plug-in
+    data folder (Documents/MuseScore Sound Library Check/<library> extract <date>/)."""
+    base = os.path.join(E.documents_folder(), "MuseScore Sound Library Check")
+    found = []
+    if os.path.isdir(base):
+        for d in os.listdir(base):
+            p = os.path.join(base, d, "plugin component.bin")
+            if " extract " in d and os.path.isfile(p):
+                found.append((os.path.getmtime(p), p))
     found.sort(reverse=True)
     return found[0][1] if found else None
 
@@ -663,6 +769,8 @@ def main(argv=None):
     ap.add_argument("--only", action="append", default=[], help="a patch (map name or .nki name); repeatable")
     ap.add_argument("--all", action="store_true", help="every patch without a setup")
     ap.add_argument("--overwrite", action="store_true", help="also over existing setups (kept as .bak)")
+    ap.add_argument("--empty", help="Kontakt's state with nothing loaded (default: plugin component.bin of "
+                                    "the newest Extract plug-in data folder); without one, a template's")
     args = ap.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -719,9 +827,25 @@ def main(argv=None):
         except Exception as e:
             print("  template %s: %s" % (name, e))
     print("%d templates (setups made by hand)" % len(templates))
-    for t in templates[:200]:
-        ed = {s: {k: v.decode("latin-1") for k, v in vs.items()} for s, vs in t["edits"].items()}
-        print("  %s: settings %s" % (t["name"], ed or "none"))
+    # the settings they hold, grouped (written to learned_settings.json too)
+    groups = {}
+    learned = {}
+    for t in templates:
+        ed = {str(s): {k: v.decode("latin-1") for k, v in vs.items()} for s, vs in t["edits"].items()}
+        learned[t["name"]] = ed
+        groups.setdefault(json.dumps(ed, sort_keys=True), []).append(t["name"])
+    for key, names_ in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        print("  settings %s: %d setups (%s)" % (key if key != "{}" else "none", len(names_), ", ".join(names_)))
+    with open(os.path.join(setups, "learned_settings.json"), "w", encoding="utf-8") as f:
+        json.dump(learned, f, indent=1, sort_keys=True)
+    empty_path = args.empty or find_empty_state()
+    empty = None
+    if empty_path:
+        with open(empty_path, "rb") as f:
+            empty = f.read()
+        if empty[:4] == b"MSV3":
+            empty = read_vst3state(empty)[2]
+    print("Empty Kontakt state:", empty_path or "none (setups made on a template)")
     if not templates:
         print("No template: set up one patch by hand first (Check articulations › Set up…).")
         return 1
@@ -768,18 +892,23 @@ def main(argv=None):
             def overlap(t):
                 return sum(len(vars_.get(s, set()) & t["vars"].get(s, set())) for s in t["vars"])
             t = max(templates, key=overlap)
-            program2, count = apply_settings(program, t["edits"])
-            base = os.path.dirname(patch_nki[n])
-            files2 = absolute_file_list(files, base) if files else None
-            component = make_component(t["component"], program2, files2)
+            if empty is not None:
+                component = make_component_from_empty(empty, patch_nki[n], t["edits"])
+                _, count = apply_settings(program, t["edits"])
+            else:
+                program2, count = apply_settings(program, t["edits"])
+                base = os.path.dirname(patch_nki[n])
+                files2 = absolute_file_list(files, base) if files else None
+                component = make_component(t["component"], program2, files2)
             if os.path.isfile(sf):
                 os.replace(sf, sf + ".bak")
             with open(sf, "wb") as f:
                 f.write(write_vst3state(t["pluginName"], component, t["controller"]))
             generated.add(n)
             made.append(n)
-            print("  %s: made from %s (template %s, %d settings), %.1f MB"
-                  % (n, os.path.basename(patch_nki[n]), t["name"], count, len(component) / 1e6))
+            print("  %s: made from %s (%s, settings of %s: %d), %.1f MB"
+                  % (n, os.path.basename(patch_nki[n]), "empty Kontakt" if empty is not None else "template",
+                     t["name"], count, len(component) / 1e6))
         except Exception as e:
             print("  %s: %s: %s" % (n, type(e).__name__, e))
     with open(generated_file, "w", encoding="utf-8") as f:
