@@ -309,6 +309,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `pitchBend`, summary "pitch bend range"). Test `pitchShift` (the test synth now bends ±2 semitones,
   "Pitch Bend" parameter on MIDI pitch bend: measured within 6 cents; shifts of 50 … 1300 cents by
   note-on tuning; a vibrato tone a minor third up).
+  **SSO's pitch bend doesn't bend the pitch** (the owner's extract of 2026-09-27 14:13, run 127/130: Violins 1,
+  Flutes a2, Horn Solo, every bend 0 … 16383 within the round robins' own spread: 0 / −14 cents on Violins 1
+  alternating with the round robin, not with the bend). So the owner's plan below is what is left.
   If not, the owner's plan: an effect of our own that shifts the pitch after the plug-in, **not**
   pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
   output shifts all its notes together, so chords with different tunings need per-note handling.
