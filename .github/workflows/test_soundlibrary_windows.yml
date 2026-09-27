@@ -4,7 +4,11 @@ name: 'Test: Sound library on Windows'
 # (tst_soundlibrary: the VST 3 host with the MS Test Synth plug-in), and uploads the
 # installed MuseScore for trying it. Manual only: Actions -> this workflow -> Run workflow,
 # or a push to main or a claude/ branch whose last commit message contains
-# [windows-build]. Other pushes skip the job (no runner minutes).
+# [windows-build]. Other pushes skip the job (no runner minutes). The build folder is cached
+# between runs (actions/cache: per branch, else any), so a run compiles only what changed.
+# msvc_build.bat keeps an existing CMake configuration, so a cached build keeps the build number
+# and revision of the run that configured it (MuseScore's About box); a CMakeLists.txt change
+# reconfigures by itself. Delete the caches (Actions -> Caches) to start clean.
 on:
   workflow_dispatch:
   push:
@@ -21,6 +25,40 @@ jobs:
       uses: actions/checkout@v7
       with:
         submodules: 'true'
+        fetch-depth: 0          # (the history: each file's last commit time, below)
+    # The build folder of an earlier run, so that only what changed is compiled again (the
+    # owner, 2026-09-27: every build compiled everything). A checkout gives every file the time
+    # of the checkout, which would make MSBuild compile everything anyway: each file gets back
+    # the time of the last commit that changed it, older than the objects built from it before.
+    - name: Restore the build folder of an earlier run
+      uses: actions/cache/restore@v4
+      with:
+        path: msvc.build_x64
+        key: msvc-build-${{ github.ref_name }}-${{ github.sha }}
+        restore-keys: |
+          msvc-build-${{ github.ref_name }}-
+          msvc-build-
+    - name: Files' times from their last commit
+      shell: python
+      run: |
+        import os, subprocess
+        out = subprocess.run(["git", "-c", "core.quotepath=off", "log", "--format=@%ct", "--name-only"], capture_output=True, text=True, check=True).stdout
+        seen, t = set(), 0
+        for line in out.splitlines():
+            if line.startswith("@"):
+                t = int(line[1:])
+            elif line and line not in seen:
+                seen.add(line)
+                if os.path.isfile(line):
+                    os.utime(line, (t, t))
+        # a submodule's files: its commit's time
+        subs = subprocess.run(["git", "submodule", "--quiet", "foreach", "--recursive", "echo $sm_path"], capture_output=True, text=True).stdout.split()
+        for sub in subs:
+            st = int(subprocess.run(["git", "-C", sub, "log", "-1", "--format=%ct"], capture_output=True, text=True).stdout.strip() or 0)
+            for root, dirs, files in os.walk(sub):
+                for f in files:
+                    os.utime(os.path.join(root, f), (st, st))
+        print(len(seen), "files dated,", len(subs), "submodules")
     - name: Setup environment
       run: |
         build\ci\windows\setup.bat
@@ -40,6 +78,12 @@ jobs:
         FOR /F "usebackq tokens=*" %%i IN (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) DO SET "MSBUILD=%%i"
         ECHO MSBuild: %MSBUILD%
         "%MSBUILD%" msvc.build_x64\mtest\libmscore\soundlibrary\tst_soundlibrary.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
+    - name: Keep the build folder for the next run (MuseScore and the tests)
+      if: ${{ always() }}
+      uses: actions/cache/save@v4
+      with:
+        path: msvc.build_x64
+        key: msvc-build-${{ github.ref_name }}-${{ github.sha }}
     - name: Run the sound library tests
       shell: cmd
       run: |
