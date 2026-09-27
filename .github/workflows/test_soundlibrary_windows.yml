@@ -33,14 +33,17 @@ jobs:
     # time"). A fresh checkout gives every file today's time, which would make MSBuild rebuild
     # all: every file is set back to 2000, then those changed since the cached build's commit
     # (cached-commit.txt) to now. Without a cache, or if anything here fails, it is a full build.
+    # Each branch has its own cache (the owner, 2026-09-27: main and a session's branch build
+    # different code): the key and restore-keys carry the branch's name, so a branch never
+    # starts from another branch's build (GitHub would otherwise give it main's).
     - name: Restore the last build
       id: restore
       continue-on-error: true
       uses: actions/cache/restore@v4
       with:
         path: msvc.build_x64
-        key: msvc-build-x64-${{ github.sha }}
-        restore-keys: msvc-build-x64-
+        key: msvc-build-x64-${{ github.ref_name }}-${{ github.sha }}
+        restore-keys: msvc-build-x64-${{ github.ref_name }}-
     - name: Compile only what changed since it
       continue-on-error: true
       shell: pwsh
@@ -97,7 +100,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: msvc.build_x64
-        key: msvc-build-x64-${{ github.sha }}
+        key: msvc-build-x64-${{ github.ref_name }}-${{ github.sha }}
     - name: Upload MuseScore (installed)
       if: ${{ always() }}
       uses: actions/upload-artifact@v7
