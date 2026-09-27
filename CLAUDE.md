@@ -625,9 +625,12 @@ A value a SSO patch lacks: its window shows "None" and it plays nothing (no defa
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. Start it with *Run workflow* (Actions › Test: Sound library on Windows), or
 with a push to `main` (or a `claude/` branch) whose last commit message contains
-`[windows-build]`. The owner allows runs without asking (the free minutes),
-but not excessively: validate locally first, fix all you can between runs, and don't retry
-blindly. A newer `[windows-build]` push doesn't cancel a build still running: cancel the
+`[windows-build]`. **Actions minutes: use them conservatively** (the owner, 2026-09-27, after
+run 72 was started only to see the merged code compile on MSVC). Start a Windows build only
+when the owner needs a new MuseScore to try something, or when a change touches code Linux
+can't compile (`Q_OS_WIN`, MSVC-only paths) and the owner will need it soon. Not to confirm that
+code which passes here also compiles on Windows: that check rides along with the next build the
+owner needs. Batch changes into that one build, validate locally first, and don't retry blindly. A newer `[windows-build]` push doesn't cancel a build still running: cancel the
 superseded one (Actions › the run › Cancel, or the API), as the owner asked why two ran (runs 46/47). Other pushes show up as skipped runs, which use no minutes. Runs so far
 are in the commit log. Run 1 compiled everything with MSVC (about 15 minutes) and failed
 only at the link (`Linux::IRunLoop` in vst3editor; now Linux-only). Run 2 built and uploaded

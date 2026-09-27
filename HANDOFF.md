@@ -125,7 +125,8 @@ are mapped where notation can ask for them). Still open:
    `spitfireMap` test checks instrument matching.
 7. Push. If code changed (not just the map) and the owner needs a new Windows build, put
    `[windows-build]` in the last commit message. The workflow then builds, tests and uploads
-   in about 15 minutes. The owner allows this without asking, but don't overuse it:
+   in about 15 minutes. Use Actions minutes conservatively (the owner, 2026-09-27; see
+   `CLAUDE.md`): only when the owner needs a new build to try something;
    - validate locally first;
    - batch fixes into one run;
    - don't retry blindly.
