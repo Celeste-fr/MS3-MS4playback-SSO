@@ -59,6 +59,21 @@ jobs:
         $now = Get-Date
         foreach ($f in $changed) { if (Test-Path $f) { (Get-Item $f).LastWriteTime = $now } }
         Write-Host "Cached build of $cached; $(@($changed).Count) files changed since."
+    # CMake downloads MuseScore 3's SoundFont into share/sound when it configures (DOWNLOAD_SOUNDFONT,
+    # CMakeLists.txt), and the configuration it keeps installs it from there; a cached build is not
+    # configured again, and a fresh checkout doesn't have the files (run 133 failed at install:
+    # "file INSTALL cannot find share/sound/MuseScore_General.sf3"). The same files from the same place.
+    - name: The SoundFont files a cached build installs
+      if: ${{ hashFiles('msvc.build_x64/CMakeCache.txt') != '' }}
+      shell: pwsh
+      run: |
+        $root = "https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General"
+        foreach ($f in @("MuseScore_General.sf3", "MuseScore_General_License.md", "VERSION")) {
+          if (-not (Test-Path "share\sound\$f")) {
+            Write-Host "Downloading $f"
+            Invoke-WebRequest -Uri "$root/$f" -OutFile "share\sound\$f" -UseBasicParsing
+          }
+        }
     - name: Build MuseScore
       shell: cmd
       run: |
