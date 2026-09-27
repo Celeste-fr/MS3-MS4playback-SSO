@@ -21,16 +21,17 @@ library work; the tuning work is described under "Tuning" below).
 
 ## Branches
 
-- `main`: the default branch and the only one. It was called `ms4-playback` until 2026-09-27,
-  when the repository was also renamed from `musescore3-ms4-playback` to `MS3-MS4playback-SSO`.
-  It has the MS4 playback work (essentially finished) and the sound-library work, which was
-  developed on `claude/continue-previous-work-5u4n0j`, merged in on 2026-09-25 and then
-  deleted. All work goes on `main` now. A cloud session that is given a `claude/…` branch of
-  its own must merge it into `main` (and push) when its work is done: on 2026-09-27 two such
-  branches (`claude/zen-heisenberg-kpqg2v`: SSO percussion, tuning, accidentals;
-  `claude/gallant-johnson-czw783`: plug-in data extraction) were found unmerged a day later
-  and merged then. Check `git log` and the latest commit messages first.
-  They are detailed on purpose and describe what each step did and how it was measured.
+- `main`: the default branch. It was called `ms4-playback` until 2026-09-27, when the
+  repository was also renamed from `musescore3-ms4-playback` to `MS3-MS4playback-SSO`. It has
+  the MS4 playback work (essentially finished) and the sound-library work.
+- **A session works on its own branch only** (the owner, 2026-09-27: "just work on your
+  branch"). A cloud session that is given a `claude/…` branch commits and pushes there and
+  does not merge into `main` or push to it; the owner decides what goes to `main`. (Several
+  sessions merging into `main` at once had crossed: one reverted another's work there.)
+  Windows test builds for the owner come from the session's branch (`[windows-build]` in its
+  last commit message, or *Run workflow* on that branch). Check `git log` of `main` and of
+  your branch, and the latest commit messages, first. They are detailed on purpose and
+  describe what each step did and how it was measured.
 - CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This keeps the
   private repo's Actions minutes.
 
