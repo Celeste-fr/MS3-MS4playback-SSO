@@ -294,8 +294,10 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
 - Microtones (the owner, 2026-09-27): each library note's tuning (cents, `tuning.h`) goes into VST 3's
   `NoteOnEvent::tuning` (`Vst3Plugin::midi`, from `Vst3Synth::play`); the test synth honours it
   (`vst3Plugin` test: A4 +50 cents sounds at 452.9 Hz). **Kontakt / SSO ignores it** (the owner, run 115,
-  2026-09-27: "tuning doesn't affect the note pitch at all"). Next to try: VST 3 note expression (tuning
-  type) if Kontakt reports an `INoteExpressionController` (the plug-in extract's "note expressions").
+  2026-09-27: "tuning doesn't affect the note pitch at all"). No note expression either: Kontakt 8.9 has
+  `INoteExpressionController` but lists 0 note expression types on every channel, with nothing loaded and
+  with Violins 1/2, Violas, Celli loaded (the owner's extract of 2026-09-27 10:58). So Kontakt has no
+  per-note tuning a host can reach; what is left shifts a whole instance (pitch bend, or an effect).
   If not, the owner's plan: an effect of our own that shifts the pitch after the plug-in, **not**
   pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
   output shifts all its notes together, so chords with different tunings need per-note handling.
