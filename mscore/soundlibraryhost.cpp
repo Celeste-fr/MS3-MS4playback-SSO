@@ -525,6 +525,14 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
             logTime(library, QString("%1: not resaved (the plug-in's state could not be read)").arg(li.name));
             return;
             }
+      // Kontakt gives back the very bytes it was given when it didn't load them (the owner's background
+      // run, 2026-09-27: after a warning of Kontakt's, "One or more Kontakt instances cannot be recalled
+      // correctly", 636 setups came back unchanged and were taken for Kontakt's own state); its own
+      // state is always saved anew (the made setups' sample list becomes Kontakt 8's, and smaller)
+      if (component == madeComponent) {
+            logTime(library, QString("%1: not resaved (the plug-in gave the setup back unchanged: it did not load it)").arg(li.name));
+            return;
+            }
       const QByteArray program = KontaktSetup::slotProgram(component, nullptr);
       const QString programName = KontaktSetup::programName(program);
       bool ok = !program.isEmpty() && programName == KontaktSetup::programName(KontaktSetup::slotProgram(madeComponent, nullptr))

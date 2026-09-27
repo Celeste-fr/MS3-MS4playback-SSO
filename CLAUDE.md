@@ -564,7 +564,15 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   (their states full size). Now a patch with none named, once earlier patches of the run had some, is done
   again on a new Kontakt instance; five in a row still without stop the run with a log line. On Windows a
   watchdog thread (`DialogWatch`, musescore.cpp, background run only: the process has no window of its own)
-  logs the title and texts of any visible window of the process and closes it (WM_CLOSE) after 30 s. Its setups
+  logs the title and texts of any visible window of the process and closes it (WM_CLOSE) after 30 s. The
+  warning (the owner's screenshot): "One or more Kontakt instances cannot be recalled correctly, perhaps due to
+  missing content. Please open any Kontakt instance in your host, Komplete Kontrol or Maschine to resolve the
+  issue." Celli - Performance loads and plays in Kontakt standalone, and its made setup's 27,530 sample paths
+  all point where the `.nki`'s do (the Samples folder's Strings_Celli_*, Legacy_2-4, Strings_Violins1_8
+  archives), so the cause is not found yet. `load times.log` showed that from then on Kontakt gave every setup
+  back unchanged (636 "resaved … (n KB, was n KB)"): `resave` now refuses a state identical to the one given
+  ("the plug-in gave the setup back unchanged: it did not load it"). (The test synth gives Kontakt states back
+  unchanged, so with it a made setup is never resaved now.) Its setups
   are a copy of the working MuseScore's in `Documents/MuseScore Sound Library Check/background extract setups`
   (`SoundLibraryHost::setDataFolder`; copied file by file where missing), and it writes nothing in MuseScore's
   data or settings folders (not even `workspaces/global/menubar.xml`, which every other start writes).
