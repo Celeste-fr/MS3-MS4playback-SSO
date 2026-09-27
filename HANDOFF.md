@@ -52,6 +52,22 @@ in playback and export, set in *View › Sound Library…* › *Controllers…*.
 choose with the owner which controllers MuseScore should set and what they are called, put them
 in `CONTROLLERS` / `PATCH_CONTROLLERS` of `gen_spitfire_sso.py`, regenerate the map.
 
+## Extract library files (2026-09-27)
+
+The owner asked to extract all the data possible from SSO for a full integration later. The plug-in's side is
+*Extract plug-in data* (above); the library's files are `tools/soundlibraries/extract_library_files.py`
+(see `CLAUDE.md` › Extract library files). Next: the owner downloads `ExtractLibraryFiles-win64` from the
+workflow "Tool: Extract library files", double-clicks `ExtractLibraryFiles.exe` (or gives it the SSO folder)
+and hands back the zip it names. From it (`--report`, then `library.json` and `archives/`):
+- whether SSO's presets are readable: if so, each patch's groups (articulation × dynamic × round robin),
+  zones (ranges, release triggers) and samples, to check the map's articulations, ranges and keyswitches
+  against the patches themselves; if encrypted, the Soundinfo tags and SNPIDs only;
+- the sample names in the `.nkx` archives: which articulations, dynamics, round robins and mic positions
+  exist per instrument, and their ranges;
+- ProductHints, registry and database rows: the library's id, version and product names.
+Then decide with the owner what goes into the map (ranges per articulation, round-robin counts, release
+samples) and what MuseScore should drive.
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2
