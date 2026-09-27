@@ -59,6 +59,17 @@ jobs:
         $now = Get-Date
         foreach ($f in $changed) { if (Test-Path $f) { (Get-Item $f).LastWriteTime = $now } }
         Write-Host "Cached build of $cached; $(@($changed).Count) files changed since."
+        # CMake's configure step downloads MuseScore_General.sf3 into the source tree, and the
+        # cached build's install script expects it (run 141 failed there): put back the copy kept
+        # with the cache, else make MSBuild configure again (which downloads it)
+        $kept = "msvc.build_x64\kept-soundfont"
+        if (Test-Path "$kept\MuseScore_General.sf3") {
+          Copy-Item "$kept\*" share\sound\ -Force
+          Write-Host "Soundfont put back from the cache."
+        } elseif (-not (Test-Path share\sound\MuseScore_General.sf3)) {
+          (Get-Item CMakeLists.txt).LastWriteTime = $now
+          Write-Host "No soundfont kept: CMake configures again."
+        }
     - name: Build MuseScore
       shell: cmd
       run: |
@@ -94,6 +105,8 @@ jobs:
       shell: pwsh
       run: |
         Set-Content msvc.build_x64\cached-commit.txt "${{ github.sha }}"
+        New-Item -ItemType Directory -Force msvc.build_x64\kept-soundfont | Out-Null
+        Copy-Item share\sound\MuseScore_General*, share\sound\VERSION msvc.build_x64\kept-soundfont\ -Force -ErrorAction SilentlyContinue
     - name: Save the build
       if: ${{ success() }}
       continue-on-error: true
