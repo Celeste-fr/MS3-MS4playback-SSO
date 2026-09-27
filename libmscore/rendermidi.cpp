@@ -1893,8 +1893,15 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                   ++i;
                   continue;
                   }
-            const std::vector<std::pair<int, int>>& outs = r->second;
+            const std::vector<std::vector<std::pair<int, int>>>& outs = r->second;
             const int patch = qBound(0, ev.libraryPatch(), int(outs.size()) - 1);
+            const std::vector<std::pair<int, int>>& lanes = outs[size_t(patch)];
+            int lane = 0;
+            if (lanes.size() > 1 && ev.note()) {
+                  auto l = libLanes.find(ev.note());
+                  if (l != libLanes.end())
+                        lane = qBound(0, l->second, int(lanes.size()) - 1);
+                  }
             if (ev.librarySwitch() && i->first < utick2) {
                   const int ch = ev.channel() * 128 + patch;
                   const bool keyswitch = ev.type() == ME_NOTEON;
@@ -1918,14 +1925,24 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                         selected[ch] = value;
                         }
                   }
-            ev.setExternal(outs[patch].first, outs[patch].second);
-            // the part's controllers (dynamics, pedal …) for each of its patches
-            if (i->first < utick2 && ev.type() != ME_NOTEON && ev.type() != ME_NOTEOFF && !ev.librarySwitch() && patch == 0) {
-                  for (int p = 1; p < int(outs.size()); ++p) {
+            ev.setExternal(lanes[size_t(lane)].first, lanes[size_t(lane)].second);
+            // a switch goes to every lane of its patch (whichever plays the next note)
+            if (ev.librarySwitch() && i->first < utick2) {
+                  for (int l = 1; l < int(lanes.size()); ++l) {
                         NPlayEvent c(ev);
-                        c.setLibraryPatch(p);
-                        c.setExternal(outs[p].first, outs[p].second);
+                        c.setExternal(lanes[size_t(l)].first, lanes[size_t(l)].second);
                         copies.emplace_back(i->first, c);
+                        }
+                  }
+            // the part's controllers (dynamics, pedal …) for each of its patches and lanes
+            if (i->first < utick2 && ev.type() != ME_NOTEON && ev.type() != ME_NOTEOFF && !ev.librarySwitch() && patch == 0) {
+                  for (int p = 0; p < int(outs.size()); ++p) {
+                        for (int l = (p == 0 ? 1 : 0); l < int(outs[size_t(p)].size()); ++l) {
+                              NPlayEvent c(ev);
+                              c.setLibraryPatch(p);
+                              c.setExternal(outs[size_t(p)][size_t(l)].first, outs[size_t(p)][size_t(l)].second);
+                              copies.emplace_back(i->first, c);
+                              }
                         }
                   }
             ++i;
@@ -3612,13 +3629,14 @@ void MidiRenderer::updateState()
 
             libParts.clear();
             libRoutes.clear();
+            libLanes.clear();
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {
                   const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
                   for (const SoundLib::Route& r : routes) {
-                        if (r.patch != 0)
+                        if (r.patch != 0 || r.lane != 0)
                               continue;
                         Part* part = const_cast<Part*>(r.part);
                         LibPart& lp = libParts[part];
@@ -3632,19 +3650,32 @@ void MidiRenderer::updateState()
                               }
                         // the main patch's instrument plays all the part's routed patches, an
                         // instrument change only its own on the part's route
-                        std::vector<std::pair<int, int>> outs;
+                        // (a patch's lanes follow it: copies of it for other tunings)
+                        std::vector<std::vector<std::pair<int, int>>> outs;
                         for (const SoundLib::Route& e : routes) {
-                              if (e.part == r.part) {
+                              if (e.part != r.part)
+                                    continue;
+                              if (e.lane == 0) {
                                     lp.patches.push_back(e.instrument);
-                                    outs.push_back({ e.port, e.channel });
+                                    outs.emplace_back();
                                     }
+                              outs.back().push_back({ e.port, e.channel });
+                              }
+                        bool severalLanes = false;
+                        for (const auto& o : outs)
+                              severalLanes = severalLanes || o.size() > 1;
+                        if (severalLanes) {
+                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, library->laneTolerance, library->laneTail, library->maxLanes);
+                              for (const auto& nl : l.lane)
+                                    if (nl.second > 0)
+                                          libLanes[nl.first] = nl.second;
                               }
                         for (const auto& ip : *part->instruments()) {
                               const SoundLib::LibInstrument* li = library->match(ip.second, part);
                               lp.instruments[ip.second] = li;
                               if (li)
                                     libRoutes[ip.second->channel(0)->channel()] = li == r.instrument ? outs
-                                       : std::vector<std::pair<int, int>> { outs.front() };
+                                       : std::vector<std::vector<std::pair<int, int>>> { { outs.front().front() } };
                               }
                         }
                   }

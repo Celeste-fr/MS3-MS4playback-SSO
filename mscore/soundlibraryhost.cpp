@@ -718,6 +718,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       const QString path = pluginPath(*library, error);
       if (path.isEmpty())
             return false;
+      vst->setVarispeed(library->varispeed);
 
       // what the score needs, by slot
       struct Need {
@@ -981,6 +982,7 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                   }
             _own.reset(new Vst3Synth);
             _own->init(sampleRate);
+            _own->setVarispeed(SoundLib::current() && SoundLib::current()->varispeed);
             for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
                   if (r.instrument->kit)
                         continue;
@@ -1250,15 +1252,18 @@ void SoundLibraryDialog::rebuild()
                   // a row per patch the part plays (its own, then the extras its notation needs)
                   const int row = _table->rowCount();
                   _table->insertRow(row);
-                  _table->setItem(row, 0, new QTableWidgetItem(r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName())));
+                  // (a lane: a copy of the patch for another tuning, SoundLib::Lanes)
+                  const QString name = r->lane > 0 ? QString("  ~ %1 (%2)").arg(part->partName(), tr("other tuning %1").arg(r->lane))
+                                     : r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName());
+                  _table->setItem(row, 0, new QTableWidgetItem(name));
                   _table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
                   // the part's controllers: those of all its patches (a MIDI controller goes to all of
                   // them, a plug-in parameter to each that has it)
-                  if (r->patch == 0) {
+                  if (r->patch == 0 && r->lane == 0) {
                         PartPatches patches;
                         bool any = false;
                         for (const SoundLib::Route& e : routes) {
-                              if (e.part != part)
+                              if (e.part != part || e.lane != 0)
                                     continue;
                               patches.push_back({ e.instrument, plugin && !e.instrument->kit ? e.port * 16 + e.channel : -1 });
                               any = any || !e.instrument->allControllers.empty();

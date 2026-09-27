@@ -19,6 +19,9 @@ const char* Vst3Synth::NAME = "VST3";
 Vst3Synth::Vst3Synth()
       {
       _slots.resize(MAX_SLOTS);
+      _sounding.resize(MAX_SLOTS);
+      for (auto& s : _sounding)
+            s.fill(0);
       }
 
 Vst3Synth::~Vst3Synth()
@@ -64,7 +67,21 @@ void Vst3Synth::play(const PlayEvent& event)
       const int slot = event.channel();
       if (slot < 0 || slot >= int(_slots.size()) || !_slots[slot])
             return;
-      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB(), event.tuning());
+      const bool noteOn = event.type() == ME_NOTEON && event.dataB() > 0;
+      const bool noteOff = event.type() == ME_NOTEOFF || (event.type() == ME_NOTEON && event.dataB() == 0);
+      std::array<unsigned char, 128>& sounding = _sounding[size_t(slot)];
+      if (_varispeed && noteOn) {
+            bool any = false;
+            for (unsigned char n : sounding)
+                  any = any || n > 0;
+            _slots[slot]->setPitch(event.tuning(), any ? LEGATO_GLIDE : 0.0);
+            }
+      const int key = event.dataA() & 0x7f;
+      if (noteOn && sounding[size_t(key)] < 255)
+            ++sounding[size_t(key)];
+      else if (noteOff && sounding[size_t(key)] > 0)
+            --sounding[size_t(key)];
+      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB(), _varispeed ? 0.f : event.tuning());
       }
 
 void Vst3Synth::process(unsigned frames, float* out, float*, float*)
@@ -95,6 +112,8 @@ void Vst3Synth::allNotesOff(int slot)
       for (auto& p : _slots)
             if (p)
                   p->allNotesOff();
+      for (auto& s : _sounding)
+            s.fill(0);
       }
 
 //---------------------------------------------------------
@@ -116,6 +135,7 @@ void Vst3Synth::setPlugin(int slot, std::unique_ptr<Vst3Plugin> plugin)
             std::lock_guard<std::mutex> lock(_mutex);
             old = std::move(_slots[slot]);
             _slots[slot] = std::move(plugin);
+            _sounding[size_t(slot)].fill(0);
       }
       // old goes here, outside the lock: a plug-in can take its time to go
       }

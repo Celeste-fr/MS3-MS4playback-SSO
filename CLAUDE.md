@@ -312,9 +312,31 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   **SSO's pitch bend doesn't bend the pitch** (the owner's extract of 2026-09-27 14:13, run 127/130: Violins 1,
   Flutes a2, Horn Solo, every bend 0 … 16383 within the round robins' own spread: 0 / −14 cents on Violins 1
   alternating with the round robin, not with the bend). So the owner's plan below is what is left.
-  If not, the owner's plan: an effect of our own that shifts the pitch after the plug-in, **not**
-  pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
-  output shifts all its notes together, so chords with different tunings need per-note handling.
+  (Timpani, a Kickstart patch, does bend: ±2 semitones, linear; the orchestral patches don't.)
+  **Built instead (the owner chose "option 1" and asked for memory savings, 2026-09-27): tuning lanes
+  with varispeed.** An effect on one instance's output would shift the tails of earlier notes with the
+  new one (the owner: "this shouldn't happen"), and a second copy of a patch costs about 245 MB even in the
+  same Kontakt (the owner measured 1031 → 1276 MB: Kontakt shares no samples between copies). So:
+  - `Vst3Plugin::setPitch(cents, glide)`: varispeed. The plug-in renders into a buffer read back at
+    2^(cents/1200) through a windowed-sinc resampler (Lanczos, 8 taps each side): exact pitch, no
+    pitch-shifter artifacts, 8 samples of latency once engaged; the plug-in's own time runs as much faster
+    (3 % for a quarter tone: vibrato and attacks). Glides for legato.
+  - `SoundLib::lanes` (map `<Tuning method="varispeed" tolerance="3" tail="1.5" maxLanes="4"/>`, SSO's
+    since 2026-09-27): a part's notes over copies ("lanes") of their patch. In order of start: a slurred
+    note stays on its previous note's lane (the legato transition needs one instrument; it glides), else a
+    lane at its tuning (within the tolerance, cents), else a lane silent by then (its notes' end plus the
+    tail, seconds), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
+    Tied notes follow their first note, grace notes their chord. `routes()` gives each patch one route
+    per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer
+    (`libLanes`, `finishLibraryEvents`) sends a note's events to its lane and the part's switches and
+    controllers to all lanes. `Vst3Synth::setVarispeed` (from the map, in sync and export): a note-on
+    sets its slot's speed from the note's tuning, at once when the slot is silent, else gliding 80 ms;
+    the note goes to the plug-in with no tuning. 12-tone equal scores need no lane (every tuning 0); a
+    temperament (meantone, JI) can need several per part, hence maxLanes. The Sound Library dialog lists
+    lanes as "~ <part> (other tuning n)".
+  - Test `tuningLanes` (quartertones.musicxml: 8 notes' lanes, their routing and tuning, CC1 and switches
+    on both lanes, maxLanes 1, and Vst3Synth playing ±50 cents on the test synth by speed); `pitchShift`
+    (setPitch +50, −100, +700, a glide to +200). Not heard with Kontakt yet.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).

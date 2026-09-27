@@ -156,6 +156,15 @@ class Library {
       int dynamicsCC { 1 };               // single-note dynamics (Spitfire: CC1); -1: velocity only
       QStringList plugins;                // the plug-in to host, by file name, in order of preference
       int expressionValue { 127 };        // CC11 at the start (when dynamicsCC is not 11)
+      // microtones (<Tuning method="varispeed" tolerance tail>): the plug-in ignores a note's tuning
+      // (Kontakt), so a part's notes are spread over copies of its patch ("lanes", Lanes below),
+      // each played faster or slower by its tuning (Vst3Plugin::setPitch). A lane changes its
+      // tuning only once silent: after its last note's end plus laneTail seconds (the release,
+      // the room); notes within laneTolerance cents of a lane's tuning share it
+      bool varispeed { false };
+      double laneTolerance { 3.0 };       // cents
+      double laneTail { 1.5 };            // seconds
+      int maxLanes { 4 };                 // per patch: past it, the lane quiet longest is retuned (its tail with it)
       std::vector<Controller> controllers;          // for all its instruments
       std::vector<LibInstrument> instruments;
       // the library's other patches (<Patch>): none of the map's, but set up and checked (Check
@@ -235,12 +244,32 @@ struct Route {
       int port { 0 };
       int channel { 0 };
       int patch { 0 };                    // its index in the main patch's patches()
+      int lane { 0 };                     // a copy of the patch for another tuning (Library::varispeed)
       };
 
 std::vector<Route> routes(const Score* score, const Library& library);
 
 // which of the patches (patches() of the part's main patch) the part's notation plays
 std::vector<bool> usedPatches(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches);
+
+//---------------------------------------------------------
+//   Lanes
+//    a part's notes over copies of each patch by tuning (Library::varispeed): each note, in the
+//    order they start (a tied note with the note it continues, a grace note at its chord): a
+//    slurred note to its previous note's lane, which glides (a legato transition needs the same
+//    instrument); else to a lane of its patch already at its tuning (within the tolerance); else
+//    to a lane that is silent by then (its notes ended and their tail gone), retuned; else to a
+//    new lane. count: lanes per patch (1 where no note
+//    needs another), lane: each note's (0 when not listed)
+//---------------------------------------------------------
+
+struct Lanes {
+      std::vector<int> count;
+      std::map<const Note*, int> lane;
+      std::map<const Note*, double> cents;          // the tuning each note plays at (its lane's)
+      };
+Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
+            double toleranceCents, double tailSeconds, int maxLanes = 4);
 
 //---------------------------------------------------------
 //   TextTechniques

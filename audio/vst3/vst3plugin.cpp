@@ -13,6 +13,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <map>
 
@@ -290,6 +291,16 @@ class Vst3PluginPrivate {
 
       double sampleRate { 44100.0 };
       int maxBlock { 4096 };
+
+      // varispeed (setPitch): the plug-in's output read at a speed, resampled; engaged from the first
+      // pitch other than 0 on. fifo: what it rendered (interleaved stereo), pos: the read position in it
+      bool varispeed { false };
+      std::vector<float> fifo;
+      double pos { 0 };
+      double ratio { 1.0 };
+      double targetRatio { 1.0 };
+      double ratioStep { 0 };             // per output frame, while gliding
+      std::vector<float> scratch;
       bool offline { false };
       bool active { false };
       HostProcessData data;
@@ -564,10 +575,114 @@ void Vst3Plugin::allNotesOff()
 //    audio thread: the queued events and edits, then the output added to buffer
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   varispeed
+//    windowed-sinc interpolation (Lanczos, 8 samples each side, 512 steps a sample)
+//---------------------------------------------------------
+
+static constexpr int VS_HALF = 8;
+static constexpr int VS_STEPS = 512;
+
+static const std::vector<float>& varispeedKernel()
+      {
+      static const std::vector<float> table = []() {
+            std::vector<float> t(size_t((VS_STEPS + 1) * 2 * VS_HALF));
+            for (int s = 0; s <= VS_STEPS; ++s) {
+                  const double frac = double(s) / VS_STEPS;
+                  for (int k = 0; k < 2 * VS_HALF; ++k) {
+                        const double x = frac - double(k - VS_HALF + 1);    // (taps i0-H+1 … i0+H)
+                        double v = 1.0;
+                        if (std::fabs(x) > 1e-9) {
+                              const double px = 3.14159265358979323846 * x;
+                              v = std::sin(px) / px * std::sin(px / VS_HALF) / (px / VS_HALF);
+                              }
+                        if (std::fabs(x) >= VS_HALF)
+                              v = 0;
+                        t[size_t(s * 2 * VS_HALF + k)] = float(v);
+                        }
+                  }
+            return t;
+            }();
+      return table;
+      }
+
+void Vst3Plugin::setPitch(double cents, double glideSeconds)
+      {
+      const double target = std::pow(2.0, cents / 1200.0);
+      if (!d->varispeed) {
+            if (std::fabs(cents) < 1e-6)
+                  return;
+            d->varispeed = true;
+            d->fifo.assign(size_t(2 * (VS_HALF - 1)), 0.f);           // the history before the first frame
+            d->pos = VS_HALF - 1;
+            d->ratio = target;
+            }
+      d->targetRatio = target;
+      if (glideSeconds <= 0 || d->sampleRate <= 0) {
+            d->ratio = target;
+            d->ratioStep = 0;
+            }
+      else
+            d->ratioStep = (target - d->ratio) / (glideSeconds * d->sampleRate);
+      }
+
+double Vst3Plugin::pitch() const
+      {
+      return 1200.0 * std::log2(d->targetRatio);
+      }
+
 void Vst3Plugin::process(int frames, float* buffer)
       {
-      if (!d->active)
+      if (!d->active || frames <= 0)
             return;
+      if (!d->varispeed) {
+            processDirect(frames, buffer);
+            return;
+            }
+      // render what the frames will read: up to the last one's taps
+      const double fastest = std::max(d->ratio, d->targetRatio);
+      const long needed = long(std::floor(d->pos + fastest * frames)) + VS_HALF + 2;
+      long have = long(d->fifo.size() / 2);
+      while (have < needed) {
+            const int n = int(std::min<long>(needed - have, d->maxBlock));
+            d->scratch.assign(size_t(2 * n), 0.f);
+            processDirect(n, d->scratch.data());
+            d->fifo.insert(d->fifo.end(), d->scratch.begin(), d->scratch.end());
+            have += n;
+            }
+      const std::vector<float>& kernel = varispeedKernel();
+      const float* x = d->fifo.data();
+      for (int j = 0; j < frames; ++j) {
+            const long i0 = long(std::floor(d->pos));
+            const double frac = d->pos - double(i0);
+            const float* k = kernel.data() + size_t(std::lround(frac * VS_STEPS)) * 2 * VS_HALF;
+            float l = 0, r = 0;
+            const float* s = x + 2 * (i0 - VS_HALF + 1);
+            for (int t = 0; t < 2 * VS_HALF; ++t) {
+                  l += k[t] * s[2 * t];
+                  r += k[t] * s[2 * t + 1];
+                  }
+            buffer[2 * j] += l;
+            buffer[2 * j + 1] += r;
+            d->pos += d->ratio;
+            if (d->ratioStep != 0) {
+                  d->ratio += d->ratioStep;
+                  if ((d->ratioStep > 0 && d->ratio >= d->targetRatio) || (d->ratioStep < 0 && d->ratio <= d->targetRatio)) {
+                        d->ratio = d->targetRatio;
+                        d->ratioStep = 0;
+                        }
+                  }
+            }
+      // keep the taps' history only
+      const long drop = long(std::floor(d->pos)) - (VS_HALF - 1);
+      if (drop > 0) {
+            d->fifo.erase(d->fifo.begin(), d->fifo.begin() + 2 * drop);
+            d->pos -= double(drop);
+            }
+      }
+
+void Vst3Plugin::processDirect(int frames, float* buffer)
+      {
       {
             std::unique_lock<std::mutex> lock(d->handler.mutex, std::try_to_lock);
             if (lock.owns_lock()) {

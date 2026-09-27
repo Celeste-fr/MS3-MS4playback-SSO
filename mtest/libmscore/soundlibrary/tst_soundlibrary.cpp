@@ -27,6 +27,8 @@
 #include "audio/vst3/pluginextract.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
+#include "libmscore/segment.h"
+#include "libmscore/chord.h"
 #endif
 
 #define DIR QString("libmscore/soundlibrary/")
@@ -65,6 +67,7 @@ class TestSoundLibrary : public QObject, public MTest
       void pluginDescribe();
       void pluginExtract();
       void pitchShift();
+      void tuningLanes();
       void externalPlugin();
 #endif
       };
@@ -1060,6 +1063,35 @@ void TestSoundLibrary::pitchShift()
             QVERIFY2(confidence > 0.5, qPrintable(QString("%1: confidence %2").arg(cents).arg(confidence)));
             }
 
+      // varispeed (Vst3Plugin::setPitch: for plug-ins that ignore a note's tuning): untuned notes
+      // played on an instance set to +50, -100 and +700 cents, then a glide to +200 within a note
+      for (double cents : { 50.0, -100.0, 700.0, 0.0 }) {
+            p->setPitch(cents);
+            double confidence = 0;
+            const double measured = PluginExtract::centsShift(reference, play(0), 48000, 2600, &confidence);
+            QVERIFY2(std::fabs(measured - cents) < 6, qPrintable(QString("varispeed %1 measured as %2").arg(cents).arg(measured)));
+            QVERIFY(confidence > 0.5);
+            }
+      {
+            p->midi(ME_CONTROLLER, 0, 1, 100);
+            p->midi(ME_NOTEON, 0, 69, 100);
+            std::vector<float> b(2 * 512, 0.f);
+            p->process(512, b.data());
+            p->setPitch(200, 0.2);                      // glides while the note sounds
+            std::vector<float> during(2 * 512 * 40, 0.f);
+            for (int i = 0; i < 40; ++i)
+                  p->process(512, during.data() + 2 * 512 * i);
+            std::vector<float> after(2 * 512 * 100, 0.f);
+            for (int i = 0; i < 100; ++i)
+                  p->process(512, after.data() + 2 * 512 * i);
+            p->midi(ME_NOTEON, 0, 69, 0);
+            std::vector<float> rest(2 * 4096, 0.f);
+            p->process(4096, rest.data());
+            QVERIFY(std::fabs(PluginExtract::centsShift(reference, after, 48000) - 200) < 6);
+            QVERIFY(std::fabs(p->pitch() - 200) < 1e-6);
+            p->setPitch(0);
+            }
+
       // a tone with two harmonics and a little vibrato, a minor third up
       auto tone = [](double hz) {
             std::vector<float> b;
@@ -1101,6 +1133,117 @@ void TestSoundLibrary::pitchShift()
       double confidence = 0;
       const double third = PluginExtract::centsShift(tone(220), tone(220 * std::pow(2.0, 3 / 12.0)), 48000, 2600, &confidence);
       QVERIFY2(std::fabs(third - 300) < 6, qPrintable(QString("measured %1").arg(third)));
+      }
+
+//---------------------------------------------------------
+//   tuningLanes
+//    microtones through a plug-in that ignores a note's tuning (<Tuning method="varispeed">): the
+//    part's notes over copies of its patch (SoundLib::lanes), each copy retuned only when silent
+//    (its notes and their tail over) or gliding within a slur; the renderer routes each note to its
+//    copy and the part's controllers and switches to all; Vst3Synth plays a note-on's tuning as its
+//    slot's speed (quartertones.musicxml, ♩ = 120, a tail of 0.5 s)
+//---------------------------------------------------------
+
+void TestSoundLibrary::tuningLanes()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QVERIFY(lib->varispeed);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      QCOMPARE(int(routes.size()), 2);
+      QCOMPARE(routes[0].lane, 0);
+      QCOMPARE(routes[1].lane, 1);
+      QCOMPARE(routes[1].instrument, routes[0].instrument);
+
+      // each note's lane, in order: m1 C5, C5+ (the first still rings); m3 D5+ (the lane at +50);
+      // m5 C5 and E5- together (the +50 lane silent by then: retuned); m7 a slur C5, D5+, E5 on one lane
+      const SoundLib::Lanes l = SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, 0.5);
+      QCOMPARE(l.count[0], 2);
+      // at most one lane (memory): all on it
+      const SoundLib::Lanes one = SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, 0.5, 1);
+      QCOMPARE(one.count[0], 1);
+      for (const auto& nl : one.lane)
+            QCOMPARE(nl.second, 0);
+      std::vector<std::pair<int, int>> got;         // pitch, lane
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  for (const Note* n : toChord(s->element(0))->notes())
+                        got.push_back({ n->pitch(), l.lane.at(n) });
+      const std::vector<std::pair<int, int>> expected = { { 72, 0 }, { 72, 1 }, { 74, 1 }, { 72, 0 }, { 76, 1 }, { 72, 0 }, { 74, 0 }, { 76, 0 } };
+      QCOMPARE(int(got.size()), int(expected.size()));
+      for (size_t i = 0; i < got.size(); ++i)
+            QVERIFY2(got[i] == expected[i], qPrintable(QString("note %1: pitch %2 lane %3").arg(i).arg(got[i].first).arg(got[i].second)));
+
+      // rendered: the notes on their lane's channel with their tuning; CC1 and the switch on both
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::vector<std::pair<int, int>> onChannel;   // pitch, MIDI out channel
+      std::map<int, int> cc1, switches;
+      std::vector<double> tunings;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            if (ev.librarySwitch())
+                  ++switches[ev.extChannel()];
+            else if (ev.type() == ME_CONTROLLER && ev.controller() == 1)
+                  ++cc1[ev.extChannel()];
+            else if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                  onChannel.push_back({ ev.pitch(), ev.extChannel() });
+                  tunings.push_back(ev.tuning());
+                  }
+            }
+      QCOMPARE(int(onChannel.size()), int(expected.size()));
+      for (size_t i = 0; i < onChannel.size(); ++i)
+            QCOMPARE(onChannel[i], expected[i]);
+      const std::vector<double> cents = { 0, 50, 50, 0, -50, 0, 50, 0 };
+      for (size_t i = 0; i < tunings.size(); ++i)
+            QVERIFY2(std::fabs(tunings[i] - cents[i]) < 0.5, qPrintable(QString("note %1: %2 cents").arg(i).arg(tunings[i])));
+      QVERIFY(cc1[0] > 0 && cc1[1] > 0);
+      QVERIFY(switches[0] > 0 && switches[1] > 0);
+
+      // played: Vst3Synth sets the slot's speed from the tuning (the test synth, which would honour
+      // the note's own tuning, gets none, so a shift heard is the speed's)
+      QString error;
+      Vst3Synth synth;
+      synth.init(48000);
+      synth.setVarispeed(true);
+      synth.setPlugin(0, Vst3Plugin::load(TESTSYNTH, 48000, 512, &error));
+      QVERIFY2(synth.plugin(0), qPrintable(error));
+      auto play = [&](double cents) {
+            PlayEvent cc(ME_CONTROLLER, 0, 1, 100);
+            synth.play(cc);
+            PlayEvent on(ME_NOTEON, 0, 69, 100);
+            on.setTuning(float(cents));
+            synth.play(on);
+            std::vector<float> skip(2 * 512 * 10, 0.f);
+            for (int i = 0; i < 10; ++i)
+                  synth.process(512, skip.data() + 2 * 512 * i, nullptr, nullptr);
+            std::vector<float> c(2 * 512 * 100, 0.f);
+            for (int i = 0; i < 100; ++i)
+                  synth.process(512, c.data() + 2 * 512 * i, nullptr, nullptr);
+            PlayEvent off(ME_NOTEON, 0, 69, 0);
+            synth.play(off);
+            std::vector<float> rest(2 * 4096, 0.f);
+            synth.process(4096, rest.data(), nullptr, nullptr);
+            return c;
+            };
+      const std::vector<float> reference = play(0);
+      QVERIFY(std::fabs(PluginExtract::centsShift(reference, play(50), 48000) - 50) < 6);
+      QVERIFY(std::fabs(PluginExtract::centsShift(reference, play(-50), 48000) + 50) < 6);
+      SoundLib::setCurrent(nullptr);
+      delete score;
       }
 
 //---------------------------------------------------------

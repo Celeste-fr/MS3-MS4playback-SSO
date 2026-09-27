@@ -18,6 +18,7 @@
 #ifndef __VST3SYNTH_H__
 #define __VST3SYNTH_H__
 
+#include <array>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -32,6 +33,8 @@ namespace Ms {
 class Vst3Synth : public Synthesizer {
       mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
       std::vector<std::unique_ptr<Vst3Plugin>> _slots;
+      std::vector<std::array<unsigned char, 128>> _sounding;   // per slot, per key: notes on
+      std::atomic<bool> _varispeed { false };
       std::atomic<bool> _exporting { false };
       std::thread::id _exportThread;
       QList<MidiPatch*> _patches;
@@ -59,6 +62,12 @@ class Vst3Synth : public Synthesizer {
       void process(unsigned frames, float* out, float*, float*) override;
       void allSoundsOff(int slot) override;
       void allNotesOff(int slot) override;
+
+      // a note's tuning as the speed of its slot (Vst3Plugin::setPitch), for a library whose plug-in
+      // ignores a note's tuning: set at each note-on, at once when nothing sounds on the slot (the
+      // lanes see to that, SoundLib::Lanes), else gliding (legato)
+      void setVarispeed(bool on) { _varispeed = on; }
+      static constexpr double LEGATO_GLIDE = 0.08;        // seconds
 
       // GUI thread
       Vst3Plugin* plugin(int slot) const;
