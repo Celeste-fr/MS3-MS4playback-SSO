@@ -42,6 +42,7 @@ class QLabel;
 
 namespace Ms {
 
+class MasterScore;
 class MasterSynthesizer;
 class NPlayEvent;
 class Score;
@@ -63,6 +64,10 @@ class SoundLibraryHost : public QObject {
             };
       std::array<Slot, 64> _slots;
       QTimer _idle;
+      QTimer _preloadTimer;
+      QPointer<MasterScore> _preloadScore;
+      void preloadStep();
+      bool syncSome(Score* score, QString* error, int maxLoads, int* remaining);
 
       SoundLibraryHost();
 
@@ -77,6 +82,7 @@ class SoundLibraryHost : public QObject {
 
       Vst3Synth* synth() const;
       bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
+      void preloadSoon(Score* score);     // load them ahead of the first play, in the background
       void release();                     // no instances
       bool loaded(int slot) const;
       bool saveSetup(int slot, QString* error = nullptr);

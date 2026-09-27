@@ -60,6 +60,8 @@ extern QString dataPath;
 SoundLibraryHost::SoundLibraryHost()
       {
 #ifdef USE_VST3
+      _preloadTimer.setSingleShot(true);
+      connect(&_preloadTimer, &QTimer::timeout, this, &SoundLibraryHost::preloadStep);
       _idle.setInterval(50);
       connect(&_idle, &QTimer::timeout, this, [this]() {
             if (Vst3Synth* s = synth())
@@ -224,6 +226,63 @@ static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::
 
 bool SoundLibraryHost::sync(Score* score, QString* error)
       {
+      _preloadTimer.stop();
+      return syncSome(score, error, -1, nullptr);
+      }
+
+//---------------------------------------------------------
+//   preloadSoon
+//    the score's instances loaded ahead of its first playback (the owner, 2026-09-27: the first
+//    play of an orchestral score waited for 25 Kontakt instances), one at a time from the event
+//    loop so MuseScore stays usable; starts a moment after the score is shown (browsing tabs
+//    loads nothing). A play before it's done loads the rest (sync)
+//---------------------------------------------------------
+
+void SoundLibraryHost::preloadSoon(Score* score)
+      {
+#ifdef USE_VST3
+      _preloadScore = score ? score->masterScore() : nullptr;
+      _preloadTimer.stop();
+      if (!_preloadScore || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
+            return;
+      _preloadTimer.start(2000);
+#else
+      Q_UNUSED(score);
+#endif
+      }
+
+void SoundLibraryHost::preloadStep()
+      {
+#ifdef USE_VST3
+      if (!_preloadScore || !mscore || !mscore->currentScore() || mscore->currentScore()->masterScore() != _preloadScore)
+            return;                                         // (another score is shown now)
+      if (seq && seq->isPlaying())
+            return;                                         // (play has loaded what it needs)
+      int remaining = 0;
+      QString error;
+      if (!syncSome(_preloadScore, &error, 1, &remaining)) {
+            if (!error.isEmpty() && mscore)
+                  mscore->showMessage(error, 10000);
+            return;
+            }
+      qDebug("Sound library: preloaded one instance, %d to go", remaining);
+      if (remaining > 0)
+            _preloadTimer.start(100);                     // (the event loop runs in between)
+      else if (mscore)
+            mscore->showMessage(tr("%1 is loaded.").arg(SoundLib::current() ? SoundLib::current()->name : QString()), 3000);
+#endif
+      }
+
+//---------------------------------------------------------
+//   syncSome
+//    sync, loading no more than maxLoads instances (-1: all); remaining (optional): how many are
+//    still to load. The others are released and the parameters set once all are loaded
+//---------------------------------------------------------
+
+bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int* remaining)
+      {
+      if (remaining)
+            *remaining = 0;
 #ifdef USE_VST3
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       Vst3Synth* vst = synth();
@@ -238,7 +297,9 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
       std::array<bool, 64> used {};
       bool ok = true;
       bool waiting = false;
-      for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+      int loads = 0;
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
                   continue;
             const int k = r.port * 16 + r.channel;
@@ -250,12 +311,19 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
             s.part = r.part->partName();
             if (current && current->path() == path && s.instrument == name && (s.hasSetup || !setup))
                   continue;
-            if (!waiting) {
+            if (maxLoads >= 0 && loads >= maxLoads) {       // (later: preloadStep)
+                  if (remaining)
+                        ++*remaining;
+                  continue;
+                  }
+            ++loads;
+            if (!waiting && maxLoads < 0) {
                   QApplication::setOverrideCursor(Qt::WaitCursor);
                   waiting = true;
                   }
             if (mscore)
-                  mscore->showMessage(tr("Loading %1: %2…").arg(library->name, name), 5000);
+                  mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, name)
+                                                   : tr("Loading %1 in the background: %2…").arg(library->name, name), 8000);
             if (s.editor)
                   s.editor->close();
 
@@ -277,10 +345,16 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
             s.patchValues.clear();
             vst->setPlugin(k, std::move(p));
             }
+      if (remaining && *remaining > 0) {                  // (not all loaded yet: nothing released)
+            if (waiting)
+                  QApplication::restoreOverrideCursor();
+            emit changed();
+            return ok;
+            }
       // the parts' plug-in parameters, on every sync (a setup loaded since resets them)
       if (ok) {
             const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
-            for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library))
+            for (const SoundLib::Route& r : routes)
                   if (!r.instrument->kit)
                         if (Vst3Plugin* p = vst->plugin(r.port * 16 + r.channel))
                               applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
