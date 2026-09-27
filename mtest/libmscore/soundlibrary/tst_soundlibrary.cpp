@@ -22,6 +22,7 @@
 
 #ifdef TESTSYNTH
 #include "audio/vst3/articulationcheck.h"
+#include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/pluginextract.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
@@ -54,6 +55,8 @@ class TestSoundLibrary : public QObject, public MTest
       void renderKitRoll();
       void controllers();
 #ifdef TESTSYNTH
+      void kontaktSetup();
+      void kontaktSetupReal();
       void vst3Plugin();
       void vst3Render();
       void articulationCheck();
@@ -800,6 +803,131 @@ static float peak(const std::vector<float>& buffer)
       for (float f : buffer)
             p = std::max(p, std::fabs(f));
       return p;
+      }
+
+//---------------------------------------------------------
+//   kontaktSetup
+//    a Kontakt setup made from Kontakt's state with nothing loaded and a patch's .nki
+//    (KontaktSetup::fromEmpty; files by kontakt/make_fixtures.py, the Python tool's builders)
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktSetup()
+      {
+      using namespace KontaktSetup;
+      // FastLZ both ways, compressible and not, short and long
+      QByteArray text;
+      for (int i = 0; i < 5000; ++i)
+            text += QByteArray::number(i % 97) + " zone rr1 sus p ";
+      QByteArray noise;
+      quint32 x = 12345;
+      for (int i = 0; i < 70000; ++i) {
+            x = x * 1103515245u + 12345u;
+            noise += char(x >> 24);
+            }
+      for (const QByteArray& d : { text, noise, QByteArray("abc"), QByteArray(20000, 'a') }) {
+            const QByteArray packed = fastlzCompress(d);
+            bool ok = false;
+            QCOMPARE(fastlzDecompress(packed, d.size(), &ok), d);
+            QVERIFY(ok);
+            }
+      QVERIFY(fastlzCompress(text).size() < text.size() / 3);
+
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      QVERIFY(!nki.isEmpty() && !empty.isEmpty());
+      QCOMPARE(programName(nkiProgram(nki, nullptr)), QString("Violins 2 - All techniques"));
+      QCOMPARE(scriptValues(nkiProgram(nki, nullptr)).at("$iooxo"), QByteArray("0"));
+
+      // $iooxo set (same length); $stgrp not (its value is longer); a name the script lacks: nothing
+      QString error;
+      int set = 0;
+      const QByteArray state = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings",
+                                         { { "$iooxo", "3" }, { "$stgrp", "99" }, { "$none", "1" } }, &error, &set);
+      QVERIFY2(!state.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 1);
+      const QByteArray program = slotProgram(state, &error);
+      QVERIFY2(!program.isEmpty(), qPrintable(error));
+      QCOMPARE(programName(program), QString("Violins 2 - All techniques"));
+      const std::map<QString, QByteArray> values = scriptValues(program);
+      QCOMPARE(values.at("$iooxo"), QByteArray("3"));
+      QCOMPARE(values.at("$zdiqz"), QByteArray("0"));
+      QCOMPARE(values.at("$stgrp"), QByteArray("127"));
+      // otherwise the .nki's program as it is
+      QCOMPARE(program.size(), nkiProgram(nki, nullptr).size());
+      const QStringList paths = samplePaths(state, &error);
+      QCOMPARE(paths.size(), 2 + 2);
+      QCOMPARE(paths[0], QString("D:/Libs/SSO/Samples/Lib_Strings.nkr"));
+      QCOMPARE(paths[2], QString("D:/Libs/SSO/Samples/Strings_V.nkxSamples/v2_C3.ncw"));
+      // made again from its own result: nothing loaded is needed (a slot already used is replaced)
+      QVERIFY(!fromEmpty(state, nki, "D:/x", {}, &error).isEmpty());
+      // what can't be used
+      QVERIFY(fromEmpty(empty, QByteArray("not an nki"), "D:/x", {}, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      QVERIFY(fromEmpty(QByteArray(100, 0), nki, "D:/x", {}, &error).isEmpty());
+      }
+
+//---------------------------------------------------------
+//   kontaktSetupReal
+//    with the owner's files (skipped without them): SSO_NKI (Violins 1 - All techniques.nki),
+//    SSO_EMPTY (Kontakt 8.9's state with nothing loaded), SSO_SETUP (the owner's own setup of it,
+//    .vst3state or its component): the setup made has the .nki's program, UACC switching set,
+//    the setup's switching value and every sample path absolute
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktSetupReal()
+      {
+      using namespace KontaktSetup;
+      const QString nkiPath = qEnvironmentVariable("SSO_NKI");
+      const QString emptyPath = qEnvironmentVariable("SSO_EMPTY");
+      if (nkiPath.isEmpty() || emptyPath.isEmpty())
+            QSKIP("SSO_NKI / SSO_EMPTY not set");
+      auto read = [](const QString& path) {
+            QFile f(path);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read(nkiPath);
+      QByteArray empty = read(emptyPath);
+      QString error;
+      QElapsedTimer t;
+      t.start();
+      int set = 0;
+      const QByteArray state = fromEmpty(empty, nki, "D:/SSO/Instruments/Symphonic Strings", { { "$iooxo", "3" } }, &error, &set);
+      qDebug("made in %lld ms, %d bytes", t.elapsed(), int(state.size()));
+      QVERIFY2(!state.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 1);
+      const QByteArray program = slotProgram(state, &error);
+      QCOMPARE(programName(program), programName(nkiProgram(nki, nullptr)));
+      QCOMPARE(scriptValues(program).at("$iooxo"), QByteArray("3"));
+      const QStringList paths = samplePaths(state, &error);
+      QVERIFY(paths.size() > 100);
+      for (const QString& p : paths)
+            QVERIFY2(p.isEmpty() || p.startsWith("D:/SSO/"), qPrintable(p));
+      const QString setupPath = qEnvironmentVariable("SSO_SETUP");
+      if (!setupPath.isEmpty()) {
+            QByteArray setup = read(setupPath);
+            if (setup.startsWith("MSV3")) {
+                  QDataStream ds(setup.mid(4));
+                  quint32 version;
+                  QString name;
+                  QByteArray component;
+                  ds >> version >> name >> component;
+                  setup = component;
+                  }
+            const QByteArray own = slotProgram(setup, &error);
+            QVERIFY2(!own.isEmpty(), qPrintable(error));
+            QCOMPARE(scriptValues(own).at("$iooxo"), QByteArray("3"));
+            QCOMPARE(programName(own), programName(program));
+            }
+      const QString out = qEnvironmentVariable("SSO_OUT");
+      if (!out.isEmpty()) {
+            QFile f(out);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(state);
+            }
       }
 
 //---------------------------------------------------------
