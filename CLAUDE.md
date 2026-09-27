@@ -412,7 +412,7 @@ macOS.
   written by us: after a made setup's first load, `resave` (soundlibraryhost.cpp) replaces it with Kontakt's own
   state (getState), kept only when it has the same program, the program marker and the script values
   (`"resaved": true` in `made setups.json`; the record's other fields still say when to make it again). So a
-  patch's first load stays slow, later ones should be like the hand-made setups': to be confirmed by the owner.
+  patch's first load stays slow, later ones should be like the hand-made setups': run 119's `load times.log` (the owner, 4 solo strings): made 92-106 ms, first load 0.3-2.4 s (from the .nki), resaved 60-88 ms (386 → 298 KB), next load 92-109 ms (Kontakt's own state), about 20 times faster. setState's time only: Kontakt may still stream samples after it returns.
   `load times.log` (setups folder) records making, loading ("made from the .nki" / "Kontakt's own state") and
   resaving per patch, since qDebug doesn't show on Windows. Parts with no note get no instance
   (`partsWithNotes`; a new score from a template loaded 25): loaded at the play after they get notes. Tried here
