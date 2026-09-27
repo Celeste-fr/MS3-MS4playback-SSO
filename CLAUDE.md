@@ -298,7 +298,17 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   instance (`Slot::patchValues`).
 - Microtones (the owner, 2026-09-27): each library note's tuning (cents, `tuning.h`) goes into VST 3's
   `NoteOnEvent::tuning` (`Vst3Plugin::midi`, from `Vst3Synth::play`); the test synth honours it
-  (`vst3Plugin` test: A4 +50 cents sounds at 452.9 Hz). Whether Kontakt / SSO honours it is untested.
+  (`vst3Plugin` test: A4 +50 cents sounds at 452.9 Hz). **Kontakt / SSO ignores it** (the owner, run 115,
+  2026-09-27: "tuning doesn't affect the note pitch at all"). No note expression either: Kontakt 8.9 has
+  `INoteExpressionController` but lists 0 note expression types on every channel, with nothing loaded and
+  with Violins 1/2, Violas, Celli loaded (the owner's extract of 2026-09-27 10:58). So Kontakt has no
+  per-note tuning a host can reach; what is left shifts a whole instance (pitch bend, or an effect).
+  The owner chose pitch bend if SSO's bends the pitch cleanly. *Extract plug-in data* now measures it on
+  every patch (`PluginExtract::pitchBend`: the test note at bends 0 … 16383 against the unbent note,
+  `centsShift`: the log-frequency spectra's best alignment, ±26 semitones, 5-cent bins refined; JSON
+  `pitchBend`, summary "pitch bend range"). Test `pitchShift` (the test synth now bends ±2 semitones,
+  "Pitch Bend" parameter on MIDI pitch bend: measured within 6 cents; shifts of 50 … 1300 cents by
+  note-on tuning; a vibrato tone a minor third up).
   If not, the owner's plan: an effect of our own that shifts the pitch after the plug-in, **not**
   pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
   output shifts all its notes together, so chords with different tunings need per-note handling.
@@ -827,7 +837,10 @@ A value a SSO patch lacks: its window shows "None" and it plays nothing (no defa
 `.github/workflows/test_soundlibrary_windows.yml` builds on Windows, runs the tests and
 uploads the build. Start it with *Run workflow* (Actions › Test: Sound library on Windows), or
 with a push to `main` (or a `claude/` branch) whose last commit message contains
-`[windows-build]`. **Actions minutes: use them conservatively** (the owner, 2026-09-27, after
+`[windows-build]`. The workflow keeps the build folder in a GitHub cache (`msvc-build-x64-<sha>`) and
+restores the latest one, setting unchanged files' times back to 2000 so MSBuild compiles only what changed
+since the cached commit (the owner, 2026-09-27: "don't rebuild everything every time"); a change to a
+header in the precompiled header still rebuilds most. **Actions minutes: use them conservatively** (the owner, 2026-09-27, after
 run 72 was started only to see the merged code compile on MSVC). Start a Windows build only
 when the owner needs a new MuseScore to try something, or when a change touches code Linux
 can't compile (`Q_OS_WIN`, MSVC-only paths) and the owner will need it soon. Not to confirm that

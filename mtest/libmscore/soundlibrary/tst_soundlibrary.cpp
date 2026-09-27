@@ -64,6 +64,7 @@ class TestSoundLibrary : public QObject, public MTest
       void scanPictures();
       void pluginDescribe();
       void pluginExtract();
+      void pitchShift();
       void externalPlugin();
 #endif
       };
@@ -1026,6 +1027,83 @@ void TestSoundLibrary::vst3Plugin()
       }
 
 //---------------------------------------------------------
+//   pitchShift
+//    PluginExtract::centsShift, which Extract plug-in data uses to measure what pitch bend does to
+//    a patch: the test synth's A4 tuned by known amounts (its note-on tuning) against the untuned
+//    one, and a two-harmonic tone made here
+//---------------------------------------------------------
+
+void TestSoundLibrary::pitchShift()
+      {
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      auto play = [&](float cents) {
+            p->midi(ME_CONTROLLER, 0, 1, 100);
+            p->midi(ME_NOTEON, 0, 69, 100, cents);
+            std::vector<float> skip(2 * 512 * 10, 0.f);
+            for (int i = 0; i < 10; ++i)
+                  p->process(512, skip.data() + 2 * 512 * i);
+            std::vector<float> c(2 * 512 * 110, 0.f);
+            for (int i = 0; i < 110; ++i)
+                  p->process(512, c.data() + 2 * 512 * i);
+            p->midi(ME_NOTEON, 0, 69, 0);
+            std::vector<float> rest(2 * 4096, 0.f);
+            p->process(4096, rest.data());
+            return c;
+            };
+      const std::vector<float> reference = play(0);
+      for (float cents : { 0.f, 50.f, -200.f, 700.f, -1200.f, 1300.f }) {
+            double confidence = 0;
+            const double measured = PluginExtract::centsShift(reference, play(cents), 48000, 2600, &confidence);
+            QVERIFY2(std::fabs(measured - cents) < 6, qPrintable(QString("%1 measured as %2").arg(cents).arg(measured)));
+            QVERIFY2(confidence > 0.5, qPrintable(QString("%1: confidence %2").arg(cents).arg(confidence)));
+            }
+
+      // a tone with two harmonics and a little vibrato, a minor third up
+      auto tone = [](double hz) {
+            std::vector<float> b;
+            double ph = 0;
+            for (int i = 0; i < 48000; ++i) {
+                  const double f = hz * (1 + 0.003 * std::sin(2 * M_PI * 5.5 * i / 48000.0));
+                  ph += 2 * M_PI * f / 48000.0;
+                  const float x = float(0.3 * std::sin(ph) + 0.15 * std::sin(2 * ph) + 0.1 * std::sin(3 * ph));
+                  b.push_back(x);
+                  b.push_back(x);
+                  }
+            return b;
+            };
+      // the whole measurement, offline, on the test synth (pitch bend ±2 semitones)
+      PluginExtract::Settings settings;
+      settings.pitch = 69;
+      settings.sampleRate = 48000;
+      PluginExtract::Capture capture = [&](int ms, std::vector<float>* captured) {
+            const int frames = ms * 48;
+            std::vector<float> b(2 * size_t(frames), 0.f);
+            for (int i = 0; i < frames; i += 512)
+                  p->process(std::min(512, frames - i), b.data() + 2 * i);
+            if (captured)
+                  captured->insert(captured->end(), b.begin(), b.end());
+            return true;
+            };
+      const QJsonObject pb = PluginExtract::pitchBend(p.get(), settings, capture,
+                                                      [&]() { p->midi(ME_CONTROLLER, 0, 1, 100); }, nullptr);
+      const QJsonArray bends = pb.value("bends").toArray();
+      QCOMPARE(bends.size(), 9);
+      for (const QJsonValue& v : bends) {
+            const QJsonObject o = v.toObject();
+            const double expected = (o.value("bend").toInt() - 8192) / 8192.0 * 200.0;
+            QVERIFY2(std::fabs(o.value("cents").toDouble() - expected) < 6,
+                     qPrintable(QString("bend %1: %2 cents, expected %3").arg(o.value("bend").toInt()).arg(o.value("cents").toDouble()).arg(expected)));
+            }
+      QVERIFY2(std::fabs(pb.value("rangeUp").toDouble() - 200) < 6, qPrintable(QJsonDocument(pb).toJson()));
+
+      double confidence = 0;
+      const double third = PluginExtract::centsShift(tone(220), tone(220 * std::pow(2.0, 3 / 12.0)), 48000, 2600, &confidence);
+      QVERIFY2(std::fabs(third - 300) < 6, qPrintable(QString("measured %1").arg(third)));
+      }
+
+//---------------------------------------------------------
 //   vst3Render
 //    a score played as an audio export plays it: the violin part on the hosted plug-in (its
 //    slot, the switches and dynamics as its parameters), the piano not
@@ -1235,7 +1313,7 @@ void TestSoundLibrary::pluginDescribe()
       std::map<QString, QJsonObject> params;
       for (const QJsonValue& v : d.value("parameters").toArray())
             params[v.toObject().value("title").toString()] = v.toObject();
-      QCOMPARE(int(params.size()), 3 + 12);
+      QCOMPARE(int(params.size()), 4 + 12);            // (Articulation, Level, Tone, Pitch Bend; the macros)
       QCOMPARE(params["Tone"].value("units").toString(), QString("%"));
       // a map's parameter controller (SoundLib::Controller::param) finds it by title, whatever the case
       QCOMPARE(p->parameterId("tone"), 3L);
@@ -1252,7 +1330,8 @@ void TestSoundLibrary::pluginDescribe()
       const QJsonObject bus0 = d.value("midiMapping").toObject().value("bus 0").toObject();
       QCOMPARE(bus0.size(), 16);
       const QJsonObject ch1 = bus0.value("channel 1").toObject();
-      QCOMPARE(ch1.size(), 2);
+      QCOMPARE(ch1.size(), 3);                          // CC32, CC1, pitch bend
+      QCOMPARE(ch1.value("129").toObject().value("title").toString(), QString("Pitch Bend"));
       QCOMPARE(ch1.value("32").toObject().value("title").toString(), QString("Articulation"));
       QCOMPARE(ch1.value("1").toObject().value("title").toString(), QString("Level"));
 
@@ -1316,20 +1395,21 @@ void TestSoundLibrary::pluginExtract()
       QVERIFY(!cancelled);
       QVERIFY(ran > 0);
       const QJsonArray effects = c.value("effects").toArray();
-      QCOMPARE(effects.size(), 1);
+      QCOMPARE(effects.size(), 2);                      // CC1 and pitch bend (129)
       const QJsonObject cc1 = effects[0].toObject();
+      QCOMPARE(effects[1].toObject().value("cc").toInt(), 129);
       QCOMPARE(cc1.value("cc").toInt(), 1);
       QVERIFY(cc1.value("changes").toArray().contains("sound"));
       QVERIFY2(std::abs(cc1.value("patchValue").toInt() - 100) <= 3, qPrintable(QString::number(cc1.value("patchValue").toInt())));
       // every other controller is not mapped (the switch is not tried)
-      QCOMPARE(c.value("notMapped").toArray().size(), 120 - 2 + 2);
+      QCOMPARE(c.value("notMapped").toArray().size(), 120 - 2 + 1);   // (and channel pressure)
       QVERIFY(!c.value("notMapped").toArray().contains(32));
       QVERIFY(c.value("noEffect").toArray().isEmpty());
       QCOMPARE(testSynthState(p->state()).second, cc1.value("patchValue").toInt() / 127.0);
 
       const QJsonObject par = PluginExtract::parameters(p.get(), s, run, grab, nullptr, nullptr, &cancelled);
       QVERIFY(!cancelled);
-      QCOMPARE(par.value("controllerParameters").toInt(), 2);
+      QCOMPARE(par.value("controllerParameters").toInt(), 3);
       QCOMPARE(par.value("placeholders").toObject().value("Macro #").toInt(), 12);
       const QJsonArray pe = par.value("effects").toArray();
       QCOMPARE(pe.size(), 1);

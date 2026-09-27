@@ -109,10 +109,150 @@ PluginExtract::Level PluginExtract::level(const std::vector<float>& buffer)
       return l;
       }
 
+//---------------------------------------------------------
+//   centsShift
+//---------------------------------------------------------
+
+// the magnitude spectrum on a log-frequency grid (5 cents a bin from 40 Hz), of the mono mix
+// decimated by 4 (enough for the harmonics that carry the pitch), Hann-windowed; log-compressed
+// and made zero-mean, unit-length for a correlation
+static std::vector<double> logSpectrum(const std::vector<float>& stereo, double sampleRate, double step, int bins)
+      {
+      const int decimate = 4;
+      std::vector<double> x;
+      const size_t frames = stereo.size() / 2;
+      for (size_t i = 0; i + decimate <= frames; i += decimate) {
+            double s = 0;
+            for (int k = 0; k < decimate; ++k)
+                  s += 0.5 * (double(stereo[2 * (i + k)]) + double(stereo[2 * (i + k) + 1]));
+            x.push_back(s / decimate);
+            }
+      const double rate = sampleRate / decimate;
+      const size_t n = x.size();
+      std::vector<double> spec(size_t(bins), 0.0);
+      if (n < 64)
+            return spec;
+      for (size_t i = 0; i < n; ++i)
+            x[i] *= 0.5 - 0.5 * std::cos(2 * M_PI * double(i) / double(n - 1));
+      for (int b = 0; b < bins; ++b) {
+            const double f = 40.0 * std::pow(2.0, b * step / 1200.0);
+            if (f >= 0.45 * rate)
+                  break;
+            // Goertzel
+            const double w = 2 * M_PI * f / rate;
+            const double c = 2 * std::cos(w);
+            double s1 = 0, s2 = 0;
+            for (size_t i = 0; i < n; ++i) {
+                  const double s0 = x[i] + c * s1 - s2;
+                  s2 = s1;
+                  s1 = s0;
+                  }
+            const double power = std::max(0.0, s1 * s1 + s2 * s2 - c * s1 * s2);
+            spec[size_t(b)] = std::log1p(1e4 * std::sqrt(power) / double(n));
+            }
+      double mean = 0;
+      for (double v : spec)
+            mean += v;
+      mean /= bins;
+      double norm = 0;
+      for (double& v : spec) {
+            v -= mean;
+            norm += v * v;
+            }
+      norm = std::sqrt(norm);
+      if (norm > 0)
+            for (double& v : spec)
+                  v /= norm;
+      return spec;
+      }
+
+double PluginExtract::centsShift(const std::vector<float>& reference, const std::vector<float>& shifted,
+                                 double sampleRate, double maxCents, double* confidence)
+      {
+      const double step = 5.0;                  // cents a bin
+      const int bins = int(std::log2(5000.0 / 40.0) * 1200.0 / step);
+      const std::vector<double> a = logSpectrum(reference, sampleRate, step, bins);
+      const std::vector<double> b = logSpectrum(shifted, sampleRate, step, bins);
+      const int maxShift = int(maxCents / step);
+      std::vector<double> score(size_t(2 * maxShift + 1), -1.0);
+      int best = 0;
+      for (int s = -maxShift; s <= maxShift; ++s) {
+            double sum = 0;
+            for (int i = 0; i < bins; ++i) {
+                  const int j = i + s;
+                  if (j >= 0 && j < bins)
+                        sum += a[size_t(i)] * b[size_t(j)];
+                  }
+            score[size_t(s + maxShift)] = sum;
+            if (sum > score[size_t(best + maxShift)])
+                  best = s;
+            }
+      double refined = best;
+      if (best > -maxShift && best < maxShift) {    // (a parabola through the peak and its neighbours)
+            const double l = score[size_t(best - 1 + maxShift)], m = score[size_t(best + maxShift)], r = score[size_t(best + 1 + maxShift)];
+            const double d = l - 2 * m + r;
+            if (d < 0)
+                  refined = best + 0.5 * (l - r) / d;
+            }
+      if (confidence)
+            *confidence = std::max(0.0, score[size_t(best + maxShift)]);
+      return refined * step;
+      }
+
 static double round1(double x)
       {
       return std::round(x * 10) / 10;
       }
+
+//---------------------------------------------------------
+//   pitchBend
+//---------------------------------------------------------
+
+QJsonObject PluginExtract::pitchBend(Vst3Plugin* p, const Settings& s, Capture capture,
+                                     std::function<void()> prepare, std::function<void(const QString&)> status)
+      {
+      QJsonObject out;
+      out["pitch"] = s.pitch;
+      auto play = [&](int bend, std::vector<float>* c) {
+            if (status)
+                  status(QString("pitch bend %1…").arg(bend));
+            p->midi(ME_PITCHBEND, s.channel, bend & 0x7f, bend >> 7);
+            if (!capture(150, nullptr))
+                  return false;
+            if (prepare)
+                  prepare();
+            p->midi(ME_NOTEON, s.channel, s.pitch, s.velocity);
+            if (!capture(300, nullptr))                        // (the attack left out)
+                  return false;
+            if (!capture(1200, c))
+                  return false;
+            p->midi(ME_NOTEON, s.channel, s.pitch, 0);
+            return capture(900, nullptr);
+            };
+      std::vector<float> reference;
+      bool ok = play(8192, &reference);
+      QJsonArray bends;
+      for (int bend : { 0, 4096, 6144, 7168, 8192, 9216, 10240, 12288, 16383 }) {
+            std::vector<float> c;
+            if (!ok || !(ok = play(bend, &c)))
+                  break;
+            double confidence = 0;
+            const double cents = centsShift(reference, c, s.sampleRate, 2600, &confidence);
+            QJsonObject o;
+            o["bend"] = bend;
+            o["cents"] = round1(cents);
+            o["confidence"] = std::round(confidence * 100) / 100;
+            o["db"] = round1(level(c).db);
+            bends.append(o);
+            if (bend == 16383 && confidence >= 0.5)
+                  out["rangeUp"] = round1(cents);
+            }
+      p->midi(ME_PITCHBEND, s.channel, 0, 64);             // (the centre)
+      capture(200, nullptr);
+      out["bends"] = bends;
+      return out;
+      }
+
 
 //---------------------------------------------------------
 //   helpers

@@ -46,7 +46,7 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-enum : ParamID { kArticulation = 1, kLevel = 2, kTone = 3, kMacro = 100 };
+enum : ParamID { kArticulation = 1, kLevel = 2, kTone = 3, kBend = 4, kMacro = 100 };
 
 static const FUID ProcessorUID(0x6d737473, 0x796e7468, 0x70726f63, 0x00000001);
 static const FUID ControllerUID(0x6d737473, 0x796e7468, 0x6374726c, 0x00000001);
@@ -102,6 +102,7 @@ class Processor : public AudioEffect {
       ParamValue articulation { 0.0 };
       ParamValue level { 1.0 };
       ParamValue tone { 1.0 };
+      ParamValue bend { 0.5 };      // MIDI pitch bend: ±2 semitones, as most samplers
       int current { 1 };            // the articulation notes start with
       int roundRobin { 0 };
       std::map<int, Voice> voices;  // pitch -> voice
@@ -149,6 +150,8 @@ class Processor : public AudioEffect {
                                     level = v;
                               else if (q->getParameterId() == kTone)
                                     tone = v;
+                              else if (q->getParameterId() == kBend)
+                                    bend = v;
                               }
                         }
                   }
@@ -186,7 +189,7 @@ class Processor : public AudioEffect {
             for (int32 i = 0; i < data.numSamples; ++i)
                   l[i] = r[i] = 0.f;
             for (auto& v : voices) {
-                  const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + v.second.tuning / 100.0) / 12.0) / processSetup.sampleRate;
+                  const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + v.second.tuning / 100.0 + (bend - 0.5) * 4.0) / 12.0) / processSetup.sampleRate;
                   Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
                         const float s = timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
@@ -268,6 +271,7 @@ class Controller : public EditController, public IMidiMapping, public IUnitInfo,
             parameters.addParameter(STR16("Articulation"), nullptr, 0, 0.0, ParameterInfo::kCanAutomate, kArticulation);
             parameters.addParameter(STR16("Level"), nullptr, 0, 1.0, ParameterInfo::kCanAutomate, kLevel);
             parameters.addParameter(STR16("Tone"), STR16("%"), 0, 1.0, ParameterInfo::kCanAutomate, kTone);
+            parameters.addParameter(STR16("Pitch Bend"), nullptr, 0, 0.5, ParameterInfo::kCanAutomate, kBend);
             for (int i = 0; i < 12; ++i) {
                   char16_t title[16];
                   const std::string t = "Macro " + std::to_string(i + 1);
@@ -297,6 +301,8 @@ class Controller : public EditController, public IMidiMapping, public IUnitInfo,
                   id = kArticulation;
             else if (cc == kCtrlModWheel)
                   id = kLevel;
+            else if (cc == kPitchBend)
+                  id = kBend;
             else
                   return kResultFalse;
             return kResultTrue;
