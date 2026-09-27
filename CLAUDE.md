@@ -360,7 +360,14 @@ macOS.
   bar "Loading … in the background"); a play before that's done loads the rest (`sync`). The owner,
   2026-09-27: a full orchestra (25+ Kontakt instances, ~0.7 GB each at Kontakt's default 60 kB
   preload) made the first play wait long. Tried here under Xvfb with the test synth: 5 parts, 5
-  instances loaded one by one (`qDebug` "preloaded one instance, n to go"). **Crackle live, not in
+  instances loaded one by one (`qDebug` "preloaded one instance, n to go"). Instances are reused
+  across scores (`syncSome`): one the score can't use in its slot is set aside (`_spares`), a patch a
+  spare plays moves to the slot that needs it ("<patch> kept (slot n)"), a spare of a patch no longer
+  needed takes a new patch when it has a setup (one instance fewer), and the spares left are
+  released once all is loaded. Tried with two scores sharing 3 of their 4-5 patches in another
+  order: switching loads only the other 1-2. Status messages (`MuseScore::showMessage`) are in a
+  label of their own and repainted at once: QStatusBar's own messages never showed in MuseScore 3
+  (its stretching spacers leave them no room). **Crackle live, not in
   the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;
   Kontakt's *Options › Memory › Override instrument's preload size* at 30 kB fixed it. Suggest that
   first when the owner reports crackles or a slow load.
