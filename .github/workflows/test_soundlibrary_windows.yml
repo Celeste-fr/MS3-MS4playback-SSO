@@ -3,13 +3,13 @@ name: 'Test: Sound library on Windows'
 # Builds MuseScore with MSVC (as "Build: Windows" does), runs the sound library tests
 # (tst_soundlibrary: the VST 3 host with the MS Test Synth plug-in), and uploads the
 # installed MuseScore for trying it. Manual only: Actions -> this workflow -> Run workflow,
-# or a push to ms4-playback or a claude/ branch whose last commit message contains
+# or a push to main or a claude/ branch whose last commit message contains
 # [windows-build]. Other pushes skip the job (no runner minutes).
 on:
   workflow_dispatch:
   push:
     branches:
-      - 'ms4-playback'
+      - 'main'
       - 'claude/**'
 
 jobs:

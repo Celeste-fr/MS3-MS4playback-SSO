@@ -7,11 +7,12 @@ made. The commit messages on this branch explain each step in detail.
 
 ## Where things are
 
-- Branch: `ms4-playback`, the default and only branch (the sound-library branch was merged into
-  it and deleted on 2026-09-25). Develop and push there; no pull requests.
+- Branch: `main` (called `ms4-playback` until 2026-09-27), the default and only branch (the
+  sound-library branch was merged into it and deleted on 2026-09-25). Develop and push there;
+  no pull requests.
 - Latest Windows build: run 11 (commit 6bc3a62). All 10 `tst_soundlibrary` tests passed on
   Windows. Artifact `MuseScore-soundlibrary-win64`:
-  https://github.com/Celeste-fr/musescore3-ms4-playback/actions/runs/36178930191
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36178930191
 - That build has:
   - the check memory (`checks.json`; *Tick what needs checking*);
   - the scan of every value 0–127;
