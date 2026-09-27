@@ -59,11 +59,12 @@ The owner asked to extract all the data possible from SSO for a full integration
 (see `CLAUDE.md` › Extract library files). Next: the owner downloads `ExtractLibraryFiles-win64` from the
 workflow "Tool: Extract library files", double-clicks `ExtractLibraryFiles.exe` (or gives it the SSO folder)
 and hands back the zip it names. From it (`--report`, then `library.json` and `archives/`):
-- (the owner has the free Kontakt Player, not the full Kontakt: SSO is a Player library, so its presets
-  are most likely encrypted, and Creator Tools, which needs the full Kontakt, is no way in)
-- whether SSO's presets are readable: if so, each patch's groups (articulation × dynamic × round robin),
-  zones (ranges, release triggers) and samples, to check the map's articulations, ranges and keyswitches
-  against the patches themselves; if encrypted, the Soundinfo tags and SNPIDs only;
+- first run (03:27, library.json left out: 800 MB): SSO's 700 patches are readable, none encrypted, although
+  the owner has the free Kontakt Player (see `CLAUDE.md` › Extract library files); 432,829 sample names.
+  The extractor now sums zones up per group (small enough to send); the owner re-runs it to send the groups
+- from the groups (articulation × dynamic × round robin, mic headers, release triggers), their key and
+  velocity ranges and samples: check the map's articulations, ranges and keyswitches against the patches
+  themselves (e.g. why Violins Long Sul G is silent in "All techniques");
 - the sample names in the `.nkx` archives: which articulations, dynamics, round robins and mic positions
   exist per instrument, and their ranges;
 - ProductHints, registry and database rows: the library's id, version and product names.
