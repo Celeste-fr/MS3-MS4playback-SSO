@@ -75,6 +75,8 @@ SoundLibraryHost::SoundLibraryHost()
 #ifdef USE_VST3
       _preloadTimer.setSingleShot(true);
       connect(&_preloadTimer, &QTimer::timeout, this, &SoundLibraryHost::preloadStep);
+      _lastInput.start();
+      qApp->installEventFilter(this);         // (the user's input: preloadStep waits for a pause)
       _idle.setInterval(50);
       connect(&_idle, &QTimer::timeout, this, [this]() {
             if (Vst3Synth* s = synth())
@@ -616,7 +618,7 @@ static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::
 //   partsWithNotes
 //    the parts that have a note anywhere: only those get an instance (the owner, 2026-09-27:
 //    a new score from the Symphony Orchestra template, no notes yet, loaded 25 Kontakt
-//    instances); a part that gets its first notes is loaded at the next play
+//    instances); a part that gets its first notes is loaded a moment after the edit (preloadSoon)
 //---------------------------------------------------------
 
 static std::set<const Part*> partsWithNotes(Score* score)
@@ -651,7 +653,8 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
 //    the score's instances loaded ahead of its first playback (the owner, 2026-09-27: the first
 //    play of an orchestral score waited for 25 Kontakt instances), one at a time from the event
 //    loop so MuseScore stays usable; starts a moment after the score is shown (browsing tabs
-//    loads nothing). A play before it's done loads the rest (sync)
+//    loads nothing) and after an edit that gives a part its first notes (edited), so it waits
+//    while one types. A play before it's done loads the rest (sync)
 //---------------------------------------------------------
 
 void SoundLibraryHost::preloadSoon(Score* score)
@@ -659,12 +662,58 @@ void SoundLibraryHost::preloadSoon(Score* score)
 #ifdef USE_VST3
       _preloadScore = score ? score->masterScore() : nullptr;
       _preloadTimer.stop();
+      _preloadFrom = _loads;
       if (!_preloadScore || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
             return;
       _preloadTimer.start(2000);
 #else
       Q_UNUSED(score);
 #endif
+      }
+
+//---------------------------------------------------------
+//   edited
+//    after each edit (MuseScore::endCmd): a part that got its first notes is loaded a moment
+//    later, as a score is when shown (the owner, 2026-09-27: an empty score loaded nothing until
+//    play). Only a part with notes that the last sync didn't have starts it, so other edits cost
+//    a scan of the score's chords
+//---------------------------------------------------------
+
+void SoundLibraryHost::edited(Score* score)
+      {
+#ifdef USE_VST3
+      if (!score || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
+            return;
+      if (!_preloadTimer.isActive() && score->masterScore() == _syncedScore) {
+            const std::set<const Part*> playing = partsWithNotes(score->masterScore());
+            if (std::includes(_synced.begin(), _synced.end(), playing.begin(), playing.end()))
+                  return;
+            }
+      preloadSoon(score);
+#else
+      Q_UNUSED(score);
+#endif
+      }
+
+//---------------------------------------------------------
+//   eventFilter
+//    the time of the user's last key, click or wheel (preloadStep)
+//---------------------------------------------------------
+
+bool SoundLibraryHost::eventFilter(QObject* o, QEvent* e)
+      {
+      switch (e->type()) {
+            case QEvent::KeyPress:
+            case QEvent::MouseButtonPress:
+            case QEvent::MouseButtonDblClick:
+            case QEvent::Wheel:
+            case QEvent::ShortcutOverride:
+                  _lastInput.restart();
+                  break;
+            default:
+                  break;
+            }
+      return QObject::eventFilter(o, e);
       }
 
 void SoundLibraryHost::preloadStep()
@@ -674,6 +723,13 @@ void SoundLibraryHost::preloadStep()
             return;                                         // (another score is shown now)
       if (seq && seq->isPlaying())
             return;                                         // (play has loaded what it needs)
+      // an instance blocks MuseScore while it loads (0.2-0.8 s for SSO, the first time of a patch
+      // 2-40 s; VST 3 wants it on the UI thread): not while the user is doing something (the
+      // owner, 2026-09-27: a full orchestra's loading locked the window for seconds)
+      if (_lastInput.elapsed() < INPUT_PAUSE_MS) {
+            _preloadTimer.start(INPUT_PAUSE_MS - int(_lastInput.elapsed()) + 50);
+            return;
+            }
       int remaining = 0;
       QString error;
       if (!syncSome(_preloadScore, &error, 1, &remaining)) {
@@ -684,7 +740,7 @@ void SoundLibraryHost::preloadStep()
       qDebug("Sound library: preloaded one instance, %d to go", remaining);
       if (remaining > 0)
             _preloadTimer.start(100);                     // (the event loop runs in between)
-      else if (mscore)
+      else if (mscore && _loads > _preloadFrom)       // (an edit that needed nothing new says nothing)
             mscore->showMessage(tr("%1 is loaded.").arg(SoundLib::current() ? SoundLib::current()->name : QString()), 3000);
 #endif
       }
@@ -788,6 +844,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   continue;
                   }
             ++loads;
+            ++_loads;
             if (!waiting && maxLoads < 0) {
                   QApplication::setOverrideCursor(Qt::WaitCursor);
                   waiting = true;
@@ -811,6 +868,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   }
             if (!p) {
                   QString err;
+                  QElapsedTimer t;
+                  t.start();
                   p = Vst3Plugin::load(path, MScore::sampleRate, 4096, &err);
                   if (!p) {
                         if (error)
@@ -818,6 +877,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                         ok = false;
                         break;
                         }
+                  logTime(*library, QString("%1: a new instance of the plug-in in %2 ms").arg(name).arg(t.elapsed()));
                   }
             s.instrument = name;
             QString err;
@@ -850,6 +910,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   }
             }
       _spares.clear();
+      _synced = playing;
+      _syncedScore = score->masterScore();
       if (waiting)
             QApplication::restoreOverrideCursor();
       if (!_idle.isActive())
@@ -876,6 +938,8 @@ void SoundLibraryHost::release()
             _slots[k] = Slot();
             }
       _spares.clear();
+      _synced.clear();
+      _syncedScore = nullptr;
       _idle.stop();
       emit changed();
 #endif

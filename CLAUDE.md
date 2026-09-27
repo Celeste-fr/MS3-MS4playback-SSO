@@ -415,11 +415,16 @@ macOS.
   patch's first load stays slow, later ones should be like the hand-made setups': run 119's `load times.log` (the owner, 4 solo strings): made 92-106 ms, first load 0.3-2.4 s (from the .nki), resaved 60-88 ms (386 → 298 KB), next load 92-109 ms (Kontakt's own state), about 20 times faster. setState's time only: Kontakt may still stream samples after it returns.
   `load times.log` (setups folder) records making, loading ("made from the .nki" / "Kontakt's own state") and
   resaving per patch, since qDebug doesn't show on Windows. Parts with no note get no instance
-  (`partsWithNotes`; a new score from a template loaded 25): loaded at the play after they get notes. Tried here
+  (`partsWithNotes`; a new score from a template loaded 25): loaded a moment after the edit that gives them notes (`SoundLibraryHost::edited`, from `MuseScore::endCmd`: only when a part with notes wasn't in the last sync, else a scan of the chords). Tried here
   with the test synth: only the part with notes loaded; its state (not Kontakt's) was not resaved, as it should.
 - Loading ahead (`SoundLibraryHost::preloadSoon`, from `MuseScore::setCurrentScoreView`): 2 s after
   a score is shown, its instances load one per event-loop turn (`syncSome(…, 1, &remaining)`, status
-  bar "Loading … in the background"); a play before that's done loads the rest (`sync`). The owner,
+  bar "Loading … in the background"), each only after 1.5 s without a key, click or wheel
+  (`eventFilter`, `INPUT_PAUSE_MS`: an instance blocks the window while it loads, and VST 3 wants that
+  on the UI thread); a play before that's done loads the rest (`sync`). The owner's full orchestra
+  (2026-09-27, `load times.log`): first loads from the made setups 2-43 s per patch (Trumpet Solo 43 s,
+  the string sections 15-31 s), after the resave 0.15-0.8 s (25 instances in 11 s); `load times.log`
+  now also has each new instance's creation time. The owner,
   2026-09-27: a full orchestra (25+ Kontakt instances, ~0.7 GB each at Kontakt's default 60 kB
   preload) made the first play wait long. Tried here under Xvfb with the test synth: 5 parts, 5
   instances loaded one by one (`qDebug` "preloaded one instance, n to go"). Instances are reused

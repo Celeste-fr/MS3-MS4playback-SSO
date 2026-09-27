@@ -35,9 +35,11 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 
 #include <QDialog>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QPointer>
 #include <QTimer>
@@ -53,6 +55,7 @@ class MasterScore;
 class MasterSynthesizer;
 class NPlayEvent;
 class Vst3Plugin;
+class Part;
 class Score;
 class Vst3EditorWindow;
 class Vst3Plugin;
@@ -83,6 +86,12 @@ class SoundLibraryHost : public QObject {
       QTimer _idle;
       QTimer _preloadTimer;
       QPointer<MasterScore> _preloadScore;
+      int _loads { 0 };                   // instances loaded so far
+      int _preloadFrom { 0 };             // _loads when the preload started
+      std::set<const Part*> _synced;      // the parts with notes at the last complete sync
+      QPointer<MasterScore> _syncedScore;
+      QElapsedTimer _lastInput;           // since the user's last key, click or wheel
+      static constexpr int INPUT_PAUSE_MS = 1500;  // a background load waits for this long a pause
       void preloadStep();
       bool syncSome(Score* score, QString* error, int maxLoads, int* remaining);
 
@@ -113,10 +122,14 @@ class SoundLibraryHost : public QObject {
       Vst3Synth* synth() const;
       bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
       void preloadSoon(Score* score);     // load them ahead of the first play, in the background
+      void edited(Score* score);          // after an edit: load a part that got its first notes
       void release();                     // no instances
       bool loaded(int slot) const;
       bool showEditor(int slot, QString* error = nullptr);
       static void routesMayChange();
+
+   protected:
+      bool eventFilter(QObject* o, QEvent* e) override;
 
    signals:
       void changed();
