@@ -845,8 +845,10 @@ QSet<QString> ArticulationCheckDialog::measuredBefore(bool pitchBend) const
                   const QJsonObject c = j.value("controllers").toObject();
                   if (j.value("patch").toString().isEmpty() || !j.value("sounds").toBool() || c.isEmpty() || c.contains("cancelled")
                       || !c.contains("endDistanceDb") || !j.contains("parameters") || j.value("parameters").toObject().contains("cancelled")
-                      || (pitchBend && !j.contains("pitchBend")))
-                        continue;
+                      || (pitchBend && !j.contains("pitchBend")) || j.contains("skippedAfterCrash")
+                      || c.contains("skippedAfterCrash") || j.value("parameters").toObject().contains("skippedAfterCrash")
+                      || j.value("switches").toObject().contains("skippedAfterCrash"))
+                        continue;         // (a step left out after crashes: measured again, it may go through)
                   // (put back: within the patch's own noise; a patch left silent measured the rest on silence)
                   if (c.value("endDistanceDb").toDouble() > std::max(1.5, 3 * c.value("soundNoiseDb").toDouble()))
                         continue;

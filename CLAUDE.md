@@ -881,6 +881,13 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   (`measuredBefore`: an extract folder's JSON that sounded, has `endDistanceDb` within the patch's noise, parameters,
   and pitch bend when asked; `MS_EXTRACT_REDO=1` measures them again). Percussion with decaying round robins (Toys,
   Bongos, Wood, Xylophone, Marimba, Snare 1) show nearly every CC as "sound" and may never count as put back.
+  **The fourth run (build d966da4, 13:09):** the 44 left out as meant; in 9 minutes 20 patches and 5 crashes, all in
+  Kontakt 8.vst3 at +0x84AC98, +0x84DB9C or +0x8E5873, at cc 23 (Basses, Contrabass Trombone), parameter 8 (Horn Solo),
+  parameter 2048 (Contrabass Trombone again, once cc 23 was left out) and parameter 5 (Timpani); each patch went through
+  without its step. Violas, Strings Ensemble, Flute Solo, Oboe Solo and the others that crashed in the third run went
+  through. So the crashes come and go rather than follow a step: now the first crash at a step is tried again as it
+  was, and a step is left out only at a second crash there (4 tries); a patch measured with a step left out
+  (`skippedAfterCrash` in its controllers, parameters or switches) is measured again by the next run.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

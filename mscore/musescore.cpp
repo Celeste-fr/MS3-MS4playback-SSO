@@ -4664,6 +4664,7 @@ static bool superviseExtract(const QString& root)
       QFile::remove(skipFile);
       QFile::remove(ArticulationCheckDialog::runFile(root, "finished"));
       std::map<QString, int> tries;
+      std::map<QString, QString> lastCrashStep;       // patch -> the step its last crash was at
       const QByteArray runStart = QByteArray::number(QDateTime::currentMSecsSinceEpoch());
       for (int round = 1; round <= MAX_SUPERVISED_ROUNDS; ++round) {
             QFile::remove(progress);
@@ -4722,8 +4723,15 @@ static bool superviseExtract(const QString& root)
             const bool skippable = step.startsWith("cc ") || step.startsWith("parameter ") || step.startsWith("switch ")
                                    || step == "pitch bend";
             const int tried = ++tries[where];
-            const bool again = (crashed || hung) && (skippable ? tried <= 3 : tried <= 2);
-            if (again && skippable) {
+            const bool again = (crashed || hung) && (skippable ? tried <= 4 : tried <= 2);
+            // a step is left out only when the patch crashed at it twice: Kontakt's crashes come and go (the
+            // owner's run of 2026-09-28 13:09: Contrabass Trombone at cc 23, then without it at parameter 2048;
+            // Violas, which crashed in two earlier runs, went through; the same two offsets in Kontakt 8.vst3
+            // whatever the step), so the first crash at a step is tried again with it (cc 23 is one of SSO's)
+            const bool sameStepAgain = skippable && lastCrashStep[where] == step;
+            lastCrashStep[where] = step;
+            const bool leaveOut = again && sameStepAgain;
+            if (leaveOut) {
                   QFile sf(skipFile);
                   if (sf.open(QIODevice::Append | QIODevice::Text))
                         sf.write((where + "\t" + step + "\n").toUtf8());
@@ -4747,7 +4755,8 @@ static bool superviseExtract(const QString& root)
                                  : QString("Kontakt stopped running patch scripts");
             const QString at = step.isEmpty() ? QString() : QString(" at %1").arg(step);
             const QString then = !again ? QString(" (left out), its data not written")
-                                 : skippable ? QString(": once more without %1 (try %2 of 3)").arg(step).arg(tried + 1)
+                                 : leaveOut ? QString(": once more without %1, its second crash there (try %2 of 4)").arg(step).arg(tried + 1)
+                                 : skippable ? QString(": once more as it was (try %1 of 4)").arg(tried + 1)
                                  : QString(": once more (try %1 of 2)").arg(tried + 1);
             ArticulationCheckDialog::logBackground(QString("%1 on %2%3%4; %5 patches left")
                                                    .arg(what, where, at, crashed || hung ? then : QString(" (left out)"))
