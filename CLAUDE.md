@@ -360,6 +360,16 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
   Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
   Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
+  **UI (2026-09-28, the owner: "tidy up the Sound Library menu")**: *View › Sound Library…* is the overview: a
+  tree (`SoundLibraryDialog::_tree`), each part's row with its patch, *Controllers…* (kept until the automation
+  system: the owner), setup state, *Show*, memory; its extra patches (+) and copies for other tunings (~) under
+  it, closed. The settings are in **Mixer › Advanced Options…** (and a button in the Sound Library window):
+  `SoundLibraryOptions` — this score: copies for other tunings (metaTag `soundLibraryLanes`) and the short
+  notes' balance per family (metaTag `soundLibraryShortBalance`, `shortNotesBalance` / `writeShortBalance`:
+  only what differs from the library's calibration; `calibratedVelocity(…, family, score)`); the library:
+  its folder, *Measure dynamics in the background* / *Scan drum keys in the background* (start this
+  MuseScore with --check-dynamics / --scan-keys). *Check articulations* has no button any more (its dialog
+  runs the background jobs).
   **Short notes' balance per family** (the owner, 2026-09-28, "Whence" bar 15: staccatos quite a bit louder than
   legato): the calibration matched them (Violins 1: Spiccato at velocity 88 and the legato at CC 64 both -39.1 dB
   loudest 50 ms; uncalibrated, Spiccato at ~64 was -46 dB: Spitfire's own balance ~7 dB under), but a bright

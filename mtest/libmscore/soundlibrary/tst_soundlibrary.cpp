@@ -2091,6 +2091,20 @@ void TestSoundLibrary::dynamicsCalibration()
       QVERIFY(again.read(dir.path() + "/dynamics.json"));
       QCOMPARE(again.balanceFor("strings"), -4.0);
       QCOMPARE(again.balanceFor("woodwinds"), -2.0);
+      // the score's own (Mixer › Advanced Options…): only what differs from the library's is written
+      {
+            MasterScore* sc = readScore(DIR + "shorts-dynamics.musicxml");
+            QVERIFY(sc);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "strings"), -4.0);
+            const QString tag = SoundLib::writeShortBalance({ { "strings", -4.0 }, { "solo strings", -6.0 }, { "brass", 1.5 } }, again);
+            QCOMPARE(tag, QString("brass=1.5 solo_strings=-6"));
+            sc->setMetaTag(SoundLib::shortBalanceMetaTag, tag);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "solo strings"), -6.0);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "brass"), 1.5);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "strings"), -4.0);
+            QCOMPARE(SoundLib::calibratedVelocity(again, "Violin", 40, "Violin", 1, 32, "solo strings", sc), 68);   // -42.8 dB
+            delete sc;
+      }
 
       // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
       back->balanceDb = 0;

@@ -284,7 +284,14 @@ std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
 // a short's velocity for the dynamics CC value cc: -1 when either curve is missing or the
 // articulation isn't on velocity
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc, const QString& family = QString());
+                       const QString& refPatch, int refValue, int cc, const QString& family = QString(),
+                       const Score* score = nullptr);
+// the score's own short notes' balance per family (Mixer › Advanced Options…, metaTag
+// "soundLibraryShortBalance": "strings=-4 brass=-2", only what differs from the library's
+// calibration), else the calibration's
+extern const char* shortBalanceMetaTag;
+double shortNotesBalance(const Score* score, const DynamicsCalibration& cal, const QString& family);
+QString writeShortBalance(const std::map<QString, double>& byFamily, const DynamicsCalibration& cal);
 // a patch's family for the balance, from its main patch's folder in the library (SSO: Symphonic
 // Strings, Solo Strings, Symphonic Woodwinds, Symphonic / Motif Brass; else "other")
 QString family(const LibInstrument& main);

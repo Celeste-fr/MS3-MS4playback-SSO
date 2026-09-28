@@ -1218,7 +1218,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (held) {
                                     const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
                                                                                libPatches[held.patch]->name, held.articulation->value, cc,
-                                                                               SoundLib::family(*libPatches.front()));
+                                                                               SoundLib::family(*libPatches.front()), score);
                                     if (v > 0)
                                           return qBound(1, int(std::lround(v * accent)), 127);
                                     }

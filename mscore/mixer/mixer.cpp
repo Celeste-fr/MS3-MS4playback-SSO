@@ -41,6 +41,7 @@
 #include "mixertrackchannel.h"
 #include "mixertrackpart.h"
 #include "mixertrackitem.h"
+#include "soundlibraryhost.h"
 
 namespace Ms {
 
@@ -87,7 +88,18 @@ Mixer::Mixer(QWidget* parent)
 
       setupUi(this);
       setAllowedAreas(Qt::DockWidgetAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea));
-      verticalLayout->insertWidget(0, PlaybackModeBox::row(dockWidgetContents));   // MS3 / MS4 / sound library
+      // MS3 / MS4 / sound library, and the score's sound library settings (the owner, 2026-09-28)
+      {
+            QWidget* top = new QWidget(dockWidgetContents);
+            QHBoxLayout* h = new QHBoxLayout(top);
+            h->setContentsMargins(0, 0, 0, 0);
+            h->addWidget(PlaybackModeBox::row(top), 1);
+            QPushButton* options = new QPushButton(tr("Advanced Options…"), top);
+            options->setToolTip(tr("This score's sound library settings (copies for other tunings, short notes' balance) and the library's"));
+            connect(options, &QPushButton::clicked, this, [this]() { SoundLibraryOptions::showFor(this); });
+            h->addWidget(options);
+            verticalLayout->insertWidget(0, top);
+      }
 
       trackAreaLayout = new QHBoxLayout;
       trackAreaLayout->setMargin(0);

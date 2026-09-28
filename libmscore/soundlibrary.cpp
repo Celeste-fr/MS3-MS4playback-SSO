@@ -704,14 +704,39 @@ QString family(const LibInstrument& main)
       return "other";
       }
 
+const char* shortBalanceMetaTag = "soundLibraryShortBalance";
+
+double shortNotesBalance(const Score* score, const DynamicsCalibration& cal, const QString& family)
+      {
+      if (score) {
+            const QString tag = score->masterScore()->metaTag(shortBalanceMetaTag);
+            for (const QString& item : tag.split(' ', QString::SkipEmptyParts)) {
+                  bool ok = false;
+                  const double v = item.section('=', 1).toDouble(&ok);
+                  if (ok && item.section('=', 0, 0).replace('_', ' ') == family)
+                        return v;
+                  }
+            }
+      return cal.balanceFor(family);
+      }
+
+QString writeShortBalance(const std::map<QString, double>& byFamily, const DynamicsCalibration& cal)
+      {
+      QStringList items;
+      for (const auto& f : byFamily)
+            if (std::fabs(f.second - cal.balanceFor(f.first)) > 1e-9)
+                  items << QString("%1=%2").arg(QString(f.first).replace(' ', '_')).arg(f.second);
+      return items.join(' ');
+      }
+
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc, const QString& family)
+                       const QString& refPatch, int refValue, int cc, const QString& family, const Score* score)
       {
       const DynamicsCurve* c = cal.curve(patch, value);
       const DynamicsCurve* ref = cal.curve(refPatch, refValue);
       if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
             return -1;
-      return c->inverse(ref->at(cc) + cal.balanceFor(family));
+      return c->inverse(ref->at(cc) + shortNotesBalance(score, cal, family));
       }
 
 int routesGeneration()

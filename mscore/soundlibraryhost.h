@@ -47,6 +47,7 @@
 #include "libmscore/soundlibrary.h"
 
 class QTableWidget;
+class QTreeWidget;
 class QLabel;
 class QDoubleSpinBox;
 class QSpinBox;
@@ -178,18 +179,42 @@ class SoundLibraryDialog : public QDialog {
       std::shared_ptr<const SoundLib::Library> _library;
       SoundLib::Output _output;
       QLabel* _info;
-      QWidget* _lanesRow { nullptr };     // the copies for other tunings: tolerance, ring, at most
-      QDoubleSpinBox* _tolerance { nullptr };
-      QDoubleSpinBox* _tail { nullptr };
-      QSpinBox* _maxLanes { nullptr };
-      std::map<QString, QDoubleSpinBox*> _balance;   // per family: the calibration's short notes against held ones (dB)
-      QTableWidget* _table;
-      void setLaneSettings(bool libraryDefaults);
+      QTreeWidget* _tree;                 // a part, its patches (extras, copies for other tunings) under it
 
       void rebuild();
 
    public:
       SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> library, SoundLib::Output output, QWidget* parent = nullptr);
+      };
+
+//---------------------------------------------------------
+//   SoundLibraryOptions
+//    Mixer › Advanced Options…: the score's sound library settings (the copies for other tunings,
+//    the short notes' balance per family) and the library's own (its folder, the background
+//    measurements); the owner, 2026-09-28: "put the useful configs in there … make all these
+//    configs per score"
+//---------------------------------------------------------
+
+class SoundLibraryOptions : public QDialog {
+      Q_OBJECT
+
+      std::shared_ptr<const SoundLib::Library> _library;
+      QPointer<MasterScore> _score;
+      QDoubleSpinBox* _tolerance { nullptr };
+      QDoubleSpinBox* _tail { nullptr };
+      QSpinBox* _maxLanes { nullptr };
+      std::map<QString, QDoubleSpinBox*> _balance;
+      QLabel* _folder { nullptr };
+
+      void load();
+      void setLaneSettings(bool libraryDefaults);
+      void setBalance(bool libraryDefaults);
+      void setMetaTag(const char* tag, const QString& value);
+      void startBackground(const QStringList& args, const QString& what);
+
+   public:
+      SoundLibraryOptions(MasterScore* score, QWidget* parent = nullptr);
+      static void showFor(QWidget* parent);     // for the current score
       };
 
 } // namespace Ms
