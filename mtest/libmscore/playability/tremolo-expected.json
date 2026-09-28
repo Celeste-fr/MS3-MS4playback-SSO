@@ -1,0 +1,47 @@
+{
+ "rows": [
+  {
+   "staff": "Violin",
+   "bar": 4,
+   "verdict": "outOfReach",
+   "reason": "fingered tremolo across strings G–D (minor 6th)",
+   "notes": "A3 ↔ F4"
+  },
+  {
+   "staff": "Violin",
+   "bar": 5,
+   "verdict": "impossible",
+   "reason": "fingered tremolo too wide (17 semitones)",
+   "notes": "A3 ↔ D5"
+  },
+  {
+   "staff": "Violin",
+   "bar": 9,
+   "verdict": "outOfReach",
+   "reason": "fingered tremolo across strings G–D (minor 6th)",
+   "notes": "F4 ↔ A3"
+  },
+  {
+   "staff": "Viola",
+   "bar": 1,
+   "verdict": "outOfReach",
+   "reason": "fingered tremolo across strings C–G (octave)",
+   "notes": "C#3 ↔ C#4"
+  },
+  {
+   "staff": "Contrabass",
+   "bar": 1,
+   "verdict": "outOfReach",
+   "reason": "fingered tremolo across strings E–A (perfect 4th)",
+   "notes": "F1 ↔ Bb1"
+  },
+  {
+   "staff": "Contrabass",
+   "bar": 2,
+   "verdict": "impossible",
+   "reason": "fingered tremolo too wide (minor 7th)",
+   "notes": "F1 ↔ Eb2"
+  }
+ ],
+ "checked": 14
+}

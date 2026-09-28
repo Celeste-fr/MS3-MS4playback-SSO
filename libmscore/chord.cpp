@@ -1745,7 +1745,7 @@ static void updatePercussionNotes(Chord* c, const Drumset* drumset)
 //   cmdUpdateNotes
 //---------------------------------------------------------
 
-void Chord::cmdUpdateNotes(AccidentalState* as, int staffIdx)
+void Chord::cmdUpdateNotes(AccidentalState* as, int staffIdx, AccidentalState* sounding)
       {
       // TAB_STAFF is different, as each note has to be fretted
       // in the context of the all of the chords of the whole segment
@@ -1776,7 +1776,7 @@ void Chord::cmdUpdateNotes(AccidentalState* as, int staffIdx)
                         continue;
                   std::vector<Note*> notes(ch->notes());  // we need a copy!
                   for (Note* note : notes)
-                        note->updateAccidental(as);
+                        note->updateAccidental(as, sounding);
                   ch->sortNotes();
                   }
             if (vStaffIdx() == staffIdx) {
@@ -1791,7 +1791,7 @@ void Chord::cmdUpdateNotes(AccidentalState* as, int staffIdx)
                                     score()->undoRemoveElement(note->accidental());
                                     }
                               }
-                        note->updateAccidental(as);
+                        note->updateAccidental(as, sounding);
                         }
                   }
             const QVector<Chord*> gna(graceNotesAfter());
@@ -1800,7 +1800,7 @@ void Chord::cmdUpdateNotes(AccidentalState* as, int staffIdx)
                         continue;
                   std::vector<Note*> notes(ch->notes());  // we need a copy!
                   for (Note* note : notes)
-                        note->updateAccidental(as);
+                        note->updateAccidental(as, sounding);
                   ch->sortNotes();
                   }
             }

@@ -1705,6 +1705,17 @@ void ChangeStyle::undo(EditData* ed)
       }
 
 //---------------------------------------------------------
+//   ChangeScordaturaView::flip
+//---------------------------------------------------------
+
+void ChangeScordaturaView::flip(EditData*)
+      {
+      bool old = score->scordaturaView();
+      score->setScordaturaView(flag);
+      flag = old;
+      }
+
+//---------------------------------------------------------
 //   ChangeStyleVal::flip
 //---------------------------------------------------------
 

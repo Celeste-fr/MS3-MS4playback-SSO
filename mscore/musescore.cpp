@@ -112,6 +112,8 @@
 #include "inspector/inspector.h"
 
 #include "libmscore/chord.h"
+#include "libmscore/playability.h"
+#include "playabilitypanel.h"
 #include "libmscore/chordlist.h"
 #include "libmscore/drumset.h"
 #include "libmscore/excerpt.h"
@@ -457,6 +459,40 @@ static void printVersion(const char* prog)
 static const int RECENT_LIST_SIZE = 20;
 
 //---------------------------------------------------------
+//   updatePlayabilityMarks
+//    the playability checker was switched: analyse every open score (or drop its results) and redraw
+//---------------------------------------------------------
+
+void MuseScore::updatePlayabilityMarks()
+      {
+      for (MasterScore* ms : qAsConst(scoreList))
+            for (Score* s : ms->scoreList())
+                  s->updatePlayability();
+      if (cv)
+            cv->update();
+      if (_playabilityPanel && _playabilityPanel->isVisible())
+            _playabilityPanel->setScore(cs);
+      }
+
+//---------------------------------------------------------
+//   showPlayabilityPanel
+//---------------------------------------------------------
+
+void MuseScore::showPlayabilityPanel(bool visible)
+      {
+      QAction* a = getAction("toggle-playability-panel");
+      if (!_playabilityPanel) {
+            _playabilityPanel = new PlayabilityPanel(this);
+            connect(_playabilityPanel, SIGNAL(visibilityChanged(bool)), a, SLOT(setChecked(bool)));
+            addDockWidget(Qt::RightDockWidgetArea, _playabilityPanel);
+            }
+      reDisplayDockWidget(_playabilityPanel, visible);
+      a->setChecked(visible);
+      if (visible)
+            _playabilityPanel->setScore(cs);
+      }
+
+//---------------------------------------------------------
 //   closeEvent
 //---------------------------------------------------------
 
@@ -554,6 +590,9 @@ void updateExternalValuesFromPreferences() {
       MScore::ms3HairpinVelocity = preferences.getBool(PREF_APP_PLAYBACK_MS3_HAIRPIN_VELOCITY) && !qEnvironmentVariableIsSet("MS4_STRICT");
       MScore::playbackSpeedIncrement = preferences.getInt(PREF_APP_PLAYBACK_SPEEDINCREMENT);
       MScore::warnPitchRange = preferences.getBool(PREF_SCORE_NOTE_WARNPITCHRANGE);
+      Playability::enabled = preferences.getBool(PREF_SCORE_PLAYABILITY_CHECK);
+      Playability::openStringMarks = preferences.getBool(PREF_SCORE_PLAYABILITY_OPENSTRINGS);
+      Playability::openStringColor = preferences.getColor(PREF_SCORE_PLAYABILITY_OPENSTRINGCOLOR);
       MScore::disableMouseEntry = preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT);
       MScore::pedalEventsMinTicks = preferences.getInt(PREF_IO_MIDI_PEDAL_EVENTS_MIN_TICKS);
       MScore::layoutBreakColor = preferences.getColor(PREF_UI_SCORE_LAYOUTBREAKCOLOR);
@@ -629,6 +668,9 @@ void MuseScore::preferencesChanged(bool fromWorkspace, bool changeUI)
       getAction("countin")->setChecked(preferences.getBool(PREF_APP_PLAYBACK_COUNTIN));
       getAction("midi-on")->setChecked(preferences.getBool(PREF_IO_MIDI_ENABLEINPUT));
       getAction("toggle-statusbar")->setChecked(preferences.getBool(PREF_UI_APP_SHOWSTATUSBAR));
+      getAction("toggle-playability")->setChecked(Playability::enabled);
+      getAction("toggle-playability-open-strings")->setChecked(Playability::openStringMarks);
+      updatePlayabilityMarks();
       getAction("show-tours")->setChecked(preferences.getBool(PREF_UI_APP_STARTUP_SHOWTOURS));
       getAction("toggle-mouse-entry")->setChecked(!preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT));
       getAction("toggle-edit-playback")->setChecked(preferences.getBool(PREF_SCORE_NOTE_PLAYONCLICK));
@@ -2142,6 +2184,15 @@ MuseScore::MuseScore()
       menuView->addAction(getAction("show-pageborders"));
       menuView->addAction(getAction("mark-irregular"));
       menuView->addSeparator();
+      // the playability checker (libmscore/playability.h)
+      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings", "toggle-scordatura-view" }) {
+            a = getAction(name);
+            a->setCheckable(true);
+            menuView->addAction(a);
+            }
+      getAction("toggle-playability")->setChecked(Playability::enabled);
+      getAction("toggle-playability-open-strings")->setChecked(Playability::openStringMarks);
+      menuView->addSeparator();
 
       a = getAction("fullscreen");
       a->setCheckable(true);
@@ -3046,6 +3097,10 @@ void MuseScore::updateInspector()
       // (important not to skip when running test scripts)
       if (_inspector && (_inspector->isVisible() || MScore::testMode || scriptTestMode))
             _inspector->update(cs);
+      if (_playabilityPanel && _playabilityPanel->isVisible())
+            _playabilityPanel->setScore(cs);
+      if (QAction* sv = getAction("toggle-scordatura-view"))
+            sv->setChecked(cs && cs->scordaturaView());
       }
 
 //---------------------------------------------------------
@@ -5477,6 +5532,7 @@ void MuseScore::writeSettings()
       settings.beginGroup("MainWindow");
       settings.setValue("showPanel", paletteWidget && paletteWidget->isVisible());
       settings.setValue("showInspector", _inspector && _inspector->isVisible());
+      settings.setValue("showPlayabilityPanel", _playabilityPanel && _playabilityPanel->isVisible());
       settings.setValue("showPlayPanel", playPanel && playPanel->isVisible());
       settings.setValue("floatPlayPanel", playPanel && playPanel->isFloating());
       settings.setValue("showPianoKeyboard", _pianoTools && _pianoTools->isVisible());
@@ -5607,6 +5663,8 @@ void MuseScore::readSettings()
             }
       mscore->showPalette(settings.value("showPanel", "1").toBool());
       mscore->showInspector(settings.value("showInspector", "1").toBool());
+      if (settings.value("showPlayabilityPanel", "0").toBool())
+            mscore->showPlayabilityPanel(true);
       mscore->showPianoKeyboard(settings.value("showPianoKeyboard", "0").toBool());
       mscore->showSelectionWindow(settings.value("showSelectionWindow", "0").toBool());
       mscore->showMixer(mixerVisible);
@@ -7234,6 +7292,23 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             if (cmd == "toggle-statusbar") {
                   preferences.setPreference(PREF_UI_APP_SHOWSTATUSBAR, a->isChecked());
                   _statusBar->setVisible(a->isChecked());
+                  }
+            else if (cmd == "toggle-playability-panel")
+                  showPlayabilityPanel(a->isChecked());
+            else if (cmd == "toggle-scordatura-view") {
+                  // this score (a part can show it while the full score doesn't); undoable
+                  if (cs) {
+                        cs->startCmd();
+                        cs->cmdToggleScordaturaView();
+                        cs->endCmd();
+                        }
+                  a->setChecked(cs && cs->scordaturaView());
+                  }
+            else if (cmd == "toggle-playability" || cmd == "toggle-playability-open-strings") {
+                  bool check = cmd == "toggle-playability";
+                  preferences.setPreference(check ? PREF_SCORE_PLAYABILITY_CHECK : PREF_SCORE_PLAYABILITY_OPENSTRINGS, a->isChecked());
+                  (check ? Playability::enabled : Playability::openStringMarks) = a->isChecked();
+                  updatePlayabilityMarks();
                   }
             else if (cmd == "toggle-playpanel")
                   showPlayPanel(a->isChecked());
