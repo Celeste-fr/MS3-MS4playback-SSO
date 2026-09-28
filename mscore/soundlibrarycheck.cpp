@@ -647,6 +647,18 @@ void ArticulationCheckDialog::setBackgroundLog(const QString& fileName)
       }
 
 static QString zipFolder(const QString& folder);
+// the windows the background runs open off the screen themselves (the watchdog leaves them)
+static std::mutex pictureWindowsMutex;
+static std::set<quintptr> pictureWindows;
+
+static void markOwnWindow(quintptr window, bool own)
+      {
+      std::lock_guard<std::mutex> lock(pictureWindowsMutex);
+      if (own)
+            pictureWindows.insert(window);
+      else
+            pictureWindows.erase(window);
+      }
 static QString safeFileName(QString name);
 
 static QString& progressFile()
@@ -3107,11 +3119,27 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             QPointer<Vst3EditorWindow> w;
             // (a background run: no window, sound and parameters only; which named control a controller
             // moves needs the window's pictures, in real time)
-            if (Steinberg::IPlugView* view = _headless ? nullptr : p->createEditor()) {
+            // a background run opens the plug-in's window too, off the screen and not activated (as the pictures
+            // run does): the owner's minidump of 2026-09-28 15:22 (Kontakt's crash notice, 'Brass - Bass Trombone
+            // Solo - Long Cuivre' at cc 26) has the access violation on the main thread in Kontakt's own handling of
+            // a window message (Qt's event dispatch -> Kontakt 8.vst3 +0x8e5944, reading address 0x2b8: a field of
+            // an object that isn't there), while every controller was tried offline with no window ever opened;
+            // the runs with the window open (Check articulations, the dialog's extract, the pictures) never crashed.
+            // With it, each controller's window change is measured too (which control it moves)
+            if (Steinberg::IPlugView* view = p->createEditor()) {
                   w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
-                  w->show();
-                  w->raise();
-                  w->activateWindow();
+                  if (_headless) {
+                        w->setAttribute(Qt::WA_ShowWithoutActivating);
+                        w->setWindowFlag(Qt::Tool);
+                        w->move(QPoint(-20000, -20000));
+                        markOwnWindow(quintptr(w->winId()), true);
+                        w->show();
+                        }
+                  else {
+                        w->show();
+                        w->raise();
+                        w->activateWindow();
+                        }
                   }
             pump.run(2500);
             const QImage window = w ? grabPlugin(w) : QImage();
@@ -3168,6 +3196,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             if (!stopped)
                   out["controllersToControls"] = controllersToControls(out.value("controllers").toObject(), out.value("parameters").toObject());
             if (w) {
+                  if (_headless)
+                        markOwnWindow(quintptr(w->winId()), false);
                   w->close();
                   delete w;
                   }
@@ -3273,8 +3303,6 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       }
 
 // the picture windows of runHeadlessPictures: the background run's watchdog (musescore.cpp) leaves them
-static std::mutex pictureWindowsMutex;
-static std::set<quintptr> pictureWindows;
 
 bool ArticulationCheckDialog::isPictureWindow(quintptr window)
       {

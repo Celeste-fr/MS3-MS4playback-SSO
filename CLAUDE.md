@@ -897,6 +897,16 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   a `.nicrash` in Documents/Native Instruments/Kontakt 8/Crashlogs) is a message box in the crashed process waiting for
   OK, so the child's own DialogWatch can't close it; the supervisor now looks every 2 s for a window of the child with
   that text (`childHasCrashNotice`, Windows only) and ends the child, a crash like any other.
+  **The owner's `.nicrash` (15:22, build 46d8b0d) is a minidump**: the access violation is on the main thread, in
+  Kontakt 8.vst3 +0x8e5944 reading address 0x2b8 (a field of a null object), with Kontakt frames (sqlite3.dll among
+  them) over Qt's event dispatch (Qt5Core / Qt5Widgets) over MuseScore3Evo.exe: Kontakt handling one of its own window
+  messages while `Pump::run` let Qt process events between blocks, on 'Brass - Bass Trombone Solo - Long Cuivre' at
+  cc 26; not in `process()` nor in a parameter change. The background controller run had never opened Kontakt's
+  window; every run with the window open (Check articulations, the dialog's extract, the pictures run) went without a
+  crash. So the controller run now opens the window off the screen, not activated, a Tool window marked as the run's
+  own for `DialogWatch` (`markOwnWindow`), as the pictures run does, and the controllers' window changes are measured
+  too (which named control each moves, `controllersToControls`). A guess from one dump; untried with Kontakt. (The
+  owner's WER folders are the working MuseScore's ntdll c000000d fail-fasts, builds 6aba63d9 / 6aba99ca, no dumps.)
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
