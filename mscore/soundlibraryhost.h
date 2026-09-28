@@ -51,6 +51,8 @@ class QTreeWidget;
 class QLabel;
 class QDoubleSpinBox;
 class QSpinBox;
+class QCheckBox;
+class QPushButton;
 
 namespace Ms {
 
@@ -205,6 +207,9 @@ class SoundLibraryOptions : public QDialog {
       QSpinBox* _maxLanes { nullptr };
       std::map<QString, QDoubleSpinBox*> _balance;
       QLabel* _folder { nullptr };
+      QLabel* _liveSet { nullptr };
+      QCheckBox* _liveAuto { nullptr };
+      QPushButton* _liveUnlink { nullptr };
 
       void load();
       void setLaneSettings(bool libraryDefaults);

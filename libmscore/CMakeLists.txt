@@ -49,7 +49,7 @@ add_library (libmscore STATIC
       page.cpp part.cpp pedal.cpp letring.cpp vibrato.cpp palmmute.cpp pitch.cpp pitchspelling.cpp
       rendermidi.cpp
       ms4playback.cpp
-      soundlibrary.cpp partplayback.cpp partcontrollers.cpp automation.cpp midisync.cpp tempochange.cpp
+      soundlibrary.cpp partplayback.cpp partcontrollers.cpp automation.cpp midisync.cpp liveset.cpp tempochange.cpp
       ms4playback.h
       soundlibrary.h
       ms4tables.h repeat.cpp repeatlist.cpp rest.cpp
@@ -108,6 +108,11 @@ if (NOT APPLE AND NOT MINGW AND NOT MSVC AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
       target_compile_options(libmscore PRIVATE -O0 --coverage)
    endif (COVERAGE)
 endif (NOT APPLE AND NOT MINGW AND NOT MSVC AND CMAKE_BUILD_TYPE MATCHES "DEBUG")
+
+# zlib (liveset.cpp: a Live Set is gzip-compressed); with MSVC from the downloaded dependencies, as qzip
+if (MSVC)
+    target_include_directories(libmscore PRIVATE "${PROJECT_SOURCE_DIR}/dependencies/include/zlib")
+endif (MSVC)
 
 if (BUILD_PCH)
     target_use_pch(libmscore)

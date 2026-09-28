@@ -133,6 +133,7 @@
 #include "libmscore/style.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
+#include "liveintegration.h"
 #include "soundlibrarycheck.h"
 #include <QLockFile>
 #include <atomic>
@@ -3367,6 +3368,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
       if (seq)
             seq->setScoreView(cv);
       SoundLibraryHost::instance()->preloadSoon(cs);    // the sound library's instances, ahead of play
+      LiveIntegration::Watcher::instance()->update();   // a linked Live Set, re-imported when Live saves it
       if (playPanel)
             playPanel->setScore(cs);
       if (synthControl)

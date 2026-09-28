@@ -3718,6 +3718,12 @@ void MidiRenderer::updateState()
                                                 a.param = i;
                                           }
                                     }
+                              // a lane from a Live Set (automation.h) while the library plays through MIDI
+                              // output, to Live: Live plays it; MuseScore sends nothing for its controller
+                              if (lane.source() == Automation::SOURCE_LIVE && SoundLib::output() == SoundLib::Output::MIDI) {
+                                    automated.insert(lane.target);
+                                    continue;
+                                    }
                               if (a.cc < 0 && a.param < 0)
                                     continue;         // (a controller this library doesn't have)
                               automated.insert(lane.target);

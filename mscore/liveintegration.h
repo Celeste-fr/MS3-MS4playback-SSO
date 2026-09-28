@@ -20,17 +20,60 @@
 //   plays it as Live does.
 //
 //   - Mixer › Play through Live: setPlayThroughMidi (the preference io/soundLibraryOutput).
+//   - Mixer › Advanced Options… › Ableton Live: importDialog (choose the .als, import, report),
+//     re-import when the linked set is saved (watcher; metaTag "liveSet": path, auto).
 //---------------------------------------------------------
 
+#include <QObject>
+#include <QPointer>
+#include <QString>
+
+class QFileSystemWatcher;
+class QTimer;
 class QWidget;
 
 namespace Ms {
+
+class MasterScore;
+
 namespace LiveIntegration {
+
+extern const char* const linkMetaTag;       // "liveSet": {"path": …, "auto": true|false}
 
 bool playingThroughMidi();
 // the sound library's parts through MIDI output (true) or the hosted plug-in; asks first (patches
 // are reloaded / released); false: not switched
 bool setPlayThroughMidi(bool midi, QWidget* parent);
+
+// the score's linked Live Set, "" when none
+QString linkedSet(const MasterScore* score, bool* autoReimport = nullptr);
+// import the set's automation into the score (undoable); report: what was and wasn't matched
+bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report);
+// Mixer › Advanced Options…: choose a set, import, show the report
+void importDialog(MasterScore* score, QWidget* parent);
+// drop the link and the imported lanes (undoable)
+void unlink(MasterScore* score);
+
+//---------------------------------------------------------
+//   Watcher
+//    re-imports a score's linked set when Live saves it (auto re-import on), once the file has
+//    settled (Live writes it in steps)
+//---------------------------------------------------------
+
+class Watcher : public QObject {
+      Q_OBJECT
+      QFileSystemWatcher* _watcher { nullptr };
+      QTimer* _settle { nullptr };
+      QString _pending;
+
+      void changed(const QString& path);
+      void reimport();
+
+   public:
+      static Watcher* instance();
+      Watcher();
+      void update();          // the open scores' links (after a score opens, closes, or links)
+      };
 
 }     // namespace LiveIntegration
 }     // namespace Ms

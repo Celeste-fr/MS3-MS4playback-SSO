@@ -29,6 +29,18 @@
 //     [{"part": index, "name": part name,
 //       "lanes": [{"target": "vibrato", "points": [[tick, value, "step" | "linear"], …]}, …]}]
 //   Parts found as partplayback.h finds them; parts of an excerpt follow their master's part.
+//   A lane may carry more keys, kept as they are (Lane::extra); "source" says where it comes from:
+//     none: MuseScore's own lane (editable);
+//     "live": imported from an Ableton Live Set (libmscore/liveset.h, LIVE.md) with "set" (the .als
+//       path), "setTime" (its modification time), "track", "param" / "paramId" (the plug-in
+//       parameter as Live names it) or "clipCC". **Read-only**: such a lane is drawn in Live only;
+//       MuseScore replaces the lanes of that source as a whole when it imports the set again
+//       (Automation::replaceSource) and nothing else may change them: a future lane editor must
+//       show them without letting them be edited (Lane::readOnly()).
+//     When the sound library plays through MIDI output (to Live), a "live" lane sends nothing
+//     (Live plays its own automation) but still holds its controller's place (no part value or
+//     staff text is sent for it); with the hosted plug-in it plays like any lane, so MuseScore alone
+//     sounds as Live did.
 //   Played (rendermidi, the sound library's parts): a lane takes the place of its controller's
 //   part value and staff texts; a MIDI controller's lane as controller events, a plug-in
 //   parameter's as parameter events to the hosted plug-in (Vst3Synth).
@@ -36,6 +48,7 @@
 
 #include <map>
 #include <vector>
+#include <QJsonObject>
 #include <QString>
 
 namespace Ms {
@@ -56,9 +69,14 @@ struct Point {
       bool operator<(const Point& o) const { return tick < o.tick; }
       };
 
+extern const char* const SOURCE_LIVE;     // "live"
+
 struct Lane {
       QString target;                     // a controller id, or "cc<n>"
       std::vector<Point> points;          // by tick
+      QJsonObject extra;                  // the lane's other keys ("source" …), written back as read
+      QString source() const;             // "": MuseScore's own; "live": from a Live Set
+      bool readOnly() const { return !source().isEmpty(); }   // (see above: never edited in MuseScore)
       int cc() const;                     // "cc<n>": n (0-127); else -1
       // the value at tick: -1 before the first point
       double valueAt(int tick) const;
@@ -73,6 +91,10 @@ std::map<const Part*, PartLanes> read(const MasterScore* score);
 QString write(const MasterScore* score, const std::map<const Part*, PartLanes>& lanes);    // empty: none
 // a part's lanes (its master part's)
 PartLanes lanes(const Part* part, const std::map<const Part*, PartLanes>& all);
+// all lanes with the given source replaced by `with` (by part; lanes of other sources kept):
+// the only way lanes of a source (a Live Set) change
+std::map<const Part*, PartLanes> replaceSource(const std::map<const Part*, PartLanes>& all, const QString& source,
+                                               const std::map<const Part*, PartLanes>& with);
 
 }     // namespace Automation
 }     // namespace Ms

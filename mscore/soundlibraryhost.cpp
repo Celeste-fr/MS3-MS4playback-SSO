@@ -9,6 +9,8 @@
 //=============================================================================
 
 #include "soundlibraryhost.h"
+#include "liveintegration.h"
+#include "libmscore/automation.h"
 #include "soundlibrarycheck.h"
 
 #include <algorithm>
@@ -1569,6 +1571,44 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
       }
       layout->addWidget(scoreBox);
 
+      // Ableton Live (liveintegration.h, LIVE.md): the automation drawn in Live, read-only here
+      {
+            QGroupBox* liveBox = new QGroupBox(tr("Ableton Live (this score)"), this);
+            QVBoxLayout* v = new QVBoxLayout(liveBox);
+            _liveSet = new QLabel(liveBox);
+            _liveSet->setWordWrap(true);
+            v->addWidget(_liveSet);
+            QHBoxLayout* h = new QHBoxLayout;
+            QPushButton* import = new QPushButton(tr("Import automation from Live Set…"), liveBox);
+            import->setToolTip(tr("Reads the automation of a saved Live Set (.als) into this score, per part (matched by MIDI "
+                                  "input, else by track name) and controller (by parameter name). Read-only in MuseScore: "
+                                  "edit it in Live and import again."));
+            _liveAuto = new QCheckBox(tr("Import again when Live saves it"), liveBox);
+            _liveUnlink = new QPushButton(tr("Unlink"), liveBox);
+            _liveUnlink->setToolTip(tr("Forget the set and remove its automation from this score"));
+            h->addWidget(import);
+            h->addWidget(_liveAuto);
+            h->addStretch();
+            h->addWidget(_liveUnlink);
+            v->addLayout(h);
+            layout->addWidget(liveBox);
+            connect(import, &QPushButton::clicked, this, [this]() {
+                  LiveIntegration::importDialog(_score, this);
+                  load();
+                  });
+            connect(_liveAuto, &QCheckBox::toggled, this, [this](bool on) {
+                  const QString path = LiveIntegration::linkedSet(_score);
+                  QString report;
+                  if (!path.isEmpty() && !LiveIntegration::importSet(_score, path, on, &report))
+                        QMessageBox::warning(this, windowTitle(), report);
+                  load();
+                  });
+            connect(_liveUnlink, &QPushButton::clicked, this, [this]() {
+                  LiveIntegration::unlink(_score);
+                  load();
+                  });
+      }
+
       // the library (every score)
       QGroupBox* libBox = new QGroupBox(tr("%1 (every score)").arg(_library->name), this);
       QVBoxLayout* lv = new QVBoxLayout(libBox);
@@ -1639,6 +1679,20 @@ void SoundLibraryOptions::load()
       for (auto& b : _balance) {
             const QSignalBlocker blocker(b.second);
             b.second->setValue(cal ? SoundLib::shortNotesBalance(_score, *cal, b.first) : 0.0);
+            }
+      if (_liveSet) {
+            bool autoReimport = true;
+            const QString set = LiveIntegration::linkedSet(_score, &autoReimport);
+            int lanes = 0;
+            for (const auto& pl : Automation::read(_score))
+                  for (const Automation::Lane& l : pl.second)
+                        lanes += l.source() == Automation::SOURCE_LIVE;
+            _liveSet->setText(set.isEmpty() ? tr("No Live Set linked.")
+                                            : tr("Linked: %1 (%n lane(s) of automation)", "", lanes).arg(QDir::toNativeSeparators(set)));
+            const QSignalBlocker b(_liveAuto);
+            _liveAuto->setChecked(autoReimport);
+            _liveAuto->setEnabled(!set.isEmpty());
+            _liveUnlink->setEnabled(!set.isEmpty());
             }
       if (_folder) {
             const QString folder = SoundLibraryHost::libraryFolder(*_library);

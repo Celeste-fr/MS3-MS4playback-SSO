@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A minimal Ableton Live 12 Set, written BY HAND from the schema open-source readers use (DawVert,
+  dawtool, abletoolz's Live 12 fixtures; see libmscore/liveset.h). The test gzips it into an .als.
+  UNVERIFIED until the owner's own Live 12 file is tried: in particular the MIDI input routing of a
+  single port and channel (only Live's default "MidiIn/External.All/-1" / "Ext: All Ins" is known)
+  and what the CurveControl attributes mean. Not a file made by Live.
+
+  Track "Strings 1": MIDI from "MuseScore A", channel 1 (the Violin part's route), Kontakt with
+    Vibrato automated (a ramp, then a curve, then a point in the repeat's second pass and one after it),
+    an "Unknown Knob" nothing maps to, the mixer's volume, and a looped MIDI clip at beats 8-16 whose
+    envelope ramps CC 21 over its 4-beat loop.
+  Track "Flute": all inputs (matched by name), a Kontakt slot named "#002 Tone" stepping 0 -> 1.
+-->
+<Ableton MajorVersion="5" MinorVersion="12.0_12203" SchemaChangeCount="3" Creator="Ableton Live 12.2.6" Revision="">
+  <LiveSet>
+    <Tracks>
+      <MidiTrack Id="12">
+        <LomId Value="0" />
+        <Name>
+          <EffectiveName Value="Strings 1" />
+          <UserName Value="Strings 1" />
+          <Annotation Value="" />
+        </Name>
+        <AutomationEnvelopes>
+          <Envelopes>
+            <AutomationEnvelope Id="0">
+              <EnvelopeTarget>
+                <PointeeId Value="1001" />
+              </EnvelopeTarget>
+              <Automation>
+                <Events>
+                  <FloatEvent Id="1" Time="-63072000" Value="0.25" />
+                  <FloatEvent Id="2" Time="0" Value="0.25" />
+                  <FloatEvent Id="3" Time="4" Value="1" CurveControl1X="0.2" CurveControl1Y="0.8" CurveControl2X="0.5" CurveControl2Y="1" />
+                  <FloatEvent Id="4" Time="8" Value="0.5" CurveControl1X="0.5" CurveControl1Y="0.5" CurveControl2X="0.5" CurveControl2Y="0.5" />
+                  <FloatEvent Id="5" Time="26" Value="0.9" />
+                  <FloatEvent Id="6" Time="34" Value="0.1" />
+                </Events>
+              </Automation>
+            </AutomationEnvelope>
+            <AutomationEnvelope Id="1">
+              <EnvelopeTarget>
+                <PointeeId Value="1002" />
+              </EnvelopeTarget>
+              <Automation>
+                <Events>
+                  <FloatEvent Id="7" Time="-63072000" Value="0" />
+                  <FloatEvent Id="8" Time="2" Value="0.7" />
+                </Events>
+              </Automation>
+            </AutomationEnvelope>
+            <AutomationEnvelope Id="2">
+              <EnvelopeTarget>
+                <PointeeId Value="2001" />
+              </EnvelopeTarget>
+              <Automation>
+                <Events>
+                  <FloatEvent Id="9" Time="-63072000" Value="0.85" />
+                  <FloatEvent Id="10" Time="0" Value="0.5" />
+                </Events>
+              </Automation>
+            </AutomationEnvelope>
+          </Envelopes>
+        </AutomationEnvelopes>
+        <DeviceChain>
+          <MidiInputRouting>
+            <Target Value="MidiIn/External.Dev:MuseScore A/0" />
+            <UpperDisplayString Value="Ext: MuseScore A" />
+            <LowerDisplayString Value="Ch. 1" />
+            <MpeSettings />
+          </MidiInputRouting>
+          <Mixer>
+            <Volume>
+              <LomId Value="0" />
+              <Manual Value="0.85" />
+              <AutomationTarget Id="2001">
+                <LockEnvelope Value="0" />
+              </AutomationTarget>
+            </Volume>
+          </Mixer>
+          <MainSequencer>
+            <ClipTimeable>
+              <ArrangerAutomation>
+                <Events>
+                  <MidiClip Id="0" Time="8">
+                    <LomId Value="0" />
+                    <CurrentStart Value="8" />
+                    <CurrentEnd Value="16" />
+                    <Loop>
+                      <LoopStart Value="0" />
+                      <LoopEnd Value="4" />
+                      <StartRelative Value="0" />
+                      <LoopOn Value="true" />
+                      <OutMarker Value="4" />
+                      <HiddenLoopStart Value="0" />
+                      <HiddenLoopEnd Value="4" />
+                    </Loop>
+                    <Name Value="" />
+                    <Envelopes>
+                      <Envelopes>
+                        <ClipEnvelope Id="0">
+                          <EnvelopeTarget>
+                            <PointeeId Value="3023" />
+                          </EnvelopeTarget>
+                          <Automation>
+                            <Events>
+                              <FloatEvent Id="11" Time="0" Value="0" />
+                              <FloatEvent Id="12" Time="4" Value="127" />
+                            </Events>
+                          </Automation>
+                        </ClipEnvelope>
+                      </Envelopes>
+                    </Envelopes>
+                    <Notes />
+                  </MidiClip>
+                </Events>
+              </ArrangerAutomation>
+            </ClipTimeable>
+            <MidiControllers>
+              <ControllerTargets.0 Id="3000">
+                <LockEnvelope Value="0" />
+              </ControllerTargets.0>
+              <ControllerTargets.23 Id="3023">
+                <LockEnvelope Value="0" />
+              </ControllerTargets.23>
+            </MidiControllers>
+          </MainSequencer>
+          <DeviceChain>
+            <Devices>
+              <PluginDevice Id="0">
+                <LomId Value="0" />
+                <On>
+                  <Manual Value="true" />
+                  <AutomationTarget Id="4001">
+                    <LockEnvelope Value="0" />
+                  </AutomationTarget>
+                </On>
+                <PluginDesc>
+                  <Vst3PluginInfo Id="0">
+                    <Preset>
+                      <Vst3Preset Id="0">
+                        <ProcessorState>
+                          00
+                        </ProcessorState>
+                        <ControllerState />
+                        <Name Value="" />
+                      </Vst3Preset>
+                    </Preset>
+                    <Name Value="Kontakt 8" />
+                    <Uid>
+                      <Fields.0 Value="1" />
+                      <Fields.1 Value="2" />
+                      <Fields.2 Value="3" />
+                      <Fields.3 Value="4" />
+                    </Uid>
+                    <DeviceType Value="1" />
+                  </Vst3PluginInfo>
+                </PluginDesc>
+                <ParameterList>
+                  <PluginFloatParameter Id="0">
+                    <ParameterName Value="Vibrato" />
+                    <ParameterId Value="1" />
+                    <VisualIndex Value="0" />
+                    <ParameterValue>
+                      <LomId Value="0" />
+                      <Manual Value="0.25" />
+                      <MidiControllerRange>
+                        <Min Value="0" />
+                        <Max Value="1" />
+                      </MidiControllerRange>
+                      <AutomationTarget Id="1001">
+                        <LockEnvelope Value="0" />
+                      </AutomationTarget>
+                      <ModulationTarget Id="1101">
+                        <LockEnvelope Value="0" />
+                      </ModulationTarget>
+                    </ParameterValue>
+                  </PluginFloatParameter>
+                  <PluginFloatParameter Id="1">
+                    <ParameterName Value="Unknown Knob" />
+                    <ParameterId Value="7" />
+                    <VisualIndex Value="1" />
+                    <ParameterValue>
+                      <Manual Value="0" />
+                      <AutomationTarget Id="1002">
+                        <LockEnvelope Value="0" />
+                      </AutomationTarget>
+                    </ParameterValue>
+                  </PluginFloatParameter>
+                  <PluginFloatParameter Id="2">
+                    <ParameterName Value="" />
+                    <ParameterId Value="-1" />
+                    <VisualIndex Value="1073741823" />
+                    <ParameterValue>
+                      <Manual Value="0" />
+                      <AutomationTarget Id="1003">
+                        <LockEnvelope Value="0" />
+                      </AutomationTarget>
+                    </ParameterValue>
+                  </PluginFloatParameter>
+                </ParameterList>
+              </PluginDevice>
+            </Devices>
+          </DeviceChain>
+        </DeviceChain>
+      </MidiTrack>
+      <MidiTrack Id="13">
+        <Name>
+          <EffectiveName Value="Flute" />
+          <UserName Value="" />
+        </Name>
+        <AutomationEnvelopes>
+          <Envelopes>
+            <AutomationEnvelope Id="0">
+              <EnvelopeTarget>
+                <PointeeId Value="5001" />
+              </EnvelopeTarget>
+              <Automation>
+                <Events>
+                  <FloatEvent Id="1" Time="-63072000" Value="0" />
+                  <FloatEvent Id="2" Time="4" Value="0" />
+                  <FloatEvent Id="3" Time="4" Value="1" />
+                </Events>
+              </Automation>
+            </AutomationEnvelope>
+          </Envelopes>
+        </AutomationEnvelopes>
+        <DeviceChain>
+          <MidiInputRouting>
+            <Target Value="MidiIn/External.All/-1" />
+            <UpperDisplayString Value="Ext: All Ins" />
+            <LowerDisplayString Value="" />
+          </MidiInputRouting>
+          <DeviceChain>
+            <Devices>
+              <PluginDevice Id="0">
+                <PluginDesc>
+                  <Vst3PluginInfo Id="0">
+                    <Name Value="Kontakt 8" />
+                  </Vst3PluginInfo>
+                </PluginDesc>
+                <ParameterList>
+                  <PluginFloatParameter Id="0">
+                    <ParameterName Value="#002 Tone" />
+                    <ParameterId Value="2" />
+                    <ParameterValue>
+                      <Manual Value="0" />
+                      <AutomationTarget Id="5001">
+                        <LockEnvelope Value="0" />
+                      </AutomationTarget>
+                    </ParameterValue>
+                  </PluginFloatParameter>
+                </ParameterList>
+              </PluginDevice>
+            </Devices>
+          </DeviceChain>
+        </DeviceChain>
+      </MidiTrack>
+    </Tracks>
+    <MainTrack>
+      <DeviceChain>
+        <Mixer>
+          <Tempo>
+            <LomId Value="0" />
+            <Manual Value="120" />
+            <AutomationTarget Id="8">
+              <LockEnvelope Value="0" />
+            </AutomationTarget>
+          </Tempo>
+        </Mixer>
+      </DeviceChain>
+    </MainTrack>
+  </LiveSet>
+</Ableton>

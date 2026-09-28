@@ -23,10 +23,16 @@ namespace Ms {
 namespace Automation {
 
 const char* const metaTag = "automation";
+const char* const SOURCE_LIVE = "live";
 
 //---------------------------------------------------------
 //   Lane
 //---------------------------------------------------------
+
+QString Lane::source() const
+      {
+      return extra.value("source").toString();
+      }
 
 int Lane::cc() const
       {
@@ -100,6 +106,9 @@ std::map<const Part*, PartLanes> read(const MasterScore* score)
                   lane.target = lo.value("target").toString();
                   if (lane.target.isEmpty())
                         continue;
+                  lane.extra = lo;
+                  lane.extra.remove("target");
+                  lane.extra.remove("points");
                   for (const QJsonValue& pv : lo.value("points").toArray()) {
                         const QJsonArray pa = pv.toArray();
                         if (pa.size() < 2)
@@ -140,7 +149,10 @@ QString write(const MasterScore* score, const std::map<const Part*, PartLanes>& 
                   for (const Point& p : lane.points)
                         pts.append(QJsonArray({ p.tick, std::round(p.value * 10000) / 10000,
                                                 p.curve == Curve::LINEAR ? "linear" : "step" }));
-                  la.append(QJsonObject({ { "target", lane.target }, { "points", pts } }));
+                  QJsonObject lo = lane.extra;
+                  lo["target"] = lane.target;
+                  lo["points"] = pts;
+                  la.append(lo);
                   }
             if (la.isEmpty())
                   continue;
@@ -157,6 +169,22 @@ PartLanes lanes(const Part* part, const std::map<const Part*, PartLanes>& all)
       {
       auto it = all.find(PartPlaybackModes::masterPart(part));
       return it == all.end() ? PartLanes() : it->second;
+      }
+
+std::map<const Part*, PartLanes> replaceSource(const std::map<const Part*, PartLanes>& all, const QString& source,
+                                               const std::map<const Part*, PartLanes>& with)
+      {
+      std::map<const Part*, PartLanes> out;
+      for (const auto& pl : all)
+            for (const Lane& l : pl.second)
+                  if (l.source() != source)
+                        out[pl.first].push_back(l);
+      for (const auto& pl : with)
+            for (const Lane& l : pl.second)
+                  out[pl.first].push_back(l);
+      for (auto i = out.begin(); i != out.end(); )
+            i = i->second.empty() ? out.erase(i) : std::next(i);
+      return out;
       }
 
 }     // namespace Automation
