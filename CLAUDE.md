@@ -300,6 +300,22 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   dB (Long: -35.2 dB at 32, -27.1 at 80, -26.7 at 127: little above mf); velocity moves a short far more
   (Spiccato -58.8 at 32 -> -19.4 at 127, Bartok 28 dB, Col legno 21 dB). So at pp the listed shorts are
   25 dB under the longs, at ff level with them: their velocity scale may need narrowing (open; the owner's ear).
+  **Dynamics calibration** (the owner, 2026-09-28: with section strings the staccatos were quiet again;
+  "me manually hearing for every single technique volume is not gonna cut it"): *Check articulations* ›
+  *Dynamics* measures each articulation along velocity = CC1 = 16, 32 … 112, 127
+  (`ArticulationCheck::CURVE_POINTS`, loudest 50 ms) plus velocity-only / CC1-only ends (`drivenBy`), and
+  merges the curves into `<setups folder>/dynamics.json` (`SoundLib::DynamicsCalibration`, loaded by
+  `SoundLibraryHost::loadCalibration` at startup / preferences / after a check). Playback
+  (`libVelocity` in rendermidi): a note whose articulation is measured on velocity plays
+  `calibratedVelocity`: the inverse of its curve at the held note's loudness (the articulation
+  `choose(patches, {long})` gives: the Performance legato) at the dynamic's CC, plus `balanceDb`
+  (*View › Sound Library…* "Short notes against held notes"); an accent keeps its share. No curve for
+  either: the `<Dynamics velocity>` rule. On the controller (tremolo, trills …): not adjustable (the CC is
+  the part's). summary.txt "# Dynamics balance": every measured articulation against the held note at
+  pp / mf / ff, now and as before, "!" past 3 dB (the automatic test). The other branch's data (control
+  titles, articulation names, key ranges per .nki) has no velocity layers or volumes; the library-files
+  extract's library.json would show velocity-split vs crossfaded layers but not loudness. Tests
+  `dynamicsCalibration`, `dynamicsCheck`.
   **Held notes on the Performance patch** (the owner, 2026-09-28: lone held notes quiet and "the pan is
   broken"; bar 12's lone pickup eighths barely audible): a part's slurred notes played "X - Performance"
   and its lone held / unmarked notes the All techniques patch's Long, another recording with its own

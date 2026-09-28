@@ -340,16 +340,25 @@ struct Player {
 //   dynamics
 //---------------------------------------------------------
 
+constexpr int ArticulationCheck::CURVE_POINTS[8];
+
+const char* ArticulationCheck::DynamicsResult::drivenBy() const
+      {
+      const double v = velocityDb[1] - velocityDb[0], c = ccDb[1] - ccDb[0];
+      return v >= 3 && c >= 3 ? "both" : v >= 3 ? "velocity" : c >= 3 ? "controller" : "neither";
+      }
+
 std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3Plugin* plugin, const std::vector<int>& values,
-   const std::vector<int>& pitches, const std::vector<std::array<Level, 3>>& sent, const Settings& settings, Progress progress)
+   const std::vector<int>& pitches, const Settings& settings, Progress progress)
       {
       std::vector<DynamicsResult> out;
       const int n = int(values.size());
-      if (!plugin || n == 0 || int(pitches.size()) != n || int(sent.size()) != n)
+      if (!plugin || n == 0 || int(pitches.size()) != n)
             return out;
       Player player { plugin, settings, {} };
       int done = 0;
-      const int total = 7 * n;
+      const int points = int(sizeof(CURVE_POINTS) / sizeof(CURVE_POINTS[0]));
+      const int total = (points + 4) * n;
       auto at = [&](int value, int pitch, int velocity, int cc, double* db) {
             player.s.velocity = qBound(1, velocity, 127);
             player.s.dynamicsValue = qBound(0, cc, 127);
@@ -361,9 +370,12 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
             DynamicsResult r;
             r.value = values[i];
             r.pitch = pitches[i];
-            for (int k = 0; k < 3; ++k)
-                  if (!at(r.value, r.pitch, sent[i][k].velocity, sent[i][k].cc, &r.sentDb[k]))
+            for (int x : CURVE_POINTS) {
+                  double db;
+                  if (!at(r.value, r.pitch, x, x, &db))
                         return out;
+                  r.curve.push_back({ x, db });
+                  }
             const int lo = 32, hi = 127, mid = 100;
             if (!at(r.value, r.pitch, lo, mid, &r.velocityDb[0]) || !at(r.value, r.pitch, hi, mid, &r.velocityDb[1])
                 || !at(r.value, r.pitch, mid, lo, &r.ccDb[0]) || !at(r.value, r.pitch, mid, hi, &r.ccDb[1]))

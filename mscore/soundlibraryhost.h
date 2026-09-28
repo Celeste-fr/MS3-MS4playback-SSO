@@ -114,6 +114,10 @@ class SoundLibraryHost : public QObject {
       // owner works in is never touched)
       static void setDataFolder(const QString& folder);
       static QString setupsFolder(const SoundLib::Library& library);
+      // the dynamics calibration (Check articulations › Dynamics): <setups folder>/dynamics.json,
+      // read into SoundLib::dynamicsCalibration for the current library
+      static QString calibrationFile(const SoundLib::Library& library);
+      static void loadCalibration();
 
       // setups made by MuseScore
       static bool makesSetups(const SoundLib::Library& library);        // the map has <Files>
@@ -178,6 +182,7 @@ class SoundLibraryDialog : public QDialog {
       QDoubleSpinBox* _tolerance { nullptr };
       QDoubleSpinBox* _tail { nullptr };
       QSpinBox* _maxLanes { nullptr };
+      QDoubleSpinBox* _balance { nullptr };   // the calibration's short notes against held ones (dB)
       QTableWidget* _table;
       void setLaneSettings(bool libraryDefaults);
 

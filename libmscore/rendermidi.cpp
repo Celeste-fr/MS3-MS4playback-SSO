@@ -1203,10 +1203,26 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         events->registerChannel(libChannel);
                   const std::vector<const SoundLib::LibInstrument*> libPatches = li ? lp->patchesFor(li)
                                                                                      : std::vector<const SoundLib::LibInstrument*>();
-                  // a short (Spitfire: velocity, not CC1, sets its dynamics) at its level on the CC's scale,
-                  // so it follows the dynamics as the longs do; -1: MS4's velocity
-                  auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r) {
-                        return c && lp->velocityDynamics.contains(c.base) ? r.levelVelocity : -1;
+                  // a short (Spitfire: velocity, not CC1, sets its dynamics): measured (Check articulations ›
+                  // Dynamics), the velocity at which it is as loud as the part's held note at this dynamic;
+                  // else, listed in <Dynamics velocity>, its level on the CC's scale. An accent's share
+                  // (levelVelocity over the plain level) on top. -1: MS4's velocity
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::dynamicsCalibration() : nullptr;
+                  auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
+                        if (!c)
+                              return -1;
+                        const int cc = Ms4::expressionLevel(dynLevel);
+                        const double accent = cc > 0 ? double(r.levelVelocity) / cc : 1.0;
+                        if (cal) {
+                              const SoundLib::Choice held = SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} });
+                              if (held) {
+                                    const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
+                                                                               libPatches[held.patch]->name, held.articulation->value, cc);
+                                    if (v > 0)
+                                          return qBound(1, int(std::lround(v * accent)), 127);
+                                    }
+                              }
+                        return lp->velocityDynamics.contains(c.base) ? r.levelVelocity : -1;
                         };
                   auto librarySwitch = [&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
@@ -1323,7 +1339,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!li->kit && !note->tieBack()) {
                                     const Chord* ch = note->chord();
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
-                                    libNote.velocity = libVelocity(libChoice, r);
+                                    libNote.velocity = libVelocity(libChoice, r, level);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {
@@ -1382,7 +1398,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               noteChannel = libChannel;
                               if (!li->kit) {
                                     libChoice = librarySwitch(note, noteArts, start, length);
-                                    libNote.velocity = libVelocity(libChoice, r);
+                                    libNote.velocity = libVelocity(libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {

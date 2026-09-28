@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <QtTest/QtTest>
+#include <QTemporaryDir>
 #include <QPainter>
 
 #include "audio/midi/event.h"
@@ -53,6 +54,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void dynamicsCalibration();
       void heldOnPerformance();
       void dynamicsCheck();
       void shortsFollowDynamics();
@@ -1841,21 +1843,22 @@ void TestSoundLibrary::dynamicsCheck()
       QVERIFY(p->setOffline(true));
       AC::Settings s;
       s.pitch = 67;
-      const std::array<AC::Level, 3> onCC { { { 56, 32 }, { 65, 80 }, { 70, 112 } } };
-      const std::array<AC::Level, 3> onVelocity { { { 32, 32 }, { 80, 80 }, { 112, 112 } } };
       int steps = 0;
-      const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, { onCC, onVelocity }, s,
-                                                             [&](int, int) { ++steps; return true; });
-      QCOMPARE(steps, 14);
+      const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, s, [&](int, int) { ++steps; return true; });
+      QCOMPARE(steps, 24);
       QCOMPARE(int(r.size()), 2);
       const double expected = 20 * std::log10(127.0 / 32.0);
       for (const AC::DynamicsResult& d : r) {
             QVERIFY2(std::fabs(d.velocityDb[1] - d.velocityDb[0] - expected) < 2.0, qPrintable(QString::number(d.velocityDb[1] - d.velocityDb[0])));
             QVERIFY2(std::fabs(d.ccDb[1] - d.ccDb[0] - expected) < 2.0, qPrintable(QString::number(d.ccDb[1] - d.ccDb[0])));
-            QVERIFY(d.sentDb[0] < d.sentDb[1] && d.sentDb[1] < d.sentDb[2]);
+            QCOMPARE(QString(d.drivenBy()), QString("both"));
+            QCOMPARE(int(d.curve.size()), 8);
+            // velocity * CC along x = both: 40 log(127 / 16) = 36 dB from 16 to 127
+            QVERIFY2(std::fabs(d.curve.back().second - d.curve.front().second - 40 * std::log10(127.0 / 16.0)) < 2.5,
+                     qPrintable(QString::number(d.curve.back().second - d.curve.front().second)));
+            for (size_t i = 1; i < d.curve.size(); ++i)
+                  QVERIFY(d.curve[i].second > d.curve[i - 1].second);
             }
-      // as sent: velocity and CC1 together on the velocity list's scale climb more than CC1 alone
-      QVERIFY(r[1].sentDb[2] - r[1].sentDb[0] > r[0].sentDb[2] - r[0].sentDb[0] + 6);
       }
 
 //---------------------------------------------------------
@@ -1894,6 +1897,76 @@ void TestSoundLibrary::heldOnPerformance()
       QCOMPARE(chosen({ "legato", "long" }, {}), QString("1 Legato"));      // slurred
       QCOMPARE(chosen({ "short" }, {}), QString("0 Staccato"));
       QCOMPARE(chosen({ "long" }, { "muted" }), QString("0 Long CS"));       // con sord.
+      }
+
+//---------------------------------------------------------
+//   dynamicsCalibration
+//    measured curves (Check articulations › Dynamics): a short plays the velocity at which it is as
+//    loud as the part's held note at the note's dynamic (plus the balance setting); an accent keeps
+//    its share; without a curve for the held note, the <Dynamics velocity> rule
+//---------------------------------------------------------
+
+void TestSoundLibrary::dynamicsCalibration()
+      {
+      // Long on the controller: -40 + 0.1 x dB; Staccato on velocity: -70 + 0.4 x dB
+      auto line = [](const char* by, double a, double b) {
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = by;
+            for (int x : { 16, 32, 48, 64, 80, 96, 112, 127 })
+                  c.points.push_back({ x, a + b * x });
+            return c;
+            };
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal->setCurve("Violin", 1, line("controller", -40, 0.1));
+      cal->setCurve("Violin", 40, line("velocity", -70, 0.4));
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-70 + 0.4 * 50), 50);
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-100), 16);          // under the curve: its lowest x
+      QCOMPARE(cal->curve("Violin", 40)->inverse(0), 127);
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 1, "Violin", 1, 80), -1);    // on the controller
+      // pp (CC 32): -36.8 dB -> the staccato's velocity 83; mf (80): -32 -> 95
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 40, "Violin", 1, 32), 83);
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 40, "Violin", 1, 80), 95);
+      // written and read back
+      QTemporaryDir dir;
+      cal->balanceDb = -2;
+      QVERIFY(cal->write(dir.path() + "/dynamics.json"));
+      auto back = std::make_shared<SoundLib::DynamicsCalibration>();
+      QVERIFY(back->read(dir.path() + "/dynamics.json"));
+      QCOMPARE(back->balanceDb, -2.0);
+      QCOMPARE(back->curve("Violin", 40)->drivenBy, QString("velocity"));
+      QCOMPARE(int(back->curve("Violin", 40)->points.size()), 8);
+      // -2 dB: pp -38.8 -> 78
+      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32), 78);
+
+      // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
+      back->balanceDb = 0;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setDynamicsCalibration(back);
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::vector<int> velo;
+      for (const auto& te : events)
+            if (te.second.channel() == ch && te.second.type() == ME_NOTEON && te.second.velo() > 0)
+                  velo.push_back(te.second.velo());
+      SoundLib::setDynamicsCalibration(nullptr);
+      QCOMPARE(int(velo.size()), 9);
+      QCOMPARE(velo[0], 83);
+      QCOMPARE(velo[1], 83);
+      QCOMPARE(velo[3], 95);
+      QVERIFY2(velo[6] > 83 && velo[6] <= 127, qPrintable(QString::number(velo[6])));       // accented pp
+      delete score;
       }
 
 QTEST_MAIN(TestSoundLibrary)

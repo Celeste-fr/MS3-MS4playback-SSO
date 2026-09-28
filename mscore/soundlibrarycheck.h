@@ -82,6 +82,7 @@ class ArticulationCheckDialog : public QDialog {
       QCheckBox* _quick;
       QCheckBox* _pitchBend;
       QCheckBox* _dynamics;
+      QString balanceReport() const;
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;

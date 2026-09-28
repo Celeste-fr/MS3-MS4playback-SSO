@@ -13,10 +13,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 #include <set>
 
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
@@ -512,6 +516,126 @@ void setAvailable(std::function<bool(const LibInstrument&)> available)
 void routesChanged()
       {
       ++generation;
+      }
+
+//---------------------------------------------------------
+//   DynamicsCalibration
+//---------------------------------------------------------
+
+double DynamicsCurve::at(int x) const
+      {
+      if (points.empty())
+            return -200;
+      if (x <= points.front().first)
+            return points.front().second;
+      for (size_t i = 1; i < points.size(); ++i) {
+            if (x <= points[i].first) {
+                  const auto& a = points[i - 1];
+                  const auto& b = points[i];
+                  return a.second + (b.second - a.second) * (x - a.first) / double(b.first - a.first);
+                  }
+            }
+      return points.back().second;
+      }
+
+int DynamicsCurve::inverse(double db) const
+      {
+      // the lowest x that reaches db (a curve with a dip from round robins: the first crossing)
+      if (points.empty())
+            return -1;
+      if (db <= points.front().second)
+            return std::max(1, points.front().first);
+      for (size_t i = 1; i < points.size(); ++i) {
+            const auto& a = points[i - 1];
+            const auto& b = points[i];
+            if (db <= b.second && b.second > a.second)
+                  return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), 127);
+            }
+      return 127;
+      }
+
+const DynamicsCurve* DynamicsCalibration::curve(const QString& patch, int value) const
+      {
+      auto p = _patches.find(patch);
+      if (p == _patches.end())
+            return nullptr;
+      auto v = p->second.find(value);
+      return v == p->second.end() ? nullptr : &v->second;
+      }
+
+bool DynamicsCalibration::read(const QString& file)
+      {
+      QFile f(file);
+      if (!f.open(QIODevice::ReadOnly))
+            return false;
+      const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+      balanceDb = o.value("balanceDb").toDouble(0);
+      _patches.clear();
+      const QJsonObject patches = o.value("patches").toObject();
+      for (auto p = patches.begin(); p != patches.end(); ++p) {
+            const QJsonObject arts = p.value().toObject();
+            for (auto a = arts.begin(); a != arts.end(); ++a) {
+                  const QJsonObject c = a.value().toObject();
+                  DynamicsCurve curve;
+                  curve.drivenBy = c.value("drivenBy").toString();
+                  for (const QJsonValue& pt : c.value("curve").toArray())
+                        curve.points.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                  std::sort(curve.points.begin(), curve.points.end());
+                  _patches[p.key()][a.key().toInt()] = curve;
+                  }
+            }
+      return true;
+      }
+
+bool DynamicsCalibration::write(const QString& file) const
+      {
+      QJsonObject patches;
+      for (const auto& p : _patches) {
+            QJsonObject arts;
+            for (const auto& a : p.second) {
+                  QJsonArray pts;
+                  for (const auto& pt : a.second.points)
+                        pts.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
+                  arts[QString::number(a.first)] = QJsonObject({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
+                  }
+            patches[p.first] = arts;
+            }
+      QJsonObject o;
+      o["balanceDb"] = balanceDb;
+      o["patches"] = patches;
+      QFile f(file);
+      if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+      f.write(QJsonDocument(o).toJson());
+      return true;
+      }
+
+static std::mutex calibrationMutex;
+static std::shared_ptr<const DynamicsCalibration> calibration;
+
+void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c)
+      {
+      {
+            std::lock_guard<std::mutex> lock(calibrationMutex);
+            calibration = c;
+      }
+      ++generation;
+      }
+
+std::shared_ptr<const DynamicsCalibration> dynamicsCalibration()
+      {
+      std::lock_guard<std::mutex> lock(calibrationMutex);
+      return calibration;
+      }
+
+int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
+                       const QString& refPatch, int refValue, int cc)
+      {
+      const DynamicsCurve* c = cal.curve(patch, value);
+      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
+      if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+            return -1;
+      return c->inverse(ref->at(cc) + cal.balanceDb);
       }
 
 int routesGeneration()

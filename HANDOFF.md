@@ -104,6 +104,11 @@ patches, whose keys at their defaults aren't known yet: a key scan of those, or 
 
 ## Dynamics across techniques (2026-09-28)
 
+Calibration in (see `CLAUDE.md` › Dynamics calibration). Next: the owner runs *Check articulations* with
+*Dynamics* on the patches used, WITH their Performance patches (held notes play those), e.g. Violins 1,
+Violins 2, Violas, Celli, Basses and their "- Performance"; hands back the zip; the summary's
+"# Dynamics balance" shows what's left ("!" lines).
+
 Shorts on velocity now follow the dynamics (see `CLAUDE.md` › Shorts). Next: the owner runs *Check articulations*
 with *Dynamics* ticked on the patches they use (one per family at least: strings, woodwinds, brass, a
 Performance patch) and hands back the zip; from summary.txt, fix `<Dynamics velocity>` in `gen_spitfire_sso.py`

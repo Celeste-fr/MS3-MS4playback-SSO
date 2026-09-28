@@ -563,6 +563,7 @@ void updateExternalValuesFromPreferences() {
                   s->setPlaylistDirty();
             mscore->updatePlaybackMode();
             }
+      SoundLibraryHost::loadCalibration();      // (the library's measured dynamics, when there)
       const SoundLib::Output output = (SoundLibraryHost::available() && preferences.getString(PREF_IO_SOUNDLIBRARY_OUTPUT) != "midi")
                                       ? SoundLib::Output::PLUGIN : SoundLib::Output::MIDI;
       if (output != SoundLib::output()) {
