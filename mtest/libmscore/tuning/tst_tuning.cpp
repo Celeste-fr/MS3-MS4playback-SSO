@@ -72,12 +72,12 @@ static QMap<QString, const Note*> notes(Score* score)
                   Element* e = s->element(t);
                   if (!e || !e->isChord())
                         continue;
-                  Chord* c = toChord(e);
-                  auto add = [&](const Chord* ch, int grace) {
+                  Ms::Chord* c = toChord(e);
+                  auto add = [&](const Ms::Chord* ch, int grace) {
                         for (const Note* n : ch->notes())
                               m.insert(QString("%1:%2:%3:%4:%5").arg(t / VOICES).arg(s->tick().ticks()).arg(t).arg(n->pitch()).arg(grace), n);
                         };
-                  for (const Chord* g : c->graceNotes())
+                  for (const Ms::Chord* g : c->graceNotes())
                         add(g, 1);
                   add(c, 0);
                   }
@@ -111,11 +111,11 @@ static const Accidental* accidentalInForce(const Note* n)
                   Element* e = s->element(t);
                   if (!e || !e->isChord())
                         continue;
-                  QList<const Chord*> chords;
-                  for (const Chord* g : toChord(e)->graceNotes())
+                  QList<const Ms::Chord*> chords;
+                  for (const Ms::Chord* g : toChord(e)->graceNotes())
                         chords.append(g);
                   chords.append(toChord(e));
-                  for (const Chord* c : chords)
+                  for (const Ms::Chord* c : chords)
                         for (const Note* o : c->notes())
                               if (o->line() == n->line() && o->accidental() && (s->tick() < n->chord()->tick() || o == n))
                                     found = o->accidental();
@@ -157,11 +157,11 @@ static double pluginRounded(const Note* n)
                   Element* e = s->element(t);
                   if (!e || !e->isChord())
                         continue;
-                  QList<const Chord*> chords;
-                  for (const Chord* g : toChord(e)->graceNotes())
+                  QList<const Ms::Chord*> chords;
+                  for (const Ms::Chord* g : toChord(e)->graceNotes())
                         chords.append(g);
                   chords.append(toChord(e));
-                  for (const Chord* c : chords)
+                  for (const Ms::Chord* c : chords)
                         for (const Note* o : c->notes())
                               if (o->line() == n->line() && o->accidental()) {
                                     const QString name = Sym::id2name(o->accidental()->symbol());
