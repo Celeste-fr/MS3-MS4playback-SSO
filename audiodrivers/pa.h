@@ -60,6 +60,8 @@ class Portaudio : public Driver {
 #ifdef USE_PORTMIDI
       virtual void putEvent(const NPlayEvent&, unsigned framePos) override;
       virtual bool canOutputMidi() const override;
+      virtual bool canOutputSync() const override;
+      virtual void putSync(int status, int value, unsigned framePos) override;
 #endif
 
       int framePos() const;

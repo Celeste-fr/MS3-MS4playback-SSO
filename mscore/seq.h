@@ -24,6 +24,7 @@
 #include "libmscore/sequencer.h"
 #include "libmscore/fraction.h"
 #include "libmscore/fifo.h"
+#include "libmscore/midisync.h"
 
 #include "audio/midi/event.h"
 #include "audiodrivers/driver.h"
@@ -207,6 +208,21 @@ class Seq : public QObject, public Sequencer {
       qreal independentTickVolume;
 
       unsigned initialMillisecondTimestampWithLatency; // millisecond timestamp (relative to PortAudio's initialization) of start of playback
+
+      // MIDI sync out (libmscore/midisync.h, LIVE.md), realtime thread only: clock, SPP, start / stop
+      // to the driver's sync port, timed within each period like the notes
+      struct SyncOut {
+            unsigned frame;               // in this period
+            int status;
+            int value;
+            };
+      static constexpr int MAX_SYNC_OUT = 512;
+      MidiSync::Clock syncClock;
+      bool syncStartPending { false };    // playing: start once the score (not the count-in) plays
+      SyncOut syncOut[MAX_SYNC_OUT];
+      int syncOutCount { 0 };
+      int syncOutDone { 0 };
+      void syncFlush(unsigned framePos);
 
       QTimer* heartBeatTimer;
       QTimer* noteTimer;

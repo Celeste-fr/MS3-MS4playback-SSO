@@ -1114,11 +1114,14 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                         countInEvents.clear();
                         inCountIn = true;
                         }
+                  syncStartPending = true;      // (MIDI sync out: when the score plays)
                   emit toGui('1');
                   }
             // Got a message from JACK Transport panel: Stop
             else if (state == Transport::PLAY && driverState == Transport::STOP) {
                   state = Transport::STOP;
+                  syncStartPending = false;
+                  syncClock.stop(0, [this](const MidiSync::Message& m) { _driver->putSync(m.status, m.value, 0); });
                   // Muting all notes
                   stopNotes(-1, true);
                   initInstruments(true);
@@ -1171,6 +1174,27 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
             // play events for one segment
             //
             unsigned framePos = 0; // frame currently being processed relative to the first frame of this call to Seq::process
+
+            // MIDI sync out: this period's clocks (and the start) at their frames, sent in order with
+            // the notes (syncFlush), as the notes are timed: from the tempo map, the Play Panel's
+            // relative tempo included (utick2utime)
+            syncOutCount = syncOutDone = 0;
+            if (!inCountIn && _driver->canOutputSync()) {
+                  const int startFrame = *pPlayFrame;
+                  const double sr = MScore::sampleRate;
+                  auto out = [this, startFrame, sr](const MidiSync::Message& m) {
+                        if (syncOutCount >= MAX_SYNC_OUT)
+                              return;
+                        const double f = m.seconds * sr - startFrame;
+                        syncOut[syncOutCount++] = { f > 0 ? unsigned(f) : 0u, m.status, m.value };
+                        };
+                  if (syncStartPending) {
+                        syncStartPending = false;
+                        const double now = startFrame / sr;
+                        syncClock.start(cs->utime2utick(now), now, out);
+                        }
+                  syncClock.run((startFrame + double(framesPerPeriod)) / sr, [this](int utick) { return cs->utick2utime(utick); }, out);
+                  }
             int periodEndFrame = *pPlayFrame + framesPerPeriod; // the ending frame (relative to start of playback) of the period being processed by this call to Seq::process
             int scoreEndUTick = cs->repeatList().tick2utick(cs->lastMeasure()->endTick().ticks());
             while (*pPlayPos != pEventsEnd) {
@@ -1265,6 +1289,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               }
                         }
                   const NPlayEvent& event = (*pPlayPos)->second;
+                  syncFlush(framePos);
                   playEvent(event, framePos);
                   if (event.type() == ME_TICK1) {
                         const qreal volume =
@@ -1330,6 +1355,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               }
                         }
                   }
+            syncFlush(~0u);
             if (*pPlayPos == pEventsEnd) {
                   if (inCountIn) {
                         inCountIn = false;
@@ -1582,9 +1608,25 @@ void Seq::setPos(int utick)
       if (utick != ucur)
             updateSynthesizerState(ucur, utick);
 
+      // MIDI sync out: a jump while playing is Stop, SPP, Continue; while stopped the SPP alone
+      // (a count-in's start waits: it starts from here)
+      if (_driver && _driver->canOutputSync())
+            syncClock.locate(utick, 0, [this](const MidiSync::Message& m) { _driver->putSync(m.status, m.value, 0); });
+
       playFrame = cs->utick2utime(utick) * MScore::sampleRate;
       playPos   = events.lower_bound(utick);
       mutex.unlock();
+      }
+
+//---------------------------------------------------------
+//   syncFlush
+//    MIDI sync out: this period's messages due by framePos (realtime thread)
+//---------------------------------------------------------
+
+void Seq::syncFlush(unsigned framePos)
+      {
+      for (; syncOutDone < syncOutCount && syncOut[syncOutDone].frame <= framePos; ++syncOutDone)
+            _driver->putSync(syncOut[syncOutDone].status, syncOut[syncOutDone].value, syncOut[syncOutDone].frame);
       }
 
 //---------------------------------------------------------

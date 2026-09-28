@@ -370,6 +370,31 @@ bool Portaudio::canOutputMidi() const
       PortMidiDriver* portMidiDriver = static_cast<PortMidiDriver*>(midiDriver);
       return portMidiDriver && portMidiDriver->canOutput();
       }
+
+//---------------------------------------------------------
+//   canOutputSync / putSync
+//    MIDI sync out (libmscore/midisync.h): timestamped like the notes
+//---------------------------------------------------------
+
+bool Portaudio::canOutputSync() const
+      {
+      PortMidiDriver* portMidiDriver = static_cast<PortMidiDriver*>(midiDriver);
+      return portMidiDriver && portMidiDriver->getSyncStream();
+      }
+
+void Portaudio::putSync(int status, int value, unsigned framePos)
+      {
+      PortMidiDriver* portMidiDriver = static_cast<PortMidiDriver*>(midiDriver);
+      PmStream* stream = portMidiDriver ? portMidiDriver->getSyncStream() : nullptr;
+      if (!stream)
+            return;
+      const int msg = status == 0xF2 ? Pm_Message(status, value & 0x7F, (value >> 7) & 0x7F) : Pm_Message(status, 0, 0);
+      if (midiOutputTrace)
+            qDebug("MidiSync: %02x %d at frame %u", status, value, framePos);
+      PmError error = Pm_WriteShort(stream, seq->getCurrentMillisecondTimestampWithLatency(framePos), msg);
+      if (error != pmNoError)
+            qDebug("Portaudio: sync error %d", error);
+      }
 #endif
 
 //---------------------------------------------------------

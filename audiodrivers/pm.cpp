@@ -59,6 +59,8 @@ PortMidiDriver::~PortMidiDriver()
             Pt_Stop();
             Pm_Close(inputStream);
             }
+      if (syncStream && syncStreamOwned)
+            Pm_Close(syncStream);
       for (PmStream* s : extraOutputStreams)
             if (s)
                   Pm_Close(s);
@@ -145,6 +147,30 @@ bool PortMidiDriver::init()
                         qDebug("PortMidi: open output %c (id=%d) failed: %s", 'B' + i, id, Pm_GetErrorText(error));
                         extraOutputStreams[i] = nullptr;
                         }
+                  }
+            }
+
+      // MIDI sync out (midisync.h; for a DAW that follows MuseScore, LIVE.md): its own port, or
+      // an output above when it is the same device (a device can be opened once)
+      const QString syncName = preferences.getString(PREF_IO_PORTMIDI_SYNCDEVICE);
+      const int syncId = syncName.isEmpty() ? pmNoDevice : getDeviceOut(syncName);
+      if (syncId != pmNoDevice) {
+            const char* const extraPrefs[3] = { PREF_IO_PORTMIDI_OUTPUTDEVICE_B, PREF_IO_PORTMIDI_OUTPUTDEVICE_C, PREF_IO_PORTMIDI_OUTPUTDEVICE_D };
+            if (syncId == outputId)
+                  syncStream = outputStream;
+            for (int i = 0; i < 3 && !syncStream; ++i)
+                  if (extraOutputStreams[i] && getDeviceOut(preferences.getString(extraPrefs[i])) == syncId)
+                        syncStream = extraOutputStreams[i];
+            if (!syncStream) {
+                  PmError error = Pm_OpenOutput(&syncStream, syncId, (void*)DRIVER_INFO,
+                     preferences.getInt(PREF_IO_PORTMIDI_OUTPUTBUFFERCOUNT), ((PmTimeProcPtr) Pt_Time), (void*)TIME_INFO,
+                     preferences.getInt(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS));
+                  if (error != pmNoError) {
+                        qDebug("PortMidi: open sync output (id=%d) failed: %s", syncId, Pm_GetErrorText(error));
+                        syncStream = nullptr;
+                        }
+                  else
+                        syncStreamOwned = true;
                   }
             }
 

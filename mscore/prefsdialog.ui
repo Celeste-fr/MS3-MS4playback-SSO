@@ -3184,7 +3184,30 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
             </property>
            </widget>
           </item>
-          <item row="3" column="0" colspan="6">
+          <item row="3" column="0">
+           <widget class="QLabel" name="portMidiSyncLabel">
+            <property name="text">
+             <string>MIDI sync output:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1" colspan="5">
+           <widget class="QComboBox" name="portMidiSync">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="toolTip">
+             <string>MIDI clock, song position and start / stop, for a program that follows MuseScore's playback (Ableton Live: turn Sync on for this port's input). A port of its own is best.</string>
+            </property>
+            <property name="accessibleName">
+             <string>MIDI sync output</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="0" colspan="6">
            <widget class="QLabel" name="soundLibraryInfo">
             <property name="text">
              <string>Parts the library has an instrument for play with the articulation their notation asks for, instead of on the built-in synthesizer: through the library's plug-in, hosted by MuseScore (its setup per instrument: View › Sound Library…), or through MIDI output (A, then B, C, D: 16 parts each) to a host of its own. Needs the MuseScore 4 dynamics method (Synthesizer).</string>

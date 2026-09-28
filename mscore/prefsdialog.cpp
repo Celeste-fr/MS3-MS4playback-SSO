@@ -562,6 +562,7 @@ void PreferenceDialog::start()
                   new StringPreferenceItem(PREF_IO_PORTMIDI_OUTPUTDEVICE_B, portMidiOutputB, doNothing, doNothing),
                   new StringPreferenceItem(PREF_IO_PORTMIDI_OUTPUTDEVICE_C, portMidiOutputC, doNothing, doNothing),
                   new StringPreferenceItem(PREF_IO_PORTMIDI_OUTPUTDEVICE_D, portMidiOutputD, doNothing, doNothing),
+                  new StringPreferenceItem(PREF_IO_PORTMIDI_SYNCDEVICE, portMidiSync, doNothing, doNothing),
                   new IntPreferenceItem(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS, portMidiOutputLatencyMilliseconds),
             #endif
                   new StringPreferenceItem(PREF_IO_SOUNDLIBRARY, soundLibrary, doNothing, doNothing),
@@ -786,7 +787,8 @@ void PreferenceDialog::updateValues(bool useDefaultValues, bool setup)
                         const std::pair<QComboBox*, const char*> extraOutputs[] = {
                               { portMidiOutputB, PREF_IO_PORTMIDI_OUTPUTDEVICE_B },
                               { portMidiOutputC, PREF_IO_PORTMIDI_OUTPUTDEVICE_C },
-                              { portMidiOutputD, PREF_IO_PORTMIDI_OUTPUTDEVICE_D } };
+                              { portMidiOutputD, PREF_IO_PORTMIDI_OUTPUTDEVICE_D },
+                              { portMidiSync, PREF_IO_PORTMIDI_SYNCDEVICE } };
                         for (const auto& eo : extraOutputs) {
                               eo.first->clear();
                               eo.first->addItem("", -1);
@@ -821,6 +823,7 @@ void PreferenceDialog::updateValues(bool useDefaultValues, bool setup)
             soundLibraryPluginBrowse->setEnabled(plugin);
 #ifndef USE_PORTMIDI
             for (QWidget* w : { static_cast<QWidget*>(portMidiOutputB), static_cast<QWidget*>(portMidiOutputC), static_cast<QWidget*>(portMidiOutputD),
+                                static_cast<QWidget*>(portMidiSync), static_cast<QWidget*>(portMidiSyncLabel),
                                 static_cast<QWidget*>(portMidiOutputBLabel), static_cast<QWidget*>(portMidiOutputCLabel), static_cast<QWidget*>(portMidiOutputDLabel) })
                   w->setVisible(false);
 #endif
@@ -1663,12 +1666,14 @@ void PreferenceDialog::apply()
             const bool midiOutputsChanged = preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE) != portMidiOutput->currentText()
                || preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE_B) != portMidiOutputB->currentText()
                || preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE_C) != portMidiOutputC->currentText()
-               || preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE_D) != portMidiOutputD->currentText();
+               || preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE_D) != portMidiOutputD->currentText()
+               || preferences.getString(PREF_IO_PORTMIDI_SYNCDEVICE) != portMidiSync->currentText();
             preferences.setPreference(PREF_IO_PORTMIDI_INPUTDEVICE, portMidiInput->currentText());
             preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE, portMidiOutput->currentText());
             preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE_B, portMidiOutputB->currentText());
             preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE_C, portMidiOutputC->currentText());
             preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTDEVICE_D, portMidiOutputD->currentText());
+            preferences.setPreference(PREF_IO_PORTMIDI_SYNCDEVICE, portMidiSync->currentText());
             preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS, portMidiOutputLatencyMilliseconds->value());
             if (seq->driver() && static_cast<PortMidiDriver*>(static_cast<Portaudio*>(seq->driver())->mididriver())->isSameCoreMidiIacBus(preferences.getString(PREF_IO_PORTMIDI_INPUTDEVICE), preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE))) {
                   QMessageBox msgBox;

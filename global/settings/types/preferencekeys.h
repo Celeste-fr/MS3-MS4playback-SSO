@@ -137,6 +137,7 @@
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_B                     "io/portMidi/outputDeviceB"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_C                     "io/portMidi/outputDeviceC"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_D                     "io/portMidi/outputDeviceD"
+#define PREF_IO_PORTMIDI_SYNCDEVICE                         "io/portMidi/syncOutputDevice"   // MIDI clock / SPP out (midisync.h)
 #define PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS          "io/portMidi/outputLatencyMilliseconds"
 #define PREF_IO_PULSEAUDIO_USEPULSEAUDIO                    "io/pulseAudio/usePulseAudio"
 #define PREF_SCORE_CHORD_PLAYONADDNOTE                      "score/chord/playOnAddNote"

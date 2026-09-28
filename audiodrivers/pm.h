@@ -44,6 +44,8 @@ class PortMidiDriver : public MidiDriver {
       PmStream* inputStream;
       PmStream* outputStream;
       PmStream* extraOutputStreams[3] { nullptr, nullptr, nullptr };    // MIDI out B, C, D (sound library ports)
+      PmStream* syncStream { nullptr };   // MIDI sync out (clock, SPP): its own port, or one of the above
+      bool syncStreamOwned { false };     // opened for sync alone (else shared with an output above)
 
    public:
       PortMidiDriver(Seq*);
@@ -63,6 +65,7 @@ class PortMidiDriver : public MidiDriver {
       PmStream* getOutputStream() { return outputStream; }
       PmStream* getOutputStream(int port) { return port == 0 ? outputStream : (port >= 1 && port <= 3 ? extraOutputStreams[port - 1] : nullptr); }
       bool canOutput() { return outputStream != 0; }
+      PmStream* getSyncStream() { return syncStream; }
       bool isSameCoreMidiIacBus(const QString& inInterfaceAndName, const QString& outInterfaceAndName);
       int getInputId() { return inputId; }
       };

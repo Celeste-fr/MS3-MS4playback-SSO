@@ -48,6 +48,9 @@ class Driver {
       virtual int sampleRate() const = 0;
       virtual void putEvent(const NPlayEvent&, unsigned /*framePos*/) {}
       virtual bool canOutputMidi() const { return false; }     // putEvent reaches a MIDI output
+      // MIDI sync out (libmscore/midisync.h): a system message (clock, SPP, start …) to the sync port
+      virtual bool canOutputSync() const { return false; }
+      virtual void putSync(int /*status*/, int /*value*/, unsigned /*framePos*/) {}
       virtual void midiRead() {}
       virtual void handleTimeSigTempoChanged() {}
       virtual void checkTransportSeek(int, int, bool) {}
