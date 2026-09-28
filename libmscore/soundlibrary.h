@@ -275,6 +275,12 @@ std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
 // articulation isn't on velocity
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
                        const QString& refPatch, int refValue, int cc);
+// the dynamics CC value for a patch other than the held note's (the owner's check of 2026-09-28:
+// Violas' All techniques Long 10 dB over the Performance legato at pp): the value at which the
+// patch's own long (longValue) is as loud as the held note at cc; -1: a curve missing or not on
+// the controller
+int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
+                         const QString& refPatch, int refValue, int cc);
 
 //---------------------------------------------------------
 //   Route

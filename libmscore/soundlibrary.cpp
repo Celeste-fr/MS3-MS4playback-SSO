@@ -246,6 +246,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
+                  li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
                   li.setupValues = readSetupValues(a.value("setup").toString());
                   li.ids = words(a.value("ids").toString().toLower());
                   li.with = a.value("with").toString();
@@ -556,11 +557,18 @@ double DynamicsCurve::at(int x) const
 
 int DynamicsCurve::inverse(double db) const
       {
-      // the lowest x that reaches db (a curve with a dip from round robins: the first crossing)
+      // the lowest x that reaches db (a curve with a dip from round robins: the first crossing);
+      // under the first point, the first segment's slope goes on (ppp under a curve measured from 32)
       if (points.empty())
             return -1;
-      if (db <= points.front().second)
+      if (db <= points.front().second) {
+            if (points.size() >= 2 && points[1].second > points[0].second) {
+                  const auto& a = points[0];
+                  const auto& b = points[1];
+                  return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), a.first);
+                  }
             return std::max(1, points.front().first);
+            }
       for (size_t i = 1; i < points.size(); ++i) {
             const auto& a = points[i - 1];
             const auto& b = points[i];
@@ -642,6 +650,16 @@ std::shared_ptr<const DynamicsCalibration> dynamicsCalibration()
       {
       std::lock_guard<std::mutex> lock(calibrationMutex);
       return calibration;
+      }
+
+int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
+                         const QString& refPatch, int refValue, int cc)
+      {
+      const DynamicsCurve* c = cal.curve(patch, longValue);
+      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
+      if (!c || !ref || (c->drivenBy != "controller" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+            return -1;
+      return c->inverse(ref->at(cc));
       }
 
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,

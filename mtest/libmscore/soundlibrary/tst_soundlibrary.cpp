@@ -2026,7 +2026,8 @@ void TestSoundLibrary::dynamicsCalibration()
       cal->setCurve("Violin", 1, line("controller", -40, 0.1));
       cal->setCurve("Violin", 40, line("velocity", -70, 0.4));
       QCOMPARE(cal->curve("Violin", 40)->inverse(-70 + 0.4 * 50), 50);
-      QCOMPARE(cal->curve("Violin", 40)->inverse(-100), 16);          // under the curve: its lowest x
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-100), 1);           // under the curve: its slope goes on, to 1
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-67.6), 6);          // (-70 + 0.4 x: 6)
       QCOMPARE(cal->curve("Violin", 40)->inverse(0), 127);
       QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 1, "Violin", 1, 80), -1);    // on the controller
       // pp (CC 32): -36.8 dB -> the staccato's velocity 83; mf (80): -32 -> 95
@@ -2073,6 +2074,24 @@ void TestSoundLibrary::dynamicsCalibration()
       QCOMPARE(velo[3], 95);
       QVERIFY2(velo[6] > 83 && velo[6] <= 127, qPrintable(QString::number(velo[6])));       // accented pp
       delete score;
+
+      // calibratedController: the CC at which a patch's own long matches the held note (Violin -
+      // Performance's Legato, -40 + 0.1 x; the main patch's Long -45 + 0.2 x: at 32, 41)
+      auto lib2 = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' prefer='long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib2);
+      auto cal2 = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal2->setCurve("Violin - Performance", 20, line("controller", -40, 0.1));
+      cal2->setCurve("Violin", 1, line("controller", -45, 0.2));
+      QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 32), 41);
+      QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 80), 65);
       }
 
 QTEST_MAIN(TestSoundLibrary)

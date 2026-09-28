@@ -1127,6 +1127,9 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
             };
       if (ins.keyScan || ins.articulations.empty())
             return fail(tr("no articulations (a kit or keyswitched patch): nothing to measure"));
+      // (a patch whose articulations no notation chooses: never played, not loaded; the Fanfare patches)
+      if (std::none_of(ins.articulations.begin(), ins.articulations.end(), [](const SoundLib::Articulation& a) { return !a.techniques.isEmpty(); }))
+            return fail(tr("no articulation a notation plays: nothing to measure"));
       if (ins.switchType != SoundLib::SwitchType::CC && ins.switchType != SoundLib::SwitchType::NONE)
             return fail(tr("Only patches switched by a CC can be measured."));
       const int pitch = testPitch(ins);
@@ -1274,6 +1277,8 @@ QString ArticulationCheckDialog::balanceReport() const
             text += "   " + tr("held notes: %1 %2, %3 / %4 / %5 dB at pp / mf / ff").arg(heldPatch, held.articulation->name)
                .arg(f1(ref->at(32))).arg(f1(ref->at(80))).arg(f1(ref->at(112))) + "\n";
             for (const SoundLib::LibInstrument* q : patches) {
+                  // this patch's own long: its dynamics CC is calibrated to it (calibratedController)
+                  const SoundLib::Choice own = q->name == heldPatch ? SoundLib::Choice() : SoundLib::choose(*q, SoundLib::Want { { "long" }, {} });
                   for (const SoundLib::Articulation& a : q->articulations) {
                         const SoundLib::DynamicsCurve* c = cal->curve(q->name, a.value);
                         if (!c || (q->name == heldPatch && a.value == held.articulation->value))
@@ -1282,6 +1287,7 @@ QString ArticulationCheckDialog::balanceReport() const
                         for (const QString& t : a.techniques)
                               listed = listed || _library->velocityDynamics.contains(t);
                         const bool onVelocity = c->drivenBy == "velocity" || c->drivenBy == "both";
+                        const bool ownLong = own && own.articulation->value == a.value;
                         QStringList was, now;
                         double worst = 0;
                         for (int k = 0; k < 3; ++k) {
@@ -1289,18 +1295,29 @@ QString ArticulationCheckDialog::balanceReport() const
                               const double refDb = ref->at(cc);
                               const int vb = !onVelocity || listed ? cc
                                  : Ms4::note(Ms4::Family(0), { Ms4::ArtRef { Ms4::Art::Standard, false } }, LEVELS[k], true).velocity;
-                              const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc);
-                              const double n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - cal->balanceDb;
+                              double n;
+                              if (onVelocity) {
+                                    const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc);
+                                    n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - cal->balanceDb;
+                                    }
+                              else
+                                    n = c->at(cc) - refDb;          // on the controller: the part's CC, as it is
                               was << f1(c->at(vb) - refDb);
                               now << f1(n);
                               worst = std::max(worst, std::fabs(n));
                               }
+                        // flagged: a short out of its velocity range, or a patch's own long off the held note (a
+                        // patch other than the held note's); a variant (con sord., sul pont., flautando …)
+                        // keeps its own level
+                        const bool flag = worst > 3 && (onVelocity || ownLong);
                         const QString where = q == main ? QString() : q->name + ": ";
                         QString line = QString("   %1 %2%3 (%4), on %5: %6 dB against the held note at pp / mf / ff (was %7)")
-                           .arg(worst > 3 ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
+                           .arg(flag ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
                            .arg(now.join(" / "), was.join(" / "));
-                        if (worst > 3)
-                              line += onVelocity ? tr(" — beyond its velocity range") : tr(" — on the controller, which the whole part shares: not adjusted");
+                        if (flag)
+                              line += onVelocity ? tr(" — beyond its velocity range") : tr(" — the patch's long, off the held note (not adjusted yet)");
+                        else if (!onVelocity && !ownLong && worst > 3)
+                              line += tr(" (a variant: its own level)");
                         text += line + "\n";
                         }
                   }
