@@ -1089,7 +1089,7 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     `tools/soundlibraries/sso_percussion_hits.json` (per patch and drum: hit names and keys, null = off) with its
     notes: every technique of a one-drum patch is on at its defaults with a key (rolls, swells, FX), 395 of their 397
     keys sounded in the 01:46 scan; Rain Sheet Swell mp plays nothing (Voices 0; its zones are like Swell mf's, so
-    it's Spitfire's script), Cymbal Hi Choked Hit sounds though the scan heard nothing; in the ensembles many
+    it's Spitfire's script; it plays in the Unpitched - Metal kit once switched on there, the owner), Cymbal Hi Choked Hit sounds though the scan heard nothing; in the ensembles many
     techniques are off, with no key at all, and Low Ensemble's Toms 3-5 share E2 and its Field Drum Rim / X Stick A2
     (the owner: a real conflict; set them in Kontakt when a part needs them). Not in the map yet (the owner hasn't
     decided: all 42 lists, and the rolls the kits have off played from the drum's own patch).

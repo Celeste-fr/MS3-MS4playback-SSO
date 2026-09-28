@@ -1,7 +1,7 @@
 {
  "source": "Kickstart's hit lists in each patch's window at its defaults: the owner's run of 2026-09-28 05:02 (MuseScore --window-pictures, run 198), OCR checked by eye, reviewed on https://claude.ai/artifact/CKcFbayqAj3iPi9h3irUFK (the owner: readings correct, 2026-09-28). Keys: MIDI, C3 = 60; a hit with no key is off in that patch (Kickstart gives an off technique no key).",
  "notes": [
-  "Rain Sheet Swell mp (one-drum patch, F1 = 41): plays nothing (Kontakt's Voices stays 0, the owner). Its sample group is like Swell mf / f's (8 zones, velocity 1-127, not muted) in this patch, Metal Clangs and the Unpitched - Metal kit, so it's in Spitfire's script, not a missing zone; the kit patch (where it is off by default) is the only other place to try it.",
+  "Rain Sheet Swell mp (one-drum patch, F1 = 41): plays nothing there (Kontakt's Voices stays 0, the owner), though its sample group is like Swell mf / f's (8 zones, velocity 1-127, not muted), so it's Spitfire's script. It plays in the Unpitched - Metal kit once switched on (off there by default; the owner, 2026-09-28): a part that needs it would take it from the kit, with a key set there.",
   "Cymbal Hi Choked Hit (D2 = 50): sounds in Kontakt (the owner), but was silent in the key scan of 2026-09-28 01:46; cause unknown.",
   "Ensembles - Low Ensemble: Toms 3, 4 and 5 share E2 and Field Drum Rim and X Stick share A2 at the defaults (a real conflict, the owner checked); Trash Metals Scafold 2 / Spring Coil share F3 and Wind Gong Swell mf / f share G1 (one-drum patches). To be set in Kontakt when a part needs them.",
   "Techniques off at a patch's defaults have no key at all (no default keyboard mapping); they need a key set in Kontakt when a part needs them (the owner, 2026-09-28)."
