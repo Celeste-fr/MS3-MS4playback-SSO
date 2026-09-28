@@ -204,6 +204,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.nki = a.value("nki").toString();
                   li.setupValues = readSetupValues(a.value("setup").toString());
                   li.scan = a.value("scan").toString();
+                  li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
                   li.keyScan = li.scan == "keys";
                   li.switchType = defType;
                   li.switchNumber = defNumber;

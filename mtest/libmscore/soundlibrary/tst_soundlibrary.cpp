@@ -196,6 +196,9 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(int(lib->otherPatches.size()), 541);
       QCOMPARE(values, 16);
       QCOMPARE(keys, 7);
+      for (const SoundLib::LibInstrument& p : lib->otherPatches)
+            if (p.name == "Basses - Core techniques")
+                  QCOMPARE(p.testPitch, 39);                    // (its samples' keys: 24-78; 60 has none)
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);

@@ -709,6 +709,11 @@ for i, line in enumerate(out):
 FILE_ARTICULATIONS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_articulations.json'),
                                     encoding='utf-8'))
 assert len(FILE_ARTICULATIONS) == 700, len(FILE_ARTICULATIONS)
+# Each patch's keys from its zones (sso_nki_keys.json: lowest, highest, the median zone's middle key): the
+# check's test note for a <Patch> (pitch=). Every patch's program says 0-127, so the zones are what tell; the
+# owner's scan of 2026-09-27 20:15 waited on "Basses - Core techniques" at pitch 60, above its zones (24-78,
+# median 39), for a note that never sounded.
+FILE_KEYS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_keys.json'), encoding='utf-8'))
 out.append('  <!-- the library\'s other patches: set up and checked, not chosen by notation -->')
 for nki in NKI_FILES:
     if nki in used:
@@ -718,7 +723,8 @@ for nki in NKI_FILES:
     v = setupValues(nki)
     arts = FILE_ARTICULATIONS[nki]
     scan = '' if len(arts) < 2 else ' scan="keys"' if '/Symphonic Percussion/' in '/' + nki else ' scan="values"'
-    out.append(f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + scan + '/>')
+    pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
+    out.append(f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + scan + pitch + '/>')
 out.append('</SoundLibrary>')
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed

@@ -87,6 +87,9 @@ static const int CHECK_VERSION = 4;       // 4: patches without switching (liste
 
 int ArticulationCheckDialog::testPitch(const SoundLib::LibInstrument& instrument)
       {
+      // (a patch the map doesn't use: the middle of its samples' keys, from its files)
+      if (instrument.testPitch >= 0 && instrument.testPitch <= 127)
+            return instrument.testPitch;
       for (const QString& id : instrument.ids) {
             const InstrumentTemplate* t = searchTemplate(id);
             if (t && t->maxPitchA > t->minPitchA)

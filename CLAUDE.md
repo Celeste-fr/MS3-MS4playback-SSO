@@ -949,6 +949,13 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     glissandi; `keyScan`); *Check articulations* › *Tick the patches to scan* ticks them. The files give the
     names only: which switch value plays which is in Spitfire's script, so Kontakt still scans those 23.
     Test `spitfireMap` (16 values, 7 keys).
+    The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
+    windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
+    Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6
+    percussion ensembles and Harp glissandi (keys that sound and keyswitches; Kickstart names no key), then hung on
+    Basses - Core techniques: the test note was 60, above its samples (24-78), and the check waits for a sound.
+    `<Patch pitch=>` now gives each patch the middle of its zones' keys (`sso_nki_keys.json`: lowest, highest,
+    median; every program says 0-127), `LibInstrument::testPitch`, used by `ArticulationCheckDialog::testPitch`.
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
     are silent at every pitch; the report now lists such values apart ("most likely none",
