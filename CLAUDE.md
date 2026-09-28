@@ -483,7 +483,7 @@ macOS.
   (GUI, every 50 ms) held the slots' mutex while it passed every CC played to each instance's controller, and
   `play`/`process` only try that mutex: events were dropped (a note, its note-off, a switch) and blocks skipped.
   Now idle holds it only to list the instances (and while a MIDI mapping changes), an event that misses the lock
-  waits in `_pending` for the next event or block, and a missed all-notes-off is done then. `Vst3Plugin::parameterId`
+  waits in `_pending` for the next event or block, and a missed all-notes-off is done then. It also ended the owner's "note stays bent after deleting its accidental" (run 142; not reproduced by `tuningLanes`): with the old `play`, a dropped note-on skipped its slot's `setPitch` (the slot stayed at the accidental's speed) and a dropped note-off left the bent note sounding and counted, so later notes glided; the owner can't reproduce it on the build of 9fa4ce2 (2026-09-28). `Vst3Plugin::parameterId`
   keeps an index of the loose titles (it went through Kontakt's 4145 parameters, two regexes each, for every
   controller of every instance at every play). **Crackle live, not in
   the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;
