@@ -1054,6 +1054,13 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     it listens only: which keys sound, no sheet. Tried here with the test synth (a map with two drum patches
     without keys and one with): the two scanned, 2.6 min each, log, summary and zip as the extract's; so about
     2 hours for the 42.
+    **The owner's run (2026-09-28 01:46, run 182, 112 min, all 42):** every patch sounds; the keys that sound and
+    their peaks are kept in `tools/soundlibraries/sso_drum_keys_sounding.json` (keys around -45 … -60 dB next to
+    loud ones are most likely the previous key still ringing). The one-drum patches do **not** follow the kits'
+    white-key layout: Snare 1 sounds on 41-53 chromatic (41-47 rising 27 → 10 dB, a ramp), then 55, 57, 59-61;
+    Triangle 1 on 48-51, 53, 55, 59-60, 64-65. So the keys can't be named from the file's order: which key plays
+    which hit needs the patch's hit list (the owner's Kickstart screenshots, as for the kits). What playback
+    needs from them: Snare 1 / 2 roll and x stick, Triangle 1 / 2 (the rest the kits already play).
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6
