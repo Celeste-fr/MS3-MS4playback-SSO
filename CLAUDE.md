@@ -744,6 +744,13 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   it's estimated at 1-2 minutes a patch with Kontakt (not timed yet; Kontakt maps all 128 controllers on every
   channel). Tried here with the test synth: 2 patches in 9 s, pitch bend ±200 cents exactly, CC 1 and the "Tone"
   parameter found.
+  **The owner's first run (build b903d9a, 2026-09-28 08:06) crashed** 16 s into Violins 1, patch 1: an access
+  violation in `Kontakt 8.vst3` (Windows' Application Error record); no extract written. It had been switched
+  offline right after its setup and rendered flat out while it still loaded the patch. Now, as in Check
+  articulations (offline with Kontakt since run 3), the patch first sounds in real time, then goes offline and
+  must sound again; the log names each step (sounds / pitch bend / every controller) and the current one at
+  least once a minute. A background run puts each controller back to its parameter's value (`putBack`, JSON
+  "putBack") instead of Quick's reload (setState) per controller. Tried here with the test synth only.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

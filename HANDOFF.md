@@ -204,4 +204,4 @@ are mapped where notation can ask for them). Still open:
   ask the owner to paste their marks if they're needed.
 - Nothing here can hear Kontakt or SSO. Say whether something was tested with the owner's
   Kontakt, the test synth or sfizz when you report.
-- Every controller and pitch bend on all 700 patches: `Measure SSO controllers in background.bat` (offline, no window; the owner to run it and hand back the extract zips; read with `read_plugin_data.py`).
+- Every controller and pitch bend on all 700 patches: `Measure SSO controllers in background.bat` (offline, no window; the owner to run it and hand back the extract zips; read with `read_plugin_data.py`). The first run (build b903d9a) crashed in Kontakt 16 s into Violins 1: it went offline while the patch still loaded; now only after the patch sounds in real time (see CLAUDE.md).

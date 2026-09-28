@@ -2523,6 +2523,7 @@ void ArticulationCheckDialog::extract()
       QString summary = QString("%1: plug-in data of %2, %3 (MuseScore %4)\n%5\n\n")
                         .arg(_library->name, QFileInfo(path).fileName(), stamp, QString(VERSION),
                              !_tryAll->isChecked() ? QString("described only")
+                             : _headless ? QString("with every controller and parameter tried (offline, each put back to its parameter's value, no value search)")
                              : _quick->isChecked() ? QString("with every controller and parameter tried (quick: the patch reloaded, no value search)")
                              : QString("with every controller and parameter tried"));
 
@@ -2720,31 +2721,46 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       const bool listen = _pitchBend->isChecked() || _tryAll->isChecked();
       // a background run measures offline and as fast as the plug-in renders: no window to watch (the
       // owner, 2026-09-28: every controller and pitch bend on all 700 patches; in real time about 80 hours)
+      // Offline only once the patch sounds in real time, as Check articulations does (the owner's first
+      // background run, 2026-09-28 08:06: Kontakt crashed, an access violation in Kontakt 8.vst3, 16 s
+      // into Violins 1, when it was switched offline right after its setup and rendered flat out while
+      // it still loaded the patch)
       const bool offline = _headless && listen;
-      if (offline) {
-            p->setOffline(true);
-            pump.fast = true;
-            }
       struct Online {
             Vst3Plugin* p;
             bool on;
             ~Online() { if (on) p->setOffline(false); }
-            } online { p, offline };
+            } online { p, false };
       bool sounds = false;
       if (!listen) {
             status(tr("letting the patch start…"));
             prepare();
             pump.run(1500);
             }
-      for (int i = 0; listen && i < 60 && !_cancel && !sounds; ++i) {
-            status(tr("waiting for the patch to load (%1 s)…").arg(i * 2));
-            pump.peak = 0;
-            prepare();
-            p->midi(ME_NOTEON, 0, pitch, 100);
-            pump.run(1200);
-            p->midi(ME_NOTEON, 0, pitch, 0);
-            pump.run(800);
-            sounds = pump.peak > 1e-5;
+      auto waitForSound = [&](const QString& what) {
+            sounds = false;
+            for (int i = 0; i < 60 && !_cancel && !sounds; ++i) {
+                  status(what.arg(i * 2));
+                  pump.peak = 0;
+                  prepare();
+                  p->midi(ME_NOTEON, 0, pitch, 100);
+                  pump.run(1200);
+                  p->midi(ME_NOTEON, 0, pitch, 0);
+                  pump.run(800);
+                  sounds = pump.peak > 1e-5;
+                  }
+            };
+      if (listen)
+            waitForSound(tr("waiting for the patch to load (%1 s)…"));
+      if (offline && sounds && !_cancel) {
+            if (_headless)
+                  say(QString("   %1: sounds; offline from here").arg(ins.name));
+            pump.run(1000);
+            p->setOffline(true);
+            online.on = true;
+            pump.fast = true;
+            // (a plug-in may reload its samples when its processing restarts)
+            waitForSound(tr("waiting for the patch to play offline (%1)…"));
             }
       if (_cancel)
             return false;
@@ -2781,6 +2797,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                   pump.capture = nullptr;
                   return !_cancel;
                   };
+            if (_headless)
+                  say(QString("   %1: pitch bend").arg(ins.name));
             const QJsonObject pb = PluginExtract::pitchBend(p, s, capture, prepare, status);
             out["pitchBend"] = pb;
             QStringList line;
@@ -2842,6 +2860,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             std::vector<PluginExtract::Found> found;
             bool stopped = false;
             prepare();
+            if (_headless)
+                  say(QString("   %1: every controller").arg(ins.name));
             out["controllers"] = PluginExtract::controllers(p, s, run, grab, status, &found, &stopped);
             if (!stopped)
                   out["parameters"] = PluginExtract::parameters(p, s, run, grab, status, &found, &stopped);
@@ -2911,7 +2931,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                         lines << (e.contains("cc")
                            ? QString("CC %1%2: %3 · %4 · patch value %5").arg(e.value("cc").toInt())
                              .arg(e.contains("name") ? " (" + e.value("name").toString() + ")" : QString())
-                             .arg(what.join(", "), levels).arg(e.contains("patchValue") ? QString::number(e.value("patchValue").toInt()) : QString("(reloaded)"))
+                             .arg(what.join(", "), levels).arg(e.contains("patchValue") ? QString::number(e.value("patchValue").toInt())
+                                  : e.contains("putBack") ? QString("unknown (put back to %1)").arg(e.value("putBack").toInt()) : QString("(reloaded)"))
                            : QString("%1 \"%2\": %3 · %4").arg(e.value("id").toDouble()).arg(e.value("title").toString())
                              .arg(what.join(", "), levels));
                         }
