@@ -121,6 +121,14 @@ controllers), a dynamics lane on top of the notation's, the map's controller ent
 controls (`gen_spitfire_sso.py` from sso_patch_controls.json), and one try with Kontakt that a parameter
 set by automation is heard (e.g. Vibrato on Violins 1).
 
+## Live integration (2026-09-28, branch `live-integration`)
+
+See `LIVE.md`. In: MIDI clock / SPP / start-stop out on a sync port (tested end to end on Linux with
+ALSA: clocks within ~1 ms of the notes), *Mixer › Play through Live*, *Advanced Options… › Import
+automation from Live Set…* (read-only lanes, auto re-import, undoable, survives 3.6.2). Next: the owner
+tries it on Windows with loopMIDI and Live 12, and sends a small `.als` (see LIVE.md › What still needs
+the owner's Live set) to verify the reader's MIDI-input and curve parsing. Not merged into main.
+
 ## Merging with claude/intelligent-cray-6pd4o1 (prepared 2026-09-28; done 2026-09-28 on that branch, as planned)
 
 The owner decides what goes to main; this is the plan. Both branches start at main 16e6933. That

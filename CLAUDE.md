@@ -32,6 +32,10 @@ library work; the tuning work is described under "Tuning" below).
   last commit message, or *Run workflow* on that branch). Check `git log` of `main` and of
   your branch, and the latest commit messages, first. They are detailed on purpose and
   describe what each step did and how it was measured.
+- `live-integration` (2026-09-28, from main at f12a240; worktree `wt-live`): playing through
+  Ableton Live 12: MIDI clock / SPP out, *Mixer › Play through Live*, automation imported from a
+  Live Set as read-only lanes. **Read `LIVE.md`** (design, the owner's setup, what is unverified,
+  the Tracktion fallback). Test `tst_liveintegration`.
 - CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This kept the
   private repo's Actions minutes; the repository is public since 2026-09-28 (the owner ran out of
   minutes), and public repositories run Actions on GitHub's standard runners for free.
@@ -519,6 +523,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     Windows headers' macros), Linux: resident. The part's first row adds its extras and copies; the info
     line the total and MuseScore's own. Not done: lighter single-technique patches for the copies (needs
     which lighter patches SSO has per instrument: the library-files extract).
+- Live integration (branch `live-integration`, `LIVE.md`): automation lanes may carry a `source`;
+  `"source": "live"` lanes come from a Live Set (`libmscore/liveset.*`) and are **read-only**
+  (`Lane::readOnly`, only `Automation::replaceSource` changes them; a lane editor must not edit
+  them). Through MIDI output they send nothing (Live plays them); with the hosted plug-in they play.
+  MIDI sync out: `libmscore/midisync.h`, `Seq::process` / `setPos`, preference
+  `io/portMidi/syncOutputDevice`.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).
