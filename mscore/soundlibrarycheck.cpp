@@ -345,9 +345,7 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       // several, scan="values" or "keys". The values are all known now; what is left to scan are a
       // kit's own drum patches whose keys the map doesn't have yet: SSO's 42 one-drum patches. The
       // 7 scan="keys" patches were scanned on 2026-09-27: they are left unticked)
-      auto toScan = [](const SoundLib::LibInstrument& p, bool added) {
-            return (added && p.scan == "values") || (!added && p.extra() && p.keyScan && p.drums.empty());
-            };
+      auto toScan = [](const SoundLib::LibInstrument& p, bool added) { return toScanNow(p, added); };
       if (_library && (std::any_of(_library->otherPatches.begin(), _library->otherPatches.end(),
                                    [&](const SoundLib::LibInstrument& p) { return toScan(p, true); })
                        || std::any_of(_library->instruments.begin(), _library->instruments.end(),
@@ -610,6 +608,70 @@ void ArticulationCheckDialog::say(const QString& line) const
       }
 
 //---------------------------------------------------------
+//   toScanNow
+//    a patch whose articulation values or keys are not known yet (Tick the patches to scan, and
+//    the background key scan): a patch not in the map marked scan="values", or a kit's own drum
+//    patch with no <Drum> (SSO's 42 one-drum patches)
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::toScanNow(const SoundLib::LibInstrument& p, bool added)
+      {
+      return (added && p.scan == "values") || (!added && p.extra() && p.keyScan && p.drums.empty());
+      }
+
+//---------------------------------------------------------
+//   runHeadlessKeyScan
+//    Check articulations on the patches to scan (toScanNow) without the dialog: MuseScore
+//    --scan-keys (musescore.cpp), a process of its own like the background extract (the owner,
+//    2026-09-28: the 42 one-drum patches take about 4 hours, "make it run in the background
+//    exactly like" the extract). No window: the key scan listens only (which keys sound), no
+//    pictures (a plug-in window in a process with none would be a window on the owner's screen)
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::runHeadlessKeyScan(const QString& patches, QString* zip)
+      {
+      _headless = true;
+      if (!_library) {
+            say("no sound library");
+            return false;
+            }
+      QStringList wanted;
+      if (!patches.isEmpty() && patches != "toscan") {
+            QFile f(patches);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                  say(QString("cannot read %1").arg(patches));
+                  return false;
+                  }
+            for (const QString& l : QString::fromUtf8(f.readAll()).split('\n'))
+                  if (!l.trimmed().isEmpty() && !l.trimmed().startsWith('#'))
+                        wanted << l.trimmed();
+            }
+      int ticked = 0;
+      for (int row = 0; row < _table->rowCount(); ++row) {
+            const SoundLib::LibInstrument& ins = *_rows[row].instrument;
+            const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+            bool tick = wanted.isEmpty() ? toScanNow(ins, _rows[row].added) : false;
+            for (const QString& w : wanted)
+                  tick = tick || ins.name.compare(w, Qt::CaseInsensitive) == 0;
+            if (tick && !setup)
+                  say(QString("%1: no setup (its .nki was not found); left out").arg(ins.name));
+            tick = tick && setup;
+            _table->item(row, 0)->setCheckState(tick ? Qt::Checked : Qt::Unchecked);
+            ticked += tick;
+            }
+      if (!ticked) {
+            say("no patch to scan");
+            return false;
+            }
+      say(QString("%1: %2 patches to scan").arg(_library->name).arg(ticked));
+      _zip.clear();
+      check();
+      if (zip)
+            *zip = _zip;
+      return !_zip.isEmpty();
+      }
+
+//---------------------------------------------------------
 //   runHeadless
 //    the extract without the dialog: MuseScore --extract-library (musescore.cpp), a process of its
 //    own that runs in the background while the owner works in MuseScore (the owner, 2026-09-27)
@@ -804,23 +866,28 @@ void ArticulationCheckDialog::check()
             return;
       QString error;
       const QString path = SoundLibraryHost::pluginPath(*_library, &error);
+      auto warn = [this](const QString& message) {
+            if (_headless)
+                  say(message);
+            else
+                  QMessageBox::warning(this, windowTitle(), message);
+            };
       if (path.isEmpty()) {
-            QMessageBox::warning(this, windowTitle(), error);
+            warn(error);
             return;
             }
       std::vector<int> chosen;
       for (int row = 0; row < _table->rowCount(); ++row) {
             if (_table->item(row, 0)->checkState() == Qt::Checked) {
                   if (!_table->item(row, 1)->data(Qt::UserRole).toBool()) {
-                        QMessageBox::warning(this, windowTitle(), tr("%1 has no setup (its .nki was not found): untick it.")
-                                             .arg(_rows[row].instrument->name));
+                        warn(tr("%1 has no setup (its .nki was not found): untick it.").arg(_rows[row].instrument->name));
                         return;
                         }
                   chosen.push_back(row);
                   }
             }
       if (chosen.empty()) {
-            QMessageBox::information(this, windowTitle(), tr("Tick the patches to check."));
+            warn(tr("Tick the patches to check."));
             return;
             }
       if (seq && seq->isPlaying())
@@ -832,11 +899,13 @@ void ArticulationCheckDialog::check()
       libName.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
       const QString folder = root + "/" + libName + " " + stamp;
       if (!QDir().mkpath(folder)) {
-            QMessageBox::warning(this, windowTitle(), tr("Cannot create %1").arg(folder));
+            warn(tr("Cannot create %1").arg(folder));
             return;
             }
 
       setRunning(true);
+      QElapsedTimer runClock;
+      runClock.start();
       QJsonArray results;
       QString summary = QString("%1 checked against %2 on %3\n\n").arg(_library->name, QFileInfo(path).fileName(), stamp);
       // results.json and summary.txt, rewritten after each patch (final: with the note of a stop)
@@ -878,7 +947,14 @@ void ArticulationCheckDialog::check()
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
+            if (_headless) {
+                  const qint64 elapsed = runClock.elapsed() / 60000;
+                  say(QString("%1 of %2: %3 (%4 min so far%5)").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
+                      .arg(elapsed).arg(k ? QString(", about %1 min left").arg(elapsed * (int(chosen.size()) - k) / k) : QString()));
+                  }
             checkPatch(chosen[k], path, folder, results, summary);
+            if (_headless)
+                  say("   " + _table->item(chosen[k], 3)->text());
             if (!results.isEmpty())
                   save(false);      // after each patch: MuseScore closed during a long check keeps what was done
             QApplication::processEvents();
@@ -896,13 +972,17 @@ void ArticulationCheckDialog::check()
 
       // all of it in one zip, to hand back
       const QString zipPath = zipFolder(folder);
+      _zip = zipPath;
 
       done();
       rebuild();
       _status->setText(tr("Done: %1").arg(QDir::toNativeSeparators(zipPath)));
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
-      QMessageBox::information(this, windowTitle(),
-         tr("The results are in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
+      if (_headless)
+            say(QString("done in %1 min: %2").arg(runClock.elapsed() / 60000).arg(QDir::toNativeSeparators(zipPath)));
+      else
+            QMessageBox::information(this, windowTitle(),
+               tr("The results are in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
 #endif
       }
 
@@ -1033,7 +1113,8 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       std::vector<QImage> released;       // after it: what the key changed for good (a keyswitch)
       std::vector<double> peaks;
       int noise = 0;                      // what the window changes by itself
-      Steinberg::IPlugView* view = p->createEditor();
+      // (in the background: no window, listening only)
+      Steinberg::IPlugView* view = _headless ? nullptr : p->createEditor();
       if (view) {
             QPointer<Vst3EditorWindow> w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
             w->show();

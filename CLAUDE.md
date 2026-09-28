@@ -986,6 +986,16 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     36, Edge 38, Rim 40). So a key scan of the 42 (which keys sound) plus the group order should name them, to
     be reviewed by the owner. *Tick the patches to scan* now ticks a kit's own drum patches whose keys the map
     lacks (extra, keyScan, no `<Drum>`: the 42), not the 7 scanned on 2026-09-27. About 5-6 minutes a patch.
+    **In the background** (the owner, 2026-09-28: "exactly like" the extract): `Scan SSO drum keys in
+    background.bat` (`main/…bat.in`, installed to bin) starts `MuseScore3Evo.exe --scan-keys "Spitfire Symphony
+    Orchestra"` (`[--extract-patches <file>]`; `scanKeysMode`, which also sets `extractMode`: the same process
+    rules, setups copy, lock, log `background extract.log` and `DialogWatch`; no relaunch).
+    `ArticulationCheckDialog::runHeadlessKeyScan` ticks `toScanNow` (the same as the button) and runs `check()`,
+    which says its steps in the log (patch n of m, minutes left, each result) instead of message boxes; the key
+    scan opens no plug-in window then (a window of a windowless process would pop up on the owner's screen), so
+    it listens only: which keys sound, no sheet. Tried here with the test synth (a map with two drum patches
+    without keys and one with): the two scanned, 2.6 min each, log, summary and zip as the extract's; so about
+    2 hours for the 42.
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

@@ -1,0 +1,22 @@
+@echo off
+rem Scan the keys of Spitfire Symphony Orchestra's one-drum patches ("Percussion - <kit> - <drum>",
+rem 42 of them), in the background.
+rem
+rem Double-click this file. It starts a MuseScore of its own with no window
+rem (MuseScore --scan-keys, mscore/musescore.cpp), like "Extract SSO in background.bat": each
+rem patch's 128 keys played one after the other, listening to which ones sound, at below-normal
+rem priority. It takes about 4 hours. It leaves the MuseScore you work in alone: its setups are
+rem the extract's copy (Documents\MuseScore Sound Library Check\background extract setups), it
+rem opens no audio or MIDI device and shows no window. Only one background run at a time.
+rem
+rem Progress: Documents\MuseScore Sound Library Check\background extract.log
+rem When it is done, that folder opens; hand back the newest "Spitfire Symphony Orchestra <date>.zip".
+rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window). What was
+rem scanned so far stays in the folder "Spitfire Symphony Orchestra <date>" (results.json).
+
+start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --scan-keys "Spitfire Symphony Orchestra"
+
+echo The key scan runs in the background (Spitfire Symphony Orchestra's one-drum patches, about 4 hours).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background extract.log
+echo That folder opens when it is done. You can close this window and keep working.
+timeout /t 15
