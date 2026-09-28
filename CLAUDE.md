@@ -352,7 +352,8 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer
     (`libLanes`, `finishLibraryEvents`) sends a note's events to its lane and the part's switches and
     controllers to all lanes. `Vst3Synth::setVarispeed` (from the map, in sync and export): a note-on
-    sets its slot's speed from the note's tuning, at once when the slot is silent, else gliding 80 ms;
+    sets its slot's speed from the note's tuning, at once when the slot is silent, else gliding 30 ms (80 ms until 2026-09-28: the owner's
+    slurred 16th E quarter-sharp after a D quarter-flat, 110 bpm, glided a semitone over most of its 136 ms);
     the note goes to the plug-in with no tuning. 12-tone equal scores need no lane (every tuning 0); a
     temperament (meantone, JI) can need several per part, hence maxLanes. The Sound Library dialog lists
     lanes as "~ <part> (other tuning n)".
