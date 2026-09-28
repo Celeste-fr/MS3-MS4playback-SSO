@@ -329,9 +329,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   [--extract-patches mapped|file]` (musescore.cpp `extractInBackground`, `runHeadless(…, dynamics)`): its own
   setups copy (`background dynamics check setups`), lock and log (`background dynamics check.log`), the curves
   merged into the working `dynamics.json` at the end (balance kept). `Measure SSO dynamics in background.bat`
-  (bin): copies the install to `%LOCALAPPDATA%\MuseScore background dynamics check` (the owner installs other
-  builds meanwhile), refuses a second run (PowerShell: a process from that folder), starts it; a patch list file
-  dropped on it. Tried here headless with the test synth (a map DynTest.xml, the synth's state as setups):
+  (bin) starts it from its own folder (a patch list file dropped on it); a second run stops at the lock. (It
+  first copied the install to `%LOCALAPPDATA%\MuseScore background dynamics check`; the owner, 2026-09-28: "you
+  don't need MuseScore to copy itself, just run at its original location (I'll keep the folders separate)".) Tried here headless with the test synth (a map DynTest.xml, the synth's state as setups):
   2 patches in 4 s, the unused value skipped, harmonics measured an octave up, the balance report in the summary.
   **The owner's background run (2026-09-28 01:40, 56 min, 159 patches, 417 curves)**: shorts balanced (Violas
   Spiccato -14 / -12 / -7 -> within 0.3 dB). On the controller, a patch other than the held note's differs
