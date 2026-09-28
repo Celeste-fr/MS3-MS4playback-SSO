@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <QtTest/QtTest>
+#include <QTemporaryDir>
 #include <QPainter>
 
 #include "audio/midi/event.h"
@@ -53,6 +54,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void dynamicsCalibration();
       void heldOnPerformance();
       void dynamicsCheck();
       void shortsFollowDynamics();
@@ -120,6 +122,19 @@ void TestSoundLibrary::textTechniques()
       QVERIFY(s.modifiers.contains("cuivre"));
       SoundLib::TextTechniques::apply("accord", s);       // no "ord" inside a word
       QVERIFY(s.modifiers.contains("cuivre"));
+      // espressivo (SSO: Long (Rachm.) for held notes), ended by non vib. or ord.
+      for (const char* t : { "espr.", "espressivo", "molto vib.", "con molto vibrato", "dolce espressivo" }) {
+            SoundLib::TextState e;
+            SoundLib::TextTechniques::apply(t, e);
+            QVERIFY2(e.modifiers.contains("espressivo"), t);
+            }
+      SoundLib::TextTechniques::apply("espr.", s);
+      QVERIFY(s.modifiers.contains("espressivo"));
+      SoundLib::TextTechniques::apply("non vib.", s);
+      QVERIFY(!s.modifiers.contains("espressivo"));
+      SoundLib::TextTechniques::apply("molto vib.", s);
+      SoundLib::TextTechniques::apply("ord.", s);
+      QVERIFY(!s.modifiers.contains("espressivo"));
       SoundLib::TextTechniques::apply("sul G", s);
       QVERIFY(s.modifiers.contains("sulg"));
       SoundLib::TextTechniques::apply("sul C", s);
@@ -188,6 +203,47 @@ void TestSoundLibrary::spitfireMap()
       QVERIFY2(lib, qPrintable(error));
       QCOMPARE(lib->name, QString("Spitfire Symphony Orchestra"));
       QCOMPARE(lib->dynamicsCC, 1);
+      // the patches the map doesn't use: 23 with several sounds in their files, to scan (values or keys)
+      int values = 0, keys = 0;
+      for (const SoundLib::LibInstrument& p : lib->otherPatches) {
+            values += p.scan == "values";
+            keys += p.scan == "keys" && p.keyScan;
+            }
+      QCOMPARE(int(lib->otherPatches.size()), 541);
+      QCOMPARE(values, 0);                                  // (every values patch's values are known)
+      QCOMPARE(keys, 7);
+      int scanned = 0;
+      for (const SoundLib::LibInstrument& p : lib->otherPatches) {
+            if (p.name == "Basses - Core techniques")
+                  QCOMPARE(p.testPitch, 39);                    // (its samples' keys: 24-78; 60 has none)
+            if (p.name.startsWith("Curated ") && p.name.endsWith(" Ensembles")) {
+                  ++scanned;
+                  QVERIFY(p.scan.isEmpty());
+                  for (const SoundLib::Articulation& a : p.articulations)
+                        QVERIFY(a.techniques.isEmpty());      // (listed for reference)
+                  }
+            if (p.name == "Curated Tutti Ensembles") {
+                  QCOMPARE(int(p.articulations.size()), 13);
+                  QCOMPARE(p.articulations[4].name, QString("Long"));
+                  QCOMPARE(p.articulations[4].value, 5);
+                  }
+            if (p.name == "Curated String Ensembles")
+                  QCOMPARE(int(p.articulations.size()), 16);
+            // the Core / Decorative techniques: the All techniques patch's values
+            if (p.name == "Violins 1 - Core techniques") {
+                  QCOMPARE(int(p.articulations.size()), 18);
+                  QVERIFY(p.scan.isEmpty());
+                  bool pizz = false, sulG = false;
+                  for (const SoundLib::Articulation& a : p.articulations) {
+                        pizz |= a.name == "Pizzicato" && a.value == 56;
+                        sulG |= a.name == "Long Sul G" && a.value == 112 && a.expect == "silent";
+                        }
+                  QVERIFY(pizz && sulG);
+                  }
+            if (p.name == "Violins 2 - Decorative techniques")
+                  QCOMPARE(int(p.articulations.size()), 12);
+            }
+      QCOMPARE(scanned, 4);
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);
@@ -256,6 +312,15 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 1", { { "long" }, {} }), QString("Violins 1 - Performance: Legato"));
       QCOMPARE(patchFor("Solo Violin 1", { { "long" }, {} }), QString("Solo Violin - Performance: Legato"));
       QCOMPARE(patchFor("Solo Violin 1", { { "short", "staccatissimo" }, {} }), QString("Solo Violin 1: staccato"));
+      // the section strings' three lengths (2026-09-28): staccatissimo, staccato, tenuto
+      QCOMPARE(patchFor("Violins 1", { { "staccatissimo", "spiccato", "short" }, {} }), QString("Violins 1: Spiccato"));
+      QCOMPARE(patchFor("Violins 1", { { "short" }, {} }), QString("Violins 1: Short 0.5"));
+      QCOMPARE(patchFor("Violins 1", { { "tenuto", "short" }, {} }), QString("Violins 1: Short 1.0"));
+      QCOMPARE(patchFor("Violins 1", { { "short" }, { "muted" } }), QString("Violins 1: Short CS"));
+      // espressivo: a held note plays Long (Rachm.), a slurred one keeps the Performance legato
+      QCOMPARE(patchFor("Violins 1", { { "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1 - Performance: Legato"));
+      QCOMPARE(patchFor("Violins 1", { { "short" }, { "espressivo" } }), QString("Violins 1: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
       QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
@@ -1442,7 +1507,9 @@ void TestSoundLibrary::articulationCheck()
 //   scanPictures
 //    a scan's pictures, drawn like SSO's window: the articulation's name, or "None" for a
 //    value the patch lacks, a meter that moves in every picture, and a memory display that
-//    grows during the scan. The values with an articulation are told from the others
+//    grows during the scan, and a RELEASE slider that the values the patch lacks leave where
+//    the last articulation put it, so "None" looks two ways. The values with an articulation are told
+//    from the others
 //---------------------------------------------------------
 
 void TestSoundLibrary::scanPictures()
@@ -1451,6 +1518,7 @@ void TestSoundLibrary::scanPictures()
                                            { 42, "Spiccato" }, { 70, "Trill (Minor 2nd)" }, { 71, "Trill (Major 2nd)" } };
       int meter = 0;
       int memory = 700;
+      int release = 0;
       auto picture = [&](int value) {
             QImage img(640, 360, QImage::Format_RGB32);
             img.fill(QColor(20, 50, 100));
@@ -1466,6 +1534,13 @@ void TestSoundLibrary::scanPictures()
             p.setFont(f);
             p.setPen(QColor(120, 140, 170));
             p.drawText(20, 136, i == patch.end() ? QString("NO ACTIVE TECHNIQUE") : QString("UACC CC#%1").arg(value));
+            // SSO's RELEASE slider: moved by a short articulation, back by a long one, and left
+            // where it was by a value the patch lacks
+            if (value == 40 || value == 42)
+                  release = 1;
+            else if (value == 1 || value == 7 || value == 11)
+                  release = 0;
+            p.fillRect(300 + 60 * release, 30, 40, 12, QColor(0, 160, 90));
             // the meter: another height each time; a memory display that grows during the scan
             meter = (meter * 37 + 11) % 60;
             p.fillRect(600, 300 - meter, 12, meter, QColor(0, 200, 0));
@@ -1487,6 +1562,30 @@ void TestSoundLibrary::scanPictures()
       QVERIFY(!patch.count(none));
       for (int v = 0; v < 128; ++v)
             QVERIFY2(found[v] == bool(patch.count(v)), qPrintable(QString("value %1").arg(v)));
+
+      // a patch not in the map: the scan can't go back to the state it loaded in (Long), so the
+      // picture after it shows the last value's "None". Compared with the start, that left the
+      // name out as "changing by itself" (the owner's scan of 2026-09-27 23:32 missed Pizzicato
+      // and trills); compared with the last value's picture during the scan, it doesn't
+      memory = 700;
+      release = 0;
+      const QImage loaded = picture(1);
+      std::vector<QImage> same { picture(1), picture(1), picture(1) };
+      shots.clear();
+      for (int v = 0; v < 128; ++v)
+            shots.push_back(picture(v));
+      const QImage after = picture(127);
+      const std::vector<bool> found2 = ArticulationCheck::scanPictures(loaded, same, shots, QRect(), { 0, 127, 126, 99, 64 },
+                                                                        &none, { { shots.back(), after } });
+      for (int v = 0; v < 128; ++v)
+            QVERIFY2(found2[v] == bool(patch.count(v)), qPrintable(QString("not in the map: value %1").arg(v)));
+      std::vector<QImage> wrong = same;             // (as it was)
+      wrong.push_back(after);
+      const std::vector<bool> found3 = ArticulationCheck::scanPictures(loaded, wrong, shots, QRect(), { 0, 127, 126, 99, 64 }, &none);
+      int missed = 0;
+      for (int v = 0; v < 128; ++v)
+            missed += patch.count(v) && !found3[v];
+      QVERIFY(missed > 0);
       }
 //---------------------------------------------------------
 //   pluginDescribe
@@ -1841,21 +1940,31 @@ void TestSoundLibrary::dynamicsCheck()
       QVERIFY(p->setOffline(true));
       AC::Settings s;
       s.pitch = 67;
-      const std::array<AC::Level, 3> onCC { { { 56, 32 }, { 65, 80 }, { 70, 112 } } };
-      const std::array<AC::Level, 3> onVelocity { { { 32, 32 }, { 80, 80 }, { 112, 112 } } };
       int steps = 0;
-      const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, { onCC, onVelocity }, s,
+      const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, { false, true }, s,
                                                              [&](int, int) { ++steps; return true; });
-      QCOMPARE(steps, 14);
+      QCOMPARE(steps, 20);                                  // each: 3 to classify, 7 more of the curve (on both)
       QCOMPARE(int(r.size()), 2);
       const double expected = 20 * std::log10(127.0 / 32.0);
       for (const AC::DynamicsResult& d : r) {
             QVERIFY2(std::fabs(d.velocityDb[1] - d.velocityDb[0] - expected) < 2.0, qPrintable(QString::number(d.velocityDb[1] - d.velocityDb[0])));
             QVERIFY2(std::fabs(d.ccDb[1] - d.ccDb[0] - expected) < 2.0, qPrintable(QString::number(d.ccDb[1] - d.ccDb[0])));
-            QVERIFY(d.sentDb[0] < d.sentDb[1] && d.sentDb[1] < d.sentDb[2]);
+            QCOMPARE(QString(d.drivenBy()), QString("both"));
+            QCOMPARE(d.pitch, 67);
+            QCOMPARE(int(d.curve.size()), 8);
+            // velocity * CC along x = both: 40 log(127 / 16) = 36 dB from 16 to 127
+            QVERIFY2(std::fabs(d.curve.back().second - d.curve.front().second - 40 * std::log10(127.0 / 16.0)) < 2.5,
+                     qPrintable(QString::number(d.curve.back().second - d.curve.front().second)));
+            for (size_t i = 1; i < d.curve.size(); ++i)
+                  QVERIFY(d.curve[i].second > d.curve[i - 1].second);
             }
-      // as sent: velocity and CC1 together on the velocity list's scale climb more than CC1 alone
-      QVERIFY(r[1].sentDb[2] - r[1].sentDb[0] > r[0].sentDb[2] - r[0].sentDb[0] + 6);
+      // 25 plays nothing at 67 (a harmonics patch): measured an octave up; 30 is silent everywhere
+      const std::vector<AC::DynamicsResult> r2 = AC::dynamics(p.get(), { 25, 30 }, { 67, 67 }, { false, false }, s);
+      QCOMPARE(int(r2.size()), 2);
+      QCOMPARE(r2[0].pitch, 79);
+      QCOMPARE(int(r2[0].curve.size()), 8);
+      QCOMPARE(r2[1].pitch, -1);
+      QVERIFY(r2[1].curve.empty());
       }
 
 //---------------------------------------------------------
@@ -1894,6 +2003,95 @@ void TestSoundLibrary::heldOnPerformance()
       QCOMPARE(chosen({ "legato", "long" }, {}), QString("1 Legato"));      // slurred
       QCOMPARE(chosen({ "short" }, {}), QString("0 Staccato"));
       QCOMPARE(chosen({ "long" }, { "muted" }), QString("0 Long CS"));       // con sord.
+      }
+
+//---------------------------------------------------------
+//   dynamicsCalibration
+//    measured curves (Check articulations › Dynamics): a short plays the velocity at which it is as
+//    loud as the part's held note at the note's dynamic (plus the balance setting); an accent keeps
+//    its share; without a curve for the held note, the <Dynamics velocity> rule
+//---------------------------------------------------------
+
+void TestSoundLibrary::dynamicsCalibration()
+      {
+      // Long on the controller: -40 + 0.1 x dB; Staccato on velocity: -70 + 0.4 x dB
+      auto line = [](const char* by, double a, double b) {
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = by;
+            for (int x : { 16, 32, 48, 64, 80, 96, 112, 127 })
+                  c.points.push_back({ x, a + b * x });
+            return c;
+            };
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal->setCurve("Violin", 1, line("controller", -40, 0.1));
+      cal->setCurve("Violin", 40, line("velocity", -70, 0.4));
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-70 + 0.4 * 50), 50);
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-100), 1);           // under the curve: its slope goes on, to 1
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-67.6), 6);          // (-70 + 0.4 x: 6)
+      QCOMPARE(cal->curve("Violin", 40)->inverse(0), 127);
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 1, "Violin", 1, 80), -1);    // on the controller
+      // pp (CC 32): -36.8 dB -> the staccato's velocity 83; mf (80): -32 -> 95
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 40, "Violin", 1, 32), 83);
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 40, "Violin", 1, 80), 95);
+      // written and read back
+      QTemporaryDir dir;
+      cal->balanceDb = -2;
+      QVERIFY(cal->write(dir.path() + "/dynamics.json"));
+      auto back = std::make_shared<SoundLib::DynamicsCalibration>();
+      QVERIFY(back->read(dir.path() + "/dynamics.json"));
+      QCOMPARE(back->balanceDb, -2.0);
+      QCOMPARE(back->curve("Violin", 40)->drivenBy, QString("velocity"));
+      QCOMPARE(int(back->curve("Violin", 40)->points.size()), 8);
+      // -2 dB: pp -38.8 -> 78
+      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32), 78);
+
+      // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
+      back->balanceDb = 0;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setDynamicsCalibration(back);
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::vector<int> velo;
+      for (const auto& te : events)
+            if (te.second.channel() == ch && te.second.type() == ME_NOTEON && te.second.velo() > 0)
+                  velo.push_back(te.second.velo());
+      SoundLib::setDynamicsCalibration(nullptr);
+      QCOMPARE(int(velo.size()), 9);
+      QCOMPARE(velo[0], 83);
+      QCOMPARE(velo[1], 83);
+      QCOMPARE(velo[3], 95);
+      QVERIFY2(velo[6] > 83 && velo[6] <= 127, qPrintable(QString::number(velo[6])));       // accented pp
+      delete score;
+
+      // calibratedController: the CC at which a patch's own long matches the held note (Violin -
+      // Performance's Legato, -40 + 0.1 x; the main patch's Long -45 + 0.2 x: at 32, 41)
+      auto lib2 = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' prefer='long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib2);
+      auto cal2 = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal2->setCurve("Violin - Performance", 20, line("controller", -40, 0.1));
+      cal2->setCurve("Violin", 1, line("controller", -45, 0.2));
+      QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 32), 41);
+      QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 80), 65);
       }
 
 QTEST_MAIN(TestSoundLibrary)

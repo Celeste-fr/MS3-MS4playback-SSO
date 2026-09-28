@@ -38,6 +38,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -125,6 +126,9 @@ struct LibInstrument {
       std::vector<Articulation> articulations;
       bool kit { false };                 // percussion served by its extras' keys; no patch of its own
       bool keyScan { false };             // a percussion patch: the articulation check scans its keys
+      int testPitch { -1 };               // a <Patch>'s note for the articulation check (from its files), -1: none
+      QString scan;                       // a <Patch> with several articulations (read from its files): "values"
+                                          // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;
       std::vector<Controller> controllers;          // its own (over the library's, by id)
       std::vector<Controller> allControllers;       // the library's with its own (Library::load)
@@ -236,6 +240,47 @@ Output output();
 void setAvailable(std::function<bool(const LibInstrument&)> available);
 void routesChanged();
 int routesGeneration();
+
+//---------------------------------------------------------
+//   DynamicsCalibration
+//    measured by Check articulations › Dynamics with the library's plug-in (<setups folder>/
+//    dynamics.json): each articulation's loudness (its loudest 50 ms, dB) along velocity = dynamics
+//    CC = x, and what sets it ("velocity", "controller", "both", "neither"). A short (on velocity)
+//    then plays the velocity at which it is as loud as the part's held note (the articulation a
+//    plain long note chooses) is at the note's dynamic, plus balanceDb (the owner's ear: short
+//    notes against long ones)
+//---------------------------------------------------------
+
+struct DynamicsCurve {
+      QString drivenBy;
+      std::vector<std::pair<int, double>> points;       // x (1 … 127, rising), dB
+      double at(int x) const;                           // interpolated; clamped at the ends
+      int inverse(double db) const;                     // the x that plays db (1 … 127)
+      };
+
+class DynamicsCalibration {
+      std::map<QString, std::map<int, DynamicsCurve>> _patches;    // patch name -> articulation value -> curve
+   public:
+      double balanceDb { 0 };
+      const DynamicsCurve* curve(const QString& patch, int value) const;
+      void setCurve(const QString& patch, int value, const DynamicsCurve& c) { _patches[patch][value] = c; }
+      const std::map<QString, std::map<int, DynamicsCurve>>& patches() const { return _patches; }
+      bool read(const QString& file);
+      bool write(const QString& file) const;
+      };
+
+void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c);
+std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
+// a short's velocity for the dynamics CC value cc: -1 when either curve is missing or the
+// articulation isn't on velocity
+int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
+                       const QString& refPatch, int refValue, int cc);
+// the dynamics CC value for a patch other than the held note's (the owner's check of 2026-09-28:
+// Violas' All techniques Long 10 dB over the Performance legato at pp): the value at which the
+// patch's own long (longValue) is as loud as the held note at cc; -1: a curve missing or not on
+// the controller
+int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
+                         const QString& refPatch, int refValue, int cc);
 
 //---------------------------------------------------------
 //   Route

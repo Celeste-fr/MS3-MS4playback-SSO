@@ -30,8 +30,8 @@ hairpin (Ethanol bar 14). Still open:
   bar 14 confirmed good;
 - the owner: try the Playback drop-down (Mixer, Play Panel) switching MS3 / MS4 / SSO;
 - the owner: pitches for the 49 accidentals MuseScore gives none;
-- the owner: hit lists for the unpitched drum kits (see CLAUDE.md › Eighth run: click each drum
-  icon in Kickstart and screenshot its hits on the keyboard);
+- the kits' hit lists: done (2026-09-26, the owner's screenshots); the 42 one-drum patches' keys: a key
+  scan (*Tick the patches to scan*), named from the `.nki` group order (CLAUDE.md › Articulations from the files);
 - the owner: re-check the tuned percussion (Timpani, Celeste, Marimba, Vibraphone, Tubular
   Bells) with the fixed key scan.
 
@@ -103,6 +103,11 @@ list first. Kits: at the library's defaults now (the owner: what they have off c
 patches, whose keys at their defaults aren't known yet: a key scan of those, or the owner's screenshots).
 
 ## Dynamics across techniques (2026-09-28)
+
+Calibration in (see `CLAUDE.md` › Dynamics calibration, › Faster, in the background). Next: the owner
+double-clicks `Measure SSO dynamics in background.bat` (every map patch, Performance ones included, in a
+copy of MuseScore of its own) and hands back the zip; the summary's "# Dynamics balance" shows what's left
+("!" lines).
 
 Shorts on velocity now follow the dynamics (see `CLAUDE.md` › Shorts). Next: the owner runs *Check articulations*
 with *Dynamics* ticked on the patches they use (one per family at least: strings, woodwinds, brass, a

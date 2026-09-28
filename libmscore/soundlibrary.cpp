@@ -13,10 +13,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 #include <set>
 
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
@@ -68,6 +72,26 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
       if (a.hasAttribute("number"))
             number = a.value("number").toInt();
       return number >= 0 && number < 128;
+      }
+
+// <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]/>;
+// no techniques: listed for reference and checked, never chosen by notation
+static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
+      {
+      Articulation art;
+      art.name = a.value("name").toString();
+      art.techniques = words(a.value("techniques").toString());
+      art.modifiers = words(a.value("modifiers").toString());
+      art.expect = a.value("expect").toString();
+      art.prefer = words(a.value("prefer").toString());
+      bool ok = false;
+      art.value = a.value("value").toInt(&ok);
+      if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
+            return false;
+      if (!ok || art.value < 0 || art.value > 127)
+            return false;
+      li.articulations.push_back(art);
+      return true;
       }
 
 // <Controller id="vibrato" name="Vibrato" cc="21" default="64">
@@ -198,22 +222,31 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Patch") {
-                  // <Patch name="Violins 1 - Core techniques" nki="Instruments/…/….nki" setup="$iooxo=3"/>
+                  // <Patch name="Violins 1 - Core techniques" nki="Instruments/…/….nki" setup="$iooxo=3" scan="values"/>
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
                   li.setupValues = readSetupValues(a.value("setup").toString());
+                  li.scan = a.value("scan").toString();
+                  li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
+                  li.keyScan = li.scan == "keys";
                   li.switchType = defType;
                   li.switchNumber = defNumber;
-                  if (li.name.isEmpty() || li.nki.isEmpty())
+                  if (li.name.isEmpty() || li.nki.isEmpty() || !(li.scan.isEmpty() || li.scan == "values" || li.scan == "keys"))
                         return fail(QString("%1:%2: bad Patch").arg(path).arg(r.lineNumber()));
+                  // its articulations, when known (from a scan): listed for reference, never chosen
+                  while (r.readNextStartElement()) {
+                        if (r.name() == "Articulation" && !readArticulation(r.attributes(), li))
+                              return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
+                        r.skipCurrentElement();
+                        }
                   lib->otherPatches.push_back(li);
-                  r.skipCurrentElement();
                   }
             else if (r.name() == "Instrument") {
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
+                  li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
                   li.setupValues = readSetupValues(a.value("setup").toString());
                   li.ids = words(a.value("ids").toString().toLower());
                   li.with = a.value("with").toString();
@@ -253,20 +286,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               li.drums.push_back(d);
                               }
                         else if (r.name() == "Articulation") {
-                              Articulation art;
-                              art.name = aa.value("name").toString();
-                              art.techniques = words(aa.value("techniques").toString());
-                              art.modifiers = words(aa.value("modifiers").toString());
-                              art.expect = aa.value("expect").toString();
-                              art.prefer = aa.value("prefer").toString().split(' ', QString::SkipEmptyParts);
-                              bool ok = false;
-                              art.value = aa.value("value").toInt(&ok);
-                              if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
-                                    ok = false;
-                              // (no techniques: listed for reference and checked, never chosen by notation)
-                              if (!ok || art.value < 0 || art.value > 127)
+                              if (!readArticulation(aa, li))
                                     return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
-                              li.articulations.push_back(art);
                               }
                         else if (r.name() == "Controller") {
                               Controller c;
@@ -512,6 +533,143 @@ void setAvailable(std::function<bool(const LibInstrument&)> available)
 void routesChanged()
       {
       ++generation;
+      }
+
+//---------------------------------------------------------
+//   DynamicsCalibration
+//---------------------------------------------------------
+
+double DynamicsCurve::at(int x) const
+      {
+      if (points.empty())
+            return -200;
+      if (x <= points.front().first)
+            return points.front().second;
+      for (size_t i = 1; i < points.size(); ++i) {
+            if (x <= points[i].first) {
+                  const auto& a = points[i - 1];
+                  const auto& b = points[i];
+                  return a.second + (b.second - a.second) * (x - a.first) / double(b.first - a.first);
+                  }
+            }
+      return points.back().second;
+      }
+
+int DynamicsCurve::inverse(double db) const
+      {
+      // the lowest x that reaches db (a curve with a dip from round robins: the first crossing);
+      // under the first point, the first segment's slope goes on (ppp under a curve measured from 32)
+      if (points.empty())
+            return -1;
+      if (db <= points.front().second) {
+            if (points.size() >= 2 && points[1].second > points[0].second) {
+                  const auto& a = points[0];
+                  const auto& b = points[1];
+                  return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), a.first);
+                  }
+            return std::max(1, points.front().first);
+            }
+      for (size_t i = 1; i < points.size(); ++i) {
+            const auto& a = points[i - 1];
+            const auto& b = points[i];
+            if (db <= b.second && b.second > a.second)
+                  return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), 127);
+            }
+      return 127;
+      }
+
+const DynamicsCurve* DynamicsCalibration::curve(const QString& patch, int value) const
+      {
+      auto p = _patches.find(patch);
+      if (p == _patches.end())
+            return nullptr;
+      auto v = p->second.find(value);
+      return v == p->second.end() ? nullptr : &v->second;
+      }
+
+bool DynamicsCalibration::read(const QString& file)
+      {
+      QFile f(file);
+      if (!f.open(QIODevice::ReadOnly))
+            return false;
+      const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+      balanceDb = o.value("balanceDb").toDouble(0);
+      _patches.clear();
+      const QJsonObject patches = o.value("patches").toObject();
+      for (auto p = patches.begin(); p != patches.end(); ++p) {
+            const QJsonObject arts = p.value().toObject();
+            for (auto a = arts.begin(); a != arts.end(); ++a) {
+                  const QJsonObject c = a.value().toObject();
+                  DynamicsCurve curve;
+                  curve.drivenBy = c.value("drivenBy").toString();
+                  for (const QJsonValue& pt : c.value("curve").toArray())
+                        curve.points.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                  std::sort(curve.points.begin(), curve.points.end());
+                  _patches[p.key()][a.key().toInt()] = curve;
+                  }
+            }
+      return true;
+      }
+
+bool DynamicsCalibration::write(const QString& file) const
+      {
+      QJsonObject patches;
+      for (const auto& p : _patches) {
+            QJsonObject arts;
+            for (const auto& a : p.second) {
+                  QJsonArray pts;
+                  for (const auto& pt : a.second.points)
+                        pts.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
+                  arts[QString::number(a.first)] = QJsonObject({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
+                  }
+            patches[p.first] = arts;
+            }
+      QJsonObject o;
+      o["balanceDb"] = balanceDb;
+      o["patches"] = patches;
+      QFile f(file);
+      if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+      f.write(QJsonDocument(o).toJson());
+      return true;
+      }
+
+static std::mutex calibrationMutex;
+static std::shared_ptr<const DynamicsCalibration> calibration;
+
+void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c)
+      {
+      {
+            std::lock_guard<std::mutex> lock(calibrationMutex);
+            calibration = c;
+      }
+      ++generation;
+      }
+
+std::shared_ptr<const DynamicsCalibration> dynamicsCalibration()
+      {
+      std::lock_guard<std::mutex> lock(calibrationMutex);
+      return calibration;
+      }
+
+int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
+                         const QString& refPatch, int refValue, int cc)
+      {
+      const DynamicsCurve* c = cal.curve(patch, longValue);
+      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
+      if (!c || !ref || (c->drivenBy != "controller" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+            return -1;
+      return c->inverse(ref->at(cc));
+      }
+
+int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
+                       const QString& refPatch, int refValue, int cc)
+      {
+      const DynamicsCurve* c = cal.curve(patch, value);
+      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
+      if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+            return -1;
+      return c->inverse(ref->at(cc) + cal.balanceDb);
       }
 
 int routesGeneration()
@@ -840,7 +998,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
 
       // back to normal first: "ord." may come with a new technique ("ord. pizz.")
       if (has("\\b(ord|ordin|ordinario|ordinary|nat|naturale|natural|norm|normale|normal|modo ordinario)\\b")) {
-            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue" })
+            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue", "espressivo" })
                   s.modifiers.removeAll(m);
             s.harmonics = false;
             s.tremolo = false;
@@ -882,6 +1040,12 @@ void TextTechniques::apply(const QString& text, TextState& s)
             s.modifiers.removeAll("bellsup");
       else if (has("\\b(bells\\s+up|bells\\s+in\\s+the\\s+air|campana\\s+in\\s+aria|campane\\s+in\\s+aria|pavillons?\\s+en\\s+l.air|schalltrichter\\s+(auf|hoch))"))
             addModifier(s, "bellsup");
+      // espressivo / molto vibrato (the owner, 2026-09-28: SSO's Long (Rachm.) for those passages, not
+      // as the default held sound); non / senza vibrato ends it
+      if (has("\\b(non|senza)\\s+vib"))
+            s.modifiers.removeAll("espressivo");
+      else if (has("\\b(espr|espress)") || has("\\bmolto\\s+vib") || has("\\bcon\\s+(molto\\s+)?vibrato"))
+            addModifier(s, "espressivo");
       if (has("\\b(pres\\s+de\\s+la\\s+table|p\\.?\\s*d\\.?\\s*l\\.?\\s*t\\b)"))
             addModifier(s, "pdlt");
       if (has("\\b(multi|double|triple)[\\s-]*tongu") || has("\\b(doppel|tripel)zunge"))

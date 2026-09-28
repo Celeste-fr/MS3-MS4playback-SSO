@@ -196,6 +196,26 @@ QString SoundLibraryHost::setupsFolder(const SoundLib::Library& library)
       return setupFolder(library);
       }
 
+QString SoundLibraryHost::calibrationFile(const SoundLib::Library& library)
+      {
+      return setupFolder(library) + "/dynamics.json";
+      }
+
+void SoundLibraryHost::loadCalibration()
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      std::shared_ptr<SoundLib::DynamicsCalibration> c;
+      if (library) {
+            c = std::make_shared<SoundLib::DynamicsCalibration>();
+            if (!c->read(calibrationFile(*library)))
+                  c.reset();
+            }
+      SoundLib::setDynamicsCalibration(c);
+      if (mscore)
+            for (MasterScore* s : mscore->scores())
+                  s->setPlaylistDirty();
+      }
+
 QString SoundLibraryHost::setupFile(const SoundLib::Library& library, const QString& instrument)
       {
       return setupFolder(library) + "/" + fileName(instrument) + ".vst3state";
@@ -1276,6 +1296,39 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
                   connect(b, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
             connect(_maxLanes, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
             connect(defaults, &QPushButton::clicked, this, [this]() { setLaneSettings(true); });
+            }
+      // the measured dynamics (Check articulations › Dynamics): short notes against held ones
+      if (library) {
+            QWidget* balanceRow = new QWidget(this);
+            QHBoxLayout* row = new QHBoxLayout(balanceRow);
+            row->setContentsMargins(0, 0, 0, 0);
+            QLabel* label = new QLabel(tr("Short notes against held notes (measured dynamics):"), balanceRow);
+            label->setToolTip(tr("Check articulations with Dynamics measures each articulation; a short note then plays as loud as "
+                                 "the part's held note at its dynamic, plus this"));
+            row->addWidget(label);
+            _balance = new QDoubleSpinBox(balanceRow);
+            _balance->setRange(-24.0, 24.0);
+            _balance->setDecimals(1);
+            _balance->setSingleStep(1.0);
+            _balance->setSuffix(tr(" dB"));
+            _balance->setKeyboardTracking(false);
+            row->addWidget(_balance);
+            row->addStretch();
+            layout->addWidget(balanceRow);
+            const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+            _balance->setValue(cal ? cal->balanceDb : 0.0);
+            balanceRow->setVisible(bool(cal));
+            connect(_balance, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double db) {
+                  SoundLib::DynamicsCalibration cal;
+                  const QString file = SoundLibraryHost::calibrationFile(*_library);
+                  if (!cal.read(file))
+                        return;
+                  cal.balanceDb = db;
+                  if (seq && seq->isPlaying())
+                        seq->stopWait();
+                  cal.write(file);
+                  SoundLibraryHost::loadCalibration();
+                  });
             }
       _table = new QTableWidget(this);
       _table->setEditTriggers(QAbstractItemView::NoEditTriggers);

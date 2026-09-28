@@ -169,7 +169,8 @@ double ArticulationCheck::distance(const std::vector<double>& a, const std::vect
 //---------------------------------------------------------
 
 std::vector<bool> ArticulationCheck::scanPictures(const QImage& base, const std::vector<QImage>& sameState, const std::vector<QImage>& shots,
-                                                  const QRect& area, const std::vector<int>& candidates, int* noneIndex)
+                                                  const QRect& area, const std::vector<int>& candidates, int* noneIndex,
+                                                  const std::vector<std::pair<QImage, QImage>>& samePairs)
       {
       const int n = int(shots.size());
       std::vector<bool> articulation(n, false);
@@ -191,16 +192,19 @@ std::vector<bool> ArticulationCheck::scanPictures(const QImage& base, const std:
       const int cw = (w + C - 1) / C;
       const int ch = (h + C - 1) / C;
       std::vector<char> noisy(cw * ch, 0);
-      for (const QImage& s : sameState) {
-            const QImage q = prepared(s);
+      auto noise = [&](const QImage& one, const QImage& other) {
             for (int y = 0; y < h; ++y) {
-                  const QRgb* p1 = reinterpret_cast<const QRgb*>(b.constScanLine(y));
-                  const QRgb* p2 = reinterpret_cast<const QRgb*>(q.constScanLine(y));
+                  const QRgb* p1 = reinterpret_cast<const QRgb*>(one.constScanLine(y));
+                  const QRgb* p2 = reinterpret_cast<const QRgb*>(other.constScanLine(y));
                   for (int x = 0; x < w; ++x)
                         if (differs(p1[x], p2[x]))
                               noisy[(y / C) * cw + x / C] = 1;
                   }
-            }
+            };
+      for (const QImage& s : sameState)
+            noise(b, prepared(s));
+      for (const auto& pair : samePairs)
+            noise(prepared(pair.first), prepared(pair.second));
       std::vector<char> masked(cw * ch, 0);
       for (int y = 0; y < ch; ++y)
             for (int x = 0; x < cw; ++x)
@@ -243,6 +247,30 @@ std::vector<bool> ArticulationCheck::scanPictures(const QImage& base, const std:
             none = 0;
       for (int i = 0; i < n; ++i)
             articulation[i] = differing(crops[none], crops[i]) > same;
+      // "no articulation" can look two ways within a scan: SSO leaves its RELEASE slider where the
+      // last short articulation put it, so the "None" pictures before the first short differ from
+      // those after (the owner's scan of 2026-09-27 21:29: 44 values of Celli - Core techniques
+      // taken for articulations). An articulation shows its own name: a picture shared by several
+      // values is another "no articulation"
+      const int shared = 4;
+      std::vector<int> reps;                    // one picture of each kind, and how many share it
+      std::vector<std::vector<int>> members;
+      for (int i = 0; i < n; ++i) {
+            if (!articulation[i])
+                  continue;
+            size_t k = 0;
+            while (k < reps.size() && differing(crops[reps[k]], crops[i]) > same)
+                  ++k;
+            if (k == reps.size()) {
+                  reps.push_back(i);
+                  members.push_back({});
+                  }
+            members[k].push_back(i);
+            }
+      for (const std::vector<int>& m : members)
+            if (int(m.size()) >= shared)
+                  for (int i : m)
+                        articulation[i] = false;
       if (noneIndex)
             *noneIndex = none;
       return articulation;
@@ -276,6 +304,11 @@ struct Player {
       int frames(double seconds) const { return int(seconds * s.sampleRate); }
 
       int lastPitch { -1 };
+      // settle to 50 dB under the last note, not to -70 dBFS (the dynamics measurement: its notes go
+      // from soft to loud, and a tail 50 dB under the loudest 50 ms of the next note moves it by
+      // less than 0.1 dB; the owner, 2026-09-28: make the test faster without losing data)
+      bool relativeSettle { false };
+      double lastLoudDb { -200 };
 
       // until the last note has died away to -70 dBFS (or 2 s): what is left of a reverb tail
       // then is 50 dB and more under the next note, too little to change its features
@@ -290,7 +323,8 @@ struct Player {
                   double peak = 0;
                   for (float x : b)
                         peak = std::max(peak, double(std::fabs(x)));
-                  if (db(peak * peak) < -70 && i >= 2)
+                  const double floorDb = relativeSettle ? std::max(-70.0, lastLoudDb - 50) : -70.0;
+                  if (db(peak * peak) < floorDb && i >= 2)
                         break;
                   }
             }
@@ -329,6 +363,7 @@ struct Player {
                   loudest = std::max(loudest, sum / win);
                   }
             c.loudDb = db(loudest);
+            lastLoudDb = c.loudDb;
             c.features = ArticulationCheck::features(clip, frames(s.note), s.sampleRate);
             return c;
             }
@@ -340,34 +375,82 @@ struct Player {
 //   dynamics
 //---------------------------------------------------------
 
+constexpr int ArticulationCheck::CURVE_POINTS[8];
+
+const char* ArticulationCheck::DynamicsResult::drivenBy() const
+      {
+      const double v = velocityDb[1] - velocityDb[0], c = ccDb[1] - ccDb[0];
+      return v >= 3 && c >= 3 ? "both" : v >= 3 ? "velocity" : c >= 3 ? "controller" : "neither";
+      }
+
 std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3Plugin* plugin, const std::vector<int>& values,
-   const std::vector<int>& pitches, const std::vector<std::array<Level, 3>>& sent, const Settings& settings, Progress progress)
+   const std::vector<int>& pitches, const std::vector<bool>& full, const Settings& settings, Progress progress)
       {
       std::vector<DynamicsResult> out;
       const int n = int(values.size());
-      if (!plugin || n == 0 || int(pitches.size()) != n || int(sent.size()) != n)
+      if (!plugin || n == 0 || int(pitches.size()) != n || int(full.size()) != n)
             return out;
       Player player { plugin, settings, {} };
+      player.relativeSettle = true;
       int done = 0;
-      const int total = 7 * n;
+      const int total = 8 * n;                  // (about: 3 to classify, 2 to 7 more)
       auto at = [&](int value, int pitch, int velocity, int cc, double* db) {
             player.s.velocity = qBound(1, velocity, 127);
             player.s.dynamicsValue = qBound(0, cc, 127);
             *db = player.play(-1, value, pitch).loudDb;
             ++done;
-            return !progress || progress(done, total);
+            return !progress || progress(done, std::max(total, done));
             };
       for (int i = 0; i < n; ++i) {
             DynamicsResult r;
             r.value = values[i];
-            r.pitch = pitches[i];
-            for (int k = 0; k < 3; ++k)
-                  if (!at(r.value, r.pitch, sent[i][k].velocity, sent[i][k].cc, &r.sentDb[k]))
+            player.s.note = settings.note;
+            player.s.tail = settings.tail;
+            // what drives it: velocity 32 / CC 32, then the CC alone up, then the velocity alone up;
+            // at another pitch of the instrument where the test pitch plays nothing (harmonics …)
+            double d32 = -200, cc127 = -200, v127 = -200;
+            for (int shift : { 0, 12, -12, 7, -5, 24 }) {
+                  const int p = pitches[i] + shift;
+                  if (shift && (p < settings.minPitch || p > settings.maxPitch))
+                        continue;
+                  if (!at(r.value, p, 32, 32, &d32) || !at(r.value, p, 32, 127, &cc127) || !at(r.value, p, 127, 32, &v127))
                         return out;
-            const int lo = 32, hi = 127, mid = 100;
-            if (!at(r.value, r.pitch, lo, mid, &r.velocityDb[0]) || !at(r.value, r.pitch, hi, mid, &r.velocityDb[1])
-                || !at(r.value, r.pitch, mid, lo, &r.ccDb[0]) || !at(r.value, r.pitch, mid, hi, &r.ccDb[1]))
-                  return out;
+                  if (std::max(d32, std::max(cc127, v127)) > SILENT_DB) {
+                        r.pitch = p;
+                        break;
+                        }
+                  }
+            if (r.pitch < 0) {                  // silent at every pitch tried: no curve
+                  out.push_back(r);
+                  continue;
+                  }
+            r.velocityDb[0] = d32;
+            r.velocityDb[1] = v127;
+            r.ccDb[0] = d32;
+            r.ccDb[1] = cc127;
+            const QString by = r.drivenBy();
+            if (by == "velocity" || by == "both" || full[size_t(i)]) {
+                  // the whole curve, soft to loud; a short on velocity: its loudest 50 ms is its start,
+                  // a shorter note and tail do (0.5 s, 0.2 s)
+                  if (by == "velocity") {
+                        player.s.note = std::min(settings.note, 0.5);
+                        player.s.tail = std::min(settings.tail, 0.2);
+                        }
+                  for (int x : CURVE_POINTS) {
+                        double db = d32;
+                        if (x != 32 && !at(r.value, r.pitch, x, x, &db))
+                              return out;
+                        r.curve.push_back({ x, db });
+                        }
+                  }
+            else {
+                  // on the controller (a long, tremolo …): the dynamics the report shows, and 127
+                  // (velocity doesn't move it: velocity 32 with CC 127 is CC 127)
+                  double d80, d112;
+                  if (!at(r.value, r.pitch, 80, 80, &d80) || !at(r.value, r.pitch, 112, 112, &d112))
+                        return out;
+                  r.curve = { { 32, d32 }, { 80, d80 }, { 112, d112 }, { 127, cc127 } };
+                  }
             out.push_back(r);
             }
       player.settle();

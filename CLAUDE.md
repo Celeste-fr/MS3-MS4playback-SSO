@@ -1,6 +1,6 @@
 # CLAUDE.md: notes for agents working on this repository
 
-This is a private fork of the MuseScore 3.7 community fork (Jojo-Schmitz/MuseScore 3.x @
+This is a fork (public since 2026-09-28; private before) of the MuseScore 3.7 community fork (Jojo-Schmitz/MuseScore 3.x @
 29e066cd, history squashed). It has two goals:
 
 1. **MS4 playback.** MuseScore 3 plays scores the way MuseScore 4 does: the same FluidSynth
@@ -32,8 +32,9 @@ library work; the tuning work is described under "Tuning" below).
   last commit message, or *Run workflow* on that branch). Check `git log` of `main` and of
   your branch, and the latest commit messages, first. They are detailed on purpose and
   describe what each step did and how it was measured.
-- CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This keeps the
-  private repo's Actions minutes.
+- CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This kept the
+  private repo's Actions minutes; the repository is public since 2026-09-28 (the owner ran out of
+  minutes), and public repositories run Actions on GitHub's standard runners for free.
 
 ## Rule: readings of music go on a review page
 
@@ -311,6 +312,52 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   dB (Long: -35.2 dB at 32, -27.1 at 80, -26.7 at 127: little above mf); velocity moves a short far more
   (Spiccato -58.8 at 32 -> -19.4 at 127, Bartok 28 dB, Col legno 21 dB). So at pp the listed shorts are
   25 dB under the longs, at ff level with them: their velocity scale may need narrowing (open; the owner's ear).
+  **Dynamics calibration** (the owner, 2026-09-28: with section strings the staccatos were quiet again;
+  "me manually hearing for every single technique volume is not gonna cut it"): *Check articulations* ›
+  *Dynamics* measures each articulation along velocity = CC1 = 16, 32 … 112, 127
+  (`ArticulationCheck::CURVE_POINTS`, loudest 50 ms) plus velocity-only / CC1-only ends (`drivenBy`), and
+  merges the curves into `<setups folder>/dynamics.json` (`SoundLib::DynamicsCalibration`, loaded by
+  `SoundLibraryHost::loadCalibration` at startup / preferences / after a check). Playback
+  (`libVelocity` in rendermidi): a note whose articulation is measured on velocity plays
+  `calibratedVelocity`: the inverse of its curve at the held note's loudness (the articulation
+  `choose(patches, {long})` gives: the Performance legato) at the dynamic's CC, plus `balanceDb`
+  (*View › Sound Library…* "Short notes against held notes"); an accent keeps its share. No curve for
+  either: the `<Dynamics velocity>` rule. On the controller (tremolo, trills …): not adjustable (the CC is
+  the part's). summary.txt "# Dynamics balance": every measured articulation against the held note at
+  pp / mf / ff, now and as before, "!" past 3 dB (the automatic test). The other branch's data (control
+  titles, articulation names, key ranges per .nki) has no velocity layers or volumes; the library-files
+  extract's library.json would show velocity-split vs crossfaded layers but not loudness. Tests
+  `dynamicsCalibration`, `dynamicsCheck`.
+  **Faster, in the background** (the owner, 2026-09-28: "have it run in the background and use separate folders
+  … make the test faster without compromising the data"): *Dynamics only* (check box; `dynamicsPatch`) skips
+  the articulation check and the window pictures; `measureDynamics` measures only articulations a notation
+  chooses (techniques not empty); `ArticulationCheck::dynamics` classifies with 3 notes (velocity 32 / CC 32,
+  CC 127, velocity 127; other pitches where silent: +12, -12, +7, -5, +24) and gives the full 8-point curve only
+  to one on velocity (0.5 s note, 0.2 s tail) or asked for in full (the part's held note: `full`), one on the
+  controller 32 / 80 / 112 / 127; notes go soft to loud and each waits for the last one's tail 50 dB under it
+  (`Player::relativeSettle`), not -70 dBFS. The owner's Violas run of 2026-09-27 (old way, ~430 notes) took about
+  a minute: Kontakt offline is ~10x real time. `MuseScore --extract-library <lib> --check-dynamics
+  [--extract-patches mapped|file]` (musescore.cpp `extractInBackground`, `runHeadless(…, dynamics)`): its own
+  setups copy (`background dynamics check setups`), lock and log (`background dynamics check.log`), the curves
+  merged into the working `dynamics.json` at the end (balance kept). `Measure SSO dynamics in background.bat`
+  (bin): copies the install to `%LOCALAPPDATA%\MuseScore background dynamics check` (the owner installs other
+  builds meanwhile), refuses a second run (PowerShell: a process from that folder), starts it; a patch list file
+  dropped on it. Tried here headless with the test synth (a map DynTest.xml, the synth's state as setups):
+  2 patches in 4 s, the unused value skipped, harmonics measured an octave up, the balance report in the summary.
+  **The owner's background run (2026-09-28 01:40, 56 min, 159 patches, 417 curves)**: shorts balanced (Violas
+  Spiccato -14 / -12 / -7 -> within 0.3 dB). On the controller, a patch other than the held note's differs
+  (Violas' All techniques Long +10 / +3 / -2 dB against the Performance legato; Rachm. +11 at pp): one CC per
+  patch fitted to its long fixed Long / Rachm. / Marcato at mf but put tremolo and trills 5-11 dB off (left
+  out; `calibratedController` kept). **The owner's choice: controller articulations stay as Spitfire made
+  them**; only the shorts are calibrated, and the report flags only a short out of its velocity range.
+  12 patches "played nothing": no instrument templates in the background process, all tested at 60; mapped
+  patches now carry `pitch=` (their .nki's median zone key), and a patch no notation plays isn't loaded.
+  **Section strings' shorts and Long (Rachm.)** (the owner, 2026-09-28): staccato plays Short 0.5,
+  staccatissimo Spiccato, tenuto / portato Short 1.0 (Violins 1/2, Violas, Celli, Basses, Strings
+  Ensemble); staff text "espr." / "espressivo" / "molto vib." / "con vibrato" sets the modifier
+  `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
+  Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
+  Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
   **Held notes on the Performance patch** (the owner, 2026-09-28: lone held notes quiet and "the pan is
   broken"; bar 12's lone pickup eighths barely audible): a part's slurred notes played "X - Performance"
   and its lone held / unmarked notes the All techniques patch's Long, another recording with its own
@@ -970,6 +1017,69 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   both have plays on the kit patch and only a technique the kit lacks loads the drum's own patch. Their
   keys (`SINGLE_HITS` / `SINGLE_DRUMS`, at their defaults) are not known yet. Kickstart shows a technique with no key on C-2 (0). None of it heard in
   Kontakt yet.
+  - **Articulations from the files** (2026-09-28; the owner: scan faster without missing anything): each
+    `.nki`'s top-level sample-group names under the first mic are its articulations (variants, round robins,
+    dynamic layers, release groups left out; for Violins 1 exactly what Check articulations saw in Kontakt),
+    read from the owner's library-files extract into `tools/soundlibraries/sso_nki_articulations.json` (700
+    patches). Of the 541 patches the map doesn't use, 518 have one sound (single techniques, Performance): no
+    switch to scan. The 23 with several are marked in the map, `<Patch … scan="values">` (the 4 Curated
+    Ensembles, the 12 Core / Decorative techniques) or `scan="keys"` (the 6 percussion ensembles, Harp
+    glissandi; `keyScan`); *Check articulations* › *Tick the patches to scan* ticks them. The files give the
+    names only: which switch value plays which is in Spitfire's script, so Kontakt still scans those 23.
+    The owner's scan of 2026-09-27 20:15 (run 165) gave the 4 Curated Ensembles' values: their names in
+    alphabetical order, 1 … n (reviewed on https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR; Tutti 5 = Long
+    confirmed by the owner in Kontakt). They are in the map as `<Articulation>` children of their `<Patch>`
+    (`SCANNED` in gen_spitfire_sso.py; no techniques, no `scan`), so 12 values and 7 keys patches are left.
+    Test `spitfireMap`. Scan blind spot: the articulation selected at load (Curated: value 1, Beast Long)
+    looks like the values the patch lacks, which show it too, so neither picture nor sound tells its value.
+    The picture most values show now goes on the sheet as its last cell (`noneOnSheet` in results.json);
+    `read_check_names.py` flags it "AT LOAD" with the UACC number it reads when it isn't SSO's "None".
+    The owner's scan of the 12 Core / Decorative patches (2026-09-27 21:29, run 167): 8 scanned well; Celli,
+    Violas, Violins 1 and 2 - Core techniques "found" 64-67 values and played nothing offline. Their "None"
+    pictures looked two ways (the RELEASE slider left where the last articulation put it), so the ones before
+    it moved counted as articulations, the first of them (0, silent) was the offline wait's note, and a minute
+    of silence left no listening. Now a picture 4 or more values share is "no articulation" too
+    (`scanPictures`; on the owner's sheets: Celli Core 65 → 14, Violins 1 Core 67 → 17, the files list 17 / 18),
+    and the offline wait plays the value heard while loading. Test `scanPictures` (a slider like SSO's).
+    The re-scan of those 4 (2026-09-27 23:32, run 170) worked (14-15 each, every value and name the same as
+    the map's All techniques patch of that instrument), but it and the 21:29 scan missed articulations the
+    files list: Pizzicato (Core), Pizzicato / Bartok / Col Legno (Basses Core), Short Brushed / Spiccato CS
+    (Ensembles Core), Long CS Sul Pont and three trills (Violins 1 Decorative). A patch not in the map starts
+    as it loaded (Long) and the scan can't go back there, so its after-scan picture showed "None", and against
+    the start that marked the name and its button as "changing by itself"; articulations that differed from
+    "None" only there were lost. Now that picture is paired with the last value's during the scan
+    (`scanPictures` `samePairs`). Test `scanPictures` (the old comparison misses, the new finds all).
+    With it (2026-09-28 00:09, run 177) 10 of the 12 came out complete, Long included; Ensembles and Violins
+    2 - Decorative went wrong that time (cause unknown) and come from the 21:29 scan. All 12 are in the map
+    now (`SCANNED`, (value, name) pairs; names as the `.nki` and Kontakt's window give them; review page
+    https://claude.ai/artifact/D7VXjMSZfd1xRy3x5TzzBZ, OCR confirmed by the owner): every value is the
+    instrument's All techniques value; Violins 2 - Decorative's Trill (Major 2nd), in neither scan, is 71
+    (confirmed by the owner in Kontakt); Long Sul G / C in Violins 1 / 2 and Celli - Core play nothing, as in
+    All techniques (`expect="silent"`). No `scan="values"` patch is left; the 7 key patches have no key names.
+    The one-drum patches' keys are not in the files: their zones sit on keys 0-31 (round robins, dynamic
+    layers) and Spitfire's script lays the techniques on the keyboard when the patch loads. The kits the owner
+    screenshotted lay each drum's default techniques on consecutive white keys in the `.nki`'s group order
+    (Bongos: Hand flam 48, Hand bass 50, Hand tone 52, Finger flam 53, bass 55, slap 57, Hit 59; Snare 1: Hit
+    36, Edge 38, Rim 40). So a key scan of the 42 (which keys sound) plus the group order should name them, to
+    be reviewed by the owner. *Tick the patches to scan* now ticks a kit's own drum patches whose keys the map
+    lacks (extra, keyScan, no `<Drum>`: the 42), not the 7 scanned on 2026-09-27. About 5-6 minutes a patch.
+    **In the background** (the owner, 2026-09-28: "exactly like" the extract): `Scan SSO drum keys in
+    background.bat` (`main/…bat.in`, installed to bin) starts `MuseScore3Evo.exe --scan-keys "Spitfire Symphony
+    Orchestra"` (`[--extract-patches <file>]`; `scanKeysMode`, which also sets `extractMode`: the same process
+    rules, setups copy, lock, log `background extract.log` and `DialogWatch`; no relaunch).
+    `ArticulationCheckDialog::runHeadlessKeyScan` ticks `toScanNow` (the same as the button) and runs `check()`,
+    which says its steps in the log (patch n of m, minutes left, each result) instead of message boxes; the key
+    scan opens no plug-in window then (a window of a windowless process would pop up on the owner's screen), so
+    it listens only: which keys sound, no sheet. Tried here with the test synth (a map with two drum patches
+    without keys and one with): the two scanned, 2.6 min each, log, summary and zip as the extract's; so about
+    2 hours for the 42.
+    The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
+    windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
+    Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6
+    percussion ensembles and Harp glissandi (keys that sound and keyswitches; Kickstart names no key), then hung on
+    Basses - Core techniques: the test note was 60, above its samples (24-78), and the check waits for a sound.
+    `<Patch pitch=>` now gives each patch the middle of its zones' keys (`sso_nki_keys.json`: lowest, highest,
+    median; every program says 0-127), `LibInstrument::testPitch`, used by `ArticulationCheckDialog::testPitch`.
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
     are silent at every pitch; the report now lists such values apart ("most likely none",
@@ -1026,8 +1136,13 @@ with a push to `main` (or a `claude/` branch) whose last commit message contains
 `[windows-build]`. The workflow keeps the build folder in a GitHub cache (`msvc-build-x64-<sha>`) and
 restores the latest one, setting unchanged files' times back to 2000 so MSBuild compiles only what changed
 since the cached commit (the owner, 2026-09-27: "don't rebuild everything every time"); a change to a
-header in the precompiled header still rebuilds most. **Actions minutes: use them conservatively** (the owner, 2026-09-27, after
-run 72 was started only to see the merged code compile on MSVC). Start a Windows build only
+header in the precompiled header still rebuilds most. **Actions minutes** (the owner, 2026-09-27, after
+run 72 was started only to see the merged code compile on MSVC; the owner then ran out of minutes, and on
+2026-09-28 made the repository public, where standard runners are free, so minutes no longer limit builds.
+The rest still holds: a build takes about 15 minutes of the owner's wait, and the runs list stays readable).
+**Public repository:** everything in it is visible to anyone. Never commit Spitfire's or NI's files (samples,
+`.nki`, presets, scripts, expression maps), the owner's own scores or extracts, logs with their paths, keys or
+e-mail addresses; derived names, titles and key ranges only (as before). Start a Windows build only
 when the owner needs a new MuseScore to try something, or when a change touches code Linux
 can't compile (`Q_OS_WIN`, MSVC-only paths) and the owner will need it soon. Not to confirm that
 code which passes here also compiles on Windows: that check rides along with the next build the
