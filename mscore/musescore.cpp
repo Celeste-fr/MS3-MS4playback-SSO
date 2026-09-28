@@ -4641,6 +4641,44 @@ static QString readRunFile(const QString& path)
       return f.open(QIODevice::ReadOnly | QIODevice::Text) ? QString::fromUtf8(f.readAll()).trimmed() : QString();
       }
 
+#ifdef Q_OS_WIN
+//---------------------------------------------------------
+//   childHasCrashNotice
+//    a visible window of that process whose texts say Kontakt crashed
+//---------------------------------------------------------
+
+struct CrashNoticeSearch { DWORD pid; bool found; };
+
+static BOOL CALLBACK crashNoticeText(HWND h, LPARAM l)
+      {
+      wchar_t buf[512];
+      const int n = GetWindowTextW(h, buf, 512);
+      if (n > 0 && QString::fromWCharArray(buf, n).contains("encountered a major problem", Qt::CaseInsensitive)) {
+            reinterpret_cast<CrashNoticeSearch*>(l)->found = true;
+            return FALSE;
+            }
+      return TRUE;
+      }
+
+static BOOL CALLBACK crashNoticeWindow(HWND h, LPARAM l)
+      {
+      CrashNoticeSearch* s = reinterpret_cast<CrashNoticeSearch*>(l);
+      DWORD pid = 0;
+      GetWindowThreadProcessId(h, &pid);
+      if (pid == s->pid && IsWindowVisible(h))
+            EnumChildWindows(h, crashNoticeText, l);
+      return s->found ? FALSE : TRUE;
+      }
+
+static bool childHasCrashNotice(DWORD pid)
+      {
+      CrashNoticeSearch s { pid, false };
+      if (pid)
+            EnumWindows(crashNoticeWindow, reinterpret_cast<LPARAM>(&s));
+      return s.found;
+      }
+#endif
+
 static bool superviseExtract(const QString& root)
       {
       QDir().mkpath(root);
@@ -4689,7 +4727,24 @@ static bool superviseExtract(const QString& root)
                   }
             // a hang: nothing written to the log for so long (a patch logs its step at least once a minute)
             bool hung = false;
-            while (!child.waitForFinished(30000)) {
+            bool kontaktCrashed = false;
+            int polls = 0;
+            while (!child.waitForFinished(2000)) {
+#ifdef Q_OS_WIN
+                  // Kontakt's own crash notice ("Kontakt 8 has encountered a major problem and has been terminated",
+                  // the owner's run of 2026-09-28 15:22): a message box in the crashed process that waits for OK, with
+                  // the process's other threads (the child's DialogWatch) stopped, so the run waited on it. The child
+                  // has crashed: it is ended here and the patch goes on as after any crash
+                  if (childHasCrashNotice(DWORD(child.processId()))) {
+                        ArticulationCheckDialog::logBackground("Kontakt showed its crash notice (\"has encountered a major problem\"): that MuseScore is ended");
+                        child.kill();
+                        child.waitForFinished(60000);
+                        kontaktCrashed = true;
+                        break;
+                        }
+#endif
+                  if (++polls % 15)
+                        continue;         // (the log every 30 s)
                   const QDateTime last = QFileInfo(log).lastModified();
                   if (last.isValid() && last.secsTo(QDateTime::currentDateTime()) > hangMinutes * 60) {
                         ArticulationCheckDialog::logBackground(QString("nothing in the log for %1 minutes: that MuseScore is stopped").arg(hangMinutes));
@@ -4715,7 +4770,7 @@ static bool superviseExtract(const QString& root)
                   break;
                   }
             const QString where = left.takeFirst();
-            const bool crashed = child.exitStatus() == QProcess::CrashExit || child.exitCode() != 0;
+            const bool crashed = kontaktCrashed || child.exitStatus() == QProcess::CrashExit || child.exitCode() != 0;
             // where it was: the step, and (Windows) the module the fault was in
             const QString stepLine = readRunFile(stepFile);
             const QString step = stepLine.section('\t', 0, 0) == where ? stepLine.section('\t', 1).trimmed() : QString();

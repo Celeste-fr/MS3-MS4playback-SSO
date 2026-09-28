@@ -893,6 +893,10 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   0-31; Spitfire's script lays the hits out higher), so 2 minutes of waiting and every controller in real time on
   silence. Now a patch with `<Drum key>` entries is tested on a hit's key (else its first key; `testPitch`), and a
   patch that played nothing at any pitch tried is described only (`controllers.notMeasured`).
+  Kontakt's own crash notice (the owner, 15:22: "Kontakt 8 has encountered a major problem and has been terminated",
+  a `.nicrash` in Documents/Native Instruments/Kontakt 8/Crashlogs) is a message box in the crashed process waiting for
+  OK, so the child's own DialogWatch can't close it; the supervisor now looks every 2 s for a window of the child with
+  that text (`childHasCrashNotice`, Windows only) and ends the child, a crash like any other.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
