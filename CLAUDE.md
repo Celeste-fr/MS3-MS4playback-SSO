@@ -574,7 +574,18 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   again on a new Kontakt instance; five in a row still without stop the run with a log line. The owner's next run
   (16:43, 28.8 min for 700) had the same warning on Celli - Performance (after Violas - Performance on the same
   instance) and, from it on, 642 patches whose only "control" was Kontakt's own `NIKT0018` (parameter 2048), so the
-  retry didn't fire: `namedControls` no longer counts `NIKT<n>` titles. On Windows a
+  retry didn't fire: `namedControls` no longer counts `NIKT<n>` titles. The run after (17:20) retried Celli - Performance on a new
+  instance and that failed too: after the warning Kontakt runs no patch script in the whole process. So a headless run
+  now stops at a patch still without named controls after the retry (`_broken`, `_left`), and `extractInBackground`
+  starts a new MuseScore (`--extract-round n`, at most `MAX_EXTRACT_ROUNDS` 20) on `background extract round n.txt`
+  (the patches left, without that one); each process writes its own extract and zip (a folder of the same minute gets
+  " (2)"). Tried here with the test synth and `MS_EXTRACT_TEST_BROKEN=<patch>` (a test switch: from that patch on the
+  process counts as broken): 5 patches, broken on the 3rd, the other 4 in two zips. Looked into Celli - Performance
+  (the owner's `.nki` and made setup): its 27,528 sample references all resolve inside their `.nkx` (the library files
+  extract's archive lists), its header and SNPID (N51) are as Violins 1's, and the made setup's program is the
+  `.nki`'s byte for byte but `$iooxo` (1 in this `.nki`, 0 in Violins 1's; set to 3 as in the owner's hand-made
+  Performance setups). Why Kontakt can't recall it is not known. In the GUI too its made setup came back unchanged
+  (the owner's load times.log, 2026-09-27 16:28), so a part playing it most likely plays nothing. On Windows a
   watchdog thread (`DialogWatch`, musescore.cpp, background run only: the process has no window of its own)
   logs the title and texts of any visible window of the process and closes it (WM_CLOSE) after 30 s. The
   warning (the owner's screenshot): "One or more Kontakt instances cannot be recalled correctly, perhaps due to

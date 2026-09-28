@@ -1998,7 +1998,10 @@ void ArticulationCheckDialog::extract()
 
       const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HHmm");
       const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
-      const QString folder = root + "/" + safeFileName(_library->name) + " extract " + stamp;
+      QString folder = root + "/" + safeFileName(_library->name) + " extract " + stamp;
+      // (a new process of a background run can start in the same minute: never into another's folder)
+      for (int n = 2; QFileInfo::exists(folder) || QFileInfo::exists(folder + ".zip"); ++n)
+            folder = root + "/" + safeFileName(_library->name) + " extract " + stamp + QString(" (%1)").arg(n);
       if (!QDir().mkpath(folder)) {
             if (_headless)
                   say(QString("cannot create %1").arg(folder));
@@ -2055,6 +2058,13 @@ void ArticulationCheckDialog::extract()
             const QString before = summary;
             int named = -1;
             bool ok = extractPatch(chosen[k], path, folder, empty, instance, summary, &named);
+            // (a test: Kontakt broken from this patch on, in this process only)
+            static const QString testBroken = qEnvironmentVariable("MS_EXTRACT_TEST_BROKEN");
+            static bool testBrokenNow = false;
+            if (!testBroken.isEmpty()) {
+                  testBrokenNow = testBrokenNow || _rows[chosen[k]].instrument->name == testBroken;
+                  named = testBrokenNow ? 0 : 1;
+                  }
             // (only once patches of this run named controls: a plug-in that names none, sfizz or the
             // tests' synth, isn't retried)
             if (ok && named == 0 && sawNamed && !_cancel) {
@@ -2062,8 +2072,22 @@ void ArticulationCheckDialog::extract()
                   say("   no named controls: once more on a new Kontakt instance");
                   instance.reset();
                   ok = extractPatch(chosen[k], path, folder, empty, instance, summary, &named);
-                  if (ok && named == 0)
+                  if (!testBroken.isEmpty())
+                        named = testBrokenNow ? 0 : 1;
+                  if (ok && named == 0) {
                         say("   still no named controls");
+                        // (the owner's run of 2026-09-27 17:20: after Kontakt's warning on Celli -
+                        // Performance, a new instance ran no patch's script either: Kontakt is broken
+                        // for the whole process, so a new process goes on without this patch)
+                        if (_headless) {
+                              _broken = _rows[chosen[k]].instrument->name;
+                              for (int j = k + 1; j < int(chosen.size()); ++j)
+                                    _left << _rows[chosen[j]].instrument->name;
+                              summary += QString("\n(Stopped: Kontakt runs no patch script any more in this process since %1; "
+                                                 "%2 patches left for a new one.)\n").arg(_broken).arg(_left.size());
+                              break;
+                              }
+                        }
                   }
             sawNamed = sawNamed || named > 0;
             noneInARow = ok && named == 0 && sawNamed ? noneInARow + 1 : 0;
@@ -2094,7 +2118,8 @@ void ArticulationCheckDialog::extract()
       _status->setText(tr("Done: %1").arg(QDir::toNativeSeparators(zipPath)));
       if (_headless) {
             say(QString("done in %1 min: %2").arg(total.elapsed() / 60000.0, 0, 'f', 1).arg(QDir::toNativeSeparators(zipPath)));
-            QDesktopServices::openUrl(QUrl::fromLocalFile(root));    // (so the owner sees it's done)
+            if (_broken.isEmpty())                                   // (else a new process goes on)
+                  QDesktopServices::openUrl(QUrl::fromLocalFile(root));    // (so the owner sees it's done)
             return;
             }
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));

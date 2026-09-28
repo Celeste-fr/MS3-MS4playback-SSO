@@ -94,6 +94,11 @@ class ArticulationCheckDialog : public QDialog {
       bool _cancel { false };
       bool _headless { false };     // runHeadless: no dialog shown, progress on stderr
       QString _zip;                 // the last extract's zip
+      // runHeadless: Kontakt stopped running patch scripts for this whole process (a warning of
+      // Kontakt's, then no patch names a control, even on a new instance): the patch it happened on
+      // and those not done yet, for a new process (extractInBackground)
+      QString _broken;
+      QStringList _left;
       void say(const QString& line) const;
 
       QJsonObject _records;         // the last check of each patch (checks.json)
@@ -135,6 +140,8 @@ class ArticulationCheckDialog : public QDialog {
       // patch with a setup), "mapped" (the map's own) or a file with one patch name a line; the zip's
       // path in zip. false: nothing to do, or no plug-in
       bool runHeadless(const QString& patches, bool pitchBend, QString* zip);
+      QString brokenOn() const     { return _broken; }
+      QStringList patchesLeft() const { return _left; }
       // a line of the background extract's log: stderr and Documents/MuseScore Sound Library Check/
       // background extract.log (MuseScore on Windows has no console to show stderr)
       static void logBackground(const QString& line);

@@ -20,6 +20,8 @@
 #include <QLabel>
 #include <QSpinBox>
 #include <QStandardPaths>
+#include <QDesktopServices>
+#include <QProcess>
 #include <QStyleFactory>
 #include <QTimer>
 #include <QWidgetAction>
@@ -246,6 +248,7 @@ static bool extractMode = false;           // --extract-library: Extract plug-in
 static QString extractLibrary;
 static QString extractPatches = "all";
 static bool extractPitchBend = false;
+static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -4519,6 +4522,8 @@ struct DialogWatch {
       };
 #endif
 
+static const int MAX_EXTRACT_ROUNDS = 20;
+
 static bool extractInBackground()
       {
 #ifdef Q_OS_WIN
@@ -4567,10 +4572,49 @@ static bool extractInBackground()
                                              .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)));
       ArticulationCheckDialog dialog(library);
       QString zip;
+      bool ok;
+      {
 #ifdef Q_OS_WIN
-      DialogWatch watch;
+            DialogWatch watch;
 #endif
-      return dialog.runHeadless(extractPatches, extractPitchBend, &zip);
+            ok = dialog.runHeadless(extractPatches, extractPitchBend, &zip);
+      }
+      // Kontakt broken for this process (a patch it can't recall, then no patch script runs, even on
+      // a new instance): a new MuseScore goes on with the patches left, without that one (the owner's
+      // run of 2026-09-27 17:20 stopped at Celli - Performance, patch 59 of 700). Each process
+      // writes its own extract and zip
+      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      if (!dialog.brokenOn().isEmpty()) {
+            const QStringList left = dialog.patchesLeft();
+            ArticulationCheckDialog::logBackground(QString("Kontakt stopped running patch scripts on %1 (left out)")
+                                                   .arg(dialog.brokenOn()));
+            if (left.isEmpty() || extractRound >= MAX_EXTRACT_ROUNDS) {
+                  if (!left.isEmpty())
+                        ArticulationCheckDialog::logBackground(QString("%1 processes already: stopped, %2 patches not done")
+                                                               .arg(extractRound).arg(left.size()));
+                  QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+                  return ok;
+                  }
+            const QString list = root + QString("/background extract round %1.txt").arg(extractRound + 1);
+            QFile f(list);
+            if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+                  ArticulationCheckDialog::logBackground(QString("cannot write %1").arg(QDir::toNativeSeparators(list)));
+                  return ok;
+                  }
+            f.write(("# left after " + dialog.brokenOn() + "\n" + left.join("\n") + "\n").toUtf8());
+            f.close();
+            QStringList args { "--extract-library", extractLibrary.isEmpty() ? library->name : extractLibrary,
+                               "--extract-patches", list, "--extract-round", QString::number(extractRound + 1) };
+            if (extractPitchBend)
+                  args << "--extract-pitch-bend";
+            lock.unlock();                              // (the new one takes it)
+            if (QProcess::startDetached(QCoreApplication::applicationFilePath(), args))
+                  ArticulationCheckDialog::logBackground(QString("going on in a new MuseScore with %1 patches (round %2)")
+                                                         .arg(left.size()).arg(extractRound + 1));
+            else
+                  ArticulationCheckDialog::logBackground("could not start a new MuseScore; start the extract again");
+            }
+      return ok;
       }
 
 static bool processNonGui(const QStringList& argv)
@@ -8513,6 +8557,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("extract-patches", "Use with --extract-library: all (default), mapped, or a file with "
                                           "one patch name a line", "which"));
       parser.addOption(QCommandLineOption("extract-pitch-bend", "Use with --extract-library: also measure pitch bend (about 25 s a patch)"));
+      parser.addOption(QCommandLineOption("extract-round", "Use with --extract-library: set by the extract itself when it goes on in a new "
+                                          "process", "n"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8584,6 +8630,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             if (parser.isSet("extract-patches"))
                   extractPatches = parser.value("extract-patches");
             extractPitchBend = parser.isSet("extract-pitch-bend");
+            if (parser.isSet("extract-round"))
+                  extractRound = qMax(1, parser.value("extract-round").toInt());
             }
       if (parser.isSet("E")) {
             MScore::noGui = true;
