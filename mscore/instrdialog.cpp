@@ -290,11 +290,14 @@ void MuseScore::editInstrList()
 
       // keep the keylist of the first pitched staff to apply it to new ones
       KeyList tmpKeymap;
+      std::map<int, ClefType> tmpKeyClefs;          // its clef at each key (custom key signatures are placed for it)
       Staff* firstStaff = 0;
       for (Staff* s : masterScore->staves()) {
             KeyList* km = s->keyList();
             if (!s->isDrumStaff(Fraction(0,1))) {     // TODO
                   tmpKeymap.insert(km->begin(), km->end());
+                  for (const auto& k : *km)
+                        tmpKeyClefs[k.first] = s->clef(Fraction::fromTicks(k.first));
                   firstStaff = s;
                   break;
                   }
@@ -375,7 +378,7 @@ void MuseScore::editInstrList()
                   int sidx = masterScore->staffIdx(part);
                   int eidx = sidx + part->nstaves();
                   if (firstStaff)
-                        masterScore->adjustKeySigs(sidx, eidx, tmpKeymap);
+                        masterScore->adjustKeySigs(sidx, eidx, tmpKeymap, tmpKeyClefs);
                   }
             else {
                   part = pli->part;
@@ -402,7 +405,7 @@ void MuseScore::editInstrList()
                               if (part->staves()->empty())
                                     ke.setKey(Key::C);
                               else
-                                    ke = part->staff(0)->keySigEvent(Fraction(0,1));
+                                    ke = part->staff(0)->keySigEvent(Fraction(0,1)).forClef(part->staff(0)->clef(Fraction(0,1)), staff->clef(Fraction(0,1)));
 
                               staff->setKey(Fraction(0,1), ke);
 
@@ -434,7 +437,7 @@ void MuseScore::editInstrList()
                                     Excerpt::cloneStaff(linkedStaff, staff);
                               else {
                                     if (firstStaff)
-                                          masterScore->adjustKeySigs(staffIdx, staffIdx+1, tmpKeymap);
+                                          masterScore->adjustKeySigs(staffIdx, staffIdx+1, tmpKeymap, tmpKeyClefs);
                                     }
                               ++staffIdx;
                               ++rstaff;

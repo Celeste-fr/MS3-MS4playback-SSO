@@ -59,20 +59,16 @@ jobs:
         $now = Get-Date
         foreach ($f in $changed) { if (Test-Path $f) { (Get-Item $f).LastWriteTime = $now } }
         Write-Host "Cached build of $cached; $(@($changed).Count) files changed since."
-    # CMake downloads MuseScore 3's SoundFont into share/sound when it configures (DOWNLOAD_SOUNDFONT,
-    # CMakeLists.txt), and the configuration it keeps installs it from there; a cached build is not
-    # configured again, and a fresh checkout doesn't have the files (run 133 failed at install:
-    # "file INSTALL cannot find share/sound/MuseScore_General.sf3"). The same files from the same place.
-    - name: The SoundFont files a cached build installs
-      if: ${{ hashFiles('msvc.build_x64/CMakeCache.txt') != '' }}
-      shell: pwsh
-      run: |
-        $root = "https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General"
-        foreach ($f in @("MuseScore_General.sf3", "MuseScore_General_License.md", "VERSION")) {
-          if (-not (Test-Path "share\sound\$f")) {
-            Write-Host "Downloading $f"
-            Invoke-WebRequest -Uri "$root/$f" -OutFile "share\sound\$f" -UseBasicParsing
-          }
+        # CMake's configure step downloads MuseScore_General.sf3 into the source tree, and the
+        # cached build's install script expects it (run 141 failed there): put back the copy kept
+        # with the cache, else make MSBuild configure again (which downloads it)
+        $kept = "msvc.build_x64\kept-soundfont"
+        if (Test-Path "$kept\MuseScore_General.sf3") {
+          Copy-Item "$kept\*" share\sound\ -Force
+          Write-Host "Soundfont put back from the cache."
+        } elseif (-not (Test-Path share\sound\MuseScore_General.sf3)) {
+          (Get-Item CMakeLists.txt).LastWriteTime = $now
+          Write-Host "No soundfont kept: CMake configures again."
         }
     - name: Build MuseScore
       shell: cmd
@@ -89,6 +85,7 @@ jobs:
         FOR /F "usebackq tokens=*" %%i IN (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) DO SET "MSBUILD=%%i"
         ECHO MSBuild: %MSBUILD%
         "%MSBUILD%" msvc.build_x64\mtest\libmscore\soundlibrary\tst_soundlibrary.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
+        "%MSBUILD%" msvc.build_x64\mtest\libmscore\tuning\tst_tuning.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
     - name: Run the sound library tests
       shell: cmd
       run: |
@@ -103,12 +100,31 @@ jobs:
         TYPE "%CD%\tst_soundlibrary.txt"
         FINDSTR /C:"Totals:" "%CD%\tst_soundlibrary.txt" >NUL || exit /b 1
         IF NOT "%RC%"=="0" exit /b 1
+    # (the tuning tests: key signatures, temperaments; a failure doesn't stop the build being kept,
+    # it fails the job at the end)
+    - name: Run the tuning tests
+      id: tuning
+      continue-on-error: true
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%CD%\dependencies\libs\Win64;%PATH%"
+        SET QT_QPA_PLATFORM=offscreen
+        cd msvc.build_x64\mtest\libmscore\tuning
+        FOR /R %%F IN (tst_tuning.exe) DO IF EXIST "%%F" SET TST=%%F
+        IF NOT DEFINED TST (DIR /S /B & exit /b 1)
+        "%TST%" -o "%CD%\tst_tuning.txt,txt"
+        SET RC=%ERRORLEVEL%
+        TYPE "%CD%\tst_tuning.txt"
+        FINDSTR /C:"Totals:" "%CD%\tst_tuning.txt" >NUL || exit /b 1
+        IF NOT "%RC%"=="0" exit /b 1
     - name: Keep this build for the next run
       if: ${{ success() }}
       continue-on-error: true
       shell: pwsh
       run: |
         Set-Content msvc.build_x64\cached-commit.txt "${{ github.sha }}"
+        New-Item -ItemType Directory -Force msvc.build_x64\kept-soundfont | Out-Null
+        Copy-Item share\sound\MuseScore_General*, share\sound\VERSION msvc.build_x64\kept-soundfont\ -Force -ErrorAction SilentlyContinue
     - name: Save the build
       if: ${{ success() }}
       continue-on-error: true
@@ -122,3 +138,7 @@ jobs:
       with:
         name: MuseScore-soundlibrary-win64
         path: msvc.install_x64\
+    - name: Fail if the tuning tests failed
+      if: ${{ steps.tuning.outcome == 'failure' }}
+      shell: cmd
+      run: exit /b 1

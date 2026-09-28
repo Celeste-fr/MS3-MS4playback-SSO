@@ -160,6 +160,9 @@ class Staff final : public ScoreElement {
       KeyList* keyList()                      { return &_keys;                  }
       Key key(const Fraction& tick) const     { return keySigEvent(tick).key(); }
       KeySigEvent keySigEvent(const Fraction&) const;
+      // the key in force as drawn in the clef at tick: a custom key signature's accidentals are
+      // placed for the clef at its own tick (KeySigEvent::forClef), so after a clef change they move
+      KeySigEvent keySigEventForClef(const Fraction&) const;
       Fraction nextKeyTick(const Fraction&) const;
       Fraction currentKeyTick(const Fraction&) const;
       KeySigEvent prevKey(const Fraction&) const;

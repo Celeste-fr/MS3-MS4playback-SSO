@@ -2568,7 +2568,7 @@ void Score::splitStaff(int staffIdx, int splitPoint)
       undoAddElement(clef);
       clef->layout();
 
-      undoChangeKeySig(ns, Fraction(0, 1), st->keySigEvent(Fraction(0, 1)));
+      undoChangeKeySig(ns, Fraction(0, 1), st->keySigEvent(Fraction(0, 1)).forClef(st->clef(Fraction(0, 1)), ClefType::F));
 
       masterScore()->rebuildMidiMapping();
       cmdState()._instrumentsChanged = true;
@@ -2891,8 +2891,9 @@ void Score::adjustBracketsIns(int sidx, int eidx)
 //   adjustKeySigs
 //---------------------------------------------------------
 
-void Score::adjustKeySigs(int sidx, int eidx, KeyList km)
+void Score::adjustKeySigs(int sidx, int eidx, KeyList km, const std::map<int, ClefType>& kmClefs)
       {
+      // kmClefs: the clef of km's staff at each key (a custom key signature is placed for its clef)
       for (int staffIdx = sidx; staffIdx < eidx; ++staffIdx) {
             Staff* staff = _staves[staffIdx];
             for (auto i = km.begin(); i != km.end(); ++i) {
@@ -2907,6 +2908,9 @@ void Score::adjustKeySigs(int sidx, int eidx, KeyList km)
                   int diff = -staff->part()->instrument(tick)->transpose().chromatic;
                   if (diff != 0 && !styleB(Sid::concertPitch) && !oKey.custom() && !oKey.isAtonal())
                         nKey.setKey(transposeKey(nKey.key(), diff, staff->part()->preferSharpFlat()));
+                  auto c = kmClefs.find(i->first);
+                  if (c != kmClefs.end())
+                        nKey = nKey.forClef(c->second, staff->clef(tick));
                   staff->setKey(tick, nKey);
                   KeySig* keysig = new KeySig(this);
                   keysig->setTrack(staffIdx * VOICES);

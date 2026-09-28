@@ -10,6 +10,8 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
+#include <set>
+
 #include "accidental.h"
 #include "articulation.h"
 #include "barline.h"
@@ -3958,6 +3960,68 @@ void Score::undoChangeFretting(Note* note, int pitch, int string, int fret, int 
       }
 
 //---------------------------------------------------------
+//   cmdAdaptKeySigsToClefs
+//    for scores saved before custom key signatures followed the clef: a custom signature on a
+//    staff whose clef isn't treble, with the same symbols in the same places as a treble staff's at
+//    that tick, was copied as placed; it is placed again for its own clef. Signatures already
+//    placed for their clef differ from the treble one and are left alone. Returns how many changed.
+//---------------------------------------------------------
+
+int Score::cmdAdaptKeySigsToClefs()
+      {
+      auto samePlaces = [](const KeySigEvent& a, const KeySigEvent& b) {
+            const QList<KeySym>& ka = a.keySymbols();
+            const QList<KeySym>& kb = b.keySymbols();
+            if (ka.size() != kb.size())
+                  return false;
+            for (int i = 0; i < ka.size(); ++i) {
+                  if (ka[i].sym != kb[i].sym || std::abs(ka[i].spos.x() - kb[i].spos.x()) > 0.01
+                     || std::abs(ka[i].spos.y() - kb[i].spos.y()) > 0.01)
+                        return false;
+                  }
+            return true;
+            };
+      // treble 8va, 15mb … place a key signature as the treble clef does
+      auto trebleLike = [](ClefType c) {
+            return c != ClefType::INVALID && std::equal(ClefInfo::lines(c), ClefInfo::lines(c) + 14, ClefInfo::lines(ClefType::G));
+            };
+      std::set<int> ticks;
+      for (Staff* s : masterScore()->staves())
+            for (const auto& k : *s->keyList())
+                  if (k.second.custom() && !k.second.isAtonal())
+                        ticks.insert(k.first);
+      int changed = 0;
+      for (int t : ticks) {
+            const Fraction tick = Fraction::fromTicks(t);
+            std::vector<KeySigEvent> treble;
+            for (Staff* s : masterScore()->staves()) {
+                  auto k = s->keyList()->find(t);
+                  if (k != s->keyList()->end() && k->second.custom() && trebleLike(s->clef(tick)))
+                        treble.push_back(k->second);
+                  }
+            if (treble.empty())
+                  continue;
+            for (Staff* s : masterScore()->staves()) {
+                  auto k = s->keyList()->find(t);
+                  const ClefType clef = s->clef(tick);
+                  if (k == s->keyList()->end() || !k->second.custom() || trebleLike(clef))
+                        continue;
+                  const KeySigEvent placed = k->second.forClef(ClefType::G, clef);
+                  if (samePlaces(placed, k->second))
+                        continue;         // this clef places it as the treble clef does
+                  for (const KeySigEvent& e : treble) {
+                        if (samePlaces(e, k->second)) {
+                              undoChangeKeySig(s, tick, placed);
+                              ++changed;
+                              break;
+                              }
+                        }
+                  }
+            }
+      return changed;
+      }
+
+//---------------------------------------------------------
 //   undoChangeKeySig
 //---------------------------------------------------------
 
@@ -4082,6 +4146,7 @@ void Score::undoChangeClef(Staff* ostaff, Element* e, ClefType ct, bool forInstr
       Fraction tick = e->tick();
       Fraction rtick = e->rtick();
       bool isSmall = (st == SegmentType::Clef);
+      const ClefType oldClef = ostaff->clef(tick);
       for (Staff*& staff : ostaff->staffList()) {
       //      if (staff->staffType(tick)->group() != ClefInfo::staffGroup(ct))
       //            continue;
@@ -4166,6 +4231,12 @@ void Score::undoChangeClef(Staff* ostaff, Element* e, ClefType ct, bool forInstr
                   }
             clef->setSmall(isSmall);
             }
+      // a custom key signature at the clef's tick is placed for the clef: it follows the new one
+      // (later in its key, Staff::keySigEventForClef draws and reads it for the clef in force)
+      const KeySigEvent key = ostaff->keySigEvent(tick);
+      const ClefType newClef = ostaff->clef(tick);
+      if (key.custom() && ostaff->currentKeyTick(tick) == tick && ostaff->keyList()->count(tick.ticks()) && oldClef != newClef)
+            undoChangeKeySig(ostaff, tick, key.forClef(oldClef, newClef));
       }
 
 

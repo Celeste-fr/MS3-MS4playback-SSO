@@ -36,6 +36,7 @@
 #include "tremolo.h"
 #include "tempo.h"
 #include "trill.h"
+#include "tuning.h"
 
 namespace Ms {
 namespace SoundLib {
@@ -163,6 +164,17 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   for (const QString& f : a.value("files").toString().split(';'))
                         if (!f.trimmed().isEmpty())
                               lib->plugins.append(f.trimmed());
+                  r.skipCurrentElement();
+                  }
+            else if (r.name() == "Tuning") {
+                  // <Tuning method="varispeed" tolerance="3" tail="1.5"/>
+                  lib->varispeed = a.value("method") == "varispeed";
+                  if (a.hasAttribute("tolerance"))
+                        lib->laneTolerance = a.value("tolerance").toDouble();
+                  if (a.hasAttribute("tail"))
+                        lib->laneTail = a.value("tail").toDouble();
+                  if (a.hasAttribute("maxLanes"))
+                        lib->maxLanes = std::max(1, a.value("maxLanes").toInt());
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Dynamics") {
@@ -549,13 +561,20 @@ std::vector<Route> routes(const Score* score, const Library& library)
             // a kit none of whose patches plays a sound of the part: the part stays built-in
             if (li->kit && std::find(used.begin() + 1, used.end(), true) == used.end())
                   continue;
+            std::vector<int> laneCount(patches.size(), 1);
+            if (library.varispeed && !li->kit) {
+                  const LaneSettings ls = laneSettings(score, library);
+                  laneCount = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes).count;
+                  }
             for (int p = 0; p < int(patches.size()); ++p) {
                   if (p > 0 && (!used[p] || !available(*patches[p])))
                         continue;
-                  if (k / 16 >= MAX_PORTS)
-                        return result;
-                  result.push_back(Route { part, patches[p], k / 16, k % 16, p });
-                  ++k;
+                  for (int lane = 0; lane < std::max(1, laneCount[size_t(p)]); ++lane) {
+                        if (k / 16 >= MAX_PORTS)
+                              return result;
+                        result.push_back(Route { part, patches[p], k / 16, k % 16, p, lane });
+                        ++k;
+                        }
                   }
             }
       return result;
@@ -565,6 +584,56 @@ std::vector<Route> routes(const Score* score, const Library& library)
 //   usedPatches
 //    what each note of the part asks for (as the renderer asks it, without repeats), chosen
 //    from all the patches: the main patch always counts as used
+//---------------------------------------------------------
+//   laneSettings
+//---------------------------------------------------------
+
+const char* laneSettingsMetaTag = "soundLibraryLanes";
+
+LaneSettings libraryLaneSettings(const Library& library)
+      {
+      LaneSettings s;
+      s.tolerance = library.laneTolerance;
+      s.tail = library.laneTail;
+      s.maxLanes = library.maxLanes;
+      return s;
+      }
+
+LaneSettings laneSettings(const Score* score, const Library& library)
+      {
+      LaneSettings s = libraryLaneSettings(library);
+      if (!score)
+            return s;
+      const QString tag = score->masterScore()->metaTag(laneSettingsMetaTag);
+      for (const QString& item : tag.split(' ', QString::SkipEmptyParts)) {
+            const QString key = item.section('=', 0, 0);
+            bool ok = false;
+            const double v = item.section('=', 1).toDouble(&ok);
+            if (!ok)
+                  continue;
+            if (key == "tolerance" && v >= 0.0)
+                  s.tolerance = v;
+            else if (key == "tail" && v >= 0.0)
+                  s.tail = v;
+            else if (key == "max" && v >= 1.0)
+                  s.maxLanes = int(v);
+            }
+      return s;
+      }
+
+QString writeLaneSettings(const LaneSettings& s, const Library& library)
+      {
+      const LaneSettings d = libraryLaneSettings(library);
+      QStringList items;
+      if (s.tolerance != d.tolerance)
+            items << QString("tolerance=%1").arg(s.tolerance);
+      if (s.tail != d.tail)
+            items << QString("tail=%1").arg(s.tail);
+      if (s.maxLanes != d.maxLanes)
+            items << QString("max=%1").arg(s.maxLanes);
+      return items.join(' ');
+      }
+
 //---------------------------------------------------------
 
 std::vector<bool> usedPatches(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches)
@@ -614,6 +683,135 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                   }
             }
       return used;
+      }
+
+//---------------------------------------------------------
+//   lanes
+//---------------------------------------------------------
+
+Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
+            double toleranceCents, double tailSeconds, int maxLanes)
+      {
+      Lanes out;
+      out.count.assign(patches.size(), patches.empty() ? 0 : 1);
+      if (patches.empty() || patches[0]->kit)
+            return out;
+      Score* sc = const_cast<Score*>(score);
+      const ScoreTuningScope tuningScope(sc);
+      Ms4::Dynamics dynamics;
+      dynamics.build(sc, const_cast<Part*>(part));
+      TextTechniques text;
+      text.build(sc, part);
+      const TempoMap* tm = score->tempomap();
+
+      struct Item {
+            const Note* note;
+            int patch;
+            double on, off;               // seconds
+            double cents;
+            bool slurred;                 // under a slur: legato from the note before on its track
+            int track;
+            };
+      std::vector<Item> items;
+      std::map<const Note*, const Note*> tiedTo;     // a tied note -> the note it continues
+      auto end = [&](const Note* n) {                // the end of a note and the notes tied to it
+            const Note* last = n->lastTiedNote();
+            const Chord* c = last->chord();
+            return tm->tick2time(c->tick().ticks() + c->actualTicks().ticks());
+            };
+      for (Segment* seg = sc->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* e = seg->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  const Chord* chord = toChord(e);
+                  const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
+                  const int tick = chord->tick().ticks();
+                  const double seconds = tm->tick2time(tick + chord->actualTicks().ticks()) - tm->tick2time(tick);
+                  auto add = [&](const Note* note, double on, double off) {
+                        if (note->tieBack() && note->firstTiedNote() && note->firstTiedNote() != note) {
+                              tiedTo[note] = note->firstTiedNote();
+                              return;
+                              }
+                        const std::vector<Ms4::ArtRef> arts = Ms4::noteArticulations(note, chordArts);
+                        int trill = 0;
+                        bool slurred = false;
+                        for (const Ms4::ArtRef& a : arts) {
+                              if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
+                                    trill = trillSemitones(note);
+                              if (a.art == Ms4::Art::Legato)
+                                    slurred = true;
+                              }
+                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill));
+                        items.push_back({ note, c ? c.patch : 0, on, off, playbackTuning(note), slurred, track });
+                        };
+                  for (const Chord* g : chord->graceNotes())
+                        for (const Note* n : g->notes())
+                              add(n, tm->tick2time(tick), tm->tick2time(tick) + 0.1);
+                  for (const Note* n : chord->notes())
+                        add(n, tm->tick2time(tick), end(n));
+                  }
+            }
+      std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.on < b.on; });
+
+      struct Lane {
+            double cents { 0 };
+            bool tuned { false };         // (a new lane takes any tuning)
+            double busyUntil { -1 };      // its notes' end plus the tail
+            double lastOn { -1 };         // its last note's start and end
+            double lastEnd { -1 };
+            int lastTrack { -1 };
+            };
+      std::vector<std::vector<Lane>> byPatch(patches.size());
+      for (const Item& it : items) {
+            std::vector<Lane>& lanes = byPatch[size_t(it.patch)];
+            if (lanes.empty())
+                  lanes.emplace_back();
+            int chosen = -1;
+            double cents = it.cents;
+            if (it.slurred) {                                                // legato: its lane, which glides
+                  for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)
+                        if (lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)
+                              chosen = l;
+                  }
+            for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)       // already at its tuning
+                  if (!lanes[l].tuned || std::fabs(lanes[l].cents - it.cents) <= toleranceCents)
+                        chosen = l;
+            if (chosen >= 0 && lanes[chosen].tuned && std::fabs(lanes[chosen].cents - it.cents) <= toleranceCents)
+                  cents = lanes[chosen].cents;
+            for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)       // silent by then
+                  if (lanes[l].busyUntil <= it.on)
+                        chosen = l;
+            if (chosen < 0 && int(lanes.size()) >= maxLanes) {                // (memory: the lane quiet longest)
+                  chosen = 0;
+                  for (int l = 1; l < int(lanes.size()); ++l)
+                        if (lanes[l].busyUntil < lanes[size_t(chosen)].busyUntil)
+                              chosen = l;
+                  }
+            if (chosen < 0) {
+                  chosen = int(lanes.size());
+                  lanes.emplace_back();
+                  }
+            Lane& lane = lanes[size_t(chosen)];
+            lane.cents = cents;
+            lane.tuned = true;
+            lane.busyUntil = std::max(lane.busyUntil, it.off + tailSeconds);
+            lane.lastOn = it.on;
+            lane.lastEnd = it.off;
+            lane.lastTrack = it.track;
+            out.lane[it.note] = chosen;
+            out.cents[it.note] = cents;
+            }
+      for (const auto& t : tiedTo) {
+            auto l = out.lane.find(t.second);
+            if (l != out.lane.end()) {
+                  out.lane[t.first] = l->second;
+                  out.cents[t.first] = out.cents[t.second];
+                  }
+            }
+      for (size_t p = 0; p < patches.size(); ++p)
+            out.count[p] = std::max(1, int(byPatch[p].size()));
+      return out;
       }
 
 //---------------------------------------------------------

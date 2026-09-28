@@ -670,7 +670,7 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
       struct Target { bool valued; double cents; int spelled; SymId sym; double stack; };
       QHash<int, Target> keyLines;                               // line mod 7 -> the custom key signature's symbol
       if (pitchLines) {
-            const KeySigEvent ke = staff->keySigEvent(tick);
+            const KeySigEvent ke = staff->keySigEventForClef(tick);
             if (ke.custom()) {
                   for (const KeySym& ks : ke.keySymbols()) {
                         bool valued;

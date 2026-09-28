@@ -29,6 +29,7 @@
 #include <QGridLayout>
 #include <QSlider>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDirIterator>
@@ -755,6 +756,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       const QString path = pluginPath(*library, error);
       if (path.isEmpty())
             return false;
+      vst->setVarispeed(library->varispeed);
 
       // what the score needs, by slot
       struct Need {
@@ -852,6 +854,10 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, name)
                                                    : tr("Loading %1 in the background: %2…").arg(library->name, name), 8000);
 
+            // its memory: what the process grew by, as it loaded and 3 s later (Kontakt goes on
+            // loading samples) when no other load started meanwhile
+            const qint64 memoryBefore = processMemory();
+
             // an instance to reuse when the setup replaces all it had (a spare of a patch the
             // score doesn't need), else a new one
             std::unique_ptr<Vst3Plugin> p;
@@ -889,6 +895,16 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   }
             s.patchValues.clear();
             vst->setPlugin(k, std::move(p));
+            const qint64 memoryAfter = processMemory();
+            s.memory = memoryBefore >= 0 && memoryAfter >= 0 ? std::max<qint64>(0, memoryAfter - memoryBefore) : -1;
+            const int loadNumber = _loads;
+            QTimer::singleShot(3000, this, [this, k, name, memoryBefore, loadNumber]() {
+                  const qint64 now = processMemory();
+                  if (_loads != loadNumber || _slots[size_t(k)].instrument != name || memoryBefore < 0 || now < 0)
+                        return;
+                  _slots[size_t(k)].memory = std::max(_slots[size_t(k)].memory, now - memoryBefore);
+                  emit changed();
+                  });
             }
       if (remaining && *remaining > 0) {                  // (not all loaded yet: nothing released)
             if (waiting)
@@ -1034,6 +1050,7 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                   }
             _own.reset(new Vst3Synth);
             _own->init(sampleRate);
+            _own->setVarispeed(SoundLib::current() && SoundLib::current()->varispeed);
             for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
                   if (r.instrument->kit)
                         continue;
@@ -1217,6 +1234,49 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
       _info->setWordWrap(true);
       _info->setTextInteractionFlags(Qt::TextSelectableByMouse);
       layout->addWidget(_info);
+      // microtones: the copies of a patch for other tunings (SoundLib::Lanes), the score's settings
+      if (library && library->varispeed) {
+            _lanesRow = new QWidget(this);
+            QHBoxLayout* row = new QHBoxLayout(_lanesRow);
+            row->setContentsMargins(0, 0, 0, 0);
+            QLabel* label = new QLabel(tr("Copies for other tunings (this score):"), _lanesRow);
+            label->setToolTip(tr("A patch plays microtones by copies of itself, each at one tuning: each costs the patch's memory again"));
+            row->addWidget(label);
+            _tolerance = new QDoubleSpinBox(_lanesRow);
+            _tolerance->setRange(0.0, 50.0);
+            _tolerance->setDecimals(1);
+            _tolerance->setSingleStep(0.5);
+            _tolerance->setPrefix(tr("share within "));
+            _tolerance->setSuffix(tr(" cents"));
+            _tolerance->setToolTip(tr("A note this close to a copy's tuning plays on it, at its tuning (more: fewer copies, less exact)"));
+            row->addWidget(_tolerance);
+            _tail = new QDoubleSpinBox(_lanesRow);
+            _tail->setRange(0.0, 10.0);
+            _tail->setDecimals(1);
+            _tail->setSingleStep(0.5);
+            _tail->setPrefix(tr("ring "));
+            _tail->setSuffix(tr(" s"));
+            _tail->setToolTip(tr("How long a copy rings after its last note (release, room) before it can be retuned (less: fewer copies, tails may bend)"));
+            row->addWidget(_tail);
+            _maxLanes = new QSpinBox(_lanesRow);
+            _maxLanes->setRange(1, 16);
+            _maxLanes->setPrefix(tr("at most "));
+            _maxLanes->setSuffix(tr(" per patch"));
+            _maxLanes->setToolTip(tr("Past it, the copy quiet longest is retuned, its tail with it"));
+            row->addWidget(_maxLanes);
+            QPushButton* defaults = new QPushButton(tr("Library's"), _lanesRow);
+            defaults->setToolTip(tr("The library's own settings"));
+            row->addWidget(defaults);
+            row->addStretch();
+            layout->addWidget(_lanesRow);
+            _tolerance->setKeyboardTracking(false);
+            _tail->setKeyboardTracking(false);
+            _maxLanes->setKeyboardTracking(false);
+            for (QDoubleSpinBox* b : { _tolerance, _tail })
+                  connect(b, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
+            connect(_maxLanes, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
+            connect(defaults, &QPushButton::clicked, this, [this]() { setLaneSettings(true); });
+            }
       _table = new QTableWidget(this);
       _table->setEditTriggers(QAbstractItemView::NoEditTriggers);
       _table->verticalHeader()->hide();
@@ -1255,6 +1315,42 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
       rebuild();
       }
 
+//---------------------------------------------------------
+//   setLaneSettings
+//    the spin boxes' values (or the library's) into the score, as an undoable change
+//---------------------------------------------------------
+
+void SoundLibraryDialog::setLaneSettings(bool libraryDefaults)
+      {
+      Score* score = mscore ? mscore->currentScore() : nullptr;
+      if (!_library || !score || !_tolerance)
+            return;
+      MasterScore* ms = score->masterScore();
+      SoundLib::LaneSettings s;
+      s.tolerance = _tolerance->value();
+      s.tail = _tail->value();
+      s.maxLanes = _maxLanes->value();
+      const QString value = libraryDefaults ? QString() : SoundLib::writeLaneSettings(s, *_library);
+      QMap<QString, QString> tags = ms->metaTags();
+      if (value.isEmpty())
+            tags.remove(SoundLib::laneSettingsMetaTag);
+      else
+            tags.insert(SoundLib::laneSettingsMetaTag, value);
+      if (tags == ms->metaTags()) {
+            if (libraryDefaults)
+                  rebuild();
+            return;
+            }
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      ms->startCmd();
+      ms->undo(new ChangeMetaTags(ms, tags));
+      ms->endCmd();
+      // (the copies it needs load at the next play, not at each click)
+      SoundLibraryHost::routesMayChange();
+      rebuild();
+      }
+
 void SoundLibraryDialog::rebuild()
       {
       Score* score = mscore ? mscore->currentScore() : nullptr;
@@ -1265,6 +1361,16 @@ void SoundLibraryDialog::rebuild()
             return;
             }
       score = score->masterScore();
+      if (_lanesRow) {
+            const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *_library);
+            for (QWidget* w : std::initializer_list<QWidget*> { _tolerance, _tail, _maxLanes })
+                  w->blockSignals(true);
+            _tolerance->setValue(ls.tolerance);
+            _tail->setValue(ls.tail);
+            _maxLanes->setValue(ls.maxLanes);
+            for (QWidget* w : std::initializer_list<QWidget*> { _tolerance, _tail, _maxLanes })
+                  w->blockSignals(false);
+            }
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *_library);
       const bool plugin = _output == SoundLib::Output::PLUGIN;
       SoundLibraryHost* host = SoundLibraryHost::instance();
@@ -1282,9 +1388,19 @@ void SoundLibraryDialog::rebuild()
                      : tr("MuseScore sets each patch up by itself from %1, at the library's defaults with its articulation "
                           "switching (UACC); Show opens the plug-in's window, to look at it.").arg(QDir::toNativeSeparators(folder)));
                   }
+            // the memory the loaded patches took (measured as each loaded) and the process's now
+            qint64 total = 0;
+            for (const SoundLib::Route& r : routes)
+                  if (!r.instrument->kit && host->memory(r.port * 16 + r.channel) > 0)
+                        total += host->memory(r.port * 16 + r.channel);
+            const qint64 now = SoundLibraryHost::processMemory();
+            if (total > 0 || now > 0)
+                  text += " " + tr("Memory: %1 MB for this score's loaded patches, %2 MB for MuseScore in all.")
+                     .arg(total > 0 ? QString::number(total >> 20) : QString("–"))
+                     .arg(now > 0 ? QString::number(now >> 20) : QString("–"));
             _info->setText(text);
-            _table->setColumnCount(5);
-            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("Setup"), QString() });
+            _table->setColumnCount(6);
+            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("Setup"), QString(), tr("Memory") });
             }
       else {
             _info->setText(tr("Load each patch on the MIDI output (A: \"%1\", then B, C, D) and channel shown. "
@@ -1303,15 +1419,18 @@ void SoundLibraryDialog::rebuild()
                   // a row per patch the part plays (its own, then the extras its notation needs)
                   const int row = _table->rowCount();
                   _table->insertRow(row);
-                  _table->setItem(row, 0, new QTableWidgetItem(r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName())));
+                  // (a lane: a copy of the patch for another tuning, SoundLib::Lanes)
+                  const QString name = r->lane > 0 ? QString("  ~ %1 (%2)").arg(part->partName(), tr("other tuning %1").arg(r->lane))
+                                     : r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName());
+                  _table->setItem(row, 0, new QTableWidgetItem(name));
                   _table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
                   // the part's controllers: those of all its patches (a MIDI controller goes to all of
                   // them, a plug-in parameter to each that has it)
-                  if (r->patch == 0) {
+                  if (r->patch == 0 && r->lane == 0) {
                         PartPatches patches;
                         bool any = false;
                         for (const SoundLib::Route& e : routes) {
-                              if (e.part != part)
+                              if (e.part != part || e.lane != 0)
                                     continue;
                               patches.push_back({ e.instrument, plugin && !e.instrument->kit ? e.port * 16 + e.channel : -1 });
                               any = any || !e.instrument->allControllers.empty();
@@ -1339,6 +1458,24 @@ void SoundLibraryDialog::rebuild()
                                                                : host->loaded(slot) ? tr("Loaded") : tr("Ready")));
                   QPushButton* show = new QPushButton(tr("Show"));
                   _table->setCellWidget(row, 4, show);
+                  // what the patch took as it loaded; the part's own row adds its extras and copies
+                  if (host->loaded(slot) && host->memory(slot) >= 0) {
+                        QString mem = tr("%1 MB").arg(host->memory(slot) >> 20);
+                        if (r->patch == 0 && r->lane == 0) {
+                              qint64 partTotal = 0;
+                              int count = 0;
+                              for (const SoundLib::Route& e : routes)
+                                    if (e.part == part && !e.instrument->kit && host->memory(e.port * 16 + e.channel) > 0) {
+                                          partTotal += host->memory(e.port * 16 + e.channel);
+                                          ++count;
+                                          }
+                              if (count > 1)
+                                    mem += " " + tr("(part: %1 MB)").arg(partTotal >> 20);
+                              }
+                        QTableWidgetItem* item = new QTableWidgetItem(mem);
+                        item->setToolTip(tr("What MuseScore's memory grew by as this patch loaded (and in the 3 s after)"));
+                        _table->setItem(row, 5, item);
+                        }
                   MasterScore* ms = score->masterScore();
                   connect(show, &QPushButton::clicked, this, [this, host, slot, ms]() {
                         QString error;

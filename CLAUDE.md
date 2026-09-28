@@ -72,7 +72,19 @@ Custom key signatures (the owner, 2026-09-27): dropped from the palette, a custo
 (made on the editor's treble staff) is adapted to each staff's clef (`KeySigEvent::forClef`: each
 accidental where that clef's standard key signature puts the same note, an octave apart as drawn;
 `KeySig::drop`, `Measure::drop`, `ChordRest::drop`); the positions are stored per staff as before, so
-3.6 shows the same. Not adapted: a clef change after the key signature, paste. Alt+Shift+Up/Down
+3.6 shows the same. Also adapted (the owner, 2026-09-27: a viola added after the signature kept the treble
+positions): a staff added in the Instruments dialog (`adjustKeySigs` with the source staff's clefs, a new
+staff of a part), a split staff, a clef change at the signature's tick (`undoChangeClef`). A later clef
+change under a custom key: `Staff::keySigEventForClef` reads the signature for the clef in force (accidental
+states in layout, measure, cmd, tuning; the signature repeated at a system start and the courtesy one drawn
+for it); the file keeps the signature as placed. Paste and drag (2026-09-28): `KeySig::mimeData` writes a
+custom signature taken from a staff for the treble clef (as the palette's), so every drop places it for its
+own clef. Scores saved before: *Tools › Adapt Key Signatures to Clefs* (`Score::cmdAdaptKeySigsToClefs`):
+a custom signature on a staff whose clef places keys unlike the treble clef, with the same symbols in the
+same places as a treble-like staff's (G, G8va, G15mb …) at that tick, was copied as placed: it is placed for
+its clef. One already adapted differs from the treble one and is left (running it twice changes nothing); a
+score with no treble-like staff at that tick is left too.
+Tests `tst_tuning::customKeyDrop` (keysig-clefs.musicxml: viola and treble-15 cello), `customKeyPasteAndAdapt`. Alt+Shift+Up/Down
 (`Score::upDown`, DIATONIC) steps to the signature's accidental under a custom key signature (it used
 the key, C, and wrote a natural against the signature). The key signature editor (*Master Palette ›
 Key Signatures › Create Key Signature*, `mscore/keyedit.cpp`): staff twice the palettes' size, a
@@ -309,16 +321,44 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `pitchBend`, summary "pitch bend range"). Test `pitchShift` (the test synth now bends ±2 semitones,
   "Pitch Bend" parameter on MIDI pitch bend: measured within 6 cents; shifts of 50 … 1300 cents by
   note-on tuning; a vibrato tone a minor third up).
-  **Measured (the owner's extract, 2026-09-27 14:44, run 134): SSO's orchestral patches ignore pitch bend.**
-  Violins 1, Flute Solo and Horn Solo play every bend 0 … 16383 at the unbent pitch (0 cents; Violins 1's
-  -14 / 0 and every patch's 0.89-0.92 / 1.00 confidence alternate note by note: two round robins, not
-  the bend). Kontakt gets the bend (its "Pitchbend" parameter moves) and Timpani (a Kickstart patch) bends
-  cleanly ±2 semitones (-196 … +195 cents, linear). So pitch bend gives microtones on SSO's tuned percussion
-  only; for the rest, Kontakt offers nothing a host can reach (no note tuning, no note expression, no
-  tuning among the named controls).
-  So the owner's plan applies: an effect of our own that shifts the pitch after the plug-in, **not**
-  pitch bend with extra instances (too expensive). Caveat told to the owner: an effect on an instance's
-  output shifts all its notes together, so chords with different tunings need per-note handling.
+  **SSO's pitch bend doesn't bend the pitch** (the owner's extract of 2026-09-27 14:13, run 127/130: Violins 1,
+  Flutes a2, Horn Solo, every bend 0 … 16383 within the round robins' own spread: 0 / −14 cents on Violins 1
+  alternating with the round robin, not with the bend). So the owner's plan below is what is left.
+  Kontakt does receive the bend (its "Pitchbend" parameter moves; run 134's extract), the patches' scripts ignore it. (Timpani, a Kickstart patch, does bend: ±2 semitones, linear, -196 … +195 cents; the orchestral patches don't.)
+  **Built instead (the owner chose "option 1" and asked for memory savings, 2026-09-27): tuning lanes
+  with varispeed.** An effect on one instance's output would shift the tails of earlier notes with the
+  new one (the owner: "this shouldn't happen"), and a second copy of a patch costs about 245 MB even in the
+  same Kontakt (the owner measured 1031 → 1276 MB: Kontakt shares no samples between copies). So:
+  - `Vst3Plugin::setPitch(cents, glide)`: varispeed. The plug-in renders into a buffer read back at
+    2^(cents/1200) through a windowed-sinc resampler (Lanczos, 8 taps each side): exact pitch, no
+    pitch-shifter artifacts, 8 samples of latency once engaged; the plug-in's own time runs as much faster
+    (3 % for a quarter tone: vibrato and attacks). Glides for legato.
+  - `SoundLib::lanes` (map `<Tuning method="varispeed" tolerance="0.5" tail="1.5" maxLanes="4"/>`, SSO's
+    since 2026-09-27): a part's notes over copies ("lanes") of their patch. In order of start: a slurred
+    note stays on its previous note's lane (the legato transition needs one instrument; it glides), else a
+    lane at its tuning (within the tolerance, cents; the note then plays at the lane's tuning, `Lanes::cents`,
+    `libLaneCents`, so nothing sounding on it moves; 0.5 merges rounding only, not HEJI's 1.95-cent schisma), else a lane silent by then (its notes' end plus the
+    tail, seconds), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
+    Tied notes follow their first note, grace notes their chord. `routes()` gives each patch one route
+    per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer
+    (`libLanes`, `finishLibraryEvents`) sends a note's events to its lane and the part's switches and
+    controllers to all lanes. `Vst3Synth::setVarispeed` (from the map, in sync and export): a note-on
+    sets its slot's speed from the note's tuning, at once when the slot is silent, else gliding 80 ms;
+    the note goes to the plug-in with no tuning. 12-tone equal scores need no lane (every tuning 0); a
+    temperament (meantone, JI) can need several per part, hence maxLanes. The Sound Library dialog lists
+    lanes as "~ <part> (other tuning n)".
+  - Test `tuningLanes` (quartertones.musicxml: 8 notes' lanes, their routing and tuning, CC1 and switches
+    on both lanes, maxLanes 1, and Vst3Synth playing ±50 cents on the test synth by speed); `pitchShift`
+    (setPitch +50, −100, +700, a glide to +200). Not heard with Kontakt yet.
+  - The score's own tolerance, ring time (tail) and maximum copies (2026-09-28): *View › Sound Library…*
+    row "Copies for other tunings", metaTag `soundLibraryLanes` ("tolerance=… tail=… max=…", only what
+    differs from the map; `SoundLib::laneSettings`, undoable; kept by MuseScore 3.6 as a metaTag). A change
+    renders again; the copies load at the next play. Memory: the dialog's *Memory* column is what the
+    process grew by as each patch loaded, and 3 s later if no other load started (Kontakt goes on loading);
+    Windows: private bytes (`SoundLibraryHost::processMemory`, soundlibrarymemory.cpp, kept apart from the
+    Windows headers' macros), Linux: resident. The part's first row adds its extras and copies; the info
+    line the total and MuseScore's own. Not done: lighter single-technique patches for the copies (needs
+    which lighter patches SSO has per instrument: the library-files extract).
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).
@@ -458,7 +498,7 @@ macOS.
   (GUI, every 50 ms) held the slots' mutex while it passed every CC played to each instance's controller, and
   `play`/`process` only try that mutex: events were dropped (a note, its note-off, a switch) and blocks skipped.
   Now idle holds it only to list the instances (and while a MIDI mapping changes), an event that misses the lock
-  waits in `_pending` for the next event or block, and a missed all-notes-off is done then. `Vst3Plugin::parameterId`
+  waits in `_pending` for the next event or block, and a missed all-notes-off is done then. It also ended the owner's "note stays bent after deleting its accidental" (run 142; not reproduced by `tuningLanes`): with the old `play`, a dropped note-on skipped its slot's `setPitch` (the slot stayed at the accidental's speed) and a dropped note-off left the bent note sounding and counted, so later notes glided; the owner can't reproduce it on the build of 9fa4ce2 (2026-09-28). `Vst3Plugin::parameterId`
   keeps an index of the loose titles (it went through Kontakt's 4145 parameters, two regexes each, for every
   controller of every instance at every play). **Crackle live, not in
   the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;

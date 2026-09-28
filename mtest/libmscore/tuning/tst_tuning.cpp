@@ -18,6 +18,9 @@
 
 #include "libmscore/chord.h"
 #include "libmscore/key.h"
+#include "libmscore/keysig.h"
+#include "libmscore/page.h"
+#include "libmscore/system.h"
 #include "libmscore/staff.h"
 #include "libmscore/sym.h"
 #include "libmscore/undo.h"
@@ -52,6 +55,8 @@ class TestTuning : public QObject, public MTest
       void families();
       void diatonicCustomKey();
       void customKeyForClef();
+      void customKeyDrop();
+      void customKeyPasteAndAdapt();
       void json();
       };
 
@@ -67,12 +72,12 @@ static QMap<QString, const Note*> notes(Score* score)
                   Element* e = s->element(t);
                   if (!e || !e->isChord())
                         continue;
-                  Chord* c = toChord(e);
-                  auto add = [&](const Chord* ch, int grace) {
+                  Ms::Chord* c = toChord(e);
+                  auto add = [&](const Ms::Chord* ch, int grace) {
                         for (const Note* n : ch->notes())
                               m.insert(QString("%1:%2:%3:%4:%5").arg(t / VOICES).arg(s->tick().ticks()).arg(t).arg(n->pitch()).arg(grace), n);
                         };
-                  for (const Chord* g : c->graceNotes())
+                  for (const Ms::Chord* g : c->graceNotes())
                         add(g, 1);
                   add(c, 0);
                   }
@@ -106,11 +111,11 @@ static const Accidental* accidentalInForce(const Note* n)
                   Element* e = s->element(t);
                   if (!e || !e->isChord())
                         continue;
-                  QList<const Chord*> chords;
-                  for (const Chord* g : toChord(e)->graceNotes())
+                  QList<const Ms::Chord*> chords;
+                  for (const Ms::Chord* g : toChord(e)->graceNotes())
                         chords.append(g);
                   chords.append(toChord(e));
-                  for (const Chord* c : chords)
+                  for (const Ms::Chord* c : chords)
                         for (const Note* o : c->notes())
                               if (o->line() == n->line() && o->accidental() && (s->tick() < n->chord()->tick() || o == n))
                                     found = o->accidental();
@@ -152,11 +157,11 @@ static double pluginRounded(const Note* n)
                   Element* e = s->element(t);
                   if (!e || !e->isChord())
                         continue;
-                  QList<const Chord*> chords;
-                  for (const Chord* g : toChord(e)->graceNotes())
+                  QList<const Ms::Chord*> chords;
+                  for (const Ms::Chord* g : toChord(e)->graceNotes())
                         chords.append(g);
                   chords.append(toChord(e));
-                  for (const Chord* c : chords)
+                  for (const Ms::Chord* c : chords)
                         for (const Note* o : c->notes())
                               if (o->line() == n->line() && o->accidental()) {
                                     const QString name = Sym::id2name(o->accidental()->symbol());
@@ -467,17 +472,17 @@ void TestTuning::temperedAndEnharmonic()
                   ns.append(toChord(s->element(0))->upNote());
       QCOMPARE(ns.size(), 4);
       ScoreTuning tuning(score);
-      auto near = [](double a, double b) { return qAbs(a - b) < 0.002; };
+      auto nearly = [](double a, double b) { return qAbs(a - b) < 0.002; };
       // C, tempered flat: 100 cents under the note MuseScore plays (C), no just intonation
-      QVERIFY2(near(tuning.cents(ns[0]), -100.0), qPrintable(QString::number(tuning.cents(ns[0]))));
+      QVERIFY2(nearly(tuning.cents(ns[0]), -100.0), qPrintable(QString::number(tuning.cents(ns[0]))));
       // E, tempered natural: 0, where HEJI's plain E (81/64) would be +7.82
-      QVERIFY2(near(tuning.cents(ns[1]), 0.0), qPrintable(QString::number(tuning.cents(ns[1]))));
+      QVERIFY2(nearly(tuning.cents(ns[1]), 0.0), qPrintable(QString::number(tuning.cents(ns[1]))));
       // G sharp, comma down, tilde: exactly the Pythagorean A flat (4 fifths down), from G
       const double aFlat = 3 * 1200.0 - 4 * c(3, 2);
-      QVERIFY2(near(tuning.cents(ns[2]), aFlat - 700.0), qPrintable(QString::number(tuning.cents(ns[2]))));
-      QVERIFY(near(tuning.cents(ns[2]) - (100.0 - c(81, 80) + (8 * c(3, 2) - 4 * 1200.0 - 800.0)), -c(32805, 32768)));
+      QVERIFY2(nearly(tuning.cents(ns[2]), aFlat - 700.0), qPrintable(QString::number(tuning.cents(ns[2]))));
+      QVERIFY(nearly(tuning.cents(ns[2]) - (100.0 - c(81, 80) + (8 * c(3, 2) - 4 * 1200.0 - 800.0)), -c(32805, 32768)));
       // B flat, comma up, "=": B flat raised by a comma, nothing more, from B
-      QVERIFY2(near(tuning.cents(ns[3]), (2 * 1200.0 - 2 * c(3, 2)) + c(81, 80) - 1100.0),
+      QVERIFY2(nearly(tuning.cents(ns[3]), (2 * 1200.0 - 2 * c(3, 2)) + c(81, 80) - 1100.0),
                qPrintable(QString::number(tuning.cents(ns[3]))));
       // the signs stack beside the accidental, outermost
       QVERIFY(Accidental::isStackModifier(AccidentalType::TILDE));
@@ -760,6 +765,161 @@ void TestTuning::customKeyForClef()
                   QVERIFY2(treble.accidentalVal(step) == other.accidentalVal(step),
                            qPrintable(QString("clef %1, step %2").arg(int(c)).arg(step)));
             }
+      }
+
+//---------------------------------------------------------
+//   customKeyDrop
+//    a custom key signature (the palette's, made on a treble staff) dropped on a score of a
+//    viola (alto clef) and a cello (treble clef 15mb): each staff's signature for its clef, and
+//    the same notes take the same accidentals
+//---------------------------------------------------------
+
+void TestTuning::customKeyDrop()
+      {
+      MasterScore* score = readScore(DIR + "keysig-clefs.musicxml");
+      QVERIFY(score);
+      QCOMPARE(score->staff(0)->clef(Fraction(0, 1)), ClefType::C3);
+      KeySigEvent e;
+      e.setCustom(true);
+      KeySym k;
+      k.sym = SymId::accidentalFlat;
+      k.spos = QPointF(0.0, 0.5);                                  // E5 on a treble staff
+      e.keySymbols().append(k);
+      KeySig* ks = new KeySig(score);
+      ks->setKeySigEvent(e);
+      score->doLayout();
+      Measure* m = score->firstMeasure();
+      EditData ed;
+      ed.dropElement = ks;
+      ed.pos = m->staffabbox(1).center() + m->system()->page()->pos();          // as the palette drops it
+      score->startCmd();
+      score->firstMeasure()->drop(ed);
+      score->endCmd();
+      // E flat in every octave, whatever the clef: as the staff's key list holds it and as read
+      // for the clef in force at tick
+      auto eFlat = [score](int staffIdx, const Fraction& tick, const char* what) {
+            const ClefType clef = score->staff(staffIdx)->clef(tick);
+            const KeySigEvent se = score->staff(staffIdx)->keySigEventForClef(tick);
+            QVERIFY(se.custom());
+            AccidentalState as;
+            as.init(se, clef);
+            for (int step = 7; step < MAX_ACC_STATE - 7; ++step)
+                  QVERIFY2(as.accidentalVal(step) == (step % 7 == 2 ? AccidentalVal::FLAT : AccidentalVal::NATURAL),
+                           qPrintable(QString("%1: staff %2 clef %3 step %4 line %5").arg(what).arg(staffIdx).arg(int(clef)).arg(step).arg(se.keySymbols()[0].spos.y())));
+            };
+      const Fraction bar2 = score->firstMeasure()->nextMeasure()->tick();
+      for (int staffIdx : { 0, 1 })
+            eFlat(staffIdx, Fraction(0, 1), "dropped");
+
+      // the viola's clef changed at the signature (treble): the signature follows it
+      score->startCmd();
+      score->undoChangeClef(score->staff(0), score->firstMeasure(), ClefType::G);
+      score->endCmd();
+      QCOMPARE(score->staff(0)->clef(Fraction(0, 1)), ClefType::G);
+      QCOMPARE(score->staff(0)->keySigEvent(Fraction(0, 1)).keySymbols()[0].spos.y(), 0.5);
+      eFlat(0, Fraction(0, 1), "clef changed at the signature");
+
+      // the cello changes to bass clef in bar 2: the signature, drawn for the treble clef, is
+      // read (and drawn at a system start) for the bass clef there
+      score->startCmd();
+      score->undoChangeClef(score->staff(1), score->firstMeasure()->nextMeasure(), ClefType::F);
+      score->endCmd();
+      QCOMPARE(score->staff(1)->clef(bar2), ClefType::F);
+      QCOMPARE(score->staff(1)->keySigEvent(bar2).keySymbols()[0].spos.y(), 0.5);
+      eFlat(1, bar2, "later clef change");
+
+      // a staff added with the Instruments dialog takes the first staff's keys, for its own clef
+      KeyList km = *score->staff(1)->keyList();
+      std::map<int, ClefType> kmClefs;
+      for (const auto& k : km)
+            kmClefs[k.first] = score->staff(1)->clef(Fraction::fromTicks(k.first));
+      MasterScore* other = readScore(DIR + "keysig-clefs.musicxml");
+      QVERIFY(other);
+      other->adjustKeySigs(0, 1, km, kmClefs);                   // the viola, alto clef
+      auto eFlatOther = [other]() {
+            AccidentalState as;
+            as.init(other->staff(0)->keySigEventForClef(Fraction(0, 1)), ClefType::C3);
+            for (int step = 7; step < MAX_ACC_STATE - 7; ++step)
+                  QVERIFY2(as.accidentalVal(step) == (step % 7 == 2 ? AccidentalVal::FLAT : AccidentalVal::NATURAL),
+                           qPrintable(QString("added staff: step %1").arg(step)));
+            };
+      eFlatOther();
+      delete other;
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   customKeyPasteAndAdapt
+//    a score saved before the signature followed the clef: the viola (alto clef) has the
+//    treble-15mb cello's E flat as placed. Adapt key signatures to clefs places it for the alto
+//    clef, once. Then the viola's signature copied (as Ctrl+C writes it) and pasted on the cello
+//    (as Ctrl+V drops it): E flat on both.
+//---------------------------------------------------------
+
+void TestTuning::customKeyPasteAndAdapt()
+      {
+      MasterScore* score = readScore(DIR + "keysig-clefs.musicxml");
+      QVERIFY(score);
+      KeySigEvent e;
+      e.setCustom(true);
+      KeySym k;
+      k.sym = SymId::accidentalFlat;
+      k.spos = QPointF(0.0, 0.5);                                  // E5 on a treble staff
+      e.keySymbols().append(k);
+      score->startCmd();
+      for (int staffIdx : { 0, 1 })
+            score->undoChangeKeySig(score->staff(staffIdx), Fraction(0, 1), e);     // as placed
+      score->endCmd();
+      auto eFlat = [score](int staffIdx, const char* what) {
+            const ClefType clef = score->staff(staffIdx)->clef(Fraction(0, 1));
+            AccidentalState as;
+            as.init(score->staff(staffIdx)->keySigEventForClef(Fraction(0, 1)), clef);
+            for (int step = 7; step < MAX_ACC_STATE - 7; ++step)
+                  QVERIFY2(as.accidentalVal(step) == (step % 7 == 2 ? AccidentalVal::FLAT : AccidentalVal::NATURAL),
+                           qPrintable(QString("%1: staff %2 step %3").arg(what).arg(staffIdx).arg(step)));
+            };
+      eFlat(1, "cello as placed");
+      QVERIFY(score->staff(0)->keySigEvent(Fraction(0, 1)).keySymbols()[0].spos.y() == 0.5);   // F on the alto staff
+
+      score->startCmd();
+      QCOMPARE(score->cmdAdaptKeySigsToClefs(), 1);
+      score->endCmd();
+      eFlat(0, "adapted");
+      eFlat(1, "adapted");
+      score->startCmd();
+      QCOMPARE(score->cmdAdaptKeySigsToClefs(), 0);                 // adapted ones are left alone
+      score->endCmd();
+      eFlat(0, "adapted twice");
+
+      // copy the viola's signature, paste it on the cello (after clearing the cello's)
+      score->doLayout();
+      Segment* seg = score->firstMeasure()->findSegment(SegmentType::KeySig, Fraction(0, 1));
+      QVERIFY(seg);
+      KeySig* violaKey = toKeySig(seg->element(0));
+      QVERIFY(violaKey);
+      const QByteArray data = violaKey->mimeData(QPointF());
+      score->startCmd();
+      score->undoChangeKeySig(score->staff(1), Fraction(0, 1), KeySigEvent());
+      score->endCmd();
+      score->doLayout();
+      QPointF dragOffset;
+      Fraction duration(1, 4);
+      std::unique_ptr<Element> pasted(Element::readMimeData(score, data, &dragOffset, &duration));
+      QVERIFY(pasted && pasted->isKeySig());
+      Element* target = score->firstMeasure()->findSegment(SegmentType::ChordRest, Fraction(0, 1))->element(4);
+      QVERIFY(target);
+      if (target->isChord())
+            target = toChord(target)->upNote();
+      EditData ed;
+      ed.dropElement = pasted.get();
+      QVERIFY(target->acceptDrop(ed));
+      ed.dropElement = pasted->clone();
+      score->startCmd();
+      target->drop(ed);
+      score->endCmd();
+      eFlat(0, "pasted");
+      eFlat(1, "pasted");
+      delete score;
       }
 
 QTEST_MAIN(TestTuning)

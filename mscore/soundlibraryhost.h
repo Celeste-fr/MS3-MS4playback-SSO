@@ -48,6 +48,8 @@
 
 class QTableWidget;
 class QLabel;
+class QDoubleSpinBox;
+class QSpinBox;
 
 namespace Ms {
 
@@ -74,6 +76,7 @@ class SoundLibraryHost : public QObject {
             // back for a score that doesn't set it, and in the setup saved (a score's values
             // stay in the score; the setup is the library's default). Cleared when a setup loads
             std::map<unsigned, double> patchValues;
+            qint64 memory { -1 };         // bytes the process grew by as it loaded (-1: not measured)
             };
       std::array<Slot, 64> _slots;
       // instances set aside by syncSome: a patch the score being loaded doesn't play in their slot
@@ -129,6 +132,8 @@ class SoundLibraryHost : public QObject {
       void preloadSoon(Score* score);     // load them all when the score is opened or shown
       void release();                     // no instances
       bool loaded(int slot) const;
+      qint64 memory(int slot) const       { return slot >= 0 && slot < int(_slots.size()) ? _slots[size_t(slot)].memory : -1; }
+      static qint64 processMemory();      // the process's own memory (Task Manager's "Memory"), bytes; -1: unknown
       bool showEditor(int slot, QString* error = nullptr);
       static void routesMayChange();
 
@@ -169,7 +174,12 @@ class SoundLibraryDialog : public QDialog {
       std::shared_ptr<const SoundLib::Library> _library;
       SoundLib::Output _output;
       QLabel* _info;
+      QWidget* _lanesRow { nullptr };     // the copies for other tunings: tolerance, ring, at most
+      QDoubleSpinBox* _tolerance { nullptr };
+      QDoubleSpinBox* _tail { nullptr };
+      QSpinBox* _maxLanes { nullptr };
       QTableWidget* _table;
+      void setLaneSettings(bool libraryDefaults);
 
       void rebuild();
 

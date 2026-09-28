@@ -685,6 +685,7 @@ class Score : public QObject, public ScoreElement {
       void undoChangeTuning(Note*, qreal);
       void undoChangeUserMirror(Note*, MScore::DirectionH);
       void undoChangeKeySig(Staff* ostaff, const Fraction& tick, KeySigEvent);
+      int cmdAdaptKeySigsToClefs();
       void undoChangeClef(Staff* ostaff, Element*, ClefType st, bool forInstrumentChange = false);
       bool undoPropertyChanged(Element* e, Pid t, const QVariant& st, PropertyFlags ps = PropertyFlags::NOSTYLE);
       void undoPropertyChanged(ScoreElement*, Pid, const QVariant& v, PropertyFlags ps = PropertyFlags::NOSTYLE);
@@ -1005,7 +1006,7 @@ class Score : public QObject, public ScoreElement {
 
       void adjustBracketsDel(int sidx, int eidx);
       void adjustBracketsIns(int sidx, int eidx);
-      void adjustKeySigs(int sidx, int eidx, KeyList km);
+      void adjustKeySigs(int sidx, int eidx, KeyList km, const std::map<int, ClefType>& kmClefs = {});
 
       virtual inline const RepeatList& repeatList() const;
       virtual inline const RepeatList& repeatList2() const;

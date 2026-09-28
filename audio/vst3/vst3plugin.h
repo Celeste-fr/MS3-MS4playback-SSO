@@ -50,6 +50,8 @@ class Vst3Plugin {
       std::unique_ptr<Vst3PluginPrivate> d;
       Vst3Plugin();
 
+      void processDirect(int frames, float* interleavedStereo);
+
    public:
       ~Vst3Plugin();
 
@@ -65,6 +67,13 @@ class Vst3Plugin {
       // (the score's tuning: tuning.h) goes in VST 3's NoteOnEvent::tuning, for the plug-ins that honour it
       void midi(int type, int channel, int a, int b, float tuning = 0.f);
       void process(int frames, float* interleavedStereo);   // adds its output
+      // varispeed: the plug-in played faster or slower, so everything it plays is higher or lower
+      // by cents (and its time runs 2^(cents/1200) times as fast: 3 % for a quarter tone), for a
+      // plug-in that ignores a note's tuning (Kontakt). The plug-in renders into a buffer read back
+      // at that speed through a windowed-sinc resampler (8 samples each side; exact pitch, a
+      // latency of 8 samples once engaged). Jumps at once, or glides over glideSeconds
+      void setPitch(double cents, double glideSeconds = 0);
+      double pitch() const;               // the target, cents
       void allNotesOff();
 
       // GUI thread, not while process() runs

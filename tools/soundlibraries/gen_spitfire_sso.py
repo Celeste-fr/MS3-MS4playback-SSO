@@ -152,6 +152,10 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<SoundLibrary name="Spitfire Symphony Orchestra">',
 '  <Switch type="cc" number="32"/>',
 '  <Dynamics cc="1" expression="127"/>',
+'  <!-- microtones: Kontakt ignores a note\'s tuning and SSO\'s pitch bend bends nothing (the owner\'s',
+'       extracts of 2026-09-27), so notes of other tunings play on copies of the patch played',
+'       faster or slower (libmscore/soundlibrary.h: Lanes) -->',
+'  <Tuning method="varispeed" tolerance="0.5" tail="1.5"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
 '  <Files registry="Spitfire Symphony Orchestra"/>']
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
