@@ -839,6 +839,33 @@ const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector
       return held ? cal.curve(patches[size_t(held.patch)]->name, held.articulation->value) : nullptr;
       }
 
+// a curve made never to fall (pool adjacent violators): each point of the measurement is one note, and a
+// patch's round robins differ by 1 to 2 dB (the owner's run of 2026-09-28 12:30: steps of -4 dB between
+// markings on held notes that climb), which even steps would otherwise follow
+static std::vector<std::pair<int, double>> rising(const std::vector<std::pair<int, double>>& points)
+      {
+      struct Block { double sum; int n; };
+      std::vector<Block> blocks;
+      for (const auto& p : points) {
+            blocks.push_back({ p.second, 1 });
+            while (blocks.size() >= 2) {
+                  Block& b = blocks.back();
+                  Block& a = blocks[blocks.size() - 2];
+                  if (a.sum / a.n <= b.sum / b.n)
+                        break;
+                  a.sum += b.sum;
+                  a.n += b.n;
+                  blocks.pop_back();
+                  }
+            }
+      std::vector<std::pair<int, double>> out;
+      size_t i = 0;
+      for (const Block& b : blocks)
+            for (int k = 0; k < b.n; ++k, ++i)
+                  out.push_back({ points[i].first, b.sum / b.n });
+      return out;
+      }
+
 Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
       {
       Step s { cc, -1 };
@@ -852,7 +879,7 @@ Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
             return s;
             }
       const bool hearing = mode == EvenSteps::VOLUME_HEARING || mode == EvenSteps::RECORDING_HEARING;
-      const std::vector<std::pair<int, double>>& curve = hearing ? held->perceived : held->points;
+      const std::vector<std::pair<int, double>> curve = rising(hearing ? held->perceived : held->points);
       if (curve.size() < 2)
             return s;
       const int x = std::min(cc, 127);
@@ -862,13 +889,27 @@ Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
             return s;
       const double target = lo + (hi - lo) * (x - 16) / 111.0;
       if (mode == EvenSteps::RECORDING_HEARING || mode == EvenSteps::RECORDING_ENERGY) {
-            s.dynamics = qBound(1, inverseOf(curve, target), 127);
+            // where the curve is flat at the step (a stretch pooled by rising(), or a patch that stops
+            // getting louder), the CC nearest the one sent without even steps: the step is as loud
+            // anywhere there, and the tone stays nearest the marking's (the owner's run of 2026-09-28
+            // 12:30, Clarinets a2 - Performance by energy: flat from 48 up, fff would have been 48)
+            int first = -1, last = -1;
+            for (int v = 1; v <= 127; ++v) {
+                  if (std::fabs(interpolate(curve, v) - target) < 0.05) {
+                        if (first < 0)
+                              first = v;
+                        last = v;
+                        }
+                  }
+            s.dynamics = first >= 0 ? qBound(first, x, last) : qBound(1, inverseOf(curve, target), 127);
             return s;
             }
       // the volume: down by what the curve is above the step (it can't go up: the expression CC is at
       // its top without even steps)
       const std::vector<std::pair<int, double>>& volume = hearing ? held->expressionPerceived : held->expression;
-      if (volume.size() < 2)
+      // (a patch that barely follows the expression CC: as before; the owner's run of 2026-09-28 12:30,
+      // Tuba Solo - Performance: 0.6 dB from 127 to 32)
+      if (volume.size() < 2 || interpolate(volume, 127) - interpolate(volume, 16) < 6)
             return s;
       const double down = std::min(0.0, target - interpolate(curve, x));
       s.expression = down > -0.05 ? 127 : qBound(1, inverseOf(volume, interpolate(volume, 127) + down), 127);

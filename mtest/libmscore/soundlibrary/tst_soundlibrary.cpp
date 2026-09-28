@@ -2032,6 +2032,34 @@ void TestSoundLibrary::evenDynamicSteps()
       // by ear and by energy differ
       QVERIFY(SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_HEARING, 80).dynamics
               != SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_ENERGY, 80).dynamics);
+      // a dip from round robins (mf louder than f) is not followed: the markings still climb
+      {
+            SoundLib::DynamicsCurve dip = held;
+            dip.points = { { 16, -60 }, { 32, -54 }, { 48, -49 }, { 64, -45 }, { 80, -40 }, { 96, -44 }, { 112, -38 }, { 127, -36 } };
+            int last = 0;
+            for (int x : MARKS) {
+                  const int v = SoundLib::evenStep(&dip, SoundLib::EvenSteps::RECORDING_ENERGY, x).dynamics;
+                  QVERIFY2(v >= last, qPrintable(QString("%1 -> %2 after %3").arg(x).arg(v).arg(last)));
+                  last = v;
+                  }
+            // volume: the step never above the pooled curve, so never a cut from the dip at 96 alone
+            QVERIFY(SoundLib::evenStep(&dip, SoundLib::EvenSteps::VOLUME_ENERGY, 96).expression > 1);
+      }
+      // flat from 48 up (SSO's Clarinets a2 - Performance): fff stays at 127, not the flat stretch's start
+      {
+            SoundLib::DynamicsCurve flat = held;
+            flat.points = { { 16, -60 }, { 32, -52 }, { 48, -46 }, { 64, -46 }, { 80, -46 }, { 96, -46 }, { 112, -46 }, { 127, -46 } };
+            QCOMPARE(SoundLib::evenStep(&flat, SoundLib::EvenSteps::RECORDING_ENERGY, 127).dynamics, 127);
+            const int ff = SoundLib::evenStep(&flat, SoundLib::EvenSteps::RECORDING_ENERGY, 112).dynamics;  // -47.9 dB: under the flat
+            QVERIFY2(ff > 32 && ff < 48, qPrintable(QString::number(ff)));
+      }
+      // a patch that barely follows the expression CC (SSO's Tuba Solo - Performance): as before
+      {
+            SoundLib::DynamicsCurve deaf = held;
+            deaf.expression = { { 16, -40.6 }, { 64, -40.4 }, { 127, -40 } };
+            QCOMPARE(SoundLib::evenStep(&deaf, SoundLib::EvenSteps::VOLUME_ENERGY, 80).expression, -1);
+            QCOMPARE(SoundLib::evenStep(&deaf, SoundLib::EvenSteps::VOLUME_ENERGY, 80).dynamics, 80);
+      }
       // volume without the volume measured: as before
       {
             SoundLib::DynamicsCurve old = held;

@@ -211,6 +211,7 @@ class SoundLibraryOptions : public QDialog {
       void load();
       void setLaneSettings(bool libraryDefaults);
       void setBalance(bool libraryDefaults);
+      void exportEvenSteps();
       void setMetaTag(const char* tag, const QString& value);
       void startBackground(const QStringList& args, const QString& what);
 

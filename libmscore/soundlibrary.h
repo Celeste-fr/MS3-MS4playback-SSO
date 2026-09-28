@@ -306,9 +306,11 @@ bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, 
 // Even dynamic steps (the owner, 2026-09-28: SSO's held notes climb 5 to 12 dB from pp to mf and 1 to 4 from
 // mf to ff). Per score (Mixer › Advanced Options…, metaTag "soundLibraryEvenSteps"): the held note's own
 // range, ppp (CC 16) to fff (127), split evenly over the dynamics CC's scale (so every marking is a
-// step of the same size), judged by its perceived or its energy curve, reached
+// step of the same size), judged by its perceived or its energy curve (made never to fall: one note a
+// point, round robins), reached
 // - VOLUME: the dynamics CC as before (each marking keeps the recording, the tone, Spitfire gave it)
-//   and the expression CC (CC11, a plain volume) turning down where the curve is above the step;
+//   and the expression CC (CC11, a plain volume) turning down where the curve is above the step (a patch
+//   that barely follows CC11: unchanged);
 // - RECORDING: another dynamics CC value, the one whose loudness is the step (the tone moves with it).
 enum class EvenSteps : signed char { OFF, VOLUME_HEARING, VOLUME_ENERGY, RECORDING_HEARING, RECORDING_ENERGY };
 extern const char* evenStepsMetaTag;
