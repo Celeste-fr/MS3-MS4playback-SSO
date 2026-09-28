@@ -964,7 +964,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
 
       // back to normal first: "ord." may come with a new technique ("ord. pizz.")
       if (has("\\b(ord|ordin|ordinario|ordinary|nat|naturale|natural|norm|normale|normal|modo ordinario)\\b")) {
-            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue" })
+            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue", "espressivo" })
                   s.modifiers.removeAll(m);
             s.harmonics = false;
             s.tremolo = false;
@@ -1006,6 +1006,12 @@ void TextTechniques::apply(const QString& text, TextState& s)
             s.modifiers.removeAll("bellsup");
       else if (has("\\b(bells\\s+up|bells\\s+in\\s+the\\s+air|campana\\s+in\\s+aria|campane\\s+in\\s+aria|pavillons?\\s+en\\s+l.air|schalltrichter\\s+(auf|hoch))"))
             addModifier(s, "bellsup");
+      // espressivo / molto vibrato (the owner, 2026-09-28: SSO's Long (Rachm.) for those passages, not
+      // as the default held sound); non / senza vibrato ends it
+      if (has("\\b(non|senza)\\s+vib"))
+            s.modifiers.removeAll("espressivo");
+      else if (has("\\b(espr|espress)") || has("\\bmolto\\s+vib") || has("\\bcon\\s+(molto\\s+)?vibrato"))
+            addModifier(s, "espressivo");
       if (has("\\b(pres\\s+de\\s+la\\s+table|p\\.?\\s*d\\.?\\s*l\\.?\\s*t\\b)"))
             addModifier(s, "pdlt");
       if (has("\\b(multi|double|triple)[\\s-]*tongu") || has("\\b(doppel|tripel)zunge"))

@@ -122,6 +122,19 @@ void TestSoundLibrary::textTechniques()
       QVERIFY(s.modifiers.contains("cuivre"));
       SoundLib::TextTechniques::apply("accord", s);       // no "ord" inside a word
       QVERIFY(s.modifiers.contains("cuivre"));
+      // espressivo (SSO: Long (Rachm.) for held notes), ended by non vib. or ord.
+      for (const char* t : { "espr.", "espressivo", "molto vib.", "con molto vibrato", "dolce espressivo" }) {
+            SoundLib::TextState e;
+            SoundLib::TextTechniques::apply(t, e);
+            QVERIFY2(e.modifiers.contains("espressivo"), t);
+            }
+      SoundLib::TextTechniques::apply("espr.", s);
+      QVERIFY(s.modifiers.contains("espressivo"));
+      SoundLib::TextTechniques::apply("non vib.", s);
+      QVERIFY(!s.modifiers.contains("espressivo"));
+      SoundLib::TextTechniques::apply("molto vib.", s);
+      SoundLib::TextTechniques::apply("ord.", s);
+      QVERIFY(!s.modifiers.contains("espressivo"));
       SoundLib::TextTechniques::apply("sul G", s);
       QVERIFY(s.modifiers.contains("sulg"));
       SoundLib::TextTechniques::apply("sul C", s);
@@ -258,6 +271,15 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 1", { { "long" }, {} }), QString("Violins 1 - Performance: Legato"));
       QCOMPARE(patchFor("Solo Violin 1", { { "long" }, {} }), QString("Solo Violin - Performance: Legato"));
       QCOMPARE(patchFor("Solo Violin 1", { { "short", "staccatissimo" }, {} }), QString("Solo Violin 1: staccato"));
+      // the section strings' three lengths (2026-09-28): staccatissimo, staccato, tenuto
+      QCOMPARE(patchFor("Violins 1", { { "staccatissimo", "spiccato", "short" }, {} }), QString("Violins 1: Spiccato"));
+      QCOMPARE(patchFor("Violins 1", { { "short" }, {} }), QString("Violins 1: Short 0.5"));
+      QCOMPARE(patchFor("Violins 1", { { "tenuto", "short" }, {} }), QString("Violins 1: Short 1.0"));
+      QCOMPARE(patchFor("Violins 1", { { "short" }, { "muted" } }), QString("Violins 1: Short CS"));
+      // espressivo: a held note plays Long (Rachm.), a slurred one keeps the Performance legato
+      QCOMPARE(patchFor("Violins 1", { { "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1 - Performance: Legato"));
+      QCOMPARE(patchFor("Violins 1", { { "short" }, { "espressivo" } }), QString("Violins 1: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
       QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));

@@ -316,6 +316,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   titles, articulation names, key ranges per .nki) has no velocity layers or volumes; the library-files
   extract's library.json would show velocity-split vs crossfaded layers but not loudness. Tests
   `dynamicsCalibration`, `dynamicsCheck`.
+  **Section strings' shorts and Long (Rachm.)** (the owner, 2026-09-28): staccato plays Short 0.5,
+  staccatissimo Spiccato, tenuto / portato Short 1.0 (Violins 1/2, Violas, Celli, Basses, Strings
+  Ensemble); staff text "espr." / "espressivo" / "molto vib." / "con vibrato" sets the modifier
+  `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
+  Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
+  Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
   **Held notes on the Performance patch** (the owner, 2026-09-28: lone held notes quiet and "the pan is
   broken"; bar 12's lone pickup eighths barely audible): a part's slurred notes played "X - Performance"
   and its lone held / unmarked notes the All techniques patch's Long, another recording with its own

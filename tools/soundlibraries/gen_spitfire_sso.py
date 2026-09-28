@@ -42,6 +42,11 @@ T={
  'staccato (Muted)':('short staccatissimo','muted'), 'Short Stopped':('short staccatissimo','muted'),
  'Short Harmonics':('short spiccato staccatissimo','harmonics'),
  'Short 1.0':('tenuto',''),
+ # the section strings' staccato (the owner, 2026-09-28: "if we have a trigger for short 1'0, why not
+ # short 0'5?"): spiccato for staccatissimo, Short 0.5 for staccato, Short 1.0 for tenuto
+ 'Short 0.5':('short',''),
+ # "espr.", "molto vib." (staff text) on a held note; slurred notes keep the Performance legato
+ 'Long (Rachm.)':('long','espressivo'),
  'Marcato':('marcato',''), 'Marcato (Muted)':('marcato','muted'),
  'Tenuto':('tenuto',''), 'Tenuto (Muted)':('tenuto','muted'),
  'Pizzicato':('pizzicato',''), 'Pizzicato Bartok':('bartok',''), 'Col Legno':('collegno',''),
@@ -399,8 +404,9 @@ for bank,name,ids,pn in I:
         t,m=T.get(n, ('', ''))
         if (name, n) in SILENT:
             t, m = '', ''
-        # a patch with its own staccato: staccato dots play it, spiccato stays for staccatissimo
-        if n == 'Spiccato' and any(x == 'staccato' for x, _ in banks[bank]):
+        # a patch with its own staccato (or Short 0.5): staccato dots play it, spiccato stays for
+        # staccatissimo
+        if n == 'Spiccato' and any(x in ('staccato', 'Short 0.5') for x, _ in banks[bank]):
             t = 'spiccato staccatissimo'
         shown = n.replace("Trill (Minor 3rd","Trill (Minor 3rd)").replace("))",")").replace("Tremelo","Tremolo")
         if (name, n) in SPITFIRE_RENAME:
