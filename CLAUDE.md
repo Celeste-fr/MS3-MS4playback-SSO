@@ -956,6 +956,13 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     looks like the values the patch lacks, which show it too, so neither picture nor sound tells its value.
     The picture most values show now goes on the sheet as its last cell (`noneOnSheet` in results.json);
     `read_check_names.py` flags it "AT LOAD" with the UACC number it reads when it isn't SSO's "None".
+    The owner's scan of the 12 Core / Decorative patches (2026-09-27 21:29, run 167): 8 scanned well; Celli,
+    Violas, Violins 1 and 2 - Core techniques "found" 64-67 values and played nothing offline. Their "None"
+    pictures looked two ways (the RELEASE slider left where the last articulation put it), so the ones before
+    it moved counted as articulations, the first of them (0, silent) was the offline wait's note, and a minute
+    of silence left no listening. Now a picture 4 or more values share is "no articulation" too
+    (`scanPictures`; on the owner's sheets: Celli Core 65 → 14, Violins 1 Core 67 → 17, the files list 17 / 18),
+    and the offline wait plays the value heard while loading. Test `scanPictures` (a slider like SSO's).
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

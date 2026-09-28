@@ -1510,12 +1510,15 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       p->setOffline(true);
 
       // offline too, a note has to sound before listening (a plug-in may reload its samples
-      // when its processing restarts): up to a minute, else nothing to listen to
+      // when its processing restarts): up to a minute, else nothing to listen to. On the value
+      // heard while loading: the first to listen to may be one that plays nothing (a scan that
+      // took "None" for an articulation waited a minute on it, 2026-09-27 21:29)
+      const int heard = start >= 0 ? start : listenStart;
       bool offlineSounds = false;
       for (int i = 0; i < 60 && !_cancel && !offlineSounds; ++i) {
             status(tr("waiting for the patch to play offline (%1 s)…").arg(i));
             std::vector<float> buf(size_t(2 * MScore::sampleRate), 0.f);
-            switchTo(listenStart);
+            switchTo(heard);
             if (_library->dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
             p->midi(ME_NOTEON, 0, pitch, 100);

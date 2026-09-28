@@ -243,6 +243,30 @@ std::vector<bool> ArticulationCheck::scanPictures(const QImage& base, const std:
             none = 0;
       for (int i = 0; i < n; ++i)
             articulation[i] = differing(crops[none], crops[i]) > same;
+      // "no articulation" can look two ways within a scan: SSO leaves its RELEASE slider where the
+      // last short articulation put it, so the "None" pictures before the first short differ from
+      // those after (the owner's scan of 2026-09-27 21:29: 44 values of Celli - Core techniques
+      // taken for articulations). An articulation shows its own name: a picture shared by several
+      // values is another "no articulation"
+      const int shared = 4;
+      std::vector<int> reps;                    // one picture of each kind, and how many share it
+      std::vector<std::vector<int>> members;
+      for (int i = 0; i < n; ++i) {
+            if (!articulation[i])
+                  continue;
+            size_t k = 0;
+            while (k < reps.size() && differing(crops[reps[k]], crops[i]) > same)
+                  ++k;
+            if (k == reps.size()) {
+                  reps.push_back(i);
+                  members.push_back({});
+                  }
+            members[k].push_back(i);
+            }
+      for (const std::vector<int>& m : members)
+            if (int(m.size()) >= shared)
+                  for (int i : m)
+                        articulation[i] = false;
       if (noneIndex)
             *noneIndex = none;
       return articulation;

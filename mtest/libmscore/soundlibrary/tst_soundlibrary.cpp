@@ -1466,7 +1466,9 @@ void TestSoundLibrary::articulationCheck()
 //   scanPictures
 //    a scan's pictures, drawn like SSO's window: the articulation's name, or "None" for a
 //    value the patch lacks, a meter that moves in every picture, and a memory display that
-//    grows during the scan. The values with an articulation are told from the others
+//    grows during the scan, and a RELEASE slider that the values the patch lacks leave where
+//    the last articulation put it, so "None" looks two ways. The values with an articulation are told
+//    from the others
 //---------------------------------------------------------
 
 void TestSoundLibrary::scanPictures()
@@ -1475,6 +1477,7 @@ void TestSoundLibrary::scanPictures()
                                            { 42, "Spiccato" }, { 70, "Trill (Minor 2nd)" }, { 71, "Trill (Major 2nd)" } };
       int meter = 0;
       int memory = 700;
+      int release = 0;
       auto picture = [&](int value) {
             QImage img(640, 360, QImage::Format_RGB32);
             img.fill(QColor(20, 50, 100));
@@ -1490,6 +1493,13 @@ void TestSoundLibrary::scanPictures()
             p.setFont(f);
             p.setPen(QColor(120, 140, 170));
             p.drawText(20, 136, i == patch.end() ? QString("NO ACTIVE TECHNIQUE") : QString("UACC CC#%1").arg(value));
+            // SSO's RELEASE slider: moved by a short articulation, back by a long one, and left
+            // where it was by a value the patch lacks
+            if (value == 40 || value == 42)
+                  release = 1;
+            else if (value == 1 || value == 7 || value == 11)
+                  release = 0;
+            p.fillRect(300 + 60 * release, 30, 40, 12, QColor(0, 160, 90));
             // the meter: another height each time; a memory display that grows during the scan
             meter = (meter * 37 + 11) % 60;
             p.fillRect(600, 300 - meter, 12, meter, QColor(0, 200, 0));

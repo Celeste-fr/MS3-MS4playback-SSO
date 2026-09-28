@@ -127,7 +127,9 @@ class ArticulationCheck {
       // share, found among the candidates' (indices of values patches rarely use). What
       // changes by itself (a meter …) is left out: the spots where base and the pictures of
       // the same state (sameState) differ, with a margin. Two pictures are the same when no
-      // more than a few other pixels differ. none: the index of the "no articulation" picture
+      // more than a few other pixels differ. A picture 4 or more values share is "no articulation"
+      // too (SSO's "None" with its RELEASE slider moved). none: the index of the "no articulation"
+      // picture
       static std::vector<bool> scanPictures(const QImage& base, const std::vector<QImage>& sameState, const std::vector<QImage>& shots,
                                             const QRect& area, const std::vector<int>& candidates, int* none = nullptr);
 
