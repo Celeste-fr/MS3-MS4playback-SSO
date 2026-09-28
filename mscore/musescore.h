@@ -919,6 +919,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       Q_INVOKABLE void showStartcenter(bool);
       void reDisplayDockWidget(QDockWidget* widget, bool visible);
       void showPlayPanel(bool);
+      void updatePlayabilityMarks();
 
       QFileInfoList recentScores() const;
       void saveDialogState(const char* name, QFileDialog* d);

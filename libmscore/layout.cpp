@@ -5423,6 +5423,7 @@ void Score::doLayoutRange(const Fraction& st, const Fraction& et)
       lc.curSystem = collectSystem(lc);
 
       lc.layout();
+      updatePlayability();
       }
 
 //---------------------------------------------------------

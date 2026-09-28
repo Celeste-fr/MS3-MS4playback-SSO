@@ -39,6 +39,7 @@
 #include "image.h"
 #include "measure.h"
 #include "note.h"
+#include "playability.h"
 #include "notedot.h"
 #include "page.h"
 #include "part.h"
@@ -1372,6 +1373,13 @@ void Note::draw(QPainter* painter) const
                         painter->setPen(selected() ? Qt::darkRed : Qt::red);
                   else if (i < in->minPitchA() || i > in->maxPitchA())
                         painter->setPen(selected() ? QColor(0x565600) : Qt::darkYellow);
+                  }
+            // the playability checker's marks (playability.h), drawn over the range colours as the
+            // plugin drew them; never printed
+            if (chord() && chord()->segment() && staff() && !score()->printing() && Playability::enabled) {
+                  QColor pc = Playability::markColor(this, selected());
+                  if (pc.isValid())
+                        painter->setPen(pc);
                   }
             // draw blank notehead to avoid staff and ledger lines
             if (_cachedSymNull != SymId::noSym) {

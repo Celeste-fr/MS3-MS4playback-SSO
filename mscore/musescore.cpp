@@ -112,6 +112,7 @@
 #include "inspector/inspector.h"
 
 #include "libmscore/chord.h"
+#include "libmscore/playability.h"
 #include "libmscore/chordlist.h"
 #include "libmscore/drumset.h"
 #include "libmscore/excerpt.h"
@@ -455,6 +456,20 @@ static void printVersion(const char* prog)
 static const int RECENT_LIST_SIZE = 20;
 
 //---------------------------------------------------------
+//   updatePlayabilityMarks
+//    the playability checker was switched: analyse every open score (or drop its results) and redraw
+//---------------------------------------------------------
+
+void MuseScore::updatePlayabilityMarks()
+      {
+      for (MasterScore* ms : qAsConst(scoreList))
+            for (Score* s : ms->scoreList())
+                  s->updatePlayability();
+      if (cv)
+            cv->update();
+      }
+
+//---------------------------------------------------------
 //   closeEvent
 //---------------------------------------------------------
 
@@ -552,6 +567,9 @@ void updateExternalValuesFromPreferences() {
       MScore::ms3HairpinVelocity = preferences.getBool(PREF_APP_PLAYBACK_MS3_HAIRPIN_VELOCITY) && !qEnvironmentVariableIsSet("MS4_STRICT");
       MScore::playbackSpeedIncrement = preferences.getInt(PREF_APP_PLAYBACK_SPEEDINCREMENT);
       MScore::warnPitchRange = preferences.getBool(PREF_SCORE_NOTE_WARNPITCHRANGE);
+      Playability::enabled = preferences.getBool(PREF_SCORE_PLAYABILITY_CHECK);
+      Playability::openStringMarks = preferences.getBool(PREF_SCORE_PLAYABILITY_OPENSTRINGS);
+      Playability::openStringColor = preferences.getColor(PREF_SCORE_PLAYABILITY_OPENSTRINGCOLOR);
       MScore::disableMouseEntry = preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT);
       MScore::pedalEventsMinTicks = preferences.getInt(PREF_IO_MIDI_PEDAL_EVENTS_MIN_TICKS);
       MScore::layoutBreakColor = preferences.getColor(PREF_UI_SCORE_LAYOUTBREAKCOLOR);
@@ -626,6 +644,9 @@ void MuseScore::preferencesChanged(bool fromWorkspace, bool changeUI)
       getAction("countin")->setChecked(preferences.getBool(PREF_APP_PLAYBACK_COUNTIN));
       getAction("midi-on")->setChecked(preferences.getBool(PREF_IO_MIDI_ENABLEINPUT));
       getAction("toggle-statusbar")->setChecked(preferences.getBool(PREF_UI_APP_SHOWSTATUSBAR));
+      getAction("toggle-playability")->setChecked(Playability::enabled);
+      getAction("toggle-playability-open-strings")->setChecked(Playability::openStringMarks);
+      updatePlayabilityMarks();
       getAction("show-tours")->setChecked(preferences.getBool(PREF_UI_APP_STARTUP_SHOWTOURS));
       getAction("toggle-mouse-entry")->setChecked(!preferences.getBool(PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT));
       getAction("toggle-edit-playback")->setChecked(preferences.getBool(PREF_SCORE_NOTE_PLAYONCLICK));
@@ -2138,6 +2159,15 @@ MuseScore::MuseScore()
       menuView->addAction(getAction("show-frames"));
       menuView->addAction(getAction("show-pageborders"));
       menuView->addAction(getAction("mark-irregular"));
+      menuView->addSeparator();
+      // the playability checker (libmscore/playability.h)
+      for (const char* name : { "toggle-playability", "toggle-playability-open-strings" }) {
+            a = getAction(name);
+            a->setCheckable(true);
+            menuView->addAction(a);
+            }
+      getAction("toggle-playability")->setChecked(Playability::enabled);
+      getAction("toggle-playability-open-strings")->setChecked(Playability::openStringMarks);
       menuView->addSeparator();
 
       a = getAction("fullscreen");
@@ -7200,6 +7230,12 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             if (cmd == "toggle-statusbar") {
                   preferences.setPreference(PREF_UI_APP_SHOWSTATUSBAR, a->isChecked());
                   _statusBar->setVisible(a->isChecked());
+                  }
+            else if (cmd == "toggle-playability" || cmd == "toggle-playability-open-strings") {
+                  bool check = cmd == "toggle-playability";
+                  preferences.setPreference(check ? PREF_SCORE_PLAYABILITY_CHECK : PREF_SCORE_PLAYABILITY_OPENSTRINGS, a->isChecked());
+                  (check ? Playability::enabled : Playability::openStringMarks) = a->isChecked();
+                  updatePlayabilityMarks();
                   }
             else if (cmd == "toggle-playpanel")
                   showPlayPanel(a->isChecked());

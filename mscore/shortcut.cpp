@@ -2264,6 +2264,20 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
+         "toggle-playability",
+         QT_TRANSLATE_NOOP("action","Check Playability"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Check Playability'")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
+         "toggle-playability-open-strings",
+         QT_TRANSLATE_NOOP("action","Mark Open Strings"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Mark Open Strings'")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "create-new-workspace",
          "+",
          QT_TRANSLATE_NOOP("action","Add new workspace"),

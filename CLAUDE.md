@@ -243,6 +243,12 @@ Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3
   repository) is frozen (owner, 2026-09-26): no parity to keep. Update or drop
   `pluginParity` when a deliberate change breaks it.
 
+Playability checker (branch `playability-checker`; `PLAYABILITY.md` has the plan and state): the owner's
+Playability Checker plugin built in (the plugin is deprecated). `libmscore/playabilityrules.*` (string
+rules), `libmscore/playability.*` (the pass after each layout, `Score::playability()`), marks drawn in
+`Note::draw`, never saved or printed; preferences `score/playability/*` and *View › Check Playability /
+Mark Open Strings*. Test `tst_playability` (parity with the plugin's results on its test scores).
+
 Sound libraries (`libmscore/soundlibrary.h` explains the design):
 
 - `libmscore/soundlibrary.{h,cpp}`: `SoundLib`. It loads maps (`share/soundlibraries/*.xml`,

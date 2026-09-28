@@ -18,6 +18,8 @@
  Definition of Score class.
 */
 
+#include <memory>
+
 #include "input.h"
 #include "instrument.h"
 #include "layoutbreak.h"
@@ -393,6 +395,8 @@ class Movements : public std::vector<MasterScore*> {
 //    a Score has always an associated MasterScore
 //---------------------------------------------------------------------------------------
 
+struct PlayabilityResult;
+
 class Score : public QObject, public ScoreElement {
       Q_OBJECT
 
@@ -417,6 +421,7 @@ class Score : public QObject, public ScoreElement {
    private:
       static std::set<Score*> validScores;
       int _linkId { 0 };
+      std::shared_ptr<PlayabilityResult> _playability;      // playability.h: the checker's last pass
       MasterScore* _masterScore { 0 };
       QList<MuseScoreView*> viewer;
       Excerpt* _excerpt  { 0 };
@@ -1075,6 +1080,8 @@ class Score : public QObject, public ScoreElement {
 
       void doLayout();
       void doLayoutRange(const Fraction&, const Fraction&);
+      void updatePlayability();
+      const PlayabilityResult* playability() const { return _playability.get(); }
       void layoutLinear(bool layoutAll, LayoutContext& lc);
 
       void layoutChords1(Segment* segment, int staffIdx);

@@ -46,3 +46,23 @@ headless test scores and their checked results are the parity tests.
    Selected line with spelling and microtones.
 4. Diagrams: fingerboard and harmonic board, wind register graph with its chips.
 5. A Windows build for the owner; the plugin's README says where it went.
+
+## State
+
+- **Phase 1 done (2026-09-28):** `libmscore/playabilityrules.{h,cpp}` (stops, open strings, reach by
+  hand position, harmonics, div./unis., spelling and microtone names), `libmscore/playability.{h,cpp}`
+  (the pass: `Playability::analyse`, run by `Score::updatePlayability` at the end of every
+  `doLayoutRange`; results in `Score::playability()`), marks in `Note::draw` after the range colours
+  (impossible red, out of reach / risky dark yellow, darker when selected; open strings slate grey
+  #7d8791, the owner's choice, left to the selection colour when selected; never when printing).
+  Preferences `score/playability/check`, `…/openStrings`, `…/openStringColor` (Advanced list), and
+  *View › Check Playability* / *Mark Open Strings* (`toggle-playability`,
+  `toggle-playability-open-strings`). `tst_playability` 6/6: the plugin's rows and every note's
+  mark on `test-strings.mscx`, its harmonic rows (`harm-tests.mscx`, 3.6.2), microtones
+  (`micro-tests.mscx`). A pass on the plugin's 16-staff, 300-bar big-strings score: 21 ms
+  (`PLAYABILITY_BIG=<score> ./tst_playability speed`).
+- Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
+  harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
+  grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1
+  has a note), and a chord with more notes than strings names the strings its notes can have (the
+  plugin showed every note "(—)").
