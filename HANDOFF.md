@@ -30,8 +30,10 @@ hairpin (Ethanol bar 14). Still open:
   bar 14 confirmed good;
 - the owner: try the Playback drop-down (Mixer, Play Panel) switching MS3 / MS4 / SSO;
 - the owner: pitches for the 49 accidentals MuseScore gives none;
-- the kits' hit lists: done (2026-09-26, the owner's screenshots); the 42 one-drum patches' keys: a key
-  scan (*Tick the patches to scan*), named from the `.nki` group order (CLAUDE.md › Articulations from the files);
+- the kits' hit lists: done (2026-09-26, the owner's screenshots); the 42 one-drum patches: scanned in the
+  background (2026-09-28 01:46, which keys sound: `sso_drum_keys_sounding.json`); they don't follow the `.nki` group
+  order, so keys are named from the owner's hit-list screenshots. Snare 1 / 2 and Triangle 1 / 2 are in the map (the
+  sounds the kit patches lack at their defaults); the other 38 only if a sound needs them;
 - the owner: re-check the tuned percussion (Timpani, Celeste, Marimba, Vibraphone, Tubular
   Bells) with the fixed key scan.
 

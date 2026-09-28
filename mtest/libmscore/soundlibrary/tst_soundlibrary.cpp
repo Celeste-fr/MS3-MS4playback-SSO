@@ -267,6 +267,27 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(nameFor("timpani", "Timpani"), QString("Timpani"));
       QCOMPARE(nameFor("drumset", "Drumset"), QString("Percussion"));      // the kit
 
+      // the kit: a sound the kit patches have at their defaults plays there; the snares' rolls, a snare's
+      // side stick and the triangle (off in the kit patches) on the drum's own patch (the owner's
+      // screenshots, 2026-09-28)
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            if (li.name != "Percussion")
+                  continue;
+            const std::vector<const SoundLib::LibInstrument*> kit = li.patches();
+            auto play = [&](int pitch, const QString& id, const QString& technique = QString()) {
+                  const SoundLib::DrumChoice d = SoundLib::drum(kit, pitch, id, technique);
+                  return d.patch < 0 ? QString() : QString("%1 %2").arg(kit[d.patch]->name).arg(d.key->key);
+                  };
+            QCOMPARE(play(38, "snare-drum"), QString("Drums - High 36"));
+            QCOMPARE(play(38, "snare-drum", "roll"), QString("Percussion - Drums - High - Snare 1 61"));
+            QCOMPARE(play(40, "drumset", "roll"), QString("Percussion - Drums - High - Snare 2 61"));
+            QCOMPARE(play(37, "snare-drum"), QString("Percussion - Drums - High - Snare 1 59"));
+            QCOMPARE(play(37, "military-drum"), QString("Drums - Low 53"));      // the Field Drum's own
+            QCOMPARE(play(81, "triangle"), QString("Percussion - Unpitched - Metal - Triangle 1 48"));
+            QCOMPARE(play(80, "triangle"), QString("Percussion - Unpitched - Metal - Triangle 1 49"));
+            QCOMPARE(play(81, "finger-cymbals"), QString());                     // (81 is theirs too)
+            }
+
       // every main patch can play a note without marks
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (!li.extra() && !li.kit)

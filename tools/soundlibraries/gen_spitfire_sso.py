@@ -447,8 +447,7 @@ PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - W
 # are off in Kickstart until given a key. The owner (2026-09-27): setups are made by MuseScore at the
 # library's defaults, and what a kit patch has off comes from the drum's own patch (SINGLES), so an
 # entry on a key HITS marks off is left out of the map (Snare 1 x stick and roll, Snare 2 roll,
-# Triangle 1: until their patches' keys are known, the snares' rolls play the tremolo's hits, the
-# side stick plays the Field Drum's x stick, and the triangle the built-in synthesizer).
+# Triangle 1: they play on the Snare 1 / 2 and Triangle 1 patches, SINGLE_DRUMS).
 # Guesses to confirm by ear: Tom 1 is the high tom, Conga 1 the high conga, Block 1 the high block.
 DRUMS = {
  'Drums - High': [
@@ -651,9 +650,32 @@ SINGLES = {
                        'Wind Gong'],
  'Unpitched - Wood': ['Claves', 'Temple Blocks', 'Woodblocks'],
  }
-SINGLE_HITS = {}
-# (MuseScore drum pitch, key, name, ids) as DRUMS, for a single patch's keys MuseScore sounds use
-SINGLE_DRUMS = {}
+# The owner's Kickstart screenshots of the patches at their defaults (2026-09-28, reviewed on
+# https://claude.ai/artifact/CNocqS6mHvhGiJB6A4R1qw, "hit and key columns are correct"); every key sounded in
+# the owner's key scan of 01:46 (sso_drum_keys_sounding.json). Not the kits' layout: Snare 1's hit is 48 here.
+_SNARE = [(41, 'Swell mf', 1), (43, 'Swell f', 1), (48, 'Hit', 1), (49, 'Flam', 1), (52, 'Edge', 1),
+          (55, 'Rim', 1), (59, 'X Stick', 1), (61, 'Roll', 1)]
+_TRIANGLE = [(48, 'Open Hit 1', 1), (49, 'Closed Hit', 1), (53, 'Open Hit 2', 1), (59, 'Open Hit 3', 1),
+             (64, 'Open Hit 4', 1)]    # ("Roll on high vel." ticked)
+SINGLE_HITS = {
+ 'Percussion - Drums - High - Snare 1': [(k, 'Snare 1 ' + n, on) for k, n, on in _SNARE],
+ 'Percussion - Drums - High - Snare 2': sorted([(k, 'Snare 2 ' + n, on) for k, n, on in _SNARE]
+                                               + [(56, 'Snare 2 Brush', 1), (63, 'Snare 2 Brush Roll', 1)]),
+ 'Percussion - Unpitched - Metal - Triangle 1': [(k, 'Triangle 1 ' + n, on) for k, n, on in _TRIANGLE],
+ 'Percussion - Unpitched - Metal - Triangle 2': [(k, 'Triangle 2 ' + n, on) for k, n, on in _TRIANGLE],
+ }
+# (MuseScore drum pitch, key, name, ids) as DRUMS, for a single patch's keys MuseScore sounds use: what the
+# kit patches have off at their defaults (the snares' rolls, Snare 1's x stick for a snare's side stick,
+# the triangle). The rest of these patches' keys are listed (checked, never chosen): the kits play them.
+SINGLE_DRUMS = {
+ 'Percussion - Drums - High - Snare 1': [(38, 61, 'Snare 1 Roll', None),
+                                         (37, 59, 'Snare 1 X Stick', 'snare-drum drumset percussion')],
+ 'Percussion - Drums - High - Snare 2': [(40, 61, 'Snare 2 Roll', None)],
+ 'Percussion - Unpitched - Metal - Triangle 1': [(81, 48, 'Triangle 1 Open Hit 1', 'triangle drumset percussion'),
+                                                (80, 49, 'Triangle 1 Closed Hit', 'triangle drumset percussion')],
+ }
+for _name in list(SINGLE_HITS) + list(SINGLE_DRUMS):
+    assert any(_name == f'Percussion - {k} - {d}' for k in SINGLES for d in SINGLES[k]), _name
 for kit in PERCUSSION:
     for drum in SINGLES[kit]:
         name = f'Percussion - {kit} - {drum}'

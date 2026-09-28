@@ -996,7 +996,11 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   SSO's one-drum patches ("Percussion - <kit> - <drum>", 42,
   the owner's folder of 2026-09-27; `SINGLES`): extras of the kit after the five kit patches, so a sound
   both have plays on the kit patch and only a technique the kit lacks loads the drum's own patch. Their
-  keys (`SINGLE_HITS` / `SINGLE_DRUMS`, at their defaults) are not known yet. Kickstart shows a technique with no key on C-2 (0). None of it heard in
+  keys (`SINGLE_HITS` / `SINGLE_DRUMS`, at their defaults): Snare 1 / 2 and Triangle 1 / 2 since 2026-09-28 (the
+  owner's screenshots, reviewed on https://claude.ai/artifact/CNocqS6mHvhGiJB6A4R1qw: snare Swell mf 41, Swell f 43,
+  Hit 48, Flam 49, Edge 52, Rim 55, X Stick 59, Roll 61, Snare 2 also Brush 56, Brush Roll 63; triangle Open Hit
+  1-4 48 / 53 / 59 / 64, Closed Hit 49), so a snare roll plays Snare 1 / 2's Roll, a snare's side stick Snare 1's X
+  Stick, the triangle (open / muted) Triangle 1 (test `spitfireMap`); the other 38 not yet. Kickstart shows a technique with no key on C-2 (0). None of it heard in
   Kontakt yet.
   - **Articulations from the files** (2026-09-28; the owner: scan faster without missing anything): each
     `.nki`'s top-level sample-group names under the first mic are its articulations (variants, round robins,
@@ -1060,7 +1064,7 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     white-key layout: Snare 1 sounds on 41-53 chromatic (41-47 rising 27 → 10 dB, a ramp), then 55, 57, 59-61;
     Triangle 1 on 48-51, 53, 55, 59-60, 64-65. So the keys can't be named from the file's order: which key plays
     which hit needs the patch's hit list (the owner's Kickstart screenshots, as for the kits). What playback
-    needs from them: Snare 1 / 2 roll and x stick, Triangle 1 / 2 (the rest the kits already play).
+    needs from them: Snare 1 / 2 roll and x stick, Triangle 1 / 2 (the rest the kits already play). Now in the map (above).
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

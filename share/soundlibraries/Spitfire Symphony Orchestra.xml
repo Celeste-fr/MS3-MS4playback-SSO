@@ -1837,9 +1837,27 @@
   </Instrument>
   <Instrument name="Percussion - Drums - High - Snare 1" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Snare 1.nki">
     <Switch type="none"/>
+    <Drum pitch="38" key="61" name="Snare 1 Roll" technique="roll"/>
+    <Drum pitch="37" key="59" name="Snare 1 X Stick" ids="snare-drum drumset percussion"/>
+    <Drum key="41" name="Snare 1 Swell mf"/>
+    <Drum key="43" name="Snare 1 Swell f"/>
+    <Drum key="48" name="Snare 1 Hit"/>
+    <Drum key="49" name="Snare 1 Flam"/>
+    <Drum key="52" name="Snare 1 Edge"/>
+    <Drum key="55" name="Snare 1 Rim"/>
   </Instrument>
   <Instrument name="Percussion - Drums - High - Snare 2" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Snare 2.nki">
     <Switch type="none"/>
+    <Drum pitch="40" key="61" name="Snare 2 Roll" technique="roll"/>
+    <Drum key="41" name="Snare 2 Swell mf"/>
+    <Drum key="43" name="Snare 2 Swell f"/>
+    <Drum key="48" name="Snare 2 Hit"/>
+    <Drum key="49" name="Snare 2 Flam"/>
+    <Drum key="52" name="Snare 2 Edge"/>
+    <Drum key="55" name="Snare 2 Rim"/>
+    <Drum key="56" name="Snare 2 Brush"/>
+    <Drum key="59" name="Snare 2 X Stick"/>
+    <Drum key="63" name="Snare 2 Brush Roll"/>
   </Instrument>
   <Instrument name="Percussion - Drums - High - Snare 3" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Snare 3.nki">
     <Switch type="none"/>
@@ -1897,9 +1915,19 @@
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Triangle 1" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Triangle 1.nki">
     <Switch type="none"/>
+    <Drum pitch="81" key="48" name="Triangle 1 Open Hit 1" ids="triangle drumset percussion"/>
+    <Drum pitch="80" key="49" name="Triangle 1 Closed Hit" ids="triangle drumset percussion"/>
+    <Drum key="53" name="Triangle 1 Open Hit 2"/>
+    <Drum key="59" name="Triangle 1 Open Hit 3"/>
+    <Drum key="64" name="Triangle 1 Open Hit 4"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Triangle 2" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Triangle 2.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Triangle 2 Open Hit 1"/>
+    <Drum key="49" name="Triangle 2 Closed Hit"/>
+    <Drum key="53" name="Triangle 2 Open Hit 2"/>
+    <Drum key="59" name="Triangle 2 Open Hit 3"/>
+    <Drum key="64" name="Triangle 2 Open Hit 4"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Wind Gong" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Wind Gong.nki">
     <Switch type="none"/>
