@@ -231,6 +231,12 @@ Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3
 - `mscore/tuningdialog.*`: *Tools › Tuning…* (presets, final values, plugin file load/save, offers
   to clear plugin-written note values). The Inspector's note panel shows Temperament, Accidental,
   Tuning and Result.
+- Plugin API (`mscore/plugin/api/elements.h`, Note, read only): `playbackTuning` (the total cents,
+  as played) and `microtonalTuning` (accidental + own tuning, without the temperament: a quarter-sharp
+  F is +50 in any temperament). Each builds a `ScoreTuning` for the call. For plugins that judge
+  pitches, not playback: the owner's Playability Checker (`~/MuseScore/orchestration-checker`, not in
+  this repository) uses `microtonalTuning` in its string multiple-stop check (a quarter-sharp G3 is not
+  the open G string, a quarter-flat G3 is below it). MuseScore 3.6 has neither (undefined in QML).
 - `mtest/libmscore/tuning` (`tst_tuning`, 13/13): the plugin's fixture and parity with the plugin
   run in 3.6.2 (51 notes, same values but 2 with a hand-set tuning, which the fork adds to and the
   plugin overwrites). The Microtonal Tuner plugin for 3.6 (reads the same metaTag; not in this

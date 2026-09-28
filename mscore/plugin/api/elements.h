@@ -20,6 +20,7 @@
 #include "libmscore/lyrics.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
+#include "libmscore/tuning.h"
 #include "libmscore/notedot.h"
 #include "libmscore/page.h"
 #include "libmscore/segment.h"
@@ -520,6 +521,21 @@ class Note : public Element {
 //       Q_PROPERTY(qreal                          tuning            READ tuning             WRITE undoSetTuning)
 //       Q_PROPERTY(Ms::MScore::Direction          userDotPosition   READ userDotPosition    WRITE undoSetUserDotPosition)
 //       Q_PROPERTY(Ms::MScore::DirectionH         userMirror        READ userMirror         WRITE undoSetUserMirror)
+      /**
+       * How far this note sounds from equal temperament in playback, in cents: the
+       * score's temperament, its microtonal accidental (on the note, carried through the
+       * bar, or from a custom key signature) and its own tuning, as the fork computes them
+       * (libmscore/tuning.h). Read only; nothing is stored in the note.
+       * \since MuseScore 3.7 (this fork)
+       */
+      Q_PROPERTY(qreal                          playbackTuning    READ playbackTuning)
+      /**
+       * The part of \ref playbackTuning that is not the temperament: the microtonal
+       * accidental plus the note's own tuning, in cents. A quarter-sharp F is +50 in
+       * any temperament.
+       * \since MuseScore 3.7 (this fork)
+       */
+      Q_PROPERTY(qreal                          microtonalTuning  READ microtonalTuning)
       /** See PluginAPI::PluginAPI::NoteValueType */
       API_PROPERTY( veloType,                VELO_TYPE                 )
       API_PROPERTY_T( int, veloOffset,       VELO_OFFSET               )
@@ -546,6 +562,13 @@ class Note : public Element {
       QQmlListProperty<PlayEvent> playEvents() { return wrapPlayEventsContainerProperty(this, note()->playEvents()); }
 
       Element* accidental() { return wrap<Element>(note()->accidental()); }
+
+      qreal playbackTuning() const { Ms::ScoreTuning t(note()->score()); return t.cents(note()); }
+      qreal microtonalTuning() const {
+            Ms::ScoreTuning t(note()->score());
+            Ms::NoteTuning n = t.tuning(note());
+            return n.accidental + n.manual;
+            }
 
       Ms::AccidentalType accidentalType() { return note()->accidentalType(); }
       void setAccidentalType(Ms::AccidentalType t) { note()->setAccidentalType(t); }
