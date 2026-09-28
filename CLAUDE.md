@@ -871,6 +871,16 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   - the time left from the run's start over every round (`MS_EXTRACT_RUN_START` from the supervisor, patches
     finished in `background extract finished.txt`).
   Test: `MS_EXTRACT_TEST_CRASH_STEP="<patch>\t<step>"` aborts the child at that step.
+  **What the third run measured** (the owner stopped it at 11:27 after 108 patches; its 15 zips): 44 patches complete
+  (every controller put back, pitch bend, parameters). 50 were left silent: CC 32, SSO's UACC, was tried on patches
+  that take no switching (Performance, single techniques) and left them on "None", so everything after it measured
+  silence; a patch's controller run now never touches the library's switch CC (`librarySwitchCC`). 14 were silent at
+  their test note (fixed above). Found: **the Performance patches bend the pitch**, +97 to +105 cents at full bend
+  (all 35 measured; the All techniques patches don't: 0-17 cents, round robins), the Kickstart percussion +195.
+  A controller run now leaves out patches an earlier extract of the library measured completely
+  (`measuredBefore`: an extract folder's JSON that sounded, has `endDistanceDb` within the patch's noise, parameters,
+  and pitch bend when asked; `MS_EXTRACT_REDO=1` measures them again). Percussion with decaying round robins (Toys,
+  Bongos, Wood, Xylophone, Marimba, Snare 1) show nearly every CC as "sound" and may never count as put back.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

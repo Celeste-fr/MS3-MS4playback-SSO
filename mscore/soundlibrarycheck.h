@@ -162,7 +162,9 @@ class ArticulationCheckDialog : public QDialog {
       // what is left. Set: the extract doesn't open its folder at the end (the supervisor does)
       static void setProgressFile(const QString& path);
       static QString runFile(const QString& root, const QString& what);   // superviseExtract's files: step, skip, finished, crash
-      static QString zip(const QString& folder);                  // the folder zipped next to it (its path; empty: failed)
+      static QString zip(const QString& folder);
+      QSet<QString> measuredBefore(bool pitchBend) const;         // patches an earlier controller extract measured completely
+      int librarySwitchCC() const;                                 // the CC the library switches articulations on (-1: none)                  // the folder zipped next to it (its path; empty: failed)
       // Check articulations without the dialog (MuseScore --scan-keys) on the patches to scan
       // (toScanNow), or on those a file lists (one patch name a line); listening only, no window
       bool runHeadlessKeyScan(const QString& patches, QString* zip);

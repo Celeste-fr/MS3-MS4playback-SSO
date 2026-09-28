@@ -632,6 +632,7 @@ void ArticulationCheckDialog::setBackgroundLog(const QString& fileName)
       }
 
 static QString zipFolder(const QString& folder);
+static QString safeFileName(QString name);
 
 static QString& progressFile()
       {
@@ -811,6 +812,50 @@ bool ArticulationCheckDialog::runHeadlessKeyScan(const QString& patches, QString
 //    own that runs in the background while the owner works in MuseScore (the owner, 2026-09-27)
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   measuredBefore
+//    the patches an earlier controller extract of this library measured completely (runHeadless)
+//---------------------------------------------------------
+
+//---------------------------------------------------------
+//   librarySwitchCC
+//    the CC the library's patches switch articulations on (the first mapped patch's), -1: none
+//---------------------------------------------------------
+
+int ArticulationCheckDialog::librarySwitchCC() const
+      {
+      for (const SoundLib::LibInstrument& i : _library->instruments)
+            if (i.switchType == SoundLib::SwitchType::CC && i.switchNumber >= 0)
+                  return i.switchNumber;
+      return -1;
+      }
+
+QSet<QString> ArticulationCheckDialog::measuredBefore(bool pitchBend) const
+      {
+      QSet<QString> done;
+      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      for (const QFileInfo& d : QDir(root).entryInfoList({ safeFileName(_library->name) + " extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+            for (const QFileInfo& f : QDir(d.absoluteFilePath()).entryInfoList({ "*.json" }, QDir::Files)) {
+                  if (f.fileName() == "plugin.json")
+                        continue;
+                  QFile in(f.absoluteFilePath());
+                  if (!in.open(QIODevice::ReadOnly))
+                        continue;
+                  const QJsonObject j = QJsonDocument::fromJson(in.readAll()).object();
+                  const QJsonObject c = j.value("controllers").toObject();
+                  if (j.value("patch").toString().isEmpty() || !j.value("sounds").toBool() || c.isEmpty() || c.contains("cancelled")
+                      || !c.contains("endDistanceDb") || !j.contains("parameters") || j.value("parameters").toObject().contains("cancelled")
+                      || (pitchBend && !j.contains("pitchBend")))
+                        continue;
+                  // (put back: within the patch's own noise; a patch left silent measured the rest on silence)
+                  if (c.value("endDistanceDb").toDouble() > std::max(1.5, 3 * c.value("soundNoiseDb").toDouble()))
+                        continue;
+                  done.insert(j.value("patch").toString());
+                  }
+            }
+      return done;
+      }
+
 bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics, bool controllers)
       {
       _headless = true;
@@ -862,6 +907,26 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
             if (zip)
                   *zip = _zip;
             return !_zip.isEmpty();
+            }
+      // a controller run leaves out the patches an earlier one measured completely (the owner, 2026-09-28: "don't check
+      // these again in the next test if we don't need to"): an extract folder of this library with that patch's JSON,
+      // which sounded, has every controller put back (the patch at the end as at the start), pitch bend when it is
+      // asked for, and the parameters. MS_EXTRACT_REDO=1 measures them again
+      if (controllers && !qEnvironmentVariableIsSet("MS_EXTRACT_REDO")) {
+            const QSet<QString> done = measuredBefore(pitchBend);
+            int left = 0;
+            for (int row = 0; row < _table->rowCount(); ++row)
+                  if (_table->item(row, 0)->checkState() == Qt::Checked && done.contains(_rows[row].instrument->name)) {
+                        _table->item(row, 0)->setCheckState(Qt::Unchecked);
+                        --ticked;
+                        ++left;
+                        }
+            if (left)
+                  say(QString("%1 patches measured completely in earlier extracts: left out (MS_EXTRACT_REDO=1 measures them again)").arg(left));
+            if (!ticked) {
+                  say("every patch was measured already");
+                  return false;
+                  }
             }
       // every controller: offline, sound and parameters only (no window)
       _tryAll->setChecked(controllers);
@@ -3035,7 +3100,10 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             s.channel = 0;
             s.pitch = pitch;
             s.velocity = 100;
-            s.switchCC = switching ? ins.switchNumber : -1;
+            // the library's switch CC is left alone on a patch that takes no switching too (the owner's run of 2026-09-28
+            // 09:31: CC 32, SSO's UACC, at 0 and 127 left every Performance and single-technique patch on "None",
+            // silent, so every later controller and parameter was measured on silence)
+            s.switchCC = switching ? ins.switchNumber : librarySwitchCC();
             s.switchValues = switching ? switchValues : std::vector<int>();
             s.grabWait = GRAB_WAIT_MS;
             if (_headless) {
