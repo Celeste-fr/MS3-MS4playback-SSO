@@ -79,6 +79,8 @@ struct Articulation {
                                           // and that is right ("silent", "ignored", "unclear")
       QStringList prefer;                 // bases it plays over another patch's equal fit (<Articulation
                                           // prefer>: SSO's Performance legato for held notes)
+      double length { -1 };               // seconds its sample lasts (<Articulation length>: SSO's Short 0'5,
+                                          // Short 1'0): not chosen for a note under 90 % of it
       };
 
 struct DrumKey {
@@ -149,6 +151,7 @@ struct LibInstrument {
 struct Want {
       QStringList bases;                  // in order of preference
       QStringList modifiers;
+      double seconds { -1 };              // the note's written length (noteSeconds); -1: unknown
       };
 
 //---------------------------------------------------------
@@ -202,6 +205,9 @@ struct Choice {
       explicit operator bool() const { return articulation; }
       };
 
+// a note's written length in seconds, its whole tie chain (TempoMap::writtenTime)
+double noteSeconds(const Note* note);
+
 Choice choose(const LibInstrument& instrument, const Want& want);
 // of several patches: the best fit of all; of equal ones, the earlier patch
 Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want);
@@ -254,14 +260,24 @@ int routesGeneration();
 struct DynamicsCurve {
       QString drivenBy;
       std::vector<std::pair<int, double>> points;       // x (1 … 127, rising), dB
+      std::vector<std::pair<int, double>> perceived;    // x, how loud it sounds (ArticulationCheck::perceivedLoudnessDb); may be empty
+      // the part's held note only: the expression controller (CC11, the plug-in's volume) at x, with the
+      // dynamics CC at 80, in dB and by ear (127: the level playback leaves it at); may be empty
+      std::vector<std::pair<int, double>> expression;
+      std::vector<std::pair<int, double>> expressionPerceived;
       double at(int x) const;                           // interpolated; clamped at the ends
+      double perceivedAt(int x) const;                  // (-200 without perceived)
       int inverse(double db) const;                     // the x that plays db (1 … 127)
       };
 
 class DynamicsCalibration {
       std::map<QString, std::map<int, DynamicsCurve>> _patches;    // patch name -> articulation value -> curve
    public:
-      double balanceDb { 0 };
+      double balanceDb { 0 };             // every family's, unless it has its own
+      // per family (family(): the owner, 2026-09-28: "why not just do this regardless"): strings,
+      // solo strings, woodwinds, brass, other
+      std::map<QString, double> familyBalanceDb;
+      double balanceFor(const QString& family) const;
       const DynamicsCurve* curve(const QString& patch, int value) const;
       void setCurve(const QString& patch, int value, const DynamicsCurve& c) { _patches[patch][value] = c; }
       const std::map<QString, std::map<int, DynamicsCurve>>& patches() const { return _patches; }
@@ -274,7 +290,49 @@ std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
 // a short's velocity for the dynamics CC value cc: -1 when either curve is missing or the
 // articulation isn't on velocity
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc);
+                       const QString& refPatch, int refValue, int cc, const QString& family = QString(),
+                       const Score* score = nullptr);
+// the score's own short notes' balance per family (Mixer › Advanced Options…, metaTag
+// "soundLibraryShortBalance": "strings=-4 brass=-2", only what differs from the library's
+// calibration), else the calibration's
+extern const char* shortBalanceMetaTag;
+double shortNotesBalance(const Score* score, const DynamicsCalibration& cal, const QString& family);
+QString writeShortBalance(const std::map<QString, double>& byFamily, const DynamicsCalibration& cal);
+// the recommended short notes' balance for a family (Advanced Options › Recommended): with the shorts
+// matched in energy to the held note, how much louder they sound (the perceived curves), at pp, mf
+// and ff, over the family's measured shorts: the median, negated, to 0.5 dB. false: nothing to go by
+bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& family, double* db);
+
+// Even dynamic steps (the owner, 2026-09-28: SSO's held notes climb 5 to 12 dB from pp to mf and 1 to 4 from
+// mf to ff). Per score (Mixer › Advanced Options…, metaTag "soundLibraryEvenSteps"): the held note's own
+// range, ppp (CC 16) to fff (127), split evenly over the dynamics CC's scale (so every marking is a
+// step of the same size), judged by its perceived or its energy curve, reached
+// - VOLUME: the dynamics CC as before (each marking keeps the recording, the tone, Spitfire gave it)
+//   and the expression CC (CC11, a plain volume) turning down where the curve is above the step;
+// - RECORDING: another dynamics CC value, the one whose loudness is the step (the tone moves with it).
+enum class EvenSteps : signed char { OFF, VOLUME_HEARING, VOLUME_ENERGY, RECORDING_HEARING, RECORDING_ENERGY };
+extern const char* evenStepsMetaTag;
+EvenSteps evenSteps(const Score* score);
+QString evenStepsName(EvenSteps mode);                  // as in the metaTag ("" for OFF)
+struct Step {
+      int dynamics;           // the dynamics CC to send
+      int expression { -1 };  // the expression CC to send; -1: as without even steps
+      };
+// for the dynamics CC value cc (MS4's scale: ppp 16 … fff 127; under 16, a MuseScore 3 fade to silence),
+// with the part's held note's curve (nullptr, or not measured for the mode: cc unchanged)
+Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc);
+// the part's held note's curve (the articulation a plain long note chooses), when measured
+const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches);
+// a patch's family for the balance, from its main patch's folder in the library (SSO: Symphonic
+// Strings, Solo Strings, Symphonic Woodwinds, Symphonic / Motif Brass; else "other")
+QString family(const LibInstrument& main);
+extern const char* const FAMILIES[5];
+// the dynamics CC value for a patch other than the held note's (the owner's check of 2026-09-28:
+// Violas' All techniques Long 10 dB over the Performance legato at pp): the value at which the
+// patch's own long (longValue) is as loud as the held note at cc; -1: a curve missing or not on
+// the controller
+int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
+                         const QString& refPatch, int refValue, int cc);
 
 //---------------------------------------------------------
 //   Route

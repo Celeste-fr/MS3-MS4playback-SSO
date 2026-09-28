@@ -31,7 +31,9 @@
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "libmscore/segment.h"
+#include "libmscore/automation.h"
 #include "libmscore/chord.h"
+#include "libmscore/tempo.h"
 #endif
 
 #define DIR QString("libmscore/soundlibrary/")
@@ -54,10 +56,14 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void automation();
+      void perceivedLoudness();
+      void noteSecondsWritten();
       void dynamicsCalibration();
       void heldOnPerformance();
       void dynamicsCheck();
       void shortsFollowDynamics();
+      void evenDynamicSteps();
       void checkedAsExpected();
       void render();
       void renderPatches();
@@ -411,6 +417,40 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 1", { { "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
       QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1 - Performance: Legato"));
       QCOMPARE(patchFor("Violins 1", { { "short" }, { "espressivo" } }), QString("Violins 1: Short 0.5"));
+      // the balance families, from the patches' folders (an extra patch: its main patch's)
+      auto familyOf = [&](const QString& name) {
+            for (const SoundLib::LibInstrument& li : lib->instruments)
+                  if (li.name == name)
+                        return SoundLib::family(li);
+            return QString("?");
+            };
+      QCOMPARE(familyOf("Violins 1"), QString("strings"));
+      QCOMPARE(familyOf("Solo Viola"), QString("solo strings"));
+      QCOMPARE(familyOf("Oboe Solo"), QString("woodwinds"));
+      QCOMPARE(familyOf("Horns a6"), QString("brass"));
+      QCOMPARE(familyOf("Motif Horns a4"), QString("brass"));
+      QCOMPARE(familyOf("Harp"), QString("other"));
+      // shorts by the note's written length (2026-09-28, "Whence" bar 8): Short 0'5 from 0.45 s, Short 1'0
+      // from 0.9 s, else the next shorter, down to Spiccato
+      auto byLength = [&](std::vector<Ms4::Art> arts, double seconds) {
+            std::vector<Ms4::ArtRef> refs;
+            for (Ms4::Art a : arts)
+                  refs.push_back(Ms4::ArtRef { a, false });
+            return patchFor("Violins 2", SoundLib::want(refs, SoundLib::TextState(), seconds, 0));
+            };
+      using A = Ms4::Art;
+      QCOMPARE(byLength({ A::Staccato }, 0.27), QString("Violins 2: Spiccato"));          // an eighth at 110
+      QCOMPARE(byLength({ A::Staccato }, 0.55), QString("Violins 2: Short 0.5"));         // a quarter at 110
+      QCOMPARE(byLength({ A::Staccato, A::Accent }, 0.27), QString("Violins 2: Spiccato"));
+      QCOMPARE(byLength({ A::Tenuto }, 1.1), QString("Violins 2 - Performance: Legato"));   // a held note
+      QCOMPARE(byLength({ A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
+      QCOMPARE(byLength({ A::Tenuto }, 0.3), QString("Violins 2 - Performance: Legato"));    // fast: no spiccato
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 1.0), QString("Violins 2: Short 1.0")); // portato
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.27), QString("Violins 2: Spiccato"));
+      QCOMPARE(byLength({ A::Staccatissimo }, 1.0), QString("Violins 2: Spiccato"));
+      // (a length unknown: as before)
+      QCOMPARE(patchFor("Violins 2", { { "short" }, {} }), QString("Violins 2: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
       QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
@@ -2054,6 +2094,161 @@ void TestSoundLibrary::shortsFollowDynamics()
       }
 
 //---------------------------------------------------------
+//   evenDynamicSteps
+//    SoundLib::evenStep (the owner, 2026-09-28: SSO's held notes climb far more from pp to mf than
+//    from mf to ff): ppp … fff split evenly over the held note's own range, by volume (CC11 down) or
+//    by recording (another CC1), judged by energy or by ear; and what playback sends
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenDynamicSteps()
+      {
+      // a held note like SSO's Violas Long: steep to mf, then flat, with a dip at ff
+      SoundLib::DynamicsCurve held;
+      held.drivenBy = "controller";
+      held.points = { { 16, -60 }, { 32, -50 }, { 48, -44 }, { 64, -41 }, { 80, -39.5 }, { 96, -39.2 }, { 112, -39.6 }, { 127, -39 } };
+      for (const auto& p : held.points)                     // by ear: a brighter top sounds louder
+            held.perceived.push_back({ p.first, p.second + 50 + 0.05 * (p.first - 16) });
+      held.expression = { { 16, -90 }, { 32, -75 }, { 48, -62 }, { 64, -53 }, { 80, -47 }, { 96, -43 }, { 112, -41 }, { 127, -39.5 } };
+      for (const auto& p : held.expression)
+            held.expressionPerceived.push_back({ p.first, p.second + 50 });
+      auto f = [](const std::vector<std::pair<int, double>>& pts, int x) {
+            SoundLib::DynamicsCurve c;
+            c.points = pts;
+            return c.at(x);
+            };
+      const int MARKS[8] = { 16, 32, 48, 64, 80, 96, 112, 127 };
+
+      // off, or no curve: as before
+      QCOMPARE(SoundLib::evenStep(&held, SoundLib::EvenSteps::OFF, 80).dynamics, 80);
+      QCOMPARE(SoundLib::evenStep(&held, SoundLib::EvenSteps::OFF, 80).expression, -1);
+      QCOMPARE(SoundLib::evenStep(nullptr, SoundLib::EvenSteps::VOLUME_ENERGY, 80).dynamics, 80);
+
+      for (bool hearing : { false, true }) {
+            const auto& curve = hearing ? held.perceived : held.points;
+            const double lo = f(curve, 16), hi = f(curve, 127);
+            // by recording: the loudness at the CC sent climbs by the same step at every marking
+            const SoundLib::EvenSteps rec = hearing ? SoundLib::EvenSteps::RECORDING_HEARING : SoundLib::EvenSteps::RECORDING_ENERGY;
+            int last = 0;
+            for (int x : MARKS) {
+                  const SoundLib::Step st = SoundLib::evenStep(&held, rec, x);
+                  QCOMPARE(st.expression, -1);
+                  QVERIFY(st.dynamics >= last);
+                  last = st.dynamics;
+                  const double want = lo + (hi - lo) * (x - 16) / 111.0;
+                  QVERIFY2(std::fabs(f(curve, st.dynamics) - want) < 0.4,
+                           qPrintable(QString("%1 %2: %3 at %4, want %5").arg(hearing).arg(x).arg(f(curve, st.dynamics)).arg(st.dynamics).arg(want)));
+                  }
+            QCOMPARE(SoundLib::evenStep(&held, rec, 16).dynamics, 16);
+            QVERIFY(SoundLib::evenStep(&held, rec, 80).dynamics < 80);        // mf: nearer pp's recording
+            // by volume: the same CC1, the volume down to the step
+            const SoundLib::EvenSteps vol = hearing ? SoundLib::EvenSteps::VOLUME_HEARING : SoundLib::EvenSteps::VOLUME_ENERGY;
+            const auto& volume = hearing ? held.expressionPerceived : held.expression;
+            for (int x : MARKS) {
+                  const SoundLib::Step st = SoundLib::evenStep(&held, vol, x);
+                  QCOMPARE(st.dynamics, x);
+                  QVERIFY(st.expression >= 1 && st.expression <= 127);
+                  const double sounds = f(curve, x) + f(volume, st.expression) - f(volume, 127);
+                  const double want = lo + (hi - lo) * (x - 16) / 111.0;
+                  QVERIFY2(std::fabs(sounds - want) < 0.4,
+                           qPrintable(QString("%1 %2: %3 (CC11 %4), want %5").arg(hearing).arg(x).arg(sounds).arg(st.expression).arg(want)));
+                  }
+            QCOMPARE(SoundLib::evenStep(&held, vol, 16).expression, 127);
+            QCOMPARE(SoundLib::evenStep(&held, vol, 127).expression, 127);
+            QVERIFY(SoundLib::evenStep(&held, vol, 80).expression < 127);
+            // a MuseScore 3 fade under ppp: ppp's volume, the CC fading
+            QCOMPARE(SoundLib::evenStep(&held, vol, 8).dynamics, 8);
+            QCOMPARE(SoundLib::evenStep(&held, vol, 8).expression, 127);
+            }
+      // by ear and by energy differ
+      QVERIFY(SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_HEARING, 80).dynamics
+              != SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_ENERGY, 80).dynamics);
+      // volume without the volume measured: as before
+      {
+            SoundLib::DynamicsCurve old = held;
+            old.expression.clear();
+            QCOMPARE(SoundLib::evenStep(&old, SoundLib::EvenSteps::VOLUME_ENERGY, 80).expression, -1);
+            QCOMPARE(SoundLib::evenStep(&old, SoundLib::EvenSteps::VOLUME_ENERGY, 80).dynamics, 80);
+      }
+
+      // the volume curves written and read back
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal->setCurve("Violin", 1, held);
+      SoundLib::DynamicsCurve staccato;
+      staccato.drivenBy = "velocity";
+      for (int x : MARKS)
+            staccato.points.push_back({ x, -70 + 0.4 * x });
+      cal->setCurve("Violin", 40, staccato);
+      QTemporaryDir dir;
+      QVERIFY(cal->write(dir.path() + "/dynamics.json"));
+      auto back = std::make_shared<SoundLib::DynamicsCalibration>();
+      QVERIFY(back->read(dir.path() + "/dynamics.json"));
+      QCOMPARE(int(back->curve("Violin", 1)->expression.size()), 8);
+      QCOMPARE(back->curve("Violin", 1)->expressionPerceived.back().second, 10.5);
+      QVERIFY(back->curve("Violin", 40)->expression.empty());
+
+      // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' expression='127' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setDynamicsCalibration(back);
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(SoundLib::evenSteps(score), SoundLib::EvenSteps::OFF);
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      struct Played { int cc1, cc11, velo; };
+      auto play = [&](const QString& mode) {
+            score->setMetaTag(SoundLib::evenStepsMetaTag, mode);
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<Played> out;
+            int cc1 = -1, cc11 = -1;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.channel() != ch)
+                        continue;
+                  if (ev.type() == ME_CONTROLLER && ev.dataA() == 1)
+                        cc1 = ev.dataB();
+                  else if (ev.type() == ME_CONTROLLER && ev.dataA() == 11)
+                        cc11 = ev.dataB();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                        out.push_back({ cc1, cc11, ev.velo() });
+                  }
+            return out;
+            };
+      const std::vector<Played> off = play("");
+      QCOMPARE(int(off.size()), 9);
+      QCOMPARE(off[0].cc1, 32);
+      QCOMPARE(off[3].cc1, 80);
+      QCOMPARE(off[3].cc11, 127);
+      const std::vector<Played> vol = play("volume-energy");
+      QCOMPARE(SoundLib::evenSteps(score), SoundLib::EvenSteps::VOLUME_ENERGY);
+      QCOMPARE(int(vol.size()), 9);
+      QCOMPARE(vol[0].cc1, 32);
+      QCOMPARE(vol[3].cc1, 80);
+      QCOMPARE(vol[0].cc11, SoundLib::evenStep(&held, SoundLib::EvenSteps::VOLUME_ENERGY, 32).expression);
+      QCOMPARE(vol[3].cc11, SoundLib::evenStep(&held, SoundLib::EvenSteps::VOLUME_ENERGY, 80).expression);
+      QVERIFY(vol[3].cc11 < 127);
+      QCOMPARE(vol[0].velo, off[0].velo);                   // the shorts: turned down with the held note
+      QCOMPARE(vol[3].velo, off[3].velo);
+      const std::vector<Played> rec = play("recording-energy");
+      QCOMPARE(int(rec.size()), 9);
+      QCOMPARE(rec[3].cc1, SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_ENERGY, 80).dynamics);
+      QCOMPARE(rec[3].cc11, 127);
+      // the shorts as loud as the held note at the CC1 sent
+      QCOMPARE(rec[3].velo, SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, rec[3].cc1));
+      QVERIFY(rec[3].velo < off[3].velo);
+      SoundLib::setDynamicsCalibration(nullptr);
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   dynamicsCheck
 //    ArticulationCheck::dynamics on the test synth, which plays velocity * CC1: the velocity alone
 //    and the controller alone each move it 20 log(127 / 32) = 12 dB (its round robins, ±6 % gain
@@ -2073,8 +2268,14 @@ void TestSoundLibrary::dynamicsCheck()
       int steps = 0;
       const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, { false, true }, s,
                                                              [&](int, int) { ++steps; return true; });
-      QCOMPARE(steps, 20);                                  // each: 3 to classify, 7 more of the curve (on both)
+      QCOMPARE(steps, 27);                                  // each: 3 to classify, 7 more of the curve (on both);
+                                                            // the held note (full) 7 of its volume (CC11)
       QCOMPARE(int(r.size()), 2);
+      QVERIFY(r[0].expression.empty());
+      QCOMPARE(int(r[1].expression.size()), 8);             // 16 … 112, then 127 (the curve's 80)
+      QCOMPARE(int(r[1].expressionPerceived.size()), 8);
+      QCOMPARE(r[1].expression.back().first, 127);
+      QCOMPARE(r[1].expression.back().second, r[1].curve[4].second);
       const double expected = 20 * std::log10(127.0 / 32.0);
       for (const AC::DynamicsResult& d : r) {
             QVERIFY2(std::fabs(d.velocityDb[1] - d.velocityDb[0] - expected) < 2.0, qPrintable(QString::number(d.velocityDb[1] - d.velocityDb[0])));
@@ -2082,6 +2283,7 @@ void TestSoundLibrary::dynamicsCheck()
             QCOMPARE(QString(d.drivenBy()), QString("both"));
             QCOMPARE(d.pitch, 67);
             QCOMPARE(int(d.curve.size()), 8);
+            QCOMPARE(int(d.perceived.size()), 8);
             // velocity * CC along x = both: 40 log(127 / 16) = 36 dB from 16 to 127
             QVERIFY2(std::fabs(d.curve.back().second - d.curve.front().second - 40 * std::log10(127.0 / 16.0)) < 2.5,
                      qPrintable(QString::number(d.curve.back().second - d.curve.front().second)));
@@ -2156,7 +2358,8 @@ void TestSoundLibrary::dynamicsCalibration()
       cal->setCurve("Violin", 1, line("controller", -40, 0.1));
       cal->setCurve("Violin", 40, line("velocity", -70, 0.4));
       QCOMPARE(cal->curve("Violin", 40)->inverse(-70 + 0.4 * 50), 50);
-      QCOMPARE(cal->curve("Violin", 40)->inverse(-100), 16);          // under the curve: its lowest x
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-100), 1);           // under the curve: its slope goes on, to 1
+      QCOMPARE(cal->curve("Violin", 40)->inverse(-67.6), 6);          // (-70 + 0.4 x: 6)
       QCOMPARE(cal->curve("Violin", 40)->inverse(0), 127);
       QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 1, "Violin", 1, 80), -1);    // on the controller
       // pp (CC 32): -36.8 dB -> the staccato's velocity 83; mf (80): -32 -> 95
@@ -2173,6 +2376,56 @@ void TestSoundLibrary::dynamicsCalibration()
       QCOMPARE(int(back->curve("Violin", 40)->points.size()), 8);
       // -2 dB: pp -38.8 -> 78
       QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32), 78);
+      // per family: its own, else balanceDb; written and read back
+      back->familyBalanceDb["strings"] = -4;
+      QCOMPARE(back->balanceFor("strings"), -4.0);
+      QCOMPARE(back->balanceFor("brass"), -2.0);
+      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32, "strings"), 73);   // -40.8 dB
+      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32, "brass"), 78);
+      QVERIFY(back->write(dir.path() + "/dynamics.json"));
+      SoundLib::DynamicsCalibration again;
+      QVERIFY(again.read(dir.path() + "/dynamics.json"));
+      QCOMPARE(again.balanceFor("strings"), -4.0);
+      QCOMPARE(again.balanceFor("woodwinds"), -2.0);
+      // the score's own (Mixer › Advanced Options…): only what differs from the library's is written
+      {
+            MasterScore* sc = readScore(DIR + "shorts-dynamics.musicxml");
+            QVERIFY(sc);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "strings"), -4.0);
+            const QString tag = SoundLib::writeShortBalance({ { "strings", -4.0 }, { "solo strings", -6.0 }, { "brass", 1.5 } }, again);
+            QCOMPARE(tag, QString("brass=1.5 solo_strings=-6"));
+            sc->setMetaTag(SoundLib::shortBalanceMetaTag, tag);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "solo strings"), -6.0);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "brass"), 1.5);
+            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "strings"), -4.0);
+            QCOMPARE(SoundLib::calibratedVelocity(again, "Violin", 40, "Violin", 1, 32, "solo strings", sc), 68);   // -42.8 dB
+            delete sc;
+      }
+      // the recommended setting: shorts matched in energy that sound 3 dB louder -> -3
+      {
+            auto rlib = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Violin' ids='violin' nki='Instruments/Symphonic Strings/Violin.nki'>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "<Articulation name='Staccato' value='40' techniques='short'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY(rlib);
+            SoundLib::DynamicsCalibration rc;
+            SoundLib::DynamicsCurve held = line("controller", -40, 0.1);
+            SoundLib::DynamicsCurve shortc = line("velocity", -70, 0.4);
+            double dummy;
+            QVERIFY(!SoundLib::recommendedBalance(*rlib, rc, "strings", &dummy));       // nothing measured
+            for (const auto& p : held.points)
+                  held.perceived.push_back({ p.first, p.second + 50 });
+            for (const auto& p : shortc.points)
+                  shortc.perceived.push_back({ p.first, p.second + 53 });                // 3 dB louder by ear
+            rc.setCurve("Violin", 1, held);
+            rc.setCurve("Violin", 40, shortc);
+            double rec = 0;
+            QVERIFY(SoundLib::recommendedBalance(*rlib, rc, "strings", &rec));
+            QCOMPARE(rec, -3.0);
+            QVERIFY(!SoundLib::recommendedBalance(*rlib, rc, "brass", &dummy));
+      }
 
       // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
       back->balanceDb = 0;
@@ -2203,6 +2456,225 @@ void TestSoundLibrary::dynamicsCalibration()
       QCOMPARE(velo[3], 95);
       QVERIFY2(velo[6] > 83 && velo[6] <= 127, qPrintable(QString::number(velo[6])));       // accented pp
       delete score;
+
+      // calibratedController: the CC at which a patch's own long matches the held note (Violin -
+      // Performance's Legato, -40 + 0.1 x; the main patch's Long -45 + 0.2 x: at 32, 41)
+      auto lib2 = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' prefer='long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib2);
+      auto cal2 = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal2->setCurve("Violin - Performance", 20, line("controller", -40, 0.1));
+      cal2->setCurve("Violin", 1, line("controller", -45, 0.2));
+      QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 32), 41);
+      QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 80), 65);
+      }
+
+//---------------------------------------------------------
+//   noteSecondsWritten
+//    a note's written length (SoundLib::noteSeconds, TempoMap::writtenTime): not the Play Panel's
+//    speed (the articulation a note plays mustn't change with it), and its whole tie chain
+//---------------------------------------------------------
+
+void TestSoundLibrary::noteSecondsWritten()
+      {
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");       // quarters at 120: 0.5 s
+      QVERIFY(score);
+      Segment* s = score->firstSegment(SegmentType::ChordRest);
+      const Note* n = toChord(s->element(0))->upNote();
+      QVERIFY(std::fabs(SoundLib::noteSeconds(n) - 0.5) < 1e-6);
+      score->tempomap()->setRelTempo(0.5);
+      QVERIFY(std::fabs(SoundLib::noteSeconds(n) - 0.5) < 1e-6);
+      QVERIFY(std::fabs(score->tempomap()->tick2time(480) - 1.0) < 1e-6);       // (playback: twice as slow)
+      score->tempomap()->setRelTempo(1.0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   perceivedLoudness
+//    ArticulationCheck::perceivedLoudnessDb: 10 dB more is ~10 more; a short burst sounds softer than
+//    the same tone held; 4 kHz louder than 1 kHz at one energy (K-weighting); noise louder than a
+//    tone at one energy (loudness adds up over the bands)
+//---------------------------------------------------------
+
+void TestSoundLibrary::perceivedLoudness()
+      {
+      using AC = ArticulationCheck;
+      const double sr = 48000;
+      auto tone = [sr](double hz, double amp, double seconds) {
+            std::vector<float> c;
+            const int n = int(sr * seconds);
+            for (int i = 0; i < n; ++i) {
+                  const float v = float(amp * std::sin(2 * M_PI * hz * i / sr));
+                  c.push_back(v);
+                  c.push_back(v);
+                  }
+            for (int i = 0; i < int(sr * 0.3); ++i)
+                  c.push_back(0), c.push_back(0);
+            return c;
+            };
+      const double a = AC::perceivedLoudnessDb(tone(1000, 0.1, 1.0), sr);
+      const double b = AC::perceivedLoudnessDb(tone(1000, 0.1 / std::sqrt(10.0), 1.0), sr);       // -10 dB
+      QVERIFY2(std::fabs(a - b - 10) < 1.5, qPrintable(QString::number(a - b)));        // (near threshold: a bit steeper)
+      const double burst = AC::perceivedLoudnessDb(tone(1000, 0.1, 0.03), sr);
+      QVERIFY2(a - burst > 1.0, qPrintable(QString::number(a - burst)));
+      const double high = AC::perceivedLoudnessDb(tone(4000, 0.1, 1.0), sr);
+      QVERIFY2(high - a > 1.0 && high - a < 5.0, qPrintable(QString::number(high - a)));
+      std::vector<float> noise;
+      unsigned seed = 1;
+      double power = 0;
+      for (int i = 0; i < int(sr); ++i) {
+            seed = seed * 1103515245u + 12345u;
+            const float v = float((int((seed >> 16) & 0x7fff) - 16384) / 16384.0);
+            noise.push_back(v), noise.push_back(v);
+            power += double(v) * v;
+            }
+      const double gain = 0.1 / std::sqrt(2.0) / std::sqrt(power / sr);               // the tone's RMS
+      for (float& v : noise)
+            v = float(v * gain);
+      for (int i = 0; i < int(sr * 0.3); ++i)
+            noise.push_back(0), noise.push_back(0);
+      const double n = AC::perceivedLoudnessDb(noise, sr);
+      QVERIFY2(n - a > 5.0, qPrintable(QString::number(n - a)));
+      }
+
+//---------------------------------------------------------
+//   automation
+//    lanes (automation.h): their values and events, kept in the score; played, a MIDI controller's
+//    lane in place of the part's value (CC events, ramps), a plug-in parameter's as parameter events
+//    (ME_PARAMETER) that Vst3Synth hands to the instance (the test synth's Tone scales its level)
+//---------------------------------------------------------
+
+void TestSoundLibrary::automation()
+      {
+      using namespace Automation;
+      Lane lane;
+      lane.target = "vibrato";
+      lane.points = { { 480, 0.2, Curve::STEP }, { 960, 0.2, Curve::LINEAR }, { 1920, 1.0, Curve::STEP } };
+      QCOMPARE(lane.valueAt(0), -1.0);                    // before its first point: says nothing
+      QCOMPARE(lane.valueAt(480), 0.2);
+      QCOMPARE(lane.valueAt(700), 0.2);                   // step
+      QVERIFY(std::fabs(lane.valueAt(1440) - 0.6) < 1e-9);  // half way up the ramp
+      QCOMPARE(lane.valueAt(5000), 1.0);                  // after the last: stays
+      QCOMPARE(lane.cc(), -1);
+      Lane raw;
+      raw.target = "cc21";
+      QCOMPARE(raw.cc(), 21);
+      const auto ev = lane.events(600, 2000, 30, 0.1);
+      QCOMPARE(ev.front().first, 600);                    // the value in force at the chunk's start
+      QCOMPARE(ev.front().second, 0.2);
+      QCOMPARE(ev.back().first, 1920);
+      QCOMPARE(ev.back().second, 1.0);
+      int ramp = 0;
+      for (const auto& e : ev)
+            ramp += e.first > 960 && e.first < 1920;
+      QVERIFY2(ramp >= 6 && ramp <= 8, qPrintable(QString::number(ramp)));    // every 0.1 of the way up
+
+      // kept in the score
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      Lane tone;
+      tone.target = "tone";
+      tone.points = { { 0, 1.0, Curve::STEP }, { 1920, 0.25, Curve::STEP } };
+      std::map<const Part*, PartLanes> all { { score->parts()[0], { lane, tone } } };
+      score->setMetaTag(metaTag, write(score, all));
+      const std::map<const Part*, PartLanes> back = read(score);
+      QCOMPARE(int(back.size()), 1);
+      QCOMPARE(int(back.at(score->parts()[0]).size()), 2);
+      QCOMPARE(back.at(score->parts()[0])[0].points[1].curve, Curve::LINEAR);
+
+      // played
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Controller id='vibrato' name='Vibrato' cc='21' default='64'/>"
+         "<Controller id='tone' name='Tone' param='Tone'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      const SoundLib::Output output = SoundLib::output();
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      score->rebuildMidiMapping();
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      int toneIndex = -1;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            for (int i = 0; i < int(li.allControllers.size()); ++i)
+                  if (li.allControllers[size_t(i)].id == "tone")
+                        toneIndex = i;
+      QVERIFY(toneIndex >= 0);
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      SoundLib::setOutput(output);
+      std::vector<std::pair<int, int>> cc21, params;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (e.channel() != ch || e.type() != ME_CONTROLLER)
+                  continue;
+            if (e.dataA() == 21)
+                  cc21.push_back({ te.first, e.dataB() });
+            }
+      for (const auto& te : events)
+            if (te.second.channel() == ch && te.second.type() == ME_PARAMETER && te.second.dataA() == toneIndex)
+                  params.push_back({ te.first, int(std::lround(te.second.tuning() * 16383)) });
+      QVERIFY(!cc21.empty());
+      // the part's value (the map's default, 64 from the start) gives way to the lane: nothing before
+      // its first point
+      QCOMPARE(cc21.front(), std::make_pair(480, 25));    // 0.2
+      QCOMPARE(cc21.back().second, 127);
+      bool rising = true;
+      for (size_t i = 1; i < cc21.size(); ++i)
+            rising = rising && cc21[i].second >= cc21[i - 1].second;
+      QVERIFY(rising);
+      QVERIFY(params.size() >= 2);
+      QCOMPARE(params.front(), std::make_pair(0, 16383));
+      bool quarter = false;
+      for (const auto& p : params)
+            quarter = quarter || (p.first == 1920 && std::abs(p.second - 4096) <= 1);
+      QVERIFY(quarter);
+      delete score;
+
+      // heard: a parameter event reaches the instance
+      QString error;
+      Vst3Synth synth;
+      synth.init(48000);
+      synth.setPlugin(0, Vst3Plugin::load(TESTSYNTH, 48000, 512, &error));
+      QVERIFY2(synth.plugin(0), qPrintable(error));
+      const long toneId = synth.plugin(0)->parameterId("Tone");
+      QVERIFY(toneId >= 0);
+      synth.setParameterIds(0, { toneId });
+      auto peakWith = [&](int value) {
+            PlayEvent p(ME_PARAMETER, 0, 0, 0);
+            p.setTuning(float(value / 16383.0));
+            synth.play(p);
+            PlayEvent on(ME_NOTEON, 0, 69, 100);
+            synth.play(on);
+            double peak = 0;
+            std::vector<float> b(2 * 512, 0.f);
+            for (int i = 0; i < 40; ++i) {
+                  std::fill(b.begin(), b.end(), 0.f);
+                  synth.process(512, b.data(), nullptr, nullptr);
+                  if (i >= 10)
+                        for (float x : b)
+                              peak = std::max(peak, double(std::fabs(x)));
+                  }
+            PlayEvent off(ME_NOTEON, 0, 69, 0);
+            synth.play(off);
+            for (int i = 0; i < 20; ++i)
+                  synth.process(512, b.data(), nullptr, nullptr);
+            return peak;
+            };
+      const double full = peakWith(16383);
+      const double none = peakWith(0);
+      QVERIFY2(full > 0 && none > 0 && 20 * std::log10(full / none) > 10, qPrintable(QString("%1 %2").arg(full).arg(none)));
       }
 
 QTEST_MAIN(TestSoundLibrary)

@@ -26,9 +26,15 @@
 #include <QSet>
 #include <QSettings>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGridLayout>
 #include <QSlider>
 #include <QSpinBox>
+#include <QSignalBlocker>
+#include <QProcess>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QTreeWidget>
 #include <QDoubleSpinBox>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -640,6 +646,24 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QS
 //    has nothing to put back) keeps the setup's value of each parameter set, to put it back
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   parameterIds
+//    automation: a route's instance's parameter id of each controller of the part's main patch
+//    (the renderer's ME_PARAMETER events are by that index), as titled on this instance
+//---------------------------------------------------------
+
+static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, const std::vector<SoundLib::Route>& routes)
+      {
+      const SoundLib::LibInstrument* main = r.instrument;
+      for (const SoundLib::Route& m : routes)
+            if (m.part == r.part && m.patch == 0 && m.lane == 0)
+                  main = m.instrument;
+      std::vector<long> ids;
+      for (const SoundLib::Controller& c : main->allControllers)
+            ids.push_back(c.param.isEmpty() ? -1 : p->parameterId(c.param));
+      return ids;
+      }
+
 static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values,
                             std::map<unsigned, double>* patchValues)
       {
@@ -939,6 +963,13 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   if (!r.instrument->kit)
                         if (Vst3Plugin* p = vst->plugin(r.port * 16 + r.channel))
                               applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
+            // automation: each slot's parameter ids by the part's main patch controller index (the
+            // renderer's ME_PARAMETER events), as titled on this slot's instance
+            for (const SoundLib::Route& r : routes) {
+                  const int slot = r.port * 16 + r.channel;
+                  if (Vst3Plugin* p = r.instrument->kit ? nullptr : vst->plugin(slot))
+                        vst->setParameterIds(slot, parameterIds(p, r, routes));
+                  }
             }
       for (int k = 0; k < 64; ++k) {
             if (!used[k] && (vst->plugin(k) || !_slots[k].instrument.isEmpty())) {
@@ -1071,7 +1102,8 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
             _own.reset(new Vst3Synth);
             _own->init(sampleRate);
             _own->setVarispeed(SoundLib::current() && SoundLib::current()->varispeed);
-            for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+            const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+            for (const SoundLib::Route& r : routes) {
                   if (r.instrument->kit)
                         continue;
                   std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, &error);
@@ -1083,6 +1115,7 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                       && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &error))
                         qWarning("Sound library: %s", qPrintable(error));
                   applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
+                  _own->setParameterIds(r.port * 16 + r.channel, parameterIds(p.get(), r, routes));
                   _own->setPlugin(r.port * 16 + r.channel, std::move(p));
                   }
             _vst = _own.get();
@@ -1254,194 +1287,52 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
       _info->setWordWrap(true);
       _info->setTextInteractionFlags(Qt::TextSelectableByMouse);
       layout->addWidget(_info);
-      // microtones: the copies of a patch for other tunings (SoundLib::Lanes), the score's settings
-      if (library && library->varispeed) {
-            _lanesRow = new QWidget(this);
-            QHBoxLayout* row = new QHBoxLayout(_lanesRow);
-            row->setContentsMargins(0, 0, 0, 0);
-            QLabel* label = new QLabel(tr("Copies for other tunings (this score):"), _lanesRow);
-            label->setToolTip(tr("A patch plays microtones by copies of itself, each at one tuning: each costs the patch's memory again"));
-            row->addWidget(label);
-            _tolerance = new QDoubleSpinBox(_lanesRow);
-            _tolerance->setRange(0.0, 50.0);
-            _tolerance->setDecimals(1);
-            _tolerance->setSingleStep(0.5);
-            _tolerance->setPrefix(tr("share within "));
-            _tolerance->setSuffix(tr(" cents"));
-            _tolerance->setToolTip(tr("A note this close to a copy's tuning plays on it, at its tuning (more: fewer copies, less exact)"));
-            row->addWidget(_tolerance);
-            _tail = new QDoubleSpinBox(_lanesRow);
-            _tail->setRange(0.0, 10.0);
-            _tail->setDecimals(1);
-            _tail->setSingleStep(0.5);
-            _tail->setPrefix(tr("ring "));
-            _tail->setSuffix(tr(" s"));
-            _tail->setToolTip(tr("How long a copy rings after its last note (release, room) before it can be retuned (less: fewer copies, tails may bend)"));
-            row->addWidget(_tail);
-            _maxLanes = new QSpinBox(_lanesRow);
-            _maxLanes->setRange(1, 16);
-            _maxLanes->setPrefix(tr("at most "));
-            _maxLanes->setSuffix(tr(" per patch"));
-            _maxLanes->setToolTip(tr("Past it, the copy quiet longest is retuned, its tail with it"));
-            row->addWidget(_maxLanes);
-            QPushButton* defaults = new QPushButton(tr("Library's"), _lanesRow);
-            defaults->setToolTip(tr("The library's own settings"));
-            row->addWidget(defaults);
-            row->addStretch();
-            layout->addWidget(_lanesRow);
-            _tolerance->setKeyboardTracking(false);
-            _tail->setKeyboardTracking(false);
-            _maxLanes->setKeyboardTracking(false);
-            for (QDoubleSpinBox* b : { _tolerance, _tail })
-                  connect(b, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
-            connect(_maxLanes, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
-            connect(defaults, &QPushButton::clicked, this, [this]() { setLaneSettings(true); });
-            }
-      // the measured dynamics (Check articulations › Dynamics): short notes against held ones
-      if (library) {
-            QWidget* balanceRow = new QWidget(this);
-            QHBoxLayout* row = new QHBoxLayout(balanceRow);
-            row->setContentsMargins(0, 0, 0, 0);
-            QLabel* label = new QLabel(tr("Short notes against held notes (measured dynamics):"), balanceRow);
-            label->setToolTip(tr("Check articulations with Dynamics measures each articulation; a short note then plays as loud as "
-                                 "the part's held note at its dynamic, plus this"));
-            row->addWidget(label);
-            _balance = new QDoubleSpinBox(balanceRow);
-            _balance->setRange(-24.0, 24.0);
-            _balance->setDecimals(1);
-            _balance->setSingleStep(1.0);
-            _balance->setSuffix(tr(" dB"));
-            _balance->setKeyboardTracking(false);
-            row->addWidget(_balance);
-            row->addStretch();
-            layout->addWidget(balanceRow);
-            const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
-            _balance->setValue(cal ? cal->balanceDb : 0.0);
-            balanceRow->setVisible(bool(cal));
-            connect(_balance, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double db) {
-                  SoundLib::DynamicsCalibration cal;
-                  const QString file = SoundLibraryHost::calibrationFile(*_library);
-                  if (!cal.read(file))
-                        return;
-                  cal.balanceDb = db;
-                  if (seq && seq->isPlaying())
-                        seq->stopWait();
-                  cal.write(file);
-                  SoundLibraryHost::loadCalibration();
-                  });
-            }
-      _table = new QTableWidget(this);
-      _table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-      _table->verticalHeader()->hide();
-      _table->setSelectionMode(QAbstractItemView::NoSelection);
-      layout->addWidget(_table);
+      // (the owner, 2026-09-28: a part's extra patches and copies for other tunings under it, closed;
+      // the settings in Mixer › Advanced Options…)
+      _tree = new QTreeWidget(this);
+      _tree->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      _tree->setSelectionMode(QAbstractItemView::NoSelection);
+      _tree->setRootIsDecorated(true);
+      layout->addWidget(_tree);
       QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
       connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-      if (SoundLibraryHost::available() && library && SoundLibraryHost::makesSetups(*library)) {
-            QPushButton* folder = buttons->addButton(tr("Library folder…"), QDialogButtonBox::ActionRole);
-            folder->setToolTip(tr("Where %1 is installed (its folder with Instruments and Samples)").arg(library->name));
-            connect(folder, &QPushButton::clicked, this, [this]() {
-                  const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder of %1").arg(_library->name),
-                                                                        SoundLibraryHost::libraryFolder(*_library));
-                  if (dir.isEmpty())
-                        return;
-                  if (!QFileInfo::exists(dir + "/Instruments"))
-                        QMessageBox::warning(this, windowTitle(), tr("%1 has no Instruments folder.").arg(QDir::toNativeSeparators(dir)));
-                  SoundLibraryHost::setLibraryFolder(*_library, dir);
-                  rebuild();
-                  });
-            }
-      if (SoundLibraryHost::available() && library) {
-            QPushButton* check = buttons->addButton(tr("Check articulations…"), QDialogButtonBox::ActionRole);
-            connect(check, &QPushButton::clicked, this, [this]() {
-                  ArticulationCheckDialog* d = new ArticulationCheckDialog(_library, parentWidget());
-                  d->setAttribute(Qt::WA_DeleteOnClose);
-                  d->show();
-                  });
-            }
+      QPushButton* options = buttons->addButton(tr("Advanced Options…"), QDialogButtonBox::ActionRole);
+      options->setToolTip(tr("This score's sound library settings and the library's (also in the Mixer)"));
+      connect(options, &QPushButton::clicked, this, [this]() { SoundLibraryOptions::showFor(this); });
       layout->addWidget(buttons);
       resize(760, 480);
-      // (later: a change can come from a button of the table)
       connect(SoundLibraryHost::instance(), &SoundLibraryHost::changed, this, [this]() {
             QTimer::singleShot(0, this, &SoundLibraryDialog::rebuild);
             });
       rebuild();
       }
 
-//---------------------------------------------------------
-//   setLaneSettings
-//    the spin boxes' values (or the library's) into the score, as an undoable change
-//---------------------------------------------------------
-
-void SoundLibraryDialog::setLaneSettings(bool libraryDefaults)
-      {
-      Score* score = mscore ? mscore->currentScore() : nullptr;
-      if (!_library || !score || !_tolerance)
-            return;
-      MasterScore* ms = score->masterScore();
-      SoundLib::LaneSettings s;
-      s.tolerance = _tolerance->value();
-      s.tail = _tail->value();
-      s.maxLanes = _maxLanes->value();
-      const QString value = libraryDefaults ? QString() : SoundLib::writeLaneSettings(s, *_library);
-      QMap<QString, QString> tags = ms->metaTags();
-      if (value.isEmpty())
-            tags.remove(SoundLib::laneSettingsMetaTag);
-      else
-            tags.insert(SoundLib::laneSettingsMetaTag, value);
-      if (tags == ms->metaTags()) {
-            if (libraryDefaults)
-                  rebuild();
-            return;
-            }
-      if (seq && seq->isPlaying())
-            seq->stopWait();
-      ms->startCmd();
-      ms->undo(new ChangeMetaTags(ms, tags));
-      ms->endCmd();
-      // (the copies it needs load at the next play, not at each click)
-      SoundLibraryHost::routesMayChange();
-      rebuild();
-      }
-
 void SoundLibraryDialog::rebuild()
       {
       Score* score = mscore ? mscore->currentScore() : nullptr;
-      _table->clear();
-      _table->setRowCount(0);
+      // (what was open stays open)
+      QSet<QString> open;
+      for (int i = 0; i < _tree->topLevelItemCount(); ++i)
+            if (_tree->topLevelItem(i)->isExpanded())
+                  open.insert(_tree->topLevelItem(i)->text(0));
+      _tree->clear();
       if (!_library || !score) {
             _info->setText(!_library ? tr("No sound library is chosen (Preferences › I/O › Sound library).") : tr("No score is open."));
             return;
             }
       score = score->masterScore();
-      if (_lanesRow) {
-            const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *_library);
-            for (QWidget* w : std::initializer_list<QWidget*> { _tolerance, _tail, _maxLanes })
-                  w->blockSignals(true);
-            _tolerance->setValue(ls.tolerance);
-            _tail->setValue(ls.tail);
-            _maxLanes->setValue(ls.maxLanes);
-            for (QWidget* w : std::initializer_list<QWidget*> { _tolerance, _tail, _maxLanes })
-                  w->blockSignals(false);
-            }
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *_library);
       const bool plugin = _output == SoundLib::Output::PLUGIN;
       SoundLibraryHost* host = SoundLibraryHost::instance();
+      enum { PART, PATCH, CONTROLLERS, STATUS, SHOW, MEMORY };
 
       if (plugin) {
             QString error;
             const QString path = SoundLibraryHost::pluginPath(*_library, &error);
             QString text = path.isEmpty() ? error
                : tr("The library's parts play through %1, hosted by MuseScore.").arg(QDir::toNativeSeparators(path));
-            if (SoundLibraryHost::makesSetups(*_library)) {
-                  const QString folder = SoundLibraryHost::libraryFolder(*_library);
-                  text += " " + (folder.isEmpty()
-                     ? tr("%1 was not found on this computer: choose its folder (the one with Instruments and Samples) with "
-                          "Library folder….").arg(_library->name)
-                     : tr("MuseScore sets each patch up by itself from %1, at the library's defaults with its articulation "
-                          "switching (UACC); Show opens the plug-in's window, to look at it.").arg(QDir::toNativeSeparators(folder)));
-                  }
-            // the memory the loaded patches took (measured as each loaded) and the process's now
+            if (SoundLibraryHost::makesSetups(*_library) && SoundLibraryHost::libraryFolder(*_library).isEmpty())
+                  text += " " + tr("%1 was not found on this computer: choose its folder in Mixer › Advanced Options….").arg(_library->name);
             qint64 total = 0;
             for (const SoundLib::Route& r : routes)
                   if (!r.instrument->kit && host->memory(r.port * 16 + r.channel) > 0)
@@ -1458,82 +1349,74 @@ void SoundLibraryDialog::rebuild()
                         text += " " + tr("This build: %1 (%2 %3).").arg(build[0], build[1], build[2]);
                   }
             _info->setText(text);
-            _table->setColumnCount(6);
-            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("Setup"), QString(), tr("Memory") });
+            _tree->setColumnCount(6);
+            _tree->setHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("Setup"), QString(), tr("Memory") });
             }
       else {
             _info->setText(tr("Load each patch on the MIDI output (A: \"%1\", then B, C, D) and channel shown. "
                               "Parts without a patch play on MuseScore's built-in synthesizer.")
                               .arg(preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE)));
-            _table->setColumnCount(5);
-            _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("MIDI output"), tr("Channel") });
+            _tree->setColumnCount(5);
+            _tree->setHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("MIDI output"), tr("Channel") });
             }
 
       for (const Part* part : score->parts()) {
-            bool any = false;
-            for (auto r = routes.begin(); r != routes.end(); ++r) {
-                  if (r->part != part)
+            QTreeWidgetItem* partItem = nullptr;
+            qint64 partMemory = 0;
+            int measured = 0;
+            for (const SoundLib::Route& r : routes) {
+                  if (r.part != part)
                         continue;
-                  any = true;
-                  // a row per patch the part plays (its own, then the extras its notation needs)
-                  const int row = _table->rowCount();
-                  _table->insertRow(row);
-                  // (a lane: a copy of the patch for another tuning, SoundLib::Lanes)
-                  const QString name = r->lane > 0 ? QString("  ~ %1 (%2)").arg(part->partName(), tr("other tuning %1").arg(r->lane))
-                                     : r->patch == 0 ? part->partName() : QString("  + %1").arg(part->partName());
-                  _table->setItem(row, 0, new QTableWidgetItem(name));
-                  _table->setItem(row, 1, new QTableWidgetItem(r->instrument->name));
-                  // the part's controllers: those of all its patches (a MIDI controller goes to all of
-                  // them, a plug-in parameter to each that has it)
-                  if (r->patch == 0 && r->lane == 0) {
+                  // the part's own patch: its row; an extra patch (+) or a copy for another tuning (~) under it
+                  QTreeWidgetItem* item;
+                  if (!partItem) {
+                        item = partItem = new QTreeWidgetItem(_tree);
+                        item->setText(PART, part->partName());
+                        }
+                  else {
+                        item = new QTreeWidgetItem(partItem);
+                        item->setText(PART, r.lane > 0 ? QString("~ %1").arg(tr("other tuning %1").arg(r.lane))
+                                                       : QString("+ %1").arg(tr("extra patch")));
+                        }
+                  item->setText(PATCH, r.instrument->name);
+                  // the part's controllers: those of all its patches (kept until the automation system)
+                  if (item == partItem) {
                         PartPatches patches;
-                        bool any = false;
+                        bool anyCtrl = false;
                         for (const SoundLib::Route& e : routes) {
                               if (e.part != part || e.lane != 0)
                                     continue;
                               patches.push_back({ e.instrument, plugin && !e.instrument->kit ? e.port * 16 + e.channel : -1 });
-                              any = any || !e.instrument->allControllers.empty();
+                              anyCtrl = anyCtrl || !e.instrument->allControllers.empty();
                               }
-                        if (any) {
+                        if (anyCtrl) {
                               QPushButton* ctrl = new QPushButton(tr("Controllers…"));
-                              _table->setCellWidget(row, 2, ctrl);
+                              _tree->setItemWidget(item, CONTROLLERS, ctrl);
                               MasterScore* ms = score->masterScore();
                               connect(ctrl, &QPushButton::clicked, this, [this, ms, part, patches]() { editControllers(this, ms, part, patches); });
                               }
                         }
-                  if (r->instrument->kit) {
-                        _table->setItem(row, 3, new QTableWidgetItem(tr("(its drum sounds play on the patches below)")));
+                  if (r.instrument->kit) {
+                        item->setText(STATUS, tr("(its drum sounds play on the patches under it)"));
                         continue;
                         }
                   if (!plugin) {
-                        _table->setItem(row, 3, new QTableWidgetItem(QString(QChar('A' + r->port))));
-                        _table->setItem(row, 4, new QTableWidgetItem(QString::number(r->channel + 1)));
+                        item->setText(STATUS, QString(QChar('A' + r.port)));
+                        item->setText(SHOW, QString::number(r.channel + 1));
                         continue;
                         }
-                  const int slot = r->port * 16 + r->channel;
-                  const bool setup = SoundLibraryHost::hasSetup(*_library, r->instrument->name);
+                  const int slot = r.port * 16 + r.channel;
+                  const bool setup = SoundLibraryHost::hasSetup(*_library, r.instrument->name);
                   const bool makes = SoundLibraryHost::makesSetups(*_library);
-                  _table->setItem(row, 3, new QTableWidgetItem(!setup ? (makes ? tr("Its .nki was not found") : tr("No setup"))
-                                                               : host->loaded(slot) ? tr("Loaded") : tr("Ready")));
+                  item->setText(STATUS, !setup ? (makes ? tr("Its .nki was not found") : tr("No setup"))
+                                               : host->loaded(slot) ? tr("Loaded") : tr("Ready"));
                   QPushButton* show = new QPushButton(tr("Show"));
-                  _table->setCellWidget(row, 4, show);
-                  // what the patch took as it loaded; the part's own row adds its extras and copies
+                  _tree->setItemWidget(item, SHOW, show);
                   if (host->loaded(slot) && host->memory(slot) >= 0) {
-                        QString mem = tr("%1 MB").arg(host->memory(slot) >> 20);
-                        if (r->patch == 0 && r->lane == 0) {
-                              qint64 partTotal = 0;
-                              int count = 0;
-                              for (const SoundLib::Route& e : routes)
-                                    if (e.part == part && !e.instrument->kit && host->memory(e.port * 16 + e.channel) > 0) {
-                                          partTotal += host->memory(e.port * 16 + e.channel);
-                                          ++count;
-                                          }
-                              if (count > 1)
-                                    mem += " " + tr("(part: %1 MB)").arg(partTotal >> 20);
-                              }
-                        QTableWidgetItem* item = new QTableWidgetItem(mem);
-                        item->setToolTip(tr("What MuseScore's memory grew by as this patch loaded (and in the 3 s after)"));
-                        _table->setItem(row, 5, item);
+                        item->setText(MEMORY, tr("%1 MB").arg(host->memory(slot) >> 20));
+                        item->setToolTip(MEMORY, tr("What MuseScore's memory grew by as this patch loaded (and in the 3 s after)"));
+                        partMemory += host->memory(slot);
+                        ++measured;
                         }
                   MasterScore* ms = score->masterScore();
                   connect(show, &QPushButton::clicked, this, [this, host, slot, ms]() {
@@ -1546,15 +1429,317 @@ void SoundLibraryDialog::rebuild()
                               QMessageBox::warning(this, windowTitle(), error);
                         });
                   }
-            if (!any) {
-                  const int row = _table->rowCount();
-                  _table->insertRow(row);
-                  _table->setItem(row, 0, new QTableWidgetItem(part->partName()));
-                  _table->setItem(row, 1, new QTableWidgetItem(tr("(built-in synthesizer)")));
+            if (!partItem) {
+                  partItem = new QTreeWidgetItem(_tree);
+                  partItem->setText(PART, part->partName());
+                  partItem->setText(PATCH, tr("(built-in synthesizer)"));
+                  continue;
                   }
+            // a part with several patches: their memory together on the part's row
+            if (plugin && measured > 1)
+                  partItem->setText(MEMORY, tr("%1 MB (with the patches under it)").arg(partMemory >> 20));
+            partItem->setExpanded(open.contains(part->partName()));
             }
-      _table->resizeColumnsToContents();
-      _table->horizontalHeader()->setSectionResizeMode(_table->columnCount() - 1, QHeaderView::Stretch);
+      for (int c = 0; c < _tree->columnCount(); ++c)
+            _tree->resizeColumnToContents(c);
+      }
+
+//---------------------------------------------------------
+//   SoundLibraryOptions
+//---------------------------------------------------------
+
+void SoundLibraryOptions::showFor(QWidget* parent)
+      {
+      Score* score = mscore ? mscore->currentScore() : nullptr;
+      if (!score) {
+            QMessageBox::information(parent, tr("Advanced Options"), tr("No score is open."));
+            return;
+            }
+      SoundLibraryOptions d(score->masterScore(), parent);
+      d.exec();
+      }
+
+SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
+   : QDialog(parent), _library(SoundLib::current()), _score(score)
+      {
+      setWindowTitle(tr("Advanced Options: %1").arg(score->title()));
+      QVBoxLayout* layout = new QVBoxLayout(this);
+      if (!_library) {
+            layout->addWidget(new QLabel(tr("No sound library is chosen (Preferences › I/O › Sound library)."), this));
+            QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+            connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+            layout->addWidget(buttons);
+            return;
+            }
+
+      // this score
+      QGroupBox* scoreBox = new QGroupBox(tr("This score (saved in it)"), this);
+      QFormLayout* form = new QFormLayout(scoreBox);
+      if (_library->varispeed) {
+            QWidget* row = new QWidget(scoreBox);
+            QHBoxLayout* h = new QHBoxLayout(row);
+            h->setContentsMargins(0, 0, 0, 0);
+            _tolerance = new QDoubleSpinBox(row);
+            _tolerance->setRange(0.0, 50.0);
+            _tolerance->setDecimals(1);
+            _tolerance->setSingleStep(0.5);
+            _tolerance->setPrefix(tr("share within "));
+            _tolerance->setSuffix(tr(" cents"));
+            _tolerance->setToolTip(tr("A note this close to a copy's tuning plays on it, at its tuning (more: fewer copies, less exact)"));
+            _tail = new QDoubleSpinBox(row);
+            _tail->setRange(0.0, 10.0);
+            _tail->setDecimals(1);
+            _tail->setSingleStep(0.5);
+            _tail->setPrefix(tr("ring "));
+            _tail->setSuffix(tr(" s"));
+            _tail->setToolTip(tr("How long a copy rings after its last note (release, room) before it can be retuned"));
+            _maxLanes = new QSpinBox(row);
+            _maxLanes->setRange(1, 16);
+            _maxLanes->setPrefix(tr("at most "));
+            _maxLanes->setSuffix(tr(" per patch"));
+            _maxLanes->setToolTip(tr("Past it, the copy quiet longest is retuned, its tail with it"));
+            QPushButton* defaults = new QPushButton(tr("Library's"), row);
+            for (QWidget* w : std::initializer_list<QWidget*> { _tolerance, _tail, _maxLanes, defaults })
+                  h->addWidget(w);
+            h->addStretch();
+            QLabel* l = new QLabel(tr("Copies for other tunings:"), scoreBox);
+            l->setToolTip(tr("A patch plays microtones by copies of itself, each at one tuning: each costs the patch's memory again"));
+            form->addRow(l, row);
+            for (QDoubleSpinBox* b : { _tolerance, _tail })
+                  b->setKeyboardTracking(false);
+            _maxLanes->setKeyboardTracking(false);
+            for (QDoubleSpinBox* b : { _tolerance, _tail })
+                  connect(b, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
+            connect(_maxLanes, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
+            connect(defaults, &QPushButton::clicked, this, [this]() { setLaneSettings(true); });
+            }
+      {
+            QWidget* row = new QWidget(scoreBox);
+            QHBoxLayout* h = new QHBoxLayout(row);
+            h->setContentsMargins(0, 0, 0, 0);
+            static const char* const NAMES[5] = { QT_TR_NOOP("Strings"), QT_TR_NOOP("Solo strings"), QT_TR_NOOP("Woodwinds"),
+                                                  QT_TR_NOOP("Brass"), QT_TR_NOOP("Other") };
+            for (int i = 0; i < 5; ++i) {
+                  QDoubleSpinBox* box = new QDoubleSpinBox(row);
+                  box->setRange(-24.0, 24.0);
+                  box->setDecimals(1);
+                  box->setSingleStep(1.0);
+                  box->setSuffix(tr(" dB"));
+                  box->setPrefix(tr(NAMES[i]) + " ");
+                  box->setKeyboardTracking(false);
+                  h->addWidget(box);
+                  _balance[SoundLib::FAMILIES[i]] = box;
+                  connect(box, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this]() { setBalance(false); });
+                  }
+            QPushButton* defaults = new QPushButton(tr("Library's"), row);
+            h->addWidget(defaults);
+            connect(defaults, &QPushButton::clicked, this, [this]() { setBalance(true); });
+            // measured: how much louder the shorts sound than the held notes they match in energy
+            // (a loudness model over the measured dynamics; the owner, 2026-09-28)
+            QPushButton* recommended = new QPushButton(tr("Recommended"), row);
+            recommended->setToolTip(tr("Per family, from the measured dynamics and a loudness model of hearing: short notes as "
+                                       "loud as held notes sound (measure the dynamics with this build first)"));
+            h->addWidget(recommended);
+            h->addStretch();
+            connect(recommended, &QPushButton::clicked, this, [this]() {
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+                  QStringList missing;
+                  for (auto& b : _balance) {
+                        double db;
+                        if (cal && _library && SoundLib::recommendedBalance(*_library, *cal, b.first, &db)) {
+                              const QSignalBlocker blocker(b.second);
+                              b.second->setValue(db);
+                              }
+                        else
+                              missing << b.first;
+                        }
+                  setBalance(false);
+                  if (missing.size() == int(_balance.size()))
+                        QMessageBox::information(this, windowTitle(), tr("Nothing to recommend from yet: measure the dynamics "
+                                                                         "in the background with this build (below), then restart MuseScore."));
+                  else if (!missing.isEmpty())
+                        QMessageBox::information(this, windowTitle(), tr("No recommendation for: %1 (not measured with this build, "
+                                                                         "or no short notes to go by).").arg(missing.join(", ")));
+                  });
+            QLabel* l = new QLabel(tr("Short notes against held notes:"), scoreBox);
+            l->setToolTip(tr("With the dynamics measured (below), a short note plays as loud as the part's held note at its "
+                             "dynamic, plus this, per family"));
+            form->addRow(l, row);
+            if (!SoundLib::dynamicsCalibration())
+                  row->setEnabled(false), row->setToolTip(tr("Measure the dynamics first (below)"));
+
+            // even dynamic steps (SoundLib::evenStep)
+            _evenSteps = new QComboBox(scoreBox);
+            _evenSteps->addItem(tr("Off: as the library plays them"), int(SoundLib::EvenSteps::OFF));
+            _evenSteps->addItem(tr("Volume, judged by ear"), int(SoundLib::EvenSteps::VOLUME_HEARING));
+            _evenSteps->addItem(tr("Volume, judged by energy"), int(SoundLib::EvenSteps::VOLUME_ENERGY));
+            _evenSteps->addItem(tr("Recording, judged by ear"), int(SoundLib::EvenSteps::RECORDING_HEARING));
+            _evenSteps->addItem(tr("Recording, judged by energy"), int(SoundLib::EvenSteps::RECORDING_ENERGY));
+            _evenSteps->setToolTip(tr("Spaces ppp … fff evenly within each held note's own loudness range.\n"
+                                      "Volume: every dynamic keeps the library's recording (its tone); the volume is turned "
+                                      "down where a step is too small.\n"
+                                      "Recording: another point between the library's recordings is played, so the tone moves.\n"
+                                      "By ear: judged with a model of hearing (brighter sounds louder). By energy: the "
+                                      "loudest 50 ms, as the short notes are matched.\n"
+                                      "Needs the dynamics measured (below); Volume needs a measurement made with this build."));
+            QLabel* el = new QLabel(tr("Even dynamic steps:"), scoreBox);
+            el->setToolTip(_evenSteps->toolTip());
+            form->addRow(el, _evenSteps);
+            if (!SoundLib::dynamicsCalibration())
+                  _evenSteps->setEnabled(false);
+            connect(_evenSteps, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+                  const SoundLib::EvenSteps mode = SoundLib::EvenSteps(_evenSteps->currentData().toInt());
+                  setMetaTag(SoundLib::evenStepsMetaTag, SoundLib::evenStepsName(mode));
+                  const bool volume = mode == SoundLib::EvenSteps::VOLUME_HEARING || mode == SoundLib::EvenSteps::VOLUME_ENERGY;
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+                  bool measured = false;
+                  if (cal)
+                        for (const auto& p : cal->patches())
+                              for (const auto& a : p.second)
+                                    measured = measured || (volume ? !a.second.expression.empty() : a.second.points.size() >= 2);
+                  if (mode != SoundLib::EvenSteps::OFF && !measured)
+                        QMessageBox::information(this, windowTitle(), tr("This needs the dynamics measured in the background "
+                                                                         "with this build (below), then a restart of MuseScore. "
+                                                                         "Until then the dynamics play as before."));
+                  });
+      }
+      layout->addWidget(scoreBox);
+
+      // the library (every score)
+      QGroupBox* libBox = new QGroupBox(tr("%1 (every score)").arg(_library->name), this);
+      QVBoxLayout* lv = new QVBoxLayout(libBox);
+      if (SoundLibraryHost::available() && SoundLibraryHost::makesSetups(*_library)) {
+            QHBoxLayout* h = new QHBoxLayout;
+            _folder = new QLabel(libBox);
+            _folder->setWordWrap(true);
+            QPushButton* folder = new QPushButton(tr("Library folder…"), libBox);
+            folder->setToolTip(tr("Where %1 is installed (its folder with Instruments and Samples)").arg(_library->name));
+            h->addWidget(_folder, 1);
+            h->addWidget(folder);
+            lv->addLayout(h);
+            connect(folder, &QPushButton::clicked, this, [this]() {
+                  const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder of %1").arg(_library->name),
+                                                                        SoundLibraryHost::libraryFolder(*_library));
+                  if (dir.isEmpty())
+                        return;
+                  if (!QFileInfo::exists(dir + "/Instruments"))
+                        QMessageBox::warning(this, windowTitle(), tr("%1 has no Instruments folder.").arg(QDir::toNativeSeparators(dir)));
+                  SoundLibraryHost::setLibraryFolder(*_library, dir);
+                  load();
+                  });
+            }
+      if (SoundLibraryHost::available()) {
+            QHBoxLayout* h = new QHBoxLayout;
+            QPushButton* dyn = new QPushButton(tr("Measure dynamics in the background"), libBox);
+            dyn->setToolTip(tr("Every patch's loudness from soft to loud, with the library's plug-in and no window (a few "
+                               "minutes); the short notes are balanced from it. Progress: Documents/MuseScore Sound Library "
+                               "Check/background dynamics check.log"));
+            QPushButton* keys = new QPushButton(tr("Scan drum keys in the background"), libBox);
+            keys->setToolTip(tr("Which key plays which sound in the percussion patches whose keys aren't known yet"));
+            h->addWidget(dyn);
+            h->addWidget(keys);
+            h->addStretch();
+            lv->addLayout(h);
+            connect(dyn, &QPushButton::clicked, this, [this]() {
+                  startBackground({ "--extract-library", _library->name, "--check-dynamics", "--extract-patches", "mapped" },
+                                  tr("The dynamics are measured in the background (Documents/MuseScore Sound Library Check/"
+                                     "background dynamics check.log); MuseScore uses them from its next start."));
+                  });
+            connect(keys, &QPushButton::clicked, this, [this]() {
+                  startBackground({ "--scan-keys", _library->name },
+                                  tr("The drum keys are scanned in the background (Documents/MuseScore Sound Library Check/"
+                                     "background extract.log); hand back the zip it makes."));
+                  });
+            }
+      layout->addWidget(libBox);
+
+      QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+      connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+      layout->addWidget(buttons);
+      load();
+      }
+
+// the score's values into the boxes (without their signals)
+void SoundLibraryOptions::load()
+      {
+      if (!_library || !_score)
+            return;
+      if (_tolerance) {
+            const SoundLib::LaneSettings ls = SoundLib::laneSettings(_score, *_library);
+            const QSignalBlocker b1(_tolerance), b2(_tail), b3(_maxLanes);
+            _tolerance->setValue(ls.tolerance);
+            _tail->setValue(ls.tail);
+            _maxLanes->setValue(ls.maxLanes);
+            }
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+      for (auto& b : _balance) {
+            const QSignalBlocker blocker(b.second);
+            b.second->setValue(cal ? SoundLib::shortNotesBalance(_score, *cal, b.first) : 0.0);
+            }
+      if (_evenSteps) {
+            const QSignalBlocker blocker(_evenSteps);
+            _evenSteps->setCurrentIndex(std::max(0, _evenSteps->findData(int(SoundLib::evenSteps(_score)))));
+            }
+      if (_folder) {
+            const QString folder = SoundLibraryHost::libraryFolder(*_library);
+            _folder->setText(folder.isEmpty() ? tr("%1 was not found on this computer: choose its folder (the one with "
+                                                   "Instruments and Samples).").arg(_library->name)
+                                              : tr("Installed in %1").arg(QDir::toNativeSeparators(folder)));
+            }
+      }
+
+// a score metaTag as an undoable change, then played again
+void SoundLibraryOptions::setMetaTag(const char* tag, const QString& value)
+      {
+      if (!_score)
+            return;
+      QMap<QString, QString> tags = _score->metaTags();
+      if (value.isEmpty())
+            tags.remove(tag);
+      else
+            tags.insert(tag, value);
+      if (tags == _score->metaTags())
+            return;
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      _score->startCmd();
+      _score->undo(new ChangeMetaTags(_score, tags));
+      _score->endCmd();
+      _score->setPlaylistDirty();
+      SoundLibraryHost::routesMayChange();          // (the copies it needs load at the next play)
+      }
+
+void SoundLibraryOptions::setLaneSettings(bool libraryDefaults)
+      {
+      if (!_library || !_tolerance)
+            return;
+      SoundLib::LaneSettings s;
+      s.tolerance = _tolerance->value();
+      s.tail = _tail->value();
+      s.maxLanes = _maxLanes->value();
+      setMetaTag(SoundLib::laneSettingsMetaTag, libraryDefaults ? QString() : SoundLib::writeLaneSettings(s, *_library));
+      load();
+      }
+
+void SoundLibraryOptions::setBalance(bool libraryDefaults)
+      {
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+      if (!cal)
+            return;
+      std::map<QString, double> values;
+      for (const auto& b : _balance)
+            values[b.first] = b.second->value();
+      setMetaTag(SoundLib::shortBalanceMetaTag, libraryDefaults ? QString() : SoundLib::writeShortBalance(values, *cal));
+      load();
+      }
+
+// the MuseScore running here, with no window, doing a background job (musescore.cpp extractInBackground)
+void SoundLibraryOptions::startBackground(const QStringList& args, const QString& what)
+      {
+      if (QProcess::startDetached(QCoreApplication::applicationFilePath(), args))
+            QMessageBox::information(this, windowTitle(), what);
+      else
+            QMessageBox::warning(this, windowTitle(), tr("MuseScore could not be started in the background."));
       }
 
 } // namespace Ms

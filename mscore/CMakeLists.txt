@@ -230,7 +230,7 @@ add_library(mscoreapp STATIC
       selectdialog.h selectionwindow.h selectnotedialog.h selinstrument.h
       seq.h shortcut.h shortcutcapturedialog.h simplebutton.h splitstaff.h stafftextproperties.h
       startcenter.h startupWizard.h stringutils.h svggenerator.h symboldialog.h synthcontrol.h
-      templateBrowser.h textcursor.h textpalette.h texttools.h timedialog.h timeline.h timesigproperties.h
+      templateBrowser.h textcursor.h textpalette.h texttools.h timedialog.h timeline.h playabilitypanel.h timesigproperties.h
       toolbarEditor.h toolbuttonmenu.h transposedialog.h tremolobarcanvas.h realizeharmonydialog.h
       tupletdialog.h updatechecker.h waveview.h webpage.h workspace.h migration/scoremigrationdialog.h
       migration/scoremigrationdialogmodel.h migration/scoremigrator_3_6.h
@@ -248,6 +248,7 @@ add_library(mscoreapp STATIC
       mssplashscreen.cpp musescore.cpp musescoredialogs.cpp navigator.cpp pagesettings.cpp palette.cpp
       sessionstatusobserver.cpp
       timeline.cpp
+      playabilitypanel.cpp
       parteditbase.cpp playpanel.cpp selectionwindow.cpp
       measureproperties.cpp
       seq.cpp textpalette.cpp

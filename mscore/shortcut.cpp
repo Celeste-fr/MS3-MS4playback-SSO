@@ -2263,6 +2263,38 @@ Shortcut Shortcut::_sc[] = {
          },
       {
          MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY | STATE_EDIT | STATE_FOTO | STATE_TEXT_EDIT,
+         "toggle-playability-panel",
+         QT_TRANSLATE_NOOP("action","Playability Panel"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Playability Panel'")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY,
+         "toggle-scordatura-view",
+         QT_TRANSLATE_NOOP("action","Show Scordatura as Fingered"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Show Scordatura as Fingered'"),
+         0,
+         Icons::Invalid_ICON,
+         Qt::WindowShortcut,
+         ShortcutFlags::A_SCORE
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
+         "toggle-playability",
+         QT_TRANSLATE_NOOP("action","Check Playability"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Check Playability'")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
+         "toggle-playability-open-strings",
+         QT_TRANSLATE_NOOP("action","Mark Open Strings"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Mark Open Strings'")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "create-new-workspace",
          "+",

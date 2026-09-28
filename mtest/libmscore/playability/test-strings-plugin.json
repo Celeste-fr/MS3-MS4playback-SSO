@@ -1,0 +1,746 @@
+{
+ "marks": [
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 55,
+   "staff": "Violin",
+   "tick": 0
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Violin",
+   "tick": 480
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Violin",
+   "tick": 960
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 76,
+   "staff": "Violin",
+   "tick": 1440
+  },
+  {
+   "bar": 3,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Violin",
+   "tick": 3840
+  },
+  {
+   "bar": 3,
+   "color": "#00a0b0",
+   "pitch": 55,
+   "staff": "Violin",
+   "tick": 3840
+  },
+  {
+   "bar": 3,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Violin",
+   "tick": 4320
+  },
+  {
+   "bar": 3,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Violin",
+   "tick": 4320
+  },
+  {
+   "bar": 3,
+   "color": "#00a0b0",
+   "pitch": 76,
+   "staff": "Violin",
+   "tick": 4800
+  },
+  {
+   "bar": 3,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Violin",
+   "tick": 4800
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 57,
+   "staff": "Violin",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 55,
+   "staff": "Violin",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 58,
+   "staff": "Violin",
+   "tick": 6240
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 56,
+   "staff": "Violin",
+   "tick": 6240
+  },
+  {
+   "bar": 5,
+   "color": "#ff0000",
+   "pitch": 62,
+   "staff": "Violin",
+   "tick": 7680
+  },
+  {
+   "bar": 5,
+   "color": "#ff0000",
+   "pitch": 50,
+   "staff": "Violin",
+   "tick": 7680
+  },
+  {
+   "bar": 5,
+   "color": "#ff0000",
+   "pitch": 55,
+   "staff": "Violin",
+   "tick": 8160
+  },
+  {
+   "bar": 5,
+   "color": "#ff0000",
+   "pitch": 48,
+   "staff": "Violin",
+   "tick": 8160
+  },
+  {
+   "bar": 6,
+   "color": "#808000",
+   "pitch": 83,
+   "staff": "Violin",
+   "tick": 9600
+  },
+  {
+   "bar": 6,
+   "color": "#808000",
+   "pitch": 60,
+   "staff": "Violin",
+   "tick": 9600
+  },
+  {
+   "bar": 6,
+   "color": "#808000",
+   "pitch": 81,
+   "staff": "Violin",
+   "tick": 10080
+  },
+  {
+   "bar": 6,
+   "color": "#808000",
+   "pitch": 58,
+   "staff": "Violin",
+   "tick": 10080
+  },
+  {
+   "bar": 7,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Violin",
+   "tick": 11520
+  },
+  {
+   "bar": 7,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Violin",
+   "tick": 11520
+  },
+  {
+   "bar": 7,
+   "color": "#00a0b0",
+   "pitch": 55,
+   "staff": "Violin",
+   "tick": 11520
+  },
+  {
+   "bar": 7,
+   "color": "#00a0b0",
+   "pitch": 76,
+   "staff": "Violin",
+   "tick": 12000
+  },
+  {
+   "bar": 7,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Violin",
+   "tick": 12000
+  },
+  {
+   "bar": 7,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Violin",
+   "tick": 12000
+  },
+  {
+   "bar": 7,
+   "color": "#00a0b0",
+   "pitch": 55,
+   "staff": "Violin",
+   "tick": 12000
+  },
+  {
+   "bar": 9,
+   "color": "#ff0000",
+   "pitch": 57,
+   "staff": "Violin",
+   "tick": 15360
+  },
+  {
+   "bar": 9,
+   "color": "#ff0000",
+   "pitch": 55,
+   "staff": "Violin",
+   "tick": 15360
+  },
+  {
+   "bar": 11,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Violin",
+   "tick": 20160
+  },
+  {
+   "bar": 11,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Violin",
+   "tick": 20160
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 48,
+   "staff": "Viola",
+   "tick": 0
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 55,
+   "staff": "Viola",
+   "tick": 480
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Viola",
+   "tick": 960
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Viola",
+   "tick": 1440
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 55,
+   "staff": "Viola",
+   "tick": 1920
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 48,
+   "staff": "Viola",
+   "tick": 1920
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Viola",
+   "tick": 2400
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 55,
+   "staff": "Viola",
+   "tick": 2400
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 69,
+   "staff": "Viola",
+   "tick": 2880
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 62,
+   "staff": "Viola",
+   "tick": 2880
+  },
+  {
+   "bar": 3,
+   "color": "#ff0000",
+   "pitch": 50,
+   "staff": "Viola",
+   "tick": 3840
+  },
+  {
+   "bar": 3,
+   "color": "#ff0000",
+   "pitch": 48,
+   "staff": "Viola",
+   "tick": 3840
+  },
+  {
+   "bar": 3,
+   "color": "#ff0000",
+   "pitch": 52,
+   "staff": "Viola",
+   "tick": 4320
+  },
+  {
+   "bar": 3,
+   "color": "#ff0000",
+   "pitch": 49,
+   "staff": "Viola",
+   "tick": 4320
+  },
+  {
+   "bar": 4,
+   "color": "#808000",
+   "pitch": 76,
+   "staff": "Viola",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#808000",
+   "pitch": 53,
+   "staff": "Viola",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#808000",
+   "pitch": 74,
+   "staff": "Viola",
+   "tick": 6240
+  },
+  {
+   "bar": 4,
+   "color": "#808000",
+   "pitch": 51,
+   "staff": "Viola",
+   "tick": 6240
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 36,
+   "staff": "Violoncello",
+   "tick": 0
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 43,
+   "staff": "Violoncello",
+   "tick": 480
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 50,
+   "staff": "Violoncello",
+   "tick": 960
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 57,
+   "staff": "Violoncello",
+   "tick": 1440
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 43,
+   "staff": "Violoncello",
+   "tick": 1920
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 36,
+   "staff": "Violoncello",
+   "tick": 1920
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 50,
+   "staff": "Violoncello",
+   "tick": 2400
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 43,
+   "staff": "Violoncello",
+   "tick": 2400
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 57,
+   "staff": "Violoncello",
+   "tick": 2880
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 50,
+   "staff": "Violoncello",
+   "tick": 2880
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 38,
+   "staff": "Violoncello",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 36,
+   "staff": "Violoncello",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 40,
+   "staff": "Violoncello",
+   "tick": 6240
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 37,
+   "staff": "Violoncello",
+   "tick": 6240
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 28,
+   "staff": "Contrabass",
+   "tick": 0
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 33,
+   "staff": "Contrabass",
+   "tick": 480
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 38,
+   "staff": "Contrabass",
+   "tick": 960
+  },
+  {
+   "bar": 1,
+   "color": "#00a0b0",
+   "pitch": 43,
+   "staff": "Contrabass",
+   "tick": 1440
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 28,
+   "staff": "Contrabass",
+   "tick": 1920
+  },
+  {
+   "bar": 2,
+   "color": "#00a0b0",
+   "pitch": 33,
+   "staff": "Contrabass",
+   "tick": 2400
+  },
+  {
+   "bar": 3,
+   "color": "#808000",
+   "pitch": 35,
+   "staff": "Contrabass",
+   "tick": 3840
+  },
+  {
+   "bar": 3,
+   "color": "#808000",
+   "pitch": 30,
+   "staff": "Contrabass",
+   "tick": 3840
+  },
+  {
+   "bar": 3,
+   "color": "#808000",
+   "pitch": 40,
+   "staff": "Contrabass",
+   "tick": 4320
+  },
+  {
+   "bar": 3,
+   "color": "#808000",
+   "pitch": 35,
+   "staff": "Contrabass",
+   "tick": 4320
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 30,
+   "staff": "Contrabass",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 28,
+   "staff": "Contrabass",
+   "tick": 5760
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 31,
+   "staff": "Contrabass",
+   "tick": 6240
+  },
+  {
+   "bar": 4,
+   "color": "#ff0000",
+   "pitch": 29,
+   "staff": "Contrabass",
+   "tick": 6240
+  }
+ ],
+ "rows": [
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "G3 (IV) + A3 (—)",
+   "reason": "same string (G)",
+   "staff": "Violin",
+   "tick": 5760,
+   "track": 0,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "Ab3 (IV) + Bb3 (—)",
+   "reason": "same string (G)",
+   "staff": "Violin",
+   "tick": 6240,
+   "track": 0,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 5,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "D3 (—) + D4 (IV)",
+   "reason": "below the lowest string",
+   "staff": "Violin",
+   "tick": 7680,
+   "track": 0,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 5,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "C3 (—) + G3 (IV)",
+   "reason": "below the lowest string",
+   "staff": "Violin",
+   "tick": 8160,
+   "track": 0,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 6,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "C4 (IV) + B5 (III)",
+   "reason": "stretch 16 st, max 8.6 here",
+   "staff": "Violin",
+   "tick": 9600,
+   "track": 0,
+   "verdict": "outOfReach"
+  },
+  {
+   "bar": 6,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "Bb3 (IV) + A5 (III)",
+   "reason": "stretch 16 st, max 7.4 here",
+   "staff": "Violin",
+   "tick": 10080,
+   "track": 0,
+   "verdict": "outOfReach"
+  },
+  {
+   "bar": 9,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "G3 (IV) + A3 (—)",
+   "reason": "same string (G)",
+   "staff": "Violin",
+   "tick": 15360,
+   "track": 0,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 3,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "C3 (IV) + D3 (—)",
+   "reason": "same string (C)",
+   "staff": "Viola",
+   "tick": 3840,
+   "track": 4,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 3,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "C#3 (IV) + E3 (—)",
+   "reason": "same string (C)",
+   "staff": "Viola",
+   "tick": 4320,
+   "track": 4,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "F3 (IV) + E5 (III)",
+   "reason": "stretch 16 st, max 7.1 here",
+   "staff": "Viola",
+   "tick": 5760,
+   "track": 4,
+   "verdict": "outOfReach"
+  },
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "Eb3 (IV) + D5 (III)",
+   "reason": "stretch 16 st, max 6.1 here",
+   "staff": "Viola",
+   "tick": 6240,
+   "track": 4,
+   "verdict": "outOfReach"
+  },
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "C2 (IV) + D2 (—)",
+   "reason": "same string (C)",
+   "staff": "Violoncello",
+   "tick": 5760,
+   "track": 8,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "C#2 (IV) + E2 (—)",
+   "reason": "same string (C)",
+   "staff": "Violoncello",
+   "tick": 6240,
+   "track": 8,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 3,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "F#1 (IV) + B1 (III)",
+   "reason": "no open string",
+   "staff": "Contrabass",
+   "tick": 3840,
+   "track": 12,
+   "verdict": "outOfReach"
+  },
+  {
+   "bar": 3,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "B1 (III) + E2 (II)",
+   "reason": "no open string",
+   "staff": "Contrabass",
+   "tick": 4320,
+   "track": 12,
+   "verdict": "outOfReach"
+  },
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "E1 (IV) + F#1 (—)",
+   "reason": "same string (E)",
+   "staff": "Contrabass",
+   "tick": 5760,
+   "track": 12,
+   "verdict": "impossible"
+  },
+  {
+   "bar": 4,
+   "grace": -1,
+   "kind": "stop",
+   "notes": "F1 (IV) + G1 (—)",
+   "reason": "same string (E)",
+   "staff": "Contrabass",
+   "tick": 6240,
+   "track": 12,
+   "verdict": "impossible"
+  }
+ ]
+}

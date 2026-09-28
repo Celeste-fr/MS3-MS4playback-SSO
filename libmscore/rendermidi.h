@@ -27,6 +27,7 @@
 
 #include "ms4playback.h"
 #include "soundlibrary.h"
+#include "automation.h"
 
 namespace Ms {
 
@@ -74,6 +75,7 @@ class MidiRenderer {
       std::set<const Part*> ms4Active;                      // its parts that use it (partplayback.h)
       QString partModes;                                    // the parts' playback modes as last read
       QString partControllers;                              // the parts' library controllers as last read
+      QString partAutomation;                               // the parts' automation lanes as last read
 
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {
@@ -87,6 +89,14 @@ class MidiRenderer {
                   std::map<int, int> texts;
                   };
             std::vector<Ctrl> controllers;
+            // the part's automation lanes (automation.h) its main patch can play: a MIDI controller's
+            // (cc) or a plug-in parameter's (param: the controller's index in allControllers)
+            struct Auto {
+                  Automation::Lane lane;
+                  int cc { -1 };
+                  int param { -1 };
+                  };
+            std::vector<Auto> automation;
             std::map<const Instrument*, const SoundLib::LibInstrument*> instruments;
             QStringList velocityDynamics;                   // Library::velocityDynamics
             std::vector<const SoundLib::LibInstrument*> patches;    // routed: the main one, then extras

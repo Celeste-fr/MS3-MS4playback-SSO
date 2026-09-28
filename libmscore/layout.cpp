@@ -3211,6 +3211,11 @@ void Score::getNextMeasure(LayoutContext& lc)
             const Drumset* drumset = staff->part()->instrument(measure->tick())->useDrumset() ? staff->part()->instrument(measure->tick())->drumset() : 0;
             AccidentalState as;      // list of already set accidentals for this measure
             as.init(staff->keySigEventForClef(measure->tick()), staff->clef(measure->tick()));
+            // scordatura shown as fingered: the accidentals the notes have at sounding pitch, kept for
+            // saving (Note::write), so the file is the one the sounding view writes
+            AccidentalState asSounding;
+            asSounding.init(staff->keySigEventForClef(measure->tick()), staff->clef(measure->tick()));
+            AccidentalState* sounding = score()->scordaturaView() ? &asSounding : nullptr;
 
             for (Segment& segment : measure->segments()) {
                   // TODO? maybe we do need to process it here to make it possible to enable later
@@ -3223,6 +3228,7 @@ void Score::getNextMeasure(LayoutContext& lc)
                               continue;
                         Fraction tick = segment.tick();
                         as.init(staff->keySigEventForClef(tick), staff->clef(tick));
+                        asSounding.init(staff->keySigEventForClef(tick), staff->clef(tick));
                         ks->layout();
                         }
                   else if (segment.isChordRestType()) {
@@ -3240,7 +3246,7 @@ void Score::getNextMeasure(LayoutContext& lc)
 
                               if (cr->isChord()) {
                                     Chord* chord = toChord(cr);
-                                    chord->cmdUpdateNotes(&as, staffIdx);
+                                    chord->cmdUpdateNotes(&as, staffIdx, sounding);
                                     for (Chord* c : qAsConst(chord->graceNotes())) {
                                           c->setMag(m * score()->styleD(Sid::graceNoteMag));
                                           c->computeUp();
@@ -5276,6 +5282,8 @@ void Score::doLayoutRange(const Fraction& st, const Fraction& et)
       {
       CmdStateLocker cmdStateLocker(this);
       LayoutContext lc(this);
+      if (_scordaturaView)
+            updateScordaturaShifts();       // before the accidentals and lines are set
 
       Fraction stick(st);
       Fraction etick(et);
@@ -5423,6 +5431,7 @@ void Score::doLayoutRange(const Fraction& st, const Fraction& et)
       lc.curSystem = collectSystem(lc);
 
       lc.layout();
+      updatePlayability();
       }
 
 //---------------------------------------------------------

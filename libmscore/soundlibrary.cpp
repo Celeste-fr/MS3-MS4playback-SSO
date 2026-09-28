@@ -110,6 +110,7 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.modifiers = words(a.value("modifiers").toString());
       art.expect = a.value("expect").toString();
       art.prefer = words(a.value("prefer").toString());
+      art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -281,6 +282,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
+                  li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
                   li.setupValues = readSetupValues(a.value("setup").toString());
                   li.ids = words(a.value("ids").toString().toLower());
                   li.with = a.value("with").toString();
@@ -463,6 +465,13 @@ DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, con
       return DrumChoice();
       }
 
+double noteSeconds(const Note* note)
+      {
+      const Note* first = note->firstTiedNote();
+      const int t0 = first->chord()->tick().ticks();
+      return note->score()->masterScore()->tempomap()->writtenTime(t0, t0 + note->playTicks());
+      }
+
 Choice choose(const LibInstrument& instrument, const Want& want)
       {
       return choose(std::vector<const LibInstrument*> { &instrument }, want);
@@ -477,6 +486,9 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
             for (int p = 0; p < int(patches.size()); ++p) {
                   for (const Articulation& a : patches[p]->articulations) {
                         if (!a.techniques.contains(base))
+                              continue;
+                        // a short that lasts longer than the note (Short 0'5 for a fast eighth): not this one
+                        if (a.length > 0 && want.seconds > 0 && want.seconds < 0.9 * a.length)
                               continue;
                         bool fits = true;
                         for (const QString& m : a.modifiers)
@@ -556,7 +568,7 @@ void routesChanged()
 //   DynamicsCalibration
 //---------------------------------------------------------
 
-double DynamicsCurve::at(int x) const
+static double interpolate(const std::vector<std::pair<int, double>>& points, int x)
       {
       if (points.empty())
             return -200;
@@ -572,13 +584,30 @@ double DynamicsCurve::at(int x) const
       return points.back().second;
       }
 
-int DynamicsCurve::inverse(double db) const
+double DynamicsCurve::at(int x) const
       {
-      // the lowest x that reaches db (a curve with a dip from round robins: the first crossing)
+      return interpolate(points, x);
+      }
+
+double DynamicsCurve::perceivedAt(int x) const
+      {
+      return interpolate(perceived, x);
+      }
+
+// the lowest x that reaches db (a curve with a dip from round robins: the first crossing);
+// under the first point, the first segment's slope goes on (ppp under a curve measured from 32)
+static int inverseOf(const std::vector<std::pair<int, double>>& points, double db)
+      {
       if (points.empty())
             return -1;
-      if (db <= points.front().second)
+      if (db <= points.front().second) {
+            if (points.size() >= 2 && points[1].second > points[0].second) {
+                  const auto& a = points[0];
+                  const auto& b = points[1];
+                  return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), a.first);
+                  }
             return std::max(1, points.front().first);
+            }
       for (size_t i = 1; i < points.size(); ++i) {
             const auto& a = points[i - 1];
             const auto& b = points[i];
@@ -586,6 +615,11 @@ int DynamicsCurve::inverse(double db) const
                   return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), 127);
             }
       return 127;
+      }
+
+int DynamicsCurve::inverse(double db) const
+      {
+      return inverseOf(points, db);
       }
 
 const DynamicsCurve* DynamicsCalibration::curve(const QString& patch, int value) const
@@ -604,6 +638,10 @@ bool DynamicsCalibration::read(const QString& file)
             return false;
       const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
       balanceDb = o.value("balanceDb").toDouble(0);
+      familyBalanceDb.clear();
+      const QJsonObject fam = o.value("familyBalanceDb").toObject();
+      for (auto f = fam.begin(); f != fam.end(); ++f)
+            familyBalanceDb[f.key()] = f.value().toDouble(0);
       _patches.clear();
       const QJsonObject patches = o.value("patches").toObject();
       for (auto p = patches.begin(); p != patches.end(); ++p) {
@@ -614,6 +652,14 @@ bool DynamicsCalibration::read(const QString& file)
                   curve.drivenBy = c.value("drivenBy").toString();
                   for (const QJsonValue& pt : c.value("curve").toArray())
                         curve.points.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                  auto readPoints = [&](const char* key, std::vector<std::pair<int, double>>* out) {
+                        for (const QJsonValue& pt : c.value(key).toArray())
+                              out->push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                        std::sort(out->begin(), out->end());
+                        };
+                  readPoints("perceived", &curve.perceived);
+                  readPoints("expression", &curve.expression);
+                  readPoints("expressionPerceived", &curve.expressionPerceived);
                   std::sort(curve.points.begin(), curve.points.end());
                   _patches[p.key()][a.key().toInt()] = curve;
                   }
@@ -630,12 +676,29 @@ bool DynamicsCalibration::write(const QString& file) const
                   QJsonArray pts;
                   for (const auto& pt : a.second.points)
                         pts.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
-                  arts[QString::number(a.first)] = QJsonObject({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
+                  QJsonObject o({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
+                  auto writePoints = [&](const char* key, const std::vector<std::pair<int, double>>& in) {
+                        if (in.empty())
+                              return;
+                        QJsonArray per;
+                        for (const auto& pt : in)
+                              per.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
+                        o[key] = per;
+                        };
+                  writePoints("perceived", a.second.perceived);
+                  writePoints("expression", a.second.expression);
+                  writePoints("expressionPerceived", a.second.expressionPerceived);
+                  arts[QString::number(a.first)] = o;
                   }
             patches[p.first] = arts;
             }
       QJsonObject o;
       o["balanceDb"] = balanceDb;
+      QJsonObject fam;
+      for (const auto& f : familyBalanceDb)
+            fam[f.first] = f.second;
+      if (!fam.isEmpty())
+            o["familyBalanceDb"] = fam;
       o["patches"] = patches;
       QFile f(file);
       if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -662,14 +725,172 @@ std::shared_ptr<const DynamicsCalibration> dynamicsCalibration()
       return calibration;
       }
 
+int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
+                         const QString& refPatch, int refValue, int cc)
+      {
+      const DynamicsCurve* c = cal.curve(patch, longValue);
+      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
+      if (!c || !ref || (c->drivenBy != "controller" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+            return -1;
+      return c->inverse(ref->at(cc));
+      }
+
+const char* const FAMILIES[5] = { "strings", "solo strings", "woodwinds", "brass", "other" };
+
+double DynamicsCalibration::balanceFor(const QString& family) const
+      {
+      auto f = familyBalanceDb.find(family);
+      return f == familyBalanceDb.end() ? balanceDb : f->second;
+      }
+
+QString family(const LibInstrument& main)
+      {
+      const QString folder = main.nki.section('/', 1, 1);         // Instruments/<folder>/…
+      if (folder == "Solo Strings")
+            return "solo strings";
+      if (folder.endsWith("Strings"))
+            return "strings";
+      if (folder.endsWith("Woodwinds"))
+            return "woodwinds";
+      if (folder.endsWith("Brass"))
+            return "brass";
+      return "other";
+      }
+
+const char* shortBalanceMetaTag = "soundLibraryShortBalance";
+
+double shortNotesBalance(const Score* score, const DynamicsCalibration& cal, const QString& family)
+      {
+      if (score) {
+            const QString tag = score->masterScore()->metaTag(shortBalanceMetaTag);
+            for (const QString& item : tag.split(' ', QString::SkipEmptyParts)) {
+                  bool ok = false;
+                  const double v = item.section('=', 1).toDouble(&ok);
+                  if (ok && item.section('=', 0, 0).replace('_', ' ') == family)
+                        return v;
+                  }
+            }
+      return cal.balanceFor(family);
+      }
+
+QString writeShortBalance(const std::map<QString, double>& byFamily, const DynamicsCalibration& cal)
+      {
+      QStringList items;
+      for (const auto& f : byFamily)
+            if (std::fabs(f.second - cal.balanceFor(f.first)) > 1e-9)
+                  items << QString("%1=%2").arg(QString(f.first).replace(' ', '_')).arg(f.second);
+      return items.join(' ');
+      }
+
+bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& fam, double* db)
+      {
+      std::vector<double> louder;
+      for (const LibInstrument& main : library.instruments) {
+            if (main.extra() || main.kit || family(main) != fam)
+                  continue;
+            const std::vector<const LibInstrument*> patches = main.patches();
+            const Choice held = choose(patches, Want { { "long" }, {} });
+            if (!held)
+                  continue;
+            const QString heldPatch = patches[size_t(held.patch)]->name;
+            const DynamicsCurve* ref = cal.curve(heldPatch, held.articulation->value);
+            if (!ref || ref->perceived.empty())
+                  continue;
+            for (const LibInstrument* q : patches) {
+                  for (const Articulation& a : q->articulations) {
+                        const DynamicsCurve* c = cal.curve(q->name, a.value);
+                        if (!c || c->perceived.empty() || (c->drivenBy != "velocity" && c->drivenBy != "both") || a.techniques.isEmpty())
+                              continue;
+                        for (int cc : { 32, 80, 112 }) {
+                              const int v = c->inverse(ref->at(cc));          // matched in energy (balance 0)
+                              if (v > 1 && v < 127)                           // (out of its range: says nothing)
+                                    louder.push_back(c->perceivedAt(v) - ref->perceivedAt(cc));
+                              }
+                        }
+                  }
+            }
+      if (louder.empty())
+            return false;
+      std::sort(louder.begin(), louder.end());
+      const double median = louder[louder.size() / 2];
+      *db = std::round(-median * 2) / 2;
+      return true;
+      }
+
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc)
+                       const QString& refPatch, int refValue, int cc, const QString& family, const Score* score)
       {
       const DynamicsCurve* c = cal.curve(patch, value);
       const DynamicsCurve* ref = cal.curve(refPatch, refValue);
       if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
             return -1;
-      return c->inverse(ref->at(cc) + cal.balanceDb);
+      return c->inverse(ref->at(cc) + shortNotesBalance(score, cal, family));
+      }
+
+//---------------------------------------------------------
+//   evenSteps
+//---------------------------------------------------------
+
+const char* evenStepsMetaTag = "soundLibraryEvenSteps";
+
+static const char* const EVEN_STEPS_NAMES[5] = { "", "volume-hearing", "volume-energy", "recording-hearing", "recording-energy" };
+
+QString evenStepsName(EvenSteps mode)
+      {
+      return EVEN_STEPS_NAMES[int(mode)];
+      }
+
+EvenSteps evenSteps(const Score* score)
+      {
+      if (!score)
+            return EvenSteps::OFF;
+      const QString tag = score->masterScore()->metaTag(evenStepsMetaTag).trimmed();
+      for (int i = 1; i < 5; ++i)
+            if (tag == EVEN_STEPS_NAMES[i])
+                  return EvenSteps(i);
+      return EvenSteps::OFF;
+      }
+
+const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches)
+      {
+      const Choice held = choose(patches, Want { { "long" }, {} });
+      return held ? cal.curve(patches[size_t(held.patch)]->name, held.articulation->value) : nullptr;
+      }
+
+Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
+      {
+      Step s { cc, -1 };
+      if (!held || mode == EvenSteps::OFF)
+            return s;
+      if (cc < 16) {                      // a MuseScore 3 fade under ppp: ppp's step, faded as before
+            const Step ppp = evenStep(held, mode, 16);
+            if (mode == EvenSteps::RECORDING_HEARING || mode == EvenSteps::RECORDING_ENERGY)
+                  s.dynamics = int(std::lround(ppp.dynamics * cc / 16.0));
+            s.expression = ppp.expression;
+            return s;
+            }
+      const bool hearing = mode == EvenSteps::VOLUME_HEARING || mode == EvenSteps::RECORDING_HEARING;
+      const std::vector<std::pair<int, double>>& curve = hearing ? held->perceived : held->points;
+      if (curve.size() < 2)
+            return s;
+      const int x = std::min(cc, 127);
+      const double lo = interpolate(curve, 16);
+      const double hi = interpolate(curve, 127);
+      if (hi <= lo)
+            return s;
+      const double target = lo + (hi - lo) * (x - 16) / 111.0;
+      if (mode == EvenSteps::RECORDING_HEARING || mode == EvenSteps::RECORDING_ENERGY) {
+            s.dynamics = qBound(1, inverseOf(curve, target), 127);
+            return s;
+            }
+      // the volume: down by what the curve is above the step (it can't go up: the expression CC is at
+      // its top without even steps)
+      const std::vector<std::pair<int, double>>& volume = hearing ? held->expressionPerceived : held->expression;
+      if (volume.size() < 2)
+            return s;
+      const double down = std::min(0.0, target - interpolate(curve, x));
+      s.expression = down > -0.05 ? 127 : qBound(1, inverseOf(volume, interpolate(volume, 127) + down), 127);
+      return s;
       }
 
 int routesGeneration()
@@ -811,7 +1032,6 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
       dynamics.build(sc, const_cast<Part*>(part));
       TextTechniques text;
       text.build(sc, part);
-      const TempoMap* tm = score->tempomap();
       const int strack = part->startTrack();
       const int etrack = part->endTrack();
       for (Segment* seg = sc->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
@@ -834,8 +1054,8 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                         }
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
                   const int tick = chord->tick().ticks();
-                  const double seconds = tm->tick2time(tick + chord->actualTicks().ticks()) - tm->tick2time(tick);
                   for (const Note* note : chord->notes()) {
+                        const double seconds = noteSeconds(note);
                         const std::vector<Ms4::ArtRef> arts = Ms4::noteArticulations(note, chordArts);
                         int trill = 0;
                         for (const Ms4::ArtRef& a : arts)
@@ -892,8 +1112,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   const Chord* chord = toChord(e);
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
                   const int tick = chord->tick().ticks();
-                  const double seconds = tm->tick2time(tick + chord->actualTicks().ticks()) - tm->tick2time(tick);
                   auto add = [&](const Note* note, double on, double off) {
+                        const double seconds = noteSeconds(note);
                         if (note->tieBack() && note->firstTiedNote() && note->firstTiedNote() != note) {
                               tiedTo[note] = note->firstTiedNote();
                               return;
@@ -1123,6 +1343,7 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             return false;
             };
       Want w;
+      w.seconds = seconds;
       w.modifiers = text.modifiers;
       if (has(Art::Mute) || has(Art::PalmMute)) {
             if (!w.modifiers.contains("muted"))
@@ -1167,6 +1388,8 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
 
       const bool accent = has(Art::Accent) || has(Art::Marcato);
       const bool shortNote = seconds < 0.6;
+      // (a short with a length - Short 0'5, Short 1'0 - is skipped for a note shorter than it: then
+      // the next shorter one, down to spiccato; the owner, 2026-09-28: a fast staccato on Short 0'5 rang on)
       if (has(Art::Staccatissimo))
             b << "staccatissimo" << "spiccato" << "short";
       else if (has(Art::Staccato)) {
@@ -1174,7 +1397,7 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
                   b << "marcato";
             else if (has(Art::Tenuto))
                   b << "tenuto";
-            b << "short";
+            b << "short" << "spiccato";
             }
       else if (accent) {
             if (shortNote)
@@ -1182,8 +1405,9 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             b << "longmarcato" << "long";
             }
       else if (has(Art::Tenuto)) {
+            // (a fast tenuto: never a bouncing spiccato; Short 0'5 if it fits, else the held note)
             if (shortNote)
-                  b << "tenuto";
+                  b << "tenuto" << "short";
             b << "long";
             }
       else if (has(Art::Legato))

@@ -381,10 +381,15 @@ EXPECT = {
 }
 expectUsed = set()
 
+# how long a short's sample lasts, as Spitfire names it: not chosen for a note under 90 % of it (a fast
+# staccato plays Spiccato; the owner, 2026-09-28: "Whence" bar 8's accented eighths on Short 0'5 rang on)
+LENGTHS = {'Short 0.5': 0.5, 'Short 1.0': 1.0}
+
 def articulation(n, v, t, m, patch=None, prefer=''):
     a=f'    <Articulation name={q(n)} value="{v}" techniques={q(t)}'
     if m: a+=f' modifiers={q(m)}'
     if prefer: a+=f' prefer={q(prefer)}'
+    if t and n in LENGTHS: a+=f' length="{LENGTHS[n]}"'
     if (patch, v) in EXPECT:
         a+=f' expect={q(EXPECT[(patch, v)])}'
         expectUsed.add((patch, v))
@@ -745,6 +750,7 @@ def setupValues(nki):
     return SETUP_VALUES
 used = set()
 names = set()
+ZONE_KEYS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_keys.json'), encoding='utf-8'))
 for i, line in enumerate(out):
     m = re.match(r'  <Instrument name="([^"]*)"(.*)$', line)
     if not m or ' kit="1"' in line:
@@ -758,7 +764,11 @@ for i, line in enumerate(out):
     rest = m.group(2)
     end = '/>' if rest.endswith('/>') else '>'
     rest = rest[:-len(end)]
-    out[i] = f'  <Instrument name={q(name)}{rest} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + end
+    # the check's test note from the patch's own zones (the median zone's key), as for a <Patch>: the
+    # background dynamics check of 2026-09-28 01:40 had no instrument templates, tested every patch at 60,
+    # and waited 2 min each on 12 low or high ones (Basses, Piccolo, the contrabass brass …) for nothing
+    pitch = f' pitch="{ZONE_KEYS[nki][2]}"' if nki in ZONE_KEYS else ''
+    out[i] = f'  <Instrument name={q(name)}{rest} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + pitch + end
 # Each patch's articulations (or sounds) as its .nki's sample groups name them (the owner's library-files
 # extract of 2026-09-27, library.json: the top-level group names under the first mic, variants, round
 # robins, dynamic layers and release groups left out; sso_nki_articulations.json). For Violins 1 they are

@@ -298,6 +298,11 @@ class Note final : public Element {
       qreal _tuning       { 0.0 };  ///< pitch offset in cent, playable only by internal synthesizer
 
       Accidental* _accidental { 0 };
+      // scordatura shown as fingered (Score::scordaturaView): the accidental at sounding pitch,
+      // written instead of the displayed one
+      int _soundingAccidental { 0 };                // an AccidentalType
+      bool _soundingHasAccidental { false };
+      bool _soundingAccidentalValid { false };
 
       Tie* _tieFor        { 0 };
       Tie* _tieBack       { 0 };
@@ -381,6 +386,8 @@ class Note final : public Element {
       int ottaveCapoFret() const;
       int ppitch() const;           ///< playback pitch
       int epitch() const;           ///< effective pitch
+      int displayTpc() const;       ///< tpc as shown: moved by a scordatura shown as fingered
+      int displayEpitch() const;    ///< effective pitch as shown
       qreal tuning() const                { return _tuning;   }
       void setTuning(qreal v)             { _tuning = v;      }
       void undoSetTpc(int v);
@@ -493,7 +500,7 @@ class Note final : public Element {
       QVector<NoteDot*>& dots()                   { return _dots;             }
 
       int qmlDotsCount();
-      void updateAccidental(AccidentalState*);
+      void updateAccidental(AccidentalState*, AccidentalState* sounding = nullptr);
       void updateLine();
       void setNval(const NoteVal&, Fraction = { -1, 1} );
       NoteEventList& playEvents()                { return _playEvents; }

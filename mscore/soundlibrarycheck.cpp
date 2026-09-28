@@ -1136,11 +1136,27 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             SoundLib::DynamicsCurve c;
             c.drivenBy = d.drivenBy();
             c.points = d.curve;
+            c.perceived = d.perceived;
+            c.expression = d.expression;
+            c.expressionPerceived = d.expressionPerceived;
             cal.setCurve(ins.name, d.value, c);
             QJsonArray pts;
             for (const auto& pt : d.curve)
                   pts.append(QJsonArray({ pt.first, r1(pt.second) }));
             o["curve"] = pts;
+            QJsonArray per;
+            for (const auto& pt : d.perceived)
+                  per.append(QJsonArray({ pt.first, r1(pt.second) }));
+            o["perceived"] = per;
+            if (!d.expression.empty()) {
+                  QJsonArray ex, exp;
+                  for (const auto& pt : d.expression)
+                        ex.append(QJsonArray({ pt.first, r1(pt.second) }));
+                  for (const auto& pt : d.expressionPerceived)
+                        exp.append(QJsonArray({ pt.first, r1(pt.second) }));
+                  o["expression"] = ex;
+                  o["expressionPerceived"] = exp;
+                  }
             o["velocityDb"] = QJsonArray({ r1(d.velocityDb[0]), r1(d.velocityDb[1]) });
             o["controllerDb"] = QJsonArray({ r1(d.ccDb[0]), r1(d.ccDb[1]) });
             o["drivenBy"] = c.drivenBy;
@@ -1148,6 +1164,13 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             lines << QString("%1 (%2): on %3, %4 / %5 / %6 dB at pp / mf / ff%7").arg(names[d.value].join(" / ")).arg(d.value)
                .arg(c.drivenBy).arg(r1(c.at(32))).arg(r1(c.at(80))).arg(r1(c.at(112)))
                .arg(d.pitch != pitch ? QString(" (pitch %1)").arg(d.pitch) : QString());
+            if (d.expression.size() >= 2) {     // the held note's volume (CC11) against 127, at mf
+                  SoundLib::DynamicsCurve ex;
+                  ex.points = d.expression;
+                  const double top = ex.at(127);
+                  lines << QString("   volume (CC11) 32 / 64 / 96: %1 / %2 / %3 dB against 127")
+                     .arg(r1(ex.at(32) - top)).arg(r1(ex.at(64) - top)).arg(r1(ex.at(96) - top));
+                  }
             }
       if (!dr.empty()) {
             QDir().mkpath(QFileInfo(calFile).absolutePath());
@@ -1185,6 +1208,9 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
             };
       if (ins.keyScan || ins.articulations.empty())
             return fail(tr("no articulations (a kit or keyswitched patch): nothing to measure"));
+      // (a patch whose articulations no notation chooses: never played, not loaded; the Fanfare patches)
+      if (std::none_of(ins.articulations.begin(), ins.articulations.end(), [](const SoundLib::Articulation& a) { return !a.techniques.isEmpty(); }))
+            return fail(tr("no articulation a notation plays: nothing to measure"));
       if (ins.switchType != SoundLib::SwitchType::CC && ins.switchType != SoundLib::SwitchType::NONE)
             return fail(tr("Only patches switched by a CC can be measured."));
       const int pitch = testPitch(ins);
@@ -1323,7 +1349,9 @@ QString ArticulationCheckDialog::balanceReport() const
             const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
             const QString heldPatch = held ? patches[size_t(held.patch)]->name : QString();
             const SoundLib::DynamicsCurve* ref = held ? cal->curve(heldPatch, held.articulation->value) : nullptr;
-            text += QString("## %1\n").arg(main->name);
+            const QString fam = SoundLib::family(*main);
+            const double balance = cal->balanceFor(fam);
+            text += QString("## %1 (%2, short notes %3 dB)\n").arg(main->name, fam, f1(balance));
             if (!ref) {
                   text += "   " + tr("held notes play %1 (%2), not measured yet: check it with Dynamics too")
                      .arg(heldPatch, held ? held.articulation->name : QString("?")) + "\n";
@@ -1347,25 +1375,43 @@ QString ArticulationCheckDialog::balanceReport() const
                               const double refDb = ref->at(cc);
                               const int vb = !onVelocity || listed ? cc
                                  : Ms4::note(Ms4::Family(0), { Ms4::ArtRef { Ms4::Art::Standard, false } }, LEVELS[k], true).velocity;
-                              const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc);
-                              const double n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - cal->balanceDb;
+                              double n;
+                              if (onVelocity) {
+                                    const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc, fam);
+                                    n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - balance;
+                                    }
+                              else
+                                    n = c->at(cc) - refDb;          // on the controller: the part's CC, as it is
                               was << f1(c->at(vb) - refDb);
                               now << f1(n);
                               worst = std::max(worst, std::fabs(n));
                               }
+                        // flagged: a short out of its velocity range. One on the controller keeps Spitfire's own
+                        // level (the owner, 2026-09-28: "Leave as Spitfire made them"), listed for reference
+                        const bool flag = worst > 3 && onVelocity;
                         const QString where = q == main ? QString() : q->name + ": ";
                         QString line = QString("   %1 %2%3 (%4), on %5: %6 dB against the held note at pp / mf / ff (was %7)")
-                           .arg(worst > 3 ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
+                           .arg(flag ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
                            .arg(now.join(" / "), was.join(" / "));
-                        if (worst > 3)
-                              line += onVelocity ? tr(" — beyond its velocity range") : tr(" — on the controller, which the whole part shares: not adjusted");
+                        if (flag)
+                              line += tr(" — beyond its velocity range");
+                        else if (!onVelocity)
+                              line += tr(" (on the controller: Spitfire's own level)");
                         text += line + "\n";
                         }
                   }
             }
       if (text.isEmpty())
             return QString();
-      return "\n# " + tr("Dynamics balance (loudest 50 ms; the short notes' balance setting: %1 dB)").arg(f1(cal->balanceDb))
+      // the recommended short notes' settings (how much louder the matched shorts sound)
+      QStringList rec;
+      for (const char* f : SoundLib::FAMILIES) {
+            double db;
+            if (SoundLib::recommendedBalance(*_library, *cal, f, &db))
+                  rec << QString("%1 %2 dB").arg(f).arg(f1(db));
+            }
+      return "\n# " + tr("Dynamics balance (loudest 50 ms; against the held note plus each family's short notes setting)")
+             + (rec.isEmpty() ? QString() : "\n" + tr("Recommended short notes settings (by a loudness model): %1").arg(rec.join(", ")))
              + "\n" + text;
       }
 

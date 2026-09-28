@@ -1211,13 +1211,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
                         if (!c)
                               return -1;
-                        const int cc = Ms4::expressionLevel(dynLevel);
-                        const double accent = cc > 0 ? double(r.levelVelocity) / cc : 1.0;
+                        const int level = Ms4::expressionLevel(dynLevel);
+                        const double accent = level > 0 ? double(r.levelVelocity) / level : 1.0;
                         if (cal) {
                               const SoundLib::Choice held = SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} });
                               if (held) {
+                                    // as loud as the held note plays: at the dynamics CC even steps send
+                                    // (their volume turns both down alike)
+                                    const int cc = SoundLib::evenStep(SoundLib::heldCurve(*cal, libPatches), SoundLib::evenSteps(score),
+                                                                      level).dynamics;
                                     const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
-                                                                               libPatches[held.patch]->name, held.articulation->value, cc);
+                                                                               libPatches[held.patch]->name, held.articulation->value, cc,
+                                                                               SoundLib::family(*libPatches.front()), score);
                                     if (v > 0)
                                           return qBound(1, int(std::lround(v * accent)), 127);
                                     }
@@ -1737,6 +1742,15 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
             int controller = CTRL_EXPRESSION;
             std::vector<int> channels;
+            // a library part's: per channel, its held note's curve for even steps (SoundLib::evenStep), and
+            // whether they turn the expression CC (not when an automation lane has it)
+            std::map<int, const SoundLib::DynamicsCurve*> heldCurves;
+            const SoundLib::EvenSteps evenSteps = lp ? SoundLib::evenSteps(score) : SoundLib::EvenSteps::OFF;
+            bool evenVolume = evenSteps == SoundLib::EvenSteps::VOLUME_HEARING || evenSteps == SoundLib::EvenSteps::VOLUME_ENERGY;
+            if (lp)
+                  for (const LibPart::Auto& a : lp->automation)
+                        if (a.cc == CTRL_EXPRESSION)
+                              evenVolume = false;
             std::vector<int> builtInChannels;     // a kit's drum sounds the built-in synthesizer plays
             if (lp) {
                   if (ctx.snd)
@@ -1763,15 +1777,40 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                         for (; t != c.texts.end() && t->first < tick2; ++t)
                               putCtrl(t->first, t->second);
                         }
+                  // automation lanes: the value in force at the chunk's start, then their points and ramps
+                  // (a MIDI controller to 1/127, a plug-in parameter to 1/1000, every 30 ticks along a ramp)
+                  for (const LibPart::Auto& a : lp->automation) {
+                        const bool param = a.param >= 0;
+                        for (const auto& tv : a.lane.events(tick1, tick2, 30, param ? 0.001 : 1.0 / 127)) {
+                              for (const auto& ip : *part->instruments()) {
+                                    if (!libraryPlays(ip.second))
+                                          continue;
+                                    NPlayEvent ev = param ? NPlayEvent(ME_PARAMETER, ip.second->channel(0)->channel(), a.param, 0)
+                                                          : NPlayEvent(ME_CONTROLLER, ip.second->channel(0)->channel(), a.cc,
+                                                                       int(std::lround(tv.second * 127)));
+                                    if (param)
+                                          ev.setTuning(float(tv.second));
+                                    ev.setOriginatingStaff(part->staff(0)->idx());
+                                    events->insert(events->lower_bound(tv.first + tickOffset), std::make_pair(tv.first + tickOffset, ev));
+                                    }
+                              }
+                        }
                   if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
                         continue;
                   controller = library->dynamicsCC;
+                  if (controller == CTRL_EXPRESSION)
+                        evenVolume = false;
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
                   for (const auto& ip : *part->instruments()) {
                         if (!libraryPlays(ip.second))
                               continue;
                         const int ch = ip.second->channel(0)->channel();
                         channels.push_back(ch);
-                        if (controller != CTRL_EXPRESSION) {
+                        auto li = lp->instruments.find(ip.second);
+                        if (cal && evenSteps != SoundLib::EvenSteps::OFF && li != lp->instruments.end() && li->second)
+                              heldCurves[ch] = SoundLib::heldCurve(*cal, lp->patchesFor(li->second));
+                        // (even steps' volume: put() sends it with each level)
+                        if (controller != CTRL_EXPRESSION && !(evenVolume && heldCurves[ch] && heldCurves[ch]->expression.size() >= 2)) {
                               NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, library->expressionValue, 127));
                               ev.setOriginatingStaff(part->staff(0)->idx());
                               events->insert(std::make_pair(tick1 + tickOffset, ev));
@@ -1788,7 +1827,14 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
             auto put = [&](int tick, int level) {
                   const int value = Ms4::expressionLevel(level);
                   for (int ch : channels) {
-                        NPlayEvent ev(ME_CONTROLLER, ch, controller, value);
+                        auto hc = heldCurves.find(ch);
+                        const SoundLib::Step step = SoundLib::evenStep(hc == heldCurves.end() ? nullptr : hc->second, evenSteps, value);
+                        if (evenVolume && step.expression >= 0) {
+                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, step.expression);
+                              ev.setOriginatingStaff(part->staff(0)->idx());
+                              events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
+                              }
+                        NPlayEvent ev(ME_CONTROLLER, ch, controller, step.dynamics);
                         ev.setOriginatingStaff(part->staff(0)->idx());
                         // a library's dynamics CC ahead of the notes at its tick (a long starting on a
                         // new dynamic would start at the old one); MS4's CC11 after them, as MS4 sends it
@@ -1860,8 +1906,9 @@ SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::
       for (const Ms4::ArtRef& a : noteArts)
             if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
                   trill = SoundLib::trillSemitones(note);
-      const TempoMap* tm = score->tempomap();
-      const double seconds = tm->tick2time(tick + qMax(0, ticks)) - tm->tick2time(tick);
+      // its written length (not the Play Panel's speed), with the notes tied to it
+      const int tied = note->tieFor() && !note->tieBack() ? note->playTicks() - note->chord()->actualTicks().ticks() : 0;
+      const double seconds = score->tempomap()->writtenTime(tick, tick + qMax(0, ticks) + qMax(0, tied));
       return SoundLib::choose(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill));
       }
 
@@ -3650,12 +3697,14 @@ void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
       const QString controllers = score->masterScore()->metaTag(PartControllers::metaTag);
+      const QString automation = score->masterScore()->metaTag(Automation::metaTag);
       if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
-          || controllers != partControllers)
+          || controllers != partControllers || automation != partAutomation)
             needUpdate = true;
       if (needUpdate) {
             partModes = modes;
             partControllers = controllers;
+            partAutomation = automation;
             // Update the related structures inside score
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
@@ -3669,6 +3718,7 @@ void MidiRenderer::updateState()
             libGeneration = SoundLib::routesGeneration();
             if (library) {
                   const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
+                  const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
                   for (const SoundLib::Route& r : routes) {
                         if (r.patch != 0 || r.lane != 0)
@@ -3678,8 +3728,32 @@ void MidiRenderer::updateState()
                         lp.route = r;
                         lp.velocityDynamics = library->velocityDynamics;
                         lp.text.build(score, part);
+                        // automation: a lane takes its controller's place (its part value, its staff texts)
+                        QSet<QString> automated;
+                        for (const Automation::Lane& lane : Automation::lanes(part, allLanes)) {
+                              LibPart::Auto a;
+                              a.lane = lane;
+                              a.cc = lane.cc();
+                              if (a.cc < 0) {
+                                    const auto& all = r.instrument->allControllers;
+                                    for (int i = 0; i < int(all.size()); ++i) {
+                                          if (all[size_t(i)].id != lane.target)
+                                                continue;
+                                          if (all[size_t(i)].cc >= 0)
+                                                a.cc = all[size_t(i)].cc;
+                                          else if (!all[size_t(i)].param.isEmpty() && SoundLib::output() == SoundLib::Output::PLUGIN)
+                                                a.param = i;
+                                          }
+                                    }
+                              if (a.cc < 0 && a.param < 0)
+                                    continue;         // (a controller this library doesn't have)
+                              automated.insert(lane.target);
+                              lp.automation.push_back(a);
+                              }
                         for (const SoundLib::Controller& c : r.instrument->allControllers) {
                               if (c.cc < 0)       // a plug-in parameter: set on the instance (SoundLibraryHost)
+                                    continue;
+                              if (automated.contains(c.id) || automated.contains(QString("cc%1").arg(c.cc)))
                                     continue;
                               lp.controllers.push_back({ c.cc, PartControllers::value(part, c, values),
                                                          SoundLib::controllerTexts(score, part, c) });

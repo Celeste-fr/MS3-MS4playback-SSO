@@ -715,6 +715,22 @@ class ChangeStyleVal : public UndoCommand {
       };
 
 //---------------------------------------------------------
+//   ChangeScordaturaView
+//    show scordatura as fingered (playability.h); the accidentals the layout sets follow it
+//---------------------------------------------------------
+
+class ChangeScordaturaView : public UndoCommand {
+      Score* score;
+      bool flag;
+
+      void flip(EditData*) override;
+
+   public:
+      ChangeScordaturaView(Score* s, bool f) : score(s), flag(f) {}
+      UNDO_NAME("ChangeScordaturaView")
+      };
+
+//---------------------------------------------------------
 //   ChangePageNumberOffset
 //---------------------------------------------------------
 

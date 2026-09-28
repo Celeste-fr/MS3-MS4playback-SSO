@@ -34,6 +34,8 @@ class Vst3Synth : public Synthesizer {
       mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
       std::vector<std::unique_ptr<Vst3Plugin>> _slots;
       std::vector<std::array<unsigned char, 128>> _sounding;   // per slot, per key: notes on
+      std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
+                                                    // controller index (ME_PARAMETER events), -1: none
       std::atomic<bool> _varispeed { false };
       // what the audio thread couldn't play while the GUI thread had the slots: played with the next
       // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
@@ -74,6 +76,8 @@ class Vst3Synth : public Synthesizer {
       // ignores a note's tuning: set at each note-on, at once when nothing sounds on the slot (the
       // lanes see to that, SoundLib::Lanes), else gliding (legato)
       void setVarispeed(bool on) { _varispeed = on; }
+      // (GUI thread, SoundLibraryHost::sync) a slot's parameter ids by controller index (automation)
+      void setParameterIds(int slot, const std::vector<long>& ids);
       // seconds: a slurred note of another tuning on its previous note's lane (the owner, 2026-09-28: a
       // slurred 16th quarter-tone sharp at 110 bpm spent most of 80 ms gliding and sounded off)
       static constexpr double LEGATO_GLIDE = 0.03;

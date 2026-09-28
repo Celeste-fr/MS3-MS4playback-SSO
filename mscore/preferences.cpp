@@ -256,6 +256,9 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_SCORE_NOTE_PLAYONCLICK,                          new BoolPreference(true, false)},
             {PREF_SCORE_NOTE_DEFAULTPLAYDURATION,                  new IntPreference(300 /* ms */, false)},
             {PREF_SCORE_NOTE_WARNPITCHRANGE,                       new BoolPreference(true, false)},
+            {PREF_SCORE_PLAYABILITY_CHECK,                         new BoolPreference(true, true)},   // libmscore/playability.h
+            {PREF_SCORE_PLAYABILITY_OPENSTRINGS,                   new BoolPreference(true, true)},
+            {PREF_SCORE_PLAYABILITY_OPENSTRINGCOLOR,               new ColorPreference(QColor(0x7d8791), true)},  // the owner's choice, slate grey
             {PREF_SCORE_NOTE_INPUT_DISABLE_MOUSE_INPUT,            new BoolPreference(false, true)},
             {PREF_SCORE_STYLE_DEFAULTSTYLEFILE,                    new StringPreference("", false)},
             {PREF_SCORE_STYLE_PARTSTYLEFILE,                       new StringPreference("", false)},
