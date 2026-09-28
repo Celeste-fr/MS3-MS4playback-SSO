@@ -468,8 +468,10 @@ def seg(t, text):
 
 
 def absolute(segs, base):
-    """A relative path made absolute against base (a Windows folder, the .nki's)."""
-    if not segs or segs[0][0] in (0, 1):
+    """A relative path made absolute against base (a Windows folder, the .nki's). One starting with a
+    6 is in Kontakt's own content (Celli - Performance's convolution reverb, <6>presets/Effects/...):
+    kept, Kontakt finds it itself."""
+    if not segs or segs[0][0] in (0, 1, 6):
         return segs
     parts = [x for x in re.split(r"[\\/]+", base) if x]
     drive = parts[0].rstrip(":") if parts and parts[0].endswith(":") else ""

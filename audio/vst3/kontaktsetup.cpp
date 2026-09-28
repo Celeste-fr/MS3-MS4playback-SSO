@@ -553,10 +553,13 @@ QByteArray segment(int type, const QString& text)
       return QByteArray(1, char(type)) + le32(quint32(text.size())) + s;
       }
 
-// a relative path made absolute against base (a folder, the .nki's)
+// a relative path made absolute against base (a folder, the .nki's). One that starts with a 6 is
+// in Kontakt's own content, which Kontakt finds itself: kept as it is (Celli - Performance's
+// convolution reverb, "<6>presets/Effects/Convolution/K4IR.nkx/…", was put under the .nki's folder,
+// and Kontakt couldn't recall the setup: "perhaps due to missing content", the owner, 2026-09-28)
 std::vector<Segment> absolute(const std::vector<Segment>& segs, const QString& base)
       {
-      if (segs.empty() || segs[0].type == 0 || segs[0].type == 1)
+      if (segs.empty() || segs[0].type == 0 || segs[0].type == 1 || segs[0].type == 6)
             return segs;
       QStringList parts = base.split(QRegularExpression("[\\\\/]+"), QString::SkipEmptyParts);
       QString drive;

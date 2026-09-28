@@ -134,6 +134,16 @@ class Tests(unittest.TestCase):
         # the dates and the rest after the paths are kept
         self.assertTrue(out.endswith(b"\x01\x00"))
 
+    def test_kontakt_content_kept(self):
+        # Celli - Performance's convolution reverb is in Kontakt's own content (a path starting with a
+        # 6): kept as it is, not put under the .nki's folder (Kontakt couldn't recall the setup)
+        ir = entry(seg(6), seg(2, "presets"), seg(2, "Effects"), seg(8, "K4IR.nkx"), seg(4, "L224.wav"))
+        fl = file_list(["x_C3.ncw"], "V.nki")
+        fl = fl[:-2 - len(entry(seg(4, "V.nki"))) - 4] + u32(2) + entry(seg(4, "V.nki")) + ir + b"\x01\x00"
+        out = M.absolute_file_list(fl, r"D:\Libs\SSO\Instruments\Symphonic Strings")
+        self.assertIn(ir, out)
+        self.assertNotIn("Symphonic Strings".encode("utf-16-le") + b"\x02", out[out.index(ir) - 4:])
+
     def test_make(self):
         """--only makes a map patch's setup and another's (added to Check articulations' list)."""
         setups = os.path.join(self.dir, "data", "soundlibraries", "Spitfire Symphony Orchestra")

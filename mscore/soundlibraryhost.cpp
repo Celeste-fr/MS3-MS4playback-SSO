@@ -530,7 +530,16 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
       // correctly", 636 setups came back unchanged and were taken for Kontakt's own state); its own
       // state is always saved anew (the made setups' sample list becomes Kontakt 8's, and smaller)
       if (component == madeComponent) {
-            logTime(library, QString("%1: not resaved (the plug-in gave the setup back unchanged: it did not load it)").arg(li.name));
+            logTime(library, QString("%1: not resaved (the plug-in gave the setup back unchanged: it did not load it); "
+                                     "made again next time").arg(li.name));
+            // (made again by the next load: a setup made before a fix, Celli - Performance's with its
+            // convolution reverb under the .nki's folder, 2026-09-28, is remade without raising
+            // MAKER_VERSION, which would remake every patch and make each first load slow again)
+            QJsonObject made = readMade(library);
+            if (made.contains(li.name)) {
+                  made.remove(li.name);
+                  writeFile(madeFile(library), QJsonDocument(made).toJson());
+                  }
             return;
             }
       const QByteArray program = KontaktSetup::slotProgram(component, nullptr);

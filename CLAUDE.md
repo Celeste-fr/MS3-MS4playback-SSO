@@ -584,8 +584,14 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   (the owner's `.nki` and made setup): its 27,528 sample references all resolve inside their `.nkx` (the library files
   extract's archive lists), its header and SNPID (N51) are as Violins 1's, and the made setup's program is the
   `.nki`'s byte for byte but `$iooxo` (1 in this `.nki`, 0 in Violins 1's; set to 3 as in the owner's hand-made
-  Performance setups). Why Kontakt can't recall it is not known. In the GUI too its made setup came back unchanged
-  (the owner's load times.log, 2026-09-27 16:28), so a part playing it most likely plays nothing. On Windows a
+  Performance setups). **Found (2026-09-28)**: the warning came with Celli - Performance
+  alone in a fresh MuseScore (the owner), and its `.nki`'s "other files" have a convolution reverb from Kontakt's own
+  content, `<6>presets/Effects/Convolution/K4IR.nkx/K4 IR Samples/L224 Orchestral 1.1s.wav` (segment type 6: Kontakt's
+  content folder); making paths absolute put it under the `.nki`'s folder, which has no `presets`. A path starting with
+  a 6 is now kept as it is (`KontaktSetup` `absolute`, make_setups.py `absolute`; test `test_kontakt_content_kept`;
+  `kontaktSetupReal` with the owner's `.nki` keeps it). Other patches with Kontakt's convolution would have had the same
+  fault. Not heard with Kontakt yet. Without raising `MAKER_VERSION` (every patch's first load slow again): a setup
+  Kontakt gives back unchanged loses its `made setups.json` record, so it is made again at its next load. On Windows a
   watchdog thread (`DialogWatch`, musescore.cpp, background run only: the process has no window of its own)
   logs the title and texts of any visible window of the process and closes it (WM_CLOSE) after 30 s. The
   warning (the owner's screenshot): "One or more Kontakt instances cannot be recalled correctly, perhaps due to
