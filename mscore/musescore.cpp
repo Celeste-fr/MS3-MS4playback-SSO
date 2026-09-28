@@ -483,7 +483,13 @@ void MuseScore::showPlayabilityPanel(bool visible)
       QAction* a = getAction("toggle-playability-panel");
       if (!_playabilityPanel) {
             _playabilityPanel = new PlayabilityPanel(this);
-            connect(_playabilityPanel, SIGNAL(visibilityChanged(bool)), a, SLOT(setChecked(bool)));
+            // ticked while the panel is open, also as a tab behind another dock (visibilityChanged(false)
+            // then, but the panel isn't closed): as QDockWidget's own toggle action does
+            connect(_playabilityPanel, &QDockWidget::visibilityChanged, this, [this, a](bool visible) {
+                  a->setChecked(!_playabilityPanel->isHidden());
+                  if (visible)
+                        _playabilityPanel->setScore(cs);      // its tab brought to the front
+                  });
             addDockWidget(Qt::RightDockWidgetArea, _playabilityPanel);
             }
       reDisplayDockWidget(_playabilityPanel, visible);
@@ -1875,6 +1881,12 @@ MuseScore::MuseScore()
       AccessibleToolButton* concertPitchButton = new AccessibleToolButton(cpitchTools, a);
       concertPitchButton->setProperty("iconic-text", true);
       cpitchTools->addWidget(concertPitchButton);
+      // scordatura shown as fingered (Score::scordaturaView), beside Concert Pitch
+      a = getAction("toggle-scordatura-view");
+      a->setCheckable(true);
+      AccessibleToolButton* scordaturaButton = new AccessibleToolButton(cpitchTools, a);
+      scordaturaButton->setProperty("iconic-text", true);
+      cpitchTools->addWidget(scordaturaButton);
 
       //-------------------------------
       //    Image Capture Tool Bar
@@ -2185,7 +2197,7 @@ MuseScore::MuseScore()
       menuView->addAction(getAction("mark-irregular"));
       menuView->addSeparator();
       // the playability checker (libmscore/playability.h)
-      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings", "toggle-scordatura-view" }) {
+      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings" }) {
             a = getAction(name);
             a->setCheckable(true);
             menuView->addAction(a);

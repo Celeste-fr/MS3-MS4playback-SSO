@@ -2272,9 +2272,9 @@ Shortcut Shortcut::_sc[] = {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY,
          "toggle-scordatura-view",
-         QT_TRANSLATE_NOOP("action","Show Scordatura as Fingered"),
-         QT_TRANSLATE_NOOP("action","Toggle 'Show Scordatura as Fingered'"),
-         0,
+         QT_TRANSLATE_NOOP("action","Scordatura Fingering"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Scordatura Fingering'"),
+         QT_TRANSLATE_NOOP("action","Show notes on retuned strings where they are fingered (scordatura notation); they still sound as written"),
          Icons::Invalid_ICON,
          Qt::WindowShortcut,
          ShortcutFlags::A_SCORE
