@@ -1091,8 +1091,12 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     keys sounded in the 01:46 scan; Rain Sheet Swell mp plays nothing (Voices 0; its zones are like Swell mf's, so
     it's Spitfire's script; it plays in the Unpitched - Metal kit once switched on there, the owner), Cymbal Hi Choked Hit sounds though the scan heard nothing; in the ensembles many
     techniques are off, with no key at all, and Low Ensemble's Toms 3-5 share E2 and its Field Drum Rim / X Stick A2
-    (the owner: a real conflict; set them in Kontakt when a part needs them). Not in the map yet (the owner hasn't
-    decided: all 42 lists, and the rolls the kits have off played from the drum's own patch).
+    (the owner: a real conflict; set them in Kontakt when a part needs them). The owner's decisions (2026-09-28): (a) every one-drum
+    patch's list is in the map (`SINGLE_HITS` from the JSON, `<Drum key name>` for reference; "save all the data we can
+    so future work will be easier"; the screenshots of Snare 1 / 2 and Triangle 1 / 2 checked against it); (b) not now:
+    the rolls (and other techniques) the kit patches have off are not played from the drum's own patch; **a future
+    system is to switch an off technique on in the kit patch and give it a key when a score needs it**; (c) the six
+    ensembles' lists stay in the JSON only (no MuseScore instrument plays them). Test `spitfireMap`.
     Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
     the owner: "OCR correct"): 0 Whole (selected at load, label "KEYSWITCH C0"; from the order), 1 Minor H., 2 Minor
     M., 3 Major, 4 Pentatonic, 5 Diminished; 102-103 no change (a ring). In the map (`SCANNED_KEYS`; a `<Patch>` now

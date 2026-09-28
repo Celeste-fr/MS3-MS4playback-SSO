@@ -1825,15 +1825,61 @@
   </Instrument>
   <Instrument name="Percussion - Drums - High - Bongos" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Bongos.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Bongos H Swell mf"/>
+    <Drum key="42" name="Bongos F Swell mf"/>
+    <Drum key="43" name="Bongos H Swell f"/>
+    <Drum key="44" name="Bongos F Swell f"/>
+    <Drum key="48" name="Bongos Hand Tone"/>
+    <Drum key="49" name="Bongos Hand Flam"/>
+    <Drum key="52" name="Bongos Hand Bass"/>
+    <Drum key="60" name="Bongos Fing Bass"/>
+    <Drum key="61" name="Bongos Fing Flam"/>
+    <Drum key="64" name="Bongos Fing Slap"/>
+    <Drum key="72" name="Bongos Hit"/>
+    <Drum key="73" name="Bongos Hand Roll"/>
+    <Drum key="75" name="Bongos Hand Roll sfp"/>
+    <Drum key="78" name="Bongos Fing Roll sfp"/>
+    <Drum key="80" name="Bongos Fing Roll"/>
+    <Drum key="82" name="Bongos Side Roll"/>
   </Instrument>
   <Instrument name="Percussion - Drums - High - Conga 1" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Conga 1.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Conga 1 Swell mf"/>
+    <Drum key="43" name="Conga 1 Swell f"/>
+    <Drum key="48" name="Conga 1 Bass"/>
+    <Drum key="49" name="Conga 1 Flam"/>
+    <Drum key="52" name="Conga 1 Tone"/>
+    <Drum key="55" name="Conga 1 Slap"/>
+    <Drum key="72" name="Conga 1 Hit"/>
+    <Drum key="73" name="Conga 1 Roll"/>
+    <Drum key="75" name="Conga 1 Roll sfp"/>
+    <Drum key="78" name="Conga 1 Roll Side"/>
   </Instrument>
   <Instrument name="Percussion - Drums - High - Conga 2" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Conga 2.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Conga 2 Swell mf"/>
+    <Drum key="43" name="Conga 2 Swell f"/>
+    <Drum key="48" name="Conga 2 Bass"/>
+    <Drum key="49" name="Conga 2 Flam"/>
+    <Drum key="52" name="Conga 2 Tone"/>
+    <Drum key="55" name="Conga 2 Slap"/>
+    <Drum key="72" name="Conga 2 Hit"/>
+    <Drum key="73" name="Conga 2 Roll"/>
+    <Drum key="75" name="Conga 2 Roll sfp"/>
+    <Drum key="78" name="Conga 2 Roll Side"/>
   </Instrument>
   <Instrument name="Percussion - Drums - High - Rototoms" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Rototoms.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Rototoms Roto 1"/>
+    <Drum key="53" name="Rototoms Roto 2"/>
+    <Drum key="59" name="Rototoms Roto 3"/>
+    <Drum key="64" name="Rototoms Roto 4"/>
+    <Drum key="69" name="Rototoms Roto 5"/>
+    <Drum key="84" name="Rototoms Swell 1"/>
+    <Drum key="86" name="Rototoms Swell 2"/>
+    <Drum key="88" name="Rototoms Swell 3"/>
+    <Drum key="89" name="Rototoms Swell 4"/>
+    <Drum key="91" name="Rototoms Swell 5"/>
   </Instrument>
   <Instrument name="Percussion - Drums - High - Snare 1" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Snare 1.nki">
     <Switch type="none"/>
@@ -1861,57 +1907,182 @@
   </Instrument>
   <Instrument name="Percussion - Drums - High - Snare 3" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Snare 3.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Snare 3 Hit"/>
   </Instrument>
   <Instrument name="Percussion - Drums - High - Timbales" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Timbales.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Timbales Lo Swell mf"/>
+    <Drum key="42" name="Timbales Hi Swell mf"/>
+    <Drum key="43" name="Timbales Lo Swell f"/>
+    <Drum key="44" name="Timbales Hi Swell f"/>
+    <Drum key="48" name="Timbales Lo Hit"/>
+    <Drum key="49" name="Timbales Lo Flam"/>
+    <Drum key="52" name="Timbales Lo Edge"/>
+    <Drum key="55" name="Timbales Lo Rim"/>
+    <Drum key="59" name="Timbales Lo X St."/>
+    <Drum key="72" name="Timbales Hi Hit"/>
+    <Drum key="73" name="Timbales Hi Flam"/>
+    <Drum key="76" name="Timbales Hi Edge"/>
+    <Drum key="78" name="Timbales Hi Side"/>
+    <Drum key="79" name="Timbales Hi Rim"/>
+    <Drum key="83" name="Timbales Hi X St."/>
   </Instrument>
   <Instrument name="Percussion - Drums - Low - Bass Drum" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - Low - Bass Drum.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Bass Drum Swell"/>
+    <Drum key="48" name="Bass Drum Hit"/>
+    <Drum key="52" name="Bass Drum Soft Hit"/>
+    <Drum key="55" name="Bass Drum Mute Hit"/>
+    <Drum key="59" name="Bass Drum Rute"/>
+    <Drum key="61" name="Bass Drum Roll"/>
+    <Drum key="72" name="Bass Drum FX Rub"/>
   </Instrument>
   <Instrument name="Percussion - Drums - Low - Field Drum" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - Low - Field Drum.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Field Drum Swell mf"/>
+    <Drum key="43" name="Field Drum Swell f"/>
+    <Drum key="48" name="Field Drum Hit"/>
+    <Drum key="49" name="Field Drum Flam"/>
+    <Drum key="52" name="Field Drum Edge"/>
+    <Drum key="55" name="Field Drum Rim"/>
+    <Drum key="59" name="Field Drum X Stick"/>
+    <Drum key="66" name="Field Drum Roll"/>
   </Instrument>
   <Instrument name="Percussion - Drums - Low - Gong Drum" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - Low - Gong Drum.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Gong Drum Hit"/>
+    <Drum key="52" name="Gong Drum Mute Hit"/>
+    <Drum key="55" name="Gong Drum Swell"/>
+    <Drum key="59" name="Gong Drum FX Drag"/>
+    <Drum key="81" name="Gong Drum FX Various"/>
   </Instrument>
   <Instrument name="Percussion - Drums - Low - Tom Ensemble" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - Low - Tom Ensemble.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Tom Ensemble Hit"/>
+    <Drum key="49" name="Tom Ensemble Hit Loose"/>
+    <Drum key="60" name="Tom Ensemble Eth Hit"/>
+    <Drum key="61" name="Tom Ensemble Eth Hit Loose"/>
   </Instrument>
   <Instrument name="Percussion - Drums - Low - Toms" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - Low - Toms.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Toms Tom 1"/>
+    <Drum key="53" name="Toms Tom 2"/>
+    <Drum key="59" name="Toms Tom 3"/>
+    <Drum key="64" name="Toms Tom 4"/>
+    <Drum key="69" name="Toms Tom 5"/>
+    <Drum key="84" name="Toms Swell 1 mf"/>
+    <Drum key="86" name="Toms Swell 2 mf"/>
+    <Drum key="88" name="Toms Swell 3 mf"/>
+    <Drum key="89" name="Toms Swell 4 mf"/>
+    <Drum key="91" name="Toms Swell 5 mf"/>
+    <Drum key="96" name="Toms Swell 1 f"/>
+    <Drum key="98" name="Toms Swell 2 f"/>
+    <Drum key="100" name="Toms Swell 3 f"/>
+    <Drum key="101" name="Toms Swell 4 f"/>
+    <Drum key="103" name="Toms Swell 5 f"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Anvil" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Anvil.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Anvil Hit Rear"/>
+    <Drum key="49" name="Anvil Steel Sheet"/>
+    <Drum key="52" name="Anvil Hit Mid"/>
+    <Drum key="54" name="Anvil Rear Pipe"/>
+    <Drum key="55" name="Anvil Hit Face"/>
+    <Drum key="60" name="Anvil Horn Tip"/>
+    <Drum key="61" name="Anvil Horn Pipe"/>
+    <Drum key="64" name="Anvil Horn Center"/>
+    <Drum key="67" name="Anvil Horn Under"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Cymbal Hi" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Hi.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Cymbal Hi Swell mf"/>
+    <Drum key="43" name="Cymbal Hi Swell f"/>
+    <Drum key="48" name="Cymbal Hi Hit"/>
+    <Drum key="50" name="Cymbal Hi Choked Hit"/>
+    <Drum key="52" name="Cymbal Hi Brush"/>
+    <Drum key="61" name="Cymbal Hi Roll"/>
+    <Drum key="72" name="Cymbal Hi FX Scrape"/>
+    <Drum key="84" name="Cymbal Hi FX Bow"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Cymbal Lo" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Lo.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Cymbal Lo Swell mf"/>
+    <Drum key="43" name="Cymbal Lo Swell f"/>
+    <Drum key="48" name="Cymbal Lo Hit"/>
+    <Drum key="50" name="Cymbal Lo Choked Hit"/>
+    <Drum key="52" name="Cymbal Lo Brush"/>
+    <Drum key="61" name="Cymbal Lo Roll"/>
+    <Drum key="72" name="Cymbal Lo FX Scrape"/>
+    <Drum key="84" name="Cymbal Lo FX Bow"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Cymbal Med" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Med.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Cymbal Med Swell mf"/>
+    <Drum key="43" name="Cymbal Med Swell f"/>
+    <Drum key="48" name="Cymbal Med Hit"/>
+    <Drum key="50" name="Cymbal Med Choked Hit"/>
+    <Drum key="52" name="Cymbal Med Brush"/>
+    <Drum key="61" name="Cymbal Med Roll"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Mark Tree" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Mark Tree.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Mark Tree Long"/>
+    <Drum key="49" name="Mark Tree Push"/>
+    <Drum key="52" name="Mark Tree Up"/>
+    <Drum key="55" name="Mark Tree Down"/>
+    <Drum key="60" name="Mark Tree Sweep Low"/>
+    <Drum key="64" name="Mark Tree Sweep Mid"/>
+    <Drum key="67" name="Mark Tree Sweep High"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Mini Anvil" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Mini Anvil.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Mini Anvil Anvil 1"/>
+    <Drum key="53" name="Mini Anvil Anvil 2"/>
+    <Drum key="59" name="Mini Anvil Anvil 3"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Piatti" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Piatti.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Piatti Hit"/>
+    <Drum key="72" name="Piatti Choked Hit"/>
+    <Drum key="74" name="Piatti Choked Alt"/>
+    <Drum key="77" name="Piatti FX Scrape"/>
+    <Drum key="84" name="Piatti FX Sizzle"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Rain Sheet" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Rain Sheet.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Rain Sheet Swell mp"/>
+    <Drum key="43" name="Rain Sheet Swell mf"/>
+    <Drum key="45" name="Rain Sheet Swell f"/>
+    <Drum key="48" name="Rain Sheet Hit"/>
+    <Drum key="50" name="Rain Sheet Choked Hit"/>
+    <Drum key="61" name="Rain Sheet Roll"/>
+    <Drum key="72" name="Rain Sheet Superball"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Rivet Cymbal" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Rivet Cymbal.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Rivet Cymbal Swell"/>
+    <Drum key="48" name="Rivet Cymbal Hit"/>
+    <Drum key="61" name="Rivet Cymbal Roll"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Tam Tam" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Tam Tam.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Tam Tam Swell mf"/>
+    <Drum key="43" name="Tam Tam Swell f"/>
+    <Drum key="48" name="Tam Tam Hit"/>
+    <Drum key="50" name="Tam Tam Choked Hit"/>
+    <Drum key="61" name="Tam Tam Roll"/>
+    <Drum key="72" name="Tam Tam Superball"/>
+    <Drum key="89" name="Tam Tam FX Scrape"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Trash Metals" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Trash Metals.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Trash Metals Brake 1"/>
+    <Drum key="52" name="Trash Metals Brake 2"/>
+    <Drum key="57" name="Trash Metals Pans"/>
+    <Drum key="62" name="Trash Metals Scafold 1"/>
+    <Drum key="65" name="Trash Metals Scafold 2"/>
+    <Drum key="65" name="Trash Metals Spring Coil"/>
+    <Drum key="71" name="Trash Metals Trash Can"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Triangle 1" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Triangle 1.nki">
     <Switch type="none"/>
@@ -1931,51 +2102,115 @@
   </Instrument>
   <Instrument name="Percussion - Unpitched - Metal - Wind Gong" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Wind Gong.nki">
     <Switch type="none"/>
+    <Drum key="43" name="Wind Gong Swell f"/>
+    <Drum key="43" name="Wind Gong Swell mf"/>
+    <Drum key="48" name="Wind Gong Hit"/>
+    <Drum key="50" name="Wind Gong Choke"/>
+    <Drum key="60" name="Wind Gong FX Bow"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Wood - Claves" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Wood - Claves.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Claves Bass Hit"/>
+    <Drum key="53" name="Claves C# Hit"/>
+    <Drum key="59" name="Claves D Hit"/>
+    <Drum key="64" name="Claves Cuban Hit"/>
+    <Drum key="69" name="Claves E Hit"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Wood - Temple Blocks" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Wood - Temple Blocks.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Temple Blocks Block 1"/>
+    <Drum key="53" name="Temple Blocks Block 2"/>
+    <Drum key="59" name="Temple Blocks Block 3"/>
+    <Drum key="64" name="Temple Blocks Block 4"/>
+    <Drum key="69" name="Temple Blocks Block 5"/>
   </Instrument>
   <Instrument name="Percussion - Unpitched - Wood - Woodblocks" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Wood - Woodblocks.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Woodblocks Block 1"/>
+    <Drum key="53" name="Woodblocks Block 2"/>
+    <Drum key="59" name="Woodblocks Block 3"/>
+    <Drum key="64" name="Woodblocks Block 4"/>
+    <Drum key="69" name="Woodblocks Block 5"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Agogo" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Agogo.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Agogo Low Hit"/>
+    <Drum key="60" name="Agogo High Hit"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Cabasa" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Cabasa.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Cabasa Flick"/>
+    <Drum key="52" name="Cabasa Shake"/>
+    <Drum key="55" name="Cabasa Slap"/>
+    <Drum key="59" name="Cabasa Twist"/>
+    <Drum key="62" name="Cabasa Alt Twist"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Castanets" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Castanets.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Castanets Left Hand"/>
+    <Drum key="49" name="Castanets Flam"/>
+    <Drum key="60" name="Castanets Right Hand"/>
+    <Drum key="61" name="Castanets Roll"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Cowbells" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Cowbells.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Cowbells Bell 1 Open"/>
+    <Drum key="49" name="Cowbells Bell 1 Closed"/>
+    <Drum key="53" name="Cowbells Bell 2 Open"/>
+    <Drum key="54" name="Cowbells Bell 2 Closed"/>
+    <Drum key="60" name="Cowbells Bell 3 Open"/>
+    <Drum key="61" name="Cowbells Bell 3 Closed"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Gankogui" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Gankogui.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Gankogui Low Open"/>
+    <Drum key="49" name="Gankogui Low Closed"/>
+    <Drum key="60" name="Gankogui Hi Open"/>
+    <Drum key="61" name="Gankogui Hi Closed"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Guiro" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Guiro.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Guiro Hit"/>
+    <Drum key="60" name="Guiro Zip"/>
+    <Drum key="72" name="Guiro Zip Fast"/>
+    <Drum key="84" name="Guiro Zip sfz"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Jawbone" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Jawbone.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Jawbone Hit"/>
+    <Drum key="49" name="Jawbone Hit f"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Ratchet" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Ratchet.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Ratchet Short"/>
+    <Drum key="60" name="Ratchet Long"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Shakers" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Shakers.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Shakers Met Open"/>
+    <Drum key="49" name="Shakers Met Closed"/>
+    <Drum key="60" name="Shakers Pop Closed"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Ships Bell" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Ships Bell.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Ships Bell Hit"/>
+    <Drum key="52" name="Ships Bell Muted Hit"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Sleighbells" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Sleighbells.nki">
     <Switch type="none"/>
+    <Drum key="48" name="Sleighbells Hit 2"/>
+    <Drum key="49" name="Sleighbells Roll 2"/>
+    <Drum key="60" name="Sleighbells Hit 1"/>
+    <Drum key="61" name="Sleighbells Roll 1"/>
   </Instrument>
   <Instrument name="Percussion - Other - Toys - Tambourines" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Other - Toys - Tambourines.nki">
     <Switch type="none"/>
+    <Drum key="41" name="Tambourines Swell"/>
+    <Drum key="43" name="Tambourines Swell Alt"/>
+    <Drum key="48" name="Tambourines Hit"/>
+    <Drum key="52" name="Tambourines Hit Alt"/>
+    <Drum key="60" name="Tambourines FX Rolls"/>
+    <Drum key="61" name="Tambourines Roll"/>
   </Instrument>
   <!-- the library's other patches: set up and checked, not chosen by notation -->
   <Patch name="Curated Brass Ensembles" nki="Instruments/Curated Ensembles/Curated Brass Ensembles.nki" setup="$iooxo=3" pitch="54">

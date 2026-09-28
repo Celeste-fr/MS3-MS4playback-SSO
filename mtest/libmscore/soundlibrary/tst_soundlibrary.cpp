@@ -306,6 +306,40 @@ void TestSoundLibrary::spitfireMap()
             QCOMPARE(play(81, "triangle"), QString("Percussion - Unpitched - Metal - Triangle 1 48"));
             QCOMPARE(play(80, "triangle"), QString("Percussion - Unpitched - Metal - Triangle 1 49"));
             QCOMPARE(play(81, "finger-cymbals"), QString());                     // (81 is theirs too)
+            // every one-drum patch lists its hits at its defaults (the owner's picture run of 2026-09-28): keys two
+            // hits share are both there
+            for (const SoundLib::LibInstrument* x : kit) {
+                  if (!x->name.startsWith("Percussion - "))
+                        continue;
+                  QVERIFY2(!x->drums.empty(), qPrintable(x->name));
+                  if (x->name == "Percussion - Drums - Low - Toms")
+                        QCOMPARE(int(x->drums.size()), 15);
+                  if (x->name == "Percussion - Unpitched - Metal - Trash Metals") {
+                        QStringList onF3;
+                        for (const SoundLib::DrumKey& d : x->drums)
+                              if (d.key == 65)
+                                    onF3 << d.name;
+                        onF3.sort();
+                        QCOMPARE(onF3.join(", "), QString("Trash Metals Scafold 2, Trash Metals Spring Coil"));
+                        }
+                  }
+            // every one-drum patch lists its hits at its defaults (the owner's picture run of 2026-09-28): keys two
+            // hits share are both there
+            for (const SoundLib::LibInstrument* x : kit) {
+                  if (!x->name.startsWith("Percussion - "))
+                        continue;
+                  QVERIFY2(!x->drums.empty(), qPrintable(x->name));
+                  if (x->name == "Percussion - Drums - Low - Toms")
+                        QCOMPARE(int(x->drums.size()), 15);
+                  if (x->name == "Percussion - Unpitched - Metal - Trash Metals") {
+                        QStringList onF3;
+                        for (const SoundLib::DrumKey& d : x->drums)
+                              if (d.key == 65)
+                                    onF3 << d.name;
+                        onF3.sort();
+                        QCOMPARE(onF3.join(", "), QString("Trash Metals Scafold 2, Trash Metals Spring Coil"));
+                        }
+                  }
             }
 
       // every main patch can play a note without marks

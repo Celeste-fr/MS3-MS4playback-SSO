@@ -33,7 +33,7 @@ hairpin (Ethanol bar 14). Still open:
 - the kits' hit lists: done (2026-09-26, the owner's screenshots); the 42 one-drum patches: scanned in the
   background (2026-09-28 01:46, which keys sound: `sso_drum_keys_sounding.json`); they don't follow the `.nki` group
   order, so keys are named from the owner's hit-list screenshots. Snare 1 / 2 and Triangle 1 / 2 are in the map (the
-  sounds the kit patches lack at their defaults); the other 38 and the 6 ensembles: read from the owner's picture run of 2026-09-28 05:02 and confirmed, in `tools/soundlibraries/sso_percussion_hits.json` (with notes on conflicts and techniques that are off); waiting on the owner's decision whether to put the 42 lists and the one-drum patches' rolls in the map; Harp glissandi's modes: in the map (reviewed); the three-mic patches' mics: done (Close, Tree, Ambient);
+  sounds the kit patches lack at their defaults); the other 38 and the 6 ensembles: read from the owner's picture run of 2026-09-28 05:02 and confirmed, in `tools/soundlibraries/sso_percussion_hits.json` (with notes on conflicts and techniques that are off); the 42 one-drum lists are in the map (reference); the ensembles stay in the JSON; next, when a score needs a technique a kit patch has off (the rolls of bongos, congas, bass drum, field drum, cymbals, tam-tam, thunder sheet, tambourine, sleigh bells, castanets; Rain Sheet Swell mp …): a system that switches it on in the kit patch and gives it a key (the owner, 2026-09-28: to be built later); Harp glissandi's modes: in the map (reviewed); the three-mic patches' mics: done (Close, Tree, Ambient);
 - the owner: re-check the tuned percussion (Timpani, Celeste, Marimba, Vibraphone, Tubular
   Bells) with the fixed key scan.
 
