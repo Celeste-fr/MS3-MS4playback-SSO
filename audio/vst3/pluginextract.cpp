@@ -551,6 +551,16 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             if (!reportedLow.isEmpty() || !reportedHigh.isEmpty())
                   e["reportedByPlugin"] = QJsonArray { reportedLow, reportedHigh };
 
+            // put back to the value its parameter had, no reload
+            if (s.putBack && cc != PITCHBEND) {
+                  sendController(p, s.channel, cc, previous);
+                  e["putBack"] = previous;
+                  if (!run(s.grabWait, nullptr))
+                        return stop();
+                  c.reported(skip);
+                  effects.append(e);
+                  continue;
+                  }
             // Quick: the patch reloaded, as it was before (its own value of every controller); the
             // controller's own value is not known then ("patchValue" left out)
             if (s.restore && cc != PITCHBEND) {

@@ -78,6 +78,10 @@ class PluginExtract {
             // Quick (set: controllers() puts the patch back with it, reloading its state, instead
             // of searching each controller's own value; false: it failed)
             std::function<bool()> restore;
+            // put each controller back to the value its parameter had before it was touched, with no reload
+            // and no search (a background run: reloading a big patch after every controller took Kontakt
+            // offline far too long; "patchValue" left out, "putBack" the value sent)
+            bool putBack { false };
             };
 
       // something that changed the window: its pictures at the low and the high value (the

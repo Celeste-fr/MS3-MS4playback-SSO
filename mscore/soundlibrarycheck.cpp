@@ -2648,8 +2648,15 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
 #ifdef USE_VST3
       const SoundLib::LibInstrument& ins = *_rows[index].instrument;
       const QString fileBase = safeFileName(ins.name);
+      // (a background run: a line in the log at most once a minute, so a long patch shows it is moving)
+      QElapsedTimer sinceLogged;
+      sinceLogged.start();
       auto status = [&](const QString& s) {
             _status->setText(QString("%1: %2").arg(ins.name, s));
+            if (_headless && sinceLogged.elapsed() > 60000) {
+                  say(QString("   %1: %2").arg(ins.name, s));
+                  sinceLogged.restart();
+                  }
             QApplication::processEvents();
             };
       QJsonObject out;
@@ -2811,7 +2818,9 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             s.switchCC = switching ? ins.switchNumber : -1;
             s.switchValues = switching ? switchValues : std::vector<int>();
             s.grabWait = GRAB_WAIT_MS;
-            if (_quick->isChecked()) {
+            if (_headless)
+                  s.putBack = true;       // (a reload per controller took Kontakt offline far too long)
+            else if (_quick->isChecked()) {
                   s.restore = [&]() {
                         if (!p->setState(patchState))
                               return false;
