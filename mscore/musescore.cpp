@@ -248,6 +248,7 @@ static bool extractMode = false;           // --extract-library: Extract plug-in
 static QString extractLibrary;
 static QString extractPatches = "all";
 static bool extractPitchBend = false;
+static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
@@ -4554,14 +4555,19 @@ static bool extractInBackground()
       // its own copy of the setups: what the working MuseScore has, file by file, where the copy
       // lacks it (the copy's own made and resaved setups stay)
       const QString mine = SoundLibraryHost::setupsFolder(*library);
+      // the dynamics check: a folder, lock and log of its own (it may run beside an extract, and
+      // beside the MuseScore the owner tests other builds in; the owner, 2026-09-28)
+      const QString what = checkDynamicsMode ? "background dynamics check" : "background extract";
+      if (checkDynamicsMode)
+            ArticulationCheckDialog::setBackgroundLog(what + ".log");
       // (outside MuseScore's data folder altogether, next to the extract's output; the owner, 2026-09-27)
       SoundLibraryHost::setDataFolder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-                                      + "/MuseScore Sound Library Check/background extract setups");
+                                      + "/MuseScore Sound Library Check/" + what + " setups");
       const QString copy = SoundLibraryHost::setupsFolder(*library);
       QDir().mkpath(copy);
-      QLockFile lock(copy + "/background extract.lock");
+      QLockFile lock(copy + "/" + what + ".lock");
       if (!lock.tryLock(0)) {
-            ArticulationCheckDialog::logBackground("a background extract is already running; this one stops");
+            ArticulationCheckDialog::logBackground(QString("a %1 is already running; this one stops").arg(what));
             return false;
             }
       int copied = 0;
@@ -4570,8 +4576,8 @@ static bool extractInBackground()
                   continue;
             copied += QFile::copy(fi.absoluteFilePath(), copy + "/" + fi.fileName());
             }
-      ArticulationCheckDialog::logBackground(QString("background extract started; setups in %1 (%2 copied from %3)")
-                                             .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)));
+      ArticulationCheckDialog::logBackground(QString("%4 started; setups in %1 (%2 copied from %3)")
+                                             .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)).arg(what));
       ArticulationCheckDialog dialog(library);
       QString zip;
       bool ok;
@@ -4579,8 +4585,28 @@ static bool extractInBackground()
 #ifdef Q_OS_WIN
             DialogWatch watch;
 #endif
-            ok = dialog.runHeadless(extractPatches, extractPitchBend, &zip);
+            ok = dialog.runHeadless(extractPatches, extractPitchBend, &zip, checkDynamicsMode);
       }
+      if (checkDynamicsMode) {
+            // the curves into the working MuseScore's calibration (its balance setting stays)
+            SoundLib::DynamicsCalibration measured, working;
+            if (measured.read(copy + "/dynamics.json")) {
+                  working.read(mine + "/dynamics.json");
+                  int n = 0;
+                  for (const auto& p : measured.patches())
+                        for (const auto& a : p.second) {
+                              working.setCurve(p.first, a.first, a.second);
+                              ++n;
+                              }
+                  QDir().mkpath(mine);
+                  if (working.write(mine + "/dynamics.json"))
+                        ArticulationCheckDialog::logBackground(QString("%1 curves into %2 (MuseScore uses them at its next start or "
+                                                                       "Preferences › Apply)").arg(n).arg(QDir::toNativeSeparators(mine + "/dynamics.json")));
+                  }
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                                          + "/MuseScore Sound Library Check"));
+            return ok;
+            }
       // Kontakt broken for this process (a patch it can't recall, then no patch script runs, even on
       // a new instance): a new MuseScore goes on with the patches left, without that one (the owner's
       // run of 2026-09-27 17:20 stopped at Celli - Performance, patch 59 of 700). Each process
@@ -8571,6 +8597,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("extract-pitch-bend", "Use with --extract-library: also measure pitch bend (about 25 s a patch)"));
       parser.addOption(QCommandLineOption("extract-round", "Use with --extract-library: set by the extract itself when it goes on in a new "
                                           "process", "n"));
+      parser.addOption(QCommandLineOption("check-dynamics", "Use with --extract-library: measure the patches' dynamics (Check articulations › "
+                                          "Dynamics only) instead of extracting; the curves go into the working MuseScore's calibration at the end"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8642,6 +8670,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             if (parser.isSet("extract-patches"))
                   extractPatches = parser.value("extract-patches");
             extractPitchBend = parser.isSet("extract-pitch-bend");
+            checkDynamicsMode = parser.isSet("check-dynamics");
             if (parser.isSet("extract-round"))
                   extractRound = qMax(1, parser.value("extract-round").toInt());
             }

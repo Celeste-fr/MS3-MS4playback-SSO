@@ -1866,14 +1866,16 @@ void TestSoundLibrary::dynamicsCheck()
       AC::Settings s;
       s.pitch = 67;
       int steps = 0;
-      const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, s, [&](int, int) { ++steps; return true; });
-      QCOMPARE(steps, 24);
+      const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, { false, true }, s,
+                                                             [&](int, int) { ++steps; return true; });
+      QCOMPARE(steps, 20);                                  // each: 3 to classify, 7 more of the curve (on both)
       QCOMPARE(int(r.size()), 2);
       const double expected = 20 * std::log10(127.0 / 32.0);
       for (const AC::DynamicsResult& d : r) {
             QVERIFY2(std::fabs(d.velocityDb[1] - d.velocityDb[0] - expected) < 2.0, qPrintable(QString::number(d.velocityDb[1] - d.velocityDb[0])));
             QVERIFY2(std::fabs(d.ccDb[1] - d.ccDb[0] - expected) < 2.0, qPrintable(QString::number(d.ccDb[1] - d.ccDb[0])));
             QCOMPARE(QString(d.drivenBy()), QString("both"));
+            QCOMPARE(d.pitch, 67);
             QCOMPARE(int(d.curve.size()), 8);
             // velocity * CC along x = both: 40 log(127 / 16) = 36 dB from 16 to 127
             QVERIFY2(std::fabs(d.curve.back().second - d.curve.front().second - 40 * std::log10(127.0 / 16.0)) < 2.5,
@@ -1881,6 +1883,13 @@ void TestSoundLibrary::dynamicsCheck()
             for (size_t i = 1; i < d.curve.size(); ++i)
                   QVERIFY(d.curve[i].second > d.curve[i - 1].second);
             }
+      // 25 plays nothing at 67 (a harmonics patch): measured an octave up; 30 is silent everywhere
+      const std::vector<AC::DynamicsResult> r2 = AC::dynamics(p.get(), { 25, 30 }, { 67, 67 }, { false, false }, s);
+      QCOMPARE(int(r2.size()), 2);
+      QCOMPARE(r2[0].pitch, 79);
+      QCOMPARE(int(r2[0].curve.size()), 8);
+      QCOMPARE(r2[1].pitch, -1);
+      QVERIFY(r2[1].curve.empty());
       }
 
 //---------------------------------------------------------

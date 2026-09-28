@@ -51,6 +51,7 @@
 #include <QJsonObject>
 
 #include "libmscore/soundlibrary.h"
+#include "audio/vst3/articulationcheck.h"
 
 class QCheckBox;
 class QLabel;
@@ -83,6 +84,11 @@ class ArticulationCheckDialog : public QDialog {
       QCheckBox* _pitchBend;
       QCheckBox* _dynamics;
       QString balanceReport() const;
+      QCheckBox* _dynamicsOnly;
+      // the dynamics of a loaded patch's articulations (those a notation chooses) into the calibration
+      // and out["dynamics"]; lines for the summary
+      void measureDynamics(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
+                           QJsonObject& out, QStringList& lines);
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;
@@ -113,6 +119,8 @@ class ArticulationCheckDialog : public QDialog {
       bool extractPatch(int index, const QString& pluginPath, const QString& folder, const QJsonObject& empty,
                         std::unique_ptr<Vst3Plugin>& instance, QString& summary, int* named = nullptr);
       bool checkPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
+      // Dynamics only: the patch loaded and measured, no articulation check
+      bool dynamicsPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       QString recordsFile() const;
       QString addedFile() const;
@@ -141,7 +149,8 @@ class ArticulationCheckDialog : public QDialog {
       // Extract plug-in data without the dialog (MuseScore --extract-library): patches "all" (every
       // patch with a setup), "mapped" (the map's own) or a file with one patch name a line; the zip's
       // path in zip. false: nothing to do, or no plug-in
-      bool runHeadless(const QString& patches, bool pitchBend, QString* zip);
+      bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false);   // dynamics: Dynamics only instead of the extract
+      static void setBackgroundLog(const QString& fileName);      // in Documents/MuseScore Sound Library Check (default "background extract.log")
       QString brokenOn() const     { return _broken; }
       QStringList patchesLeft() const { return _left; }
       // a line of the background extract's log: stderr and Documents/MuseScore Sound Library Check/

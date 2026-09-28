@@ -316,6 +316,22 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   titles, articulation names, key ranges per .nki) has no velocity layers or volumes; the library-files
   extract's library.json would show velocity-split vs crossfaded layers but not loudness. Tests
   `dynamicsCalibration`, `dynamicsCheck`.
+  **Faster, in the background** (the owner, 2026-09-28: "have it run in the background and use separate folders
+  … make the test faster without compromising the data"): *Dynamics only* (check box; `dynamicsPatch`) skips
+  the articulation check and the window pictures; `measureDynamics` measures only articulations a notation
+  chooses (techniques not empty); `ArticulationCheck::dynamics` classifies with 3 notes (velocity 32 / CC 32,
+  CC 127, velocity 127; other pitches where silent: +12, -12, +7, -5, +24) and gives the full 8-point curve only
+  to one on velocity (0.5 s note, 0.2 s tail) or asked for in full (the part's held note: `full`), one on the
+  controller 32 / 80 / 112 / 127; notes go soft to loud and each waits for the last one's tail 50 dB under it
+  (`Player::relativeSettle`), not -70 dBFS. The owner's Violas run of 2026-09-27 (old way, ~430 notes) took about
+  a minute: Kontakt offline is ~10x real time. `MuseScore --extract-library <lib> --check-dynamics
+  [--extract-patches mapped|file]` (musescore.cpp `extractInBackground`, `runHeadless(…, dynamics)`): its own
+  setups copy (`background dynamics check setups`), lock and log (`background dynamics check.log`), the curves
+  merged into the working `dynamics.json` at the end (balance kept). `Measure SSO dynamics in background.bat`
+  (bin): copies the install to `%LOCALAPPDATA%\MuseScore background dynamics check` (the owner installs other
+  builds meanwhile), refuses a second run (PowerShell: a process from that folder), starts it; a patch list file
+  dropped on it. Tried here headless with the test synth (a map DynTest.xml, the synth's state as setups):
+  2 patches in 4 s, the unused value skipped, harmonics measured an octave up, the balance report in the summary.
   **Section strings' shorts and Long (Rachm.)** (the owner, 2026-09-28): staccato plays Short 0.5,
   staccatissimo Spiccato, tenuto / portato Short 1.0 (Violins 1/2, Violas, Celli, Basses, Strings
   Ensemble); staff text "espr." / "espressivo" / "molto vib." / "con vibrato" sets the modifier
