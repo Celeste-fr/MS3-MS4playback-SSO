@@ -472,17 +472,17 @@ void TestTuning::temperedAndEnharmonic()
                   ns.append(toChord(s->element(0))->upNote());
       QCOMPARE(ns.size(), 4);
       ScoreTuning tuning(score);
-      auto near = [](double a, double b) { return qAbs(a - b) < 0.002; };
+      auto nearly = [](double a, double b) { return qAbs(a - b) < 0.002; };
       // C, tempered flat: 100 cents under the note MuseScore plays (C), no just intonation
-      QVERIFY2(near(tuning.cents(ns[0]), -100.0), qPrintable(QString::number(tuning.cents(ns[0]))));
+      QVERIFY2(nearly(tuning.cents(ns[0]), -100.0), qPrintable(QString::number(tuning.cents(ns[0]))));
       // E, tempered natural: 0, where HEJI's plain E (81/64) would be +7.82
-      QVERIFY2(near(tuning.cents(ns[1]), 0.0), qPrintable(QString::number(tuning.cents(ns[1]))));
+      QVERIFY2(nearly(tuning.cents(ns[1]), 0.0), qPrintable(QString::number(tuning.cents(ns[1]))));
       // G sharp, comma down, tilde: exactly the Pythagorean A flat (4 fifths down), from G
       const double aFlat = 3 * 1200.0 - 4 * c(3, 2);
-      QVERIFY2(near(tuning.cents(ns[2]), aFlat - 700.0), qPrintable(QString::number(tuning.cents(ns[2]))));
-      QVERIFY(near(tuning.cents(ns[2]) - (100.0 - c(81, 80) + (8 * c(3, 2) - 4 * 1200.0 - 800.0)), -c(32805, 32768)));
+      QVERIFY2(nearly(tuning.cents(ns[2]), aFlat - 700.0), qPrintable(QString::number(tuning.cents(ns[2]))));
+      QVERIFY(nearly(tuning.cents(ns[2]) - (100.0 - c(81, 80) + (8 * c(3, 2) - 4 * 1200.0 - 800.0)), -c(32805, 32768)));
       // B flat, comma up, "=": B flat raised by a comma, nothing more, from B
-      QVERIFY2(near(tuning.cents(ns[3]), (2 * 1200.0 - 2 * c(3, 2)) + c(81, 80) - 1100.0),
+      QVERIFY2(nearly(tuning.cents(ns[3]), (2 * 1200.0 - 2 * c(3, 2)) + c(81, 80) - 1100.0),
                qPrintable(QString::number(tuning.cents(ns[3]))));
       // the signs stack beside the accidental, outermost
       QVERIFY(Accidental::isStackModifier(AccidentalType::TILDE));
