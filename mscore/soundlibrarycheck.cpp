@@ -230,9 +230,33 @@ struct Pump {
       std::vector<float> buffer;
       double peak { 0 };
       std::vector<float>* capture { nullptr };  // what it plays, when set
+      // as fast as the plug-in renders (offline: a background run's measurements with no window, which
+      // needs no real time; Kontakt offline is about 10 times real time)
+      bool fast { false };
 
       void run(int ms)
             {
+            if (fast) {
+                  const qint64 total = qint64(ms) * qint64(sampleRate) / 1000;
+                  int blocks = 0;
+                  for (qint64 frames = 0; frames < total && !*cancel; ) {
+                        const int n = int(std::min<qint64>(512, total - frames));
+                        buffer.assign(size_t(2 * n), 0.f);
+                        p->process(n, buffer.data());
+                        for (float x : buffer)
+                              peak = std::max(peak, double(std::fabs(x)));
+                        if (capture)
+                              capture->insert(capture->end(), buffer.begin(), buffer.end());
+                        frames += n;
+                        if (++blocks % 32 == 0) {
+                              p->idle();
+                              QApplication::processEvents();
+                              }
+                        }
+                  p->idle();
+                  QApplication::processEvents();
+                  return;
+                  }
             QElapsedTimer t;
             t.start();
             qint64 frames = 0;
@@ -695,7 +719,7 @@ bool ArticulationCheckDialog::runHeadlessKeyScan(const QString& patches, QString
 //    own that runs in the background while the owner works in MuseScore (the owner, 2026-09-27)
 //---------------------------------------------------------
 
-bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics)
+bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics, bool controllers)
       {
       _headless = true;
       if (!_library) {
@@ -747,9 +771,12 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
                   *zip = _zip;
             return !_zip.isEmpty();
             }
-      _tryAll->setChecked(false);       // (it needs the plug-in's window on screen)
+      // every controller: offline, sound and parameters only (no window)
+      _tryAll->setChecked(controllers);
+      _quick->setChecked(true);
       _pitchBend->setChecked(pitchBend);
-      say(QString("%1: %2 patches%3").arg(_library->name).arg(ticked).arg(pitchBend ? ", with pitch bend" : ""));
+      say(QString("%1: %2 patches%3%4").arg(_library->name).arg(ticked).arg(pitchBend ? ", with pitch bend" : "")
+          .arg(controllers ? ", every controller (sound and parameters)" : ""));
       extract();
       if (zip)
             *zip = _zip;
@@ -2684,6 +2711,18 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       // glissandi, effects, waited the full 2 minutes each)
       Pump pump { p, double(MScore::sampleRate), &_cancel, {} };
       const bool listen = _pitchBend->isChecked() || _tryAll->isChecked();
+      // a background run measures offline and as fast as the plug-in renders: no window to watch (the
+      // owner, 2026-09-28: every controller and pitch bend on all 700 patches; in real time about 80 hours)
+      const bool offline = _headless && listen;
+      if (offline) {
+            p->setOffline(true);
+            pump.fast = true;
+            }
+      struct Online {
+            Vst3Plugin* p;
+            bool on;
+            ~Online() { if (on) p->setOffline(false); }
+            } online { p, offline };
       bool sounds = false;
       if (!listen) {
             status(tr("letting the patch start…"));
@@ -2752,7 +2791,9 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
 
       if (_tryAll->isChecked() && !_cancel) {
             QPointer<Vst3EditorWindow> w;
-            if (Steinberg::IPlugView* view = p->createEditor()) {
+            // (a background run: no window, sound and parameters only; which named control a controller
+            // moves needs the window's pictures, in real time)
+            if (Steinberg::IPlugView* view = _headless ? nullptr : p->createEditor()) {
                   w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
                   w->show();
                   w->raise();

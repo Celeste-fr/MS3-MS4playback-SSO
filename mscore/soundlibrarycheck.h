@@ -153,7 +153,8 @@ class ArticulationCheckDialog : public QDialog {
       // Extract plug-in data without the dialog (MuseScore --extract-library): patches "all" (every
       // patch with a setup), "mapped" (the map's own) or a file with one patch name a line; the zip's
       // path in zip. false: nothing to do, or no plug-in
-      bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false);   // dynamics: Dynamics only instead of the extract
+      bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false,   // dynamics: Dynamics only instead of the extract
+                       bool controllers = false);   // controllers: every controller tried too (offline, no window: sound and parameters)
       static void setBackgroundLog(const QString& fileName);      // in Documents/MuseScore Sound Library Check (default "background extract.log")
       // Check articulations without the dialog (MuseScore --scan-keys) on the patches to scan
       // (toScanNow), or on those a file lists (one patch name a line); listening only, no window

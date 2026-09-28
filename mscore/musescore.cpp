@@ -248,6 +248,7 @@ static bool extractMode = false;           // --extract-library: Extract plug-in
 static QString extractLibrary;
 static QString extractPatches = "all";
 static bool extractPitchBend = false;
+static bool extractControllers = false;     // --extract-controllers: every controller tried too (offline, no window)
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
@@ -4454,7 +4455,7 @@ static bool doProcessJob(QString jsonFile)
 
 //---------------------------------------------------------
 //   extractInBackground
-//    MuseScore --extract-library <library> [--extract-patches all|mapped|<file>] [--extract-pitch-bend]
+//    MuseScore --extract-library <library> [--extract-patches all|mapped|<file>] [--extract-pitch-bend] [--extract-controllers]
 //    MuseScore --scan-keys <library> [--extract-patches <file>]: Check articulations' key scan of the
 //    patches whose keys aren't known yet (SSO's 42 one-drum patches, about 4 hours), the same way
 //    MuseScore --window-pictures <library> [--extract-patches <file>]: the percussion patches' windows,
@@ -4597,7 +4598,7 @@ static bool extractInBackground()
 #endif
             ok = picturesMode ? dialog.runHeadlessPictures(extractPatches, &zip)
                : scanKeysMode ? dialog.runHeadlessKeyScan(extractPatches, &zip)
-                              : dialog.runHeadless(extractPatches, extractPitchBend, &zip, checkDynamicsMode);
+                              : dialog.runHeadless(extractPatches, extractPitchBend, &zip, checkDynamicsMode, extractControllers);
       }
       if (scanKeysMode || picturesMode)
             return ok;          // (a key scan, the pictures: one process; its zip and log as the extract's)
@@ -4649,6 +4650,8 @@ static bool extractInBackground()
                                "--extract-patches", list, "--extract-round", QString::number(extractRound + 1) };
             if (extractPitchBend)
                   args << "--extract-pitch-bend";
+            if (extractControllers)
+                  args << "--extract-controllers";
             lock.unlock();                              // (the new one takes it)
             if (QProcess::startDetached(QCoreApplication::applicationFilePath(), args))
                   ArticulationCheckDialog::logBackground(QString("going on in a new MuseScore with %1 patches (round %2)")
@@ -8609,6 +8612,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("extract-patches", "Use with --extract-library: all (default), mapped, or a file with "
                                           "one patch name a line", "which"));
       parser.addOption(QCommandLineOption("extract-pitch-bend", "Use with --extract-library: also measure pitch bend (about 25 s a patch)"));
+      parser.addOption(QCommandLineOption("extract-controllers", "Use with --extract-library: also try every MIDI controller and parameter "
+                                          "on each patch, offline (sound and parameters; no window)"));
       parser.addOption(QCommandLineOption("extract-round", "Use with --extract-library: set by the extract itself when it goes on in a new "
                                           "process", "n"));
       parser.addOption(QCommandLineOption("check-dynamics", "Use with --extract-library: measure the patches' dynamics (Check articulations › "
@@ -8696,6 +8701,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             else if (parser.isSet("extract-patches"))
                   extractPatches = parser.value("extract-patches");
             extractPitchBend = parser.isSet("extract-pitch-bend");
+            extractControllers = parser.isSet("extract-controllers");
             checkDynamicsMode = parser.isSet("check-dynamics");
             if (parser.isSet("extract-round"))
                   extractRound = qMax(1, parser.value("extract-round").toInt());

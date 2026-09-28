@@ -732,6 +732,18 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   Progress in `Documents/MuseScore Sound Library Check/background extract.log` (`logBackground`), the folder
   opens when done. Tried here headless with the test synth, alone and beside a running MuseScore: 3 patches in
   10 s, only the copy, the log and the extract written; a second start while one runs stops at once.
+  **Every controller and pitch bend on all 700, in the background** (the owner, 2026-09-28: "let's do that", after
+  *Try every controller* had run on Violins 1 only and pitch bend on four patches): `Measure SSO controllers in
+  background.bat` starts `--extract-library … --extract-patches all --extract-controllers --extract-pitch-bend`
+  (`extractControllers`, passed on to a new process when Kontakt breaks; `runHeadless(…, controllers)`). In a
+  background run with controllers or pitch bend, `extractPatch` plays the patch offline (`setOffline(true)`, back
+  to real time after the patch) and `Pump::fast` renders without waiting for the clock; no window is opened, so
+  each controller's effect is its sound (level, brightness, balance) and Kontakt's parameters, with Quick's reload
+  after each one that did something; which named control it moves ("controllersToControls") needs the window's
+  pictures and stays "?". In real time with the window this would be about 7 minutes a patch (80 hours); offline
+  it's estimated at 1-2 minutes a patch with Kontakt (not timed yet; Kontakt maps all 128 controllers on every
+  channel). Tried here with the test synth: 2 patches in 9 s, pitch bend ±200 cents exactly, CC 1 and the "Tone"
+  parameter found.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
