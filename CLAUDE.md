@@ -289,6 +289,16 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   speed is on velocity). The library's dynamics CC now goes ahead of the notes at its tick (a long starting on
   a new dynamic started at the old one); MS4's CC11 for the built-in sounds keeps MS4's order.
   Test `shortsFollowDynamics` (shorts-dynamics.musicxml).
+  **Check of it with the library** (the owner, 2026-09-28: "verify that dynamics is consistent across all
+  techniques"; not knowable here: which of SSO's articulations are on velocity is Spitfire's, the list above a
+  guess for tenuto and marcato): *Check articulations* › *Dynamics* (`ArticulationCheck::dynamics`): each
+  articulation that switches plays, offline, at pp / mf / ff as MuseScore sends them (CC1 32 / 80 / 112; the
+  velocity: the same for a listed technique, else MS4's plain one, 56 / 65 / …) and with velocity 32 / 127 at
+  CC1 100 and CC1 32 / 127 at velocity 100; loudness = the loudest 50 ms (RMS). summary.txt, per articulation:
+  dB at pp / mf / ff, driven by velocity / controller / both / neither (3 dB and more from 32 to 127), and a
+  flag: on velocity but not listed (add it), on the controller only but listed (not needed), neither, or a
+  pp -> ff span more than 6 dB off the patch's controller articulations' median. results.json `dynamics`.
+  Round robins move a note ±1-2 dB. Test `dynamicsCheck` (test synth: velocity * CC1).
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

@@ -51,6 +51,8 @@
 #include "soundlibraryhost.h"
 #include "audio/midi/event.h"
 #include "libmscore/instrtemplate.h"
+#include "libmscore/instrument.h"
+#include "libmscore/ms4playback.h"
 #include "libmscore/mscore.h"
 #include "thirdparty/qzip/qzipwriter_p.h"
 
@@ -288,6 +290,10 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _quick->setEnabled(false);
       connect(_tryAll, &QCheckBox::toggled, _quick, &QCheckBox::setEnabled);
       layout->addWidget(_quick);
+      // (the owner, 2026-09-28: "verify that dynamics is consistent across all techniques")
+      _dynamics = new QCheckBox(tr("Dynamics: play each articulation at pp, mf and ff as MuseScore sends them, and with velocity "
+                                   "and the dynamics controller alone, to see what sets its loudness (about 15 s more per articulation)"), this);
+      layout->addWidget(_dynamics);
       // scanning: the set-up patches never scanned (else: what needs checking)
       connect(_scan, &QCheckBox::toggled, this, [this](bool on) {
             for (int row = 0; row < _table->rowCount(); ++row) {
@@ -1647,6 +1653,103 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
             out["pictures"] = sheetNote;
       if (!region.isNull())
             out["region"] = QJsonArray({ region.x(), region.y(), region.width(), region.height() });
+
+      // dynamics: what sets each articulation's loudness, and whether pp -> ff spans what the
+      // articulations on the dynamics controller (the longs) span
+      QStringList dynamicsLines;
+      if (_dynamics->isChecked() && offlineSounds && !_cancel) {
+            std::map<int, QStringList> techniquesOf;
+            for (const SoundLib::Articulation& a : ins.articulations)
+                  if (!techniquesOf.count(a.value))
+                        techniquesOf[a.value] = a.techniques;
+            Ms4::Family fam = Ms4::Family(0);
+            for (const QString& id : ins.ids)
+                  if (const InstrumentTemplate* t = searchTemplate(id)) {
+                        Instrument instr = Instrument::fromTemplate(t);
+                        fam = Ms4::family(&instr);
+                        break;
+                        }
+            static const int LEVELS[3] = { 3750, 5250, 6250 };            // pp, mf, ff (MS4)
+            std::vector<int> dynValues, dynPitches;
+            std::vector<std::array<ArticulationCheck::Level, 3>> sent;
+            std::vector<bool> listed;
+            for (const ArticulationCheck::Result& r : report.results) {
+                  if (r.verdict != ArticulationCheck::Verdict::SWITCHES || !names.count(r.value))
+                        continue;
+                  bool onVelocity = false;
+                  for (const QString& t : techniquesOf[r.value])
+                        onVelocity = onVelocity || _library->velocityDynamics.contains(t);
+                  std::array<ArticulationCheck::Level, 3> l;
+                  for (int k = 0; k < 3; ++k) {
+                        const int cc = Ms4::expressionLevel(LEVELS[k]);
+                        const int velocity = onVelocity ? cc
+                           : Ms4::note(fam, { Ms4::ArtRef { Ms4::Art::Standard, false } }, LEVELS[k], true).velocity;
+                        l[size_t(k)] = { velocity, cc };
+                        }
+                  dynValues.push_back(r.value);
+                  dynPitches.push_back(r.pitch >= 0 ? r.pitch : pitch);
+                  sent.push_back(l);
+                  listed.push_back(onVelocity);
+                  }
+            p->setOffline(true);
+            ArticulationCheck::Settings ds = s;
+            const std::vector<ArticulationCheck::DynamicsResult> dr = ArticulationCheck::dynamics(p.get(), dynValues, dynPitches, sent, ds,
+               [&](int done, int total) {
+                  if (events.elapsed() > 50) {
+                        _status->setText(tr("%1: dynamics %2 of %3").arg(ins.name).arg(done).arg(total));
+                        QApplication::processEvents();
+                        events.restart();
+                        }
+                  return !_cancel;
+                  });
+            p->setOffline(false);
+            // which control moves it (3 dB and more from 32 to 127), and the longs' span as reference
+            auto drive = [](const ArticulationCheck::DynamicsResult& d) {
+                  const double v = d.velocityDb[1] - d.velocityDb[0], c = d.ccDb[1] - d.ccDb[0];
+                  return v >= 3 && c >= 3 ? QString("both") : v >= 3 ? QString("velocity") : c >= 3 ? QString("controller") : QString("neither");
+                  };
+            std::vector<double> ccSpans;
+            for (const auto& d : dr)
+                  if (drive(d) == "controller")
+                        ccSpans.push_back(d.sentDb[2] - d.sentDb[0]);
+            std::sort(ccSpans.begin(), ccSpans.end());
+            const double ref = ccSpans.empty() ? -1 : ccSpans[ccSpans.size() / 2];
+            QJsonArray dyn;
+            for (size_t i = 0; i < dr.size(); ++i) {
+                  const auto& d = dr[i];
+                  auto r1 = [](double x) { return std::round(x * 10) / 10; };
+                  const double span = d.sentDb[2] - d.sentDb[0];
+                  const QString how = drive(d);
+                  QJsonObject o;
+                  o["value"] = d.value;
+                  o["names"] = QJsonArray::fromStringList(names[d.value]);
+                  o["techniques"] = QJsonArray::fromStringList(techniquesOf[d.value]);
+                  o["pitch"] = d.pitch;
+                  o["sentDb"] = QJsonArray({ r1(d.sentDb[0]), r1(d.sentDb[1]), r1(d.sentDb[2]) });
+                  o["sent"] = QJsonArray({ QJsonArray({ sent[i][0].velocity, sent[i][0].cc }), QJsonArray({ sent[i][1].velocity, sent[i][1].cc }),
+                                           QJsonArray({ sent[i][2].velocity, sent[i][2].cc }) });
+                  o["velocityDb"] = QJsonArray({ r1(d.velocityDb[0]), r1(d.velocityDb[1]) });
+                  o["controllerDb"] = QJsonArray({ r1(d.ccDb[0]), r1(d.ccDb[1]) });
+                  o["drivenBy"] = how;
+                  o["velocityListed"] = bool(listed[i]);
+                  dyn.append(o);
+                  QString note;
+                  if (how == "velocity" && !listed[i])
+                        note = tr("its loudness is on velocity, which MuseScore barely moves: add its technique to <Dynamics velocity>");
+                  else if (how == "controller" && listed[i])
+                        note = tr("its loudness is on the controller only: its technique needn't be in <Dynamics velocity>");
+                  else if (how == "neither")
+                        note = tr("neither velocity nor the controller changes its loudness");
+                  else if (ref >= 0 && std::fabs(span - ref) > 6)
+                        note = tr("pp to ff spans %1 dB, the longs %2 dB").arg(r1(span)).arg(r1(ref));
+                  dynamicsLines << QString("%1 (%2): %3 dB at pp / mf / ff, on %4%5").arg(names[d.value].join(" / ")).arg(d.value)
+                     .arg(QString("%1 / %2 / %3").arg(r1(d.sentDb[0])).arg(r1(d.sentDb[1])).arg(r1(d.sentDb[2])))
+                     .arg(how).arg(note.isEmpty() ? QString() : " — " + note);
+                  }
+            out["dynamics"] = dyn;
+            if (ref >= 0)
+                  out["dynamicsReferenceSpanDb"] = std::round(ref * 10) / 10;
+            }
       results.append(out);
 
       QString line = tr("%1 switch, %2 ignored, %3 unclear, %4 silent%5")
@@ -1661,6 +1764,11 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       summary += QString("## %1 (pitch %2)\n   %3\n").arg(ins.name).arg(pitch).arg(line);
       for (const QString& pr : problems)
             summary += "   - " + pr + "\n";
+      if (!dynamicsLines.isEmpty()) {
+            summary += "   Dynamics (loudest 50 ms):\n";
+            for (const QString& l : dynamicsLines)
+                  summary += "   - " + l + "\n";
+            }
       if (!sheetNote.isEmpty())
             summary += "   " + sheetNote + "\n";
       summary += "\n";

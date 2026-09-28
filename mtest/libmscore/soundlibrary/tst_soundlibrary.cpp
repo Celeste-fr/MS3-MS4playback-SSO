@@ -53,6 +53,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void dynamicsCheck();
       void shortsFollowDynamics();
       void checkedAsExpected();
       void render();
@@ -1801,6 +1802,40 @@ void TestSoundLibrary::shortsFollowDynamics()
                   }
             delete score;
             }
+      }
+
+//---------------------------------------------------------
+//   dynamicsCheck
+//    ArticulationCheck::dynamics on the test synth, which plays velocity * CC1: the velocity alone
+//    and the controller alone each move it 20 log(127 / 32) = 12 dB (its round robins, ±6 % gain
+//    cycling over the notes: up to 1.5 dB between two), and pp
+//    -> ff as sent climbs
+//---------------------------------------------------------
+
+void TestSoundLibrary::dynamicsCheck()
+      {
+      using AC = ArticulationCheck;
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->setOffline(true));
+      AC::Settings s;
+      s.pitch = 67;
+      const std::array<AC::Level, 3> onCC { { { 56, 32 }, { 65, 80 }, { 70, 112 } } };
+      const std::array<AC::Level, 3> onVelocity { { { 32, 32 }, { 80, 80 }, { 112, 112 } } };
+      int steps = 0;
+      const std::vector<AC::DynamicsResult> r = AC::dynamics(p.get(), { 1, 2 }, { 67, 67 }, { onCC, onVelocity }, s,
+                                                             [&](int, int) { ++steps; return true; });
+      QCOMPARE(steps, 14);
+      QCOMPARE(int(r.size()), 2);
+      const double expected = 20 * std::log10(127.0 / 32.0);
+      for (const AC::DynamicsResult& d : r) {
+            QVERIFY2(std::fabs(d.velocityDb[1] - d.velocityDb[0] - expected) < 2.0, qPrintable(QString::number(d.velocityDb[1] - d.velocityDb[0])));
+            QVERIFY2(std::fabs(d.ccDb[1] - d.ccDb[0] - expected) < 2.0, qPrintable(QString::number(d.ccDb[1] - d.ccDb[0])));
+            QVERIFY(d.sentDb[0] < d.sentDb[1] && d.sentDb[1] < d.sentDb[2]);
+            }
+      // as sent: velocity and CC1 together on the velocity list's scale climb more than CC1 alone
+      QVERIFY(r[1].sentDb[2] - r[1].sentDb[0] > r[0].sentDb[2] - r[0].sentDb[0] + 6);
       }
 
 QTEST_MAIN(TestSoundLibrary)

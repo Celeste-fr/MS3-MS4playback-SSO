@@ -102,6 +102,13 @@ or its samples are missing: compare with make_setups.py's (which Kontakt loaded)
 list first. Kits: at the library's defaults now (the owner: what they have off comes from the one-drum
 patches, whose keys at their defaults aren't known yet: a key scan of those, or the owner's screenshots).
 
+## Dynamics across techniques (2026-09-28)
+
+Shorts on velocity now follow the dynamics (see `CLAUDE.md` › Shorts). Next: the owner runs *Check articulations*
+with *Dynamics* ticked on the patches they use (one per family at least: strings, woodwinds, brass, a
+Performance patch) and hands back the zip; from summary.txt, fix `<Dynamics velocity>` in `gen_spitfire_sso.py`
+(techniques flagged "on velocity but not listed" / "not needed") and look at the flagged spans.
+
 ## Merging with claude/intelligent-cray-6pd4o1 (prepared 2026-09-28, not done)
 
 The owner decides what goes to main; this is the plan. Both branches start at main 16e6933. That
