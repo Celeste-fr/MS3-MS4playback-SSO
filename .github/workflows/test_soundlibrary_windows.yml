@@ -86,6 +86,7 @@ jobs:
         ECHO MSBuild: %MSBUILD%
         "%MSBUILD%" msvc.build_x64\mtest\libmscore\soundlibrary\tst_soundlibrary.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
         "%MSBUILD%" msvc.build_x64\mtest\libmscore\tuning\tst_tuning.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
+        IF EXIST msvc.build_x64\mtest\libmscore\playability\tst_playability.vcxproj "%MSBUILD%" msvc.build_x64\mtest\libmscore\playability\tst_playability.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
     - name: Run the sound library tests
       shell: cmd
       run: |
@@ -117,6 +118,24 @@ jobs:
         TYPE "%CD%\tst_tuning.txt"
         FINDSTR /C:"Totals:" "%CD%\tst_tuning.txt" >NUL || exit /b 1
         IF NOT "%RC%"=="0" exit /b 1
+    # (the playability checker's tests: parity with the plugin; like the tuning tests, a failure fails
+    # the job at the end)
+    - name: Run the playability tests
+      id: playability
+      continue-on-error: true
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%CD%\dependencies\libs\Win64;%PATH%"
+        SET QT_QPA_PLATFORM=offscreen
+        IF NOT EXIST msvc.build_x64\mtest\libmscore\playability exit /b 0
+        cd msvc.build_x64\mtest\libmscore\playability
+        FOR /R %%F IN (tst_playability.exe) DO IF EXIST "%%F" SET TST=%%F
+        IF NOT DEFINED TST (DIR /S /B & exit /b 1)
+        "%TST%" -o "%CD%\tst_playability.txt,txt"
+        SET RC=%ERRORLEVEL%
+        TYPE "%CD%\tst_playability.txt"
+        FINDSTR /C:"Totals:" "%CD%\tst_playability.txt" >NUL || exit /b 1
+        IF NOT "%RC%"=="0" exit /b 1
     - name: Keep this build for the next run
       if: ${{ success() }}
       continue-on-error: true
@@ -147,7 +166,7 @@ jobs:
       with:
         name: MuseScore-soundlibrary-win64-${{ env.SHORT_SHA }}
         path: msvc.install_x64\
-    - name: Fail if the tuning tests failed
-      if: ${{ steps.tuning.outcome == 'failure' }}
+    - name: Fail if the tuning or playability tests failed
+      if: ${{ steps.tuning.outcome == 'failure' || steps.playability.outcome == 'failure' }}
       shell: cmd
       run: exit /b 1

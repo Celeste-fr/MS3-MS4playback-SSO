@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <QRegularExpression>
 #include <QSet>

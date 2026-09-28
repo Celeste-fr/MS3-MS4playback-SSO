@@ -69,9 +69,20 @@ headless test scores and their checked results are the parity tests.
   the score (the plugin needed a copy of the file). Tests `roles` and `bowing` (bow, jete, fast,
   tremolo: the rows of the plugin's Python models, which the plugin matched): 12 pass. With bowing
   a pass takes 22 ms on big-strings and 39 ms on big-slurs (16 staves, 300 bars).
+- **Phases 3 and 4 done (2026-09-28):** the panel, *View › Playability Panel*
+  (`mscore/playabilitypanel.{h,cpp}`): the table (mark, Bar, Staff, Reason; by bar, then staff; row
+  → selection and scroll, selection → row), the Selected line, the fingerboard of a playable stop
+  or a natural harmonic, and the W1 wind register graph with its chips. The drawings are display
+  lists (`libmscore/playabilitydiagram.{h,cpp}`), equal item for item to the plugin's
+  (`fingerboardLayouts`, `windLayouts`); the wind data is `libmscore/playabilitywinds.h`, generated
+  by `tools/playability/gen_winds.py` from the plugin's `winds.js` (its sourcebook). The panel
+  refreshes after every command, so the plugin's Re-check, live mode and copy reader have no
+  counterpart. `tst_playability`: 16 pass, 1 skipped (speed).
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1
   has a note), and a chord with more notes than strings names the strings its notes can have (the
   plugin showed every note "(—)"), and names in bowing rows are spelled as written (the plugin
-  used its C#/Eb/F#/Ab/Bb default there).
+  used its C#/Eb/F#/Ab/Bb default there); the fingerboard's open-string rings and reach band use the
+  open-string colour (the plugin's teal before); wind notes under an 8va are drawn at their
+  sounding pitch.

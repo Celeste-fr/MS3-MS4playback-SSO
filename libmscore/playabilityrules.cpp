@@ -10,6 +10,7 @@
 
 #include "playabilityrules.h"
 
+#include <algorithm>
 #include <cmath>
 #include <QRegularExpression>
 #include <QStringList>

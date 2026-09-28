@@ -26,6 +26,7 @@
 #include <cmath>
 #include <map>
 #include <set>
+#include <tuple>
 #include <QRegularExpression>
 
 namespace Ms {
