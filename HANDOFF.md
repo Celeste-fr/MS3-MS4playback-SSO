@@ -33,7 +33,7 @@ hairpin (Ethanol bar 14). Still open:
 - the kits' hit lists: done (2026-09-26, the owner's screenshots); the 42 one-drum patches: scanned in the
   background (2026-09-28 01:46, which keys sound: `sso_drum_keys_sounding.json`); they don't follow the `.nki` group
   order, so keys are named from the owner's hit-list screenshots. Snare 1 / 2 and Triangle 1 / 2 are in the map (the
-  sounds the kit patches lack at their defaults); the other 38 and the 6 ensembles: `Take SSO percussion pictures in background.bat` (--window-pictures) takes each window with each drum icon clicked, then read the hit lists onto a review page; Harp glissandi's modes on https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD await the owner; the three-mic patches' mics: done (Close, Tree, Ambient);
+  sounds the kit patches lack at their defaults); the other 38 and the 6 ensembles: `Take SSO percussion pictures in background.bat` (--window-pictures) takes each window with each drum icon clicked, then read the hit lists onto a review page; Harp glissandi's modes: in the map (reviewed); the three-mic patches' mics: done (Close, Tree, Ambient);
 - the owner: re-check the tuned percussion (Timpani, Celeste, Marimba, Vibraphone, Tubular
   Bells) with the fixed key scan.
 

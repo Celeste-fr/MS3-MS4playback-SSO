@@ -234,10 +234,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.switchNumber = defNumber;
                   if (li.name.isEmpty() || li.nki.isEmpty() || !(li.scan.isEmpty() || li.scan == "values" || li.scan == "keys"))
                         return fail(QString("%1:%2: bad Patch").arg(path).arg(r.lineNumber()));
-                  // its articulations, when known (from a scan): listed for reference, never chosen
+                  // its articulations, when known (from a scan): listed for reference, never chosen; its own
+                  // switch (a keyswitch patch: Harp glissandi)
                   while (r.readNextStartElement()) {
                         if (r.name() == "Articulation" && !readArticulation(r.attributes(), li))
                               return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
+                        if (r.name() == "Switch" && !readSwitch(r.attributes(), li.switchType, li.switchNumber))
+                              return fail(QString("%1:%2: bad Switch").arg(path).arg(r.lineNumber()));
                         r.skipCurrentElement();
                         }
                   lib->otherPatches.push_back(li);

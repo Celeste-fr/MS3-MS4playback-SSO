@@ -785,6 +785,15 @@ SCANNED = {
     'Ensembles - Core techniques': [(1, 'Long'), (7, 'Long CS'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (42, 'Spiccato'), (47, 'Spiccato CS'), (48, 'Short Brushed'), (50, "Short 0'5"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harm'), (62, 'Short Brushed CS')],
     'Ensembles - Decorative techniques': [(5, 'Long CS Blend'), (11, 'Tremolo'), (12, 'Trem CS'), (13, 'Trem Sul Pont'), (18, 'Long Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (112, 'Long Sul String'), (114, 'Long Super Sul Tasto')],
 }
+# Keyswitch patches with their keys known (key, name): Harp glissandi's scales, from the pictures of the
+# owner's key scan of 2026-09-27 20:15 (each key's picture shows its scale's button lit; reviewed on
+# https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD, the owner: "OCR correct", 2026-09-28). Whole is selected
+# at load (its label "KEYSWITCH C0"): key 0 from the order, the scan couldn't see it switch. Its other groups
+# (gliss up / down, fast, swirls) are played by the keys, not switched
+SCANNED_KEYS = {
+    'Other - Harp glissandi': [(0, 'Whole'), (1, 'Minor H.'), (2, 'Minor M.'), (3, 'Major'), (4, 'Pentatonic'),
+                               (5, 'Diminished')],
+}
 # selected and shown, but they play nothing: as in the All techniques patches (SILENT above)
 SCANNED_SILENT = {('Violins 1 - Core techniques', 112), ('Violins 2 - Core techniques', 112),
                   ('Celli - Core techniques', 112)}
@@ -813,10 +822,19 @@ for nki in NKI_FILES:
             silent = ' expect="silent"' if (name, value) in SCANNED_SILENT else ''
             out.append(f'    <Articulation name={q(a)} value="{value}"{silent}/>')
         out.append('  </Patch>')
+    elif name in SCANNED_KEYS:
+        known = SCANNED_KEYS[name]
+        assert all(a in arts for _, a in known), name
+        scannedUsed.add(name)
+        out.append(head + scan + pitch + '>')
+        out.append('    <Switch type="keyswitch"/>')
+        for key, a in known:
+            out.append(f'    <Articulation name={q(a)} value="{key}"/>')
+        out.append('  </Patch>')
     else:
         out.append(head + scan + pitch + '/>')
 out.append('</SoundLibrary>')
-assert scannedUsed == set(SCANNED), set(SCANNED) - scannedUsed
+assert scannedUsed == set(SCANNED) | set(SCANNED_KEYS), set(SCANNED) | set(SCANNED_KEYS) - scannedUsed
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed
 assert not measuredMissing, measuredMissing         # (every map patch was in the extract)

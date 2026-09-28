@@ -2557,7 +2557,15 @@
   <Patch name="Ensembles - Metal Clangs" nki="Instruments/Symphonic Percussion/Ensembles - Metal Clangs.nki" scan="keys" pitch="2"/>
   <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki" scan="keys" pitch="7"/>
   <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki" scan="keys" pitch="3"/>
-  <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki" scan="keys" pitch="67"/>
+  <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki" scan="keys" pitch="67">
+    <Switch type="keyswitch"/>
+    <Articulation name="Whole" value="0"/>
+    <Articulation name="Minor H." value="1"/>
+    <Articulation name="Minor M." value="2"/>
+    <Articulation name="Major" value="3"/>
+    <Articulation name="Pentatonic" value="4"/>
+    <Articulation name="Diminished" value="5"/>
+  </Patch>
   <Patch name="Basses - Core techniques" nki="Instruments/Symphonic Strings/Basses - Core techniques.nki" setup="$iooxo=3" pitch="39">
     <Articulation name="Long" value="1"/>
     <Articulation name="Long Flautando" value="8"/>

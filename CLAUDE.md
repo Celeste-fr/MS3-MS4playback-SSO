@@ -1081,8 +1081,9 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     summary.txt, zip. Tried here only with the test synth (no editor: "the plug-in has no window"); the window,
     the off-screen grab and the clicks are untried with Kontakt. Test `drumIcons`.
     Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
-    not in the map until the owner confirms): 1 Minor H., 2 Minor M., 3 Major, 4 Pentatonic, 5 Diminished; Whole
-    (selected at load, label "KEYSWITCH C0") most likely 0; 102-103 no change (a ring).
+    the owner: "OCR correct"): 0 Whole (selected at load, label "KEYSWITCH C0"; from the order), 1 Minor H., 2 Minor
+    M., 3 Major, 4 Pentatonic, 5 Diminished; 102-103 no change (a ring). In the map (`SCANNED_KEYS`; a `<Patch>` now
+    takes a `<Switch>` child).
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

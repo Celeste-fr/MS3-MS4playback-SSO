@@ -243,6 +243,14 @@ void TestSoundLibrary::spitfireMap()
                   }
             if (p.name == "Violins 2 - Decorative techniques")
                   QCOMPARE(int(p.articulations.size()), 12);
+            // a keyswitch patch: Harp glissandi's scales on keys 0-5 (the owner's reviewed pictures)
+            if (p.name == "Other - Harp glissandi") {
+                  QVERIFY(p.switchType == SoundLib::SwitchType::KEYSWITCH);
+                  QCOMPARE(int(p.articulations.size()), 6);
+                  QCOMPARE(p.articulations[3].name, QString("Major"));
+                  QCOMPARE(p.articulations[3].value, 3);
+                  QVERIFY(p.keyScan);
+                  }
             }
       QCOMPARE(scanned, 4);
 
