@@ -1398,6 +1398,12 @@ void SoundLibraryDialog::rebuild()
                   text += " " + tr("Memory: %1 MB for this score's loaded patches, %2 MB for MuseScore in all.")
                      .arg(total > 0 ? QString::number(total >> 20) : QString("–"))
                      .arg(now > 0 ? QString::number(now >> 20) : QString("–"));
+            QFile buildFile(QCoreApplication::applicationDirPath() + "/BUILD.txt");
+            if (buildFile.open(QIODevice::ReadOnly)) {
+                  const QStringList build = QString::fromUtf8(buildFile.readLine()).trimmed().split(' ');
+                  if (build.size() >= 3)
+                        text += " " + tr("This build: %1 (%2 %3).").arg(build[0], build[1], build[2]);
+                  }
             _info->setText(text);
             _table->setColumnCount(6);
             _table->setHorizontalHeaderLabels({ tr("Part"), tr("Patch"), tr("Controllers"), tr("Setup"), QString(), tr("Memory") });

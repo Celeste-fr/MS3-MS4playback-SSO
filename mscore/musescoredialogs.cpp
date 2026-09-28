@@ -155,7 +155,15 @@ AboutBoxDialog::AboutBoxDialog()
             versionLabel->setText(tr("Version: %1").arg(msVersion) + tr(" Evolution"));
       }
 
-      if (!revision.isEmpty())
+      // this fork's builds: the commit and run they came from (BUILD.txt, written by the Windows build;
+      // the configured revision and build number go stale in a cached build)
+      QFile buildFile(QCoreApplication::applicationDirPath() + "/BUILD.txt");
+      const QStringList build = buildFile.open(QIODevice::ReadOnly) ? QString::fromUtf8(buildFile.readLine()).trimmed().split(' ') : QStringList();
+      if (build.size() >= 5) {
+            versionLabel->setText(tr("Version: %1").arg(VERSION) + tr(" Evolution") + QString(" — build %1 (%2 %3)").arg(build[0], build[1], build[2]));
+            revisionLabel->setText(tr("Revision: %1").arg(QString("<a href=\"%1\">%2</a>").arg(build.last(), build[0])));
+            }
+      else if (!revision.isEmpty())
             revisionLabel->setText(tr("Revision: %1").arg(QString("<a href=\"https://github.com/Jojo-Schmitz/musescore/commit/%1\">%1</a>").arg(revision)));
       else {
             revisionLabel->setText("");
