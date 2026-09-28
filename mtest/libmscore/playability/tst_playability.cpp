@@ -12,6 +12,8 @@
 //                       result in MuseScore 3.6.2 (run-check.qml: rows and note colours)
 //   harm-tests.mscx     natural and artificial harmonics (harm-check.qml's rows, 3.6.2)
 //   micro-tests.mscx    microtones in stops (micro-check.py's expectations, the plugin on the fork)
+//   bow- jete- fast- tremolo-tests.mscx   bowing (S10–S13) with the rows of the plugin's Python
+//                       models (gen_*_tests.py, <name>-expected.json), which the plugin matched
 
 #include <QtTest/QtTest>
 #include <QJsonArray>
@@ -44,6 +46,9 @@ class TestPlayability : public QObject, public MTest
       void harmonics();
       void microtones();
       void marksFollowSwitches();
+      void roles();
+      void bowing_data();
+      void bowing();
       void speed();
       };
 
@@ -286,6 +291,78 @@ void TestPlayability::speed()
       for (int i = 0; i < runs; ++i)
             rowCount = int(Playability::analyse(score).rows.size());
       qInfo("analyse: %.1f ms per pass, %d rows", double(t.elapsed()) / runs, rowCount);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   roles: section or single player (the plugin's gen_role_tests.py cases)
+//---------------------------------------------------------
+
+void TestPlayability::roles()
+      {
+      struct Case { const char* name; const char* id; int program; const char* instrument; bool section; };
+      const Case cases[] = {
+            { "Violin", "strings.violin", 40, "Violin", false },
+            { "Violins", "strings.group", 48, "Violin", true },
+            { "Violin I", "strings.violin", 40, "Violin", false },
+            { "Violins I", "strings.violin", 40, "Violin", true },          // plural name
+            { "Violin II", "strings.violin", 48, "Violin", true },          // section sound
+            { "Viola", "strings.viola", 41, "Viola", false },
+            { "Violas", "strings.viola", 41, "Viola", true },
+            { "Violoncello", "strings.cello", 42, "Cello", false },
+            { "Violoncellos", "strings.group", 48, "Cello", true },
+            { "Cellos", "strings.cello", 42, "Cello", true },
+            { "Contrabass", "strings.contrabass", 43, "Double bass", false },
+            { "Double Bass", "strings.contrabass", 43, "Double bass", false },
+            { "Double Basses", "strings.contrabass", 43, "Double bass", true },
+            { "Contrabasses", "strings.group", 48, "Double bass", true },
+            { "Solo Violin", "strings.violin", 49, "Violin", true },        // String Ensemble 2 sound wins
+            };
+      for (const Case& c : cases) {
+            Playability::StringInstrument in = Playability::lookup(c.id, c.name, c.program);
+            QVERIFY2(in.name == c.instrument, c.name);
+            QVERIFY2(in.section == c.section, c.name);
+            }
+      }
+
+//---------------------------------------------------------
+//   bowing: slur timing, jeté and slurred staccato, fast bass runs, fingered tremolo
+//---------------------------------------------------------
+
+void TestPlayability::bowing_data()
+      {
+      // the plugin's checkers compared the rows of these kinds only
+      QTest::addColumn<QString>("name");
+      QTest::addColumn<QStringList>("kinds");
+      QTest::newRow("bow") << QString("bow") << QStringList({ "slur", "group", "jete" });
+      QTest::newRow("jete") << QString("jete") << QStringList({ "jete", "group", "slur" });
+      QTest::newRow("fast") << QString("fast") << QStringList({ "fast" });
+      QTest::newRow("tremolo") << QString("tremolo") << QStringList({ "tremolo" });
+      }
+
+void TestPlayability::bowing()
+      {
+      QFETCH(QString, name);
+      QFETCH(QStringList, kinds);
+      MasterScore* score = readScore(DIR + name + "-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QFile f(root + "/" + DIR + name + "-expected.json");
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QJsonArray expected = QJsonDocument::fromJson(f.readAll()).object()["rows"].toArray();
+      bool withNotes = !expected.isEmpty() && expected[0].toObject().contains("notes");
+      QStringList want, got;
+      for (const QJsonValue& v : expected) {
+            QJsonObject o = v.toObject();
+            want << rowText(o["bar"].toInt(), o["staff"].toString(), o["verdict"].toString(), o["reason"].toString(),
+                            withNotes ? o["notes"].toString() : QString());
+            }
+      for (const PlayabilityRow& row : r.rows)
+            if (kinds.contains(row.kind))
+                  got << rowText(row.bar, row.staff, row.verdict, row.reason, withNotes ? row.notes : QString());
+      want.sort();
+      got.sort();
+      compare(got, want);
       delete score;
       }
 

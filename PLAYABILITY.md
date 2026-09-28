@@ -61,8 +61,17 @@ headless test scores and their checked results are the parity tests.
   mark on `test-strings.mscx`, its harmonic rows (`harm-tests.mscx`, 3.6.2), microtones
   (`micro-tests.mscx`). A pass on the plugin's 16-staff, 300-bar big-strings score: 21 ms
   (`PLAYABILITY_BIG=<score> ./tst_playability speed`).
+- **Phase 2 done (2026-09-28):** bowing in the same pass (`Pass::checkSlurs`, `checkTremolos`,
+  `checkFastRuns`): every slur a bow stroke timed against the bow limit for its dynamics and
+  hairpins at the score's tempo marks (S11), jeté and slurred staccato note limits for sections
+  (S10), fast double bass section runs (S12), fingered tremolos (S13), none under pizz.; a later
+  check never takes a note's red away. Slurs, hairpins, staccato dots and tremolos are read from
+  the score (the plugin needed a copy of the file). Tests `roles` and `bowing` (bow, jete, fast,
+  tremolo: the rows of the plugin's Python models, which the plugin matched): 12 pass. With bowing
+  a pass takes 22 ms on big-strings and 39 ms on big-slurs (16 staves, 300 bars).
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1
   has a note), and a chord with more notes than strings names the strings its notes can have (the
-  plugin showed every note "(—)").
+  plugin showed every note "(—)"), and names in bowing rows are spelled as written (the plugin
+  used its C#/Eb/F#/Ab/Bb default there).

@@ -1,0 +1,111 @@
+{
+ "rows": [
+  {
+   "staff": "Violins",
+   "bar": 3,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 6,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 7,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "D4 D4 D4 D4 D4 D4 D4"
+  },
+  {
+   "staff": "Violins",
+   "bar": 8,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 10,
+   "verdict": "outOfReach",
+   "reason": "slurred staccato: 7 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 11,
+   "verdict": "outOfReach",
+   "reason": "slurred staccato: 7 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 12,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 13,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "A3 A4 B4 C5 D5 E5 F5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 16,
+   "verdict": "outOfReach",
+   "reason": "slurred staccato: 8 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5 A4"
+  },
+  {
+   "staff": "Violins",
+   "bar": 17,
+   "verdict": "outOfReach",
+   "reason": "slurred staccato at f: 4 notes on one bow (section max 3)",
+   "notes": "A4 B4 C5 D5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 19,
+   "verdict": "outOfReach",
+   "reason": "slurred staccato at f: 4 notes on one bow (section max 3)",
+   "notes": "A4 B4 C5 D5"
+  },
+  {
+   "staff": "Violins",
+   "bar": 21,
+   "verdict": "outOfReach",
+   "reason": "slurred staccato: 7 notes on one bow (section max 6)",
+   "notes": "A4 B4 C5 D5 E5 F5 G5"
+  },
+  {
+   "staff": "Violas",
+   "bar": 2,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "C4 D4 E4 F4 G4 A4 B4"
+  },
+  {
+   "staff": "Violoncellos",
+   "bar": 2,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "C3 D3 E3 F3 G3 A3 B3"
+  },
+  {
+   "staff": "Contrabasses",
+   "bar": 2,
+   "verdict": "outOfReach",
+   "reason": "jeté: 7 notes on one bow (section max 6)",
+   "notes": "E2 F2 G2 A2 B2 C3 D3"
+  }
+ ],
+ "strokes": 14,
+ "groups": 9
+}

@@ -1,0 +1,95 @@
+{
+ "rows": [
+  {
+   "staff": "Violin",
+   "bar": 4,
+   "verdict": "outOfReach",
+   "reason": "slur 7 s at p (max 6 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 6,
+   "verdict": "impossible",
+   "reason": "slur 13 s at p (longest one bow can last 12 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 10,
+   "verdict": "outOfReach",
+   "reason": "slur 3 s at f (max 2.5 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 11,
+   "verdict": "impossible",
+   "reason": "slur 5 s at f (longest one bow can last 4.5 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 13,
+   "verdict": "outOfReach",
+   "reason": "slur 2 s at ff (max 1.5 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 17,
+   "verdict": "outOfReach",
+   "reason": "slur 7 s at p (max 6 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 24,
+   "verdict": "impossible",
+   "reason": "slur 8 s at mf (longest one bow can last 6 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 26,
+   "verdict": "outOfReach",
+   "reason": "slur 4 s, p\u2013f (needs 113% of a comfortable bow)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 27,
+   "verdict": "outOfReach",
+   "reason": "slur 4 s, p\u2013f (needs 104% of a comfortable bow)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 29,
+   "verdict": "outOfReach",
+   "reason": "slur 4 s, p\u2013f (needs 104% of a comfortable bow)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 33,
+   "verdict": "outOfReach",
+   "reason": "slur 8 s at p (max 6 s)"
+  },
+  {
+   "staff": "Violin",
+   "bar": 35,
+   "verdict": "outOfReach",
+   "reason": "slur 8 s at p (max 6 s)"
+  },
+  {
+   "staff": "Viola",
+   "bar": 1,
+   "verdict": "outOfReach",
+   "reason": "slur 4 s at mf (max 3 s)"
+  },
+  {
+   "staff": "Violoncello",
+   "bar": 1,
+   "verdict": "outOfReach",
+   "reason": "slur 4 s at p (max 3.6 s)"
+  },
+  {
+   "staff": "Contrabass",
+   "bar": 1,
+   "verdict": "impossible",
+   "reason": "slur 8 s at p (longest one bow can last 7.2 s)"
+  }
+ ],
+ "timed": 23
+}

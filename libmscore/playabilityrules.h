@@ -145,6 +145,73 @@ struct HarmonicResult {
 HarmonicResult classifyHarmonic(const StringInstrument& in, const std::vector<HarmonicNote>& list, const Spelling& sp);
 
 //---------------------------------------------------------
+//   Bowing (S10–S13)
+//---------------------------------------------------------
+
+// S11: the longest slur, in seconds, on one bow, per dynamic tier (violin; viola as violin, cello
+// and bass × 0.6). Sevsay p. 10's scale 12 / 6 / 3 / 1 / 0.5 s for pp … ff; warn / red values set
+// inside the range the other sources give: pp 12 / 15 (Widor p. 163, Forsyth p. 343 ≈ 10–13 s;
+// Askenfelt 1986 p. 1011, Flesch p. 64 ≈ 15 s), p 6 / 12 (Wagner p. 30), mf 3 / 6 (Russo), f 2.5 /
+// 4.5 (Forsyth p. 390, Schoonderwaldt 2009 p. 2715, Wagner p. 30), ff 1.5 / 3 (Sevsay, Russo).
+// Cello and bass × 0.6 derived from Forsyth p. 445 (bass bow changed every 3–4 s at p). Without any
+// dynamic a passage counts as mf (velocity 80).
+struct BowLimit {
+      bool valid { false };
+      double warn { 0 };
+      double red { 0 };
+      };
+BowLimit bowLimit(const StringInstrument& in, const QString& tier);
+constexpr int DEFAULT_VELOCITY = 80;
+
+// Dynamics as MuseScore's velocities (verified on 3.6.2): pp 33, p 49, mf 80, f 96, ff 112 …; a
+// dynamic that changes after its attack settles at velocity + change (fp 49, sfp 65). Accents (sf,
+// sfz, fz, rf, the lone letters) are not a level: -1, as is a text that is no dynamic.
+// elVelocity / elChange: a Dynamic's own values, or -1 / 0 for other texts.
+int dynamicVelocity(const QString& text, int elVelocity, int elChange);
+// f or louder: settled velocity 89 and up (Wagner p. 35: mf counts with the softer dynamics)
+bool isLoud(double velocity);
+// S11 tiers, split halfway between MuseScore's default velocities; mp goes with p
+QString dynamicTier(double velocity);
+int tierOrder(const QString& tier);
+
+// S10 slurred staccato, SECTIONS only (Wagner p. 35: four to six notes soft, three at f-ff;
+// Forsyth p. 344, Sevsay p. 13); soloists: no count limit.
+constexpr int GROUP_STACCATO_SOFT = 6;
+constexpr int GROUP_STACCATO_LOUD = 3;
+// S10 jeté, SECTIONS only: more than 6 notes on one stroke is a warning on every bowed string
+// (Sevsay p. 18, Wagner p. 40; the owner's choice, 2026-09-14). A single player's jeté is timed.
+constexpr int JETE_MAX = 6;
+// S12 fast passages, double bass SECTIONS only: notes under 0.1 s each, a run over 1.5 s (placed
+// between the composers' marked examples: Adler p. 84, Prout p. 27, Jadassohn p. 318 / 175,
+// Forsyth p. 454, Kennan p. 26; no source states them)
+constexpr double FAST_NOTE_SECONDS = 0.1;
+constexpr double FAST_RUN_SECONDS = 1.5;
+
+// S13 fingered tremolo ("between notes"): fine on one string within span0 at that position or with
+// an open string; out of reach when both notes are stopped on two adjacent strings (Forsyth
+// p. 355-357: "somewhat shabby and ineffective"); impossible when no fingering reaches.
+struct TremoloResult {
+      Verdict verdict { Verdict::IMPOSSIBLE };
+      bool fine { false };
+      int lower { -1 };             // string indices
+      int upper { -1 };
+      int interval { 0 };
+      };
+TremoloResult fingeredTremolo(const StringInstrument& in, int a, int b);
+QString intervalName(int semitones);
+// "3.8 s": one decimal, as the plugin's fmtSeconds
+QString fmtSeconds(double x);
+
+//---------------------------------------------------------
+//   Text states: 1 on, 0 off, -1 no keyword
+//   div. (Adler p. 12); jeté on (jeté, gettato, ricochet), off by Adler's cancel words (p. 33) or
+//   another stroke; pizz. / arco
+//---------------------------------------------------------
+
+int jeteState(const QString& text);
+int pizzState(const QString& text);
+
+//---------------------------------------------------------
 //   div. state (Adler p. 12): 1 div. on, 0 off (unis.), -1 no keyword
 //---------------------------------------------------------
 

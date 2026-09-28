@@ -13,6 +13,8 @@
 
 #include "articulation.h"
 #include "chord.h"
+#include "dynamic.h"
+#include "hairpin.h"
 #include "instrument.h"
 #include "measure.h"
 #include "note.h"
@@ -22,12 +24,18 @@
 #include "staff.h"
 #include "sym.h"
 #include "symbol.h"
+#include "slur.h"
+#include "tempotext.h"
 #include "textbase.h"
+#include "tremolo.h"
 #include "tuning.h"
 
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <QRegularExpression>
+#include <QSet>
+#include <QStringList>
 
 namespace Ms {
 namespace Playability {
@@ -40,19 +48,77 @@ QColor openStringColor = QColor(0x7d, 0x87, 0x91);
 //   Pass: one analysis of a score
 //---------------------------------------------------------
 
+// A state that texts switch, as the plugin's [{tick, on}] lists: the value in force at a tick.
+struct StateList {
+      std::vector<std::pair<int, int>> changes;     // tick, value
+      int index(double tick) const {                // the last change at or before tick, or -1
+            auto i = std::upper_bound(changes.begin(), changes.end(), tick,
+                                      [](double t, const std::pair<int, int>& c) { return t < c.first; });
+            return int(i - changes.begin()) - 1;
+            }
+      int valueAt(double tick, int dflt) const {
+            int i = index(tick);
+            return i < 0 ? dflt : changes[i].second;
+            }
+      bool on(int tick) const { return valueAt(tick, 0) != 0; }
+      };
+
+struct StaffTexts {
+      StateList div, jete, pizz, dyn;
+      };
+
+struct Walked {                                     // a voice's chords, in order
+      std::vector<int> ticks;
+      std::vector<Chord*> chords;
+      };
+
+struct HairpinSpan {
+      int from, to;
+      bool cresc;
+      int change;
+      };
+
+struct BowUse {
+      bool valid { false };
+      double secs { 0 };
+      double warn { 0 };
+      double red { 0 };
+      QStringList tiers;            // soft to loud
+      };
+
 class Pass {
       Score* _score;
       ScoreTuning _tuning;
       PlayabilityResult& _res;
       std::vector<Fraction> _barStarts;
       std::map<const Instrument*, StringInstrument> _instruments;
+      std::vector<std::pair<int, double>> _tempo;   // tick, quarter notes per second
+      std::map<int, std::vector<std::pair<int, int>>> _slurs;     // track -> [from, to]
+      std::map<int, std::vector<HairpinSpan>> _hairpins;          // staff -> hairpins
 
       int barOf(const Fraction& tick) const;
+      int barOf(int tick) const { return barOf(Fraction::fromTicks(tick)); }
       const StringInstrument& instrumentAt(Part* part, const Fraction& tick);
-      std::vector<std::pair<Fraction, bool>> divChanges(int staffIdx) const;
+      StaffTexts staffTexts(int staffIdx) const;
       double microCents(const Note* note);
       void handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths);
       void mark(const Note* n, PlayMark m) { _res.marks[n] = m; }
+      // a later check never takes a note's red away
+      void markOver(const Note* n, PlayMark m) {
+            if (_res.marks.value(n, PlayMark::NONE) != PlayMark::IMPOSSIBLE)
+                  _res.marks[n] = m;
+            }
+      void collectSpanners();
+      void collectTempo();
+      double secondsBetween(double t0, double t1) const;
+      QString topName(const Chord* c) const;
+      BowUse bowUse(const StringInstrument& in, const StateList& dyn, const std::vector<HairpinSpan>& allHairpins,
+                    int t0, int t1, const std::vector<int>& cuts) const;
+      void checkSlurs(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked);
+      void checkTremolos(int st, Part* part, const QString& staffName, const Walked* walked);
+      void checkFastRuns(int st, Part* part, const QString& staffName, const StaffTexts& tx);
+      void addRow(int tick, int tickEnd, int track, const QString& staff, const QString& kind, const QString& verdict,
+                  const QString& reason, const QString& notes);
 
    public:
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
@@ -94,19 +160,216 @@ const StringInstrument& Pass::instrumentAt(Part* part, const Fraction& tick)
       return _instruments[in] = lookup(id, name, arcoProgram(in));
       }
 
-// div./unis. texts on the staff, in order
-std::vector<std::pair<Fraction, bool>> Pass::divChanges(int staffIdx) const
+// the staff's texts that switch div., jeté, pizz. and the dynamic level, in one walk
+StaffTexts Pass::staffTexts(int staffIdx) const
       {
-      std::vector<std::pair<Fraction, bool>> changes;
+      StaffTexts tx;
       for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
             for (Element* e : s->annotations()) {
                   if (e->staffIdx() != staffIdx || !e->isTextBase())
                         continue;
-                  int st = divState(plainText(toTextBase(e)->xmlText()));
-                  if (st >= 0)
-                        changes.push_back({ s->tick(), st == 1 });
+                  QString text = plainText(toTextBase(e)->xmlText());
+                  if (text.isEmpty())
+                        continue;
+                  int tick = s->tick().ticks();
+                  int v;
+                  if ((v = divState(text)) >= 0)
+                        tx.div.changes.push_back({ tick, v });
+                  if ((v = jeteState(text)) >= 0)
+                        tx.jete.changes.push_back({ tick, v });
+                  if ((v = pizzState(text)) >= 0)
+                        tx.pizz.changes.push_back({ tick, v });
+                  int vel = -1, change = 0;
+                  if (e->isDynamic()) {
+                        vel = e->getProperty(Pid::VELOCITY).toInt();
+                        change = e->getProperty(Pid::VELO_CHANGE).toInt();
+                        }
+                  if ((v = dynamicVelocity(text, vel, change)) >= 0)
+                        tx.dyn.changes.push_back({ tick, v });
                   }
-      return changes;
+      return tx;
+      }
+
+// Slurs per track and hairpins per staff, from the score's spanners.
+void Pass::collectSpanners()
+      {
+      for (const auto& sp : _score->spanner()) {
+            Spanner* s = sp.second;
+            if (s->isSlur())
+                  _slurs[s->track()].push_back({ s->tick().ticks(), s->tick2().ticks() });
+            else if (s->isHairpin()) {
+                  Hairpin* h = toHairpin(s);
+                  int type = int(h->hairpinType());
+                  if (type < 0 || type > 3 || s->ticks().ticks() <= 0)
+                        continue;
+                  _hairpins[s->staffIdx()].push_back({ s->tick().ticks(), s->tick2().ticks(), type == 0 || type == 2, h->veloChange() });
+                  }
+            }
+      for (auto& t : _slurs)
+            std::stable_sort(t.second.begin(), t.second.end());
+      }
+
+// Tempo marks as the plugin reads them: every tempo text's quarter notes per second, the first
+// at a tick; ♩ = 120 before any.
+void Pass::collectTempo()
+      {
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (Element* e : s->annotations())
+                  if (e->isTempoText() && toTempoText(e)->tempo() > 0
+                     && (_tempo.empty() || _tempo.back().first != s->tick().ticks()))
+                        _tempo.push_back({ s->tick().ticks(), toTempoText(e)->tempo() });
+      }
+
+// seconds from tick t0 to t1 (480 ticks to a quarter note)
+double Pass::secondsBetween(double t0, double t1) const
+      {
+      double secs = 0, t = t0, qps = 2;
+      for (const auto& m : _tempo)
+            if (m.first <= t0)
+                  qps = m.second;
+      for (size_t j = 0; j < _tempo.size() && t < t1; ++j) {
+            if (_tempo[j].first <= t)
+                  continue;
+            double edge = std::min(double(_tempo[j].first), t1);
+            secs += (edge - t) / 480 / qps;
+            t = edge;
+            qps = _tempo[j].second;
+            }
+      if (t < t1)
+            secs += (t1 - t) / 480 / qps;
+      return secs;
+      }
+
+// the chord's top note, spelled as written
+QString Pass::topName(const Chord* c) const
+      {
+      std::vector<SpelledNote> sp;
+      for (const Note* n : c->notes())
+            sp.push_back({ n->ppitch(), n->tpc1(), 0.0 });
+      return Spelling(sp, int(c->staff()->key(c->tick()))).name(c->upNote()->ppitch());
+      }
+
+// staccato-type articulations make a slur a bounced stroke; portato (tenuto + staccato) does not
+static bool hasStaccato(const Chord* c)
+      {
+      static const QRegularExpression STACCATO("^artic(Staccato|Staccatissimo|AccentStaccato|MarcatoStaccato)");
+      for (const Articulation* a : c->articulations())
+            if (STACCATO.match(Sym::id2name(a->symId())).hasMatch())
+                  return true;
+      return false;
+      }
+
+// the end of a stroke's last chord, or of the last note tied on from it: a tie continues the bow
+static int strokeEnd(const Chord* last)
+      {
+      int end = (last->tick() + last->actualTicks()).ticks();
+      for (const Note* n : last->notes()) {
+            const Chord* lc = n->lastTiedNote()->chord();
+            end = std::max(end, (lc->tick() + lc->actualTicks()).ticks());
+            }
+      return end;
+      }
+
+// the tick of the last chord a stroke sounds on (its last chord, or one tied on from it)
+static int strokeLastTick(const Chord* last)
+      {
+      int t = last->tick().ticks();
+      for (const Note* n : last->notes())
+            t = std::max(t, n->lastTiedNote()->chord()->tick().ticks());
+      return t;
+      }
+
+//---------------------------------------------------------
+//   bowUse
+//    How much bow a stroke uses: t seconds at a tier with limit L use t / L of a bow (Sevsay p. 10
+//    works his example this way), summed over the stroke against the warn and the red limits;
+//    above 1 = more than one bow. Inside a hairpin the level moves in a straight line from its
+//    start to its target: the first dynamic at or after its end if that lies the right way, else
+//    the start plus the hairpin's own velocity change; a dynamic inside the hairpin takes over.
+//    Cut at every chord, dynamic and hairpin end; a stretch in a hairpin is sampled in 8 parts.
+//---------------------------------------------------------
+
+
+static double levelAt(const StateList& dyn, const std::vector<HairpinSpan>& hairpins, double t)
+      {
+      double base = dyn.valueAt(t, DEFAULT_VELOCITY);
+      for (const HairpinSpan& hp : hairpins) {
+            if (!(hp.from <= t && t < hp.to))
+                  continue;
+            if (dyn.index(t) > dyn.index(hp.from))
+                  continue;                         // a dynamic inside the hairpin wins
+            double v0 = dyn.valueAt(hp.from, DEFAULT_VELOCITY), v1 = v0 + hp.change;
+            int e = dyn.index(hp.to - 1) + 1;      // the first dynamic at or after the end
+            if (e < int(dyn.changes.size()) && (hp.cresc ? dyn.changes[e].second > v0 : dyn.changes[e].second < v0))
+                  v1 = dyn.changes[e].second;
+            return v0 + (v1 - v0) * (t - hp.from) / (hp.to - hp.from);
+            }
+      return base;
+      }
+
+BowUse Pass::bowUse(const StringInstrument& in, const StateList& dyn, const std::vector<HairpinSpan>& allHairpins,
+                    int t0, int t1, const std::vector<int>& cuts) const
+      {
+      BowUse res;
+      if (!bowLimit(in, "mf").valid)
+            return res;
+      std::vector<double> pts = { double(t0), double(t1) };
+      std::vector<HairpinSpan> hairpins;
+      auto addCut = [&](double t) { if (t > t0 && t < t1) pts.push_back(t); };
+      for (int c : cuts)
+            addCut(c);
+      for (int b = dyn.index(t0) + 1; b < int(dyn.changes.size()) && dyn.changes[b].first < t1; ++b)
+            addCut(dyn.changes[b].first);
+      for (const HairpinSpan& h : allHairpins)          // only the hairpins touching the stroke
+            if (h.from < t1 && h.to > t0)
+                  hairpins.push_back(h);
+      for (const HairpinSpan& h : hairpins) {
+            addCut(h.from);
+            addCut(h.to);
+            }
+      std::sort(pts.begin(), pts.end());
+      QSet<QString> seen;
+      for (size_t k = 0; k + 1 < pts.size(); ++k) {
+            double a0 = pts[k], a1 = pts[k + 1];
+            if (a1 <= a0)
+                  continue;
+            bool inHairpin = false;
+            for (const HairpinSpan& h : hairpins)
+                  if (h.from < a1 && h.to > a0)
+                        inHairpin = true;
+            int parts = inHairpin ? 8 : 1;
+            for (int m = 0; m < parts; ++m) {
+                  double s0 = a0 + (a1 - a0) * m / parts, s1 = a0 + (a1 - a0) * (m + 1) / parts;
+                  QString tier = dynamicTier(levelAt(dyn, hairpins, (s0 + s1) / 2));
+                  BowLimit bl = bowLimit(in, tier);
+                  double secs = secondsBetween(s0, s1);
+                  res.secs += secs;
+                  res.warn += secs / bl.warn;
+                  res.red += secs / bl.red;
+                  seen.insert(tier);
+                  }
+            }
+      for (const QString& t : { "pp", "p", "mf", "f", "ff" })
+            if (seen.contains(t))
+                  res.tiers << t;
+      res.valid = true;
+      return res;
+      }
+
+void Pass::addRow(int tick, int tickEnd, int track, const QString& staff, const QString& kind, const QString& verdict,
+                  const QString& reason, const QString& notes)
+      {
+      PlayabilityRow r;
+      r.bar = barOf(tick);
+      r.tick = Fraction::fromTicks(tick);
+      r.tickEnd = Fraction::fromTicks(tickEnd);
+      r.track = track;
+      r.staff = staff;
+      r.kind = kind;
+      r.verdict = verdict;
+      r.reason = reason;
+      r.notes = notes;
+      _res.rows.push_back(r);
       }
 
 // The microtonal part of a note's tuning (its accidental, the carried accidental, a custom key
@@ -229,10 +492,239 @@ void Pass::handle(Chord* chord, int grace, const QString& staffName, const Strin
       addRow("stop", bad ? "impossible" : "outOfReach", res.reason, describe(in, pitches, res, sp));
       }
 
+//---------------------------------------------------------
+//   checkSlurs (S10, S11)
+//    Every slur on a bowed string is one bow stroke; chords are counted (a double stop is one
+//    note, grace notes are not). Under pizz. there is no bow. A section's dotted slur under a jeté
+//    text is jeté, judged by its note count; everything else is timed, and a section's slurred
+//    staccato (dots, no jeté text) also has a note limit. A note already red stays red.
+//---------------------------------------------------------
+
+void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked)
+      {
+      const std::vector<HairpinSpan> noHairpins;
+      auto hp = _hairpins.find(st);
+      const std::vector<HairpinSpan>& allHairpins = hp == _hairpins.end() ? noHairpins : hp->second;
+
+      for (int v = 0; v < VOICES; ++v) {
+            int trk = st * VOICES + v;
+            auto sl = _slurs.find(trk);
+            if (sl == _slurs.end())
+                  continue;
+            const Walked& w = walked[v];
+            for (const auto& slur : sl->second) {
+                  int from = slur.first, to = slur.second;
+                  if (tx.pizz.on(from))
+                        continue;
+                  const StringInstrument& in = instrumentAt(part, Fraction::fromTicks(from));
+                  if (!in.valid())
+                        continue;                 // not a bowed string here
+                  std::vector<Chord*> chords;
+                  bool dotted = false;
+                  size_t first = std::lower_bound(w.ticks.begin(), w.ticks.end(), from) - w.ticks.begin();
+                  for (size_t i = first; i < w.ticks.size() && w.ticks[i] <= to; ++i) {
+                        chords.push_back(w.chords[i]);
+                        dotted |= hasStaccato(w.chords[i]);
+                        }
+                  int n = int(chords.size());
+                  if (n < 2)
+                        continue;
+                  QString verdict, reason, kind;
+                  bool jeteText = tx.jete.on(from);
+                  if (dotted && in.section && jeteText) {
+                        if (n <= JETE_MAX)
+                              continue;
+                        verdict = "outOfReach";
+                        kind = "jete";
+                        reason = QString::fromUtf8("jeté: %1 notes on one bow (section max %2)").arg(n).arg(JETE_MAX);
+                        }
+                  else {
+                        QString groupVerdict, groupReason, timedVerdict, timedReason;
+                        if (dotted && in.section && !jeteText) {
+                              bool loud = isLoud(tx.dyn.valueAt(from, 0));
+                              int gmax = loud ? GROUP_STACCATO_LOUD : GROUP_STACCATO_SOFT;
+                              if (n > gmax) {
+                                    groupVerdict = "outOfReach";
+                                    groupReason = QString("slurred staccato%1: %2 notes on one bow (section max %3)")
+                                                  .arg(loud ? " at f" : "").arg(n).arg(gmax);
+                                    }
+                              }
+                        int endTick = strokeEnd(chords.back());
+                        std::vector<int> cuts;
+                        for (const Chord* c : chords)
+                              cuts.push_back(c->tick().ticks());
+                        BowUse use = bowUse(in, tx.dyn, allHairpins, from, endTick, cuts);
+                        if (use.valid && use.warn > 1 + 1e-9) {
+                              bool red = use.red > 1 + 1e-9;
+                              if (use.tiers.size() == 1) {
+                                    BowLimit bl = bowLimit(in, use.tiers[0]);
+                                    timedReason = "slur " + fmtSeconds(use.secs) + " at " + use.tiers[0] + " ("
+                                                  + (red ? "longest one bow can last " + fmtSeconds(bl.red) : "max " + fmtSeconds(bl.warn)) + ")";
+                                    }
+                              else
+                                    timedReason = "slur " + fmtSeconds(use.secs) + ", " + use.tiers.front() + QChar(0x2013) + use.tiers.back()
+                                                  + QString(" (needs %1% of ").arg(qRound((red ? use.red : use.warn) * 100))
+                                                  + (red ? "the longest bow" : "a comfortable bow") + ")";
+                              timedVerdict = red ? "impossible" : "outOfReach";
+                              }
+                        if (groupVerdict.isEmpty() && timedVerdict.isEmpty())
+                              continue;
+                        if (!groupVerdict.isEmpty() && !timedVerdict.isEmpty()) {     // one row, the worse colour
+                              verdict = timedVerdict == "impossible" ? "impossible" : groupVerdict;
+                              reason = groupReason + "; " + timedReason;
+                              kind = "group";
+                              }
+                        else if (!groupVerdict.isEmpty()) {
+                              verdict = groupVerdict;
+                              reason = groupReason;
+                              kind = "group";
+                              }
+                        else {
+                              verdict = timedVerdict;
+                              reason = timedReason;
+                              kind = "slur";
+                              }
+                        }
+
+                  // the notes tied on from the stroke's last chord sound on the same bow: marked, not named
+                  QStringList names;
+                  for (const Chord* c : chords)
+                        names << topName(c);
+                  int lastTick = strokeLastTick(chords.back());
+                  for (size_t i = first + n; i < w.ticks.size() && w.ticks[i] <= lastTick; ++i)
+                        chords.push_back(w.chords[i]);
+                  PlayMark m = verdict == "impossible" ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH;
+                  for (const Chord* c : chords)
+                        for (const Note* note : c->notes())
+                              markOver(note, m);
+                  QString noteText = (kind == "jete" || kind == "group") ? names.join(" ")
+                                     : names.front() + QString(" ") + QChar(0x2026) + " " + names.back() + QString(" (%1 notes)").arg(names.size());
+                  addRow(from, lastTick, trk, staffName, kind, verdict, reason, noteText);
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkTremolos (S13)
+//    every "between notes" tremolo: its chord and the next in the voice; single notes only, no
+//    harmonics
+//---------------------------------------------------------
+
+void Pass::checkTremolos(int st, Part* part, const QString& staffName, const Walked* walked)
+      {
+      for (int v = 0; v < VOICES; ++v) {
+            int trk = st * VOICES + v;
+            const Walked& w = walked[v];
+            for (size_t i = 0; i + 1 < w.chords.size(); ++i) {
+                  Chord* a = w.chords[i];
+                  Tremolo* t = a->tremolo();
+                  if (!t || !t->twoNotes() || t->chord1() != a)
+                        continue;
+                  Chord* b = w.chords[i + 1];
+                  int t0 = w.ticks[i];
+                  const StringInstrument& in = instrumentAt(part, a->tick());
+                  if (!in.valid())
+                        continue;
+                  if (a->notes().size() != 1 || b->notes().size() != 1)
+                        continue;
+                  Note* na = a->notes()[0];
+                  Note* nb = b->notes()[0];
+                  if (na->headGroup() == NoteHead::Group::HEAD_DIAMOND || nb->headGroup() == NoteHead::Group::HEAD_DIAMOND)
+                        continue;
+                  TremoloResult res = fingeredTremolo(in, na->ppitch(), nb->ppitch());
+                  if (res.fine)
+                        continue;
+                  bool red = res.verdict == Verdict::IMPOSSIBLE;
+                  markOver(na, red ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH);
+                  markOver(nb, red ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH);
+                  QString reason = red
+                        ? "fingered tremolo too wide (" + intervalName(res.interval) + ")"
+                        : "fingered tremolo across strings " + stringName(in.strings[res.lower]) + QChar(0x2013)
+                          + stringName(in.strings[res.upper]) + " (" + intervalName(res.interval) + ")";
+                  addRow(t0, w.ticks[i + 1], trk, staffName, "tremolo", red ? "impossible" : "outOfReach", reason,
+                         topName(a) + " " + QChar(0x2194) + " " + topName(b));
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkFastRuns (S12)
+//    double bass SECTION only: a run is a chain of bowed notes in one voice, each shorter than
+//    0.1 s and each starting where the last ended (a rest, a longer note or pizz. ends it; a
+//    tied-on note belongs to the note it continues); longer than 1.5 s is flagged
+//---------------------------------------------------------
+
+void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const StaffTexts& tx)
+      {
+      auto isBassSection = [](const StringInstrument& in) { return in.valid() && in.section && in.name == "Double bass"; };
+      bool anyBass = false;
+      for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i)
+            anyBass |= isBassSection(instrumentAt(part, Fraction::fromTicks(i->first)));
+      if (!anyBass)
+            return;
+      struct Item { Chord* chord; int tick; int end; };
+      for (int v = 0; v < VOICES; ++v) {
+            int trk = st * VOICES + v;
+            std::vector<Item> run;
+            int prevEnd = -1;
+            auto close = [&]() {
+                  std::vector<Item> r;
+                  r.swap(run);
+                  if (r.size() < 2)
+                        return;
+                  int t0 = r.front().tick, t1 = r.back().end, last = r.back().tick;
+                  double secs = secondsBetween(t0, t1);
+                  if (secs <= FAST_RUN_SECONDS + 1e-9)
+                        return;
+                  for (const Item& i : r)
+                        for (const Note* n : i.chord->notes())
+                              markOver(n, PlayMark::OUT_OF_REACH);
+                  double rate = std::floor(r.size() / secs * 10 + 0.5) / 10;
+                  addRow(t0, last, trk, staffName, "fast", "outOfReach",
+                         QString("fast passage: %1 notes/s for %2 (section max 10/s for 1.5 s)").arg(QString::number(rate, 'g', 12), fmtSeconds(secs)),
+                         topName(r.front().chord) + " " + QChar(0x2026) + " " + topName(r.back().chord) + QString(" (%1 notes)").arg(r.size()));
+                  };
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                  Element* e = s->element(trk);
+                  if (!e)
+                        continue;
+                  if (!e->isChord()) {                  // a rest
+                        close();
+                        prevEnd = -1;
+                        continue;
+                        }
+                  Chord* c = toChord(e);
+                  int tick = s->tick().ticks();
+                  int end = tick + c->actualTicks().ticks();
+                  if (c->notes().front()->tieBack() && tick == prevEnd) {   // a tied-on note lengthens the last
+                        if (!run.empty()) {
+                              run.back().end = end;
+                              if (secondsBetween(run.back().tick, end) >= FAST_NOTE_SECONDS - 1e-9) {
+                                    run.pop_back();
+                                    close();
+                                    }
+                              }
+                        prevEnd = end;
+                        continue;
+                        }
+                  bool ok = isBassSection(instrumentAt(part, s->tick())) && !tx.pizz.on(tick)
+                            && secondsBetween(tick, end) < FAST_NOTE_SECONDS - 1e-9;
+                  if (!ok || tick != prevEnd)
+                        close();
+                  if (ok)
+                        run.push_back({ c, tick, end });
+                  prevEnd = end;
+                  }
+            close();
+            }
+      }
+
 void Pass::run()
       {
       for (Measure* m = _score->firstMeasure(); m; m = m->nextMeasure())
             _barStarts.push_back(m->tick());
+      collectSpanners();
+      collectTempo();
 
       for (int st = 0; st < _score->nstaves(); ++st) {
             Staff* staff = _score->staff(st);
@@ -249,17 +741,8 @@ void Pass::run()
                         anyString = true;
             if (!anyString)
                   continue;                           // never a bowed string staff
-            std::vector<std::pair<Fraction, bool>> divs = divChanges(st);
-            auto divAt = [&divs](const Fraction& t) {
-                  bool on = false;
-                  for (const auto& d : divs) {
-                        if (d.first > t)
-                              break;
-                        on = d.second;
-                        }
-                  return on;
-                  };
-
+            StaffTexts tx = staffTexts(st);
+            Walked walked[VOICES];
             for (int v = 0; v < VOICES; ++v) {
                   int track = st * VOICES + v;
                   for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
@@ -268,17 +751,22 @@ void Pass::run()
                               continue;
                         Chord* c = toChord(e);
                         Fraction tick = s->tick();
+                        walked[v].ticks.push_back(tick.ticks());
+                        walked[v].chords.push_back(c);
                         const StringInstrument& in = instrumentAt(part, tick);
                         if (!in.valid())
                               continue;               // a non-string instrument here
                         int fifths = int(staff->key(tick));
-                        bool div = divAt(tick);
+                        bool div = tx.div.on(tick.ticks());
                         const QVector<Chord*>& graces = c->graceNotes();
                         for (int g = 0; g < graces.size(); ++g)
                               handle(graces[g], g, staffName, in, div, fifths);
                         handle(c, -1, staffName, in, div, fifths);
                         }
                   }
+            checkSlurs(st, part, staffName, tx, walked);
+            checkTremolos(st, part, staffName, walked);
+            checkFastRuns(st, part, staffName, tx);
             }
       }
 
