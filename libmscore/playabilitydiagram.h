@@ -32,7 +32,7 @@ namespace Ms {
 class Score;
 
 struct DrawItem {
-      enum class Kind : char { LINE, RECT, CIRCLE, TEXT, META };
+      enum class Kind : char { LINE, RECT, CIRCLE, LABEL, META };
       Kind kind { Kind::LINE };
       double x1 { 0 }, y1 { 0 }, x2 { 0 }, y2 { 0 };   // LINE
       double x { 0 }, y { 0 }, w { 0 }, h { 0 };       // RECT (x, y, w, h), CIRCLE (x, y centre), TEXT (x, baseline y)

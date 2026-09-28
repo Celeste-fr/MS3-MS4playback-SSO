@@ -70,7 +70,7 @@ static DrawItem circle(double x, double y, double r, const QColor& fill, const Q
 static DrawItem text(double x, double y, const QString& t, double size, const QColor& color, int align, bool bold = false)
       {
       DrawItem i;
-      i.kind = DrawItem::Kind::TEXT;
+      i.kind = DrawItem::Kind::LABEL;
       i.x = x; i.y = y;
       i.text = t;
       i.size = size;
@@ -103,7 +103,7 @@ bool namesShown(const DisplayList& items)
 //---------------------------------------------------------
 
 namespace FB {
-static const QColor TEXT("#333333"), FAINT("#8a8a8a"), STRING("#7a7a7a"), NUT("#2b2b2b"), TICK("#e6e6e6"),
+static const QColor INK("#333333"), FAINT("#8a8a8a"), STRING("#7a7a7a"), NUT("#2b2b2b"), TICK("#e6e6e6"),
                     MARK("#c8c8c8"), STOPPED("#1f1f1f");
 static const QColor RING("#1f1f1f"), SOLO("#9a9a9a"), FAINT_STRING("#d0d0d0"), BRIDGE("#2b2b2b");
 static const double MAX_GAP = 40;
@@ -178,11 +178,11 @@ DisplayList layoutFingerboard(const ChordInfo& g, double w, double h)
       for (int i = 0; i < n; ++i) {
             items.push_back(line(xAt(i), top, xAt(i), top + bh, FB::STRING, 1 + 0.45 * i));
             if (!tiny) {
-                  items.push_back(text(xAt(i), top - 31, g.stringNames.value(i), 11, FB::TEXT, 0, true));
+                  items.push_back(text(xAt(i), top - 31, g.stringNames.value(i), 11, FB::INK, 0, true));
                   items.push_back(text(xAt(i), top - 19, i < 5 ? ROMAN[i] : "", 9, FB::FAINT, 0));
                   }
             else
-                  items.push_back(text(xAt(i), top - 3, g.stringNames.value(i), 9, FB::TEXT, 0, true));
+                  items.push_back(text(xAt(i), top - 3, g.stringNames.value(i), 9, FB::INK, 0, true));
             }
       items.push_back(line(xLow - 8, top, xHigh + 8, top, FB::NUT, 3));
 
@@ -195,7 +195,7 @@ DisplayList layoutFingerboard(const ChordInfo& g, double w, double h)
                   double y = yAt(nt.offset);
                   items.push_back(circle(x, y, dotR, FB::STOPPED));
                   if (showNames)
-                        items.push_back(text(x + dotR + 4, y + 4, nt.name, 10, FB::TEXT, -1, true));
+                        items.push_back(text(x + dotR + 4, y + 4, nt.name, 10, FB::INK, -1, true));
                   }
             }
       return items;
@@ -261,11 +261,11 @@ static DisplayList layoutHarmonic(const ChordInfo& g, double w, double h)
             bool on = used.count(i);
             items.push_back(line(xAt(i), top, xAt(i), top + bh, on ? FB::STRING : FB::FAINT_STRING, 1 + 0.45 * i));
             if (!tiny) {
-                  items.push_back(text(xAt(i), top - 31, g.stringNames.value(i), 11, on ? FB::TEXT : FB::FAINT, 0, on));
+                  items.push_back(text(xAt(i), top - 31, g.stringNames.value(i), 11, on ? FB::INK : FB::FAINT, 0, on));
                   items.push_back(text(xAt(i), top - 19, i < 5 ? ROMAN[i] : "", 9, FB::FAINT, 0));
                   }
             else
-                  items.push_back(text(xAt(i), top - 3, g.stringNames.value(i), 9, on ? FB::TEXT : FB::FAINT, 0, on));
+                  items.push_back(text(xAt(i), top - 3, g.stringNames.value(i), 9, on ? FB::INK : FB::FAINT, 0, on));
             }
       items.push_back(line(xLow - 8, top, xHigh + 8, top, FB::NUT, 3));
       items.push_back(line(xLow - 8, top + bh, xHigh + 8, top + bh, FB::BRIDGE, 2));
@@ -305,7 +305,7 @@ static DisplayList layoutHarmonic(const ChordInfo& g, double w, double h)
                         }
                   }
             for (int t = 0; t < sounds.size(); ++t)
-                  items.push_back(text(x, top + bh + (tiny ? 13 : 24) + 12 * t, sounds[t], 10, FB::TEXT, 0, true));
+                  items.push_back(text(x, top + bh + (tiny ? 13 : 24) + 12 * t, sounds[t], 10, FB::INK, 0, true));
             }
       if (anySolo)
             items.push_back(text(2, top + bh + 42, "* solo and chamber only", 9, FB::SOLO, -1));

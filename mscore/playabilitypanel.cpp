@@ -118,7 +118,7 @@ void DisplayListView::paintEvent(QPaintEvent*)
                         else
                               p.drawEllipse(QPointF(it.x, it.y), it.r, it.r);
                         break;
-                  case DrawItem::Kind::TEXT: {
+                  case DrawItem::Kind::LABEL: {
                         if (it.text.isEmpty())
                               break;
                         p.setRenderHint(QPainter::Antialiasing, true);
