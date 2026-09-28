@@ -114,6 +114,13 @@ with *Dynamics* ticked on the patches they use (one per family at least: strings
 Performance patch) and hands back the zip; from summary.txt, fix `<Dynamics velocity>` in `gen_spitfire_sso.py`
 (techniques flagged "on velocity but not listed" / "not needed") and look at the flagged spans.
 
+## Automation (2026-09-28): infrastructure in, no UI
+
+See `CLAUDE.md` › Automation. Next: the UI (lanes to draw per part, targets from the part's patch's
+controllers), a dynamics lane on top of the notation's, the map's controller entries for SSO's named
+controls (`gen_spitfire_sso.py` from sso_patch_controls.json), and one try with Kontakt that a parameter
+set by automation is heard (e.g. Vibrato on Violins 1).
+
 ## Merging with claude/intelligent-cray-6pd4o1 (prepared 2026-09-28; done 2026-09-28 on that branch, as planned)
 
 The owner decides what goes to main; this is the plan. Both branches start at main 16e6933. That
