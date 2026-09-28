@@ -68,6 +68,7 @@ class SoundLibraryHost : public QObject {
             QString instrument;           // the library instrument it plays
             QString part;
             bool hasSetup { false };      // its setup was loaded
+            bool setupFailed { false };   // its setup could not be loaded: not tried again at each play
             QPointer<Vst3EditorWindow> editor;
             // the patch's own value (its setup's) of each plug-in parameter a score has set: put
             // back for a score that doesn't set it, and in the setup saved (a score's values
@@ -88,6 +89,7 @@ class SoundLibraryHost : public QObject {
       QPointer<MasterScore> _preloadScore;
       int _loads { 0 };                   // instances loaded so far
       int _preloadFrom { 0 };             // _loads when the preload started
+      bool _preloadLogged { false };      // its list of what to load is in load times.log
       QElapsedTimer _lastInput;           // since the user's last key, click or wheel
       static constexpr int INPUT_PAUSE_MS = 0;     // a background load waits for this long a pause (the owner, 2026-09-27: 0, no wait)
       void preloadStep();

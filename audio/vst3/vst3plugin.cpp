@@ -17,6 +17,7 @@
 #include <map>
 
 #include <QDataStream>
+#include <QElapsedTimer>
 #include <QDebug>
 #include <QFile>
 #include <QFileInfo>
@@ -246,6 +247,7 @@ class ComponentHandler : public U::ImplementsNonDestroyable<U::Directly<ICompone
       std::vector<std::pair<ParamID, ParamValue>> edits;
       std::vector<std::pair<ParamID, ParamValue>> reported;     // for takeReported() (bounded)
       bool midiMappingChanged { false };
+      bool titlesChanged { false };             // (Vst3Plugin::parameterId's index)
 
       tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override
             {
@@ -268,6 +270,10 @@ class ComponentHandler : public U::ImplementsNonDestroyable<U::Directly<ICompone
             if (flags & kMidiCCAssignmentChanged) {
                   std::lock_guard<std::mutex> lock(mutex);
                   midiMappingChanged = true;
+                  }
+            if (flags & (kParamTitlesChanged | kIoTitlesChanged | kReloadComponent)) {
+                  std::lock_guard<std::mutex> lock(mutex);
+                  titlesChanged = true;
                   }
             return kResultOk;
             }
@@ -300,6 +306,13 @@ class Vst3PluginPrivate {
       std::vector<std::pair<ParamID, ParamValue>> fromProcessor;      // for the controller (idle)
       std::vector<std::pair<ParamID, ParamValue>> reported;           // the processor's own, for takeReported()
       std::mutex fromProcessorMutex;
+
+      // parameterId's index: loose title -> id, of all the parameters (Kontakt has 4145; each play
+      // looks up every controller of every instance). Remade after setState, a change of titles, or
+      // a title not found once a second has passed (a patch's script names its slots after loading)
+      std::map<QString, ParamID> titleIndex;
+      bool titleIndexValid { false };
+      QElapsedTimer titleIndexAge;
 
       // MIDI controller (0 … 129) per channel -> parameter, kNoParamId: not mapped
       std::vector<ParamID> ccParam;
@@ -632,7 +645,7 @@ void Vst3Plugin::process(int frames, float* buffer)
 //    GUI thread: what the processor changed, to the controller (its editor)
 //---------------------------------------------------------
 
-void Vst3Plugin::idle()
+void Vst3Plugin::idle(std::mutex* processing)
       {
       std::vector<std::pair<ParamID, ParamValue>> changes;
       {
@@ -649,8 +662,12 @@ void Vst3Plugin::idle()
             remap = d->handler.midiMappingChanged;
             d->handler.midiMappingChanged = false;
       }
-      if (remap)
+      if (remap) {
+            std::unique_lock<std::mutex> lock;
+            if (processing)
+                  lock = std::unique_lock<std::mutex>(*processing);   // (midi reads the mapping)
             d->mapControllers();
+            }
       }
 
 //---------------------------------------------------------
@@ -734,6 +751,7 @@ bool Vst3Plugin::setState(const QByteArray& state)
             d->controller->setState(s);
             }
       d->mapControllers();
+      d->titleIndexValid = false;
       return true;
       }
 
@@ -890,22 +908,44 @@ std::vector<Vst3Plugin::Parameter> Vst3Plugin::parameters() const
       return params;
       }
 
+// loosely: letters and digits only, lower case, and a slot number in front left out ("Mic 1 level" =
+// "MIC 1 Level" = "07 Mic 1 level"; Kontakt's own titles aren't known here)
+static QString looseTitle(const QString& t)
+      {
+      static const QRegularExpression slot("^\\s*#?\\d+\\s*[:.)-]?\\s+");
+      static const QRegularExpression other("[^a-z0-9]");
+      QString s = t.toLower();
+      s.remove(slot);
+      s.remove(other);
+      return s;
+      }
+
 long Vst3Plugin::parameterId(const QString& title) const
       {
-      // loosely: letters and digits only, lower case, and a slot number in front left out
-      // ("Mic 1 level" = "MIC 1 Level" = "07 Mic 1 level"; Kontakt's own titles aren't known here)
-      auto norm = [](const QString& t) {
-            QString s = t.toLower();
-            s.remove(QRegularExpression("^\\s*#?\\d+\\s*[:.)-]?\\s+"));
-            s.remove(QRegularExpression("[^a-z0-9]"));
-            return s;
-            };
-      const QString want = norm(title);
+      const QString want = looseTitle(title);
       if (want.isEmpty())
             return -1;
-      for (const Parameter& p : parameters())
-            if (norm(p.title) == want)
-                  return long(p.id);
+      {
+            std::lock_guard<std::mutex> lock(d->handler.mutex);
+            if (d->handler.titlesChanged)
+                  d->titleIndexValid = false;
+            d->handler.titlesChanged = false;
+      }
+      for (int pass = 0; pass < 2; ++pass) {
+            if (!d->titleIndexValid || (pass == 1 && d->titleIndexAge.elapsed() > 1000)) {
+                  d->titleIndex.clear();
+                  for (const Parameter& p : parameters()) {
+                        const QString t = looseTitle(p.title);
+                        if (!t.isEmpty() && !d->titleIndex.count(t))          // (the first, as before)
+                              d->titleIndex[t] = p.id;
+                        }
+                  d->titleIndexValid = true;
+                  d->titleIndexAge.start();
+                  }
+            auto i = d->titleIndex.find(want);
+            if (i != d->titleIndex.end())
+                  return long(i->second);
+            }
       return -1;
       }
 

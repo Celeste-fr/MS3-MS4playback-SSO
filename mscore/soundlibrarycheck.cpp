@@ -1898,11 +1898,16 @@ static int namedControls(const QJsonObject& d, const QJsonObject& empty)
       std::map<double, QString> titles;
       for (const QJsonValue& v : empty.value("parameters").toArray())
             titles[v.toObject().value("id").toDouble()] = v.toObject().value("title").toString();
+      // "NIKT0018" (on parameter 2048, "##" with nothing loaded) is Kontakt's own, not the patch's
+      // script's: the only one every patch had from Celli - Performance on, whose script didn't run
+      // (the owner's run of 2026-09-27 16:43), so a patch with no other named nothing
+      static const QRegularExpression kontakts("^NIKT\\d+$");
       int n = 0;
       for (const QJsonValue& v : d.value("parametersChanged").toArray()) {
             const QJsonObject o = v.toObject();
+            const QString title = o.value("title").toString();
             auto b = titles.find(o.value("id").toDouble());
-            n += b == titles.end() || b->second != o.value("title").toString();
+            n += (b == titles.end() || b->second != title) && !kontakts.match(title).hasMatch();
             }
       return n;
       }

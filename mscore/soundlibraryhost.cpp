@@ -665,6 +665,7 @@ void SoundLibraryHost::preloadSoon(Score* score)
       _preloadScore = score ? score->masterScore() : nullptr;
       _preloadTimer.stop();
       _preloadFrom = _loads;
+      _preloadLogged = false;
       if (!_preloadScore || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
             return;
       _preloadTimer.start(0);
@@ -713,6 +714,8 @@ void SoundLibraryHost::preloadStep()
       if (!syncSome(_preloadScore, &error, 1, &remaining)) {
             if (!error.isEmpty() && mscore)
                   mscore->showMessage(error, 10000);
+            if (SoundLib::current())
+                  logTime(*SoundLib::current(), QString("Loading at score open stopped: %1").arg(error));
             return;
             }
       qDebug("Sound library: preloaded one instance, %d to go", remaining);
@@ -762,7 +765,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             needs.push_back({ k, r.instrument->name, hasSetup(*library, r.instrument->name) });
             }
       auto fits = [&path](const Vst3Plugin* p, const Slot& s, const Need& n) {
-            return p && p->path() == path && s.instrument == n.name && (s.hasSetup || !n.setup);
+            return p && p->path() == path && s.instrument == n.name && (s.hasSetup || s.setupFailed || !n.setup);
             };
 
       // an instance the score can't use in its slot is set aside (a spare), not released: the
@@ -803,6 +806,18 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             vst->setPlugin(n.slot, std::move(i->plugin));
             _spares.erase(i);
             qDebug("Sound library: %s kept (slot %d)", qPrintable(n.name), n.slot);
+            }
+
+      // which loads happen when (the owner, 2026-09-28: the Performance patches loaded at every play):
+      // at play (all at once) or at score open (one at a time, the first of them logged)
+      if (!toLoad.empty() && (maxLoads < 0 || !_preloadLogged)) {
+            QStringList names;
+            for (const Need* n : toLoad)
+                  names << n->name;
+            logTime(*library, QString("%1: %2 of %3 instances to load: %4")
+                    .arg(maxLoads < 0 ? "At play" : "At score open").arg(toLoad.size()).arg(needs.size()).arg(names.join(", ")));
+            if (maxLoads >= 0)
+                  _preloadLogged = true;
             }
 
       bool ok = true;
@@ -857,8 +872,12 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             s.instrument = name;
             QString err;
             s.hasSetup = setup && loadSetup(p.get(), *library, name, path, &err);
-            if (setup && !s.hasSetup && mscore)
-                  mscore->showMessage(err, 10000);
+            s.setupFailed = setup && !s.hasSetup;
+            if (s.setupFailed) {
+                  logTime(*library, QString("%1: %2").arg(name, err));
+                  if (mscore)
+                        mscore->showMessage(err, 10000);
+                  }
             s.patchValues.clear();
             vst->setPlugin(k, std::move(p));
             }

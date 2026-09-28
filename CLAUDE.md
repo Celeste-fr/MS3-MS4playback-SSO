@@ -451,7 +451,16 @@ macOS.
   released once all is loaded. Tried with two scores sharing 3 of their 4-5 patches in another
   order: switching loads only the other 1-2. Status messages (`MuseScore::showMessage`) are in a
   label of their own and repainted at once: QStatusBar's own messages never showed in MuseScore 3
-  (its stretching spacers leave them no room). **Crackle live, not in
+  (its stretching spacers leave them no room). `load times.log` also says what each sync has to load, "At play" or
+  "At score open", and a setup that failed to load (the owner, 2026-09-28: the Performance patches loaded at every
+  play; cause not found by reading the code). A slot whose setup failed is not loaded again at each play
+  (`Slot::setupFailed`). **Audio thread** (the owner, 2026-09-28: sound stopped at random): `Vst3Synth::idle`
+  (GUI, every 50 ms) held the slots' mutex while it passed every CC played to each instance's controller, and
+  `play`/`process` only try that mutex: events were dropped (a note, its note-off, a switch) and blocks skipped.
+  Now idle holds it only to list the instances (and while a MIDI mapping changes), an event that misses the lock
+  waits in `_pending` for the next event or block, and a missed all-notes-off is done then. `Vst3Plugin::parameterId`
+  keeps an index of the loose titles (it went through Kontakt's 4145 parameters, two regexes each, for every
+  controller of every instance at every play). **Crackle live, not in
   the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;
   Kontakt's *Options › Memory › Override instrument's preload size* at 30 kB fixed it. Suggest that
   first when the owner reports crackles or a slow load.
@@ -562,7 +571,10 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   on patch 59 (Celli - Performance: "something could not be loaded, open Kontakt"; the exact text unknown)
   held it 21 minutes, and from that patch on Kontakt ran no patch's script: 545 patches with no named controls
   (their states full size). Now a patch with none named, once earlier patches of the run had some, is done
-  again on a new Kontakt instance; five in a row still without stop the run with a log line. On Windows a
+  again on a new Kontakt instance; five in a row still without stop the run with a log line. The owner's next run
+  (16:43, 28.8 min for 700) had the same warning on Celli - Performance (after Violas - Performance on the same
+  instance) and, from it on, 642 patches whose only "control" was Kontakt's own `NIKT0018` (parameter 2048), so the
+  retry didn't fire: `namedControls` no longer counts `NIKT<n>` titles. On Windows a
   watchdog thread (`DialogWatch`, musescore.cpp, background run only: the process has no window of its own)
   logs the title and texts of any visible window of the process and closes it (WM_CLOSE) after 30 s. The
   warning (the owner's screenshot): "One or more Kontakt instances cannot be recalled correctly, perhaps due to

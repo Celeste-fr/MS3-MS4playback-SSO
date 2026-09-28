@@ -19,6 +19,7 @@ const char* Vst3Synth::NAME = "VST3";
 Vst3Synth::Vst3Synth()
       {
       _slots.resize(MAX_SLOTS);
+      _pending.reserve(4096);
       }
 
 Vst3Synth::~Vst3Synth()
@@ -51,16 +52,37 @@ bool Vst3Synth::mine() const
 
 //---------------------------------------------------------
 //   play / process
-//    audio thread (or the exporting thread); skipped while the GUI thread changes the slots
+//    audio thread (or the exporting thread). While the GUI thread changes the slots, an event
+//    waits in _pending for the next event or block (it was dropped: the owner heard notes stop,
+//    2026-09-28), and a block is skipped
 //---------------------------------------------------------
+
+void Vst3Synth::playPending()
+      {
+      if (_allOffPending.exchange(false))
+            for (auto& p : _slots)
+                  if (p)
+                        p->allNotesOff();
+      std::lock_guard<std::mutex> lock(_pendingMutex);
+      for (const PlayEvent& e : _pending) {
+            const int slot = e.channel();
+            if (slot >= 0 && slot < int(_slots.size()) && _slots[slot])
+                  _slots[slot]->midi(e.type(), 0, e.dataA(), e.dataB(), e.tuning());
+            }
+      _pending.clear();
+      }
 
 void Vst3Synth::play(const PlayEvent& event)
       {
       if (!mine())
             return;
       std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-      if (!lock.owns_lock())
+      if (!lock.owns_lock()) {
+            std::lock_guard<std::mutex> pending(_pendingMutex);
+            _pending.push_back(event);
             return;
+            }
+      playPending();
       const int slot = event.channel();
       if (slot < 0 || slot >= int(_slots.size()) || !_slots[slot])
             return;
@@ -74,6 +96,7 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
       if (!lock.owns_lock())
             return;
+      playPending();
       for (auto& p : _slots)
             if (p)
                   p->process(int(frames), out);
@@ -90,8 +113,19 @@ void Vst3Synth::allNotesOff(int slot)
       if (slot != -1 || !mine())
             return;
       std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-      if (!lock.owns_lock())
+      if (!lock.owns_lock()) {
+            {
+                  std::lock_guard<std::mutex> pending(_pendingMutex);
+                  _pending.clear();                 // (the notes they'd start would ring on)
+            }
+            _allOffPending = true;
             return;
+            }
+      {
+            std::lock_guard<std::mutex> pending(_pendingMutex);
+            _pending.clear();
+      }
+      _allOffPending = false;
       for (auto& p : _slots)
             if (p)
                   p->allNotesOff();
@@ -133,12 +167,19 @@ int Vst3Synth::slotCount() const
       return MAX_SLOTS;
       }
 
+// not with the slots held: Kontakt's controller takes its time over each CC played (the switches,
+// the dynamics), and the audio thread waited. Only this (GUI) thread changes the slots
 void Vst3Synth::idle()
       {
-      std::lock_guard<std::mutex> lock(_mutex);
-      for (auto& p : _slots)
-            if (p)
-                  p->idle();
+      std::vector<Vst3Plugin*> plugins;
+      {
+            std::lock_guard<std::mutex> lock(_mutex);
+            for (auto& p : _slots)
+                  if (p)
+                        plugins.push_back(p.get());
+      }
+      for (Vst3Plugin* p : plugins)
+            p->idle(&_mutex);
       }
 
 //---------------------------------------------------------

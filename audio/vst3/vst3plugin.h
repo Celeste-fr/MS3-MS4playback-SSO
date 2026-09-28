@@ -77,7 +77,8 @@ class Vst3Plugin {
       // program's pitch names (IUnitInfo) and the keyswitches (IKeyswitchController, "KS "
       // prefix). source: which of the two answered, or why none did
       std::map<int, QString> keyNames(QString* source = nullptr) const;
-      void idle();                        // parameter changes of the processor to the controller
+      void idle(std::mutex* processing = nullptr); // parameter changes of the processor to the controller;
+                                                   // processing: held while the MIDI mapping changes
 
       // for Extract (mscore/soundlibrarycheck.h), GUI thread:
       // all the plug-in says about itself: module and classes, buses, parameters (with the text

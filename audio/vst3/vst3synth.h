@@ -32,11 +32,17 @@ namespace Ms {
 class Vst3Synth : public Synthesizer {
       mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
       std::vector<std::unique_ptr<Vst3Plugin>> _slots;
+      // what the audio thread couldn't play while the GUI thread had the slots: played with the next
+      // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
+      std::mutex _pendingMutex;
+      std::vector<PlayEvent> _pending;
+      std::atomic<bool> _allOffPending { false };
       std::atomic<bool> _exporting { false };
       std::thread::id _exportThread;
       QList<MidiPatch*> _patches;
 
       bool mine() const;
+      void playPending();                 // (with _mutex held)
 
    public:
       static constexpr int MAX_SLOTS = 64;
