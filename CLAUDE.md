@@ -288,7 +288,13 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   curve's peak would make an accented pp short 113). Longs and legato keep MS4's velocity (Spitfire's legato
   speed is on velocity). The library's dynamics CC now goes ahead of the notes at its tick (a long starting on
   a new dynamic started at the old one); MS4's CC11 for the built-in sounds keeps MS4's order.
-  Test `shortsFollowDynamics` (shorts-dynamics.musicxml).
+  Held notes too (2026-09-28, the owner: "why does single held note still sound quieter than everything
+  else"): a lone held note (base `long`, SSO's Long) had CC1 like its neighbours but MS4's velocity (67 at f,
+  the staccatos 96); SSO's Long is not a quiet sample (checks of 2026-09-25 at velocity 100 / CC1 100: Violas
+  Long -19.2 dB peak, Spiccato -26.4, Short 1.0 -22.4), so velocity moves its level too: `long` is listed.
+  A slurred note chooses `legato` (same Long articulation, other base) and keeps MS4's velocity (Spitfire's
+  legato speed). To confirm with the Dynamics check (drivenBy of Long).
+  Test `shortsFollowDynamics` (shorts-dynamics.musicxml; bar 4 slurred).
   **Check of it with the library** (the owner, 2026-09-28: "verify that dynamics is consistent across all
   techniques"; not knowable here: which of SSO's articulations are on velocity is Spitfire's, the list above a
   guess for tenuto and marcato): *Check articulations* › *Dynamics* (`ArticulationCheck::dynamics`): each

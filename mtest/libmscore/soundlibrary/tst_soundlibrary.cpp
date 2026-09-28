@@ -1760,8 +1760,9 @@ void TestSoundLibrary::externalPlugin()
 //   shortsFollowDynamics
 //    Spitfire's shorts take their dynamics from velocity, not CC1 (the owner, 2026-09-28: at pp the
 //    staccatos stood out): a base listed in <Dynamics velocity> gets its level on CC1's scale (pp 32,
-//    mf 80), an accent as much above as MS4 puts it; the longs keep MS4's velocity. Without the
-//    attribute, MS4's velocity for all
+//    mf 80), an accent as much above as MS4 puts it; a held note (long) too when listed (the owner:
+//    a single held note sounded quieter than the rest), a slurred one (legato: Spitfire's transition
+//    speed) never. Without the attribute, MS4's velocity for all
 //---------------------------------------------------------
 
 void TestSoundLibrary::shortsFollowDynamics()
@@ -1772,9 +1773,9 @@ void TestSoundLibrary::shortsFollowDynamics()
                "<Instrument name='Violin' ids='violin'>"
                "<Articulation name='Long' value='1' techniques='long legato'/>"
                "<Articulation name='Staccato' value='40' techniques='short'/>"
-               "</Instrument></SoundLibrary>").arg(listed ? " velocity='short spiccato'" : ""));
+               "</Instrument></SoundLibrary>").arg(listed ? " velocity='short spiccato long'" : ""));
             QVERIFY(lib);
-            QCOMPARE(lib->velocityDynamics.size(), listed ? 2 : 0);
+            QCOMPARE(lib->velocityDynamics.size(), listed ? 3 : 0);
             SoundLib::setCurrent(lib);
             MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
             QVERIFY(score);
@@ -1783,7 +1784,8 @@ void TestSoundLibrary::shortsFollowDynamics()
             EventMap events;
             SynthesizerState ss;
             score->renderMidi(&events, false, true, ss);
-            // the note-ons in order: bar 1 pp A B C, bar 2 mf A B C, bar 3 pp A (accent) B C; the CC1 in
+            // the note-ons in order: bar 1 pp A B C, bar 2 mf A B C, bar 3 pp A (accent) B C, bar 4 mf A C
+            // slurred; the CC1 in
             // force at each (sent ahead of a note on the same tick)
             std::vector<int> velo, cc1;
             int cc = -1;
@@ -1798,12 +1800,12 @@ void TestSoundLibrary::shortsFollowDynamics()
                         cc1.push_back(cc);
                         }
                   }
-            QCOMPARE(int(velo.size()), 9);
+            QCOMPARE(int(velo.size()), 11);
             QCOMPARE(cc1[0], 32);
             QCOMPARE(cc1[3], 80);
-            const int longPp = velo[2];                   // MS4's velocity (the soundfont's), either way
-            const int longMf = velo[5];
-            QVERIFY(longMf > longPp && longMf - longPp < 20);
+            const int legatoMf = velo[10];                // MS4's velocity (the soundfont's), either way
+            QVERIFY(legatoMf > 40 && legatoMf < 80);
+            QCOMPARE(velo[9], velo[10]);
             if (listed) {
                   QCOMPARE(velo[0], 32);
                   QCOMPARE(velo[1], 32);
@@ -1811,10 +1813,14 @@ void TestSoundLibrary::shortsFollowDynamics()
                   QCOMPARE(velo[4], 80);
                   QVERIFY2(velo[6] > 32 && velo[6] < 64, qPrintable(QString::number(velo[6])));    // accented pp: above pp, not ff
                   QCOMPARE(velo[7], 32);
+                  QCOMPARE(velo[2], 32);                  // held
+                  QCOMPARE(velo[5], 80);
+                  QVERIFY(velo[10] != 80);                // slurred: MS4's
                   }
             else {
-                  QCOMPARE(velo[0], longPp);
-                  QCOMPARE(velo[3], longMf);
+                  QCOMPARE(velo[0], velo[2]);             // staccato and held alike: MS4's
+                  QCOMPARE(velo[3], velo[5]);
+                  QVERIFY(velo[5] - velo[2] < 20);
                   }
             delete score;
             }
