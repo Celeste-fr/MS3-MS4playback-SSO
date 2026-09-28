@@ -64,6 +64,7 @@ class TestSoundLibrary : public QObject, public MTest
       void dynamicsCheck();
       void shortsFollowDynamics();
       void evenDynamicSteps();
+      void pedalChangeAfterChord();
       void checkedAsExpected();
       void render();
       void renderPatches();
@@ -2144,6 +2145,60 @@ void TestSoundLibrary::evenDynamicSteps()
       QVERIFY(rec[3].velo < off[3].velo);
       SoundLib::setDynamicsCalibration(nullptr);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   pedalChangeAfterChord
+//    a pedal change on a sound library part comes after the chord it goes with (legato pedalling):
+//    the owner, 2026-09-28, SSO's Grand Piano dropped about 1 chord in 8 at a pedal change when the
+//    pedal went up a tick before the chord and down with it. The built-in synthesizer keeps MS4's
+//    timing. pedal-change.musicxml: 60 bpm, a pedal on bar 1's chord, a new one on bar 2's
+//---------------------------------------------------------
+
+void TestSoundLibrary::pedalChangeAfterChord()
+      {
+      for (bool withLibrary : { true, false }) {
+            auto lib = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Grand Piano' ids='piano'>"
+               "<Articulation name='Direct' value='1' techniques='long legato short'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY(lib);
+            SoundLib::setCurrent(withLibrary ? lib : nullptr);
+            MasterScore* score = readScore(DIR + "pedal-change.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::pair<int, int>> pedal;           // tick, value
+            int chord2 = -1;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.channel() != ch)
+                        continue;
+                  if (ev.type() == ME_CONTROLLER && ev.dataA() == CTRL_SUSTAIN)
+                        pedal.push_back({ te.first, ev.dataB() });
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && te.first >= 1920 && chord2 < 0)
+                        chord2 = te.first;
+                  }
+            QCOMPARE(chord2, 1920);
+            QCOMPARE(int(pedal.size()), 4);                   // down, the change (up, down), up
+            QCOMPARE(pedal[0], std::make_pair(0, 127));
+            if (withLibrary) {
+                  // 40 ms and 90 ms after the chord at 60 bpm: 19 and 43 ticks
+                  QCOMPARE(pedal[1], std::make_pair(1920 + 19, 0));
+                  QCOMPARE(pedal[2], std::make_pair(1920 + 43, 127));
+                  }
+            else {
+                  QCOMPARE(pedal[1], std::make_pair(1919, 0));
+                  QCOMPARE(pedal[2], std::make_pair(1920, 127));
+                  }
+            QCOMPARE(pedal[3].second, 0);
+            delete score;
+            }
+      SoundLib::setCurrent(nullptr);
       }
 
 //---------------------------------------------------------

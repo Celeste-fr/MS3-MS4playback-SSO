@@ -2286,6 +2286,42 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                   const int to = pc->second.dynamics.spannerStop(s);
                   if (to <= from)
                         continue;
+                  // a sound library part: a pedal change after the chord it comes with, as a pianist
+                  // changes it (legato pedalling: up 40 ms after the chord, down again at 90 ms). The
+                  // owner, 2026-09-28: SSO's Grand Piano dropped about 1 chord in 8 at a pedal change
+                  // (28 of 220, 1 of 2442 elsewhere, in a piano piece's export), the pedal lifted a tick
+                  // before the chord and put down with it
+                  int down = from;
+                  int up = to;
+                  if (libParts.count(s->part())) {
+                        auto isPedal = [&](const Spanner* o) {
+                              return o != s && o->part() == s->part() && (o->isPedal() || o->isLetRing())
+                                     && (!o->staff() || o->staff()->primaryStaff());
+                              };
+                        auto after = [&](int tick, double ms) {
+                              const double beatsPerSecond = score->tempomap()->tempo(tick);
+                              return std::max(1, int(std::lround(ms / 1000.0 * beatsPerSecond * DIVISION)));
+                              };
+                        const Spanner* prev = nullptr;
+                        const Spanner* next = nullptr;
+                        for (const auto& o : score->spannerMap().map()) {
+                              if (!isPedal(o.second))
+                                    continue;
+                              const int oFrom = o.second->tick().ticks();
+                              const int oTo = pc->second.dynamics.spannerStop(o.second);
+                              if (oFrom < from && (oTo == from - 1 || oTo == from))
+                                    prev = o.second;
+                              if (oFrom > from && (oFrom == to + 1 || oFrom == to))
+                                    next = o.second;
+                              }
+                        if (prev)
+                              down = from + std::min(after(from, 90), std::max(1, (to - from) / 2));
+                        if (next) {
+                              const int nextFrom = next->tick().ticks();
+                              const int nextLength = pc->second.dynamics.spannerStop(next) - nextFrom;
+                              up = nextFrom + std::min(after(nextFrom, 40), std::max(0, nextLength / 4));
+                              }
+                        }
                   auto put = [&](int tick, int value) {
                         NPlayEvent ev(ME_CONTROLLER, channel, CTRL_SUSTAIN, value);
                         ev.setOriginatingStaff(staff);
@@ -2298,11 +2334,13 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               ev.setLayer(0);
                         events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
                         };
-                  if (from >= tick1 && from < tick2)
-                        put(from, 127);
+                  // (put in the chunk the pedal's own tick is in; moved past its end, where playback may
+                  // jump (a repeat), it stays at that tick)
                   const bool lastChunk = score->lastMeasure() && tick2 >= score->lastMeasure()->endTick().ticks();
+                  if (from >= tick1 && from < tick2)
+                        put(down < tick2 ? down : from, 127);
                   if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2))
-                        put(to, 0);
+                        put(up < tick2 || (lastChunk && up == tick2) ? up : to, 0);
                   continue;
                   }
             if (s->isPedal() || s->isLetRing()) {
