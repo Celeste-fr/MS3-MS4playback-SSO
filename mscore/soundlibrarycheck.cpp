@@ -1277,8 +1277,6 @@ QString ArticulationCheckDialog::balanceReport() const
             text += "   " + tr("held notes: %1 %2, %3 / %4 / %5 dB at pp / mf / ff").arg(heldPatch, held.articulation->name)
                .arg(f1(ref->at(32))).arg(f1(ref->at(80))).arg(f1(ref->at(112))) + "\n";
             for (const SoundLib::LibInstrument* q : patches) {
-                  // this patch's own long: its dynamics CC is calibrated to it (calibratedController)
-                  const SoundLib::Choice own = q->name == heldPatch ? SoundLib::Choice() : SoundLib::choose(*q, SoundLib::Want { { "long" }, {} });
                   for (const SoundLib::Articulation& a : q->articulations) {
                         const SoundLib::DynamicsCurve* c = cal->curve(q->name, a.value);
                         if (!c || (q->name == heldPatch && a.value == held.articulation->value))
@@ -1287,7 +1285,6 @@ QString ArticulationCheckDialog::balanceReport() const
                         for (const QString& t : a.techniques)
                               listed = listed || _library->velocityDynamics.contains(t);
                         const bool onVelocity = c->drivenBy == "velocity" || c->drivenBy == "both";
-                        const bool ownLong = own && own.articulation->value == a.value;
                         QStringList was, now;
                         double worst = 0;
                         for (int k = 0; k < 3; ++k) {
@@ -1306,18 +1303,17 @@ QString ArticulationCheckDialog::balanceReport() const
                               now << f1(n);
                               worst = std::max(worst, std::fabs(n));
                               }
-                        // flagged: a short out of its velocity range, or a patch's own long off the held note (a
-                        // patch other than the held note's); a variant (con sord., sul pont., flautando …)
-                        // keeps its own level
-                        const bool flag = worst > 3 && (onVelocity || ownLong);
+                        // flagged: a short out of its velocity range. One on the controller keeps Spitfire's own
+                        // level (the owner, 2026-09-28: "Leave as Spitfire made them"), listed for reference
+                        const bool flag = worst > 3 && onVelocity;
                         const QString where = q == main ? QString() : q->name + ": ";
                         QString line = QString("   %1 %2%3 (%4), on %5: %6 dB against the held note at pp / mf / ff (was %7)")
                            .arg(flag ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
                            .arg(now.join(" / "), was.join(" / "));
                         if (flag)
-                              line += onVelocity ? tr(" — beyond its velocity range") : tr(" — the patch's long, off the held note (not adjusted yet)");
-                        else if (!onVelocity && !ownLong && worst > 3)
-                              line += tr(" (a variant: its own level)");
+                              line += tr(" — beyond its velocity range");
+                        else if (!onVelocity)
+                              line += tr(" (on the controller: Spitfire's own level)");
                         text += line + "\n";
                         }
                   }

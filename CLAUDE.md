@@ -333,6 +333,14 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   builds meanwhile), refuses a second run (PowerShell: a process from that folder), starts it; a patch list file
   dropped on it. Tried here headless with the test synth (a map DynTest.xml, the synth's state as setups):
   2 patches in 4 s, the unused value skipped, harmonics measured an octave up, the balance report in the summary.
+  **The owner's background run (2026-09-28 01:40, 56 min, 159 patches, 417 curves)**: shorts balanced (Violas
+  Spiccato -14 / -12 / -7 -> within 0.3 dB). On the controller, a patch other than the held note's differs
+  (Violas' All techniques Long +10 / +3 / -2 dB against the Performance legato; Rachm. +11 at pp): one CC per
+  patch fitted to its long fixed Long / Rachm. / Marcato at mf but put tremolo and trills 5-11 dB off (left
+  out; `calibratedController` kept). **The owner's choice: controller articulations stay as Spitfire made
+  them**; only the shorts are calibrated, and the report flags only a short out of its velocity range.
+  12 patches "played nothing": no instrument templates in the background process, all tested at 60; mapped
+  patches now carry `pitch=` (their .nki's median zone key), and a patch no notation plays isn't loaded.
   **Section strings' shorts and Long (Rachm.)** (the owner, 2026-09-28): staccato plays Short 0.5,
   staccatissimo Spiccato, tenuto / portato Short 1.0 (Violins 1/2, Violas, Celli, Basses, Strings
   Ensemble); staff text "espr." / "espressivo" / "molto vib." / "con vibrato" sets the modifier
