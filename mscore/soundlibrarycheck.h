@@ -44,11 +44,13 @@
 #define __SOUNDLIBRARYCHECK_H__
 
 #include <memory>
+#include <vector>
 
 #include <QDialog>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QPoint>
 
 #include "libmscore/soundlibrary.h"
 #include "audio/vst3/articulationcheck.h"
@@ -122,6 +124,8 @@ class ArticulationCheckDialog : public QDialog {
       // Dynamics only: the patch loaded and measured, no articulation check
       bool dynamicsPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
+      bool picturePatch(int index, const QString& pluginPath, const QString& folder, std::unique_ptr<Vst3Plugin>& instance,
+                        QJsonArray& results, QString& summary);
       QString recordsFile() const;
       QString addedFile() const;
       void loadAdded();
@@ -155,6 +159,11 @@ class ArticulationCheckDialog : public QDialog {
       // (toScanNow), or on those a file lists (one patch name a line); listening only, no window
       bool runHeadlessKeyScan(const QString& patches, QString* zip);
       static bool toScanNow(const SoundLib::LibInstrument& instrument, bool added);
+      // each percussion patch's window (isPicturePatch, or those a file lists), as loaded and with each drum
+      // icon clicked, off the screen (MuseScore --window-pictures)
+      bool runHeadlessPictures(const QString& patches, QString* zip);
+      static bool isPicturePatch(const SoundLib::LibInstrument& instrument);
+      static bool isPictureWindow(quintptr window);                   // one of runHeadlessPictures' (the watchdog leaves it)
       QString brokenOn() const     { return _broken; }
       QStringList patchesLeft() const { return _left; }
       // a line of the background extract's log: stderr and Documents/MuseScore Sound Library Check/

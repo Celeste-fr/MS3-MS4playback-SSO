@@ -165,6 +165,43 @@ double ArticulationCheck::distance(const std::vector<double>& a, const std::vect
       }
 
 //---------------------------------------------------------
+//   drumIcons
+//    the drum icons of a Kickstart patch's window (SSO's percussion, in MuseScore's editor window,
+//    1377 x 679 at 100 %): right-aligned on a grid of 100 pixels, each with its name under it (the
+//    owner's pictures of the six percussion ensembles, 2026-09-27 20:15: 4-7 icons, every one found).
+//    Their centres, right to left, while a name is there; none left of the patch's title
+//---------------------------------------------------------
+
+std::vector<QPoint> ArticulationCheck::drumIcons(const QImage& window)
+      {
+      std::vector<QPoint> icons;
+      if (window.width() < 400 || window.height() < 300)
+            return icons;
+      const QImage img = window.convertToFormat(QImage::Format_RGB32);
+      const double sx = img.width() / 1377.0;
+      const double sy = img.height() / 679.0;
+      for (int k = 0; k < 12; ++k) {
+            const int cx = int(std::lround((1303 - 100 * k) * sx));
+            if (cx - 45 * sx < 620 * sx)
+                  break;                              // (the patch's title)
+            int label = 0;                            // light grey pixels in the name's row
+            for (int y = int(std::lround(438 * sy)); y < int(std::lround(462 * sy)); ++y) {
+                  const QRgb* line = reinterpret_cast<const QRgb*>(img.constScanLine(y));
+                  for (int x = int(std::lround(cx - 45 * sx)); x < int(std::lround(cx + 45 * sx)); ++x) {
+                        const QRgb c = line[x];
+                        const int lo = std::min({ qRed(c), qGreen(c), qBlue(c) });
+                        const int hi = std::max({ qRed(c), qGreen(c), qBlue(c) });
+                        label += lo > 150 && hi - lo < 30;
+                        }
+                  }
+            if (label < 12)
+                  break;
+            icons.push_back(QPoint(cx, int(std::lround(400 * sy))));
+            }
+      return icons;
+      }
+
+//---------------------------------------------------------
 //   scanPictures
 //---------------------------------------------------------
 

@@ -49,6 +49,7 @@
 #include <vector>
 
 #include <QImage>
+#include <QPoint>
 #include <QRect>
 #include <QString>
 
@@ -122,6 +123,10 @@ class ArticulationCheck {
             };
       static std::vector<DynamicsResult> dynamics(Vst3Plugin* plugin, const std::vector<int>& values, const std::vector<int>& pitches,
                                                   const std::vector<bool>& full, const Settings& settings, Progress progress = nullptr);
+
+      // the drum icons of a Kickstart patch's window (SSO's percussion; MuseScore's editor window, its pixels):
+      // their centres, right to left (MuseScore --window-pictures clicks each for its hit list)
+      static std::vector<QPoint> drumIcons(const QImage& window);
 
       // a scan's pictures (the plug-in's window after each value of the switch, cropped to
       // area): which show an articulation. "No articulation" is the picture most of them

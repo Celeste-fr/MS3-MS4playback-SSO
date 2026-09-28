@@ -251,6 +251,7 @@ static bool extractPitchBend = false;
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
+static bool picturesMode = false;          // --window-pictures: the percussion patches' windows, in the background (extractMode too)
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -4456,6 +4457,8 @@ static bool doProcessJob(QString jsonFile)
 //    MuseScore --extract-library <library> [--extract-patches all|mapped|<file>] [--extract-pitch-bend]
 //    MuseScore --scan-keys <library> [--extract-patches <file>]: Check articulations' key scan of the
 //    patches whose keys aren't known yet (SSO's 42 one-drum patches, about 4 hours), the same way
+//    MuseScore --window-pictures <library> [--extract-patches <file>]: the percussion patches' windows,
+//    each drum icon clicked (their hit lists: runHeadlessPictures), the same way
 //    Extract plug-in data (soundlibrarycheck.h) without a window, while the owner works in another
 //    MuseScore (the owner, 2026-09-27: "have the test run in the background without interfering").
 //    It is a process of its own: a new MuseScore window isn't asked for (the single-instance check is
@@ -4504,6 +4507,8 @@ struct DialogWatch {
                   std::vector<HWND> found;
                   EnumWindows(windows, reinterpret_cast<LPARAM>(&found));
                   for (HWND h : found) {
+                        if (ArticulationCheckDialog::isPictureWindow(quintptr(h)))
+                              continue;       // (the picture run's own, off the screen)
                         if (!seen.count(h)) {
                               seen[h] = clock.elapsed();
                               QStringList t;
@@ -4513,7 +4518,8 @@ struct DialogWatch {
                               ArticulationCheckDialog::logBackground(QString("   a window of the plug-in's: \"%1\" (closed in 30 s if still open)")
                                                                      .arg(t.join(" | ")));
                               }
-                        else if (seen[h] >= 0 && clock.elapsed() - seen[h] > 30000) {
+                        else if (seen[h] >= 0 && clock.elapsed() - seen[h] > 30000
+                               && !ArticulationCheckDialog::isPictureWindow(quintptr(h))) {
                               ArticulationCheckDialog::logBackground("   closing that window");
                               PostMessageW(h, WM_CLOSE, 0, 0);
                               seen[h] = -1;           // (closed once)
@@ -4581,7 +4587,7 @@ static bool extractInBackground()
             }
       ArticulationCheckDialog::logBackground(QString("%4 started; setups in %1 (%2 copied from %3)")
                                              .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine))
-                                             .arg(scanKeysMode ? QString("background key scan") : what));
+                                             .arg(picturesMode ? QString("background window pictures") : scanKeysMode ? QString("background key scan") : what));
       ArticulationCheckDialog dialog(library);
       QString zip;
       bool ok;
@@ -4589,11 +4595,12 @@ static bool extractInBackground()
 #ifdef Q_OS_WIN
             DialogWatch watch;
 #endif
-            ok = scanKeysMode ? dialog.runHeadlessKeyScan(extractPatches, &zip)
+            ok = picturesMode ? dialog.runHeadlessPictures(extractPatches, &zip)
+               : scanKeysMode ? dialog.runHeadlessKeyScan(extractPatches, &zip)
                               : dialog.runHeadless(extractPatches, extractPitchBend, &zip, checkDynamicsMode);
       }
-      if (scanKeysMode)
-            return ok;          // (a key scan: one process; its zip and log as the extract's)
+      if (scanKeysMode || picturesMode)
+            return ok;          // (a key scan, the pictures: one process; its zip and log as the extract's)
       if (checkDynamicsMode) {
             // the curves into the working MuseScore's calibration (its balance setting stays)
             SoundLib::DynamicsCalibration measured, working;
@@ -8609,6 +8616,9 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("scan-keys", "Check articulations' key scan of a sound library's patches whose keys are not "
                                           "known yet, without a window, as a process of its own like --extract-library (listening "
                                           "only); --extract-patches <file> for other patches", "library"));
+      parser.addOption(QCommandLineOption("window-pictures", "Pictures of a sound library's percussion patches' windows, each drum icon "
+                                          "clicked (their hit lists), as a process of its own like --extract-library (the window off "
+                                          "the screen); --extract-patches <file> for other patches", "library"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8675,10 +8685,13 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                   parser.showHelp(EXIT_FAILURE);
             }
       scanKeysMode = parser.isSet("scan-keys");
-      if ((extractMode = parser.isSet("extract-library") || scanKeysMode)) {
+      picturesMode = parser.isSet("window-pictures");
+      if ((extractMode = parser.isSet("extract-library") || scanKeysMode || picturesMode)) {
             MScore::noGui = true;
-            extractLibrary = parser.value(scanKeysMode ? "scan-keys" : "extract-library");
-            if (scanKeysMode)
+            extractLibrary = parser.value(picturesMode ? "window-pictures" : scanKeysMode ? "scan-keys" : "extract-library");
+            if (picturesMode)
+                  extractPatches = parser.isSet("extract-patches") ? parser.value("extract-patches") : QString("percussion");
+            else if (scanKeysMode)
                   extractPatches = parser.isSet("extract-patches") ? parser.value("extract-patches") : QString("toscan");
             else if (parser.isSet("extract-patches"))
                   extractPatches = parser.value("extract-patches");

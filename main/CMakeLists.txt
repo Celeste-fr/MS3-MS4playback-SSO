@@ -85,6 +85,9 @@ if (MINGW OR MSVC)
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Scan SSO drum keys in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Scan SSO drum keys in background.bat" @ONLY NEWLINE_STYLE CRLF)
       install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Scan SSO drum keys in background.bat" DESTINATION bin)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Take SSO percussion pictures in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Take SSO percussion pictures in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Take SSO percussion pictures in background.bat" DESTINATION bin)
 endif (MINGW OR MSVC)
 
 target_include_directories(mscore PRIVATE

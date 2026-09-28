@@ -71,6 +71,7 @@ class TestSoundLibrary : public QObject, public MTest
       void vst3Render();
       void articulationCheck();
       void scanPictures();
+      void drumIcons();
       void pluginDescribe();
       void pluginExtract();
       void pitchShift();
@@ -1533,6 +1534,42 @@ void TestSoundLibrary::articulationCheck()
       s.switchCC = 32;
       r = AC::run(p.get(), { 1, 2, 42, 71 }, s, [](int done, int) { return done < 2; });
       QVERIFY(r.cancelled);
+      }
+
+//---------------------------------------------------------
+//   drumIcons
+//    a Kickstart window's drum row (as SSO's percussion ensembles show it): icons right-aligned on a
+//    100-pixel grid, a light name under each; the icons found right to left, at any window scale
+//---------------------------------------------------------
+
+void TestSoundLibrary::drumIcons()
+      {
+      for (double scale : { 1.0, 1.5 }) {
+            QImage w(int(1377 * scale), int(679 * scale), QImage::Format_RGB32);
+            w.fill(qRgb(30, 30, 30));
+            QPainter painter(&w);
+            painter.scale(scale, scale);
+            painter.fillRect(360, 345, 1017, 130, QColor(72, 72, 72));               // the row
+            painter.fillRect(383, 360, 220, 14, QColor(230, 230, 230));              // the patch's title
+            for (int k = 0; k < 4; ++k) {
+                  const int cx = 1303 - 100 * k;
+                  painter.setBrush(QColor(190, 190, 190));
+                  painter.setPen(Qt::NoPen);
+                  painter.drawEllipse(QPoint(cx, 400), 26, 26);                       // the drum
+                  painter.fillRect(cx - 25, 446, 50, 8, QColor(215, 215, 215));       // its name
+                  }
+            painter.end();
+            const std::vector<QPoint> icons = ArticulationCheck::drumIcons(w);
+            QCOMPARE(int(icons.size()), 4);
+            for (int k = 0; k < 4; ++k) {
+                  QVERIFY(std::abs(icons[k].x() - (1303 - 100 * k) * scale) <= 2);
+                  QVERIFY(std::abs(icons[k].y() - 400 * scale) <= 2);
+                  }
+            }
+      // a window with no drum row (an orchestral patch): none
+      QImage plain(1377, 679, QImage::Format_RGB32);
+      plain.fill(qRgb(30, 30, 30));
+      QVERIFY(ArticulationCheck::drumIcons(plain).empty());
       }
 
 //---------------------------------------------------------

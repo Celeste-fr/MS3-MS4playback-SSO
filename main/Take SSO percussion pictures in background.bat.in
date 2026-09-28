@@ -1,0 +1,22 @@
+@echo off
+rem Pictures of Spitfire Symphony Orchestra's percussion patches' windows, in the background: the 42
+rem one-drum patches ("Percussion - <kit> - <drum>") and the 6 percussion ensembles.
+rem
+rem Double-click this file. It starts a MuseScore of its own with no window
+rem (MuseScore --window-pictures, mscore/musescore.cpp), like "Extract SSO in background.bat". Each
+rem patch is loaded, its Kontakt window opened off the screen, and pictured as loaded and with each
+rem drum icon clicked: Kickstart shows a drum's hits and their keys only there. About half a minute a
+rem patch, so about half an hour. It leaves the MuseScore you work in alone: its setups are the
+rem extract's copy (Documents\MuseScore Sound Library Check\background extract setups), it opens no
+rem audio or MIDI device. Only one background run at a time.
+rem
+rem Progress: Documents\MuseScore Sound Library Check\background extract.log
+rem When it is done, that folder opens; hand back the newest "Spitfire Symphony Orchestra windows <date>.zip".
+rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
+
+start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --window-pictures "Spitfire Symphony Orchestra"
+
+echo The pictures are taken in the background (Spitfire Symphony Orchestra's percussion, about half an hour).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background extract.log
+echo That folder opens when it is done. You can close this window and keep working.
+timeout /t 15

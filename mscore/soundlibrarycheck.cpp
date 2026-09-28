@@ -15,6 +15,8 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <mutex>
+#include <set>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -2892,6 +2894,343 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       Q_UNUSED(pluginPath);
       Q_UNUSED(folder);
       Q_UNUSED(summary);
+      return false;
+#endif
+      }
+
+// the picture windows of runHeadlessPictures: the background run's watchdog (musescore.cpp) leaves them
+static std::mutex pictureWindowsMutex;
+static std::set<quintptr> pictureWindows;
+
+bool ArticulationCheckDialog::isPictureWindow(quintptr window)
+      {
+      std::lock_guard<std::mutex> lock(pictureWindowsMutex);
+      return pictureWindows.count(window) > 0;
+      }
+
+#ifdef USE_VST3
+// a mouse click (or a wheel turn, wheel != 0) on the plug-in's window at a point of its picture
+// (grabPlugin's pixels): posted to the plug-in's own window under that point, so the window needn't be
+// on screen nor active. Windows only
+static bool pluginMouse(QWidget* w, const QImage& picture, const QPoint& at, int wheel = 0)
+      {
+#ifdef Q_OS_WIN
+      HWND top = reinterpret_cast<HWND>(w->winId());
+      RECT rc;
+      if (!GetClientRect(top, &rc) || picture.width() <= 0 || picture.height() <= 0)
+            return false;
+      POINT pt { LONG(at.x() * double(rc.right - rc.left) / picture.width()),
+                 LONG(at.y() * double(rc.bottom - rc.top) / picture.height()) };
+      HWND target = top;
+      for (int depth = 0; depth < 16; ++depth) {
+            HWND child = ChildWindowFromPointEx(target, pt, CWP_SKIPINVISIBLE | CWP_SKIPTRANSPARENT);
+            if (!child || child == target)
+                  break;
+            MapWindowPoints(target, child, &pt, 1);
+            target = child;
+            }
+      const LPARAM local = MAKELPARAM(pt.x, pt.y);
+      if (wheel) {
+            POINT screen = pt;
+            ClientToScreen(target, &screen);
+            return PostMessageW(target, WM_MOUSEWHEEL, MAKEWPARAM(0, wheel), MAKELPARAM(screen.x, screen.y));
+            }
+      PostMessageW(target, WM_MOUSEMOVE, 0, local);
+      return PostMessageW(target, WM_LBUTTONDOWN, MK_LBUTTON, local) && PostMessageW(target, WM_LBUTTONUP, 0, local);
+#else
+      Q_UNUSED(w);
+      Q_UNUSED(picture);
+      Q_UNUSED(at);
+      Q_UNUSED(wheel);
+      return false;
+#endif
+      }
+
+// how many pixels of a region differ between two pictures (by more than a little)
+static int differing(const QImage& a, const QImage& b, const QRect& r)
+      {
+      if (a.size() != b.size())
+            return r.width() * r.height();
+      int n = 0;
+      const QRect area = r.intersected(a.rect());
+      for (int y = area.top(); y <= area.bottom(); ++y) {
+            const QRgb* la = reinterpret_cast<const QRgb*>(a.constScanLine(y));
+            const QRgb* lb = reinterpret_cast<const QRgb*>(b.constScanLine(y));
+            for (int x = area.left(); x <= area.right(); ++x)
+                  n += std::abs(qGray(la[x]) - qGray(lb[x])) > 24;
+            }
+      return n;
+      }
+#endif
+
+//---------------------------------------------------------
+//   picturePatch
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::picturePatch(int index, const QString& pluginPath, const QString& folder,
+                                           std::unique_ptr<Vst3Plugin>& instance, QJsonArray& results, QString& summary)
+      {
+#ifdef USE_VST3
+      const SoundLib::LibInstrument& ins = *_rows[index].instrument;
+      const QString fileBase = safeFileName(ins.name);
+      QJsonObject out;
+      out["patch"] = ins.name;
+      auto fail = [&](const QString& message) {
+            out["error"] = message;
+            results.append(out);
+            summary += QString("## %1\n   %2\n\n").arg(ins.name, message);
+            say(QString("   %1: %2").arg(ins.name, message));
+            return false;
+            };
+      QString error;
+      if (!instance) {
+            instance = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
+            if (!instance)
+                  return fail(error);
+            }
+      Vst3Plugin* const p = instance.get();
+      if (!SoundLibraryHost::loadSetup(p, *_library, ins.name, pluginPath, &error))
+            return fail(error);
+      if (_library->dynamicsCC >= 0)
+            p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
+
+      // until the patch sounds (its script has laid out its window by then; up to 2 minutes)
+      Pump pump { p, double(MScore::sampleRate), &_cancel, {} };
+      bool sounds = false;
+      for (int i = 0; i < 40 && !_cancel && !sounds; ++i) {
+            pump.peak = 0;
+            for (int key : { 36, 38, 42, 48, 60, 72 }) {
+                  p->midi(ME_NOTEON, 0, key, 100);
+                  pump.run(350);
+                  p->midi(ME_NOTEON, 0, key, 0);
+                  pump.run(150);
+                  }
+            sounds = pump.peak > 1e-4;
+            }
+      if (_cancel)
+            return false;
+      out["sounds"] = sounds;
+      p->allNotesOff();
+
+      Steinberg::IPlugView* view = p->createEditor();
+      if (!view)
+            return fail("the plug-in has no window");
+      QPointer<Vst3EditorWindow> w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
+      w->setAttribute(Qt::WA_ShowWithoutActivating);
+      w->setWindowFlag(Qt::Tool);                         // (not on the taskbar)
+      // a background run shows nothing: the window is off the screen (PrintWindow draws it there)
+      const QPoint away(-20000, -20000);
+      if (_headless)
+            w->move(away);
+      {
+            std::lock_guard<std::mutex> lock(pictureWindowsMutex);
+            pictureWindows.insert(quintptr(w->winId()));
+      }
+      w->show();
+      pump.run(3000);
+      auto grab = [&]() {
+            if (!w)
+                  return QImage();
+            QImage img = grabPlugin(w);
+            if (uniform(img) && _headless) {
+                  // (drawn only on the screen: a moment in a corner of it, not activated)
+                  if (QScreen* screen = QApplication::primaryScreen()) {
+                        const QRect a = screen->availableGeometry();
+                        w->move(a.right() - w->width(), a.bottom() - w->height());
+                        pump.run(1500);
+                        img = grabPlugin(w);
+                        w->move(away);
+                        out["onScreen"] = true;
+                        }
+                  }
+            return img;
+            };
+      QJsonArray pictures;
+      auto save = [&](const QImage& img, const QString& suffix, const QString& what) {
+            const QString file = fileBase + suffix + ".png";
+            if (!img.isNull() && img.save(folder + "/" + file)) {
+                  QJsonObject o;
+                  o["file"] = file;
+                  o["what"] = what;
+                  pictures.append(o);
+                  }
+            };
+      const QImage first = grab();
+      save(first, "", "as loaded");
+      QStringList lines;
+
+      // each drum icon clicked: its hit list and keys
+      auto clickAll = [&](const QImage& from, const QString& prefix) {
+            const std::vector<QPoint> icons = ArticulationCheck::drumIcons(from);
+            for (int k = 0; k < int(icons.size()) && w && !_cancel; ++k) {
+                  if (!pluginMouse(w, from, icons[k]))
+                        return int(icons.size());
+                  pump.run(1200);
+                  save(grab(), QString(" - %1%2").arg(prefix).arg(k + 1),
+                       QString("drum icon %1 from the right clicked (%2, %3)").arg(k + 1).arg(icons[k].x()).arg(icons[k].y()));
+                  }
+            return int(icons.size());
+            };
+      const int icons = clickAll(first, "");
+      out["icons"] = icons;
+      lines << QString("%1 drum icon(s)").arg(icons);
+#ifndef Q_OS_WIN
+      if (icons)
+            lines << "(clicks only on Windows: the icons' lists not taken)";
+#endif
+      // more drums than the row shows (Ensembles - Contemporary: 8 in the file, 7 shown): the wheel over
+      // the row, both ways; a row that moved is clicked again
+      if (icons >= 5 && w) {
+            const double sx = first.width() / 1377.0;
+            const double sy = first.height() / 679.0;
+            const QPoint row(int(std::lround(900 * sx)), int(std::lround(400 * sy)));
+            const QRect band(int(std::lround(640 * sx)), int(std::lround(350 * sy)), int(std::lround(730 * sx)),
+                             int(std::lround(120 * sy)));
+            QImage before = grab();
+            for (int wheel : { 120, -120 }) {
+                  for (int i = 0; i < 3; ++i)
+                        pluginMouse(w, first, row, wheel);
+                  pump.run(1000);
+                  const QImage after = grab();
+                  if (differing(before, after, band) > 200) {
+                        save(after, QString(" - scrolled %1").arg(wheel > 0 ? "up" : "down"), "the drum row after the mouse wheel");
+                        const int more = clickAll(after, wheel > 0 ? "up " : "down ");
+                        lines << QString("the wheel moved the row (%1): %2 icon(s)").arg(wheel > 0 ? "up" : "down").arg(more);
+                        out[wheel > 0 ? "scrolledUp" : "scrolledDown"] = more;
+                        before = grab();
+                        }
+                  }
+            }
+      {
+            std::lock_guard<std::mutex> lock(pictureWindowsMutex);
+            if (w)
+                  pictureWindows.erase(quintptr(w->winId()));
+      }
+      if (w) {
+            w->close();
+            delete w;
+            }
+      out["pictures"] = pictures;
+      results.append(out);
+      lines << QString("%1 picture(s)").arg(pictures.size());
+      if (out.value("onScreen").toBool())
+            lines << "the window had to be on the screen for its pictures";
+      if (!sounds)
+            lines << "it played nothing (the window taken anyway)";
+      summary += QString("## %1\n   %2\n\n").arg(ins.name, lines.join("; "));
+      say(QString("   %1").arg(lines.join("; ")));
+      return !pictures.isEmpty();
+#else
+      Q_UNUSED(index);
+      Q_UNUSED(pluginPath);
+      Q_UNUSED(folder);
+      Q_UNUSED(instance);
+      Q_UNUSED(results);
+      Q_UNUSED(summary);
+      return false;
+#endif
+      }
+
+//---------------------------------------------------------
+//   runHeadlessPictures
+//    each percussion patch's window, as loaded and with each drum icon clicked (its hit list and keys:
+//    Kickstart shows them only there; the one-drum patches' keys, and the ensembles'), in the
+//    background: MuseScore --window-pictures (musescore.cpp; the owner, 2026-09-28: "let's close off
+//    these gaps"). The window is off the screen; its pictures and a summary in a zip
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::isPicturePatch(const SoundLib::LibInstrument& p)
+      {
+      return p.keyScan && (p.name.startsWith("Percussion - ") || p.name.startsWith("Ensembles - "));
+      }
+
+bool ArticulationCheckDialog::runHeadlessPictures(const QString& patches, QString* zip)
+      {
+#ifdef USE_VST3
+      _headless = true;
+      if (!_library) {
+            say("no sound library");
+            return false;
+            }
+      QString error;
+      const QString path = SoundLibraryHost::pluginPath(*_library, &error);
+      if (path.isEmpty()) {
+            say(error);
+            return false;
+            }
+      QStringList wanted;
+      if (!patches.isEmpty() && patches != "percussion") {
+            QFile f(patches);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                  say(QString("cannot read %1").arg(patches));
+                  return false;
+                  }
+            for (const QString& l : QString::fromUtf8(f.readAll()).split('\n'))
+                  if (!l.trimmed().isEmpty() && !l.trimmed().startsWith('#'))
+                        wanted << l.trimmed();
+            }
+      std::vector<int> chosen;
+      for (int row = 0; row < _table->rowCount(); ++row) {
+            const SoundLib::LibInstrument& ins = *_rows[row].instrument;
+            bool take = wanted.isEmpty() && isPicturePatch(ins);
+            for (const QString& n : wanted)
+                  take = take || ins.name.compare(n, Qt::CaseInsensitive) == 0;
+            if (!take)
+                  continue;
+            if (_table->item(row, 1)->data(Qt::UserRole).toBool())
+                  chosen.push_back(row);
+            else
+                  say(QString("%1: no setup (its .nki was not found); left out").arg(ins.name));
+            }
+      if (chosen.empty()) {
+            say("no patch to take");
+            return false;
+            }
+      const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HHmm");
+      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      QString folder = root + "/" + safeFileName(_library->name) + " windows " + stamp;
+      for (int n = 2; QFileInfo::exists(folder) || QFileInfo::exists(folder + ".zip"); ++n)
+            folder = root + "/" + safeFileName(_library->name) + " windows " + stamp + QString(" (%1)").arg(n);
+      if (!QDir().mkpath(folder)) {
+            say(QString("cannot create %1").arg(folder));
+            return false;
+            }
+      say(QString("%1: %2 patches' windows").arg(_library->name).arg(chosen.size()));
+      setRunning(true);
+      QString summary = QString("%1: patch windows, %2 (MuseScore %3)\n"
+                                "Each patch as loaded, then each drum icon clicked (its hit list and keys).\n\n")
+                        .arg(_library->name, stamp, QString(VERSION));
+      QJsonArray results;
+      QElapsedTimer total;
+      total.start();
+      std::unique_ptr<Vst3Plugin> instance;
+      for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
+            const QString left = k > 0 ? QString(", about %1 min left").arg((total.elapsed() / k * (int(chosen.size()) - k) + 59999) / 60000)
+                                       : QString();
+            say(QString("%1 of %2: %3 (%4 min so far%5)").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
+                .arg(total.elapsed() / 60000).arg(left));
+            if (!picturePatch(chosen[k], path, folder, instance, results, summary))
+                  instance.reset();
+            writeFile(folder + "/summary.txt", (summary + "\n(Still running: written after each patch.)\n").toUtf8());
+            writeFile(folder + "/pictures.json", QJsonDocument(results).toJson());
+            QApplication::processEvents();
+            }
+      instance.reset();
+      summary += QString("\n%1 patches in %2 min\n").arg(chosen.size()).arg(total.elapsed() / 60000.0, 0, 'f', 1);
+      if (_cancel)
+            summary += "\n(Stopped before the end.)\n";
+      writeFile(folder + "/summary.txt", summary.toUtf8());
+      writeFile(folder + "/pictures.json", QJsonDocument(results).toJson());
+      _zip = zipFolder(folder);
+      setRunning(false);
+      say(QString("done in %1 min: %2").arg(total.elapsed() / 60000.0, 0, 'f', 1).arg(QDir::toNativeSeparators(_zip)));
+      QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+      if (zip)
+            *zip = _zip;
+      return true;
+#else
+      Q_UNUSED(patches);
+      Q_UNUSED(zip);
       return false;
 #endif
       }

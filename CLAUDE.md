@@ -1065,6 +1065,24 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     Triangle 1 on 48-51, 53, 55, 59-60, 64-65. So the keys can't be named from the file's order: which key plays
     which hit needs the patch's hit list (the owner's Kickstart screenshots, as for the kits). What playback
     needs from them: Snare 1 / 2 roll and x stick, Triangle 1 / 2 (the rest the kits already play). Now in the map (above).
+    **Pictures of the percussion windows, in the background** (the owner, 2026-09-28: "let's close off these
+    gaps"): Kickstart shows a drum's hits and keys in its window only (a one-drum patch as it loads, a patch with
+    several drums once its icon is clicked; the six ensembles' rows are 4-8 drums, Contemporary's 8th off the row's
+    left end). `Take SSO percussion pictures in background.bat` starts `MuseScore3Evo.exe --window-pictures
+    "Spitfire Symphony Orchestra"` (`[--extract-patches <file>]`; `picturesMode`, extractMode's process rules, log
+    `background extract.log`): `ArticulationCheckDialog::runHeadlessPictures` takes every keyScan patch named
+    "Percussion - …" or "Ensembles - …" (`isPicturePatch`, 48), loads it on one instance, waits until it sounds, opens
+    its window off the screen (-20000, not activated, a Tool window; `DialogWatch` leaves it: `isPictureWindow`),
+    grabs it (PrintWindow; if that is blank, a moment in the screen's corner), then clicks each drum icon
+    (`ArticulationCheck::drumIcons`: a name under each slot of a 100-pixel grid from the right, found on all six
+    ensemble pictures of 2026-09-27 20:15; `pluginMouse`: WM_LBUTTONDOWN/UP posted to the plug-in's window under the
+    point, Windows only) and, with 5 or more icons, turns the mouse wheel over the row both ways and clicks again if
+    it moved. `<library> windows <date>/`: `<patch>.png`, `<patch> - n.png` (icon n from the right), pictures.json,
+    summary.txt, zip. Tried here only with the test synth (no editor: "the plug-in has no window"); the window,
+    the off-screen grab and the clicks are untried with Kontakt. Test `drumIcons`.
+    Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
+    not in the map until the owner confirms): 1 Minor H., 2 Minor M., 3 Major, 4 Pentatonic, 5 Diminished; Whole
+    (selected at load, label "KEYSWITCH C0") most likely 0; 102-103 no change (a ring).
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6
