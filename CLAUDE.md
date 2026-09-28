@@ -590,7 +590,8 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   content folder); making paths absolute put it under the `.nki`'s folder, which has no `presets`. A path starting with
   a 6 is now kept as it is (`KontaktSetup` `absolute`, make_setups.py `absolute`; test `test_kontakt_content_kept`;
   `kontaktSetupReal` with the owner's `.nki` keeps it). Other patches with Kontakt's convolution would have had the same
-  fault. Not heard with Kontakt yet. Without raising `MAKER_VERSION` (every patch's first load slow again): a setup
+  fault. **Confirmed by the owner on run 151 (2026-09-28): with its setup made again, Celli - Performance
+  loads and plays.** Without raising `MAKER_VERSION` (every patch's first load slow again): a setup
   Kontakt gives back unchanged loses its `made setups.json` record, so it is made again at its next load. On Windows a
   watchdog thread (`DialogWatch`, musescore.cpp, background run only: the process has no window of its own)
   logs the title and texts of any visible window of the process and closes it (WM_CLOSE) after 30 s. The
