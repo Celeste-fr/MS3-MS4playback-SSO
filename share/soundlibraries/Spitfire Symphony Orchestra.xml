@@ -1672,7 +1672,18 @@
     <Drum key="88" name="Rototom 3"/>
     <Drum key="89" name="Rototom 4"/>
     <Drum key="91" name="Rototom 5"/>
-    <!-- off in Kickstart by default (from the drum's own patch): Snare 2 X Stick, Snare 2 Flam, Snare 2 Brush, Snare 2 Roll, Snare 2 Brush Roll, Snare 1 Swell mf, Snare 1 Swell f, Snare 1 X Stick, Snare 1 Roll, Snare 1 Flam, Snare 2 Rim; Timbales Lo / Hi X Stick, Lo / Hi Flam, Hi Side, Lo / Hi Swell mf / f; Rototoms Swell 1-5; Conga 1 / 2 Flam, Roll, Roll SFP, Roll Side, Swell mf / f; Bongos Hand Roll (SFP), Finger Roll (SFP), Side Roll, Hand / Bass Swell mf / f -->
+    <Drum name="Snare 2 X Stick" default="off"/>
+    <Drum name="Snare 2 Flam" default="off"/>
+    <Drum name="Snare 2 Brush" default="off"/>
+    <Drum name="Snare 2 Roll" default="off"/>
+    <Drum name="Snare 2 Brush Roll" default="off"/>
+    <Drum name="Snare 1 Swell mf" default="off"/>
+    <Drum name="Snare 1 Swell f" default="off"/>
+    <Drum name="Snare 1 X Stick" default="off"/>
+    <Drum name="Snare 1 Roll" default="off"/>
+    <Drum name="Snare 1 Flam" default="off"/>
+    <Drum name="Snare 2 Rim" default="off"/>
+    <!-- also off in Kickstart by default, no key (names as the kit shows them): Timbales Lo / Hi X Stick, Lo / Hi Flam, Hi Side, Lo / Hi Swell mf / f; Rototoms Swell 1-5; Conga 1 / 2 Flam, Roll, Roll SFP, Roll Side, Swell mf / f; Bongos Hand Roll (SFP), Finger Roll (SFP), Side Roll, Hand / Bass Swell mf / f -->
   </Instrument>
   <Instrument name="Drums - Low" with="Percussion" keyScan="1" nki="Instruments/Symphonic Percussion/Drums - Low.nki">
     <Switch type="none"/>
@@ -1702,7 +1713,7 @@
     <Drum key="77" name="Tom Ensemble Eth Hit Loose"/>
     <Drum key="88" name="Bass Drum Mute Hit"/>
     <Drum key="89" name="Bass Drum Rute"/>
-    <!-- off in Kickstart by default (from the drum's own patch): Toms Swell 1-5 mf / f; Gong Drum Swell, Fx Drag, Fx Various; Field Drum Flam, Roll, Swell mf / f; Bass Drum Roll, Fx Rub, Swell -->
+    <!-- also off in Kickstart by default, no key (names as the kit shows them): Toms Swell 1-5 mf / f; Gong Drum Swell, Fx Drag, Fx Various; Field Drum Flam, Roll, Swell mf / f; Bass Drum Roll, Fx Rub, Swell -->
   </Instrument>
   <Instrument name="Unpitched - Metal" with="Percussion" keyScan="1" nki="Instruments/Symphonic Percussion/Unpitched - Metal.nki">
     <Switch type="none"/>
@@ -1751,7 +1762,17 @@
     <Drum key="93" name="Trash Metal Scafold 2"/>
     <Drum key="95" name="Trash Metal Spring Coil"/>
     <Drum key="96" name="Trash Metal Trash Can"/>
-    <!-- off in Kickstart by default (from the drum's own patch): Triangle 1 Open Hit 1, Triangle 1 Open Hit 2, Triangle 1 Open Hit 3, Triangle 1 Open Hit 4, Triangle 1 Closed Hit, Triangle 2 Open Hit 1, Triangle 2 Open Hit 2, Triangle 2 Open Hit 3, Triangle 2 Open Hit 4, Triangle 2 Closed Hit; Gong Swell mf / f, Fx Bow; Tam Tam Roll, Swell mf / f, Superball, Fx Scrape; Rivet Cymbal Roll, Swell; Rain Sheet Roll, Swell mp / mf / f, Superball; Piatti Choked Hit, Choked Alt, Fx Scrape, Fx Sizzle; Cymbal Hi / Lo Roll, Swell mf / f, Fx Scrape, Fx Bow; Cymbal Med Roll, Swell mf / f; Mark Tree Sweep low / mid / high; Anvil Hit Face, Steel Sheet, Horn Pipe, Rear Pipe -->
+    <Drum name="Triangle 1 Open Hit 1" default="off"/>
+    <Drum name="Triangle 1 Open Hit 2" default="off"/>
+    <Drum name="Triangle 1 Open Hit 3" default="off"/>
+    <Drum name="Triangle 1 Open Hit 4" default="off"/>
+    <Drum name="Triangle 1 Closed Hit" default="off"/>
+    <Drum name="Triangle 2 Open Hit 1" default="off"/>
+    <Drum name="Triangle 2 Open Hit 2" default="off"/>
+    <Drum name="Triangle 2 Open Hit 3" default="off"/>
+    <Drum name="Triangle 2 Open Hit 4" default="off"/>
+    <Drum name="Triangle 2 Closed Hit" default="off"/>
+    <!-- also off in Kickstart by default, no key (names as the kit shows them): Gong Swell mf / f, Fx Bow; Tam Tam Roll, Swell mf / f, Superball, Fx Scrape; Rivet Cymbal Roll, Swell; Rain Sheet Roll, Swell mp / mf / f, Superball; Piatti Choked Hit, Choked Alt, Fx Scrape, Fx Sizzle; Cymbal Hi / Lo Roll, Swell mf / f, Fx Scrape, Fx Bow; Cymbal Med Roll, Swell mf / f; Mark Tree Sweep low / mid / high; Anvil Hit Face, Steel Sheet, Horn Pipe, Rear Pipe -->
   </Instrument>
   <Instrument name="Unpitched - Wood" with="Percussion" keyScan="1" nki="Instruments/Symphonic Percussion/Unpitched - Wood.nki">
     <Switch type="none"/>
@@ -1775,7 +1796,7 @@
     <Drum key="62" name="Woodblock 2"/>
     <Drum key="64" name="Woodblock 3"/>
     <Drum key="65" name="Woodblock 4"/>
-    <!-- off in Kickstart by default (from the drum's own patch): (not yet known) -->
+    <!-- also off in Kickstart by default, no key (names as the kit shows them): (not yet known) -->
   </Instrument>
   <Instrument name="Other - Toys" with="Percussion" keyScan="1" nki="Instruments/Symphonic Percussion/Other - Toys.nki">
     <Switch type="none"/>
@@ -1821,7 +1842,7 @@
     <Drum key="93" name="Cabasa Slap"/>
     <Drum key="95" name="Cabasa Twist 1"/>
     <Drum key="96" name="Cabasa Twist 2"/>
-    <!-- off in Kickstart by default (from the drum's own patch): Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll -->
+    <!-- also off in Kickstart by default, no key (names as the kit shows them): Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll -->
   </Instrument>
   <Instrument name="Percussion - Drums - High - Bongos" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Drums - High - Bongos.nki">
     <Switch type="none"/>
@@ -2786,12 +2807,274 @@
   <Patch name="Woodwinds - Piccolo Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Tenuto.nki" setup="$iooxo=3" pitch="89"/>
   <Patch name="Woodwinds - Piccolo Flute - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="87"/>
   <Patch name="Woodwinds - Piccolo Flute - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="87"/>
-  <Patch name="Ensembles - Contemporary" nki="Instruments/Symphonic Percussion/Ensembles - Contemporary.nki" scan="keys" pitch="4"/>
-  <Patch name="Ensembles - Hands and hits" nki="Instruments/Symphonic Percussion/Ensembles - Hands and hits.nki" scan="keys" pitch="4"/>
-  <Patch name="Ensembles - Low Ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Low Ensemble.nki" scan="keys" pitch="5"/>
-  <Patch name="Ensembles - Metal Clangs" nki="Instruments/Symphonic Percussion/Ensembles - Metal Clangs.nki" scan="keys" pitch="2"/>
-  <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki" scan="keys" pitch="7"/>
-  <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki" scan="keys" pitch="3"/>
+  <Patch name="Ensembles - Contemporary" nki="Instruments/Symphonic Percussion/Ensembles - Contemporary.nki" scan="keys" pitch="4">
+    <Drum key="48" name="Tambourines Hit"/>
+    <Drum key="52" name="Tambourines Hit Alt"/>
+    <Drum key="49" name="Tambourines Roll"/>
+    <Drum name="Tambourines Swell" default="off"/>
+    <Drum name="Tambourines Swell Alt" default="off"/>
+    <Drum name="Tambourines FX Rolls" default="off"/>
+    <Drum key="29" name="Shakers Pop Closed"/>
+    <Drum key="30" name="Shakers Met Open"/>
+    <Drum name="Shakers Met Closed" default="off"/>
+    <Drum key="108" name="Cowbells Bell 1 Open"/>
+    <Drum key="109" name="Cowbells Bell 1 Closed"/>
+    <Drum key="112" name="Cowbells Bell 2 Open"/>
+    <Drum key="114" name="Cowbells Bell 2 Closed"/>
+    <Drum key="115" name="Cowbells Bell 3 Open"/>
+    <Drum key="118" name="Cowbells Bell 3 Closed"/>
+    <Drum key="60" name="Sleighbells Hit 1"/>
+    <Drum key="64" name="Sleighbells Hit 2"/>
+    <Drum key="61" name="Sleighbells Roll 1"/>
+    <Drum key="66" name="Sleighbells Roll 2"/>
+    <Drum key="84" name="Trash metals Brake 1"/>
+    <Drum key="88" name="Trash metals Brake 2"/>
+    <Drum key="85" name="Trash metals Pans"/>
+    <Drum key="90" name="Trash metals Scafold 1"/>
+    <Drum key="91" name="Trash metals Scafold 2"/>
+    <Drum name="Trash metals Spring Coil" default="off"/>
+    <Drum name="Trash metals Trash Can" default="off"/>
+    <Drum key="96" name="Ratchet Short"/>
+    <Drum key="100" name="Ratchet Long"/>
+    <Drum key="37" name="Guiro Hit"/>
+    <Drum key="36" name="Guiro Zip"/>
+    <Drum name="Guiro Zip Fast" default="off"/>
+    <Drum name="Guiro Zip sfz" default="off"/>
+    <Drum key="72" name="Claves Bass Hit"/>
+    <Drum key="76" name="Claves Cuban Hit"/>
+    <Drum key="79" name="Claves C# Hit"/>
+    <Drum key="73" name="Claves D Hit"/>
+    <Drum key="78" name="Claves E Hit"/>
+  </Patch>
+  <Patch name="Ensembles - Hands and hits" nki="Instruments/Symphonic Percussion/Ensembles - Hands and hits.nki" scan="keys" pitch="4">
+    <Drum name="Bongos Side Roll" default="off"/>
+    <Drum name="Bongos H Swell mf" default="off"/>
+    <Drum name="Bongos H Swell f" default="off"/>
+    <Drum name="Bongos B Swell mf" default="off"/>
+    <Drum name="Bongos B Swell f" default="off"/>
+    <Drum key="60" name="Bongos Hand Flam"/>
+    <Drum key="64" name="Bongos Hand Bass"/>
+    <Drum name="Bongos Hand Tone" default="off"/>
+    <Drum key="61" name="Bongos Fing Flam"/>
+    <Drum name="Bongos Fing Bass" default="off"/>
+    <Drum name="Bongos Fing Slap" default="off"/>
+    <Drum key="67" name="Bongos Hit"/>
+    <Drum name="Bongos Hand Roll sfp" default="off"/>
+    <Drum key="66" name="Bongos Hand Roll"/>
+    <Drum name="Bongos Fing Roll sfp" default="off"/>
+    <Drum key="68" name="Bongos Fing Roll"/>
+    <Drum name="Conga 1 Flam" default="off"/>
+    <Drum name="Conga 1 Bass" default="off"/>
+    <Drum name="Conga 1 Tone" default="off"/>
+    <Drum name="Conga 1 Slap" default="off"/>
+    <Drum key="40" name="Conga 1 Hit"/>
+    <Drum name="Conga 1 Roll" default="off"/>
+    <Drum name="Conga 1 Roll sfp" default="off"/>
+    <Drum name="Conga 1 Roll Side" default="off"/>
+    <Drum name="Conga 1 Swell mf" default="off"/>
+    <Drum name="Conga 1 Swell f" default="off"/>
+    <Drum name="Conga 2 Flam" default="off"/>
+    <Drum name="Conga 2 Bass" default="off"/>
+    <Drum name="Conga 2 Tone" default="off"/>
+    <Drum name="Conga 2 Slap" default="off"/>
+    <Drum key="36" name="Conga 2 Hit"/>
+    <Drum name="Conga 2 Roll" default="off"/>
+    <Drum name="Conga 2 Roll sfp" default="off"/>
+    <Drum name="Conga 2 Roll Side" default="off"/>
+    <Drum name="Conga 2 Swell mf" default="off"/>
+    <Drum name="Conga 2 Swell f" default="off"/>
+    <Drum key="48" name="Gong Drum Hit"/>
+    <Drum key="49" name="Gong Drum Mute Hit"/>
+    <Drum name="Gong Drum Swell" default="off"/>
+    <Drum name="Gong Drum FX Drag" default="off"/>
+    <Drum name="Gong Drum FX Various" default="off"/>
+    <Drum key="84" name="Gankogui Low Open"/>
+    <Drum key="85" name="Gankogui Low Closed"/>
+    <Drum key="88" name="Gankogui Hi Open"/>
+    <Drum key="90" name="Gankogui Hi Closed"/>
+    <Drum key="72" name="Cabasa Flick"/>
+    <Drum key="76" name="Cabasa Shake"/>
+    <Drum key="73" name="Cabasa Slap"/>
+    <Drum key="78" name="Cabasa Twist"/>
+    <Drum key="79" name="Cabasa Alt Twist"/>
+  </Patch>
+  <Patch name="Ensembles - Low Ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Low Ensemble.nki" scan="keys" pitch="5">
+    <Drum key="48" name="Bass Drum Hit"/>
+    <Drum key="52" name="Bass Drum Soft Hit"/>
+    <Drum key="49" name="Bass Drum Mute Hit"/>
+    <Drum key="61" name="Bass Drum Roll"/>
+    <Drum key="57" name="Bass Drum Rute"/>
+    <Drum name="Bass Drum FX Rub" default="off"/>
+    <Drum name="Bass Drum Swell" default="off"/>
+    <Drum name="Toms Swell 2 f" default="off"/>
+    <Drum name="Toms Swell 3 f" default="off"/>
+    <Drum name="Toms Swell 4 f" default="off"/>
+    <Drum name="Toms Swell 5 f" default="off"/>
+    <Drum key="48" name="Toms Tom 1"/>
+    <Drum key="49" name="Toms Tom 2"/>
+    <Drum key="52" name="Toms Tom 3"/>
+    <Drum key="52" name="Toms Tom 4"/>
+    <Drum key="52" name="Toms Tom 5"/>
+    <Drum name="Toms Swell 1 mf" default="off"/>
+    <Drum name="Toms Swell 2 mf" default="off"/>
+    <Drum name="Toms Swell 3 mf" default="off"/>
+    <Drum name="Toms Swell 4 mf" default="off"/>
+    <Drum name="Toms Swell 5 mf" default="off"/>
+    <Drum name="Toms Swell 1 f" default="off"/>
+    <Drum key="48" name="Tom Ensemble Hit"/>
+    <Drum key="49" name="Tom Ensemble Hit Loose"/>
+    <Drum key="52" name="Tom Ensemble Eth Hit"/>
+    <Drum name="Tom Ensemble Eth Hit Loose" default="off"/>
+    <Drum key="48" name="Gong Drum Hit"/>
+    <Drum key="49" name="Gong Drum Mute Hit"/>
+    <Drum name="Gong Drum Swell" default="off"/>
+    <Drum name="Gong Drum FX Drag" default="off"/>
+    <Drum name="Gong Drum FX Various" default="off"/>
+    <Drum key="48" name="Field Drum Hit"/>
+    <Drum key="52" name="Field Drum Edge"/>
+    <Drum key="57" name="Field Drum Rim"/>
+    <Drum key="57" name="Field Drum X Stick"/>
+    <Drum key="49" name="Field Drum Flam"/>
+    <Drum key="61" name="Field Drum Roll"/>
+    <Drum name="Field Drum Swell mf" default="off"/>
+    <Drum name="Field Drum Swell f" default="off"/>
+  </Patch>
+  <Patch name="Ensembles - Metal Clangs" nki="Instruments/Symphonic Percussion/Ensembles - Metal Clangs.nki" scan="keys" pitch="2">
+    <Drum key="36" name="Anvil Hit Rear"/>
+    <Drum name="Anvil Hit Mid" default="off"/>
+    <Drum key="42" name="Anvil Horn Center"/>
+    <Drum key="37" name="Anvil Horn Tip"/>
+    <Drum name="Anvil Horn Under" default="off"/>
+    <Drum name="Anvil Hit Face" default="off"/>
+    <Drum name="Anvil Steel Sheet" default="off"/>
+    <Drum key="40" name="Anvil Horn Pipe"/>
+    <Drum name="Anvil Rear Pipe" default="off"/>
+    <Drum key="43" name="Mini Anvil Anvil 1"/>
+    <Drum key="46" name="Mini Anvil Anvil 2"/>
+    <Drum name="Mini Anvil Anvil 3" default="off"/>
+    <Drum name="Rain Sheet Hit" default="off"/>
+    <Drum name="Rain Sheet Choked Hit" default="off"/>
+    <Drum name="Rain Sheet Roll" default="off"/>
+    <Drum name="Rain Sheet Swell mp" default="off"/>
+    <Drum name="Rain Sheet Swell mf" default="off"/>
+    <Drum name="Rain Sheet Swell f" default="off"/>
+    <Drum name="Rain Sheet Superball" default="off"/>
+    <Drum key="48" name="Trash metals Brake 1"/>
+    <Drum key="52" name="Trash metals Brake 2"/>
+    <Drum key="49" name="Trash metals Pans"/>
+    <Drum key="54" name="Trash metals Scafold 1"/>
+    <Drum key="55" name="Trash metals Scafold 2"/>
+    <Drum name="Trash metals Spring Coil" default="off"/>
+    <Drum name="Trash metals Trash Can" default="off"/>
+    <Drum name="Triangle 1 Open Hit 1" default="off"/>
+    <Drum name="Triangle 1 Open Hit 2" default="off"/>
+    <Drum name="Triangle 1 Open Hit 3" default="off"/>
+    <Drum key="96" name="Triangle 1 Open Hit 4"/>
+    <Drum key="97" name="Triangle 1 Closed Hit"/>
+    <Drum name="Triangle 2 Open Hit 1" default="off"/>
+    <Drum name="Triangle 2 Open Hit 2" default="off"/>
+    <Drum name="Triangle 2 Open Hit 3" default="off"/>
+    <Drum key="100" name="Triangle 2 Open Hit 4"/>
+    <Drum key="102" name="Triangle 2 Closed Hit"/>
+    <Drum key="84" name="Ships Bell Hit"/>
+    <Drum key="85" name="Ships Bell Muted Hit"/>
+    <Drum key="60" name="Agogo Low Hit"/>
+    <Drum key="64" name="Agogo High Hit"/>
+    <Drum key="72" name="Gankogui Low Open"/>
+    <Drum key="73" name="Gankogui Low Closed"/>
+    <Drum key="76" name="Gankogui Hi Open"/>
+    <Drum key="78" name="Gankogui Hi Closed"/>
+  </Patch>
+  <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki" scan="keys" pitch="7">
+    <Drum key="48" name="Snare 1 Hit"/>
+    <Drum key="52" name="Snare 1 Edge"/>
+    <Drum key="55" name="Snare 1 Rim"/>
+    <Drum key="59" name="Snare 1 X Stick"/>
+    <Drum key="49" name="Snare 1 Flam"/>
+    <Drum key="61" name="Snare 1 Roll"/>
+    <Drum key="41" name="Snare 1 Swell mf"/>
+    <Drum key="43" name="Snare 1 Swell f"/>
+    <Drum key="48" name="Snare 2 Hit"/>
+    <Drum key="52" name="Snare 2 Edge"/>
+    <Drum key="55" name="Snare 2 Rim"/>
+    <Drum key="59" name="Snare 2 X Stick"/>
+    <Drum key="49" name="Snare 2 Flam"/>
+    <Drum key="72" name="Snare 2 Brush"/>
+    <Drum key="61" name="Snare 2 Roll"/>
+    <Drum key="73" name="Snare 2 Brush Roll"/>
+    <Drum key="41" name="Snare 2 Swell mf"/>
+    <Drum key="43" name="Snare 2 Swell f"/>
+    <Drum key="48" name="Snare 3 Hit"/>
+    <Drum key="48" name="Field Drum Hit"/>
+    <Drum key="52" name="Field Drum Edge"/>
+    <Drum key="55" name="Field Drum Rim"/>
+    <Drum key="59" name="Field Drum X Stick"/>
+    <Drum key="49" name="Field Drum Flam"/>
+    <Drum key="61" name="Field Drum Roll"/>
+    <Drum key="41" name="Field Drum Swell mf"/>
+    <Drum key="43" name="Field Drum Swell f"/>
+  </Patch>
+  <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki" scan="keys" pitch="3">
+    <Drum key="36" name="Bass Drum Hit"/>
+    <Drum name="Bass Drum Soft Hit" default="off"/>
+    <Drum name="Bass Drum Mute Hit" default="off"/>
+    <Drum key="37" name="Bass Drum Roll"/>
+    <Drum name="Bass Drum Rute" default="off"/>
+    <Drum name="Bass Drum FX Rub" default="off"/>
+    <Drum name="Bass Drum Swell" default="off"/>
+    <Drum name="Toms Swell 2 f" default="off"/>
+    <Drum name="Toms Swell 3 f" default="off"/>
+    <Drum name="Toms Swell 4 f" default="off"/>
+    <Drum name="Toms Swell 5 f" default="off"/>
+    <Drum key="60" name="Toms Tom 1"/>
+    <Drum key="64" name="Toms Tom 2"/>
+    <Drum key="67" name="Toms Tom 3"/>
+    <Drum key="71" name="Toms Tom 4"/>
+    <Drum key="74" name="Toms Tom 5"/>
+    <Drum name="Toms Swell 1 mf" default="off"/>
+    <Drum name="Toms Swell 2 mf" default="off"/>
+    <Drum name="Toms Swell 3 mf" default="off"/>
+    <Drum name="Toms Swell 4 mf" default="off"/>
+    <Drum name="Toms Swell 5 mf" default="off"/>
+    <Drum name="Toms Swell 1 f" default="off"/>
+    <Drum key="48" name="Piatti Hit"/>
+    <Drum name="Piatti Choked Hit" default="off"/>
+    <Drum name="Piatti Choked Alt" default="off"/>
+    <Drum name="Piatti FX Scrape" default="off"/>
+    <Drum name="Piatti FX Sizzle" default="off"/>
+    <Drum key="50" name="Cymbal Lo Hit"/>
+    <Drum name="Cymbal Lo Choked Hit" default="off"/>
+    <Drum name="Cymbal Lo Brush" default="off"/>
+    <Drum name="Cymbal Lo Roll" default="off"/>
+    <Drum name="Cymbal Lo Swell mf" default="off"/>
+    <Drum name="Cymbal Lo Swell f" default="off"/>
+    <Drum name="Cymbal Lo FX Scrape" default="off"/>
+    <Drum name="Cymbal Lo FX Bow" default="off"/>
+    <Drum name="Cymbal Med Hit" default="off"/>
+    <Drum name="Cymbal Med Choked Hit" default="off"/>
+    <Drum name="Cymbal Med Brush" default="off"/>
+    <Drum name="Cymbal Med Roll" default="off"/>
+    <Drum name="Cymbal Med Swell mf" default="off"/>
+    <Drum name="Cymbal Med Swell f" default="off"/>
+    <Drum key="53" name="Cymbal Hi Hit"/>
+    <Drum name="Cymbal Hi Choked Hit" default="off"/>
+    <Drum name="Cymbal Hi Brush" default="off"/>
+    <Drum name="Cymbal Hi Roll" default="off"/>
+    <Drum name="Cymbal Hi Swell mf" default="off"/>
+    <Drum name="Cymbal Hi Swell f" default="off"/>
+    <Drum name="Cymbal Hi FX Scrape" default="off"/>
+    <Drum name="Cymbal Hi FX Bow" default="off"/>
+    <Drum key="84" name="Triangle 1 Open Hit 1"/>
+    <Drum key="88" name="Triangle 1 Open Hit 2"/>
+    <Drum key="91" name="Triangle 1 Open Hit 3"/>
+    <Drum key="90" name="Triangle 1 Open Hit 4"/>
+    <Drum key="85" name="Triangle 1 Closed Hit"/>
+    <Drum key="96" name="Triangle 2 Open Hit 1"/>
+    <Drum key="100" name="Triangle 2 Open Hit 2"/>
+    <Drum key="103" name="Triangle 2 Open Hit 3"/>
+    <Drum key="102" name="Triangle 2 Open Hit 4"/>
+    <Drum key="97" name="Triangle 2 Closed Hit"/>
+  </Patch>
   <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki" scan="keys" pitch="67">
     <Switch type="keyswitch"/>
     <Articulation name="Whole" value="0"/>

@@ -243,6 +243,17 @@ void TestSoundLibrary::spitfireMap()
                   }
             if (p.name == "Violins 2 - Decorative techniques")
                   QCOMPARE(int(p.articulations.size()), 12);
+            // a percussion ensemble: each drum's hits, those off at the defaults with no key (reference)
+            if (p.name == "Ensembles - Low Ensemble") {
+                  int off = 0, toms3to5 = 0;
+                  for (const SoundLib::DrumKey& d : p.drums) {
+                        off += d.key < 0 && d.offByDefault;
+                        toms3to5 += d.key == 52 && d.name.startsWith("Toms Tom ");
+                        QCOMPARE(d.pitch, -1);
+                        }
+                  QVERIFY(off > 0);
+                  QCOMPARE(toms3to5, 3);                // (Toms 3-5 share E2 at its defaults)
+                  }
             // a keyswitch patch: Harp glissandi's scales on keys 0-5 (the owner's reviewed pictures)
             if (p.name == "Other - Harp glissandi") {
                   QVERIFY(p.switchType == SoundLib::SwitchType::KEYSWITCH);
@@ -312,6 +323,8 @@ void TestSoundLibrary::spitfireMap()
                   if (!x->name.startsWith("Percussion - "))
                         continue;
                   QVERIFY2(!x->drums.empty(), qPrintable(x->name));
+                  for (const SoundLib::DrumKey& d : x->drums)
+                        QVERIFY(d.key >= 0 || (d.offByDefault && d.pitch < 0));
                   if (x->name == "Percussion - Drums - Low - Toms")
                         QCOMPARE(int(x->drums.size()), 15);
                   if (x->name == "Percussion - Unpitched - Metal - Trash Metals") {
@@ -329,6 +342,8 @@ void TestSoundLibrary::spitfireMap()
                   if (!x->name.startsWith("Percussion - "))
                         continue;
                   QVERIFY2(!x->drums.empty(), qPrintable(x->name));
+                  for (const SoundLib::DrumKey& d : x->drums)
+                        QVERIFY(d.key >= 0 || (d.offByDefault && d.pitch < 0));
                   if (x->name == "Percussion - Drums - Low - Toms")
                         QCOMPARE(int(x->drums.size()), 15);
                   if (x->name == "Percussion - Unpitched - Metal - Trash Metals") {

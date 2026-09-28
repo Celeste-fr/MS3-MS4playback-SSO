@@ -1096,7 +1096,11 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     so future work will be easier"; the screenshots of Snare 1 / 2 and Triangle 1 / 2 checked against it); (b) not now:
     the rolls (and other techniques) the kit patches have off are not played from the drum's own patch; **a future
     system is to switch an off technique on in the kit patch and give it a key when a score needs it**; (c) the six
-    ensembles' lists stay in the JSON only (no MuseScore instrument plays them). Test `spitfireMap`.
+    ensembles' lists are in the map too, as `<Drum key name>` children of their `<Patch>` (the owner: "make sure the
+    map (and reference files) is 100% complete whether used or not"). Every technique off at a patch's defaults, which
+    has no key, is an entry too: `<Drum name default="off"/>` with no key and no pitch (never played; the check and
+    the key scan skip it), in the one-drum patches, the ensembles and the kits (the kits' others, named only as the
+    kit shows them, in a comment). Test `spitfireMap`.
     Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
     the owner: "OCR correct"): 0 Whole (selected at load, label "KEYSWITCH C0"; from the order), 1 Minor H., 2 Minor
     M., 3 Major, 4 Pentatonic, 5 Diminished; 102-103 no change (a ring). In the map (`SCANNED_KEYS`; a `<Patch>` now

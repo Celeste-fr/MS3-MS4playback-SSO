@@ -635,8 +635,9 @@ for name in PERCUSSION:
     for key, (n, on) in sorted(hits.items()):
         if key not in used and on:
             out.append(f'    <Drum key="{key}" name={q(n)}/>')
-    off = '; '.join(x for x in (', '.join(offNames), STILL_OFF[name]) if x)
-    out.append(f'    <!-- off in Kickstart by default (from the drum\'s own patch): {off} -->')
+    for n in offNames:                  # (off at the defaults, no key: the key the owner had given it is in HITS)
+        out.append(f'    <Drum name={q(n)} default="off"/>')
+    out.append(f'    <!-- also off in Kickstart by default, no key (names as the kit shows them): {STILL_OFF[name]} -->')
     out.append('  </Instrument>')
 # One patch per drum (the owner's folder, 2026-09-27: "Percussion - <kit> - <drum>.nki"). A kit patch's
 # keyboard can't hold every technique of all its drums; the drum's own patch can. Extras of the kit
@@ -671,9 +672,9 @@ SINGLE_HITS_SCREENSHOTS = {
 # Every percussion patch's hit list (the owner's picture run of 2026-09-28 05:02, MuseScore --window-pictures: each
 # patch's window at its defaults with each drum icon clicked; OCR checked by eye, reviewed on
 # https://claude.ai/artifact/CKcFbayqAj3iPi9h3irUFK, the owner: correct; sso_percussion_hits.json). The owner: every
-# one-drum patch's list goes in the map, used now or not ("save all the data we can so future work will be easier");
-# the six ensembles' stay in sso_percussion_hits.json only (no MuseScore instrument plays them). A hit with no key
-# is off at the patch's defaults (Kickstart gives it none): named in a comment. Keys two hits share (Low Ensemble's
+# list goes in the map, the ensembles' too, used now or not ("make sure the map (and reference files) is 100%
+# complete whether used or not"). A hit with no key is off at the patch's defaults (Kickstart gives it none):
+# <Drum name default="off"/> with no key. Keys two hits share (Low Ensemble's
 # Toms 3-5, Trash Metals Scafold 2 / Spring Coil …) are listed as Kickstart shows them.
 PERCUSSION_HITS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_percussion_hits.json'),
                                  encoding='utf-8'))['patches']
@@ -715,9 +716,10 @@ for kit in PERCUSSION:
         for key, n, on in sorted(hits):
             if (key, n) not in used:
                 out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
-        off = [_hitName(d['drum'], h['name']) for d in PERCUSSION_HITS[name]['drums'] for h in d['hits'] if h['key'] is None]
-        if off:
-            out.append(f'    <!-- off at its defaults (no key): {", ".join(off)} -->')
+        for d in PERCUSSION_HITS[name]['drums']:
+            for h in d['hits']:
+                if h['key'] is None:            # (off at its defaults, no key: reference)
+                    out.append(f'    <Drum name={q(_hitName(d["drum"], h["name"]))} default="off"/>')
         out.append('  </Instrument>')
 # Setups made by MuseScore (the owner, 2026-09-27: every patch at the library's defaults, no manual
 # set-up; audio/vst3/kontaktsetup.h): each patch's .nki (sso_nki_files.txt, the owner's library; the
@@ -846,6 +848,17 @@ for nki in NKI_FILES:
             silent = ' expect="silent"' if (name, value) in SCANNED_SILENT else ''
             out.append(f'    <Articulation name={q(a)} value="{value}"{silent}/>')
         out.append('  </Patch>')
+    elif name in PERCUSSION_HITS:
+        # a percussion ensemble: each drum's hits (the owner: the map complete, used or not; no MuseScore
+        # instrument plays an ensemble)
+        scannedUsed.add(name)
+        out.append(head + scan + pitch + '>')
+        for d in PERCUSSION_HITS[name]['drums']:
+            for h in d['hits']:
+                n = _hitName(d['drum'], h['name'])
+                out.append(f'    <Drum key="{h["key"]}" name={q(n)}/>' if h['key'] is not None
+                           else f'    <Drum name={q(n)} default="off"/>')
+        out.append('  </Patch>')
     elif name in SCANNED_KEYS:
         known = SCANNED_KEYS[name]
         assert all(a in arts for _, a in known), name
@@ -858,7 +871,8 @@ for nki in NKI_FILES:
     else:
         out.append(head + scan + pitch + '/>')
 out.append('</SoundLibrary>')
-assert scannedUsed == set(SCANNED) | set(SCANNED_KEYS), set(SCANNED) | set(SCANNED_KEYS) - scannedUsed
+_ensembles = {p for p in PERCUSSION_HITS if p.startswith('Ensembles - ')}
+assert scannedUsed == set(SCANNED) | set(SCANNED_KEYS) | _ensembles, (set(SCANNED) | set(SCANNED_KEYS) | _ensembles) - scannedUsed
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed
 assert not measuredMissing, measuredMissing         # (every map patch was in the extract)

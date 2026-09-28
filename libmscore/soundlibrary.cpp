@@ -77,13 +77,17 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"] [technique="roll"]
-// [default="off"]/>; without pitch: a key no MuseScore sound plays (listed for reference and checked, never chosen)
+// [default="off"]/>; without pitch: a key no MuseScore sound plays (listed for reference and checked, never chosen);
+// without key (default="off", no pitch): a technique the patch has, off at its defaults, with no key (reference)
 static bool readDrum(const QXmlStreamAttributes& aa, DrumKey& d)
       {
-      bool ok1 = true, ok2 = false;
+      bool ok1 = true, ok2 = true;
       if (aa.hasAttribute("pitch"))
             d.pitch = aa.value("pitch").toInt(&ok1);
-      d.key = aa.value("key").toInt(&ok2);
+      if (aa.hasAttribute("key"))
+            d.key = aa.value("key").toInt(&ok2);
+      else if (aa.value("default") != "off" || aa.hasAttribute("pitch"))
+            return false;
       if (aa.hasAttribute("velocity"))
             d.velocity = aa.value("velocity").toInt();
       d.ids = words(aa.value("ids").toString().toLower());
@@ -94,8 +98,8 @@ static bool readDrum(const QXmlStreamAttributes& aa, DrumKey& d)
             return false;
       if (!d.technique.isEmpty() && d.technique != "roll")
             return false;
-      return ok1 && ok2 && !(aa.hasAttribute("pitch") && d.pitch < 0) && d.pitch <= 127 && d.key >= 0 && d.key <= 127
-             && d.velocity <= 127;
+      return ok1 && ok2 && !(aa.hasAttribute("pitch") && d.pitch < 0) && d.pitch <= 127
+             && !(aa.hasAttribute("key") && d.key < 0) && d.key <= 127 && d.velocity <= 127;
       }
 
 static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
@@ -256,11 +260,17 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.switchNumber = defNumber;
                   if (li.name.isEmpty() || li.nki.isEmpty() || !(li.scan.isEmpty() || li.scan == "values" || li.scan == "keys"))
                         return fail(QString("%1:%2: bad Patch").arg(path).arg(r.lineNumber()));
-                  // its articulations, when known (from a scan): listed for reference, never chosen; its own
-                  // switch (a keyswitch patch: Harp glissandi)
+                  // its articulations or drum keys, when known (from a scan or its window): listed for reference,
+                  // never chosen; its own switch (a keyswitch patch: Harp glissandi)
                   while (r.readNextStartElement()) {
                         if (r.name() == "Articulation" && !readArticulation(r.attributes(), li))
                               return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
+                        if (r.name() == "Drum") {
+                              DrumKey d;
+                              if (!readDrum(r.attributes(), d) || d.pitch >= 0)
+                                    return fail(QString("%1:%2: bad Drum").arg(path).arg(r.lineNumber()));
+                              li.drums.push_back(d);
+                              }
                         if (r.name() == "Switch" && !readSwitch(r.attributes(), li.switchType, li.switchNumber))
                               return fail(QString("%1:%2: bad Switch").arg(path).arg(r.lineNumber()));
                         r.skipCurrentElement();
@@ -404,7 +414,7 @@ bool checkedAsExpected(const LibInstrument& instrument, const QString& line, QSt
                         sounding.insert(k);
                   }
             for (const DrumKey& d : instrument.drums)
-                  if (!sounding.count(d.key))
+                  if (d.key >= 0 && !d.offByDefault && !sounding.count(d.key))    // (what is off doesn't sound)
                         return false;
             newLine->remove("; the map has no keys for it yet");
             return true;

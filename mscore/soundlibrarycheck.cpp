@@ -1385,7 +1385,8 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
             };
       std::map<int, QString> mapped;          // key -> the map's drum sounds on it
       for (const SoundLib::DrumKey& d : ins.drums)
-            mapped[d.key] += (mapped[d.key].isEmpty() ? "" : " / ") + d.name;
+            if (d.key >= 0)                   // (a technique that is off has no key)
+                  mapped[d.key] += (mapped[d.key].isEmpty() ? "" : " / ") + d.name;
 
       std::map<int, QString> keyswitchMap;    // the map's keyswitch values (a patch switched by key)
       if (ins.switchType == SoundLib::SwitchType::KEYSWITCH)
