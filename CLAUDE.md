@@ -979,6 +979,13 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     instrument's All techniques value; Violins 2 - Decorative's Trill (Major 2nd), in neither scan, is 71
     (confirmed by the owner in Kontakt); Long Sul G / C in Violins 1 / 2 and Celli - Core play nothing, as in
     All techniques (`expect="silent"`). No `scan="values"` patch is left; the 7 key patches have no key names.
+    The one-drum patches' keys are not in the files: their zones sit on keys 0-31 (round robins, dynamic
+    layers) and Spitfire's script lays the techniques on the keyboard when the patch loads. The kits the owner
+    screenshotted lay each drum's default techniques on consecutive white keys in the `.nki`'s group order
+    (Bongos: Hand flam 48, Hand bass 50, Hand tone 52, Finger flam 53, bass 55, slap 57, Hit 59; Snare 1: Hit
+    36, Edge 38, Rim 40). So a key scan of the 42 (which keys sound) plus the group order should name them, to
+    be reviewed by the owner. *Tick the patches to scan* now ticks a kit's own drum patches whose keys the map
+    lacks (extra, keyScan, no `<Drum>`: the 42), not the 7 scanned on 2026-09-27. About 5-6 minutes a patch.
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

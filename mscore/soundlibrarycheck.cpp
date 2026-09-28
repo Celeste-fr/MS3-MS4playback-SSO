@@ -342,16 +342,23 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
             });
       // (the owner, 2026-09-28: the scan of the patches the map doesn't use, faster without missing
       // anything: of SSO's 541, the files show 518 with one sound only; the map marks the 23 with
-      // several, scan="values" or "keys")
-      if (_library && std::any_of(_library->otherPatches.begin(), _library->otherPatches.end(),
-                                  [](const SoundLib::LibInstrument& p) { return !p.scan.isEmpty(); })) {
-            QPushButton* toScan = buttons->addButton(tr("Tick the patches to scan"), QDialogButtonBox::ActionRole);
-            toScan->setToolTip(tr("The patches not in the map whose files hold several articulations or sounds: "
-                                  "their values or keys are scanned (the others have one sound each)"));
-            connect(toScan, &QPushButton::clicked, this, [this]() {
+      // several, scan="values" or "keys". The values are all known now; what is left to scan are a
+      // kit's own drum patches whose keys the map doesn't have yet: SSO's 42 one-drum patches. The
+      // 7 scan="keys" patches were scanned on 2026-09-27: they are left unticked)
+      auto toScan = [](const SoundLib::LibInstrument& p, bool added) {
+            return (added && p.scan == "values") || (!added && p.extra() && p.keyScan && p.drums.empty());
+            };
+      if (_library && (std::any_of(_library->otherPatches.begin(), _library->otherPatches.end(),
+                                   [&](const SoundLib::LibInstrument& p) { return toScan(p, true); })
+                       || std::any_of(_library->instruments.begin(), _library->instruments.end(),
+                                      [&](const SoundLib::LibInstrument& p) { return toScan(p, false); }))) {
+            QPushButton* toScanButton = buttons->addButton(tr("Tick the patches to scan"), QDialogButtonBox::ActionRole);
+            toScanButton->setToolTip(tr("The patches whose articulation values or keys are not known yet: "
+                                        "they are scanned (a kit's own drum patches: every key)"));
+            connect(toScanButton, &QPushButton::clicked, this, [this, toScan]() {
                   for (int row = 0; row < _table->rowCount(); ++row) {
                         const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
-                        const bool tick = setup && _rows[row].added && !_rows[row].instrument->scan.isEmpty();
+                        const bool tick = setup && toScan(*_rows[row].instrument, _rows[row].added);
                         _table->item(row, 0)->setCheckState(tick ? Qt::Checked : Qt::Unchecked);
                         }
                   });
