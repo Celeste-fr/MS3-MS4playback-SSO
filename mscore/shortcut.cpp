@@ -3016,6 +3016,16 @@ Shortcut Shortcut::_sc[] = {
          Qt::WindowShortcut
          },
       {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY,
+         "adapt-keysigs-to-clefs",
+         QT_TRANSLATE_NOOP("action","Adapt Key Signatures to Clefs"),
+         QT_TRANSLATE_NOOP("action","Adapt key signatures to clefs"),
+         QT_TRANSLATE_NOOP("action","Custom key signatures copied from a treble staff as placed: place them for each staff's clef"),
+         Icons::Invalid_ICON,
+         Qt::WindowShortcut
+         },
+      {
          MsWidget::SCORE_TAB,
          STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED | STATE_NOTE_ENTRY_STAFF_DRUM /*| STATE_NOTE_ENTRY_TAB*/,
          "double-duration",

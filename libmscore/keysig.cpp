@@ -350,6 +350,21 @@ Element* KeySig::drop(EditData& data)
       }
 
 //---------------------------------------------------------
+//   mimeData
+//    a custom signature copied or dragged from a staff is written for the treble clef, as the
+//    palette's are: drop places it for each staff's clef (KeySigEvent::forClef)
+//---------------------------------------------------------
+
+QByteArray KeySig::mimeData(const QPointF& dragOffset) const
+      {
+      if (!staff() || !_sig.custom())
+            return Element::mimeData(dragOffset);
+      KeySig ks(*this);
+      ks.setKeySigEvent(_sig.forClef(staff()->clef(tick()), ClefType::G));
+      return ks.Element::mimeData(dragOffset);
+      }
+
+//---------------------------------------------------------
 //   setKey
 //---------------------------------------------------------
 

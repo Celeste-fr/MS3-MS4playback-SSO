@@ -43,6 +43,7 @@ class KeySig final : public Element {
       ElementType type() const override    { return ElementType::KEYSIG; }
       bool acceptDrop(EditData&) const override;
       Element* drop(EditData&) override;
+      QByteArray mimeData(const QPointF&) const override;
       void layout() override;
       qreal mag() const override;
 

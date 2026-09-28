@@ -77,8 +77,14 @@ positions): a staff added in the Instruments dialog (`adjustKeySigs` with the so
 staff of a part), a split staff, a clef change at the signature's tick (`undoChangeClef`). A later clef
 change under a custom key: `Staff::keySigEventForClef` reads the signature for the clef in force (accidental
 states in layout, measure, cmd, tuning; the signature repeated at a system start and the courtesy one drawn
-for it); the file keeps the signature as placed. Not adapted: paste, and scores saved before (drop it again).
-Test `tst_tuning::customKeyDrop` (keysig-clefs.musicxml: viola and treble-15 cello). Alt+Shift+Up/Down
+for it); the file keeps the signature as placed. Paste and drag (2026-09-28): `KeySig::mimeData` writes a
+custom signature taken from a staff for the treble clef (as the palette's), so every drop places it for its
+own clef. Scores saved before: *Tools › Adapt Key Signatures to Clefs* (`Score::cmdAdaptKeySigsToClefs`):
+a custom signature on a staff whose clef places keys unlike the treble clef, with the same symbols in the
+same places as a treble-like staff's (G, G8va, G15mb …) at that tick, was copied as placed: it is placed for
+its clef. One already adapted differs from the treble one and is left (running it twice changes nothing); a
+score with no treble-like staff at that tick is left too.
+Tests `tst_tuning::customKeyDrop` (keysig-clefs.musicxml: viola and treble-15 cello), `customKeyPasteAndAdapt`. Alt+Shift+Up/Down
 (`Score::upDown`, DIATONIC) steps to the signature's accidental under a custom key signature (it used
 the key, C, and wrote a natural against the signature). The key signature editor (*Master Palette ›
 Key Signatures › Create Key Signature*, `mscore/keyedit.cpp`): staff twice the palettes' size, a
@@ -344,6 +350,15 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   - Test `tuningLanes` (quartertones.musicxml: 8 notes' lanes, their routing and tuning, CC1 and switches
     on both lanes, maxLanes 1, and Vst3Synth playing ±50 cents on the test synth by speed); `pitchShift`
     (setPitch +50, −100, +700, a glide to +200). Not heard with Kontakt yet.
+  - The score's own tolerance, ring time (tail) and maximum copies (2026-09-28): *View › Sound Library…*
+    row "Copies for other tunings", metaTag `soundLibraryLanes` ("tolerance=… tail=… max=…", only what
+    differs from the map; `SoundLib::laneSettings`, undoable; kept by MuseScore 3.6 as a metaTag). A change
+    renders again; the copies load at the next play. Memory: the dialog's *Memory* column is what the
+    process grew by as each patch loaded, and 3 s later if no other load started (Kontakt goes on loading);
+    Windows: private bytes (`SoundLibraryHost::processMemory`, soundlibrarymemory.cpp, kept apart from the
+    Windows headers' macros), Linux: resident. The part's first row adds its extras and copies; the info
+    line the total and MuseScore's own. Not done: lighter single-technique patches for the copies (needs
+    which lighter patches SSO has per instrument: the library-files extract).
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).

@@ -273,6 +273,23 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             double toleranceCents, double tailSeconds, int maxLanes = 4);
 
 //---------------------------------------------------------
+//   LaneSettings
+//    the lanes' tolerance, tail and maximum for a score: the map's, unless the score sets its own
+//    (View › Sound Library…, metaTag "soundLibraryLanes": "tolerance=0.5 tail=1.5 max=4", any of them)
+//---------------------------------------------------------
+
+struct LaneSettings {
+      double tolerance { 0.5 };           // cents
+      double tail { 1.5 };                // seconds
+      int maxLanes { 4 };
+      bool operator==(const LaneSettings& o) const { return tolerance == o.tolerance && tail == o.tail && maxLanes == o.maxLanes; }
+      };
+extern const char* laneSettingsMetaTag;
+LaneSettings libraryLaneSettings(const Library&);
+LaneSettings laneSettings(const Score*, const Library&);
+QString writeLaneSettings(const LaneSettings& s, const Library&);      // "" when the library's
+
+//---------------------------------------------------------
 //   TextTechniques
 //    playing techniques written as staff text (pizz., arco, con sord., sul pont., ord. …),
 //    in force from the text to the one that ends them

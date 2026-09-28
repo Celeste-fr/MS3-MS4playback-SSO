@@ -85,6 +85,7 @@ jobs:
         FOR /F "usebackq tokens=*" %%i IN (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe`) DO SET "MSBUILD=%%i"
         ECHO MSBuild: %MSBUILD%
         "%MSBUILD%" msvc.build_x64\mtest\libmscore\soundlibrary\tst_soundlibrary.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
+        "%MSBUILD%" msvc.build_x64\mtest\libmscore\tuning\tst_tuning.vcxproj /p:Configuration=RelWithDebInfo /p:Platform=x64 /m /v:minimal || exit /b 1
     - name: Run the sound library tests
       shell: cmd
       run: |
@@ -98,6 +99,23 @@ jobs:
         SET RC=%ERRORLEVEL%
         TYPE "%CD%\tst_soundlibrary.txt"
         FINDSTR /C:"Totals:" "%CD%\tst_soundlibrary.txt" >NUL || exit /b 1
+        IF NOT "%RC%"=="0" exit /b 1
+    # (the tuning tests: key signatures, temperaments; a failure doesn't stop the build being kept,
+    # it fails the job at the end)
+    - name: Run the tuning tests
+      id: tuning
+      continue-on-error: true
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%CD%\dependencies\libs\Win64;%PATH%"
+        SET QT_QPA_PLATFORM=offscreen
+        cd msvc.build_x64\mtest\libmscore\tuning
+        FOR /R %%F IN (tst_tuning.exe) DO IF EXIST "%%F" SET TST=%%F
+        IF NOT DEFINED TST (DIR /S /B & exit /b 1)
+        "%TST%" -o "%CD%\tst_tuning.txt,txt"
+        SET RC=%ERRORLEVEL%
+        TYPE "%CD%\tst_tuning.txt"
+        FINDSTR /C:"Totals:" "%CD%\tst_tuning.txt" >NUL || exit /b 1
         IF NOT "%RC%"=="0" exit /b 1
     - name: Keep this build for the next run
       if: ${{ success() }}
@@ -120,3 +138,7 @@ jobs:
       with:
         name: MuseScore-soundlibrary-win64
         path: msvc.install_x64\
+    - name: Fail if the tuning tests failed
+      if: ${{ steps.tuning.outcome == 'failure' }}
+      shell: cmd
+      run: exit /b 1

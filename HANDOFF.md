@@ -102,6 +102,20 @@ or its samples are missing: compare with make_setups.py's (which Kontakt loaded)
 list first. Kits: at the library's defaults now (the owner: what they have off comes from the one-drum
 patches, whose keys at their defaults aren't known yet: a key scan of those, or the owner's screenshots).
 
+## Merging with claude/intelligent-cray-6pd4o1 (prepared 2026-09-28, not done)
+
+The owner decides what goes to main; this is the plan. Both branches start at main 16e6933. That
+branch was still being pushed to (a38eeba, 00:47 UTC): merge once its session pauses.
+- Its commits not here: the background extract (098e85a, b7b274a, 32e8bfc, a38eeba), 4d1d657 (a setup
+  Kontakt gives back unchanged isn't taken for its state), 036dc3e's NIKT title rule (soundlibrarycheck.cpp;
+  the rest of 036dc3e is 9fa4ce2 here), 17ee5fb, 22219702 (soundfont), b209f4e (notes).
+- `git merge-tree` conflicts, four files: `audio/vst3/vst3synth.cpp/.h` → this branch's (its `deliver`
+  keeps varispeed; the other side is a subset); `.github/workflows/test_soundlibrary_windows.yml` → this
+  branch's soundfont fix (67e5a42: kept with the cache, no download at each run; drop 22219702's step);
+  `CLAUDE.md` → this branch's text, adding from the other: Kontakt receives the pitch bend (run 134),
+  Timpani bends ±2 semitones. Everything else merges cleanly.
+- After merging: build, `tst_soundlibrary`, `tst_tuning`; check the NIKT rule and 4d1d657 are in.
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2

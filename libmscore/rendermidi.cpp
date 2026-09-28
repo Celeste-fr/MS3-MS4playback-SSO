@@ -3670,7 +3670,8 @@ void MidiRenderer::updateState()
                         // varispeed: a note plays at its lane's tuning (within the tolerance of its own),
                         // so a note joining a lane never retunes what still sounds on it
                         if (library->varispeed && !r.instrument->kit) {
-                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, library->laneTolerance, library->laneTail, library->maxLanes);
+                              const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *library);
+                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes);
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;

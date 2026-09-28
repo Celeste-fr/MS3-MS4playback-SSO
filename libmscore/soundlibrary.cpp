@@ -562,8 +562,10 @@ std::vector<Route> routes(const Score* score, const Library& library)
             if (li->kit && std::find(used.begin() + 1, used.end(), true) == used.end())
                   continue;
             std::vector<int> laneCount(patches.size(), 1);
-            if (library.varispeed && !li->kit)
-                  laneCount = lanes(score, part, patches, library.laneTolerance, library.laneTail, library.maxLanes).count;
+            if (library.varispeed && !li->kit) {
+                  const LaneSettings ls = laneSettings(score, library);
+                  laneCount = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes).count;
+                  }
             for (int p = 0; p < int(patches.size()); ++p) {
                   if (p > 0 && (!used[p] || !available(*patches[p])))
                         continue;
@@ -582,6 +584,56 @@ std::vector<Route> routes(const Score* score, const Library& library)
 //   usedPatches
 //    what each note of the part asks for (as the renderer asks it, without repeats), chosen
 //    from all the patches: the main patch always counts as used
+//---------------------------------------------------------
+//   laneSettings
+//---------------------------------------------------------
+
+const char* laneSettingsMetaTag = "soundLibraryLanes";
+
+LaneSettings libraryLaneSettings(const Library& library)
+      {
+      LaneSettings s;
+      s.tolerance = library.laneTolerance;
+      s.tail = library.laneTail;
+      s.maxLanes = library.maxLanes;
+      return s;
+      }
+
+LaneSettings laneSettings(const Score* score, const Library& library)
+      {
+      LaneSettings s = libraryLaneSettings(library);
+      if (!score)
+            return s;
+      const QString tag = score->masterScore()->metaTag(laneSettingsMetaTag);
+      for (const QString& item : tag.split(' ', QString::SkipEmptyParts)) {
+            const QString key = item.section('=', 0, 0);
+            bool ok = false;
+            const double v = item.section('=', 1).toDouble(&ok);
+            if (!ok)
+                  continue;
+            if (key == "tolerance" && v >= 0.0)
+                  s.tolerance = v;
+            else if (key == "tail" && v >= 0.0)
+                  s.tail = v;
+            else if (key == "max" && v >= 1.0)
+                  s.maxLanes = int(v);
+            }
+      return s;
+      }
+
+QString writeLaneSettings(const LaneSettings& s, const Library& library)
+      {
+      const LaneSettings d = libraryLaneSettings(library);
+      QStringList items;
+      if (s.tolerance != d.tolerance)
+            items << QString("tolerance=%1").arg(s.tolerance);
+      if (s.tail != d.tail)
+            items << QString("tail=%1").arg(s.tail);
+      if (s.maxLanes != d.maxLanes)
+            items << QString("max=%1").arg(s.maxLanes);
+      return items.join(' ');
+      }
+
 //---------------------------------------------------------
 
 std::vector<bool> usedPatches(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches)

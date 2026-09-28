@@ -1176,6 +1176,22 @@ void TestSoundLibrary::tuningLanes()
       QCOMPARE(one.count[0], 1);
       for (const auto& nl : one.lane)
             QCOMPARE(nl.second, 0);
+      // the score's own settings (View › Sound Library…): at most one copy, then the map's again
+      QCOMPARE(SoundLib::writeLaneSettings(SoundLib::laneSettings(score, *lib), *lib), QString());
+      SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *lib);
+      QCOMPARE(ls.tolerance, 3.0);
+      QCOMPARE(ls.tail, 0.5);
+      ls.maxLanes = 1;
+      const QString tag = SoundLib::writeLaneSettings(ls, *lib);
+      QCOMPARE(tag, QString("max=1"));
+      score->setMetaTag(SoundLib::laneSettingsMetaTag, tag);
+      QVERIFY(SoundLib::laneSettings(score, *lib) == ls);
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 1);
+      score->setMetaTag(SoundLib::laneSettingsMetaTag, "tolerance=abc tail=2");        // what doesn't read stays the map's
+      QCOMPARE(SoundLib::laneSettings(score, *lib).tolerance, 3.0);
+      QCOMPARE(SoundLib::laneSettings(score, *lib).tail, 2.0);
+      score->metaTags().remove(SoundLib::laneSettingsMetaTag);
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
       std::vector<std::pair<int, int>> got;         // pitch, lane
       for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
             if (s->element(0) && s->element(0)->isChord())

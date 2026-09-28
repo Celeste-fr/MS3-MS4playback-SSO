@@ -2282,6 +2282,7 @@ MuseScore::MuseScore()
 
       menuTools->addAction(getAction("transpose"));
       menuTools->addAction(getAction("tuning"));
+      menuTools->addAction(getAction("adapt-keysigs-to-clefs"));
       menuTools->addSeparator();
       menuTools->addAction(getAction("explode"));
       menuTools->addAction(getAction("implode"));
@@ -7062,6 +7063,16 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             if (cs) {
                   TuningDialog d(cs, this);
                   d.exec();
+                  }
+            }
+      else if (cmd == "adapt-keysigs-to-clefs") {
+            if (cs) {
+                  cs->startCmd();
+                  const int n = cs->cmdAdaptKeySigsToClefs();
+                  cs->endCmd();
+                  QMessageBox::information(this, tr("Adapt key signatures to clefs"), n
+                     ? tr("%n key signature(s) placed for their staff's clef.", "", n)
+                     : tr("No key signature needed adapting: none on a non-treble staff is placed as a treble staff's at the same place."));
                   }
             }
       else if (cmd == "playback-ms3")
