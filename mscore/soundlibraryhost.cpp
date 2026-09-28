@@ -1505,8 +1505,34 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                   }
             QPushButton* defaults = new QPushButton(tr("Library's"), row);
             h->addWidget(defaults);
-            h->addStretch();
             connect(defaults, &QPushButton::clicked, this, [this]() { setBalance(true); });
+            // measured: how much louder the shorts sound than the held notes they match in energy
+            // (a loudness model over the measured dynamics; the owner, 2026-09-28)
+            QPushButton* recommended = new QPushButton(tr("Recommended"), row);
+            recommended->setToolTip(tr("Per family, from the measured dynamics and a loudness model of hearing: short notes as "
+                                       "loud as held notes sound (measure the dynamics with this build first)"));
+            h->addWidget(recommended);
+            h->addStretch();
+            connect(recommended, &QPushButton::clicked, this, [this]() {
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+                  QStringList missing;
+                  for (auto& b : _balance) {
+                        double db;
+                        if (cal && _library && SoundLib::recommendedBalance(*_library, *cal, b.first, &db)) {
+                              const QSignalBlocker blocker(b.second);
+                              b.second->setValue(db);
+                              }
+                        else
+                              missing << b.first;
+                        }
+                  setBalance(false);
+                  if (missing.size() == int(_balance.size()))
+                        QMessageBox::information(this, windowTitle(), tr("Nothing to recommend from yet: measure the dynamics "
+                                                                         "in the background with this build (below), then restart MuseScore."));
+                  else if (!missing.isEmpty())
+                        QMessageBox::information(this, windowTitle(), tr("No recommendation for: %1 (not measured with this build, "
+                                                                         "or no short notes to go by).").arg(missing.join(", ")));
+                  });
             QLabel* l = new QLabel(tr("Short notes against held notes:"), scoreBox);
             l->setToolTip(tr("With the dynamics measured (below), a short note plays as loud as the part's held note at its "
                              "dynamic, plus this, per family"));

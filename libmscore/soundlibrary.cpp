@@ -550,7 +550,7 @@ void routesChanged()
 //   DynamicsCalibration
 //---------------------------------------------------------
 
-double DynamicsCurve::at(int x) const
+static double interpolate(const std::vector<std::pair<int, double>>& points, int x)
       {
       if (points.empty())
             return -200;
@@ -564,6 +564,16 @@ double DynamicsCurve::at(int x) const
                   }
             }
       return points.back().second;
+      }
+
+double DynamicsCurve::at(int x) const
+      {
+      return interpolate(points, x);
+      }
+
+double DynamicsCurve::perceivedAt(int x) const
+      {
+      return interpolate(perceived, x);
       }
 
 int DynamicsCurve::inverse(double db) const
@@ -619,7 +629,10 @@ bool DynamicsCalibration::read(const QString& file)
                   curve.drivenBy = c.value("drivenBy").toString();
                   for (const QJsonValue& pt : c.value("curve").toArray())
                         curve.points.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                  for (const QJsonValue& pt : c.value("perceived").toArray())
+                        curve.perceived.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
                   std::sort(curve.points.begin(), curve.points.end());
+                  std::sort(curve.perceived.begin(), curve.perceived.end());
                   _patches[p.key()][a.key().toInt()] = curve;
                   }
             }
@@ -635,7 +648,14 @@ bool DynamicsCalibration::write(const QString& file) const
                   QJsonArray pts;
                   for (const auto& pt : a.second.points)
                         pts.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
-                  arts[QString::number(a.first)] = QJsonObject({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
+                  QJsonObject o({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
+                  if (!a.second.perceived.empty()) {
+                        QJsonArray per;
+                        for (const auto& pt : a.second.perceived)
+                              per.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
+                        o["perceived"] = per;
+                        }
+                  arts[QString::number(a.first)] = o;
                   }
             patches[p.first] = arts;
             }
@@ -727,6 +747,41 @@ QString writeShortBalance(const std::map<QString, double>& byFamily, const Dynam
             if (std::fabs(f.second - cal.balanceFor(f.first)) > 1e-9)
                   items << QString("%1=%2").arg(QString(f.first).replace(' ', '_')).arg(f.second);
       return items.join(' ');
+      }
+
+bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& fam, double* db)
+      {
+      std::vector<double> louder;
+      for (const LibInstrument& main : library.instruments) {
+            if (main.extra() || main.kit || family(main) != fam)
+                  continue;
+            const std::vector<const LibInstrument*> patches = main.patches();
+            const Choice held = choose(patches, Want { { "long" }, {} });
+            if (!held)
+                  continue;
+            const QString heldPatch = patches[size_t(held.patch)]->name;
+            const DynamicsCurve* ref = cal.curve(heldPatch, held.articulation->value);
+            if (!ref || ref->perceived.empty())
+                  continue;
+            for (const LibInstrument* q : patches) {
+                  for (const Articulation& a : q->articulations) {
+                        const DynamicsCurve* c = cal.curve(q->name, a.value);
+                        if (!c || c->perceived.empty() || (c->drivenBy != "velocity" && c->drivenBy != "both") || a.techniques.isEmpty())
+                              continue;
+                        for (int cc : { 32, 80, 112 }) {
+                              const int v = c->inverse(ref->at(cc));          // matched in energy (balance 0)
+                              if (v > 1 && v < 127)                           // (out of its range: says nothing)
+                                    louder.push_back(c->perceivedAt(v) - ref->perceivedAt(cc));
+                              }
+                        }
+                  }
+            }
+      if (louder.empty())
+            return false;
+      std::sort(louder.begin(), louder.end());
+      const double median = louder[louder.size() / 2];
+      *db = std::round(-median * 2) / 2;
+      return true;
       }
 
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,

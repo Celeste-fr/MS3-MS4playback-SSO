@@ -116,6 +116,7 @@ class ArticulationCheck {
             int value { -1 };
             int pitch { -1 };                        // -1: silent at every pitch tried
             std::vector<std::pair<int, double>> curve;    // x, dB
+            std::vector<std::pair<int, double>> perceived;   // x, perceived dB (perceivedLoudnessDb), as curve
             double velocityDb[2] { -200, -200 };     // velocity 32, 127 (CC 32)
             double ccDb[2] { -200, -200 };           // the dynamics CC 32, 127 (velocity 32)
             const char* drivenBy() const;            // 3 dB and more from 32 to 127: "velocity", "controller", "both", "neither"
@@ -140,6 +141,11 @@ class ArticulationCheck {
       // features of a stereo interleaved clip (the note from its start, noteFrames long, then
       // its tail) and their distance, for the tests
       static std::vector<double> features(const std::vector<float>& clip, int noteFrames, double sampleRate);
+      // how loud a stereo interleaved clip sounds: a simplified short-term loudness (Glasberg & Moore
+      // 2002): the ear's K-weighting (ITU-R BS.1770), auditory filters one ERB apart (rounded exponential; 2048-point FFTs every 5 ms) each to the power 0.3
+      // (10 dB = twice as loud) summed, smoothed in time (attack 22 ms, release 50 ms); its peak, as
+      // phon-like dB (33.2 log10 of the sum). Only differences mean anything
+      static double perceivedLoudnessDb(const std::vector<float>& clip, double sampleRate);
       static double distance(const std::vector<double>& a, const std::vector<double>& b);
       };
 

@@ -77,6 +77,105 @@ static double db(double power)
       }
 
 //---------------------------------------------------------
+//   perceivedLoudnessDb
+//---------------------------------------------------------
+
+double ArticulationCheck::perceivedLoudnessDb(const std::vector<float>& clip, double sampleRate)
+      {
+      const size_t frames = clip.size() / 2;
+      if (frames == 0 || sampleRate <= 0)
+            return -200;
+      std::vector<double> x(frames);
+      for (size_t i = 0; i < frames; ++i)
+            x[i] = 0.5 * (double(clip[2 * i]) + double(clip[2 * i + 1]));
+      // K-weighting (BS.1770's two stages, for this sample rate): a high shelf (+4 dB over ~1.7 kHz,
+      // the head), a high-pass (~38 Hz)
+      auto biquad = [&x](double b0, double b1, double b2, double a1, double a2) {
+            double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+            for (double& v : x) {
+                  const double y = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+                  x2 = x1; x1 = v; y2 = y1; y1 = y;
+                  v = y;
+                  }
+            };
+      {
+            const double f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196;
+            const double K = std::tan(PI * f0 / sampleRate), Vh = std::pow(10.0, G / 20.0), Vb = std::pow(Vh, 0.4996667741545416);
+            const double a0 = 1 + K / Q + K * K;
+            biquad((Vh + Vb * K / Q + K * K) / a0, 2 * (K * K - Vh) / a0, (Vh - Vb * K / Q + K * K) / a0,
+                   2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0);
+      }
+      {
+            const double f0 = 38.13547087602444, Q = 0.5003270373238773;
+            const double K = std::tan(PI * f0 / sampleRate);
+            const double a0 = 1 + K / Q + K * K;
+            biquad(1.0, -2.0, 1.0, 2 * (K * K - 1) / a0, (1 - K / Q + K * K) / a0);
+      }
+      // auditory filters one ERB apart from 50 Hz to 15 kHz, each a rounded exponential (Glasberg & Moore
+      // 1990): smooth and overlapping, so a tone counts the same wherever it falls (hard band edges
+      // made a tone split over two bands several dB louder)
+      // (2048 at 48 kHz: 23 Hz bins; 43 ms, short enough for a short note)
+      const size_t N = 2048;
+      const size_t hop = std::max<size_t>(1, size_t(sampleRate * 0.005));
+      const double dt = double(hop) / sampleRate;
+      const double attack = 1 - std::exp(-dt / 0.022), release = 1 - std::exp(-dt / 0.050);
+      std::vector<double> window(N);
+      for (size_t i = 0; i < N; ++i)
+            window[i] = 0.5 - 0.5 * std::cos(2 * PI * double(i) / double(N - 1));
+      auto erbRate = [](double f) { return 21.4 * std::log10(4.37 * f / 1000 + 1); };
+      auto erbFreq = [](double e) { return (std::pow(10.0, e / 21.4) - 1) * 1000 / 4.37; };
+      struct Filter { size_t from; std::vector<double> w; };
+      std::vector<Filter> filters;
+      const double binHz = sampleRate / double(N);
+      for (double e = erbRate(50); e <= erbRate(std::min(15000.0, sampleRate * 0.45)); e += 1.0) {
+            const double fc = erbFreq(e);
+            const double p = 4 * fc / (24.7 * (4.37 * fc / 1000 + 1));
+            Filter flt;
+            flt.from = 0;
+            bool started = false;
+            for (size_t k = 1; k < N / 2; ++k) {
+                  const double g = std::fabs(double(k) * binHz - fc) / fc;
+                  const double w = (1 + p * g) * std::exp(-p * g);
+                  if (w < 1e-4) {
+                        if (started)
+                              break;
+                        continue;
+                        }
+                  if (!started)
+                        flt.from = k, started = true;
+                  flt.w.push_back(w);
+                  }
+            if (started)
+                  filters.push_back(std::move(flt));
+            }
+      std::vector<std::complex<double>> spec(N);
+      std::vector<double> power(N / 2);
+      double stl = 0, peak = 0;
+      for (size_t start = 0; start + N <= frames + N / 2; start += hop) {
+            for (size_t i = 0; i < N; ++i) {
+                  const size_t j = start + i;
+                  spec[i] = j < frames ? x[j] * window[i] : 0.0;
+                  }
+            fft(spec);
+            for (size_t k = 0; k < N / 2; ++k)
+                  power[k] = std::norm(spec[k]);
+            // (a threshold: a filter barely excited adds next to nothing, as in hearing; A ~60 dB under
+            // a -20 dBFS tone at this FFT size)
+            static const double A = 1e-3;
+            double loud = 0;
+            for (const Filter& flt : filters) {
+                  double e = 0;
+                  for (size_t i = 0; i < flt.w.size(); ++i)
+                        e += flt.w[i] * power[flt.from + i];
+                  loud += std::pow(e + A, 0.3) - std::pow(A, 0.3);
+                  }
+            stl += (loud > stl ? attack : release) * (loud - stl);
+            peak = std::max(peak, stl);
+            }
+      return peak > 0 ? 33.2 * std::log10(peak) : -200;
+      }
+
+//---------------------------------------------------------
 //   features
 //    [0] the number of spectrum values; the spectrum (dB per band, per part); the loudness
 //    envelope (dB per 20 ms)
@@ -287,6 +386,7 @@ struct Clip {
       std::vector<double> features;
       double peakDb { -200 };
       double loudDb { -200 };       // the loudest 50 ms (RMS): a level round robins and clicks move less
+      double perceivedDb { -200 };  // ArticulationCheck::perceivedLoudnessDb
       };
 
 struct Player {
@@ -364,6 +464,7 @@ struct Player {
                   }
             c.loudDb = db(loudest);
             lastLoudDb = c.loudDb;
+            c.perceivedDb = ArticulationCheck::perceivedLoudnessDb(clip, s.sampleRate);
             c.features = ArticulationCheck::features(clip, frames(s.note), s.sampleRate);
             return c;
             }
@@ -394,10 +495,13 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
       player.relativeSettle = true;
       int done = 0;
       const int total = 8 * n;                  // (about: 3 to classify, 2 to 7 more)
+      double pdb = -200;                  // the last note's perceived loudness
       auto at = [&](int value, int pitch, int velocity, int cc, double* db) {
             player.s.velocity = qBound(1, velocity, 127);
             player.s.dynamicsValue = qBound(0, cc, 127);
-            *db = player.play(-1, value, pitch).loudDb;
+            const Clip c = player.play(-1, value, pitch);
+            *db = c.loudDb;
+            pdb = c.perceivedDb;
             ++done;
             return !progress || progress(done, std::max(total, done));
             };
@@ -409,11 +513,18 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
             // what drives it: velocity 32 / CC 32, then the CC alone up, then the velocity alone up;
             // at another pitch of the instrument where the test pitch plays nothing (harmonics …)
             double d32 = -200, cc127 = -200, v127 = -200;
+            double p32 = -200, pcc127 = -200;
             for (int shift : { 0, 12, -12, 7, -5, 24 }) {
                   const int p = pitches[i] + shift;
                   if (shift && (p < settings.minPitch || p > settings.maxPitch))
                         continue;
-                  if (!at(r.value, p, 32, 32, &d32) || !at(r.value, p, 32, 127, &cc127) || !at(r.value, p, 127, 32, &v127))
+                  if (!at(r.value, p, 32, 32, &d32))
+                        return out;
+                  p32 = pdb;
+                  if (!at(r.value, p, 32, 127, &cc127))
+                        return out;
+                  pcc127 = pdb;
+                  if (!at(r.value, p, 127, 32, &v127))
                         return out;
                   if (std::max(d32, std::max(cc127, v127)) > SILENT_DB) {
                         r.pitch = p;
@@ -438,18 +549,28 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
                         }
                   for (int x : CURVE_POINTS) {
                         double db = d32;
-                        if (x != 32 && !at(r.value, r.pitch, x, x, &db))
-                              return out;
+                        double pd = p32;
+                        if (x != 32) {
+                              if (!at(r.value, r.pitch, x, x, &db))
+                                    return out;
+                              pd = pdb;
+                              }
                         r.curve.push_back({ x, db });
+                        r.perceived.push_back({ x, pd });
                         }
                   }
             else {
                   // on the controller (a long, tremolo …): the dynamics the report shows, and 127
                   // (velocity doesn't move it: velocity 32 with CC 127 is CC 127)
-                  double d80, d112;
-                  if (!at(r.value, r.pitch, 80, 80, &d80) || !at(r.value, r.pitch, 112, 112, &d112))
+                  double d80, d112, p80, p112;
+                  if (!at(r.value, r.pitch, 80, 80, &d80))
                         return out;
+                  p80 = pdb;
+                  if (!at(r.value, r.pitch, 112, 112, &d112))
+                        return out;
+                  p112 = pdb;
                   r.curve = { { 32, d32 }, { 80, d80 }, { 112, d112 }, { 127, cc127 } };
+                  r.perceived = { { 32, p32 }, { 80, p80 }, { 112, p112 }, { 127, pcc127 } };
                   }
             out.push_back(r);
             }

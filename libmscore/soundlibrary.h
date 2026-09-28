@@ -260,7 +260,9 @@ int routesGeneration();
 struct DynamicsCurve {
       QString drivenBy;
       std::vector<std::pair<int, double>> points;       // x (1 … 127, rising), dB
+      std::vector<std::pair<int, double>> perceived;    // x, how loud it sounds (ArticulationCheck::perceivedLoudnessDb); may be empty
       double at(int x) const;                           // interpolated; clamped at the ends
+      double perceivedAt(int x) const;                  // (-200 without perceived)
       int inverse(double db) const;                     // the x that plays db (1 … 127)
       };
 
@@ -292,6 +294,10 @@ int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int
 extern const char* shortBalanceMetaTag;
 double shortNotesBalance(const Score* score, const DynamicsCalibration& cal, const QString& family);
 QString writeShortBalance(const std::map<QString, double>& byFamily, const DynamicsCalibration& cal);
+// the recommended short notes' balance for a family (Advanced Options › Recommended): with the shorts
+// matched in energy to the held note, how much louder they sound (the perceived curves), at pp, mf
+// and ff, over the family's measured shorts: the median, negated, to 0.5 dB. false: nothing to go by
+bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& family, double* db);
 // a patch's family for the balance, from its main patch's folder in the library (SSO: Symphonic
 // Strings, Solo Strings, Symphonic Woodwinds, Symphonic / Motif Brass; else "other")
 QString family(const LibInstrument& main);

@@ -360,6 +360,16 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
   Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
   Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
+  **Recommended short notes' balance** (the owner, 2026-09-28: "measure out a recommended number for each of the
+  sections, and add a button called recommended"): each dynamics note also gets a perceived loudness
+  (`ArticulationCheck::perceivedLoudnessDb`: K-weighting (BS.1770), auditory filters one ERB apart with a
+  rounded-exponential shape (Glasberg & Moore 1990), each (E + A)^0.3 - A^0.3 summed (threshold A),
+  short-term smoothing attack 22 / release 50 ms, its peak as 33.2 log10: Glasberg & Moore 2002 simplified).
+  Hard Bark bands first: a tone split over two bands came out several dB louder (2 kHz +3 over 4 kHz);
+  overlapping filters fix it. `DynamicsCurve::perceived` ("perceived" in dynamics.json). `recommendedBalance`:
+  per family, shorts matched in energy to the held note (balance 0) at pp / mf / ff, how much louder they
+  sound, the median negated to 0.5 dB. Advanced Options › *Recommended* (right of *Library's*); the report
+  lists the recommendations. Needs one background dynamics run with this build. Test `perceivedLoudness`.
   **UI (2026-09-28, the owner: "tidy up the Sound Library menu")**: *View › Sound Library…* is the overview: a
   tree (`SoundLibraryDialog::_tree`), each part's row with its patch, *Controllers…* (kept until the automation
   system: the owner), setup state, *Show*, memory; its extra patches (+) and copies for other tunings (~) under

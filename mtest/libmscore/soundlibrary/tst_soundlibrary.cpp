@@ -55,6 +55,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void perceivedLoudness();
       void noteSecondsWritten();
       void dynamicsCalibration();
       void heldOnPerformance();
@@ -1988,6 +1989,7 @@ void TestSoundLibrary::dynamicsCheck()
             QCOMPARE(QString(d.drivenBy()), QString("both"));
             QCOMPARE(d.pitch, 67);
             QCOMPARE(int(d.curve.size()), 8);
+            QCOMPARE(int(d.perceived.size()), 8);
             // velocity * CC along x = both: 40 log(127 / 16) = 36 dB from 16 to 127
             QVERIFY2(std::fabs(d.curve.back().second - d.curve.front().second - 40 * std::log10(127.0 / 16.0)) < 2.5,
                      qPrintable(QString::number(d.curve.back().second - d.curve.front().second)));
@@ -2105,6 +2107,31 @@ void TestSoundLibrary::dynamicsCalibration()
             QCOMPARE(SoundLib::calibratedVelocity(again, "Violin", 40, "Violin", 1, 32, "solo strings", sc), 68);   // -42.8 dB
             delete sc;
       }
+      // the recommended setting: shorts matched in energy that sound 3 dB louder -> -3
+      {
+            auto rlib = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Violin' ids='violin' nki='Instruments/Symphonic Strings/Violin.nki'>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "<Articulation name='Staccato' value='40' techniques='short'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY(rlib);
+            SoundLib::DynamicsCalibration rc;
+            SoundLib::DynamicsCurve held = line("controller", -40, 0.1);
+            SoundLib::DynamicsCurve shortc = line("velocity", -70, 0.4);
+            double dummy;
+            QVERIFY(!SoundLib::recommendedBalance(*rlib, rc, "strings", &dummy));       // nothing measured
+            for (const auto& p : held.points)
+                  held.perceived.push_back({ p.first, p.second + 50 });
+            for (const auto& p : shortc.points)
+                  shortc.perceived.push_back({ p.first, p.second + 53 });                // 3 dB louder by ear
+            rc.setCurve("Violin", 1, held);
+            rc.setCurve("Violin", 40, shortc);
+            double rec = 0;
+            QVERIFY(SoundLib::recommendedBalance(*rlib, rc, "strings", &rec));
+            QCOMPARE(rec, -3.0);
+            QVERIFY(!SoundLib::recommendedBalance(*rlib, rc, "brass", &dummy));
+      }
 
       // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
       back->balanceDb = 0;
@@ -2173,6 +2200,54 @@ void TestSoundLibrary::noteSecondsWritten()
       QVERIFY(std::fabs(score->tempomap()->tick2time(480) - 1.0) < 1e-6);       // (playback: twice as slow)
       score->tempomap()->setRelTempo(1.0);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   perceivedLoudness
+//    ArticulationCheck::perceivedLoudnessDb: 10 dB more is ~10 more; a short burst sounds softer than
+//    the same tone held; 4 kHz louder than 1 kHz at one energy (K-weighting); noise louder than a
+//    tone at one energy (loudness adds up over the bands)
+//---------------------------------------------------------
+
+void TestSoundLibrary::perceivedLoudness()
+      {
+      using AC = ArticulationCheck;
+      const double sr = 48000;
+      auto tone = [sr](double hz, double amp, double seconds) {
+            std::vector<float> c;
+            const int n = int(sr * seconds);
+            for (int i = 0; i < n; ++i) {
+                  const float v = float(amp * std::sin(2 * M_PI * hz * i / sr));
+                  c.push_back(v);
+                  c.push_back(v);
+                  }
+            for (int i = 0; i < int(sr * 0.3); ++i)
+                  c.push_back(0), c.push_back(0);
+            return c;
+            };
+      const double a = AC::perceivedLoudnessDb(tone(1000, 0.1, 1.0), sr);
+      const double b = AC::perceivedLoudnessDb(tone(1000, 0.1 / std::sqrt(10.0), 1.0), sr);       // -10 dB
+      QVERIFY2(std::fabs(a - b - 10) < 1.5, qPrintable(QString::number(a - b)));        // (near threshold: a bit steeper)
+      const double burst = AC::perceivedLoudnessDb(tone(1000, 0.1, 0.03), sr);
+      QVERIFY2(a - burst > 1.0, qPrintable(QString::number(a - burst)));
+      const double high = AC::perceivedLoudnessDb(tone(4000, 0.1, 1.0), sr);
+      QVERIFY2(high - a > 1.0 && high - a < 5.0, qPrintable(QString::number(high - a)));
+      std::vector<float> noise;
+      unsigned seed = 1;
+      double power = 0;
+      for (int i = 0; i < int(sr); ++i) {
+            seed = seed * 1103515245u + 12345u;
+            const float v = float((int((seed >> 16) & 0x7fff) - 16384) / 16384.0);
+            noise.push_back(v), noise.push_back(v);
+            power += double(v) * v;
+            }
+      const double gain = 0.1 / std::sqrt(2.0) / std::sqrt(power / sr);               // the tone's RMS
+      for (float& v : noise)
+            v = float(v * gain);
+      for (int i = 0; i < int(sr * 0.3); ++i)
+            noise.push_back(0), noise.push_back(0);
+      const double n = AC::perceivedLoudnessDb(noise, sr);
+      QVERIFY2(n - a > 5.0, qPrintable(QString::number(n - a)));
       }
 
 QTEST_MAIN(TestSoundLibrary)

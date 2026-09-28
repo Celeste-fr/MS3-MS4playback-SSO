@@ -1078,11 +1078,16 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             SoundLib::DynamicsCurve c;
             c.drivenBy = d.drivenBy();
             c.points = d.curve;
+            c.perceived = d.perceived;
             cal.setCurve(ins.name, d.value, c);
             QJsonArray pts;
             for (const auto& pt : d.curve)
                   pts.append(QJsonArray({ pt.first, r1(pt.second) }));
             o["curve"] = pts;
+            QJsonArray per;
+            for (const auto& pt : d.perceived)
+                  per.append(QJsonArray({ pt.first, r1(pt.second) }));
+            o["perceived"] = per;
             o["velocityDb"] = QJsonArray({ r1(d.velocityDb[0]), r1(d.velocityDb[1]) });
             o["controllerDb"] = QJsonArray({ r1(d.ccDb[0]), r1(d.ccDb[1]) });
             o["drivenBy"] = c.drivenBy;
@@ -1322,7 +1327,15 @@ QString ArticulationCheckDialog::balanceReport() const
             }
       if (text.isEmpty())
             return QString();
+      // the recommended short notes' settings (how much louder the matched shorts sound)
+      QStringList rec;
+      for (const char* f : SoundLib::FAMILIES) {
+            double db;
+            if (SoundLib::recommendedBalance(*_library, *cal, f, &db))
+                  rec << QString("%1 %2 dB").arg(f).arg(f1(db));
+            }
       return "\n# " + tr("Dynamics balance (loudest 50 ms; against the held note plus each family's short notes setting)")
+             + (rec.isEmpty() ? QString() : "\n" + tr("Recommended short notes settings (by a loudness model): %1").arg(rec.join(", ")))
              + "\n" + text;
       }
 
