@@ -1,0 +1,2771 @@
+{
+ "source": "Kickstart's hit lists in each patch's window at its defaults: the owner's run of 2026-09-28 05:02 (MuseScore --window-pictures, run 198), OCR checked by eye, reviewed on https://claude.ai/artifact/CKcFbayqAj3iPi9h3irUFK (the owner: readings correct, 2026-09-28). Keys: MIDI, C3 = 60; a hit with no key is off in that patch (Kickstart gives an off technique no key).",
+ "notes": [
+  "Rain Sheet Swell mp (one-drum patch, F1 = 41): plays nothing (Kontakt's Voices stays 0, the owner). Its sample group is like Swell mf / f's (8 zones, velocity 1-127, not muted) in this patch, Metal Clangs and the Unpitched - Metal kit, so it's in Spitfire's script, not a missing zone; the kit patch (where it is off by default) is the only other place to try it.",
+  "Cymbal Hi Choked Hit (D2 = 50): sounds in Kontakt (the owner), but was silent in the key scan of 2026-09-28 01:46; cause unknown.",
+  "Ensembles - Low Ensemble: Toms 3, 4 and 5 share E2 and Field Drum Rim and X Stick share A2 at the defaults (a real conflict, the owner checked); Trash Metals Scafold 2 / Spring Coil share F3 and Wind Gong Swell mf / f share G1 (one-drum patches). To be set in Kontakt when a part needs them.",
+  "Techniques off at a patch's defaults have no key at all (no default keyboard mapping); they need a key set in Kontakt when a part needs them (the owner, 2026-09-28)."
+ ],
+ "patches": {
+  "Ensembles - Contemporary": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Tambourines",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Hit Alt",
+       "key": 52
+      },
+      {
+       "name": "Roll",
+       "key": 49
+      },
+      {
+       "name": "Swell",
+       "key": null
+      },
+      {
+       "name": "Swell Alt",
+       "key": null
+      },
+      {
+       "name": "FX Rolls",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 2,
+     "drum": "Shakers",
+     "hits": [
+      {
+       "name": "Pop Closed",
+       "key": 29
+      },
+      {
+       "name": "Met Open",
+       "key": 30
+      },
+      {
+       "name": "Met Closed",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 3,
+     "drum": "Cowbells",
+     "hits": [
+      {
+       "name": "Bell 1 Open",
+       "key": 108
+      },
+      {
+       "name": "Bell 1 Closed",
+       "key": 109
+      },
+      {
+       "name": "Bell 2 Open",
+       "key": 112
+      },
+      {
+       "name": "Bell 2 Closed",
+       "key": 114
+      },
+      {
+       "name": "Bell 3 Open",
+       "key": 115
+      },
+      {
+       "name": "Bell 3 Closed",
+       "key": 118
+      }
+     ]
+    },
+    {
+     "icon": 4,
+     "drum": "Sleighbells",
+     "hits": [
+      {
+       "name": "Hit 1",
+       "key": 60
+      },
+      {
+       "name": "Hit 2",
+       "key": 64
+      },
+      {
+       "name": "Roll 1",
+       "key": 61
+      },
+      {
+       "name": "Roll 2",
+       "key": 66
+      }
+     ]
+    },
+    {
+     "icon": 5,
+     "drum": "Trash metals",
+     "hits": [
+      {
+       "name": "Brake 1",
+       "key": 84
+      },
+      {
+       "name": "Brake 2",
+       "key": 88
+      },
+      {
+       "name": "Pans",
+       "key": 85
+      },
+      {
+       "name": "Scafold 1",
+       "key": 90
+      },
+      {
+       "name": "Scafold 2",
+       "key": 91
+      },
+      {
+       "name": "Spring Coil",
+       "key": null
+      },
+      {
+       "name": "Trash Can",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 6,
+     "drum": "Ratchet",
+     "hits": [
+      {
+       "name": "Short",
+       "key": 96
+      },
+      {
+       "name": "Long",
+       "key": 100
+      }
+     ]
+    },
+    {
+     "icon": 7,
+     "drum": "Guiro",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 37
+      },
+      {
+       "name": "Zip",
+       "key": 36
+      },
+      {
+       "name": "Zip Fast",
+       "key": null
+      },
+      {
+       "name": "Zip sfz",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 8,
+     "drum": "Claves",
+     "hits": [
+      {
+       "name": "Bass Hit",
+       "key": 72
+      },
+      {
+       "name": "Cuban Hit",
+       "key": 76
+      },
+      {
+       "name": "C# Hit",
+       "key": 79
+      },
+      {
+       "name": "D Hit",
+       "key": 73
+      },
+      {
+       "name": "E Hit",
+       "key": 78
+      }
+     ]
+    }
+   ]
+  },
+  "Ensembles - Hands and hits": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Bongos",
+     "hits": [
+      {
+       "name": "Side Roll",
+       "key": null
+      },
+      {
+       "name": "H Swell mf",
+       "key": null
+      },
+      {
+       "name": "H Swell f",
+       "key": null
+      },
+      {
+       "name": "B Swell mf",
+       "key": null
+      },
+      {
+       "name": "B Swell f",
+       "key": null
+      },
+      {
+       "name": "Hand Flam",
+       "key": 60
+      },
+      {
+       "name": "Hand Bass",
+       "key": 64
+      },
+      {
+       "name": "Hand Tone",
+       "key": null
+      },
+      {
+       "name": "Fing Flam",
+       "key": 61
+      },
+      {
+       "name": "Fing Bass",
+       "key": null
+      },
+      {
+       "name": "Fing Slap",
+       "key": null
+      },
+      {
+       "name": "Hit",
+       "key": 67
+      },
+      {
+       "name": "Hand Roll sfp",
+       "key": null
+      },
+      {
+       "name": "Hand Roll",
+       "key": 66
+      },
+      {
+       "name": "Fing Roll sfp",
+       "key": null
+      },
+      {
+       "name": "Fing Roll",
+       "key": 68
+      }
+     ]
+    },
+    {
+     "icon": 2,
+     "drum": "Conga 1",
+     "hits": [
+      {
+       "name": "Flam",
+       "key": null
+      },
+      {
+       "name": "Bass",
+       "key": null
+      },
+      {
+       "name": "Tone",
+       "key": null
+      },
+      {
+       "name": "Slap",
+       "key": null
+      },
+      {
+       "name": "Hit",
+       "key": 40
+      },
+      {
+       "name": "Roll",
+       "key": null
+      },
+      {
+       "name": "Roll sfp",
+       "key": null
+      },
+      {
+       "name": "Roll Side",
+       "key": null
+      },
+      {
+       "name": "Swell mf",
+       "key": null
+      },
+      {
+       "name": "Swell f",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 3,
+     "drum": "Conga 2",
+     "hits": [
+      {
+       "name": "Flam",
+       "key": null
+      },
+      {
+       "name": "Bass",
+       "key": null
+      },
+      {
+       "name": "Tone",
+       "key": null
+      },
+      {
+       "name": "Slap",
+       "key": null
+      },
+      {
+       "name": "Hit",
+       "key": 36
+      },
+      {
+       "name": "Roll",
+       "key": null
+      },
+      {
+       "name": "Roll sfp",
+       "key": null
+      },
+      {
+       "name": "Roll Side",
+       "key": null
+      },
+      {
+       "name": "Swell mf",
+       "key": null
+      },
+      {
+       "name": "Swell f",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 4,
+     "drum": "Gong Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Mute Hit",
+       "key": 49
+      },
+      {
+       "name": "Swell",
+       "key": null
+      },
+      {
+       "name": "FX Drag",
+       "key": null
+      },
+      {
+       "name": "FX Various",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 5,
+     "drum": "Gankogui",
+     "hits": [
+      {
+       "name": "Low Open",
+       "key": 84
+      },
+      {
+       "name": "Low Closed",
+       "key": 85
+      },
+      {
+       "name": "Hi Open",
+       "key": 88
+      },
+      {
+       "name": "Hi Closed",
+       "key": 90
+      }
+     ]
+    },
+    {
+     "icon": 6,
+     "drum": "Cabasa",
+     "hits": [
+      {
+       "name": "Flick",
+       "key": 72
+      },
+      {
+       "name": "Shake",
+       "key": 76
+      },
+      {
+       "name": "Slap",
+       "key": 73
+      },
+      {
+       "name": "Twist",
+       "key": 78
+      },
+      {
+       "name": "Alt Twist",
+       "key": 79
+      }
+     ]
+    }
+   ]
+  },
+  "Ensembles - Low Ensemble": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Bass Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Soft Hit",
+       "key": 52
+      },
+      {
+       "name": "Mute Hit",
+       "key": 49
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Rute",
+       "key": 57
+      },
+      {
+       "name": "FX Rub",
+       "key": null
+      },
+      {
+       "name": "Swell",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 2,
+     "drum": "Toms",
+     "hits": [
+      {
+       "name": "Swell 2 f",
+       "key": null
+      },
+      {
+       "name": "Swell 3 f",
+       "key": null
+      },
+      {
+       "name": "Swell 4 f",
+       "key": null
+      },
+      {
+       "name": "Swell 5 f",
+       "key": null
+      },
+      {
+       "name": "Tom 1",
+       "key": 48
+      },
+      {
+       "name": "Tom 2",
+       "key": 49
+      },
+      {
+       "name": "Tom 3",
+       "key": 52
+      },
+      {
+       "name": "Tom 4",
+       "key": 52
+      },
+      {
+       "name": "Tom 5",
+       "key": 52
+      },
+      {
+       "name": "Swell 1 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 2 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 3 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 4 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 5 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 1 f",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 3,
+     "drum": "Tom Ensemble",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Hit Loose",
+       "key": 49
+      },
+      {
+       "name": "Eth Hit",
+       "key": 52
+      },
+      {
+       "name": "Eth Hit Loose",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 4,
+     "drum": "Gong Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Mute Hit",
+       "key": 49
+      },
+      {
+       "name": "Swell",
+       "key": null
+      },
+      {
+       "name": "FX Drag",
+       "key": null
+      },
+      {
+       "name": "FX Various",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 5,
+     "drum": "Field Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Edge",
+       "key": 52
+      },
+      {
+       "name": "Rim",
+       "key": 57
+      },
+      {
+       "name": "X Stick",
+       "key": 57
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": null
+      },
+      {
+       "name": "Swell f",
+       "key": null
+      }
+     ]
+    }
+   ]
+  },
+  "Ensembles - Metal Clangs": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Anvil",
+     "hits": [
+      {
+       "name": "Hit Rear",
+       "key": 36
+      },
+      {
+       "name": "Hit Mid",
+       "key": null
+      },
+      {
+       "name": "Horn Center",
+       "key": 42
+      },
+      {
+       "name": "Horn Tip",
+       "key": 37
+      },
+      {
+       "name": "Horn Under",
+       "key": null
+      },
+      {
+       "name": "Hit Face",
+       "key": null
+      },
+      {
+       "name": "Steel Sheet",
+       "key": null
+      },
+      {
+       "name": "Horn Pipe",
+       "key": 40
+      },
+      {
+       "name": "Rear Pipe",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 2,
+     "drum": "Mini Anvil",
+     "hits": [
+      {
+       "name": "Anvil 1",
+       "key": 43
+      },
+      {
+       "name": "Anvil 2",
+       "key": 46
+      },
+      {
+       "name": "Anvil 3",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 3,
+     "drum": "Rain Sheet",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": null
+      },
+      {
+       "name": "Choked Hit",
+       "key": null
+      },
+      {
+       "name": "Roll",
+       "key": null
+      },
+      {
+       "name": "Swell mp",
+       "key": null
+      },
+      {
+       "name": "Swell mf",
+       "key": null
+      },
+      {
+       "name": "Swell f",
+       "key": null
+      },
+      {
+       "name": "Superball",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 4,
+     "drum": "Trash metals",
+     "hits": [
+      {
+       "name": "Brake 1",
+       "key": 48
+      },
+      {
+       "name": "Brake 2",
+       "key": 52
+      },
+      {
+       "name": "Pans",
+       "key": 49
+      },
+      {
+       "name": "Scafold 1",
+       "key": 54
+      },
+      {
+       "name": "Scafold 2",
+       "key": 55
+      },
+      {
+       "name": "Spring Coil",
+       "key": null
+      },
+      {
+       "name": "Trash Can",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 5,
+     "drum": "Triangle 1",
+     "hits": [
+      {
+       "name": "Open Hit 1",
+       "key": null
+      },
+      {
+       "name": "Open Hit 2",
+       "key": null
+      },
+      {
+       "name": "Open Hit 3",
+       "key": null
+      },
+      {
+       "name": "Open Hit 4",
+       "key": 96
+      },
+      {
+       "name": "Closed Hit",
+       "key": 97
+      }
+     ]
+    },
+    {
+     "icon": 6,
+     "drum": "Triangle 2",
+     "hits": [
+      {
+       "name": "Open Hit 1",
+       "key": null
+      },
+      {
+       "name": "Open Hit 2",
+       "key": null
+      },
+      {
+       "name": "Open Hit 3",
+       "key": null
+      },
+      {
+       "name": "Open Hit 4",
+       "key": 100
+      },
+      {
+       "name": "Closed Hit",
+       "key": 102
+      }
+     ]
+    },
+    {
+     "icon": 7,
+     "drum": "Ships Bell",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 84
+      },
+      {
+       "name": "Muted Hit",
+       "key": 85
+      }
+     ]
+    },
+    {
+     "icon": 8,
+     "drum": "Agogo",
+     "hits": [
+      {
+       "name": "Low Hit",
+       "key": 60
+      },
+      {
+       "name": "High Hit",
+       "key": 64
+      }
+     ]
+    },
+    {
+     "icon": 9,
+     "drum": "Gankogui",
+     "hits": [
+      {
+       "name": "Low Open",
+       "key": 72
+      },
+      {
+       "name": "Low Closed",
+       "key": 73
+      },
+      {
+       "name": "Hi Open",
+       "key": 76
+      },
+      {
+       "name": "Hi Closed",
+       "key": 78
+      }
+     ]
+    }
+   ]
+  },
+  "Ensembles - Snare ensemble": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Snare 1",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Edge",
+       "key": 52
+      },
+      {
+       "name": "Rim",
+       "key": 55
+      },
+      {
+       "name": "X Stick",
+       "key": 59
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    },
+    {
+     "icon": 2,
+     "drum": "Snare 2",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Edge",
+       "key": 52
+      },
+      {
+       "name": "Rim",
+       "key": 55
+      },
+      {
+       "name": "X Stick",
+       "key": 59
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Brush",
+       "key": 72
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Brush Roll",
+       "key": 73
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    },
+    {
+     "icon": 3,
+     "drum": "Snare 3",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      }
+     ]
+    },
+    {
+     "icon": 4,
+     "drum": "Field Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Edge",
+       "key": 52
+      },
+      {
+       "name": "Rim",
+       "key": 55
+      },
+      {
+       "name": "X Stick",
+       "key": 59
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    }
+   ]
+  },
+  "Ensembles - Traditional Orchestra": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Bass Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 36
+      },
+      {
+       "name": "Soft Hit",
+       "key": null
+      },
+      {
+       "name": "Mute Hit",
+       "key": null
+      },
+      {
+       "name": "Roll",
+       "key": 37
+      },
+      {
+       "name": "Rute",
+       "key": null
+      },
+      {
+       "name": "FX Rub",
+       "key": null
+      },
+      {
+       "name": "Swell",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 2,
+     "drum": "Toms",
+     "hits": [
+      {
+       "name": "Swell 2 f",
+       "key": null
+      },
+      {
+       "name": "Swell 3 f",
+       "key": null
+      },
+      {
+       "name": "Swell 4 f",
+       "key": null
+      },
+      {
+       "name": "Swell 5 f",
+       "key": null
+      },
+      {
+       "name": "Tom 1",
+       "key": 60
+      },
+      {
+       "name": "Tom 2",
+       "key": 64
+      },
+      {
+       "name": "Tom 3",
+       "key": 67
+      },
+      {
+       "name": "Tom 4",
+       "key": 71
+      },
+      {
+       "name": "Tom 5",
+       "key": 74
+      },
+      {
+       "name": "Swell 1 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 2 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 3 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 4 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 5 mf",
+       "key": null
+      },
+      {
+       "name": "Swell 1 f",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 3,
+     "drum": "Piatti",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choked Hit",
+       "key": null
+      },
+      {
+       "name": "Choked Alt",
+       "key": null
+      },
+      {
+       "name": "FX Scrape",
+       "key": null
+      },
+      {
+       "name": "FX Sizzle",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 4,
+     "drum": "Cymbal Lo",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 50
+      },
+      {
+       "name": "Choked Hit",
+       "key": null
+      },
+      {
+       "name": "Brush",
+       "key": null
+      },
+      {
+       "name": "Roll",
+       "key": null
+      },
+      {
+       "name": "Swell mf",
+       "key": null
+      },
+      {
+       "name": "Swell f",
+       "key": null
+      },
+      {
+       "name": "FX Scrape",
+       "key": null
+      },
+      {
+       "name": "FX Bow",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 5,
+     "drum": "Cymbal Med",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": null
+      },
+      {
+       "name": "Choked Hit",
+       "key": null
+      },
+      {
+       "name": "Brush",
+       "key": null
+      },
+      {
+       "name": "Roll",
+       "key": null
+      },
+      {
+       "name": "Swell mf",
+       "key": null
+      },
+      {
+       "name": "Swell f",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 6,
+     "drum": "Cymbal Hi",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 53
+      },
+      {
+       "name": "Choked Hit",
+       "key": null
+      },
+      {
+       "name": "Brush",
+       "key": null
+      },
+      {
+       "name": "Roll",
+       "key": null
+      },
+      {
+       "name": "Swell mf",
+       "key": null
+      },
+      {
+       "name": "Swell f",
+       "key": null
+      },
+      {
+       "name": "FX Scrape",
+       "key": null
+      },
+      {
+       "name": "FX Bow",
+       "key": null
+      }
+     ]
+    },
+    {
+     "icon": 7,
+     "drum": "Triangle 1",
+     "hits": [
+      {
+       "name": "Open Hit 1",
+       "key": 84
+      },
+      {
+       "name": "Open Hit 2",
+       "key": 88
+      },
+      {
+       "name": "Open Hit 3",
+       "key": 91
+      },
+      {
+       "name": "Open Hit 4",
+       "key": 90
+      },
+      {
+       "name": "Closed Hit",
+       "key": 85
+      }
+     ]
+    },
+    {
+     "icon": 8,
+     "drum": "Triangle 2",
+     "hits": [
+      {
+       "name": "Open Hit 1",
+       "key": 96
+      },
+      {
+       "name": "Open Hit 2",
+       "key": 100
+      },
+      {
+       "name": "Open Hit 3",
+       "key": 103
+      },
+      {
+       "name": "Open Hit 4",
+       "key": 102
+      },
+      {
+       "name": "Closed Hit",
+       "key": 97
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Bongos": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Bongos",
+     "hits": [
+      {
+       "name": "Side Roll",
+       "key": 82
+      },
+      {
+       "name": "H Swell mf",
+       "key": 41
+      },
+      {
+       "name": "H Swell f",
+       "key": 43
+      },
+      {
+       "name": "f Swell mf",
+       "key": 42
+      },
+      {
+       "name": "f Swell f",
+       "key": 44
+      },
+      {
+       "name": "Hand Flam",
+       "key": 49
+      },
+      {
+       "name": "Hand Bass",
+       "key": 52
+      },
+      {
+       "name": "Hand Tone",
+       "key": 48
+      },
+      {
+       "name": "Fing Flam",
+       "key": 61
+      },
+      {
+       "name": "Fing Bass",
+       "key": 60
+      },
+      {
+       "name": "Fing Slap",
+       "key": 64
+      },
+      {
+       "name": "Hit",
+       "key": 72
+      },
+      {
+       "name": "Hand Roll sfp",
+       "key": 75
+      },
+      {
+       "name": "Hand Roll",
+       "key": 73
+      },
+      {
+       "name": "Fing Roll sfp",
+       "key": 78
+      },
+      {
+       "name": "Fing Roll",
+       "key": 80
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Conga 1": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Conga 1",
+     "hits": [
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Bass",
+       "key": 48
+      },
+      {
+       "name": "Tone",
+       "key": 52
+      },
+      {
+       "name": "Slap",
+       "key": 55
+      },
+      {
+       "name": "Hit",
+       "key": 72
+      },
+      {
+       "name": "Roll",
+       "key": 73
+      },
+      {
+       "name": "Roll sfp",
+       "key": 75
+      },
+      {
+       "name": "Roll Side",
+       "key": 78
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Conga 2": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Conga 2",
+     "hits": [
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Bass",
+       "key": 48
+      },
+      {
+       "name": "Tone",
+       "key": 52
+      },
+      {
+       "name": "Slap",
+       "key": 55
+      },
+      {
+       "name": "Hit",
+       "key": 72
+      },
+      {
+       "name": "Roll",
+       "key": 73
+      },
+      {
+       "name": "Roll sfp",
+       "key": 75
+      },
+      {
+       "name": "Roll Side",
+       "key": 78
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Rototoms": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Rototoms",
+     "hits": [
+      {
+       "name": "Roto 1",
+       "key": 48
+      },
+      {
+       "name": "Roto 2",
+       "key": 53
+      },
+      {
+       "name": "Roto 3",
+       "key": 59
+      },
+      {
+       "name": "Roto 4",
+       "key": 64
+      },
+      {
+       "name": "Roto 5",
+       "key": 69
+      },
+      {
+       "name": "Swell 1",
+       "key": 84
+      },
+      {
+       "name": "Swell 2",
+       "key": 86
+      },
+      {
+       "name": "Swell 3",
+       "key": 88
+      },
+      {
+       "name": "Swell 4",
+       "key": 89
+      },
+      {
+       "name": "Swell 5",
+       "key": 91
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Snare 1": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Snare 1",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Edge",
+       "key": 52
+      },
+      {
+       "name": "Rim",
+       "key": 55
+      },
+      {
+       "name": "X Stick",
+       "key": 59
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Snare 2": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Snare 2",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Edge",
+       "key": 52
+      },
+      {
+       "name": "Rim",
+       "key": 55
+      },
+      {
+       "name": "X Stick",
+       "key": 59
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Brush",
+       "key": 56
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Brush Roll",
+       "key": 63
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Snare 3": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Snare 3",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - High - Timbales": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Timbales",
+     "hits": [
+      {
+       "name": "Lo Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Lo Swell f",
+       "key": 43
+      },
+      {
+       "name": "Hi Swell mf",
+       "key": 42
+      },
+      {
+       "name": "Hi Swell f",
+       "key": 44
+      },
+      {
+       "name": "Lo Hit",
+       "key": 48
+      },
+      {
+       "name": "Lo Edge",
+       "key": 52
+      },
+      {
+       "name": "Lo Rim",
+       "key": 55
+      },
+      {
+       "name": "Lo X St.",
+       "key": 59
+      },
+      {
+       "name": "Lo Flam",
+       "key": 49
+      },
+      {
+       "name": "Hi Hit",
+       "key": 72
+      },
+      {
+       "name": "Hi Edge",
+       "key": 76
+      },
+      {
+       "name": "Hi Rim",
+       "key": 79
+      },
+      {
+       "name": "Hi X St.",
+       "key": 83
+      },
+      {
+       "name": "Hi Flam",
+       "key": 73
+      },
+      {
+       "name": "Hi Side",
+       "key": 78
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - Low - Bass Drum": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Bass Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Soft Hit",
+       "key": 52
+      },
+      {
+       "name": "Mute Hit",
+       "key": 55
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Rute",
+       "key": 59
+      },
+      {
+       "name": "FX Rub",
+       "key": 72
+      },
+      {
+       "name": "Swell",
+       "key": 41
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - Low - Field Drum": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Field Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Edge",
+       "key": 52
+      },
+      {
+       "name": "Rim",
+       "key": 55
+      },
+      {
+       "name": "X Stick",
+       "key": 59
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Roll",
+       "key": 66
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - Low - Gong Drum": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Gong Drum",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Mute Hit",
+       "key": 52
+      },
+      {
+       "name": "Swell",
+       "key": 55
+      },
+      {
+       "name": "FX Drag",
+       "key": 59
+      },
+      {
+       "name": "FX Various",
+       "key": 81
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - Low - Tom Ensemble": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Tom Ensemble",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Hit Loose",
+       "key": 49
+      },
+      {
+       "name": "Eth Hit",
+       "key": 60
+      },
+      {
+       "name": "Eth Hit Loose",
+       "key": 61
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Drums - Low - Toms": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Toms",
+     "hits": [
+      {
+       "name": "Swell 2 f",
+       "key": 98
+      },
+      {
+       "name": "Swell 3 f",
+       "key": 100
+      },
+      {
+       "name": "Swell 4 f",
+       "key": 101
+      },
+      {
+       "name": "Swell 5 f",
+       "key": 103
+      },
+      {
+       "name": "Tom 1",
+       "key": 48
+      },
+      {
+       "name": "Tom 2",
+       "key": 53
+      },
+      {
+       "name": "Tom 3",
+       "key": 59
+      },
+      {
+       "name": "Tom 4",
+       "key": 64
+      },
+      {
+       "name": "Tom 5",
+       "key": 69
+      },
+      {
+       "name": "Swell 1 mf",
+       "key": 84
+      },
+      {
+       "name": "Swell 2 mf",
+       "key": 86
+      },
+      {
+       "name": "Swell 3 mf",
+       "key": 88
+      },
+      {
+       "name": "Swell 4 mf",
+       "key": 89
+      },
+      {
+       "name": "Swell 5 mf",
+       "key": 91
+      },
+      {
+       "name": "Swell 1 f",
+       "key": 96
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Agogo": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Agogo",
+     "hits": [
+      {
+       "name": "Low Hit",
+       "key": 48
+      },
+      {
+       "name": "High Hit",
+       "key": 60
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Cabasa": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Cabasa",
+     "hits": [
+      {
+       "name": "Flick",
+       "key": 48
+      },
+      {
+       "name": "Shake",
+       "key": 52
+      },
+      {
+       "name": "Slap",
+       "key": 55
+      },
+      {
+       "name": "Twist",
+       "key": 59
+      },
+      {
+       "name": "Alt Twist",
+       "key": 62
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Castanets": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Castanets",
+     "hits": [
+      {
+       "name": "Left Hand",
+       "key": 48
+      },
+      {
+       "name": "Right Hand",
+       "key": 60
+      },
+      {
+       "name": "Flam",
+       "key": 49
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Cowbells": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Cowbells",
+     "hits": [
+      {
+       "name": "Bell 1 Open",
+       "key": 48
+      },
+      {
+       "name": "Bell 1 Closed",
+       "key": 49
+      },
+      {
+       "name": "Bell 2 Open",
+       "key": 53
+      },
+      {
+       "name": "Bell 2 Closed",
+       "key": 54
+      },
+      {
+       "name": "Bell 3 Open",
+       "key": 60
+      },
+      {
+       "name": "Bell 3 Closed",
+       "key": 61
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Gankogui": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Gankogui",
+     "hits": [
+      {
+       "name": "Low Open",
+       "key": 48
+      },
+      {
+       "name": "Low Closed",
+       "key": 49
+      },
+      {
+       "name": "Hi Open",
+       "key": 60
+      },
+      {
+       "name": "Hi Closed",
+       "key": 61
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Guiro": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Guiro",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Zip",
+       "key": 60
+      },
+      {
+       "name": "Zip Fast",
+       "key": 72
+      },
+      {
+       "name": "Zip sfz",
+       "key": 84
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Jawbone": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Jawbone",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Hit f",
+       "key": 49
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Ratchet": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Ratchet",
+     "hits": [
+      {
+       "name": "Short",
+       "key": 48
+      },
+      {
+       "name": "Long",
+       "key": 60
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Shakers": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Shakers",
+     "hits": [
+      {
+       "name": "Pop Closed",
+       "key": 60
+      },
+      {
+       "name": "Met Open",
+       "key": 48
+      },
+      {
+       "name": "Met Closed",
+       "key": 49
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Ships Bell": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Ships Bell",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Muted Hit",
+       "key": 52
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Sleighbells": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Sleighbells",
+     "hits": [
+      {
+       "name": "Hit 1",
+       "key": 60
+      },
+      {
+       "name": "Hit 2",
+       "key": 48
+      },
+      {
+       "name": "Roll 1",
+       "key": 61
+      },
+      {
+       "name": "Roll 2",
+       "key": 49
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Other - Toys - Tambourines": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Tambourines",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Hit Alt",
+       "key": 52
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell",
+       "key": 41
+      },
+      {
+       "name": "Swell Alt",
+       "key": 43
+      },
+      {
+       "name": "FX Rolls",
+       "key": 60
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Anvil": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Anvil",
+     "hits": [
+      {
+       "name": "Hit Rear",
+       "key": 48
+      },
+      {
+       "name": "Hit Mid",
+       "key": 52
+      },
+      {
+       "name": "Horn Center",
+       "key": 64
+      },
+      {
+       "name": "Horn Tip",
+       "key": 60
+      },
+      {
+       "name": "Horn Under",
+       "key": 67
+      },
+      {
+       "name": "Hit Face",
+       "key": 55
+      },
+      {
+       "name": "Steel Sheet",
+       "key": 49
+      },
+      {
+       "name": "Horn Pipe",
+       "key": 61
+      },
+      {
+       "name": "Rear Pipe",
+       "key": 54
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Cymbal Hi": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Cymbal Hi",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choked Hit",
+       "key": 50
+      },
+      {
+       "name": "Brush",
+       "key": 52
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      },
+      {
+       "name": "FX Scrape",
+       "key": 72
+      },
+      {
+       "name": "FX Bow",
+       "key": 84
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Cymbal Lo": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Cymbal Lo",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choked Hit",
+       "key": 50
+      },
+      {
+       "name": "Brush",
+       "key": 52
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      },
+      {
+       "name": "FX Scrape",
+       "key": 72
+      },
+      {
+       "name": "FX Bow",
+       "key": 84
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Cymbal Med": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Cymbal Med",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choked Hit",
+       "key": 50
+      },
+      {
+       "name": "Brush",
+       "key": 52
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Mark Tree": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Mark Tree",
+     "hits": [
+      {
+       "name": "Long",
+       "key": 48
+      },
+      {
+       "name": "Up",
+       "key": 52
+      },
+      {
+       "name": "Down",
+       "key": 55
+      },
+      {
+       "name": "Push",
+       "key": 49
+      },
+      {
+       "name": "Sweep Low",
+       "key": 60
+      },
+      {
+       "name": "Sweep Mid",
+       "key": 64
+      },
+      {
+       "name": "Sweep High",
+       "key": 67
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Mini Anvil": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Mini Anvil",
+     "hits": [
+      {
+       "name": "Anvil 1",
+       "key": 48
+      },
+      {
+       "name": "Anvil 2",
+       "key": 53
+      },
+      {
+       "name": "Anvil 3",
+       "key": 59
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Piatti": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Piatti",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choked Hit",
+       "key": 72
+      },
+      {
+       "name": "Choked Alt",
+       "key": 74
+      },
+      {
+       "name": "FX Scrape",
+       "key": 77
+      },
+      {
+       "name": "FX Sizzle",
+       "key": 84
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Rain Sheet": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Rain Sheet",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choked Hit",
+       "key": 50
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mp",
+       "key": 41
+      },
+      {
+       "name": "Swell mf",
+       "key": 43
+      },
+      {
+       "name": "Swell f",
+       "key": 45
+      },
+      {
+       "name": "Superball",
+       "key": 72
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Rivet Cymbal": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Rivet Cymbal",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell",
+       "key": 41
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Tam Tam": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Tam Tam",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choked Hit",
+       "key": 50
+      },
+      {
+       "name": "Roll",
+       "key": 61
+      },
+      {
+       "name": "Swell mf",
+       "key": 41
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      },
+      {
+       "name": "Superball",
+       "key": 72
+      },
+      {
+       "name": "FX Scrape",
+       "key": 89
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Trash Metals": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Trash Metals",
+     "hits": [
+      {
+       "name": "Brake 1",
+       "key": 48
+      },
+      {
+       "name": "Brake 2",
+       "key": 52
+      },
+      {
+       "name": "Pans",
+       "key": 57
+      },
+      {
+       "name": "Scafold 1",
+       "key": 62
+      },
+      {
+       "name": "Scafold 2",
+       "key": 65
+      },
+      {
+       "name": "Spring Coil",
+       "key": 65
+      },
+      {
+       "name": "Trash Can",
+       "key": 71
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Triangle 1": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Triangle 1",
+     "hits": [
+      {
+       "name": "Open Hit 1",
+       "key": 48
+      },
+      {
+       "name": "Open Hit 2",
+       "key": 53
+      },
+      {
+       "name": "Open Hit 3",
+       "key": 59
+      },
+      {
+       "name": "Open Hit 4",
+       "key": 64
+      },
+      {
+       "name": "Closed Hit",
+       "key": 49
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Triangle 2": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Triangle 2",
+     "hits": [
+      {
+       "name": "Open Hit 1",
+       "key": 48
+      },
+      {
+       "name": "Open Hit 2",
+       "key": 53
+      },
+      {
+       "name": "Open Hit 3",
+       "key": 59
+      },
+      {
+       "name": "Open Hit 4",
+       "key": 64
+      },
+      {
+       "name": "Closed Hit",
+       "key": 49
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Metal - Wind Gong": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Wind Gong",
+     "hits": [
+      {
+       "name": "Hit",
+       "key": 48
+      },
+      {
+       "name": "Choke",
+       "key": 50
+      },
+      {
+       "name": "Swell mf",
+       "key": 43
+      },
+      {
+       "name": "Swell f",
+       "key": 43
+      },
+      {
+       "name": "FX Bow",
+       "key": 60
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Wood - Claves": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Claves",
+     "hits": [
+      {
+       "name": "Bass Hit",
+       "key": 48
+      },
+      {
+       "name": "Cuban Hit",
+       "key": 64
+      },
+      {
+       "name": "C# Hit",
+       "key": 53
+      },
+      {
+       "name": "D Hit",
+       "key": 59
+      },
+      {
+       "name": "E Hit",
+       "key": 69
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Wood - Temple Blocks": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Temple Blocks",
+     "hits": [
+      {
+       "name": "Block 1",
+       "key": 48
+      },
+      {
+       "name": "Block 2",
+       "key": 53
+      },
+      {
+       "name": "Block 3",
+       "key": 59
+      },
+      {
+       "name": "Block 4",
+       "key": 64
+      },
+      {
+       "name": "Block 5",
+       "key": 69
+      }
+     ]
+    }
+   ]
+  },
+  "Percussion - Unpitched - Wood - Woodblocks": {
+   "drums": [
+    {
+     "icon": 1,
+     "drum": "Woodblocks",
+     "hits": [
+      {
+       "name": "Block 1",
+       "key": 48
+      },
+      {
+       "name": "Block 2",
+       "key": 53
+      },
+      {
+       "name": "Block 3",
+       "key": 59
+      },
+      {
+       "name": "Block 4",
+       "key": 64
+      },
+      {
+       "name": "Block 5",
+       "key": 69
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

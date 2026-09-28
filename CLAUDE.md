@@ -1083,6 +1083,16 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     many as each file has), so the wheel step was dropped. `<library> windows <date>/`: `<patch>.png`, `<patch> - n.png` (icon n from the right), pictures.json,
     summary.txt, zip. Tried here only with the test synth (no editor: "the plug-in has no window"); the window,
     the off-screen grab and the clicks are untried with Kontakt. Test `drumIcons`.
+    **The owner's second run (2026-09-28 05:02, run 198, 8.8 min):** all 48 patches, every drum clicked (4-9 icons per
+    ensemble). 82 hit lists, 519 hits, read by OCR and checked by eye (8 keys corrected), reviewed on
+    https://claude.ai/artifact/CKcFbayqAj3iPi9h3irUFK (the owner: correct), kept in
+    `tools/soundlibraries/sso_percussion_hits.json` (per patch and drum: hit names and keys, null = off) with its
+    notes: every technique of a one-drum patch is on at its defaults with a key (rolls, swells, FX), 395 of their 397
+    keys sounded in the 01:46 scan; Rain Sheet Swell mp plays nothing (Voices 0; its zones are like Swell mf's, so
+    it's Spitfire's script), Cymbal Hi Choked Hit sounds though the scan heard nothing; in the ensembles many
+    techniques are off, with no key at all, and Low Ensemble's Toms 3-5 share E2 and its Field Drum Rim / X Stick A2
+    (the owner: a real conflict; set them in Kontakt when a part needs them). Not in the map yet (the owner hasn't
+    decided: all 42 lists, and the rolls the kits have off played from the drum's own patch).
     Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
     the owner: "OCR correct"): 0 Whole (selected at load, label "KEYSWITCH C0"; from the order), 1 Minor H., 2 Minor
     M., 3 Major, 4 Pentatonic, 5 Diminished; 102-103 no change (a ring). In the map (`SCANNED_KEYS`; a `<Patch>` now
