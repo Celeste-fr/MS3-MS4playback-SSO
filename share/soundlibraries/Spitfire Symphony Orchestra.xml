@@ -275,9 +275,9 @@
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Solo Violin 2" ids="violin" partName="\b(2|II)\b|\bsecond\b|\b2nd\b" nki="Instruments/Solo Strings/Solo Violin 2 - All techniques.nki" setup="$iooxo=3">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -288,9 +288,9 @@
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Solo Viola" ids="viola" nki="Instruments/Solo Strings/Solo Viola - All techniques.nki" setup="$iooxo=3">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -301,9 +301,9 @@
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Solo Cello" ids="violoncello" nki="Instruments/Solo Strings/Solo Cello - All techniques.nki" setup="$iooxo=3">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -313,9 +313,9 @@
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Piccolo" ids="piccolo" nki="Instruments/Symphonic Woodwinds/Piccolo Flute - All techniques.nki" setup="$iooxo=3">
     <Articulation name="Long" value="1" techniques="long legato"/>
@@ -963,9 +963,9 @@
     <Controller id="harppedal6" name="Harp Pedal 6" param="Harp Pedal 6"/>
     <Controller id="harppedal7" name="Harp Pedal 7" param="Harp Pedal 7"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Grand Piano" ids="piano grand-piano upright-piano" nki="Instruments/Symphonic Percussion/Other - Grand Piano.nki" setup="$iooxo=3">
     <Articulation name="Direct" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
@@ -988,18 +988,18 @@
     <Articulation name="Swell f" value="5" techniques=""/>
     <Controller id="variation" name="Variation" param="Variation"/>
     <Controller id="releases" name="Releases" param="Releases"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Celeste" ids="celesta" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Celeste.nki">
     <Switch type="keyswitch"/>
     <Articulation name="Tight" value="2" techniques="staccatissimo spiccato"/>
     <Articulation name="Celeste" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Espressivo" value="1" techniques=""/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Glockenspiel" ids="glockenspiel" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Glockenspiel.nki">
     <Switch type="keyswitch"/>
@@ -1007,24 +1007,24 @@
     <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
     <Articulation name="Hard Sticks" value="2" techniques=""/>
     <Articulation name="Roll" value="3" techniques="tremolo"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Xylophone" ids="xylophone" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Xylophone.nki">
     <Switch type="none"/>
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Marimba" ids="marimba" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Marimba.nki">
     <Switch type="keyswitch"/>
     <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Roll" value="1" techniques="tremolo"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Vibraphone" ids="vibraphone" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Vibraphone.nki">
     <Switch type="keyswitch"/>
@@ -1032,31 +1032,31 @@
     <Articulation name="Motor Sus." value="1" techniques=""/>
     <Articulation name="Roll" value="2" techniques="tremolo"/>
     <Controller id="releases" name="Releases" param="Releases"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Crotales" ids="crotales" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Crotales.nki">
     <Switch type="none"/>
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Tubular Bells" ids="tubular-bells" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Tubular Bells.nki">
     <Switch type="keyswitch"/>
     <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Desk Bells" ids="hand-bells" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Desk Bells.nki">
     <Switch type="none"/>
     <Articulation name="Normal" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Violins 1 - Performance" with="Violins 1" nki="Instruments/Symphonic Strings/Violins 1 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
@@ -1124,9 +1124,9 @@
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Solo Violin 2 - Performance" with="Solo Violin 2" nki="Instruments/Solo Strings/Solo Violin 2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
@@ -1135,9 +1135,9 @@
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Solo Viola - Performance" with="Solo Viola" nki="Instruments/Solo Strings/Solo Viola - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
@@ -1146,9 +1146,9 @@
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Solo Cello - Performance" with="Solo Cello" nki="Instruments/Solo Strings/Solo Cello - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
@@ -1157,9 +1157,9 @@
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Piccolo Flute - Performance" with="Piccolo" nki="Instruments/Symphonic Woodwinds/Piccolo Flute - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
@@ -1344,9 +1344,9 @@
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
   <Instrument name="Trumpets a2 - Performance" with="Trumpets a2" nki="Instruments/Symphonic Brass/Trumpets a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
@@ -1637,9 +1637,9 @@
     <Switch type="none"/>
     <Controller id="releases" name="Releases" param="Releases"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Drum pitch="38" key="36" name="Snare 1 Hit"/>
     <Drum pitch="40" key="41" name="Snare 2 Hit"/>
     <Drum pitch="38" key="45" name="Snare 3 Hit" ids="piccolo-snare-drum"/>
@@ -1678,9 +1678,9 @@
     <Switch type="none"/>
     <Controller id="releases" name="Releases" param="Releases"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Drum pitch="35" key="86" name="Bass Drum Soft Hit"/>
     <Drum pitch="36" key="84" name="Bass Drum Hit"/>
     <Drum pitch="38" key="48" name="Field Drum Hit" ids="military-drum"/>
@@ -1708,9 +1708,9 @@
     <Switch type="none"/>
     <Controller id="releases" name="Releases" param="Releases"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Drum pitch="49" key="48" name="Cymbal Med Hit"/>
     <Drum pitch="57" key="53" name="Cymbal Hi Hit"/>
     <Drum pitch="55" key="53" name="Cymbal Hi Hit"/>
@@ -1757,9 +1757,9 @@
     <Switch type="none"/>
     <Controller id="releases" name="Releases" param="Releases"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Drum pitch="76" key="60" name="Woodblock 1"/>
     <Drum pitch="77" key="67" name="Woodblock 5"/>
     <Drum pitch="62" key="48" name="Templeblock 1" ids="temple-blocks"/>
@@ -1781,9 +1781,9 @@
     <Switch type="none"/>
     <Controller id="releases" name="Releases" param="Releases"/>
     <Controller id="variation" name="Variation" param="Variation"/>
-    <Controller id="mic1" name="Mic 1" param="Mic 1 level"/>
-    <Controller id="mic2" name="Mic 2" param="Mic 2 level"/>
-    <Controller id="mic3" name="Mic 3" param="Mic 3 level"/>
+    <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
+    <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
+    <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Drum pitch="54" key="43" name="Tambourine Hit"/>
     <Drum pitch="83" key="76" name="Sleighbells Hit 1"/>
     <Drum pitch="82" key="67" name="Shaker Metal Closed"/>

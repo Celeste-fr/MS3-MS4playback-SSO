@@ -267,6 +267,17 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(nameFor("timpani", "Timpani"), QString("Timpani"));
       QCOMPARE(nameFor("drumset", "Drumset"), QString("Percussion"));      // the kit
 
+      // a patch with three mic faders: Close, Tree, Ambient (its .nki's mic headers with samples)
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            if (li.name != "Solo Violin 1")
+                  continue;
+            QStringList mic;
+            for (const SoundLib::Controller& c : li.allControllers)
+                  if (c.param.startsWith("Mic ") && c.param.endsWith(" level"))
+                        mic << c.name;
+            QCOMPARE(mic.join(", "), QString("Mic 1 (Close), Mic 2 (Tree), Mic 3 (Ambient)"));
+            }
+
       // the kit: a sound the kit patches have at their defaults plays there; the snares' rolls, a snare's
       // side stick and the triangle (off in the kit patches) on the drum's own patch (the owner's
       // screenshots, 2026-09-28)

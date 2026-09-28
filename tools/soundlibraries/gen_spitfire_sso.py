@@ -350,7 +350,9 @@ BRASS = ['Horn Solo', 'Horns a2', 'Horns a6', 'Trumpet Solo', 'Trumpets a2', 'Tr
 # no family guesses any more: the solo strings have Vibrato and 3 mics, some woodwinds Tightness,
 # the Curated Ensembles Reverb, the harp its 7 pedals. Dynamics, Expression and Articulation
 # Controller are MuseScore's own (CC1, CC11, UACC). Mics named Close … Leader where a patch has 4 or 5
-# (the owner saw them in Kontakt); with 3, unnamed (which three isn't known).
+# (the owner saw them in Kontakt); with 3 (148 patches), Close, Tree, Ambient: each of those patches' .nki
+# has samples under exactly these three mic headers ("####### Close #######" …; the Curated Ensembles list
+# an Outrigger header with no zones under it; the owner's library-files extract of 2026-09-27).
 MEASURED = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_patch_controls.json'),
                           encoding='utf-8'))
 NOT_SET = {'Dynamics', 'Expression', 'Articulation Controller'}
@@ -363,7 +365,7 @@ def measuredControllers(name):
     out = [_p(IDS.get(t, re.sub(r'[^a-z0-9]', '', t.lower())), NAMES.get(t, t), t) for t in other]
     if 'Mic Mix Distance' in titles:
         out += MIX                              # (first: it sets every mic level; a mic ticked wins)
-    return out + mics(len(mic), named=len(mic) >= 4)
+    return out + mics(len(mic))
 
 # What Check articulations hears on the owner's Kontakt where it isn't "switches", and why that is
 # right (eighth run, 2026-09-26; each one looked at in the pictures): the check counts these as

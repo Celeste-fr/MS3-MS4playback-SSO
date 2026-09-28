@@ -380,7 +380,7 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   some woodwinds Tightness, Performance strings Mute, 4 patches "Bow Emph.", the Curated Ensembles Reverb, some
   Speed, the Harp Releases and Harp Pedal 1-7, the Grand Piano Pedal Vol / Pedal Dyn, the kits Releases,
   Variation, 3 mics. Not Dynamics, Expression (MuseScore's CC1 / CC11) nor Articulation Controller (UACC). Mics
-  named Close … Leader where a patch has 4 or 5, unnamed where it has 3 (which three isn't known). No defaults
+  named Close … Leader where a patch has 4 or 5; where it has 3 (148 patches: solo strings, Curated, percussion …) Close, Tree, Ambient (2026-09-28: each such `.nki` has samples under exactly those three mic headers; the Curated Ensembles' Outrigger header has no zones). No defaults
   (the patch keeps its own until a part has a value). `Vst3Plugin::parameterId` matches titles loosely (case,
   spacing, punctuation, a slot number in front), and the Controllers window lists the controls of all the
   part's patches and says "not in <patch>" for a loaded patch without that title. Tried by the owner on run 91
