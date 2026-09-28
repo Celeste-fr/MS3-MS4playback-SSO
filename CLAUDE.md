@@ -1,6 +1,6 @@
 # CLAUDE.md: notes for agents working on this repository
 
-This is a private fork of the MuseScore 3.7 community fork (Jojo-Schmitz/MuseScore 3.x @
+This is a fork (public since 2026-09-28; private before) of the MuseScore 3.7 community fork (Jojo-Schmitz/MuseScore 3.x @
 29e066cd, history squashed). It has two goals:
 
 1. **MS4 playback.** MuseScore 3 plays scores the way MuseScore 4 does: the same FluidSynth
@@ -32,8 +32,9 @@ library work; the tuning work is described under "Tuning" below).
   last commit message, or *Run workflow* on that branch). Check `git log` of `main` and of
   your branch, and the latest commit messages, first. They are detailed on purpose and
   describe what each step did and how it was measured.
-- CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This keeps the
-  private repo's Actions minutes.
+- CI runs by hand only (`.github/workflows/build_all.yml`, workflow_dispatch). This kept the
+  private repo's Actions minutes; the repository is public since 2026-09-28 (the owner ran out of
+  minutes), and public repositories run Actions on GitHub's standard runners for free.
 
 ## Rule: readings of music go on a review page
 
@@ -1026,8 +1027,13 @@ with a push to `main` (or a `claude/` branch) whose last commit message contains
 `[windows-build]`. The workflow keeps the build folder in a GitHub cache (`msvc-build-x64-<sha>`) and
 restores the latest one, setting unchanged files' times back to 2000 so MSBuild compiles only what changed
 since the cached commit (the owner, 2026-09-27: "don't rebuild everything every time"); a change to a
-header in the precompiled header still rebuilds most. **Actions minutes: use them conservatively** (the owner, 2026-09-27, after
-run 72 was started only to see the merged code compile on MSVC). Start a Windows build only
+header in the precompiled header still rebuilds most. **Actions minutes** (the owner, 2026-09-27, after
+run 72 was started only to see the merged code compile on MSVC; the owner then ran out of minutes, and on
+2026-09-28 made the repository public, where standard runners are free, so minutes no longer limit builds.
+The rest still holds: a build takes about 15 minutes of the owner's wait, and the runs list stays readable).
+**Public repository:** everything in it is visible to anyone. Never commit Spitfire's or NI's files (samples,
+`.nki`, presets, scripts, expression maps), the owner's own scores or extracts, logs with their paths, keys or
+e-mail addresses; derived names, titles and key ranges only (as before). Start a Windows build only
 when the owner needs a new MuseScore to try something, or when a change touches code Linux
 can't compile (`Q_OS_WIN`, MSVC-only paths) and the owner will need it soon. Not to confirm that
 code which passes here also compiles on Windows: that check rides along with the next build the
