@@ -78,6 +78,20 @@ headless test scores and their checked results are the parity tests.
   by `tools/playability/gen_winds.py` from the plugin's `winds.js` (its sourcebook). The panel
   refreshes after every command, so the plugin's Re-check, live mode and copy reader have no
   counterpart. `tst_playability`: 16 pass, 1 skipped (speed).
+- **Scordatura (2026-09-28, the owner's request; not in the plugin):** a part's String Data
+  (*Staff/Part Properties › Edit String Data*, saved in the file, kept by MuseScore 3.6) is its
+  tuning, per instrument (an instrument change can bring its own); a staff text "scord." /
+  "scordatura" naming the strings low to high ("scord. F D A E", "Scordatura: G–D–A–E♭", octaves
+  optional: "G3 D4 A4 Eb5"; a name without an octave is the same pitch class nearest the string it
+  replaces) retunes from its tick; "normal / standard tuning", "accord.", "accordatura", "scord. off"
+  go back to the String Data (the owner chose both ways). A count of names unlike the instrument's
+  strings is ignored. Notes are read at sounding pitch (the owner's choice; MuseScore has no
+  scordatura hand notation). Everything that uses the strings follows: open strings, stops, reach,
+  harmonics, tremolos, string names in reasons and on the fingerboard; the panel's Selected line adds
+  "Tuning: …" when the tuning is not the standard one (`Playability::scordaturaText`, `retune`,
+  `withStrings`; `Pass::tunedAt`). Tests `scordaturaText`, `scordatura` (scord-tests.mscx, from
+  `tools/playability/gen_scord_tests.py`). The contrabass has no String Data in instruments.xml:
+  E A D G from the table unless the score gives one.
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1

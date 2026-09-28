@@ -18,7 +18,12 @@
 namespace Ms {
 namespace Playability {
 
-const char* const ROMAN[5] = { "I", "II", "III", "IV", "V" };
+const char* const ROMAN[7] = { "I", "II", "III", "IV", "V", "VI", "VII" };
+
+QString roman(int index)
+      {
+      return index >= 0 && index < 7 ? QString(ROMAN[index]) : QString::number(index + 1);
+      }
 
 static const char* const NAMES[12]       = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
 static const char* const SHARP_NAMES[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -147,6 +152,112 @@ QString stringName(int openPitch)
       return NAMES[pc(openPitch)];
       }
 
+QString stringName(const StringInstrument& in, int index)
+      {
+      if (index >= 0 && index < in.stringNames.size() && !in.stringNames[index].isEmpty())
+            return in.stringNames[index];
+      return index >= 0 && index < int(in.strings.size()) ? stringName(in.strings[index]) : QString("?");
+      }
+
+//---------------------------------------------------------
+//   scordatura
+//---------------------------------------------------------
+
+bool scordaturaText(const QString& text, ScordaturaText* out)
+      {
+      static const QRegularExpression RESET(QString::fromUtf8("(normal|standard|usual|ordinary|regular)\\s+tuning|\\baccord(\\.|atura)?(?![a-z])|\\bord(\\.|inario)?\\s+tuning|\\bscord(\\.|atura)?\\s+(off|ends?)\\b"),
+                                        QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression SCORD("\\bscord(\\.|atura)?", QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression NOTE(QString::fromUtf8("(?<![A-Za-z])([A-G])(bb|𝄫|♭♭|b|♭|##|x|𝄪|♯♯|#|♯)?(-?\\d)?(?![A-Za-z])"));
+      ScordaturaText t;
+      if (RESET.match(text).hasMatch()) {
+            t.reset = true;
+            *out = t;
+            return true;
+            }
+      QRegularExpressionMatch sm = SCORD.match(text);
+      if (!sm.hasMatch())
+            return false;
+      static const int LETTER_PC[7] = { 9, 11, 0, 2, 4, 5, 7 };     // A B C D E F G
+      auto it = NOTE.globalMatch(text, sm.capturedEnd());
+      while (it.hasNext()) {
+            QRegularExpressionMatch m = it.next();
+            QString acc = m.captured(2);
+            int alter = 0;
+            if (acc == "b" || acc == QString::fromUtf8("♭"))
+                  alter = -1;
+            else if (acc == "bb" || acc == QString::fromUtf8("𝄫") || acc == QString::fromUtf8("♭♭"))
+                  alter = -2;
+            else if (acc == "#" || acc == QString::fromUtf8("♯"))
+                  alter = 1;
+            else if (!acc.isEmpty())
+                  alter = 2;
+            int letter = m.captured(1).at(0).unicode() - 'A';
+            int octave = m.captured(3).isEmpty() ? -100 : m.captured(3).toInt();
+            QString name = m.captured(1) + (alter < 0 ? QString(-alter, 'b') : QString(alter, '#'));
+            t.strings.push_back({ ((LETTER_PC[letter] + alter) % 12 + 12) % 12, octave, name });
+            }
+      if (t.strings.empty())
+            return false;
+      *out = t;
+      return true;
+      }
+
+StringInstrument withStrings(const StringInstrument& in, const std::vector<int>& lowToHigh)
+      {
+      StringInstrument out = in;
+      if (lowToHigh.empty())
+            return out;
+      for (int p : lowToHigh)
+            if (p < 12 || p > 115)
+                  return out;           // not a string's pitch
+      out.strings.assign(lowToHigh.rbegin(), lowToHigh.rend());
+      out.stringNames.clear();
+      if (out.strings != in.strings) {              // a tuning of its own: named low to high
+            QStringList names;
+            for (int p : lowToHigh)
+                  names << stringName(p);
+            out.tuning = names.join(" ");
+            }
+      return out;
+      }
+
+StringInstrument retune(const StringInstrument& in, const ScordaturaText& t)
+      {
+      if (t.reset || t.strings.size() != in.strings.size())
+            return in;
+      StringInstrument out = in;
+      size_t n = in.strings.size();
+      out.stringNames.clear();
+      QStringList written;
+      for (size_t k = 0; k < n; ++k) {
+            const ScordaturaText::Str& s = t.strings[k];
+            int old = in.strings[n - 1 - k];            // the text runs low to high, strings high to low
+            int p;
+            if (s.octave != -100) {
+                  // the octave goes with the letter: B#3 is pitch 60, Cb4 is 59
+                  p = (s.octave + 1) * 12 + s.pc;
+                  if (s.name.startsWith('B') && s.name.contains('#'))
+                        p -= 12;
+                  if (s.name.startsWith('C') && s.name.contains('b'))
+                        p += 12;
+                  }
+            else {
+                  p = old - pc(old) + s.pc;               // the same pitch class nearest the old string
+                  if (p - old > 6)
+                        p -= 12;
+                  else if (old - p > 6)
+                        p += 12;
+                  }
+            out.strings[n - 1 - k] = p;
+            written << s.name;
+            }
+      for (size_t i = 0; i < n; ++i)
+            out.stringNames << t.strings[n - 1 - i].name;
+      out.tuning = written.join(" ");
+      return out;
+      }
+
 Spelling::Spelling(const std::vector<SpelledNote>& notes, int fifths)
       : _fifths(fifths), _set(true)
       {
@@ -252,7 +363,7 @@ static QString sharedString(const StringInstrument& in, const std::vector<double
       {
       for (int s = int(in.strings.size()) - 1; s >= 0; --s)
             if (pitches[i] >= in.strings[s])
-                  return stringName(in.strings[s]);
+                  return stringName(in, s);
       return "?";
       }
 
@@ -356,7 +467,7 @@ QString describe(const StringInstrument& in, const std::vector<double>& pitches,
       QStringList parts;
       for (int i = int(pitches.size()) - 1; i >= 0; --i) {
             int s = i < int(res.assign.size()) ? res.assign[i] : -1;
-            parts << sp.name(pitches[i]) + (s >= 0 ? QString(" (%1)").arg(ROMAN[s]) : " (" + DASH + ")");
+            parts << sp.name(pitches[i]) + (s >= 0 ? QString(" (%1)").arg(roman(s)) : " (" + DASH + ")");
             }
       return parts.join(" + ");
       }
@@ -460,7 +571,7 @@ static QString describeNatural(const HarmOne& r, int pitch, const Spelling& sp)
       {
       if (!r.info.valid)
             return sp.name(pitch) + " (" + DASH + ")";
-      return sp.name(pitch) + QString(" (%1) partial %2 ").arg(ROMAN[r.info.string]).arg(r.info.partial)
+      return sp.name(pitch) + QString(" (%1) partial %2 ").arg(roman(r.info.string)).arg(r.info.partial)
              + ARROW + " sounds " + sp.name(r.info.sounds);
       }
 
@@ -568,7 +679,7 @@ static QString describeOptions(const StringInstrument& in, const std::vector<Har
             QStringList names;
             for (const HarmonicNode& n : o.nodes)
                   names << sp.name(n.pitch) + (n.pitch - in.strings[o.string] == SOLO_ONLY && o.nodes.size() > 1 ? " (solo only)" : "");
-            parts << stringName(in.strings[o.string]) + QString(" string (%1): node ").arg(ROMAN[o.string]) + names.join(" or ")
+            parts << stringName(in, o.string) + QString(" string (%1): node ").arg(roman(o.string)) + names.join(" or ")
                      + ", sounds " + sp.name(o.sounds) + (o.solo ? " (solo only)" : "");
             }
       return parts.join("\n");

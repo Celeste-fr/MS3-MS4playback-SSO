@@ -25,6 +25,7 @@
 #include <map>
 #include <vector>
 #include <QString>
+#include <QStringList>
 
 namespace Ms {
 namespace Playability {
@@ -49,6 +50,8 @@ namespace Playability {
 struct StringInstrument {
       QString name;                 // "Violin", "Viola", "Cello", "Double bass"
       std::vector<int> strings;
+      QStringList stringNames;      // as a scordatura text spells them; empty: from the pitch
+      QString tuning;               // a scordatura in force: its strings, low to high ("F D A E"); else empty
       double span0 { 0 };
       double crossMax { 0 };
       bool requireOpenString { false };
@@ -96,7 +99,9 @@ QString centsSuffix(double cents);
 QString tpcName(int tpc, int pitch);
 QString plainName(int pitch);                        // no spelling context: C C# D Eb E F F# G Ab A Bb B
 QString stringName(int openPitch);                   // "G", never "G3": every open string is a natural
-extern const char* const ROMAN[5];
+QString stringName(const StringInstrument& in, int index);    // under scordatura as its text spells it
+extern const char* const ROMAN[7];
+QString roman(int index);
 
 // one decimal, no trailing ".0" (the plugin's fmtReach)
 QString fmtReach(double x);
@@ -229,6 +234,29 @@ QString fmtSeconds(double x);
 //---------------------------------------------------------
 
 int jeteState(const QString& text);
+
+//---------------------------------------------------------
+//   Scordatura: the strings' tuning. A part's String Data (Staff/Part Properties › Edit String
+//   Data, saved in the file) is its tuning; a staff text naming the strings, low to high, after
+//   "scord." / "scordatura" ("scord. G D A Eb", "Scordatura: F–D–A–E", octaves optional:
+//   "G3 D4 A4 Eb5") retunes from there, and "normal tuning" / "standard tuning" / "accord." /
+//   "accordatura" goes back to the String Data (the owner's choice, 2026-09-28). Notes are read at
+//   sounding pitch.
+//---------------------------------------------------------
+
+struct ScordaturaText {
+      bool reset { false };         // back to the String Data
+      struct Str { int pc; int octave; QString name; };   // octave -100: not given
+      std::vector<Str> strings;     // low to high, as written
+      };
+
+// false: the text is not about the tuning
+bool scordaturaText(const QString& text, ScordaturaText* out);
+// the instrument retuned: a text's strings, each without an octave placed nearest the string it
+// replaces; left as it is when the count differs from the instrument's strings
+StringInstrument retune(const StringInstrument& in, const ScordaturaText& t);
+// from String Data pitches (low to high); the standard tuning when there are none
+StringInstrument withStrings(const StringInstrument& in, const std::vector<int>& lowToHigh);
 int pizzState(const QString& text);
 
 //---------------------------------------------------------

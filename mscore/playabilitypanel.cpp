@@ -493,7 +493,10 @@ void PlayabilityPanel::updateSelectedLine()
       bool show = !_info.text.isEmpty() && _stack->currentWidget() != _graphPage
                   && (_stack->currentWidget() != _board || !Playability::namesShown(_board->items()));
       _selected->setVisible(show);
-      _selected->setText(tr("Selected: %1").arg(_info.text));
+      QString text = tr("Selected: %1").arg(_info.text);
+      if (!_info.tuning.isEmpty())
+            text += "\n" + tr("Tuning: %1").arg(_info.tuning);        // a scordatura in force
+      _selected->setText(text);
       }
 
 void PlayabilityPanel::toggleList()

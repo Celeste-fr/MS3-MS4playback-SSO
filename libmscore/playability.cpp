@@ -22,6 +22,7 @@
 #include "score.h"
 #include "segment.h"
 #include "staff.h"
+#include "stringdata.h"
 #include "sym.h"
 #include "symbol.h"
 #include "slur.h"
@@ -66,6 +67,7 @@ struct StateList {
 
 struct StaffTexts {
       StateList div, jete, pizz, dyn;
+      std::vector<std::pair<int, ScordaturaText>> scord;      // tick, retuning (or back to the String Data)
       };
 
 struct Walked {                                     // a voice's chords, in order
@@ -100,6 +102,7 @@ class Pass {
       int barOf(const Fraction& tick) const;
       int barOf(int tick) const { return barOf(Fraction::fromTicks(tick)); }
       const StringInstrument& instrumentAt(Part* part, const Fraction& tick);
+      StringInstrument tunedAt(Part* part, const Fraction& tick, const StaffTexts& tx);
       StaffTexts staffTexts(int staffIdx) const;
       double microCents(const Note* note);
       void handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths);
@@ -116,7 +119,7 @@ class Pass {
       BowUse bowUse(const StringInstrument& in, const StateList& dyn, const std::vector<HairpinSpan>& allHairpins,
                     int t0, int t1, const std::vector<int>& cuts) const;
       void checkSlurs(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked);
-      void checkTremolos(int st, Part* part, const QString& staffName, const Walked* walked);
+      void checkTremolos(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked);
       void checkFastRuns(int st, Part* part, const QString& staffName, const StaffTexts& tx);
       void addRow(int tick, int tickEnd, int track, const QString& staff, const QString& kind, const QString& verdict,
                   const QString& reason, const QString& notes);
@@ -159,7 +162,29 @@ const StringInstrument& Pass::instrumentAt(Part* part, const Fraction& tick)
             if (name.isEmpty())
                   name = part->partName();
             }
-      return _instruments[in] = lookup(id, name, arcoProgram(in));
+      // the part's own tuning: its String Data (Staff/Part Properties › Edit String Data), low to high
+      StringInstrument si = lookup(id, name, arcoProgram(in));
+      if (si.valid()) {
+            std::vector<int> lowToHigh;
+            for (const instrString& s : in->stringData()->stringList())
+                  lowToHigh.push_back(s.pitch);
+            si = withStrings(si, lowToHigh);
+            }
+      return _instruments[in] = si;
+      }
+
+// the instrument at a tick with the scordatura in force there (the last scordatura text at or
+// before it, unless that returned to normal tuning)
+StringInstrument Pass::tunedAt(Part* part, const Fraction& tick, const StaffTexts& tx)
+      {
+      const StringInstrument& in = instrumentAt(part, tick);
+      const ScordaturaText* last = nullptr;
+      for (const auto& s : tx.scord) {
+            if (s.first > tick.ticks())
+                  break;
+            last = &s.second;
+            }
+      return (last && in.valid()) ? retune(in, *last) : in;
       }
 
 // the staff's texts that switch div., jeté, pizz. and the dynamic level, in one walk
@@ -181,6 +206,9 @@ StaffTexts Pass::staffTexts(int staffIdx) const
                         tx.jete.changes.push_back({ tick, v });
                   if ((v = pizzState(text)) >= 0)
                         tx.pizz.changes.push_back({ tick, v });
+                  ScordaturaText st;
+                  if (scordaturaText(text, &st))
+                        tx.scord.push_back({ tick, st });
                   int vel = -1, change = 0;
                   if (e->isDynamic()) {
                         vel = e->getProperty(Pid::VELOCITY).toInt();
@@ -612,7 +640,7 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
 //    harmonics
 //---------------------------------------------------------
 
-void Pass::checkTremolos(int st, Part* part, const QString& staffName, const Walked* walked)
+void Pass::checkTremolos(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked)
       {
       for (int v = 0; v < VOICES; ++v) {
             int trk = st * VOICES + v;
@@ -624,7 +652,7 @@ void Pass::checkTremolos(int st, Part* part, const QString& staffName, const Wal
                         continue;
                   Chord* b = w.chords[i + 1];
                   int t0 = w.ticks[i];
-                  const StringInstrument& in = instrumentAt(part, a->tick());
+                  const StringInstrument in = tunedAt(part, a->tick(), tx);
                   if (!in.valid())
                         continue;
                   if (a->notes().size() != 1 || b->notes().size() != 1)
@@ -641,8 +669,8 @@ void Pass::checkTremolos(int st, Part* part, const QString& staffName, const Wal
                   markOver(nb, red ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH);
                   QString reason = red
                         ? "fingered tremolo too wide (" + intervalName(res.interval) + ")"
-                        : "fingered tremolo across strings " + stringName(in.strings[res.lower]) + QChar(0x2013)
-                          + stringName(in.strings[res.upper]) + " (" + intervalName(res.interval) + ")";
+                        : "fingered tremolo across strings " + stringName(in, res.lower) + QChar(0x2013)
+                          + stringName(in, res.upper) + " (" + intervalName(res.interval) + ")";
                   addRow(t0, w.ticks[i + 1], trk, staffName, "tremolo", red ? "impossible" : "outOfReach", reason,
                          topName(a) + " " + QChar(0x2194) + " " + topName(b));
                   }
@@ -755,7 +783,7 @@ void Pass::run()
                         Fraction tick = s->tick();
                         walked[v].ticks.push_back(tick.ticks());
                         walked[v].chords.push_back(c);
-                        const StringInstrument& in = instrumentAt(part, tick);
+                        const StringInstrument in = tunedAt(part, tick, tx);
                         if (!in.valid())
                               continue;               // a non-string instrument here
                         int fifths = int(staff->key(tick));
@@ -767,7 +795,7 @@ void Pass::run()
                         }
                   }
             checkSlurs(st, part, staffName, tx, walked);
-            checkTremolos(st, part, staffName, walked);
+            checkTremolos(st, part, staffName, tx, walked);
             checkFastRuns(st, part, staffName, tx);
             }
       for (PlayabilityRow& r : _res.rows)
@@ -812,7 +840,7 @@ ChordInfo Pass::inspect(Chord* chord)
             }
       Spelling sp(spelled, int(staff->key(tick)));
 
-      const StringInstrument& in = instrumentAt(part, tick);
+      const StringInstrument in = tunedAt(part, tick, staffTexts(staff->idx()));
       if (!in.valid()) {                  // not a bowed string: name what is selected, low to high
             std::vector<double> ps;
             for (const Item& i : list)
@@ -827,8 +855,9 @@ ChordInfo Pass::inspect(Chord* chord)
       info.bowedString = true;
       info.instrument = in.name;
       info.strings = in.strings;
-      for (int s : in.strings)
-            info.stringNames << stringName(s);
+      for (int s = 0; s < int(in.strings.size()); ++s)
+            info.stringNames << stringName(in, s);
+      info.tuning = in.tuning;
 
       if (anyD || anyC) {
             std::vector<HarmonicNote> hl;
@@ -862,7 +891,7 @@ ChordInfo Pass::inspect(Chord* chord)
             }
       if (list.size() == 1) {
             int o = openStringIndex(in, list[0].sound);
-            info.text = sp.name(list[0].sound) + " " + QChar(0x2014) + (o >= 0 ? QString(" open string %1").arg(ROMAN[o]) : QString(" stopped note"));
+            info.text = sp.name(list[0].sound) + " " + QChar(0x2014) + (o >= 0 ? QString(" open string %1").arg(roman(o)) : QString(" stopped note"));
             return info;
             }
       if (staffTexts(staff->idx()).div.on(tick.ticks())) {

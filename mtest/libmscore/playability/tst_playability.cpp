@@ -50,6 +50,8 @@ class TestPlayability : public QObject, public MTest
       void marksFollowSwitches();
       void roles();
       void inspectChords();
+      void scordaturaText();
+      void scordatura();
       void fingerboardLayouts_data();
       void fingerboardLayouts();
       void windLayouts();
@@ -597,6 +599,73 @@ void TestPlayability::windLayouts()
       for (const auto& l : byLabel)
             want += !l.first.startsWith("d ");
       QCOMPARE(total, want);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   scordatura: the part's String Data, a "scord." text from its tick, "normal tuning" back
+//   (scord-tests.mscx, tools/playability/gen_scord_tests.py)
+//---------------------------------------------------------
+
+void TestPlayability::scordaturaText()
+      {
+      using namespace Playability;
+      ScordaturaText t;
+      QVERIFY(Playability::scordaturaText("scord. F D A E", &t));
+      QCOMPARE(t.strings.size(), size_t(4));
+      QVERIFY(Playability::scordaturaText(QString::fromUtf8("Scordatura: G–D–A–E♭"), &t));
+      QCOMPARE(t.strings[3].name, QString("Eb"));
+      QVERIFY(Playability::scordaturaText("scord. G3 D4 A4 Eb5", &t));
+      QCOMPARE(t.strings[3].octave, 5);
+      QVERIFY(Playability::scordaturaText("normal tuning", &t) && t.reset);
+      QVERIFY(Playability::scordaturaText("accord.", &t) && t.reset);
+      QVERIFY(!Playability::scordaturaText("dolce", &t));
+      QVERIFY(!Playability::scordaturaText("Scord.", &t));              // no strings named
+
+      StringInstrument vn = lookup("strings.violin", "Violin", 40);
+      Playability::scordaturaText("scord. F D A E", &t);
+      QCOMPARE(retune(vn, t).strings, std::vector<int>({ 76, 69, 62, 53 }));    // G down to F, nearest
+      Playability::scordaturaText("scord. G3 D4 A4 Eb5", &t);
+      QCOMPARE(retune(vn, t).strings, std::vector<int>({ 75, 69, 62, 55 }));
+      Playability::scordaturaText("scord. G D A", &t);                  // three names for four strings
+      QCOMPARE(retune(vn, t).strings, vn.strings);
+      StringInstrument cb = lookup("strings.contrabass", "Contrabass", 43);
+      Playability::scordaturaText("scord. F# B E A", &t);               // the bass's solo tuning
+      QCOMPARE(retune(cb, t).strings, std::vector<int>({ 45, 40, 35, 30 }));
+      }
+
+void TestPlayability::scordatura()
+      {
+      MasterScore* score = readScore(DIR + "scord-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList open;
+      for (auto i = r.marks.begin(); i != r.marks.end(); ++i)
+            if (i.value() == PlayMark::OPEN)
+                  open << QString("%1:%2").arg(i.key()->chord()->tick().ticks()).arg(i.key()->pitch());
+      open.sort();
+      // Eb5 open (String Data), F3 open twice and E5 open under "scord. F D A E", Eb5 again after "normal tuning"
+      QStringList want = { "0:75", "1920:53", "2400:53", "2880:76", "3840:75" };
+      want.sort();
+      QCOMPARE(open, want);
+      const QString dash = QChar(0x2014);
+      QStringList rowsGot = rows(r);
+      QStringList rowsWant = {
+            rowText(2, "Violin", "impossible", "same string (F)", "G3 (IV) + A3 (" + dash + ")"),
+            rowText(3, "Violin", "impossible", "below the lowest string", "F3 (" + dash + ") + A4 (IV)"),
+            };
+      compare(rowsGot, rowsWant);
+
+      ChordInfo a = Playability::inspect(chordAt(score, 0));
+      QCOMPARE(a.text, "Eb5 " + dash + " open string I");
+      QCOMPARE(a.tuning, QString("G D A Eb"));
+      QCOMPARE(a.stringNames, QStringList({ "Eb", "A", "D", "G" }));
+      ChordInfo b = Playability::inspect(chordAt(score, 1920));
+      QCOMPARE(b.text, "F3 " + dash + " open string IV");
+      QCOMPARE(b.tuning, QString("F D A E"));
+      QCOMPARE(b.stringNames, QStringList({ "E", "A", "D", "F" }));
+      ChordInfo c = Playability::inspect(chordAt(score, 2400));
+      QVERIFY(c.kind == ChordInfo::Kind::STOP);
       delete score;
       }
 

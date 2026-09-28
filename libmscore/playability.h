@@ -111,6 +111,7 @@ struct ChordInfo {
       QString instrument;
       std::vector<int> strings;
       QStringList stringNames;
+      QString tuning;               // a scordatura in force (strings low to high), else empty
       std::vector<FingerNote> notes;                // STOP
       int stopped { 0 };
       double worst { 0 };

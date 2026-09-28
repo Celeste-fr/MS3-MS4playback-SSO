@@ -179,7 +179,7 @@ DisplayList layoutFingerboard(const ChordInfo& g, double w, double h)
             items.push_back(line(xAt(i), top, xAt(i), top + bh, FB::STRING, 1 + 0.45 * i));
             if (!tiny) {
                   items.push_back(text(xAt(i), top - 31, g.stringNames.value(i), 11, FB::INK, 0, true));
-                  items.push_back(text(xAt(i), top - 19, i < 5 ? ROMAN[i] : "", 9, FB::FAINT, 0));
+                  items.push_back(text(xAt(i), top - 19, roman(i), 9, FB::FAINT, 0));
                   }
             else
                   items.push_back(text(xAt(i), top - 3, g.stringNames.value(i), 9, FB::INK, 0, true));
@@ -262,7 +262,7 @@ static DisplayList layoutHarmonic(const ChordInfo& g, double w, double h)
             items.push_back(line(xAt(i), top, xAt(i), top + bh, on ? FB::STRING : FB::FAINT_STRING, 1 + 0.45 * i));
             if (!tiny) {
                   items.push_back(text(xAt(i), top - 31, g.stringNames.value(i), 11, on ? FB::INK : FB::FAINT, 0, on));
-                  items.push_back(text(xAt(i), top - 19, i < 5 ? ROMAN[i] : "", 9, FB::FAINT, 0));
+                  items.push_back(text(xAt(i), top - 19, roman(i), 9, FB::FAINT, 0));
                   }
             else
                   items.push_back(text(xAt(i), top - 3, g.stringNames.value(i), 9, on ? FB::INK : FB::FAINT, 0, on));
