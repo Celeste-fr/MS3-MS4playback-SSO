@@ -13,10 +13,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 #include <set>
 
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
@@ -79,6 +83,7 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.techniques = words(a.value("techniques").toString());
       art.modifiers = words(a.value("modifiers").toString());
       art.expect = a.value("expect").toString();
+      art.prefer = words(a.value("prefer").toString());
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -458,11 +463,15 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
                         bool fits = true;
                         for (const QString& m : a.modifiers)
                               fits &= want.modifiers.contains(m);
-                        // of equal fits in different patches, the one made for the base (listed
-                        // first: a Staccatissimo patch over a staccato that also plays it)
+                        // of equal fits in different patches, one that prefers the base (a held note
+                        // on the Performance legato patch, with the slurred ones), else the one made
+                        // for it (listed first: a Staccatissimo patch over a staccato that also plays it)
+                        const bool prefers = a.prefer.contains(base);
+                        const bool bestPrefers = best && best->prefer.contains(base);
                         const bool better = a.modifiers.size() > bestCount
                            || (a.modifiers.size() == bestCount && p != bestPatch
-                               && a.techniques.indexOf(base) < best->techniques.indexOf(base));
+                               && (prefers != bestPrefers ? prefers
+                                   : a.techniques.indexOf(base) < best->techniques.indexOf(base)));
                         if (fits && better) {
                               best = &a;
                               bestPatch = p;
@@ -523,6 +532,126 @@ void setAvailable(std::function<bool(const LibInstrument&)> available)
 void routesChanged()
       {
       ++generation;
+      }
+
+//---------------------------------------------------------
+//   DynamicsCalibration
+//---------------------------------------------------------
+
+double DynamicsCurve::at(int x) const
+      {
+      if (points.empty())
+            return -200;
+      if (x <= points.front().first)
+            return points.front().second;
+      for (size_t i = 1; i < points.size(); ++i) {
+            if (x <= points[i].first) {
+                  const auto& a = points[i - 1];
+                  const auto& b = points[i];
+                  return a.second + (b.second - a.second) * (x - a.first) / double(b.first - a.first);
+                  }
+            }
+      return points.back().second;
+      }
+
+int DynamicsCurve::inverse(double db) const
+      {
+      // the lowest x that reaches db (a curve with a dip from round robins: the first crossing)
+      if (points.empty())
+            return -1;
+      if (db <= points.front().second)
+            return std::max(1, points.front().first);
+      for (size_t i = 1; i < points.size(); ++i) {
+            const auto& a = points[i - 1];
+            const auto& b = points[i];
+            if (db <= b.second && b.second > a.second)
+                  return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), 127);
+            }
+      return 127;
+      }
+
+const DynamicsCurve* DynamicsCalibration::curve(const QString& patch, int value) const
+      {
+      auto p = _patches.find(patch);
+      if (p == _patches.end())
+            return nullptr;
+      auto v = p->second.find(value);
+      return v == p->second.end() ? nullptr : &v->second;
+      }
+
+bool DynamicsCalibration::read(const QString& file)
+      {
+      QFile f(file);
+      if (!f.open(QIODevice::ReadOnly))
+            return false;
+      const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+      balanceDb = o.value("balanceDb").toDouble(0);
+      _patches.clear();
+      const QJsonObject patches = o.value("patches").toObject();
+      for (auto p = patches.begin(); p != patches.end(); ++p) {
+            const QJsonObject arts = p.value().toObject();
+            for (auto a = arts.begin(); a != arts.end(); ++a) {
+                  const QJsonObject c = a.value().toObject();
+                  DynamicsCurve curve;
+                  curve.drivenBy = c.value("drivenBy").toString();
+                  for (const QJsonValue& pt : c.value("curve").toArray())
+                        curve.points.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                  std::sort(curve.points.begin(), curve.points.end());
+                  _patches[p.key()][a.key().toInt()] = curve;
+                  }
+            }
+      return true;
+      }
+
+bool DynamicsCalibration::write(const QString& file) const
+      {
+      QJsonObject patches;
+      for (const auto& p : _patches) {
+            QJsonObject arts;
+            for (const auto& a : p.second) {
+                  QJsonArray pts;
+                  for (const auto& pt : a.second.points)
+                        pts.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
+                  arts[QString::number(a.first)] = QJsonObject({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
+                  }
+            patches[p.first] = arts;
+            }
+      QJsonObject o;
+      o["balanceDb"] = balanceDb;
+      o["patches"] = patches;
+      QFile f(file);
+      if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+      f.write(QJsonDocument(o).toJson());
+      return true;
+      }
+
+static std::mutex calibrationMutex;
+static std::shared_ptr<const DynamicsCalibration> calibration;
+
+void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c)
+      {
+      {
+            std::lock_guard<std::mutex> lock(calibrationMutex);
+            calibration = c;
+      }
+      ++generation;
+      }
+
+std::shared_ptr<const DynamicsCalibration> dynamicsCalibration()
+      {
+      std::lock_guard<std::mutex> lock(calibrationMutex);
+      return calibration;
+      }
+
+int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
+                       const QString& refPatch, int refValue, int cc)
+      {
+      const DynamicsCurve* c = cal.curve(patch, value);
+      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
+      if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+            return -1;
+      return c->inverse(ref->at(cc) + cal.balanceDb);
       }
 
 int routesGeneration()
@@ -851,7 +980,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
 
       // back to normal first: "ord." may come with a new technique ("ord. pizz.")
       if (has("\\b(ord|ordin|ordinario|ordinary|nat|naturale|natural|norm|normale|normal|modo ordinario)\\b")) {
-            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue" })
+            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue", "espressivo" })
                   s.modifiers.removeAll(m);
             s.harmonics = false;
             s.tremolo = false;
@@ -893,6 +1022,12 @@ void TextTechniques::apply(const QString& text, TextState& s)
             s.modifiers.removeAll("bellsup");
       else if (has("\\b(bells\\s+up|bells\\s+in\\s+the\\s+air|campana\\s+in\\s+aria|campane\\s+in\\s+aria|pavillons?\\s+en\\s+l.air|schalltrichter\\s+(auf|hoch))"))
             addModifier(s, "bellsup");
+      // espressivo / molto vibrato (the owner, 2026-09-28: SSO's Long (Rachm.) for those passages, not
+      // as the default held sound); non / senza vibrato ends it
+      if (has("\\b(non|senza)\\s+vib"))
+            s.modifiers.removeAll("espressivo");
+      else if (has("\\b(espr|espress)") || has("\\bmolto\\s+vib") || has("\\bcon\\s+(molto\\s+)?vibrato"))
+            addModifier(s, "espressivo");
       if (has("\\b(pres\\s+de\\s+la\\s+table|p\\.?\\s*d\\.?\\s*l\\.?\\s*t\\b)"))
             addModifier(s, "pdlt");
       if (has("\\b(multi|double|triple)[\\s-]*tongu") || has("\\b(doppel|tripel)zunge"))

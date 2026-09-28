@@ -7,16 +7,17 @@ library's articulation for each note from the notation. For example:
 | Notation | Articulation |
 |---|---|
 | no mark | Long |
-| staccato / staccatissimo | Short / Spiccato |
+| staccato / staccatissimo | Short / Spiccato (section strings: staccato Short 0.5, staccatissimo Spiccato) |
 | accent or marcato on a short note | Marcato |
 | accent or marcato on a long note | Long marcato attack, where the library has one |
-| tenuto on a short note | Tenuto (brass, woodwinds) |
+| tenuto on a short note | Tenuto (brass, woodwinds), Short 1.0 (section strings) |
 | single-note tremolo, "trem.", "flz." | Tremolo / flutter (the note is played once, not repeated) |
 | trill (symbol or line) | Trill sample at the written interval (minor or major 2nd …), when the library has one |
 | fall, scoop | Fall, rip |
 | "pizz." / "arco", snap pizzicato, "col legno" | Pizzicato, Bartók pizzicato, col legno |
 | "con sord." / "senza sord.", mute symbols | Con sordino (muted, stopped) variants |
 | "sul pont.", "sul tasto", "flautando", "cuivré", "ord." | Those variants, where the library has them |
+| "espr.", "espressivo", "molto vib." (until "non vib." or "ord.") | Long (Rachm.) for held notes, section strings (slurred notes keep the legato) |
 | harmonic notehead (diamond), "harm." | Harmonics |
 
 MuseScore sends each note's dynamics as note velocity plus a continuous dynamics controller

@@ -104,6 +104,11 @@ patches, whose keys at their defaults aren't known yet: a key scan of those, or 
 
 ## Dynamics across techniques (2026-09-28)
 
+Calibration in (see `CLAUDE.md` › Dynamics calibration, › Faster, in the background). Next: the owner
+double-clicks `Measure SSO dynamics in background.bat` (every map patch, Performance ones included, in a
+copy of MuseScore of its own) and hands back the zip; the summary's "# Dynamics balance" shows what's left
+("!" lines).
+
 Shorts on velocity now follow the dynamics (see `CLAUDE.md` › Shorts). Next: the owner runs *Check articulations*
 with *Dynamics* ticked on the patches they use (one per family at least: strings, woodwinds, brass, a
 Performance patch) and hands back the zip; from summary.txt, fix `<Dynamics velocity>` in `gen_spitfire_sso.py`

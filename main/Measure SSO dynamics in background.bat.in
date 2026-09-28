@@ -1,0 +1,43 @@
+@echo off
+rem Measure the dynamics of Spitfire Symphony Orchestra's patches, in the background.
+rem
+rem Double-click this file. It copies this MuseScore to a folder of its own
+rem (%LOCALAPPDATA%\MuseScore background dynamics check), so you can install and test other builds
+rem meanwhile, and starts that copy with no window (MuseScore --extract-library ... --check-dynamics):
+rem every patch of the map, one after the other, offline, at below-normal priority. It uses a copy of
+rem your setups (Documents\MuseScore Sound Library Check\background dynamics check setups) and writes
+rem nothing in MuseScore's own folders until the end, when the measured curves go into your
+rem calibration (soundlibraries\Spitfire Symphony Orchestra\dynamics.json; MuseScore uses them at its
+rem next start). Only one runs at a time.
+rem
+rem Only some patches: put their names, one a line, in a text file and drag it onto this file.
+rem Progress: Documents\MuseScore Sound Library Check\background dynamics check.log
+rem When it is done, that folder opens; hand back the newest "Spitfire Symphony Orchestra <date>.zip".
+rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
+
+setlocal
+set "DEST=%LOCALAPPDATA%\MuseScore background dynamics check"
+set "PATCHES=mapped"
+if not "%~1"=="" set "PATCHES=%~f1"
+
+powershell -NoProfile -Command "if (Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*MuseScore background dynamics check*' }) { exit 1 }"
+if errorlevel 1 (
+  echo A background dynamics check is already running. Wait for it to finish, or end it in Task Manager.
+  timeout /t 15
+  exit /b 1
+)
+
+echo Copying this MuseScore to %DEST% ...
+robocopy "%~dp0.." "%DEST%" /MIR /NFL /NDL /NJH /NJS /NP >nul
+if errorlevel 8 (
+  echo Could not copy MuseScore to %DEST%.
+  timeout /t 30
+  exit /b 1
+)
+
+start "" "%DEST%\bin\@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --check-dynamics --extract-patches "%PATCHES%"
+
+echo The dynamics check runs in the background (patches: %PATCHES%).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background dynamics check.log
+echo That folder opens when it is done. You can close this window, and install other builds, meanwhile.
+timeout /t 15

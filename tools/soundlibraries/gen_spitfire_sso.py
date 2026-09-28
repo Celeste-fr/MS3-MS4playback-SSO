@@ -42,6 +42,11 @@ T={
  'staccato (Muted)':('short staccatissimo','muted'), 'Short Stopped':('short staccatissimo','muted'),
  'Short Harmonics':('short spiccato staccatissimo','harmonics'),
  'Short 1.0':('tenuto',''),
+ # the section strings' staccato (the owner, 2026-09-28: "if we have a trigger for short 1'0, why not
+ # short 0'5?"): spiccato for staccatissimo, Short 0.5 for staccato, Short 1.0 for tenuto
+ 'Short 0.5':('short',''),
+ # "espr.", "molto vib." (staff text) on a held note; slurred notes keep the Performance legato
+ 'Long (Rachm.)':('long','espressivo'),
  'Marcato':('marcato',''), 'Marcato (Muted)':('marcato','muted'),
  'Tenuto':('tenuto',''), 'Tenuto (Muted)':('tenuto','muted'),
  'Pizzicato':('pizzicato',''), 'Pizzicato Bartok':('bartok',''), 'Col Legno':('collegno',''),
@@ -258,10 +263,13 @@ SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), 
 # Extra patches (soundlibrary.h): other patches a part plays alongside its main one, each loaded
 # only when the part's notation asks for one of its articulations (and, hosted, once it is set
 # up). Named as the owner's .nki files. (main patch, extra patch, articulations)
-# - Performance: Spitfire's legato (the "All techniques" patches have none) for slurred notes.
-#   Its UACC value is not known yet (20 = the standard's legato); a single-articulation patch
-#   ignores it.
-LEGATO = [('Legato', 20, 'legato', '')]
+# - Performance: Spitfire's legato (the "All techniques" patches have none) for slurred notes,
+#   and for held notes too (prefer="long"; the owner, 2026-09-28: a lone held note played the All
+#   techniques patch's Long, another recording with its own level and place, quiet and slow to
+#   speak, amid the slurred notes on this patch; a note that doesn't overlap the one before plays
+#   with its own attack here). Its UACC value is not known yet (20 = the standard's legato); a
+#   single-articulation patch ignores it.
+LEGATO = [('Legato', 20, 'legato long', '', 'long')]
 PERFORMANCE = {
     'Violins 1': 'Violins 1 - Performance', 'Violins 2': 'Violins 2 - Performance',
     'Violas': 'Violas - Performance', 'Celli': 'Celli - Performance', 'Basses': 'Basses - Performance',
@@ -371,9 +379,10 @@ EXPECT = {
 }
 expectUsed = set()
 
-def articulation(n, v, t, m, patch=None):
+def articulation(n, v, t, m, patch=None, prefer=''):
     a=f'    <Articulation name={q(n)} value="{v}" techniques={q(t)}'
     if m: a+=f' modifiers={q(m)}'
+    if prefer: a+=f' prefer={q(prefer)}'
     if (patch, v) in EXPECT:
         a+=f' expect={q(EXPECT[(patch, v)])}'
         expectUsed.add((patch, v))
@@ -395,8 +404,9 @@ for bank,name,ids,pn in I:
         t,m=T.get(n, ('', ''))
         if (name, n) in SILENT:
             t, m = '', ''
-        # a patch with its own staccato: staccato dots play it, spiccato stays for staccatissimo
-        if n == 'Spiccato' and any(x == 'staccato' for x, _ in banks[bank]):
+        # a patch with its own staccato (or Short 0.5): staccato dots play it, spiccato stays for
+        # staccatissimo
+        if n == 'Spiccato' and any(x in ('staccato', 'Short 0.5') for x, _ in banks[bank]):
             t = 'spiccato staccatissimo'
         shown = n.replace("Trill (Minor 3rd","Trill (Minor 3rd)").replace("))",")").replace("Tremelo","Tremolo")
         if (name, n) in SPITFIRE_RENAME:
@@ -414,8 +424,8 @@ for main, name, arts in EXTRAS:
     # and silence it (Check articulations, 2026-09-25: Solo strings / brass Performance, the
     # single techniques)
     out.append('    <Switch type="none"/>')
-    for n, v, t, m in arts:
-        out.append(articulation(n, v, t, m))
+    for art in arts:
+        out.append(articulation(*art[:4], prefer=art[4] if len(art) > 4 else ''))
     out += patchControllers(name)
     out.append('  </Instrument>')
 

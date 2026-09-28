@@ -299,9 +299,14 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
                                     "(about 25 s more per patch; one patch per family is enough)"), this);
       layout->addWidget(_pitchBend);
       // (the owner, 2026-09-28: "verify that dynamics is consistent across all techniques")
-      _dynamics = new QCheckBox(tr("Dynamics: play each articulation at pp, mf and ff as MuseScore sends them, and with velocity "
-                                   "and the dynamics controller alone, to see what sets its loudness (about 15 s more per articulation)"), this);
+      _dynamics = new QCheckBox(tr("Dynamics: measure each articulation's loudness from soft to loud (about 20 s more per articulation); "
+                                   "playback then plays short notes as loud as the part's held notes (tick the Performance patches too: "
+                                   "held notes play them). The summary shows the balance"), this);
       layout->addWidget(_dynamics);
+      _dynamicsOnly = new QCheckBox(tr("Dynamics only: skip the articulation check (much faster)"), this);
+      _dynamicsOnly->setEnabled(false);
+      connect(_dynamics, &QCheckBox::toggled, _dynamicsOnly, &QCheckBox::setEnabled);
+      layout->addWidget(_dynamicsOnly);
       // scanning: the set-up patches never scanned (else: what needs checking)
       connect(_scan, &QCheckBox::toggled, this, [this](bool on) {
             for (int row = 0; row < _table->rowCount(); ++row) {
@@ -589,6 +594,17 @@ void ArticulationCheckDialog::removePatch(const QString& name)
       rebuild();
       }
 
+static QString& backgroundLog()
+      {
+      static QString name = "background extract.log";
+      return name;
+      }
+
+void ArticulationCheckDialog::setBackgroundLog(const QString& fileName)
+      {
+      backgroundLog() = fileName;
+      }
+
 void ArticulationCheckDialog::logBackground(const QString& line)
       {
       const QString stamped = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss") + " " + line;
@@ -596,7 +612,7 @@ void ArticulationCheckDialog::logBackground(const QString& line)
       fflush(stderr);
       const QString folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
       QDir().mkpath(folder);
-      QFile f(folder + "/background extract.log");
+      QFile f(folder + "/" + backgroundLog());
       if (f.open(QIODevice::Append | QIODevice::Text))
             f.write((stamped + "\n").toUtf8());
       }
@@ -677,7 +693,7 @@ bool ArticulationCheckDialog::runHeadlessKeyScan(const QString& patches, QString
 //    own that runs in the background while the owner works in MuseScore (the owner, 2026-09-27)
 //---------------------------------------------------------
 
-bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip)
+bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics)
       {
       _headless = true;
       if (!_library) {
@@ -718,6 +734,16 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
       if (!ticked) {
             say("no patch to extract");
             return false;
+            }
+      if (dynamics) {
+            _dynamics->setChecked(true);
+            _dynamicsOnly->setChecked(true);
+            _scan->setChecked(false);
+            say(QString("%1: dynamics of %2 patches").arg(_library->name).arg(ticked));
+            check();
+            if (zip)
+                  *zip = _zip;
+            return !_zip.isEmpty();
             }
       _tryAll->setChecked(false);       // (it needs the plug-in's window on screen)
       _pitchBend->setChecked(pitchBend);
@@ -929,6 +955,7 @@ void ArticulationCheckDialog::check()
                   text += "\n(Stopped before the end.)\n";
             if (!final)
                   text += "\n(Still running: written after each patch.)\n";
+            text += balanceReport();
             text += "\n# Every patch's last check\n";
             for (int i = 0; i < int(_rows.size()); ++i) {
                   const QString patch = _rows[i].instrument->name;
@@ -952,7 +979,10 @@ void ArticulationCheckDialog::check()
                   say(QString("%1 of %2: %3 (%4 min so far%5)").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
                       .arg(elapsed).arg(k ? QString(", about %1 min left").arg(elapsed * (int(chosen.size()) - k) / k) : QString()));
                   }
-            checkPatch(chosen[k], path, folder, results, summary);
+            if (_dynamics->isChecked() && _dynamicsOnly->isChecked())
+                  dynamicsPatch(chosen[k], path, folder, results, summary);
+            else
+                  checkPatch(chosen[k], path, folder, results, summary);
             if (_headless)
                   say("   " + _table->item(chosen[k], 3)->text());
             if (!results.isEmpty())
@@ -984,6 +1014,301 @@ void ArticulationCheckDialog::check()
             QMessageBox::information(this, windowTitle(),
                tr("The results are in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
 #endif
+      }
+
+//---------------------------------------------------------
+//   measureDynamics
+//    (the plug-in offline) each articulation a notation can choose (one no notation chooses is
+//    never played: not measured), the part's held note in full (the reference of every short)
+//---------------------------------------------------------
+
+void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
+                                              QJsonObject& out, QStringList& lines)
+      {
+      // the part's held note: the articulation a plain long note chooses among the main patch's and its extras'
+      const SoundLib::LibInstrument* main = &ins;
+      if (ins.extra())
+            for (const SoundLib::LibInstrument& li : _library->instruments)
+                  if (li.name == ins.with)
+                        main = &li;
+      const std::vector<const SoundLib::LibInstrument*> patches = main->patches();
+      const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
+      const bool heldHere = held && patches[size_t(held.patch)]->name == ins.name;
+
+      std::vector<int> values, pitches;
+      std::vector<bool> full;
+      std::map<int, QStringList> names;
+      for (const SoundLib::Articulation& a : ins.articulations) {
+            if (a.techniques.isEmpty())
+                  continue;
+            if (!names.count(a.value)) {
+                  values.push_back(a.value);
+                  pitches.push_back(pitch);
+                  full.push_back(heldHere && held.articulation->value == a.value);
+                  }
+            names[a.value].append(a.name);
+            }
+      QElapsedTimer events;
+      events.start();
+      const std::vector<ArticulationCheck::DynamicsResult> dr = ArticulationCheck::dynamics(p, values, pitches, full, s,
+         [&](int done, int total) {
+            if (events.elapsed() > 50) {
+                  _status->setText(tr("%1: dynamics %2 of about %3").arg(ins.name).arg(done).arg(total));
+                  QApplication::processEvents();
+                  events.restart();
+                  }
+            return !_cancel;
+            });
+      auto r1 = [](double x) { return std::round(x * 10) / 10; };
+      SoundLib::DynamicsCalibration cal;
+      const QString calFile = SoundLibraryHost::calibrationFile(*_library);
+      cal.read(calFile);
+      QJsonArray dyn;
+      for (const auto& d : dr) {
+            QJsonObject o;
+            o["value"] = d.value;
+            o["names"] = QJsonArray::fromStringList(names[d.value]);
+            o["pitch"] = d.pitch;
+            if (d.pitch < 0) {
+                  o["silent"] = true;
+                  dyn.append(o);
+                  lines << QString("%1 (%2): silent at every pitch tried").arg(names[d.value].join(" / ")).arg(d.value);
+                  continue;
+                  }
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = d.drivenBy();
+            c.points = d.curve;
+            cal.setCurve(ins.name, d.value, c);
+            QJsonArray pts;
+            for (const auto& pt : d.curve)
+                  pts.append(QJsonArray({ pt.first, r1(pt.second) }));
+            o["curve"] = pts;
+            o["velocityDb"] = QJsonArray({ r1(d.velocityDb[0]), r1(d.velocityDb[1]) });
+            o["controllerDb"] = QJsonArray({ r1(d.ccDb[0]), r1(d.ccDb[1]) });
+            o["drivenBy"] = c.drivenBy;
+            dyn.append(o);
+            lines << QString("%1 (%2): on %3, %4 / %5 / %6 dB at pp / mf / ff%7").arg(names[d.value].join(" / ")).arg(d.value)
+               .arg(c.drivenBy).arg(r1(c.at(32))).arg(r1(c.at(80))).arg(r1(c.at(112)))
+               .arg(d.pitch != pitch ? QString(" (pitch %1)").arg(d.pitch) : QString());
+            }
+      if (!dr.empty()) {
+            QDir().mkpath(QFileInfo(calFile).absolutePath());
+            cal.write(calFile);
+            SoundLibraryHost::loadCalibration();
+            }
+      out["dynamics"] = dyn;
+      }
+
+//---------------------------------------------------------
+//   dynamicsPatch
+//    Dynamics only: the patch loaded (until a note sounds), offline, measured; nothing else
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary)
+      {
+#ifdef USE_VST3
+      Q_UNUSED(folder);
+      const SoundLib::LibInstrument& ins = *_rows[index].instrument;
+      QTableWidgetItem* resultItem = _table->item(index, 3);
+      QJsonObject out;
+      out["patch"] = ins.name;
+      out["dynamicsOnly"] = true;
+      auto fail = [&](const QString& message) {
+            out["error"] = message;
+            results.append(out);
+            summary += QString("## %1\n   %2\n\n").arg(ins.name, message);
+            resultItem->setText(message);
+            say(QString("%1: %2").arg(ins.name, message));
+            return false;
+            };
+      auto status = [&](const QString& t) {
+            _status->setText(QString("%1: %2").arg(ins.name, t));
+            QApplication::processEvents();
+            };
+      if (ins.keyScan || ins.articulations.empty())
+            return fail(tr("no articulations (a kit or keyswitched patch): nothing to measure"));
+      if (ins.switchType != SoundLib::SwitchType::CC && ins.switchType != SoundLib::SwitchType::NONE)
+            return fail(tr("Only patches switched by a CC can be measured."));
+      const int pitch = testPitch(ins);
+      out["pitch"] = pitch;
+      status(tr("loading…"));
+      say(QString("%1: loading").arg(ins.name));
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, MScore::sampleRate, 4096, &error);
+      if (!p)
+            return fail(error);
+      if (!SoundLibraryHost::loadSetup(p.get(), *_library, ins.name, pluginPath, &error))
+            return fail(error);
+      // its samples: until a note sounds, in real time (up to 2 minutes), then offline (up to a minute)
+      const int first = ins.articulations.front().value;
+      auto prime = [&]() {
+            if (ins.switchType == SoundLib::SwitchType::CC)
+                  p->midi(ME_CONTROLLER, 0, ins.switchNumber, first);
+            if (_library->dynamicsCC >= 0)
+                  p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
+            if (_library->dynamicsCC != 11)
+                  p->midi(ME_CONTROLLER, 0, 11, _library->expressionValue);
+            };
+      Pump pump { p.get(), double(MScore::sampleRate), &_cancel, {} };
+      bool sounds = false;
+      for (int i = 0; i < 100 && !_cancel && !sounds; ++i) {
+            status(tr("waiting for the patch to load (%1 s)…").arg(i * 13 / 10));
+            pump.peak = 0;
+            prime();
+            p->midi(ME_NOTEON, 0, pitch, 100);
+            pump.run(1000);
+            p->midi(ME_NOTEON, 0, pitch, 0);
+            sounds = pump.peak > 1e-4;
+            pump.run(300);
+            }
+      if (_cancel)
+            return false;
+      if (!sounds)
+            return fail(tr("It played nothing (is the patch loaded, on MIDI channel 1?)"));
+      p->setOffline(true);
+      bool offlineSounds = false;
+      for (int i = 0; i < 60 && !_cancel && !offlineSounds; ++i) {
+            status(tr("waiting for the patch to play offline (%1 s)…").arg(i));
+            std::vector<float> buf(size_t(2 * MScore::sampleRate), 0.f);
+            prime();
+            p->midi(ME_NOTEON, 0, pitch, 100);
+            p->process(MScore::sampleRate, buf.data());
+            p->midi(ME_NOTEON, 0, pitch, 0);
+            p->process(MScore::sampleRate / 2, buf.data());
+            for (float x : buf)
+                  offlineSounds = offlineSounds || std::fabs(x) > 1e-4f;
+            if (!offlineSounds) {
+                  p->idle();
+                  QElapsedTimer t;
+                  t.start();
+                  while (t.elapsed() < 1000 && !_cancel) {
+                        QApplication::processEvents();
+                        QThread::msleep(20);
+                        }
+                  }
+            }
+      if (_cancel) {
+            p->setOffline(false);
+            return false;
+            }
+      if (!offlineSounds) {
+            p->setOffline(false);
+            return fail(tr("Offline, the plug-in played nothing for a minute"));
+            }
+      ArticulationCheck::Settings s;
+      s.sampleRate = MScore::sampleRate;
+      s.switchCC = ins.switchType == SoundLib::SwitchType::CC ? ins.switchNumber : -1;
+      s.dynamicsCC = _library->dynamicsCC;
+      s.expressionCC = _library->dynamicsCC == 11 ? -1 : 11;
+      s.pitch = pitch;
+      for (const QString& id : ins.ids)
+            if (const InstrumentTemplate* t = searchTemplate(id))
+                  if (t->maxPitchP > t->minPitchP) {
+                        s.minPitch = t->minPitchP;
+                        s.maxPitch = t->maxPitchP;
+                        break;
+                        }
+      QElapsedTimer took;
+      took.start();
+      QStringList lines;
+      measureDynamics(ins, p.get(), pitch, s, out, lines);
+      p->setOffline(false);
+      if (_cancel)
+            return false;
+      out["seconds"] = int(took.elapsed() / 1000);
+      results.append(out);
+      const QString line = tr("dynamics of %1 articulations in %2 s").arg(out["dynamics"].toArray().size()).arg(took.elapsed() / 1000);
+      resultItem->setText(line);
+      say(QString("%1: %2").arg(ins.name, line));
+      summary += QString("## %1 (pitch %2)\n   %3\n   Dynamics (loudest 50 ms):\n").arg(ins.name).arg(pitch).arg(line);
+      for (const QString& l : lines)
+            summary += "   - " + l + "\n";
+      summary += "\n";
+      return true;
+#else
+      Q_UNUSED(index);
+      Q_UNUSED(pluginPath);
+      Q_UNUSED(folder);
+      Q_UNUSED(results);
+      Q_UNUSED(summary);
+      return false;
+#endif
+      }
+
+//---------------------------------------------------------
+//   balanceReport
+//    from the calibration (every patch measured so far): each measured articulation's loudness
+//    against the part's held note (the articulation a plain long note plays) at pp, mf and ff, as
+//    MuseScore played it before the calibration and as it plays it now. The test of the balance
+//    instead of listening to each technique (the owner, 2026-09-28)
+//---------------------------------------------------------
+
+QString ArticulationCheckDialog::balanceReport() const
+      {
+      // (this library's file: a background run checks a library that isn't Preferences' current one)
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      if (!_library || !cal->read(SoundLibraryHost::calibrationFile(*_library)))
+            return QString();
+      static const int LEVELS[3] = { 3750, 5250, 6250 };            // pp, mf, ff (MS4)
+      auto f1 = [](double x) { return QString::number(std::round(x * 10) / 10); };
+      QString text;
+      for (const Row& row : _rows) {
+            const SoundLib::LibInstrument* main = row.instrument;
+            if (main->extra())
+                  continue;
+            const std::vector<const SoundLib::LibInstrument*> patches = main->patches();
+            bool any = false;
+            for (const SoundLib::LibInstrument* q : patches)
+                  any = any || cal->patches().count(q->name);
+            if (!any)
+                  continue;
+            const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
+            const QString heldPatch = held ? patches[size_t(held.patch)]->name : QString();
+            const SoundLib::DynamicsCurve* ref = held ? cal->curve(heldPatch, held.articulation->value) : nullptr;
+            text += QString("## %1\n").arg(main->name);
+            if (!ref) {
+                  text += "   " + tr("held notes play %1 (%2), not measured yet: check it with Dynamics too")
+                     .arg(heldPatch, held ? held.articulation->name : QString("?")) + "\n";
+                  continue;
+                  }
+            text += "   " + tr("held notes: %1 %2, %3 / %4 / %5 dB at pp / mf / ff").arg(heldPatch, held.articulation->name)
+               .arg(f1(ref->at(32))).arg(f1(ref->at(80))).arg(f1(ref->at(112))) + "\n";
+            for (const SoundLib::LibInstrument* q : patches) {
+                  for (const SoundLib::Articulation& a : q->articulations) {
+                        const SoundLib::DynamicsCurve* c = cal->curve(q->name, a.value);
+                        if (!c || (q->name == heldPatch && a.value == held.articulation->value))
+                              continue;
+                        bool listed = false;
+                        for (const QString& t : a.techniques)
+                              listed = listed || _library->velocityDynamics.contains(t);
+                        const bool onVelocity = c->drivenBy == "velocity" || c->drivenBy == "both";
+                        QStringList was, now;
+                        double worst = 0;
+                        for (int k = 0; k < 3; ++k) {
+                              const int cc = Ms4::expressionLevel(LEVELS[k]);
+                              const double refDb = ref->at(cc);
+                              const int vb = !onVelocity || listed ? cc
+                                 : Ms4::note(Ms4::Family(0), { Ms4::ArtRef { Ms4::Art::Standard, false } }, LEVELS[k], true).velocity;
+                              const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc);
+                              const double n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - cal->balanceDb;
+                              was << f1(c->at(vb) - refDb);
+                              now << f1(n);
+                              worst = std::max(worst, std::fabs(n));
+                              }
+                        const QString where = q == main ? QString() : q->name + ": ";
+                        QString line = QString("   %1 %2%3 (%4), on %5: %6 dB against the held note at pp / mf / ff (was %7)")
+                           .arg(worst > 3 ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
+                           .arg(now.join(" / "), was.join(" / "));
+                        if (worst > 3)
+                              line += onVelocity ? tr(" — beyond its velocity range") : tr(" — on the controller, which the whole part shares: not adjusted");
+                        text += line + "\n";
+                        }
+                  }
+            }
+      if (text.isEmpty())
+            return QString();
+      return "\n# " + tr("Dynamics balance (loudest 50 ms; the short notes' balance setting: %1 dB)").arg(f1(cal->balanceDb))
+             + "\n" + text;
       }
 
 //---------------------------------------------------------
@@ -1870,101 +2195,12 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       if (!region.isNull())
             out["region"] = QJsonArray({ region.x(), region.y(), region.width(), region.height() });
 
-      // dynamics: what sets each articulation's loudness, and whether pp -> ff spans what the
-      // articulations on the dynamics controller (the longs) span
+      // dynamics: into the calibration (measureDynamics)
       QStringList dynamicsLines;
       if (_dynamics->isChecked() && offlineSounds && !_cancel) {
-            std::map<int, QStringList> techniquesOf;
-            for (const SoundLib::Articulation& a : ins.articulations)
-                  if (!techniquesOf.count(a.value))
-                        techniquesOf[a.value] = a.techniques;
-            Ms4::Family fam = Ms4::Family(0);
-            for (const QString& id : ins.ids)
-                  if (const InstrumentTemplate* t = searchTemplate(id)) {
-                        Instrument instr = Instrument::fromTemplate(t);
-                        fam = Ms4::family(&instr);
-                        break;
-                        }
-            static const int LEVELS[3] = { 3750, 5250, 6250 };            // pp, mf, ff (MS4)
-            std::vector<int> dynValues, dynPitches;
-            std::vector<std::array<ArticulationCheck::Level, 3>> sent;
-            std::vector<bool> listed;
-            for (const ArticulationCheck::Result& r : report.results) {
-                  if (r.verdict != ArticulationCheck::Verdict::SWITCHES || !names.count(r.value))
-                        continue;
-                  bool onVelocity = false;
-                  for (const QString& t : techniquesOf[r.value])
-                        onVelocity = onVelocity || _library->velocityDynamics.contains(t);
-                  std::array<ArticulationCheck::Level, 3> l;
-                  for (int k = 0; k < 3; ++k) {
-                        const int cc = Ms4::expressionLevel(LEVELS[k]);
-                        const int velocity = onVelocity ? cc
-                           : Ms4::note(fam, { Ms4::ArtRef { Ms4::Art::Standard, false } }, LEVELS[k], true).velocity;
-                        l[size_t(k)] = { velocity, cc };
-                        }
-                  dynValues.push_back(r.value);
-                  dynPitches.push_back(r.pitch >= 0 ? r.pitch : pitch);
-                  sent.push_back(l);
-                  listed.push_back(onVelocity);
-                  }
             p->setOffline(true);
-            ArticulationCheck::Settings ds = s;
-            const std::vector<ArticulationCheck::DynamicsResult> dr = ArticulationCheck::dynamics(p.get(), dynValues, dynPitches, sent, ds,
-               [&](int done, int total) {
-                  if (events.elapsed() > 50) {
-                        _status->setText(tr("%1: dynamics %2 of %3").arg(ins.name).arg(done).arg(total));
-                        QApplication::processEvents();
-                        events.restart();
-                        }
-                  return !_cancel;
-                  });
+            measureDynamics(ins, p.get(), pitch, s, out, dynamicsLines);
             p->setOffline(false);
-            // which control moves it (3 dB and more from 32 to 127), and the longs' span as reference
-            auto drive = [](const ArticulationCheck::DynamicsResult& d) {
-                  const double v = d.velocityDb[1] - d.velocityDb[0], c = d.ccDb[1] - d.ccDb[0];
-                  return v >= 3 && c >= 3 ? QString("both") : v >= 3 ? QString("velocity") : c >= 3 ? QString("controller") : QString("neither");
-                  };
-            std::vector<double> ccSpans;
-            for (const auto& d : dr)
-                  if (drive(d) == "controller")
-                        ccSpans.push_back(d.sentDb[2] - d.sentDb[0]);
-            std::sort(ccSpans.begin(), ccSpans.end());
-            const double ref = ccSpans.empty() ? -1 : ccSpans[ccSpans.size() / 2];
-            QJsonArray dyn;
-            for (size_t i = 0; i < dr.size(); ++i) {
-                  const auto& d = dr[i];
-                  auto r1 = [](double x) { return std::round(x * 10) / 10; };
-                  const double span = d.sentDb[2] - d.sentDb[0];
-                  const QString how = drive(d);
-                  QJsonObject o;
-                  o["value"] = d.value;
-                  o["names"] = QJsonArray::fromStringList(names[d.value]);
-                  o["techniques"] = QJsonArray::fromStringList(techniquesOf[d.value]);
-                  o["pitch"] = d.pitch;
-                  o["sentDb"] = QJsonArray({ r1(d.sentDb[0]), r1(d.sentDb[1]), r1(d.sentDb[2]) });
-                  o["sent"] = QJsonArray({ QJsonArray({ sent[i][0].velocity, sent[i][0].cc }), QJsonArray({ sent[i][1].velocity, sent[i][1].cc }),
-                                           QJsonArray({ sent[i][2].velocity, sent[i][2].cc }) });
-                  o["velocityDb"] = QJsonArray({ r1(d.velocityDb[0]), r1(d.velocityDb[1]) });
-                  o["controllerDb"] = QJsonArray({ r1(d.ccDb[0]), r1(d.ccDb[1]) });
-                  o["drivenBy"] = how;
-                  o["velocityListed"] = bool(listed[i]);
-                  dyn.append(o);
-                  QString note;
-                  if (how == "velocity" && !listed[i])
-                        note = tr("its loudness is on velocity, which MuseScore barely moves: add its technique to <Dynamics velocity>");
-                  else if (how == "controller" && listed[i])
-                        note = tr("its loudness is on the controller only: its technique needn't be in <Dynamics velocity>");
-                  else if (how == "neither")
-                        note = tr("neither velocity nor the controller changes its loudness");
-                  else if (ref >= 0 && std::fabs(span - ref) > 6)
-                        note = tr("pp to ff spans %1 dB, the longs %2 dB").arg(r1(span)).arg(r1(ref));
-                  dynamicsLines << QString("%1 (%2): %3 dB at pp / mf / ff, on %4%5").arg(names[d.value].join(" / ")).arg(d.value)
-                     .arg(QString("%1 / %2 / %3").arg(r1(d.sentDb[0])).arg(r1(d.sentDb[1])).arg(r1(d.sentDb[2])))
-                     .arg(how).arg(note.isEmpty() ? QString() : " — " + note);
-                  }
-            out["dynamics"] = dyn;
-            if (ref >= 0)
-                  out["dynamicsReferenceSpanDb"] = std::round(ref * 10) / 10;
             }
       results.append(out);
 

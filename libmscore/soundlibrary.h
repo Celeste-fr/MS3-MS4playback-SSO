@@ -38,6 +38,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -76,6 +77,8 @@ struct Articulation {
       int value { -1 };                   // CC value, keyswitch pitch or program
       QString expect;                     // what Check articulations hears where it isn't "switches"
                                           // and that is right ("silent", "ignored", "unclear")
+      QStringList prefer;                 // bases it plays over another patch's equal fit (<Articulation
+                                          // prefer>: SSO's Performance legato for held notes)
       };
 
 struct DrumKey {
@@ -237,6 +240,41 @@ Output output();
 void setAvailable(std::function<bool(const LibInstrument&)> available);
 void routesChanged();
 int routesGeneration();
+
+//---------------------------------------------------------
+//   DynamicsCalibration
+//    measured by Check articulations › Dynamics with the library's plug-in (<setups folder>/
+//    dynamics.json): each articulation's loudness (its loudest 50 ms, dB) along velocity = dynamics
+//    CC = x, and what sets it ("velocity", "controller", "both", "neither"). A short (on velocity)
+//    then plays the velocity at which it is as loud as the part's held note (the articulation a
+//    plain long note chooses) is at the note's dynamic, plus balanceDb (the owner's ear: short
+//    notes against long ones)
+//---------------------------------------------------------
+
+struct DynamicsCurve {
+      QString drivenBy;
+      std::vector<std::pair<int, double>> points;       // x (1 … 127, rising), dB
+      double at(int x) const;                           // interpolated; clamped at the ends
+      int inverse(double db) const;                     // the x that plays db (1 … 127)
+      };
+
+class DynamicsCalibration {
+      std::map<QString, std::map<int, DynamicsCurve>> _patches;    // patch name -> articulation value -> curve
+   public:
+      double balanceDb { 0 };
+      const DynamicsCurve* curve(const QString& patch, int value) const;
+      void setCurve(const QString& patch, int value, const DynamicsCurve& c) { _patches[patch][value] = c; }
+      const std::map<QString, std::map<int, DynamicsCurve>>& patches() const { return _patches; }
+      bool read(const QString& file);
+      bool write(const QString& file) const;
+      };
+
+void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c);
+std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
+// a short's velocity for the dynamics CC value cc: -1 when either curve is missing or the
+// articulation isn't on velocity
+int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
+                       const QString& refPatch, int refValue, int cc);
 
 //---------------------------------------------------------
 //   Route

@@ -42,8 +42,8 @@
     <Articulation name="Long Sul Tasto" value="17" techniques="long legato" modifiers="sultasto"/>
     <Articulation name="Long Sul G" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques=""/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
+    <Articulation name="Short 0.5" value="50" techniques="short"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
@@ -54,7 +54,7 @@
     <Articulation name="Col Legno" value="58" techniques="collegno"/>
     <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
     <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
-    <Articulation name="Long (Rachm.)" value="16" techniques=""/>
+    <Articulation name="Long (Rachm.)" value="16" techniques="long" modifiers="espressivo"/>
     <Articulation name="Long CS Blend" value="5" techniques=""/>
     <Articulation name="Tremolo" value="11" techniques="tremolo"/>
     <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
@@ -84,8 +84,8 @@
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
     <Articulation name="Long Sul G" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques=""/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
+    <Articulation name="Short 0.5" value="50" techniques="short"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
@@ -96,7 +96,7 @@
     <Articulation name="Col Legno" value="58" techniques="collegno"/>
     <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
     <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
-    <Articulation name="Long (Rachm.)" value="16" techniques=""/>
+    <Articulation name="Long (Rachm.)" value="16" techniques="long" modifiers="espressivo"/>
     <Articulation name="Long CS Blend" value="5" techniques=""/>
     <Articulation name="Tremolo" value="11" techniques="tremolo"/>
     <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
@@ -124,8 +124,8 @@
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
     <Articulation name="Long Sul C" value="112" techniques="long legato" modifiers="sulc"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques=""/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
+    <Articulation name="Short 0.5" value="50" techniques="short"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
@@ -136,7 +136,7 @@
     <Articulation name="Col Legno" value="58" techniques="collegno"/>
     <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
     <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
-    <Articulation name="Long (Rachm.)" value="16" techniques=""/>
+    <Articulation name="Long (Rachm.)" value="16" techniques="long" modifiers="espressivo"/>
     <Articulation name="Long CS Blend" value="5" techniques=""/>
     <Articulation name="Tremolo" value="11" techniques="tremolo"/>
     <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
@@ -164,8 +164,8 @@
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
     <Articulation name="Long Sul C" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques=""/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
+    <Articulation name="Short 0.5" value="50" techniques="short"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
@@ -176,7 +176,7 @@
     <Articulation name="Col Legno" value="58" techniques="collegno"/>
     <Articulation name="Long CS Sul Pont" value="19" techniques="long legato" modifiers="muted sulpont"/>
     <Articulation name="Long Super Sul Tasto" value="114" techniques="long legato" modifiers="sultasto"/>
-    <Articulation name="Long (Rachm.)" value="16" techniques=""/>
+    <Articulation name="Long (Rachm.)" value="16" techniques="long" modifiers="espressivo"/>
     <Articulation name="Long CS Blend" value="5" techniques=""/>
     <Articulation name="Tremolo" value="11" techniques="tremolo"/>
     <Articulation name="Trem Sul Pont" value="13" techniques="tremolo" modifiers="sulpont"/>
@@ -205,8 +205,8 @@
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques=""/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
+    <Articulation name="Short 0.5" value="50" techniques="short"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
     <Articulation name="Staccato Dig" value="49" techniques=""/>
     <Articulation name="Short Spicc-Pizz" value="41" techniques=""/>
@@ -239,8 +239,8 @@
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
-    <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques=""/>
+    <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
+    <Articulation name="Short 0.5" value="50" techniques="short"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
     <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
     <Articulation name="Col Legno" value="58" techniques="collegno"/>
@@ -1060,7 +1060,7 @@
   </Instrument>
   <Instrument name="Violins 1 - Performance" with="Violins 1" nki="Instruments/Symphonic Strings/Violins 1 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
@@ -1072,7 +1072,7 @@
   </Instrument>
   <Instrument name="Violins 2 - Performance" with="Violins 2" nki="Instruments/Symphonic Strings/Violins 2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
@@ -1084,7 +1084,7 @@
   </Instrument>
   <Instrument name="Violas - Performance" with="Violas" nki="Instruments/Symphonic Strings/Violas - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
@@ -1096,7 +1096,7 @@
   </Instrument>
   <Instrument name="Celli - Performance" with="Celli" nki="Instruments/Symphonic Strings/Celli - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
@@ -1108,7 +1108,7 @@
   </Instrument>
   <Instrument name="Basses - Performance" with="Basses" nki="Instruments/Symphonic Strings/Basses - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1119,7 +1119,7 @@
   </Instrument>
   <Instrument name="Solo Violin - Performance" with="Solo Violin 1" nki="Instruments/Solo Strings/Solo Violin - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
@@ -1130,7 +1130,7 @@
   </Instrument>
   <Instrument name="Solo Violin 2 - Performance" with="Solo Violin 2" nki="Instruments/Solo Strings/Solo Violin 2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
@@ -1141,7 +1141,7 @@
   </Instrument>
   <Instrument name="Solo Viola - Performance" with="Solo Viola" nki="Instruments/Solo Strings/Solo Viola - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
@@ -1152,7 +1152,7 @@
   </Instrument>
   <Instrument name="Solo Cello - Performance" with="Solo Cello" nki="Instruments/Solo Strings/Solo Cello - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="bowemphasis" name="Bow Emphasis" param="Bow Emph."/>
@@ -1163,7 +1163,7 @@
   </Instrument>
   <Instrument name="Piccolo Flute - Performance" with="Piccolo" nki="Instruments/Symphonic Woodwinds/Piccolo Flute - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1173,7 +1173,7 @@
   </Instrument>
   <Instrument name="Flute Solo - Total Performance" with="Flute Solo" nki="Instruments/Symphonic Woodwinds/Flute Solo - Total Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1183,7 +1183,7 @@
   </Instrument>
   <Instrument name="Flutes a2 - Performance" with="Flutes a2" nki="Instruments/Symphonic Woodwinds/Flutes a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1193,7 +1193,7 @@
   </Instrument>
   <Instrument name="Alto Flute - Performance" with="Alto Flute" nki="Instruments/Symphonic Woodwinds/Alto Flute - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1203,7 +1203,7 @@
   </Instrument>
   <Instrument name="Bass Flute - Performance" with="Bass Flute" nki="Instruments/Symphonic Woodwinds/Bass Flute - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1213,7 +1213,7 @@
   </Instrument>
   <Instrument name="Oboe Solo - Performance" with="Oboe Solo" nki="Instruments/Symphonic Woodwinds/Oboe Solo - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1223,7 +1223,7 @@
   </Instrument>
   <Instrument name="Oboes a2 - Performance" with="Oboes a2" nki="Instruments/Symphonic Woodwinds/Oboes a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1233,7 +1233,7 @@
   </Instrument>
   <Instrument name="Cor Anglais - Performance" with="Cor Anglais" nki="Instruments/Symphonic Woodwinds/Cor Anglais - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1243,7 +1243,7 @@
   </Instrument>
   <Instrument name="Clarinet Solo - Performance" with="Clarinet Solo" nki="Instruments/Symphonic Woodwinds/Clarinet Solo - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1253,7 +1253,7 @@
   </Instrument>
   <Instrument name="Clarinets a2 - Performance" with="Clarinets a2" nki="Instruments/Symphonic Woodwinds/Clarinets a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1263,7 +1263,7 @@
   </Instrument>
   <Instrument name="Bass Clarinet - Performance" with="Bass Clarinet" nki="Instruments/Symphonic Woodwinds/Bass Clarinet - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1273,7 +1273,7 @@
   </Instrument>
   <Instrument name="ContraBass Clarinet - Performance" with="Contrabass Clarinet" nki="Instruments/Symphonic Woodwinds/ContraBass Clarinet - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1283,7 +1283,7 @@
   </Instrument>
   <Instrument name="Bassoon Solo - Performance" with="Bassoon Solo" nki="Instruments/Symphonic Woodwinds/Bassoon Solo - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1293,7 +1293,7 @@
   </Instrument>
   <Instrument name="Bassoons a2 - Performance" with="Bassoons a2" nki="Instruments/Symphonic Woodwinds/Bassoons a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1303,7 +1303,7 @@
   </Instrument>
   <Instrument name="ContraBassoon - Performance" with="Contrabassoon" nki="Instruments/Symphonic Woodwinds/ContraBassoon - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1313,7 +1313,7 @@
   </Instrument>
   <Instrument name="Horn Solo - Performance" with="Horn Solo" nki="Instruments/Symphonic Brass/Horn Solo - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1322,7 +1322,7 @@
   </Instrument>
   <Instrument name="Horns a2 - Performance" with="Horns a2" nki="Instruments/Symphonic Brass/Horns a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1331,7 +1331,7 @@
   </Instrument>
   <Instrument name="Horns a6 - Performance" with="Horns a6" nki="Instruments/Symphonic Brass/Horns a6 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1340,7 +1340,7 @@
   </Instrument>
   <Instrument name="Trumpet Solo - Total Performance" with="Trumpet Solo" nki="Instruments/Symphonic Brass/Trumpet Solo - Total Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
@@ -1350,7 +1350,7 @@
   </Instrument>
   <Instrument name="Trumpets a2 - Performance" with="Trumpets a2" nki="Instruments/Symphonic Brass/Trumpets a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1360,7 +1360,7 @@
   </Instrument>
   <Instrument name="Trumpets a6 - Performance" with="Trumpets a6" nki="Instruments/Symphonic Brass/Trumpets a6 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1370,7 +1370,7 @@
   </Instrument>
   <Instrument name="Tenor Trombone Solo - Total Performance" with="Tenor Trombone Solo" nki="Instruments/Symphonic Brass/Tenor Trombone Solo - Total Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
@@ -1381,7 +1381,7 @@
   </Instrument>
   <Instrument name="Tenor Trombones a2 - Performance" with="Tenor Trombones a2" nki="Instruments/Symphonic Brass/Tenor Trombones a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1390,7 +1390,7 @@
   </Instrument>
   <Instrument name="Trombones a6 - Performance" with="Trombones a6" nki="Instruments/Symphonic Brass/Trombones a6 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1399,7 +1399,7 @@
   </Instrument>
   <Instrument name="Bass Trombones a2 - Performance" with="Bass Trombones a2" nki="Instruments/Symphonic Brass/Bass Trombones a2 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1408,7 +1408,7 @@
   </Instrument>
   <Instrument name="Tuba Solo - Performance" with="Tuba Solo" nki="Instruments/Symphonic Brass/Tuba Solo - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1417,7 +1417,7 @@
   </Instrument>
   <Instrument name="Horns a4 - Performance" with="Motif Horns a4" nki="Instruments/Motif Brass/Horns a4 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1426,7 +1426,7 @@
   </Instrument>
   <Instrument name="Trumpets a3 - Performance" with="Motif Trumpets a3" nki="Instruments/Motif Brass/Trumpets a3 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
@@ -1435,7 +1435,7 @@
   </Instrument>
   <Instrument name="Trombones a5 - Performance" with="Motif Trombones a5" nki="Instruments/Motif Brass/Trombones a5 - Performance.nki" setup="$iooxo=3">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>

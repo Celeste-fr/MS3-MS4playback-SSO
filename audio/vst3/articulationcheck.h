@@ -106,21 +106,22 @@ class ArticulationCheck {
 
       static Report run(Vst3Plugin* plugin, const std::vector<int>& values, const Settings& settings, Progress progress = nullptr);
 
-      // dynamics: how loud each value plays (its loudest 50 ms, dB) as a library part sends pp, mf
-      // and ff (the velocity and the dynamics CC of each), and with the velocity alone (32, 127 at
-      // the CC's 100) and the CC alone (32, 127 at velocity 100): which of the two sets the
-      // articulation's dynamics, and whether it follows the score's as the others do
-      struct Level { int velocity; int cc; };
+      // dynamics: how loud each value plays (its loudest 50 ms, dB): first what drives it (velocity
+      // 32 and CC 32, the CC alone to 127, the velocity alone to 127), then along velocity = dynamics
+      // CC = x (CURVE_POINTS: the calibration's curve, SoundLib::DynamicsCalibration) for one on
+      // velocity or asked for in full (the part's held note); one on the controller only at 32, 80,
+      // 112, 127. Another pitch where the given one is silent; silent everywhere: pitch -1, no curve
+      static constexpr int CURVE_POINTS[8] = { 16, 32, 48, 64, 80, 96, 112, 127 };
       struct DynamicsResult {
             int value { -1 };
-            int pitch { -1 };
-            double sentDb[3] { -200, -200, -200 };   // pp, mf, ff as sent
-            double velocityDb[2] { -200, -200 };     // velocity 32, 127
-            double ccDb[2] { -200, -200 };           // the dynamics CC 32, 127
+            int pitch { -1 };                        // -1: silent at every pitch tried
+            std::vector<std::pair<int, double>> curve;    // x, dB
+            double velocityDb[2] { -200, -200 };     // velocity 32, 127 (CC 32)
+            double ccDb[2] { -200, -200 };           // the dynamics CC 32, 127 (velocity 32)
+            const char* drivenBy() const;            // 3 dB and more from 32 to 127: "velocity", "controller", "both", "neither"
             };
       static std::vector<DynamicsResult> dynamics(Vst3Plugin* plugin, const std::vector<int>& values, const std::vector<int>& pitches,
-                                                  const std::vector<std::array<Level, 3>>& sent, const Settings& settings,
-                                                  Progress progress = nullptr);
+                                                  const std::vector<bool>& full, const Settings& settings, Progress progress = nullptr);
 
       // a scan's pictures (the plug-in's window after each value of the switch, cropped to
       // area): which show an articulation. "No articulation" is the picture most of them

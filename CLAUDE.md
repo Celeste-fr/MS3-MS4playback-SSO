@@ -232,6 +232,12 @@ Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3
 - `mscore/tuningdialog.*`: *Tools › Tuning…* (presets, final values, plugin file load/save, offers
   to clear plugin-written note values). The Inspector's note panel shows Temperament, Accidental,
   Tuning and Result.
+- Plugin API (`mscore/plugin/api/elements.h`, Note, read only): `playbackTuning` (the total cents,
+  as played) and `microtonalTuning` (accidental + own tuning, without the temperament: a quarter-sharp
+  F is +50 in any temperament). Each builds a `ScoreTuning` for the call. For plugins that judge
+  pitches, not playback: the owner's Playability Checker (`~/MuseScore/orchestration-checker`, not in
+  this repository) uses `microtonalTuning` in its string multiple-stop check (a quarter-sharp G3 is not
+  the open G string, a quarter-flat G3 is below it). MuseScore 3.6 has neither (undefined in QML).
 - `mtest/libmscore/tuning` (`tst_tuning`, 13/13): the plugin's fixture and parity with the plugin
   run in 3.6.2 (51 notes, same values but 2 with a hand-set tuning, which the fork adds to and the
   plugin overwrites). The Microtonal Tuner plugin for 3.6 (reads the same metaTag; not in this
@@ -290,6 +296,58 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   speed is on velocity). The library's dynamics CC now goes ahead of the notes at its tick (a long starting on
   a new dynamic started at the old one); MS4's CC11 for the built-in sounds keeps MS4's order.
   Test `shortsFollowDynamics` (shorts-dynamics.musicxml).
+  **The owner's Dynamics check, Violas (2026-09-27 21:57 local):** Long and every long / tremolo / trill is on
+  CC1 only (velocity 32 vs 127: no change), so `long` is not listed (18492e8 reverted). CC1 moves a Long 8-16
+  dB (Long: -35.2 dB at 32, -27.1 at 80, -26.7 at 127: little above mf); velocity moves a short far more
+  (Spiccato -58.8 at 32 -> -19.4 at 127, Bartok 28 dB, Col legno 21 dB). So at pp the listed shorts are
+  25 dB under the longs, at ff level with them: their velocity scale may need narrowing (open; the owner's ear).
+  **Dynamics calibration** (the owner, 2026-09-28: with section strings the staccatos were quiet again;
+  "me manually hearing for every single technique volume is not gonna cut it"): *Check articulations* ›
+  *Dynamics* measures each articulation along velocity = CC1 = 16, 32 … 112, 127
+  (`ArticulationCheck::CURVE_POINTS`, loudest 50 ms) plus velocity-only / CC1-only ends (`drivenBy`), and
+  merges the curves into `<setups folder>/dynamics.json` (`SoundLib::DynamicsCalibration`, loaded by
+  `SoundLibraryHost::loadCalibration` at startup / preferences / after a check). Playback
+  (`libVelocity` in rendermidi): a note whose articulation is measured on velocity plays
+  `calibratedVelocity`: the inverse of its curve at the held note's loudness (the articulation
+  `choose(patches, {long})` gives: the Performance legato) at the dynamic's CC, plus `balanceDb`
+  (*View › Sound Library…* "Short notes against held notes"); an accent keeps its share. No curve for
+  either: the `<Dynamics velocity>` rule. On the controller (tremolo, trills …): not adjustable (the CC is
+  the part's). summary.txt "# Dynamics balance": every measured articulation against the held note at
+  pp / mf / ff, now and as before, "!" past 3 dB (the automatic test). The other branch's data (control
+  titles, articulation names, key ranges per .nki) has no velocity layers or volumes; the library-files
+  extract's library.json would show velocity-split vs crossfaded layers but not loudness. Tests
+  `dynamicsCalibration`, `dynamicsCheck`.
+  **Faster, in the background** (the owner, 2026-09-28: "have it run in the background and use separate folders
+  … make the test faster without compromising the data"): *Dynamics only* (check box; `dynamicsPatch`) skips
+  the articulation check and the window pictures; `measureDynamics` measures only articulations a notation
+  chooses (techniques not empty); `ArticulationCheck::dynamics` classifies with 3 notes (velocity 32 / CC 32,
+  CC 127, velocity 127; other pitches where silent: +12, -12, +7, -5, +24) and gives the full 8-point curve only
+  to one on velocity (0.5 s note, 0.2 s tail) or asked for in full (the part's held note: `full`), one on the
+  controller 32 / 80 / 112 / 127; notes go soft to loud and each waits for the last one's tail 50 dB under it
+  (`Player::relativeSettle`), not -70 dBFS. The owner's Violas run of 2026-09-27 (old way, ~430 notes) took about
+  a minute: Kontakt offline is ~10x real time. `MuseScore --extract-library <lib> --check-dynamics
+  [--extract-patches mapped|file]` (musescore.cpp `extractInBackground`, `runHeadless(…, dynamics)`): its own
+  setups copy (`background dynamics check setups`), lock and log (`background dynamics check.log`), the curves
+  merged into the working `dynamics.json` at the end (balance kept). `Measure SSO dynamics in background.bat`
+  (bin): copies the install to `%LOCALAPPDATA%\MuseScore background dynamics check` (the owner installs other
+  builds meanwhile), refuses a second run (PowerShell: a process from that folder), starts it; a patch list file
+  dropped on it. Tried here headless with the test synth (a map DynTest.xml, the synth's state as setups):
+  2 patches in 4 s, the unused value skipped, harmonics measured an octave up, the balance report in the summary.
+  **Section strings' shorts and Long (Rachm.)** (the owner, 2026-09-28): staccato plays Short 0.5,
+  staccatissimo Spiccato, tenuto / portato Short 1.0 (Violins 1/2, Violas, Celli, Basses, Strings
+  Ensemble); staff text "espr." / "espressivo" / "molto vib." / "con vibrato" sets the modifier
+  `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
+  Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
+  Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
+  **Held notes on the Performance patch** (the owner, 2026-09-28: lone held notes quiet and "the pan is
+  broken"; bar 12's lone pickup eighths barely audible): a part's slurred notes played "X - Performance"
+  and its lone held / unmarked notes the All techniques patch's Long, another recording with its own
+  level and place (Solo Viola Long -30.9 dB peak at 100/100) and slow to speak. `<Articulation prefer>`
+  (`Articulation::prefer`, `choose`: of equal fits in different patches, one that prefers the base wins):
+  the Performance legato is `techniques="legato long" prefer="long"`, so held notes play it too (not
+  overlapping, a note plays with its own attack). Shorts, pizzicato, con sord., sul G … stay on their
+  patches (their modifiers or techniques). The Performance patch now gets lanes for other tunings.
+  Tests `heldOnPerformance`, `spitfireMap`.
   **Check of it with the library** (the owner, 2026-09-28: "verify that dynamics is consistent across all
   techniques"; not knowable here: which of SSO's articulations are on velocity is Spitfire's, the list above a
   guess for tenuto and marcato): *Check articulations* › *Dynamics* (`ArticulationCheck::dynamics`): each
