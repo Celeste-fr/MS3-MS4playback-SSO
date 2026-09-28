@@ -151,6 +151,10 @@ class ArticulationCheckDialog : public QDialog {
       // path in zip. false: nothing to do, or no plug-in
       bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false);   // dynamics: Dynamics only instead of the extract
       static void setBackgroundLog(const QString& fileName);      // in Documents/MuseScore Sound Library Check (default "background extract.log")
+      // Check articulations without the dialog (MuseScore --scan-keys) on the patches to scan
+      // (toScanNow), or on those a file lists (one patch name a line); listening only, no window
+      bool runHeadlessKeyScan(const QString& patches, QString* zip);
+      static bool toScanNow(const SoundLib::LibInstrument& instrument, bool added);
       QString brokenOn() const     { return _broken; }
       QStringList patchesLeft() const { return _left; }
       // a line of the background extract's log: stderr and Documents/MuseScore Sound Library Check/

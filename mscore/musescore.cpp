@@ -250,6 +250,7 @@ static QString extractPatches = "all";
 static bool extractPitchBend = false;
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
+static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -4453,6 +4454,8 @@ static bool doProcessJob(QString jsonFile)
 //---------------------------------------------------------
 //   extractInBackground
 //    MuseScore --extract-library <library> [--extract-patches all|mapped|<file>] [--extract-pitch-bend]
+//    MuseScore --scan-keys <library> [--extract-patches <file>]: Check articulations' key scan of the
+//    patches whose keys aren't known yet (SSO's 42 one-drum patches, about 4 hours), the same way
 //    Extract plug-in data (soundlibrarycheck.h) without a window, while the owner works in another
 //    MuseScore (the owner, 2026-09-27: "have the test run in the background without interfering").
 //    It is a process of its own: a new MuseScore window isn't asked for (the single-instance check is
@@ -4577,7 +4580,8 @@ static bool extractInBackground()
             copied += QFile::copy(fi.absoluteFilePath(), copy + "/" + fi.fileName());
             }
       ArticulationCheckDialog::logBackground(QString("%4 started; setups in %1 (%2 copied from %3)")
-                                             .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)).arg(what));
+                                             .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine))
+                                             .arg(scanKeysMode ? QString("background key scan") : what));
       ArticulationCheckDialog dialog(library);
       QString zip;
       bool ok;
@@ -4585,8 +4589,11 @@ static bool extractInBackground()
 #ifdef Q_OS_WIN
             DialogWatch watch;
 #endif
-            ok = dialog.runHeadless(extractPatches, extractPitchBend, &zip, checkDynamicsMode);
+            ok = scanKeysMode ? dialog.runHeadlessKeyScan(extractPatches, &zip)
+                              : dialog.runHeadless(extractPatches, extractPitchBend, &zip, checkDynamicsMode);
       }
+      if (scanKeysMode)
+            return ok;          // (a key scan: one process; its zip and log as the extract's)
       if (checkDynamicsMode) {
             // the curves into the working MuseScore's calibration (its balance setting stays)
             SoundLib::DynamicsCalibration measured, working;
@@ -8599,6 +8606,9 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                                           "process", "n"));
       parser.addOption(QCommandLineOption("check-dynamics", "Use with --extract-library: measure the patches' dynamics (Check articulations › "
                                           "Dynamics only) instead of extracting; the curves go into the working MuseScore's calibration at the end"));
+      parser.addOption(QCommandLineOption("scan-keys", "Check articulations' key scan of a sound library's patches whose keys are not "
+                                          "known yet, without a window, as a process of its own like --extract-library (listening "
+                                          "only); --extract-patches <file> for other patches", "library"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8664,10 +8674,13 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             if (pluginName->isEmpty())
                   parser.showHelp(EXIT_FAILURE);
             }
-      if ((extractMode = parser.isSet("extract-library"))) {
+      scanKeysMode = parser.isSet("scan-keys");
+      if ((extractMode = parser.isSet("extract-library") || scanKeysMode)) {
             MScore::noGui = true;
-            extractLibrary = parser.value("extract-library");
-            if (parser.isSet("extract-patches"))
+            extractLibrary = parser.value(scanKeysMode ? "scan-keys" : "extract-library");
+            if (scanKeysMode)
+                  extractPatches = parser.isSet("extract-patches") ? parser.value("extract-patches") : QString("toscan");
+            else if (parser.isSet("extract-patches"))
                   extractPatches = parser.value("extract-patches");
             extractPitchBend = parser.isSet("extract-pitch-bend");
             checkDynamicsMode = parser.isSet("check-dynamics");

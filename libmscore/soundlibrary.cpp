@@ -74,6 +74,26 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
       return number >= 0 && number < 128;
       }
 
+// <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]/>;
+// no techniques: listed for reference and checked, never chosen by notation
+static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
+      {
+      Articulation art;
+      art.name = a.value("name").toString();
+      art.techniques = words(a.value("techniques").toString());
+      art.modifiers = words(a.value("modifiers").toString());
+      art.expect = a.value("expect").toString();
+      art.prefer = words(a.value("prefer").toString());
+      bool ok = false;
+      art.value = a.value("value").toInt(&ok);
+      if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
+            return false;
+      if (!ok || art.value < 0 || art.value > 127)
+            return false;
+      li.articulations.push_back(art);
+      return true;
+      }
+
 // <Controller id="vibrato" name="Vibrato" cc="21" default="64">
 //   <Text match="senza vib\.?" value="0"/>
 // </Controller>
@@ -202,17 +222,25 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Patch") {
-                  // <Patch name="Violins 1 - Core techniques" nki="Instruments/…/….nki" setup="$iooxo=3"/>
+                  // <Patch name="Violins 1 - Core techniques" nki="Instruments/…/….nki" setup="$iooxo=3" scan="values"/>
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
                   li.setupValues = readSetupValues(a.value("setup").toString());
+                  li.scan = a.value("scan").toString();
+                  li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
+                  li.keyScan = li.scan == "keys";
                   li.switchType = defType;
                   li.switchNumber = defNumber;
-                  if (li.name.isEmpty() || li.nki.isEmpty())
+                  if (li.name.isEmpty() || li.nki.isEmpty() || !(li.scan.isEmpty() || li.scan == "values" || li.scan == "keys"))
                         return fail(QString("%1:%2: bad Patch").arg(path).arg(r.lineNumber()));
+                  // its articulations, when known (from a scan): listed for reference, never chosen
+                  while (r.readNextStartElement()) {
+                        if (r.name() == "Articulation" && !readArticulation(r.attributes(), li))
+                              return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
+                        r.skipCurrentElement();
+                        }
                   lib->otherPatches.push_back(li);
-                  r.skipCurrentElement();
                   }
             else if (r.name() == "Instrument") {
                   LibInstrument li;
@@ -257,20 +285,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               li.drums.push_back(d);
                               }
                         else if (r.name() == "Articulation") {
-                              Articulation art;
-                              art.name = aa.value("name").toString();
-                              art.techniques = words(aa.value("techniques").toString());
-                              art.modifiers = words(aa.value("modifiers").toString());
-                              art.expect = aa.value("expect").toString();
-                              art.prefer = aa.value("prefer").toString().split(' ', QString::SkipEmptyParts);
-                              bool ok = false;
-                              art.value = aa.value("value").toInt(&ok);
-                              if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
-                                    ok = false;
-                              // (no techniques: listed for reference and checked, never chosen by notation)
-                              if (!ok || art.value < 0 || art.value > 127)
+                              if (!readArticulation(aa, li))
                                     return fail(QString("%1:%2: bad Articulation").arg(path).arg(r.lineNumber()));
-                              li.articulations.push_back(art);
                               }
                         else if (r.name() == "Controller") {
                               Controller c;

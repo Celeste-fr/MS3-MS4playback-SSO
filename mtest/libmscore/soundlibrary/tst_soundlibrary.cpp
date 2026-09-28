@@ -203,6 +203,47 @@ void TestSoundLibrary::spitfireMap()
       QVERIFY2(lib, qPrintable(error));
       QCOMPARE(lib->name, QString("Spitfire Symphony Orchestra"));
       QCOMPARE(lib->dynamicsCC, 1);
+      // the patches the map doesn't use: 23 with several sounds in their files, to scan (values or keys)
+      int values = 0, keys = 0;
+      for (const SoundLib::LibInstrument& p : lib->otherPatches) {
+            values += p.scan == "values";
+            keys += p.scan == "keys" && p.keyScan;
+            }
+      QCOMPARE(int(lib->otherPatches.size()), 541);
+      QCOMPARE(values, 0);                                  // (every values patch's values are known)
+      QCOMPARE(keys, 7);
+      int scanned = 0;
+      for (const SoundLib::LibInstrument& p : lib->otherPatches) {
+            if (p.name == "Basses - Core techniques")
+                  QCOMPARE(p.testPitch, 39);                    // (its samples' keys: 24-78; 60 has none)
+            if (p.name.startsWith("Curated ") && p.name.endsWith(" Ensembles")) {
+                  ++scanned;
+                  QVERIFY(p.scan.isEmpty());
+                  for (const SoundLib::Articulation& a : p.articulations)
+                        QVERIFY(a.techniques.isEmpty());      // (listed for reference)
+                  }
+            if (p.name == "Curated Tutti Ensembles") {
+                  QCOMPARE(int(p.articulations.size()), 13);
+                  QCOMPARE(p.articulations[4].name, QString("Long"));
+                  QCOMPARE(p.articulations[4].value, 5);
+                  }
+            if (p.name == "Curated String Ensembles")
+                  QCOMPARE(int(p.articulations.size()), 16);
+            // the Core / Decorative techniques: the All techniques patch's values
+            if (p.name == "Violins 1 - Core techniques") {
+                  QCOMPARE(int(p.articulations.size()), 18);
+                  QVERIFY(p.scan.isEmpty());
+                  bool pizz = false, sulG = false;
+                  for (const SoundLib::Articulation& a : p.articulations) {
+                        pizz |= a.name == "Pizzicato" && a.value == 56;
+                        sulG |= a.name == "Long Sul G" && a.value == 112 && a.expect == "silent";
+                        }
+                  QVERIFY(pizz && sulG);
+                  }
+            if (p.name == "Violins 2 - Decorative techniques")
+                  QCOMPARE(int(p.articulations.size()), 12);
+            }
+      QCOMPARE(scanned, 4);
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);
@@ -1466,7 +1507,9 @@ void TestSoundLibrary::articulationCheck()
 //   scanPictures
 //    a scan's pictures, drawn like SSO's window: the articulation's name, or "None" for a
 //    value the patch lacks, a meter that moves in every picture, and a memory display that
-//    grows during the scan. The values with an articulation are told from the others
+//    grows during the scan, and a RELEASE slider that the values the patch lacks leave where
+//    the last articulation put it, so "None" looks two ways. The values with an articulation are told
+//    from the others
 //---------------------------------------------------------
 
 void TestSoundLibrary::scanPictures()
@@ -1475,6 +1518,7 @@ void TestSoundLibrary::scanPictures()
                                            { 42, "Spiccato" }, { 70, "Trill (Minor 2nd)" }, { 71, "Trill (Major 2nd)" } };
       int meter = 0;
       int memory = 700;
+      int release = 0;
       auto picture = [&](int value) {
             QImage img(640, 360, QImage::Format_RGB32);
             img.fill(QColor(20, 50, 100));
@@ -1490,6 +1534,13 @@ void TestSoundLibrary::scanPictures()
             p.setFont(f);
             p.setPen(QColor(120, 140, 170));
             p.drawText(20, 136, i == patch.end() ? QString("NO ACTIVE TECHNIQUE") : QString("UACC CC#%1").arg(value));
+            // SSO's RELEASE slider: moved by a short articulation, back by a long one, and left
+            // where it was by a value the patch lacks
+            if (value == 40 || value == 42)
+                  release = 1;
+            else if (value == 1 || value == 7 || value == 11)
+                  release = 0;
+            p.fillRect(300 + 60 * release, 30, 40, 12, QColor(0, 160, 90));
             // the meter: another height each time; a memory display that grows during the scan
             meter = (meter * 37 + 11) % 60;
             p.fillRect(600, 300 - meter, 12, meter, QColor(0, 200, 0));
@@ -1511,6 +1562,30 @@ void TestSoundLibrary::scanPictures()
       QVERIFY(!patch.count(none));
       for (int v = 0; v < 128; ++v)
             QVERIFY2(found[v] == bool(patch.count(v)), qPrintable(QString("value %1").arg(v)));
+
+      // a patch not in the map: the scan can't go back to the state it loaded in (Long), so the
+      // picture after it shows the last value's "None". Compared with the start, that left the
+      // name out as "changing by itself" (the owner's scan of 2026-09-27 23:32 missed Pizzicato
+      // and trills); compared with the last value's picture during the scan, it doesn't
+      memory = 700;
+      release = 0;
+      const QImage loaded = picture(1);
+      std::vector<QImage> same { picture(1), picture(1), picture(1) };
+      shots.clear();
+      for (int v = 0; v < 128; ++v)
+            shots.push_back(picture(v));
+      const QImage after = picture(127);
+      const std::vector<bool> found2 = ArticulationCheck::scanPictures(loaded, same, shots, QRect(), { 0, 127, 126, 99, 64 },
+                                                                        &none, { { shots.back(), after } });
+      for (int v = 0; v < 128; ++v)
+            QVERIFY2(found2[v] == bool(patch.count(v)), qPrintable(QString("not in the map: value %1").arg(v)));
+      std::vector<QImage> wrong = same;             // (as it was)
+      wrong.push_back(after);
+      const std::vector<bool> found3 = ArticulationCheck::scanPictures(loaded, wrong, shots, QRect(), { 0, 127, 126, 99, 64 }, &none);
+      int missed = 0;
+      for (int v = 0; v < 128; ++v)
+            missed += patch.count(v) && !found3[v];
+      QVERIFY(missed > 0);
       }
 //---------------------------------------------------------
 //   pluginDescribe

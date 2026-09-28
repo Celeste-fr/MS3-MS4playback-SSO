@@ -1950,545 +1950,776 @@
     <Switch type="none"/>
   </Instrument>
   <!-- the library's other patches: set up and checked, not chosen by notation -->
-  <Patch name="Curated Brass Ensembles" nki="Instruments/Curated Ensembles/Curated Brass Ensembles.nki" setup="$iooxo=3"/>
-  <Patch name="Curated String Ensembles" nki="Instruments/Curated Ensembles/Curated String Ensembles.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Tutti Ensembles" nki="Instruments/Curated Ensembles/Curated Tutti Ensembles.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Woodwind Ensembles" nki="Instruments/Curated Ensembles/Curated Woodwind Ensembles.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Fall" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Long" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Multitongue" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Rip" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombone Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - FX Gliss" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - FX Gliss.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Fall" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Long" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Rip" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Bass Trombones a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbassi a2 - Fall" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbassi a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbassi a2 - Long" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbassi a2 - Rip" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbassi a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbassi a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbassi a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbasso Solo - Fall" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbasso Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbasso Solo - Long" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbasso Solo - Rip" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbasso Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbasso Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Cimbasso Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Fall" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Long Cuivre" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Long Stopped" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Long Stopped.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Long" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Rip" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Short Marcato" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Short Staccato Muted" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Staccato Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Short Staccato" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Trombone - Short Tenuto" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Tuba Solo - Fall" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Tuba Solo - Long" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Tuba Solo - Rip" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Tuba Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Tuba Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Contrabass Tuba Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Fall" nki="Instruments/Individual techniques/Brass - Horn Solo - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Legato" nki="Instruments/Individual techniques/Brass - Horn Solo - Legato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Horn Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Long" nki="Instruments/Individual techniques/Brass - Horn Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Rip" nki="Instruments/Individual techniques/Brass - Horn Solo - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Horn Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Horn Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Horn Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Horn Solo - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horn Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Horn Solo - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Bells up Crotchet" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Crotchet.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Bells up Long" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Bells up Quaver" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Quaver.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Bells up Staccato" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Fall" nki="Instruments/Individual techniques/Brass - Horns a2 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Legato" nki="Instruments/Individual techniques/Brass - Horns a2 - Legato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Horns a2 - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Long Flutter" nki="Instruments/Individual techniques/Brass - Horns a2 - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Long Stopped" nki="Instruments/Individual techniques/Brass - Horns a2 - Long Stopped.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Long" nki="Instruments/Individual techniques/Brass - Horns a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Horns a2 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Rip" nki="Instruments/Individual techniques/Brass - Horns a2 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Horns a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Horns a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Horns a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Horns a2 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Horns a2 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Fall" nki="Instruments/Individual techniques/Brass - Horns a6 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Horns a6 - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Long" nki="Instruments/Individual techniques/Brass - Horns a6 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Multitongue" nki="Instruments/Individual techniques/Brass - Horns a6 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Rip" nki="Instruments/Individual techniques/Brass - Horns a6 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Short Marcato" nki="Instruments/Individual techniques/Brass - Horns a6 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Short Staccato" nki="Instruments/Individual techniques/Brass - Horns a6 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Horns a6 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Horns a6 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Fall" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Long Flutter Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Flutter Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Long Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Long" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Multitongue" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Rip" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Short Marcato Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Marcato Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Short Staccato Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Staccato Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Short Tenuto Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Tenuto Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombone Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - FX Gliss" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - FX Gliss.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Fall" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Long" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Rip" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tenor Trombones a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Fall" nki="Instruments/Individual techniques/Brass - Trombones a6 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Trombones a6 - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Long" nki="Instruments/Individual techniques/Brass - Trombones a6 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Multitongue" nki="Instruments/Individual techniques/Brass - Trombones a6 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Rip" nki="Instruments/Individual techniques/Brass - Trombones a6 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Short Marcato" nki="Instruments/Individual techniques/Brass - Trombones a6 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Short Staccato" nki="Instruments/Individual techniques/Brass - Trombones a6 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trombones a6 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trombones a6 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - FX Gliss" nki="Instruments/Individual techniques/Brass - Trumpet Solo - FX Gliss.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Long Mariachi" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long Mariachi.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Long Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Long" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Multitongue" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Short Marcato Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Marcato Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Short Staccato Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Staccato Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Short Tenuto Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Tenuto Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpet Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Fall" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Long Mariachi" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Long Mariachi.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Long Muted" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Long Muted.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Long" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Rip" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Fall" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Long Cuivre.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Long" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Multitongue" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Rip" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Short Marcato" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Short Staccato" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Trumpets a6 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Fall" nki="Instruments/Individual techniques/Brass - Tuba Solo - Fall.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Long Stopped" nki="Instruments/Individual techniques/Brass - Tuba Solo - Long Stopped.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Long" nki="Instruments/Individual techniques/Brass - Tuba Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Rip" nki="Instruments/Individual techniques/Brass - Tuba Solo - Rip.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Short Stopped" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Stopped.nki" setup="$iooxo=3"/>
-  <Patch name="Brass - Tuba Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Beast Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Beast Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Beast Short" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Beast Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Choir Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Choir Short" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Choir Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Power Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Power Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Slow Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Slow Choir Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Slow Super Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Slow Super Choir Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Super Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Super Choir Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Brass - Super Choir Short" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Super Choir Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Cool Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 1.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Cool Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 2.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Cool Strings 3" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 3.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Cool Strings 4" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 4.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Giant Epic Long" nki="Instruments/Individual techniques/Curated Ensembles - String - Giant Epic Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Giant Epic Short" nki="Instruments/Individual techniques/Curated Ensembles - String - Giant Epic Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Ligeti Strings" nki="Instruments/Individual techniques/Curated Ensembles - String - Ligeti Strings.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Mondo Plucks" nki="Instruments/Individual techniques/Curated Ensembles - String - Mondo Plucks.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Slow Cool Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 1.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Slow Cool Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 2.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Slow Cool Strings 3" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 3.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Slow Cool Strings 4" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 4.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Slow Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Strings 1.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Slow Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Strings 2.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Super Slow Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Super Slow Strings 1.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - String - Super Slow Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Super Slow Strings 2.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Beast Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Beast Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Beast Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Beast Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Brass String Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Brass String Choir Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Brass String Choir Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Brass String Choir Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Low Brass String Stab" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Low Brass String Stab.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Low Wood String Stab" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Low Wood String Stab.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Nutcracker" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Nutcracker.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Staccato" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Woods String 1 Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 1 Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Woods String 1 Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 1 Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Woods String 2 Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 2 Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Tutti - Woods String 2 Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 2 Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Beast Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Beast Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Beast Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Beast Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Chorus Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Chorus Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Chorus Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Chorus Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Light Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Light Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Orchestrator Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Orchestrator Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Orchestrator Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Orchestrator Short.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Slow Chorus Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Slow Chorus Long.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Ensembles - Woodwind - Slow Orchestrator Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Slow Orchestrator Long.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Horns a4 - Long" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Horns a4 - Multitongue" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Horns a4 - Short Marcato" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Horns a4 - Short Staccatissimo" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Staccatissimo.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Horns a4 - Short Staccato" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Horns a4 - Short Tenuto" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trombones a5 - Long" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trombones a5 - Multitongue" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trombones a5 - Short Marcato" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trombones a5 - Short Staccatissimo" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Staccatissimo.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trombones a5 - Short Staccato" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trombones a5 - Short Tenuto" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trumpets a3 - Long" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trumpets a3 - Multitongue" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trumpets a3 - Short Marcato" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trumpets a3 - Short Staccatissimo" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Staccatissimo.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trumpets a3 - Short Staccato" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Motif Brass - Trumpets a3 - Short Tenuto" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Other - Harp - Bisbigliando" nki="Instruments/Individual techniques/Other - Harp - Bisbigliando.nki" setup="$iooxo=3"/>
-  <Patch name="Other - Harp - FX" nki="Instruments/Individual techniques/Other - Harp - FX.nki" setup="$iooxo=3"/>
-  <Patch name="Other - Harp - Flageolet" nki="Instruments/Individual techniques/Other - Harp - Flageolet.nki" setup="$iooxo=3"/>
-  <Patch name="Other - Harp - Normale" nki="Instruments/Individual techniques/Other - Harp - Normale.nki" setup="$iooxo=3"/>
-  <Patch name="Other - Harp - PDLT" nki="Instruments/Individual techniques/Other - Harp - PDLT.nki" setup="$iooxo=3"/>
-  <Patch name="Other - Harp - Slid CPU-friendly" nki="Instruments/Individual techniques/Other - Harp - Slid CPU-friendly.nki" setup="$iooxo=3"/>
-  <Patch name="Other - Harp - Slid" nki="Instruments/Individual techniques/Other - Harp - Slid.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Cello - Long Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Cello - Long" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Cello - Short Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Cello - Short Pizzicato" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Cello - Short Spiccato" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Viola - Long Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Viola - Long" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Viola - Short Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Viola - Short Pizzicato" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Viola - Short Spiccato" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Viola - Short Staccato" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Violin - Long Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Violin - Long" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Violin - Short Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Violin - Short Pizzicato" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Violin - Short Spiccato" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Solo Strings - Solo Violin - Short Staccato" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - FX" nki="Instruments/Individual techniques/Strings - Basses - FX.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Long Flautando" nki="Instruments/Individual techniques/Strings - Basses - Long Flautando.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Long Harmonics" nki="Instruments/Individual techniques/Strings - Basses - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Long Sul Pont Distorted" nki="Instruments/Individual techniques/Strings - Basses - Long Sul Pont Distorted.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Basses - Long Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Basses - Long Super Sul Tasto.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Long" nki="Instruments/Individual techniques/Strings - Basses - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Marcato Attack" nki="Instruments/Individual techniques/Strings - Basses - Marcato Attack.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short 0'5" nki="Instruments/Individual techniques/Strings - Basses - Short 0'5.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short 1'0" nki="Instruments/Individual techniques/Strings - Basses - Short 1'0.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short Col Legno" nki="Instruments/Individual techniques/Strings - Basses - Short Col Legno.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short Harmonics" nki="Instruments/Individual techniques/Strings - Basses - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Basses - Short Pizzicato Bartok.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Basses - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short Spicc-Pizz" nki="Instruments/Individual techniques/Strings - Basses - Short Spicc-Pizz.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short Spiccato" nki="Instruments/Individual techniques/Strings - Basses - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Short Staccato Dig" nki="Instruments/Individual techniques/Strings - Basses - Short Staccato Dig.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Basses - Tremolo Measured (150bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Basses - Tremolo Measured (180bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Basses - Tremolo Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Tremolo" nki="Instruments/Individual techniques/Strings - Basses - Tremolo.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Basses - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Basses - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Basses - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - FX" nki="Instruments/Individual techniques/Strings - Celli - FX.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long CS Blend" nki="Instruments/Individual techniques/Strings - Celli - Long CS Blend.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Celli - Long CS Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long CS" nki="Instruments/Individual techniques/Strings - Celli - Long CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long Flautando" nki="Instruments/Individual techniques/Strings - Celli - Long Flautando.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long Harmonics" nki="Instruments/Individual techniques/Strings - Celli - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Celli - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Celli - Long Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Celli - Long Super Sul Tasto.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Long" nki="Instruments/Individual techniques/Strings - Celli - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Marcato Attack" nki="Instruments/Individual techniques/Strings - Celli - Marcato Attack.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short 0'5" nki="Instruments/Individual techniques/Strings - Celli - Short 0'5.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short 1'0" nki="Instruments/Individual techniques/Strings - Celli - Short 1'0.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Celli - Short Brushed CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short Brushed" nki="Instruments/Individual techniques/Strings - Celli - Short Brushed.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short CS" nki="Instruments/Individual techniques/Strings - Celli - Short CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short Col Legno" nki="Instruments/Individual techniques/Strings - Celli - Short Col Legno.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short Harmonics" nki="Instruments/Individual techniques/Strings - Celli - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Celli - Short Pizzicato Bartok.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Celli - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Short Spiccato" nki="Instruments/Individual techniques/Strings - Celli - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Tremolo CS" nki="Instruments/Individual techniques/Strings - Celli - Tremolo CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Measured (150bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Measured (180bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Tremolo Measured CS (150bpm)" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Measured CS (150bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Tremolo" nki="Instruments/Individual techniques/Strings - Celli - Tremolo.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Trill (Major 3rd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Major 3rd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Celli - Trill (Minor 3rd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Minor 3rd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long CS Blend" nki="Instruments/Individual techniques/Strings - Ensembles - Long CS Blend.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long CS" nki="Instruments/Individual techniques/Strings - Ensembles - Long CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long Flautando" nki="Instruments/Individual techniques/Strings - Ensembles - Long Flautando.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long Harmonics" nki="Instruments/Individual techniques/Strings - Ensembles - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Ensembles - Long Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long Sul String" nki="Instruments/Individual techniques/Strings - Ensembles - Long Sul String.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Ensembles - Long Super Sul Tasto.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Long" nki="Instruments/Individual techniques/Strings - Ensembles - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Marcato Attack" nki="Instruments/Individual techniques/Strings - Ensembles - Marcato Attack.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short 0'5" nki="Instruments/Individual techniques/Strings - Ensembles - Short 0'5.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Ensembles - Short Brushed CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Brushed" nki="Instruments/Individual techniques/Strings - Ensembles - Short Brushed.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Col Legno" nki="Instruments/Individual techniques/Strings - Ensembles - Short Col Legno.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Harmonics" nki="Instruments/Individual techniques/Strings - Ensembles - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Ensembles - Short Pizzicato Bartok.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Ensembles - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Spiccato CS" nki="Instruments/Individual techniques/Strings - Ensembles - Short Spiccato CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Short Spiccato" nki="Instruments/Individual techniques/Strings - Ensembles - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Tremolo CS" nki="Instruments/Individual techniques/Strings - Ensembles - Tremolo CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Tremolo SulPont" nki="Instruments/Individual techniques/Strings - Ensembles - Tremolo SulPont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Tremolo" nki="Instruments/Individual techniques/Strings - Ensembles - Tremolo.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Trill (major 2nd)" nki="Instruments/Individual techniques/Strings - Ensembles - Trill (major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Ensembles - Trill (minor 2nd)" nki="Instruments/Individual techniques/Strings - Ensembles - Trill (minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - FX" nki="Instruments/Individual techniques/Strings - Violas - FX.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long CS Blend" nki="Instruments/Individual techniques/Strings - Violas - Long CS Blend.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Violas - Long CS Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long CS" nki="Instruments/Individual techniques/Strings - Violas - Long CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long Flautando" nki="Instruments/Individual techniques/Strings - Violas - Long Flautando.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long Harmonics" nki="Instruments/Individual techniques/Strings - Violas - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Violas - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long Sul C" nki="Instruments/Individual techniques/Strings - Violas - Long Sul C.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Violas - Long Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Violas - Long Super Sul Tasto.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Long" nki="Instruments/Individual techniques/Strings - Violas - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Marcato Attack" nki="Instruments/Individual techniques/Strings - Violas - Marcato Attack.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short 0'5" nki="Instruments/Individual techniques/Strings - Violas - Short 0'5.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short 1'0" nki="Instruments/Individual techniques/Strings - Violas - Short 1'0.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Violas - Short Brushed CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short Brushed" nki="Instruments/Individual techniques/Strings - Violas - Short Brushed.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short CS" nki="Instruments/Individual techniques/Strings - Violas - Short CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short Col Legno" nki="Instruments/Individual techniques/Strings - Violas - Short Col Legno.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short Harmonics" nki="Instruments/Individual techniques/Strings - Violas - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Violas - Short Pizzicato Bartok.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Violas - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Short Spiccato" nki="Instruments/Individual techniques/Strings - Violas - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Tremolo CS" nki="Instruments/Individual techniques/Strings - Violas - Tremolo CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Violas - Tremolo Measured (150bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Violas - Tremolo Measured (180bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Violas - Tremolo Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Tremolo" nki="Instruments/Individual techniques/Strings - Violas - Tremolo.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Violas - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violas - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Violas - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - FX" nki="Instruments/Individual techniques/Strings - Violins 1 - FX.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long CS Blend" nki="Instruments/Individual techniques/Strings - Violins 1 - Long CS Blend.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 1 - Long CS Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long CS" nki="Instruments/Individual techniques/Strings - Violins 1 - Long CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long Flautando" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Flautando.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long Harmonics" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long Sul Tasto" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Sul Tasto.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Super Sul Tasto.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Long" nki="Instruments/Individual techniques/Strings - Violins 1 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Marcato Attack" nki="Instruments/Individual techniques/Strings - Violins 1 - Marcato Attack.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short 0'5" nki="Instruments/Individual techniques/Strings - Violins 1 - Short 0'5.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short 1'0" nki="Instruments/Individual techniques/Strings - Violins 1 - Short 1'0.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Brushed CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short Brushed" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Brushed.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short CS" nki="Instruments/Individual techniques/Strings - Violins 1 - Short CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short Col Legno" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Col Legno.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short Harmonics" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Pizzicato Bartok.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Short Spiccato" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Measured (150bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Measured (180bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Tremolo Measured CS (150bpm)" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Measured CS (150bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Tremolo" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Trill (Major 3rd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Major 3rd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 1 - Trill (Minor 3rd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Minor 3rd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - FX" nki="Instruments/Individual techniques/Strings - Violins 2 - FX.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long CS Blend" nki="Instruments/Individual techniques/Strings - Violins 2 - Long CS Blend.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 2 - Long CS Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Long CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long Flautando" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Flautando.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long Harmonics" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Super Sul Tasto.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Long" nki="Instruments/Individual techniques/Strings - Violins 2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Marcato Attack" nki="Instruments/Individual techniques/Strings - Violins 2 - Marcato Attack.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short 0'5" nki="Instruments/Individual techniques/Strings - Violins 2 - Short 0'5.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short 1'0" nki="Instruments/Individual techniques/Strings - Violins 2 - Short 1'0.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Brushed CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short Brushed" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Brushed.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Short CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short Col Legno" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Col Legno.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short Harmonics" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Pizzicato Bartok.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Pizzicato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Short Spiccato" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Spiccato.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Tremolo CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo CS.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo Measured (150bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo Measured (180bpm).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo Sul Pont.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Tremolo" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo.nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Violins 2 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Strings - Violins 2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Violins 2 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Long Overblown" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long Overblown.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Long" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Short Overblown" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Overblown.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Alto Flute - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Clarinet - Long" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Clarinet - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Clarinet - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Clarinet - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Clarinet - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Flute - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Flute - Long Overblown" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Long Overblown.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Flute - Long" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Flute - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Flute - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bass Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoon Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Bassoons a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinet Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinet Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinet Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinet Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinet Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinet Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinets a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinets a2 - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinets a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinets a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinets a2 - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinets a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Clarinets a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - ContraBassoon - Long" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - ContraBassoon - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - ContraBassoon - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - ContraBassoon - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Contrabass Clarinet - Long" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Contrabass Clarinet - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Contrabass Clarinet - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Contrabass Clarinet - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Cor Anglais - Long" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Cor Anglais - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Cor Anglais - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Cor Anglais - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Long Hollow" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long Hollow.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Short Marcato Sfz" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Marcato Sfz.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flute Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Long Hollow" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Hollow.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Long Overblown" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Overblown.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Short Marcato Sfz" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Marcato Sfz.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Short Overblown" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Overblown.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Flutes a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboe Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboes a2 - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboes a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboes a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboes a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboes a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Oboes a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Long Flutter.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Long Harmonics.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Long" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Long.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Multitongue.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Marcato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Staccato.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Tenuto.nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Major 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Woodwinds - Piccolo Flute - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Ensembles - Contemporary" nki="Instruments/Symphonic Percussion/Ensembles - Contemporary.nki"/>
-  <Patch name="Ensembles - Hands and hits" nki="Instruments/Symphonic Percussion/Ensembles - Hands and hits.nki"/>
-  <Patch name="Ensembles - Low Ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Low Ensemble.nki"/>
-  <Patch name="Ensembles - Metal Clangs" nki="Instruments/Symphonic Percussion/Ensembles - Metal Clangs.nki"/>
-  <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki"/>
-  <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki"/>
-  <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki"/>
-  <Patch name="Basses - Core techniques" nki="Instruments/Symphonic Strings/Basses - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Basses - Decorative techniques" nki="Instruments/Symphonic Strings/Basses - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Celli - Core techniques" nki="Instruments/Symphonic Strings/Celli - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Celli - Decorative techniques" nki="Instruments/Symphonic Strings/Celli - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Ensembles - Core techniques" nki="Instruments/Symphonic Strings/Ensembles - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Ensembles - Decorative techniques" nki="Instruments/Symphonic Strings/Ensembles - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violas - Core techniques" nki="Instruments/Symphonic Strings/Violas - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violas - Decorative techniques" nki="Instruments/Symphonic Strings/Violas - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 1 - Core techniques" nki="Instruments/Symphonic Strings/Violins 1 - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 1 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 1 - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 2 - Core techniques" nki="Instruments/Symphonic Strings/Violins 2 - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 2 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 2 - Decorative techniques.nki" setup="$iooxo=3"/>
+  <Patch name="Curated Brass Ensembles" nki="Instruments/Curated Ensembles/Curated Brass Ensembles.nki" setup="$iooxo=3" pitch="54">
+    <Articulation name="Beast Long" value="1"/>
+    <Articulation name="Beast Short" value="2"/>
+    <Articulation name="Choir Long" value="3"/>
+    <Articulation name="Choir Short" value="4"/>
+    <Articulation name="Power Long" value="5"/>
+    <Articulation name="Slow Choir Long" value="6"/>
+    <Articulation name="Slow Sup. Choir" value="7"/>
+    <Articulation name="Sup. Choir Long" value="8"/>
+    <Articulation name="Sup. Choir Short" value="9"/>
+  </Patch>
+  <Patch name="Curated String Ensembles" nki="Instruments/Curated Ensembles/Curated String Ensembles.nki" setup="$iooxo=3" pitch="61">
+    <Articulation name="Cool Strings 1" value="1"/>
+    <Articulation name="Cool Strings 2" value="2"/>
+    <Articulation name="Cool Strings 3" value="3"/>
+    <Articulation name="Cool Strings 4" value="4"/>
+    <Articulation name="Giant Epic Long" value="5"/>
+    <Articulation name="Giant Epic Short" value="6"/>
+    <Articulation name="Ligeti Strings" value="7"/>
+    <Articulation name="Mondo Plucks" value="8"/>
+    <Articulation name="Slow Cool Strings 1" value="9"/>
+    <Articulation name="Slow Cool Strings 2" value="10"/>
+    <Articulation name="Slow Cool Strings 3" value="11"/>
+    <Articulation name="Slow Cool Strings 4" value="12"/>
+    <Articulation name="Slow Strings 1" value="13"/>
+    <Articulation name="Slow Strings 2" value="14"/>
+    <Articulation name="Super Slow Strings 1" value="15"/>
+    <Articulation name="Super Slow Strings 2" value="16"/>
+  </Patch>
+  <Patch name="Curated Tutti Ensembles" nki="Instruments/Curated Ensembles/Curated Tutti Ensembles.nki" setup="$iooxo=3" pitch="58">
+    <Articulation name="Beast Long" value="1"/>
+    <Articulation name="Beast Short" value="2"/>
+    <Articulation name="Brs Str Choir Long" value="3"/>
+    <Articulation name="Brs Str Chr Short" value="4"/>
+    <Articulation name="Long" value="5"/>
+    <Articulation name="Low Brass String Stab" value="6"/>
+    <Articulation name="Low Wood String Stb" value="7"/>
+    <Articulation name="Nutcracker" value="8"/>
+    <Articulation name="Staccato" value="9"/>
+    <Articulation name="Wood Str. 1 Long" value="10"/>
+    <Articulation name="Wood Str. 1 Short" value="11"/>
+    <Articulation name="Wood Str. 2 Long" value="12"/>
+    <Articulation name="Wood Str. 2 Short" value="13"/>
+  </Patch>
+  <Patch name="Curated Woodwind Ensembles" nki="Instruments/Curated Ensembles/Curated Woodwind Ensembles.nki" setup="$iooxo=3" pitch="64">
+    <Articulation name="Beast Long" value="1"/>
+    <Articulation name="Beast Short" value="2"/>
+    <Articulation name="Chorus Long" value="3"/>
+    <Articulation name="Chorus Short" value="4"/>
+    <Articulation name="Light Short" value="5"/>
+    <Articulation name="Orchestrator Long" value="6"/>
+    <Articulation name="Orchestrator Shorts" value="7"/>
+    <Articulation name="Slow Chr Long" value="8"/>
+    <Articulation name="Slow Orch. Long" value="9"/>
+  </Patch>
+  <Patch name="Brass - Bass Trombone Solo - Fall" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Fall.nki" setup="$iooxo=3" pitch="48"/>
+  <Patch name="Brass - Bass Trombone Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Cuivre.nki" setup="$iooxo=3" pitch="47"/>
+  <Patch name="Brass - Bass Trombone Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Flutter.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Bass Trombone Solo - Long" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long.nki" setup="$iooxo=3" pitch="47"/>
+  <Patch name="Brass - Bass Trombone Solo - Multitongue" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Multitongue.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Bass Trombone Solo - Rip" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Rip.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Bass Trombone Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Short Marcato.nki" setup="$iooxo=3" pitch="47"/>
+  <Patch name="Brass - Bass Trombone Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Short Staccato.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Bass Trombone Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Bass Trombones a2 - FX Gliss" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - FX Gliss.nki" setup="$iooxo=3" pitch="48"/>
+  <Patch name="Brass - Bass Trombones a2 - Fall" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Fall.nki" setup="$iooxo=3" pitch="47"/>
+  <Patch name="Brass - Bass Trombones a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Long Cuivre.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Bass Trombones a2 - Long" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Long.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Bass Trombones a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Multitongue.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Bass Trombones a2 - Rip" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Rip.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Bass Trombones a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Short Marcato.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Bass Trombones a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Short Staccato.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Bass Trombones a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Bass Trombones a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Cimbassi a2 - Fall" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Fall.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Cimbassi a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Long Cuivre.nki" setup="$iooxo=3" pitch="37"/>
+  <Patch name="Brass - Cimbassi a2 - Long" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Long.nki" setup="$iooxo=3" pitch="37"/>
+  <Patch name="Brass - Cimbassi a2 - Rip" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Rip.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Cimbassi a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Short Marcato.nki" setup="$iooxo=3" pitch="37"/>
+  <Patch name="Brass - Cimbassi a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Short Staccato.nki" setup="$iooxo=3" pitch="37"/>
+  <Patch name="Brass - Cimbassi a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Cimbassi a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="37"/>
+  <Patch name="Brass - Cimbasso Solo - Fall" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Fall.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Cimbasso Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Long Cuivre.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Cimbasso Solo - Long" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Long.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Cimbasso Solo - Rip" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Rip.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Cimbasso Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Short Marcato.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Cimbasso Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Short Staccato.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Cimbasso Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Cimbasso Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Contrabass Trombone - Fall" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Fall.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Trombone - Long Cuivre" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Long Cuivre.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Trombone - Long Stopped" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Long Stopped.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Trombone - Long" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Long.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Trombone - Rip" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Rip.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Contrabass Trombone - Short Marcato" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Marcato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Trombone - Short Staccato Muted" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Staccato Muted.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Trombone - Short Staccato" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Staccato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Trombone - Short Tenuto" nki="Instruments/Individual techniques/Brass - Contrabass Trombone - Short Tenuto.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Tuba Solo - Fall" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Fall.nki" setup="$iooxo=3" pitch="43"/>
+  <Patch name="Brass - Contrabass Tuba Solo - Long" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Long.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Tuba Solo - Rip" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Rip.nki" setup="$iooxo=3" pitch="41"/>
+  <Patch name="Brass - Contrabass Tuba Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Short Marcato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Tuba Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Short Staccato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Contrabass Tuba Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Contrabass Tuba Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Brass - Horn Solo - Fall" nki="Instruments/Individual techniques/Brass - Horn Solo - Fall.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Horn Solo - Legato" nki="Instruments/Individual techniques/Brass - Horn Solo - Legato.nki" setup="$iooxo=3" pitch="50"/>
+  <Patch name="Brass - Horn Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Horn Solo - Long Flutter.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Brass - Horn Solo - Long" nki="Instruments/Individual techniques/Brass - Horn Solo - Long.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horn Solo - Rip" nki="Instruments/Individual techniques/Brass - Horn Solo - Rip.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Brass - Horn Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Horn Solo - Short Marcato.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horn Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Horn Solo - Short Staccato.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horn Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Horn Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horn Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Horn Solo - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horn Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Horn Solo - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="58"/>
+  <Patch name="Brass - Horns a2 - Bells up Crotchet" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Crotchet.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Brass - Horns a2 - Bells up Long" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Long.nki" setup="$iooxo=3" pitch="62"/>
+  <Patch name="Brass - Horns a2 - Bells up Quaver" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Quaver.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Brass - Horns a2 - Bells up Staccato" nki="Instruments/Individual techniques/Brass - Horns a2 - Bells up Staccato.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Brass - Horns a2 - Fall" nki="Instruments/Individual techniques/Brass - Horns a2 - Fall.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Brass - Horns a2 - Legato" nki="Instruments/Individual techniques/Brass - Horns a2 - Legato.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Brass - Horns a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Horns a2 - Long Cuivre.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a2 - Long Flutter" nki="Instruments/Individual techniques/Brass - Horns a2 - Long Flutter.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Brass - Horns a2 - Long Stopped" nki="Instruments/Individual techniques/Brass - Horns a2 - Long Stopped.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a2 - Long" nki="Instruments/Individual techniques/Brass - Horns a2 - Long.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Horns a2 - Multitongue.nki" setup="$iooxo=3" pitch="58"/>
+  <Patch name="Brass - Horns a2 - Rip" nki="Instruments/Individual techniques/Brass - Horns a2 - Rip.nki" setup="$iooxo=3" pitch="68"/>
+  <Patch name="Brass - Horns a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Horns a2 - Short Marcato.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Horns a2 - Short Staccato.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Horns a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Horns a2 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Brass - Horns a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Horns a2 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a6 - Fall" nki="Instruments/Individual techniques/Brass - Horns a6 - Fall.nki" setup="$iooxo=3" pitch="62"/>
+  <Patch name="Brass - Horns a6 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Horns a6 - Long Cuivre.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Brass - Horns a6 - Long" nki="Instruments/Individual techniques/Brass - Horns a6 - Long.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Brass - Horns a6 - Multitongue" nki="Instruments/Individual techniques/Brass - Horns a6 - Multitongue.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Brass - Horns a6 - Rip" nki="Instruments/Individual techniques/Brass - Horns a6 - Rip.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Brass - Horns a6 - Short Marcato" nki="Instruments/Individual techniques/Brass - Horns a6 - Short Marcato.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Brass - Horns a6 - Short Staccato" nki="Instruments/Individual techniques/Brass - Horns a6 - Short Staccato.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Brass - Horns a6 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Horns a6 - Short Tenuto.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Brass - Tenor Trombone Solo - Fall" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Fall.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Brass - Tenor Trombone Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Cuivre.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Brass - Tenor Trombone Solo - Long Flutter Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Flutter Muted.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Tenor Trombone Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Flutter.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Tenor Trombone Solo - Long Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long Muted.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Tenor Trombone Solo - Long" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Long.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Tenor Trombone Solo - Multitongue" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Multitongue.nki" setup="$iooxo=3" pitch="55"/>
+  <Patch name="Brass - Tenor Trombone Solo - Rip" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Rip.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Brass - Tenor Trombone Solo - Short Marcato Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Marcato Muted.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Tenor Trombone Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Marcato.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Brass - Tenor Trombone Solo - Short Staccato Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Staccato Muted.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Tenor Trombone Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Staccato.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Brass - Tenor Trombone Solo - Short Tenuto Muted" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Tenuto Muted.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Brass - Tenor Trombone Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Tenor Trombone Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Brass - Tenor Trombones a2 - FX Gliss" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - FX Gliss.nki" setup="$iooxo=3" pitch="48"/>
+  <Patch name="Brass - Tenor Trombones a2 - Fall" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Fall.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Brass - Tenor Trombones a2 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Long Cuivre.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Tenor Trombones a2 - Long" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Long.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Tenor Trombones a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Multitongue.nki" setup="$iooxo=3" pitch="55"/>
+  <Patch name="Brass - Tenor Trombones a2 - Rip" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Rip.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Tenor Trombones a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Short Marcato.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Tenor Trombones a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Short Staccato.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Tenor Trombones a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Tenor Trombones a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Brass - Trombones a6 - Fall" nki="Instruments/Individual techniques/Brass - Trombones a6 - Fall.nki" setup="$iooxo=3" pitch="50"/>
+  <Patch name="Brass - Trombones a6 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Trombones a6 - Long Cuivre.nki" setup="$iooxo=3" pitch="46"/>
+  <Patch name="Brass - Trombones a6 - Long" nki="Instruments/Individual techniques/Brass - Trombones a6 - Long.nki" setup="$iooxo=3" pitch="46"/>
+  <Patch name="Brass - Trombones a6 - Multitongue" nki="Instruments/Individual techniques/Brass - Trombones a6 - Multitongue.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Brass - Trombones a6 - Rip" nki="Instruments/Individual techniques/Brass - Trombones a6 - Rip.nki" setup="$iooxo=3" pitch="50"/>
+  <Patch name="Brass - Trombones a6 - Short Marcato" nki="Instruments/Individual techniques/Brass - Trombones a6 - Short Marcato.nki" setup="$iooxo=3" pitch="46"/>
+  <Patch name="Brass - Trombones a6 - Short Staccato" nki="Instruments/Individual techniques/Brass - Trombones a6 - Short Staccato.nki" setup="$iooxo=3" pitch="46"/>
+  <Patch name="Brass - Trombones a6 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trombones a6 - Short Tenuto.nki" setup="$iooxo=3" pitch="46"/>
+  <Patch name="Brass - Trumpet Solo - FX Gliss" nki="Instruments/Individual techniques/Brass - Trumpet Solo - FX Gliss.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long Flutter.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Brass - Trumpet Solo - Long Mariachi" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long Mariachi.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Long Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long Muted.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Long" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Long.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Brass - Trumpet Solo - Multitongue" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Multitongue.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Short Marcato Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Marcato Muted.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Marcato.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Short Staccato Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Staccato Muted.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Staccato.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Short Tenuto Muted" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Tenuto Muted.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpet Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="68"/>
+  <Patch name="Brass - Trumpet Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Trumpet Solo - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpets a2 - Fall" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Fall.nki" setup="$iooxo=3" pitch="71"/>
+  <Patch name="Brass - Trumpets a2 - Long Mariachi" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Long Mariachi.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpets a2 - Long Muted" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Long Muted.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpets a2 - Long" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Long.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Brass - Trumpets a2 - Multitongue" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Multitongue.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpets a2 - Rip" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Rip.nki" setup="$iooxo=3" pitch="71"/>
+  <Patch name="Brass - Trumpets a2 - Short Marcato" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Short Marcato.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Brass - Trumpets a2 - Short Staccato" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Short Staccato.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Brass - Trumpets a2 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Brass - Trumpets a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpets a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Brass - Trumpets a2 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Brass - Trumpets a6 - Fall" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Fall.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Trumpets a6 - Long Cuivre" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Long Cuivre.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Trumpets a6 - Long" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Long.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Trumpets a6 - Multitongue" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Multitongue.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Trumpets a6 - Rip" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Rip.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Trumpets a6 - Short Marcato" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Short Marcato.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Trumpets a6 - Short Staccato" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Short Staccato.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Trumpets a6 - Short Tenuto" nki="Instruments/Individual techniques/Brass - Trumpets a6 - Short Tenuto.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Brass - Tuba Solo - Fall" nki="Instruments/Individual techniques/Brass - Tuba Solo - Fall.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Tuba Solo - Long Stopped" nki="Instruments/Individual techniques/Brass - Tuba Solo - Long Stopped.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Tuba Solo - Long" nki="Instruments/Individual techniques/Brass - Tuba Solo - Long.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Tuba Solo - Rip" nki="Instruments/Individual techniques/Brass - Tuba Solo - Rip.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Tuba Solo - Short Marcato" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Marcato.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Tuba Solo - Short Staccato" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Staccato.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Tuba Solo - Short Stopped" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Stopped.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Brass - Tuba Solo - Short Tenuto" nki="Instruments/Individual techniques/Brass - Tuba Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Curated Ensembles - Brass - Beast Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Beast Long.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Curated Ensembles - Brass - Beast Short" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Beast Short.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Curated Ensembles - Brass - Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Choir Long.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Curated Ensembles - Brass - Choir Short" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Choir Short.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Curated Ensembles - Brass - Power Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Power Long.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Curated Ensembles - Brass - Slow Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Slow Choir Long.nki" setup="$iooxo=3" pitch="54"/>
+  <Patch name="Curated Ensembles - Brass - Slow Super Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Slow Super Choir Long.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Curated Ensembles - Brass - Super Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Super Choir Long.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Curated Ensembles - Brass - Super Choir Short" nki="Instruments/Individual techniques/Curated Ensembles - Brass - Super Choir Short.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Curated Ensembles - String - Cool Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 1.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Cool Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 2.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Cool Strings 3" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 3.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Cool Strings 4" nki="Instruments/Individual techniques/Curated Ensembles - String - Cool Strings 4.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Giant Epic Long" nki="Instruments/Individual techniques/Curated Ensembles - String - Giant Epic Long.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Curated Ensembles - String - Giant Epic Short" nki="Instruments/Individual techniques/Curated Ensembles - String - Giant Epic Short.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Curated Ensembles - String - Ligeti Strings" nki="Instruments/Individual techniques/Curated Ensembles - String - Ligeti Strings.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Mondo Plucks" nki="Instruments/Individual techniques/Curated Ensembles - String - Mondo Plucks.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Slow Cool Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 1.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Slow Cool Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 2.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Slow Cool Strings 3" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 3.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Slow Cool Strings 4" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Cool Strings 4.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Slow Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Strings 1.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Slow Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Slow Strings 2.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Super Slow Strings 1" nki="Instruments/Individual techniques/Curated Ensembles - String - Super Slow Strings 1.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - String - Super Slow Strings 2" nki="Instruments/Individual techniques/Curated Ensembles - String - Super Slow Strings 2.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Curated Ensembles - Tutti - Beast Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Beast Long.nki" setup="$iooxo=3" pitch="60"/>
+  <Patch name="Curated Ensembles - Tutti - Beast Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Beast Short.nki" setup="$iooxo=3" pitch="60"/>
+  <Patch name="Curated Ensembles - Tutti - Brass String Choir Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Brass String Choir Long.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Curated Ensembles - Tutti - Brass String Choir Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Brass String Choir Short.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Curated Ensembles - Tutti - Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Long.nki" setup="$iooxo=3" pitch="60"/>
+  <Patch name="Curated Ensembles - Tutti - Low Brass String Stab" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Low Brass String Stab.nki" setup="$iooxo=3" pitch="48"/>
+  <Patch name="Curated Ensembles - Tutti - Low Wood String Stab" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Low Wood String Stab.nki" setup="$iooxo=3" pitch="42"/>
+  <Patch name="Curated Ensembles - Tutti - Nutcracker" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Nutcracker.nki" setup="$iooxo=3" pitch="58"/>
+  <Patch name="Curated Ensembles - Tutti - Staccato" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Staccato.nki" setup="$iooxo=3" pitch="60"/>
+  <Patch name="Curated Ensembles - Tutti - Woods String 1 Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 1 Long.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Tutti - Woods String 1 Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 1 Short.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Tutti - Woods String 2 Long" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 2 Long.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Tutti - Woods String 2 Short" nki="Instruments/Individual techniques/Curated Ensembles - Tutti - Woods String 2 Short.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Woodwind - Beast Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Beast Long.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Woodwind - Beast Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Beast Short.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Woodwind - Chorus Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Chorus Long.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Woodwind - Chorus Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Chorus Short.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Woodwind - Light Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Light Short.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Woodwind - Orchestrator Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Orchestrator Long.nki" setup="$iooxo=3" pitch="68"/>
+  <Patch name="Curated Ensembles - Woodwind - Orchestrator Short" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Orchestrator Short.nki" setup="$iooxo=3" pitch="68"/>
+  <Patch name="Curated Ensembles - Woodwind - Slow Chorus Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Slow Chorus Long.nki" setup="$iooxo=3" pitch="64"/>
+  <Patch name="Curated Ensembles - Woodwind - Slow Orchestrator Long" nki="Instruments/Individual techniques/Curated Ensembles - Woodwind - Slow Orchestrator Long.nki" setup="$iooxo=3" pitch="68"/>
+  <Patch name="Motif Brass - Horns a4 - Long" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Long.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Motif Brass - Horns a4 - Multitongue" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Multitongue.nki" setup="$iooxo=3" pitch="56"/>
+  <Patch name="Motif Brass - Horns a4 - Short Marcato" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Marcato.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Motif Brass - Horns a4 - Short Staccatissimo" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Staccatissimo.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Motif Brass - Horns a4 - Short Staccato" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Staccato.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Motif Brass - Horns a4 - Short Tenuto" nki="Instruments/Individual techniques/Motif Brass - Horns a4 - Short Tenuto.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Motif Brass - Trombones a5 - Long" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Long.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Motif Brass - Trombones a5 - Multitongue" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Multitongue.nki" setup="$iooxo=3" pitch="55"/>
+  <Patch name="Motif Brass - Trombones a5 - Short Marcato" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Marcato.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Motif Brass - Trombones a5 - Short Staccatissimo" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Staccatissimo.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Motif Brass - Trombones a5 - Short Staccato" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Staccato.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Motif Brass - Trombones a5 - Short Tenuto" nki="Instruments/Individual techniques/Motif Brass - Trombones a5 - Short Tenuto.nki" setup="$iooxo=3" pitch="49"/>
+  <Patch name="Motif Brass - Trumpets a3 - Long" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Long.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Motif Brass - Trumpets a3 - Multitongue" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Multitongue.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Motif Brass - Trumpets a3 - Short Marcato" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Marcato.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Motif Brass - Trumpets a3 - Short Staccatissimo" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Staccatissimo.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Motif Brass - Trumpets a3 - Short Staccato" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Staccato.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Motif Brass - Trumpets a3 - Short Tenuto" nki="Instruments/Individual techniques/Motif Brass - Trumpets a3 - Short Tenuto.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Other - Harp - Bisbigliando" nki="Instruments/Individual techniques/Other - Harp - Bisbigliando.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Other - Harp - FX" nki="Instruments/Individual techniques/Other - Harp - FX.nki" setup="$iooxo=3" pitch="57"/>
+  <Patch name="Other - Harp - Flageolet" nki="Instruments/Individual techniques/Other - Harp - Flageolet.nki" setup="$iooxo=3" pitch="75"/>
+  <Patch name="Other - Harp - Normale" nki="Instruments/Individual techniques/Other - Harp - Normale.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Other - Harp - PDLT" nki="Instruments/Individual techniques/Other - Harp - PDLT.nki" setup="$iooxo=3" pitch="63"/>
+  <Patch name="Other - Harp - Slid CPU-friendly" nki="Instruments/Individual techniques/Other - Harp - Slid CPU-friendly.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Other - Harp - Slid" nki="Instruments/Individual techniques/Other - Harp - Slid.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Solo Strings - Solo Cello - Long Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Long Harmonics.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Solo Strings - Solo Cello - Long" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Long.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Solo Strings - Solo Cello - Short Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Short Harmonics.nki" setup="$iooxo=3" pitch="71"/>
+  <Patch name="Solo Strings - Solo Cello - Short Pizzicato" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Short Pizzicato.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Solo Strings - Solo Cello - Short Spiccato" nki="Instruments/Individual techniques/Solo Strings - Solo Cello - Short Spiccato.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Solo Strings - Solo Viola - Long Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Long Harmonics.nki" setup="$iooxo=3" pitch="87"/>
+  <Patch name="Solo Strings - Solo Viola - Long" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Long.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Solo Strings - Solo Viola - Short Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Harmonics.nki" setup="$iooxo=3" pitch="87"/>
+  <Patch name="Solo Strings - Solo Viola - Short Pizzicato" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Pizzicato.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Solo Strings - Solo Viola - Short Spiccato" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Spiccato.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Solo Strings - Solo Viola - Short Staccato" nki="Instruments/Individual techniques/Solo Strings - Solo Viola - Short Staccato.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Solo Strings - Solo Violin - Long Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Long Harmonics.nki" setup="$iooxo=3" pitch="90"/>
+  <Patch name="Solo Strings - Solo Violin - Long" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Long.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Solo Strings - Solo Violin - Short Harmonics" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Harmonics.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Solo Strings - Solo Violin - Short Pizzicato" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Pizzicato.nki" setup="$iooxo=3" pitch="75"/>
+  <Patch name="Solo Strings - Solo Violin - Short Spiccato" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Spiccato.nki" setup="$iooxo=3" pitch="75"/>
+  <Patch name="Solo Strings - Solo Violin - Short Staccato" nki="Instruments/Individual techniques/Solo Strings - Solo Violin - Short Staccato.nki" setup="$iooxo=3" pitch="75"/>
+  <Patch name="Strings - Basses - FX" nki="Instruments/Individual techniques/Strings - Basses - FX.nki" setup="$iooxo=3" pitch="48"/>
+  <Patch name="Strings - Basses - Long Flautando" nki="Instruments/Individual techniques/Strings - Basses - Long Flautando.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Long Harmonics" nki="Instruments/Individual techniques/Strings - Basses - Long Harmonics.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Basses - Long Sul Pont Distorted" nki="Instruments/Individual techniques/Strings - Basses - Long Sul Pont Distorted.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Basses - Long Sul Pont.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Basses - Long Super Sul Tasto.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Long" nki="Instruments/Individual techniques/Strings - Basses - Long.nki" setup="$iooxo=3" pitch="37"/>
+  <Patch name="Strings - Basses - Marcato Attack" nki="Instruments/Individual techniques/Strings - Basses - Marcato Attack.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short 0'5" nki="Instruments/Individual techniques/Strings - Basses - Short 0'5.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short 1'0" nki="Instruments/Individual techniques/Strings - Basses - Short 1'0.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short Col Legno" nki="Instruments/Individual techniques/Strings - Basses - Short Col Legno.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short Harmonics" nki="Instruments/Individual techniques/Strings - Basses - Short Harmonics.nki" setup="$iooxo=3" pitch="71"/>
+  <Patch name="Strings - Basses - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Basses - Short Pizzicato Bartok.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Basses - Short Pizzicato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short Spicc-Pizz" nki="Instruments/Individual techniques/Strings - Basses - Short Spicc-Pizz.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short Spiccato" nki="Instruments/Individual techniques/Strings - Basses - Short Spiccato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Short Staccato Dig" nki="Instruments/Individual techniques/Strings - Basses - Short Staccato Dig.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Basses - Tremolo Measured (150bpm).nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Basses - Tremolo Measured (180bpm).nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Basses - Tremolo Sul Pont.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Tremolo" nki="Instruments/Individual techniques/Strings - Basses - Tremolo.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Basses - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Basses - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Basses - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Strings - Celli - FX" nki="Instruments/Individual techniques/Strings - Celli - FX.nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Strings - Celli - Long CS Blend" nki="Instruments/Individual techniques/Strings - Celli - Long CS Blend.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Celli - Long CS Sul Pont.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Long CS" nki="Instruments/Individual techniques/Strings - Celli - Long CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Long Flautando" nki="Instruments/Individual techniques/Strings - Celli - Long Flautando.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Long Harmonics" nki="Instruments/Individual techniques/Strings - Celli - Long Harmonics.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Strings - Celli - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Celli - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3" pitch="57"/>
+  <Patch name="Strings - Celli - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Celli - Long Sul Pont.nki" setup="$iooxo=3" pitch="57"/>
+  <Patch name="Strings - Celli - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Celli - Long Super Sul Tasto.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Long" nki="Instruments/Individual techniques/Strings - Celli - Long.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Marcato Attack" nki="Instruments/Individual techniques/Strings - Celli - Marcato Attack.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short 0'5" nki="Instruments/Individual techniques/Strings - Celli - Short 0'5.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short 1'0" nki="Instruments/Individual techniques/Strings - Celli - Short 1'0.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Celli - Short Brushed CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short Brushed" nki="Instruments/Individual techniques/Strings - Celli - Short Brushed.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short CS" nki="Instruments/Individual techniques/Strings - Celli - Short CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short Col Legno" nki="Instruments/Individual techniques/Strings - Celli - Short Col Legno.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short Harmonics" nki="Instruments/Individual techniques/Strings - Celli - Short Harmonics.nki" setup="$iooxo=3" pitch="79"/>
+  <Patch name="Strings - Celli - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Celli - Short Pizzicato Bartok.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Strings - Celli - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Celli - Short Pizzicato.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Short Spiccato" nki="Instruments/Individual techniques/Strings - Celli - Short Spiccato.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Tremolo CS" nki="Instruments/Individual techniques/Strings - Celli - Tremolo CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Measured (150bpm).nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Measured (180bpm).nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Tremolo Measured CS (150bpm)" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Measured CS (150bpm).nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Celli - Tremolo Sul Pont.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Tremolo" nki="Instruments/Individual techniques/Strings - Celli - Tremolo.nki" setup="$iooxo=3" pitch="57"/>
+  <Patch name="Strings - Celli - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Trill (Major 3rd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Major 3rd).nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Celli - Trill (Minor 3rd)" nki="Instruments/Individual techniques/Strings - Celli - Trill (Minor 3rd).nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Long CS Blend" nki="Instruments/Individual techniques/Strings - Ensembles - Long CS Blend.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Long CS" nki="Instruments/Individual techniques/Strings - Ensembles - Long CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Long Flautando" nki="Instruments/Individual techniques/Strings - Ensembles - Long Flautando.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Long Harmonics" nki="Instruments/Individual techniques/Strings - Ensembles - Long Harmonics.nki" setup="$iooxo=3" pitch="83"/>
+  <Patch name="Strings - Ensembles - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Ensembles - Long Sul Pont.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Long Sul String" nki="Instruments/Individual techniques/Strings - Ensembles - Long Sul String.nki" setup="$iooxo=3" pitch="47"/>
+  <Patch name="Strings - Ensembles - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Ensembles - Long Super Sul Tasto.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Long" nki="Instruments/Individual techniques/Strings - Ensembles - Long.nki" setup="$iooxo=3" pitch="60"/>
+  <Patch name="Strings - Ensembles - Marcato Attack" nki="Instruments/Individual techniques/Strings - Ensembles - Marcato Attack.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short 0'5" nki="Instruments/Individual techniques/Strings - Ensembles - Short 0'5.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Ensembles - Short Brushed CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short Brushed" nki="Instruments/Individual techniques/Strings - Ensembles - Short Brushed.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short Col Legno" nki="Instruments/Individual techniques/Strings - Ensembles - Short Col Legno.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short Harmonics" nki="Instruments/Individual techniques/Strings - Ensembles - Short Harmonics.nki" setup="$iooxo=3" pitch="83"/>
+  <Patch name="Strings - Ensembles - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Ensembles - Short Pizzicato Bartok.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Ensembles - Short Pizzicato.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short Spiccato CS" nki="Instruments/Individual techniques/Strings - Ensembles - Short Spiccato CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Short Spiccato" nki="Instruments/Individual techniques/Strings - Ensembles - Short Spiccato.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Tremolo CS" nki="Instruments/Individual techniques/Strings - Ensembles - Tremolo CS.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Tremolo SulPont" nki="Instruments/Individual techniques/Strings - Ensembles - Tremolo SulPont.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Tremolo" nki="Instruments/Individual techniques/Strings - Ensembles - Tremolo.nki" setup="$iooxo=3" pitch="59"/>
+  <Patch name="Strings - Ensembles - Trill (major 2nd)" nki="Instruments/Individual techniques/Strings - Ensembles - Trill (major 2nd).nki" setup="$iooxo=3" pitch="60"/>
+  <Patch name="Strings - Ensembles - Trill (minor 2nd)" nki="Instruments/Individual techniques/Strings - Ensembles - Trill (minor 2nd).nki" setup="$iooxo=3" pitch="60"/>
+  <Patch name="Strings - Violas - FX" nki="Instruments/Individual techniques/Strings - Violas - FX.nki" setup="$iooxo=3" pitch="50"/>
+  <Patch name="Strings - Violas - Long CS Blend" nki="Instruments/Individual techniques/Strings - Violas - Long CS Blend.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Violas - Long CS Sul Pont.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Strings - Violas - Long CS" nki="Instruments/Individual techniques/Strings - Violas - Long CS.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Long Flautando" nki="Instruments/Individual techniques/Strings - Violas - Long Flautando.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Long Harmonics" nki="Instruments/Individual techniques/Strings - Violas - Long Harmonics.nki" setup="$iooxo=3" pitch="87"/>
+  <Patch name="Strings - Violas - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Violas - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Long Sul C" nki="Instruments/Individual techniques/Strings - Violas - Long Sul C.nki" setup="$iooxo=3" pitch="58"/>
+  <Patch name="Strings - Violas - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Violas - Long Sul Pont.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Violas - Long Super Sul Tasto.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Strings - Violas - Long" nki="Instruments/Individual techniques/Strings - Violas - Long.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Strings - Violas - Marcato Attack" nki="Instruments/Individual techniques/Strings - Violas - Marcato Attack.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short 0'5" nki="Instruments/Individual techniques/Strings - Violas - Short 0'5.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short 1'0" nki="Instruments/Individual techniques/Strings - Violas - Short 1'0.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Violas - Short Brushed CS.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short Brushed" nki="Instruments/Individual techniques/Strings - Violas - Short Brushed.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short CS" nki="Instruments/Individual techniques/Strings - Violas - Short CS.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Strings - Violas - Short Col Legno" nki="Instruments/Individual techniques/Strings - Violas - Short Col Legno.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short Harmonics" nki="Instruments/Individual techniques/Strings - Violas - Short Harmonics.nki" setup="$iooxo=3" pitch="87"/>
+  <Patch name="Strings - Violas - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Violas - Short Pizzicato Bartok.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Violas - Short Pizzicato.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Short Spiccato" nki="Instruments/Individual techniques/Strings - Violas - Short Spiccato.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Tremolo CS" nki="Instruments/Individual techniques/Strings - Violas - Tremolo CS.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Violas - Tremolo Measured (150bpm).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Violas - Tremolo Measured (180bpm).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Violas - Tremolo Sul Pont.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Tremolo" nki="Instruments/Individual techniques/Strings - Violas - Tremolo.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Violas - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violas - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Violas - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Strings - Violins 1 - FX" nki="Instruments/Individual techniques/Strings - Violins 1 - FX.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Strings - Violins 1 - Long CS Blend" nki="Instruments/Individual techniques/Strings - Violins 1 - Long CS Blend.nki" setup="$iooxo=3" pitch="74"/>
+  <Patch name="Strings - Violins 1 - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 1 - Long CS Sul Pont.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Long CS" nki="Instruments/Individual techniques/Strings - Violins 1 - Long CS.nki" setup="$iooxo=3" pitch="74"/>
+  <Patch name="Strings - Violins 1 - Long Flautando" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Flautando.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Long Harmonics" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Harmonics.nki" setup="$iooxo=3" pitch="92"/>
+  <Patch name="Strings - Violins 1 - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Sul Pont.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Long Sul Tasto" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Sul Tasto.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Violins 1 - Long Super Sul Tasto.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Long" nki="Instruments/Individual techniques/Strings - Violins 1 - Long.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Marcato Attack" nki="Instruments/Individual techniques/Strings - Violins 1 - Marcato Attack.nki" setup="$iooxo=3" pitch="74"/>
+  <Patch name="Strings - Violins 1 - Short 0'5" nki="Instruments/Individual techniques/Strings - Violins 1 - Short 0'5.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Short 1'0" nki="Instruments/Individual techniques/Strings - Violins 1 - Short 1'0.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Brushed CS.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Short Brushed" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Brushed.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Short CS" nki="Instruments/Individual techniques/Strings - Violins 1 - Short CS.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Short Col Legno" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Col Legno.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Short Harmonics" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Harmonics.nki" setup="$iooxo=3" pitch="94"/>
+  <Patch name="Strings - Violins 1 - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Pizzicato Bartok.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Strings - Violins 1 - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Pizzicato.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Short Spiccato" nki="Instruments/Individual techniques/Strings - Violins 1 - Short Spiccato.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Measured (150bpm).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Measured (180bpm).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Tremolo Measured CS (150bpm)" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Measured CS (150bpm).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo Sul Pont.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Tremolo" nki="Instruments/Individual techniques/Strings - Violins 1 - Tremolo.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Trill (Major 3rd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Major 3rd).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 1 - Trill (Minor 3rd)" nki="Instruments/Individual techniques/Strings - Violins 1 - Trill (Minor 3rd).nki" setup="$iooxo=3" pitch="74"/>
+  <Patch name="Strings - Violins 2 - FX" nki="Instruments/Individual techniques/Strings - Violins 2 - FX.nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Strings - Violins 2 - Long CS Blend" nki="Instruments/Individual techniques/Strings - Violins 2 - Long CS Blend.nki" setup="$iooxo=3" pitch="74"/>
+  <Patch name="Strings - Violins 2 - Long CS Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 2 - Long CS Sul Pont.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Long CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Long CS.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Long Flautando" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Flautando.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Long Harmonics" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Harmonics.nki" setup="$iooxo=3" pitch="92"/>
+  <Patch name="Strings - Violins 2 - Long Rachmaninoff Molto Vib" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Rachmaninoff Molto Vib.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Long Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Sul Pont.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Long Super Sul Tasto" nki="Instruments/Individual techniques/Strings - Violins 2 - Long Super Sul Tasto.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Long" nki="Instruments/Individual techniques/Strings - Violins 2 - Long.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Marcato Attack" nki="Instruments/Individual techniques/Strings - Violins 2 - Marcato Attack.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Short 0'5" nki="Instruments/Individual techniques/Strings - Violins 2 - Short 0'5.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Short 1'0" nki="Instruments/Individual techniques/Strings - Violins 2 - Short 1'0.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Short Brushed CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Brushed CS.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Short Brushed" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Brushed.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Short CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Short CS.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Short Col Legno" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Col Legno.nki" setup="$iooxo=3" pitch="74"/>
+  <Patch name="Strings - Violins 2 - Short Harmonics" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Harmonics.nki" setup="$iooxo=3" pitch="94"/>
+  <Patch name="Strings - Violins 2 - Short Pizzicato Bartok" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Pizzicato Bartok.nki" setup="$iooxo=3" pitch="74"/>
+  <Patch name="Strings - Violins 2 - Short Pizzicato" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Pizzicato.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Short Spiccato" nki="Instruments/Individual techniques/Strings - Violins 2 - Short Spiccato.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Tremolo CS" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo CS.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Tremolo Measured (150bpm)" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo Measured (150bpm).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Tremolo Measured (180bpm)" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo Measured (180bpm).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Tremolo Sul Pont" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo Sul Pont.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Tremolo" nki="Instruments/Individual techniques/Strings - Violins 2 - Tremolo.nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Strings - Violins 2 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Strings - Violins 2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Strings - Violins 2 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="76"/>
+  <Patch name="Woodwinds - Alto Flute - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long Flutter.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Woodwinds - Alto Flute - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long Harmonics.nki" setup="$iooxo=3" pitch="81"/>
+  <Patch name="Woodwinds - Alto Flute - Long Overblown" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long Overblown.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Woodwinds - Alto Flute - Long" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Long.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Woodwinds - Alto Flute - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Marcato.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Woodwinds - Alto Flute - Short Overblown" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Overblown.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Woodwinds - Alto Flute - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Staccato.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Woodwinds - Alto Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Short Tenuto.nki" setup="$iooxo=3" pitch="72"/>
+  <Patch name="Woodwinds - Alto Flute - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Woodwinds - Alto Flute - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Alto Flute - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="70"/>
+  <Patch name="Woodwinds - Bass Clarinet - Long" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Long.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bass Clarinet - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Short Staccato.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bass Clarinet - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Short Tenuto.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bass Clarinet - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bass Clarinet - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bass Clarinet - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bass Flute - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Long Flutter.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Woodwinds - Bass Flute - Long Overblown" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Long Overblown.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Woodwinds - Bass Flute - Long" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Long.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Woodwinds - Bass Flute - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Short Marcato.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Woodwinds - Bass Flute - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Short Staccato.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Woodwinds - Bass Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bass Flute - Short Tenuto.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Woodwinds - Bassoon Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Long Flutter.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bassoon Solo - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Long Harmonics.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Woodwinds - Bassoon Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Long.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bassoon Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Multitongue.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoon Solo - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Short Marcato.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoon Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Short Staccato.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bassoon Solo - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="53"/>
+  <Patch name="Woodwinds - Bassoon Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="52"/>
+  <Patch name="Woodwinds - Bassoon Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoon Solo - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoons a2 - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Long Flutter.nki" setup="$iooxo=3" pitch="45"/>
+  <Patch name="Woodwinds - Bassoons a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Long.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoons a2 - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Multitongue.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoons a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Short Marcato.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoons a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Short Staccato.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoons a2 - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoons a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Bassoons a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Bassoons a2 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="51"/>
+  <Patch name="Woodwinds - Clarinet Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Long Flutter.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinet Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Long.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Woodwinds - Clarinet Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Multitongue.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinet Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Short Staccato.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinet Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Woodwinds - Clarinet Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinet Solo - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Woodwinds - Clarinets a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Long.nki" setup="$iooxo=3" pitch="69"/>
+  <Patch name="Woodwinds - Clarinets a2 - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Multitongue.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinets a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Short Marcato.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinets a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Short Staccato.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinets a2 - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinets a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - Clarinets a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Clarinets a2 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="67"/>
+  <Patch name="Woodwinds - ContraBassoon - Long" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Long.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Woodwinds - ContraBassoon - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Short Marcato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Woodwinds - ContraBassoon - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Short Staccato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Woodwinds - ContraBassoon - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - ContraBassoon - Short Tenuto.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Woodwinds - Contrabass Clarinet - Long" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Long.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Woodwinds - Contrabass Clarinet - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Short Marcato.nki" setup="$iooxo=3" pitch="37"/>
+  <Patch name="Woodwinds - Contrabass Clarinet - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Short Staccato.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Woodwinds - Contrabass Clarinet - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Contrabass Clarinet - Short Tenuto.nki" setup="$iooxo=3" pitch="39"/>
+  <Patch name="Woodwinds - Cor Anglais - Long" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Long.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Woodwinds - Cor Anglais - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Short Marcato.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Woodwinds - Cor Anglais - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Short Staccato.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Woodwinds - Cor Anglais - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Cor Anglais - Short Tenuto.nki" setup="$iooxo=3" pitch="66"/>
+  <Patch name="Woodwinds - Flute Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long Flutter.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long Harmonics.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Woodwinds - Flute Solo - Long Hollow" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long Hollow.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Long.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Multitongue.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Short Marcato Sfz" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Marcato Sfz.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Marcato.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Staccato.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flute Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="75"/>
+  <Patch name="Woodwinds - Flute Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flute Solo - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="75"/>
+  <Patch name="Woodwinds - Flutes a2 - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Flutter.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flutes a2 - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Harmonics.nki" setup="$iooxo=3" pitch="88"/>
+  <Patch name="Woodwinds - Flutes a2 - Long Hollow" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Hollow.nki" setup="$iooxo=3" pitch="71"/>
+  <Patch name="Woodwinds - Flutes a2 - Long Overblown" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long Overblown.nki" setup="$iooxo=3" pitch="65"/>
+  <Patch name="Woodwinds - Flutes a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Long.nki" setup="$iooxo=3" pitch="78"/>
+  <Patch name="Woodwinds - Flutes a2 - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Multitongue.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flutes a2 - Short Marcato Sfz" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Marcato Sfz.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flutes a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Marcato.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flutes a2 - Short Overblown" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Overblown.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flutes a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Staccato.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flutes a2 - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Short Tenuto.nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Flutes a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="75"/>
+  <Patch name="Woodwinds - Flutes a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Flutes a2 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="77"/>
+  <Patch name="Woodwinds - Oboe Solo - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Long Flutter.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboe Solo - Long" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Long.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboe Solo - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Multitongue.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboe Solo - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Short Marcato.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboe Solo - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Short Staccato.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboe Solo - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Short Tenuto.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboe Solo - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboe Solo - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboe Solo - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboes a2 - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Long Flutter.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboes a2 - Long" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Long.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboes a2 - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Short Marcato.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboes a2 - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Short Staccato.nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboes a2 - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Oboes a2 - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Oboes a2 - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="73"/>
+  <Patch name="Woodwinds - Piccolo Flute - Long Flutter" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Long Flutter.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Woodwinds - Piccolo Flute - Long Harmonics" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Long Harmonics.nki" setup="$iooxo=3" pitch="96"/>
+  <Patch name="Woodwinds - Piccolo Flute - Long" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Long.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Woodwinds - Piccolo Flute - Multitongue" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Multitongue.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Woodwinds - Piccolo Flute - Short Marcato" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Marcato.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Woodwinds - Piccolo Flute - Short Staccato" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Staccato.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Woodwinds - Piccolo Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Tenuto.nki" setup="$iooxo=3" pitch="89"/>
+  <Patch name="Woodwinds - Piccolo Flute - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Major 2nd).nki" setup="$iooxo=3" pitch="87"/>
+  <Patch name="Woodwinds - Piccolo Flute - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Minor 2nd).nki" setup="$iooxo=3" pitch="87"/>
+  <Patch name="Ensembles - Contemporary" nki="Instruments/Symphonic Percussion/Ensembles - Contemporary.nki" scan="keys" pitch="4"/>
+  <Patch name="Ensembles - Hands and hits" nki="Instruments/Symphonic Percussion/Ensembles - Hands and hits.nki" scan="keys" pitch="4"/>
+  <Patch name="Ensembles - Low Ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Low Ensemble.nki" scan="keys" pitch="5"/>
+  <Patch name="Ensembles - Metal Clangs" nki="Instruments/Symphonic Percussion/Ensembles - Metal Clangs.nki" scan="keys" pitch="2"/>
+  <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki" scan="keys" pitch="7"/>
+  <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki" scan="keys" pitch="3"/>
+  <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki" scan="keys" pitch="67"/>
+  <Patch name="Basses - Core techniques" nki="Instruments/Symphonic Strings/Basses - Core techniques.nki" setup="$iooxo=3" pitch="39">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Short Spicc-Pizz" value="41"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Staccato Dig" value="49"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+  </Patch>
+  <Patch name="Basses - Decorative techniques" nki="Instruments/Symphonic Strings/Basses - Decorative techniques.nki" setup="$iooxo=3" pitch="39">
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Sul Pont (Dist)" value="113"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Celli - Core techniques" nki="Instruments/Symphonic Strings/Celli - Core techniques.nki" setup="$iooxo=3" pitch="59">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul C" value="112" expect="silent"/>
+  </Patch>
+  <Patch name="Celli - Decorative techniques" nki="Instruments/Symphonic Strings/Celli - Decorative techniques.nki" setup="$iooxo=3" pitch="58">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trill (Minor 3rd)" value="72"/>
+    <Articulation name="Trill (Major 3rd)" value="73"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="Trem CS Ms (150bpm)" value="84"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Ensembles - Core techniques" nki="Instruments/Symphonic Strings/Ensembles - Core techniques.nki" setup="$iooxo=3" pitch="61">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Spiccato CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harm" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+  </Patch>
+  <Patch name="Ensembles - Decorative techniques" nki="Instruments/Symphonic Strings/Ensembles - Decorative techniques.nki" setup="$iooxo=3" pitch="59">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Long Sul String" value="112"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Violas - Core techniques" nki="Instruments/Symphonic Strings/Violas - Core techniques.nki" setup="$iooxo=3" pitch="69">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul C" value="112"/>
+  </Patch>
+  <Patch name="Violas - Decorative techniques" nki="Instruments/Symphonic Strings/Violas - Decorative techniques.nki" setup="$iooxo=3" pitch="67">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Violins 1 - Core techniques" nki="Instruments/Symphonic Strings/Violins 1 - Core techniques.nki" setup="$iooxo=3" pitch="76">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Tasto" value="17"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul G" value="112" expect="silent"/>
+  </Patch>
+  <Patch name="Violins 1 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 1 - Decorative techniques.nki" setup="$iooxo=3" pitch="75">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trill (Minor 3rd)" value="72"/>
+    <Articulation name="Trill (Major 3rd)" value="73"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="Trem CS Ms (150bpm)" value="84"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Violins 2 - Core techniques" nki="Instruments/Symphonic Strings/Violins 2 - Core techniques.nki" setup="$iooxo=3" pitch="76">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul G" value="112" expect="silent"/>
+  </Patch>
+  <Patch name="Violins 2 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 2 - Decorative techniques.nki" setup="$iooxo=3" pitch="75">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
 </SoundLibrary>

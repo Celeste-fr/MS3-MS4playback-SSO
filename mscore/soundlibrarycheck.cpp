@@ -87,6 +87,9 @@ static const int CHECK_VERSION = 4;       // 4: patches without switching (liste
 
 int ArticulationCheckDialog::testPitch(const SoundLib::LibInstrument& instrument)
       {
+      // (a patch the map doesn't use: the middle of its samples' keys, from its files)
+      if (instrument.testPitch >= 0 && instrument.testPitch <= 127)
+            return instrument.testPitch;
       for (const QString& id : instrument.ids) {
             const InstrumentTemplate* t = searchTemplate(id);
             if (t && t->maxPitchA > t->minPitchA)
@@ -342,6 +345,27 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
             _tickAll->setProperty("ticked", tick);
             _tickAll->setText(tick ? tr("Untick all") : tr("Tick all"));
             });
+      // (the owner, 2026-09-28: the scan of the patches the map doesn't use, faster without missing
+      // anything: of SSO's 541, the files show 518 with one sound only; the map marks the 23 with
+      // several, scan="values" or "keys". The values are all known now; what is left to scan are a
+      // kit's own drum patches whose keys the map doesn't have yet: SSO's 42 one-drum patches. The
+      // 7 scan="keys" patches were scanned on 2026-09-27: they are left unticked)
+      auto toScan = [](const SoundLib::LibInstrument& p, bool added) { return toScanNow(p, added); };
+      if (_library && (std::any_of(_library->otherPatches.begin(), _library->otherPatches.end(),
+                                   [&](const SoundLib::LibInstrument& p) { return toScan(p, true); })
+                       || std::any_of(_library->instruments.begin(), _library->instruments.end(),
+                                      [&](const SoundLib::LibInstrument& p) { return toScan(p, false); }))) {
+            QPushButton* toScanButton = buttons->addButton(tr("Tick the patches to scan"), QDialogButtonBox::ActionRole);
+            toScanButton->setToolTip(tr("The patches whose articulation values or keys are not known yet: "
+                                        "they are scanned (a kit's own drum patches: every key)"));
+            connect(toScanButton, &QPushButton::clicked, this, [this, toScan]() {
+                  for (int row = 0; row < _table->rowCount(); ++row) {
+                        const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+                        const bool tick = setup && toScan(*_rows[row].instrument, _rows[row].added);
+                        _table->item(row, 0)->setCheckState(tick ? Qt::Checked : Qt::Unchecked);
+                        }
+                  });
+            }
       _all = buttons->addButton(tr("Tick what needs checking"), QDialogButtonBox::ActionRole);
       _check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
       _close = buttons->addButton(QDialogButtonBox::Close);
@@ -600,6 +624,70 @@ void ArticulationCheckDialog::say(const QString& line) const
       }
 
 //---------------------------------------------------------
+//   toScanNow
+//    a patch whose articulation values or keys are not known yet (Tick the patches to scan, and
+//    the background key scan): a patch not in the map marked scan="values", or a kit's own drum
+//    patch with no <Drum> (SSO's 42 one-drum patches)
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::toScanNow(const SoundLib::LibInstrument& p, bool added)
+      {
+      return (added && p.scan == "values") || (!added && p.extra() && p.keyScan && p.drums.empty());
+      }
+
+//---------------------------------------------------------
+//   runHeadlessKeyScan
+//    Check articulations on the patches to scan (toScanNow) without the dialog: MuseScore
+//    --scan-keys (musescore.cpp), a process of its own like the background extract (the owner,
+//    2026-09-28: the 42 one-drum patches take about 4 hours, "make it run in the background
+//    exactly like" the extract). No window: the key scan listens only (which keys sound), no
+//    pictures (a plug-in window in a process with none would be a window on the owner's screen)
+//---------------------------------------------------------
+
+bool ArticulationCheckDialog::runHeadlessKeyScan(const QString& patches, QString* zip)
+      {
+      _headless = true;
+      if (!_library) {
+            say("no sound library");
+            return false;
+            }
+      QStringList wanted;
+      if (!patches.isEmpty() && patches != "toscan") {
+            QFile f(patches);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                  say(QString("cannot read %1").arg(patches));
+                  return false;
+                  }
+            for (const QString& l : QString::fromUtf8(f.readAll()).split('\n'))
+                  if (!l.trimmed().isEmpty() && !l.trimmed().startsWith('#'))
+                        wanted << l.trimmed();
+            }
+      int ticked = 0;
+      for (int row = 0; row < _table->rowCount(); ++row) {
+            const SoundLib::LibInstrument& ins = *_rows[row].instrument;
+            const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+            bool tick = wanted.isEmpty() ? toScanNow(ins, _rows[row].added) : false;
+            for (const QString& w : wanted)
+                  tick = tick || ins.name.compare(w, Qt::CaseInsensitive) == 0;
+            if (tick && !setup)
+                  say(QString("%1: no setup (its .nki was not found); left out").arg(ins.name));
+            tick = tick && setup;
+            _table->item(row, 0)->setCheckState(tick ? Qt::Checked : Qt::Unchecked);
+            ticked += tick;
+            }
+      if (!ticked) {
+            say("no patch to scan");
+            return false;
+            }
+      say(QString("%1: %2 patches to scan").arg(_library->name).arg(ticked));
+      _zip.clear();
+      check();
+      if (zip)
+            *zip = _zip;
+      return !_zip.isEmpty();
+      }
+
+//---------------------------------------------------------
 //   runHeadless
 //    the extract without the dialog: MuseScore --extract-library (musescore.cpp), a process of its
 //    own that runs in the background while the owner works in MuseScore (the owner, 2026-09-27)
@@ -804,26 +892,28 @@ void ArticulationCheckDialog::check()
             return;
       QString error;
       const QString path = SoundLibraryHost::pluginPath(*_library, &error);
-      if (path.isEmpty()) {
+      auto warn = [this](const QString& message) {
             if (_headless)
-                  say(error);
+                  say(message);
             else
-                  QMessageBox::warning(this, windowTitle(), error);
+                  QMessageBox::warning(this, windowTitle(), message);
+            };
+      if (path.isEmpty()) {
+            warn(error);
             return;
             }
       std::vector<int> chosen;
       for (int row = 0; row < _table->rowCount(); ++row) {
             if (_table->item(row, 0)->checkState() == Qt::Checked) {
                   if (!_table->item(row, 1)->data(Qt::UserRole).toBool()) {
-                        QMessageBox::warning(this, windowTitle(), tr("%1 has no setup (its .nki was not found): untick it.")
-                                             .arg(_rows[row].instrument->name));
+                        warn(tr("%1 has no setup (its .nki was not found): untick it.").arg(_rows[row].instrument->name));
                         return;
                         }
                   chosen.push_back(row);
                   }
             }
       if (chosen.empty()) {
-            QMessageBox::information(this, windowTitle(), tr("Tick the patches to check."));
+            warn(tr("Tick the patches to check."));
             return;
             }
       if (seq && seq->isPlaying())
@@ -835,11 +925,13 @@ void ArticulationCheckDialog::check()
       libName.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
       const QString folder = root + "/" + libName + " " + stamp;
       if (!QDir().mkpath(folder)) {
-            QMessageBox::warning(this, windowTitle(), tr("Cannot create %1").arg(folder));
+            warn(tr("Cannot create %1").arg(folder));
             return;
             }
 
       setRunning(true);
+      QElapsedTimer runClock;
+      runClock.start();
       QJsonArray results;
       QString summary = QString("%1 checked against %2 on %3\n\n").arg(_library->name, QFileInfo(path).fileName(), stamp);
       // results.json and summary.txt, rewritten after each patch (final: with the note of a stop)
@@ -882,10 +974,17 @@ void ArticulationCheckDialog::check()
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
+            if (_headless) {
+                  const qint64 elapsed = runClock.elapsed() / 60000;
+                  say(QString("%1 of %2: %3 (%4 min so far%5)").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
+                      .arg(elapsed).arg(k ? QString(", about %1 min left").arg(elapsed * (int(chosen.size()) - k) / k) : QString()));
+                  }
             if (_dynamics->isChecked() && _dynamicsOnly->isChecked())
                   dynamicsPatch(chosen[k], path, folder, results, summary);
             else
                   checkPatch(chosen[k], path, folder, results, summary);
+            if (_headless)
+                  say("   " + _table->item(chosen[k], 3)->text());
             if (!results.isEmpty())
                   save(false);      // after each patch: MuseScore closed during a long check keeps what was done
             QApplication::processEvents();
@@ -908,13 +1007,12 @@ void ArticulationCheckDialog::check()
       done();
       rebuild();
       _status->setText(tr("Done: %1").arg(QDir::toNativeSeparators(zipPath)));
-      if (_headless) {
-            say(QString("done: %1").arg(QDir::toNativeSeparators(zipPath)));
-            return;
-            }
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
-      QMessageBox::information(this, windowTitle(),
-         tr("The results are in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
+      if (_headless)
+            say(QString("done in %1 min: %2").arg(runClock.elapsed() / 60000).arg(QDir::toNativeSeparators(zipPath)));
+      else
+            QMessageBox::information(this, windowTitle(),
+               tr("The results are in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
 #endif
       }
 
@@ -1340,7 +1438,8 @@ bool ArticulationCheckDialog::checkKeys(int index, const QString& pluginPath, co
       std::vector<QImage> released;       // after it: what the key changed for good (a keyswitch)
       std::vector<double> peaks;
       int noise = 0;                      // what the window changes by itself
-      Steinberg::IPlugView* view = p->createEditor();
+      // (in the background: no window, listening only)
+      Steinberg::IPlugView* view = _headless ? nullptr : p->createEditor();
       if (view) {
             QPointer<Vst3EditorWindow> w = new Vst3EditorWindow(view, QString("%1 – %2").arg(ins.name, p->name()));
             w->show();
@@ -1658,6 +1757,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       QString sheetNote;
       QImage base, again;
       std::vector<QImage> sameState;      // pictures of the starting state (what changes by itself)
+      std::vector<std::pair<QImage, QImage>> samePairs;     // two pictures of another state
       std::vector<QImage> shots;
       QRect region;
       status(tr("opening its window…"));
@@ -1689,6 +1789,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   pump.run(GRAB_WAIT_MS);
                   again = grabPlugin(w);
                   sameState = { again };
+                  samePairs.clear();
                   for (int k = 0; scan && k < 3 && w; ++k) {
                         pump.run(GRAB_WAIT_MS);
                         sameState.push_back(grabPlugin(w));
@@ -1710,11 +1811,20 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                               }
                         }
                   // back to the start: what changed by itself during the scan (a memory
-                  // display …) is left out of the comparison
+                  // display …) is left out of the comparison. A patch with no value to go
+                  // back to (not in the map: it started as it loaded) stays on the last
+                  // value, so that picture is compared with the last value's during the scan:
+                  // compared with the start, the articulation's own name and button were
+                  // left out as "changing by itself", and articulations that differed from
+                  // "None" only there were missed (the owner's scan of 2026-09-27 23:32:
+                  // Pizzicato in the Core techniques, trills in Violins 1 - Decorative)
                   if (scan && w && !_cancel) {
                         switchTo(start);
                         pump.run(2 * GRAB_WAIT_MS);
-                        sameState.push_back(grabPlugin(w));
+                        if (start >= 0 || shots.empty())
+                              sameState.push_back(grabPlugin(w));
+                        else
+                              samePairs.push_back({ shots.back(), grabPlugin(w) });
                         }
                   if (int(shots.size()) == int(values.size()))
                         region = changedRegion(base, again, shots);
@@ -1743,6 +1853,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       std::vector<int> drawn;                   // on the sheet (indices into values)
       std::vector<int> noneInMap;               // map values showing no articulation
       std::vector<int> notInMap;                // articulations found the map lacks
+      int noneShown = -1;                       // the picture most values show, on the sheet (index)
       for (int i = 0; i < int(values.size()); ++i)
             drawn.push_back(i);
       if (scan) {
@@ -1755,7 +1866,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   status(tr("comparing the pictures…"));
                   int none = 0;
                   const std::vector<bool> isArticulation = ArticulationCheck::scanPictures(
-                     base, sameState, shots, region, { 0, 127, 126, 99, 64 }, &none);
+                     base, sameState, shots, region, { 0, 127, 126, 99, 64 }, &none, samePairs);
                   drawn.clear();
                   listen.clear();
                   for (int i = 0; i < int(values.size()); ++i) {
@@ -1798,6 +1909,15 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                         out["notInMap"] = extra;
                         }
                   out["noneValueLike"] = values[none];
+                  // the picture taken for "no articulation" goes on the sheet as the last cell:
+                  // a patch whose values it lacks show the articulation selected at load (SSO's
+                  // Curated Ensembles: Beast Long, UACC 1) shows that one there, and its own
+                  // value, looking the same, was not found (read_check_names.py reads it)
+                  if (!out.contains("scanInconclusive") && std::find(drawn.begin(), drawn.end(), none) == drawn.end()) {
+                        drawn.push_back(none);
+                        noneShown = none;
+                        out["noneOnSheet"] = true;
+                        }
                   }
             }
       // the first value listened to: the map's first when found
@@ -1814,12 +1934,15 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       p->setOffline(true);
 
       // offline too, a note has to sound before listening (a plug-in may reload its samples
-      // when its processing restarts): up to a minute, else nothing to listen to
+      // when its processing restarts): up to a minute, else nothing to listen to. On the value
+      // heard while loading: the first to listen to may be one that plays nothing (a scan that
+      // took "None" for an articulation waited a minute on it, 2026-09-27 21:29)
+      const int heard = start >= 0 ? start : listenStart;
       bool offlineSounds = false;
       for (int i = 0; i < 60 && !_cancel && !offlineSounds; ++i) {
             status(tr("waiting for the patch to play offline (%1 s)…").arg(i));
             std::vector<float> buf(size_t(2 * MScore::sampleRate), 0.f);
-            switchTo(listenStart);
+            switchTo(heard);
             if (_library->dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
             p->midi(ME_NOTEON, 0, pitch, 100);
@@ -1940,7 +2063,12 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   font.setBold(false);
                   pt.setFont(font);
                   pt.setPen(colour);
-                  if (none) {
+                  if (i == noneShown) {
+                        pt.setPen(QColor(90, 90, 90));
+                        pt.drawText(QRect(x, y + 18, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
+                                    tr("picture most values show (taken for no articulation)"));
+                        }
+                  else if (none) {
                         pt.setPen(QColor(190, 0, 0));
                         pt.drawText(QRect(x, y + 18, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
                                     tr("picture: no articulation (the patch lacks this value)"));
