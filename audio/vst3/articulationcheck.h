@@ -44,6 +44,7 @@
 #ifndef __ARTICULATIONCHECK_H__
 #define __ARTICULATIONCHECK_H__
 
+#include <array>
 #include <functional>
 #include <vector>
 
@@ -104,6 +105,22 @@ class ArticulationCheck {
       using Progress = std::function<bool(int, int)>;
 
       static Report run(Vst3Plugin* plugin, const std::vector<int>& values, const Settings& settings, Progress progress = nullptr);
+
+      // dynamics: how loud each value plays (its loudest 50 ms, dB) as a library part sends pp, mf
+      // and ff (the velocity and the dynamics CC of each), and with the velocity alone (32, 127 at
+      // the CC's 100) and the CC alone (32, 127 at velocity 100): which of the two sets the
+      // articulation's dynamics, and whether it follows the score's as the others do
+      struct Level { int velocity; int cc; };
+      struct DynamicsResult {
+            int value { -1 };
+            int pitch { -1 };
+            double sentDb[3] { -200, -200, -200 };   // pp, mf, ff as sent
+            double velocityDb[2] { -200, -200 };     // velocity 32, 127
+            double ccDb[2] { -200, -200 };           // the dynamics CC 32, 127
+            };
+      static std::vector<DynamicsResult> dynamics(Vst3Plugin* plugin, const std::vector<int>& values, const std::vector<int>& pitches,
+                                                  const std::vector<std::array<Level, 3>>& sent, const Settings& settings,
+                                                  Progress progress = nullptr);
 
       // a scan's pictures (the plug-in's window after each value of the switch, cropped to
       // area): which show an articulation. "No articulation" is the picture most of them

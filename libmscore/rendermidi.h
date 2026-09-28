@@ -88,6 +88,7 @@ class MidiRenderer {
                   };
             std::vector<Ctrl> controllers;
             std::map<const Instrument*, const SoundLib::LibInstrument*> instruments;
+            QStringList velocityDynamics;                   // Library::velocityDynamics
             std::vector<const SoundLib::LibInstrument*> patches;    // routed: the main one, then extras
             // the patches a note of an instrument of the part chooses from
             std::vector<const SoundLib::LibInstrument*> patchesFor(const SoundLib::LibInstrument* li) const {

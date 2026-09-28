@@ -280,6 +280,25 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   not channels. A legato articulation's note lasts DIVISION/16 into the next (Spitfire legato
   needs the overlap). A sampled trill or tremolo plays the note once (`SndConfig::ms4Once`).
   Dynamics go on the library's CC (CC1 for Spitfire).
+  Shorts (the owner, 2026-09-28: at pp the staccatos stood out; their velocity was MS4's soundfont one, 56 at
+  pp and 65 at mf, while CC1 went 32 → 80, and Spitfire's shorts take their dynamics from velocity only):
+  a base listed in `<Dynamics velocity="short staccatissimo spiccato marcato tenuto pizzicato bartok collegno">`
+  (`Library::velocityDynamics`) gets `NoteResult::levelVelocity`: the dynamic level on CC1's scale
+  (`expressionLevel`), times MS4's velocity over a plain note's (an accent: pp 32 → 48, mf 80 → 108; the
+  curve's peak would make an accented pp short 113). Longs and legato keep MS4's velocity (Spitfire's legato
+  speed is on velocity). The library's dynamics CC now goes ahead of the notes at its tick (a long starting on
+  a new dynamic started at the old one); MS4's CC11 for the built-in sounds keeps MS4's order.
+  Test `shortsFollowDynamics` (shorts-dynamics.musicxml).
+  **Check of it with the library** (the owner, 2026-09-28: "verify that dynamics is consistent across all
+  techniques"; not knowable here: which of SSO's articulations are on velocity is Spitfire's, the list above a
+  guess for tenuto and marcato): *Check articulations* › *Dynamics* (`ArticulationCheck::dynamics`): each
+  articulation that switches plays, offline, at pp / mf / ff as MuseScore sends them (CC1 32 / 80 / 112; the
+  velocity: the same for a listed technique, else MS4's plain one, 56 / 65 / …) and with velocity 32 / 127 at
+  CC1 100 and CC1 32 / 127 at velocity 100; loudness = the loudest 50 ms (RMS). summary.txt, per articulation:
+  dB at pp / mf / ff, driven by velocity / controller / both / neither (3 dB and more from 32 to 127), and a
+  flag: on velocity but not listed (add it), on the controller only but listed (not needed), neither, or a
+  pp -> ff span more than 6 dB off the patch's controller articulations' median. results.json `dynamics`.
+  Round robins move a note ±1-2 dB. Test `dynamicsCheck` (test synth: velocity * CC1).
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,
@@ -347,7 +366,8 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer
     (`libLanes`, `finishLibraryEvents`) sends a note's events to its lane and the part's switches and
     controllers to all lanes. `Vst3Synth::setVarispeed` (from the map, in sync and export): a note-on
-    sets its slot's speed from the note's tuning, at once when the slot is silent, else gliding 80 ms;
+    sets its slot's speed from the note's tuning, at once when the slot is silent, else gliding 30 ms (80 ms until 2026-09-28: the owner's
+    slurred 16th E quarter-sharp after a D quarter-flat, 110 bpm, glided a semitone over most of its 136 ms);
     the note goes to the plug-in with no tuning. 12-tone equal scores need no lane (every tuning 0); a
     temperament (meantone, JI) can need several per part, hence maxLanes. The Sound Library dialog lists
     lanes as "~ <part> (other tuning n)".

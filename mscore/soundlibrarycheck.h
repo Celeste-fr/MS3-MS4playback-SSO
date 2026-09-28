@@ -81,6 +81,7 @@ class ArticulationCheckDialog : public QDialog {
       QCheckBox* _tryAll;
       QCheckBox* _quick;
       QCheckBox* _pitchBend;
+      QCheckBox* _dynamics;
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;

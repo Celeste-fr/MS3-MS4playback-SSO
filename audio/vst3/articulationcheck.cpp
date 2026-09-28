@@ -258,6 +258,7 @@ namespace {
 struct Clip {
       std::vector<double> features;
       double peakDb { -200 };
+      double loudDb { -200 };       // the loudest 50 ms (RMS): a level round robins and clicks move less
       };
 
 struct Player {
@@ -319,12 +320,59 @@ struct Player {
             for (float x : clip)
                   peak = std::max(peak, double(std::fabs(x)));
             c.peakDb = peak > 0 ? 20 * std::log10(peak) : -200;
+            const size_t win = size_t(2 * frames(0.05));
+            double loudest = 0;
+            for (size_t from = 0; win > 0 && from + win <= clip.size(); from += win / 2) {
+                  double sum = 0;
+                  for (size_t i = from; i < from + win; ++i)
+                        sum += double(clip[i]) * clip[i];
+                  loudest = std::max(loudest, sum / win);
+                  }
+            c.loudDb = db(loudest);
             c.features = ArticulationCheck::features(clip, frames(s.note), s.sampleRate);
             return c;
             }
       };
 
 } // namespace
+
+//---------------------------------------------------------
+//   dynamics
+//---------------------------------------------------------
+
+std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3Plugin* plugin, const std::vector<int>& values,
+   const std::vector<int>& pitches, const std::vector<std::array<Level, 3>>& sent, const Settings& settings, Progress progress)
+      {
+      std::vector<DynamicsResult> out;
+      const int n = int(values.size());
+      if (!plugin || n == 0 || int(pitches.size()) != n || int(sent.size()) != n)
+            return out;
+      Player player { plugin, settings, {} };
+      int done = 0;
+      const int total = 7 * n;
+      auto at = [&](int value, int pitch, int velocity, int cc, double* db) {
+            player.s.velocity = qBound(1, velocity, 127);
+            player.s.dynamicsValue = qBound(0, cc, 127);
+            *db = player.play(-1, value, pitch).loudDb;
+            ++done;
+            return !progress || progress(done, total);
+            };
+      for (int i = 0; i < n; ++i) {
+            DynamicsResult r;
+            r.value = values[i];
+            r.pitch = pitches[i];
+            for (int k = 0; k < 3; ++k)
+                  if (!at(r.value, r.pitch, sent[i][k].velocity, sent[i][k].cc, &r.sentDb[k]))
+                        return out;
+            const int lo = 32, hi = 127, mid = 100;
+            if (!at(r.value, r.pitch, lo, mid, &r.velocityDb[0]) || !at(r.value, r.pitch, hi, mid, &r.velocityDb[1])
+                || !at(r.value, r.pitch, mid, lo, &r.ccDb[0]) || !at(r.value, r.pitch, mid, hi, &r.ccDb[1]))
+                  return out;
+            out.push_back(r);
+            }
+      player.settle();
+      return out;
+      }
 
 //---------------------------------------------------------
 //   run

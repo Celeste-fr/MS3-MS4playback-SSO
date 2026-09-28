@@ -74,7 +74,9 @@ class Vst3Synth : public Synthesizer {
       // ignores a note's tuning: set at each note-on, at once when nothing sounds on the slot (the
       // lanes see to that, SoundLib::Lanes), else gliding (legato)
       void setVarispeed(bool on) { _varispeed = on; }
-      static constexpr double LEGATO_GLIDE = 0.08;        // seconds
+      // seconds: a slurred note of another tuning on its previous note's lane (the owner, 2026-09-28: a
+      // slurred 16th quarter-tone sharp at 110 bpm spent most of 80 ms gliding and sounded off)
+      static constexpr double LEGATO_GLIDE = 0.03;
 
       // GUI thread
       Vst3Plugin* plugin(int slot) const;
