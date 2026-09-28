@@ -25,9 +25,11 @@
 #include "libmscore/note.h"
 #include "libmscore/part.h"
 #include "libmscore/playability.h"
+#include "libmscore/playabilitydiagram.h"
 #include "libmscore/playabilityrules.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
+#include "libmscore/select.h"
 #include "libmscore/staff.h"
 #include "mtest/testutils.h"
 
@@ -47,6 +49,10 @@ class TestPlayability : public QObject, public MTest
       void microtones();
       void marksFollowSwitches();
       void roles();
+      void inspectChords();
+      void fingerboardLayouts_data();
+      void fingerboardLayouts();
+      void windLayouts();
       void bowing_data();
       void bowing();
       void speed();
@@ -323,6 +329,275 @@ void TestPlayability::roles()
             QVERIFY2(in.name == c.instrument, c.name);
             QVERIFY2(in.section == c.section, c.name);
             }
+      }
+
+//---------------------------------------------------------
+//   inspectChords: the panel's Selected line and fingerboard (the plugin's spell-check.py and
+//   micro-check.py expectations)
+//---------------------------------------------------------
+
+static Ms::Chord* chordAt(Score* score, int tick, int track = 0)
+      {
+      Segment* s = score->tick2segment(Fraction::fromTicks(tick), true, SegmentType::ChordRest);
+      Element* e = s ? s->element(track) : nullptr;
+      return e && e->isChord() ? toChord(e) : nullptr;
+      }
+
+void TestPlayability::inspectChords()
+      {
+      const QString dash = QChar(0x2014), cent = QChar(0x00a2), minus = QChar(0x2212);
+      MasterScore* score = readScore(DIR + "spell-tests.mscx");
+      QVERIFY(score);
+      QCOMPARE(Playability::inspect(chordAt(score, 0)).text, "G#4 " + dash + " stopped note");
+      QCOMPARE(Playability::inspect(chordAt(score, 480)).text, "Ab4 " + dash + " stopped note");
+      QCOMPARE(Playability::inspect(chordAt(score, 960)).text, "B#3 " + dash + " stopped note");
+      QCOMPARE(Playability::inspect(chordAt(score, 1440)).text, "Cb4 " + dash + " stopped note");
+      for (int tick : { 1920, 2880 }) {
+            ChordInfo ci = Playability::inspect(chordAt(score, tick));
+            QString want = tick == 1920 ? "G#4" : "Ab4";
+            QVERIFY2(ci.text.contains(want), qPrintable(ci.text));
+            QVERIFY(ci.kind == ChordInfo::Kind::STOP);
+            bool named = false;
+            for (const FingerNote& n : ci.notes)
+                  named |= n.name == want;
+            QVERIFY(named);
+            }
+      delete score;
+
+      score = readScore(DIR + "micro-tests.mscx");
+      QVERIFY(score);
+      QCOMPARE(Playability::inspect(chordAt(score, 0)).text, "G3+50" + cent + " " + dash + " stopped note");
+      QCOMPARE(Playability::inspect(chordAt(score, 1920)).text, "D4 (III) + A4+50" + cent + " (II) " + dash + " playable");
+      QCOMPARE(Playability::inspect(chordAt(score, 3840)).text, "G3" + minus + "50" + cent + " (" + dash + ") + D4 (IV) " + dash + " below the lowest string");
+      QCOMPARE(Playability::inspect(chordAt(score, 10560)).text, "D4 (III) + A4+50" + cent + " (II) " + dash + " playable");
+      delete score;
+
+      score = readScore(DIR + "harm-tests.mscx");
+      QVERIFY(score);
+      ChordInfo h = Playability::inspect(chordAt(score, 0));          // D5 diamond: D string, octave node
+      QVERIFY(h.kind == ChordInfo::Kind::HARMONIC);
+      QCOMPARE(h.text, QString("natural harmonic\nA string (II): node D5, sounds A6\nD string (III): node D5, sounds D5\n"
+                               "G string (IV): node D5, sounds D5"));
+      QCOMPARE(h.harmonics.size(), size_t(1));
+      QCOMPARE(h.harmonics[0].options.size(), size_t(3));
+      QCOMPARE(h.harmonics[0].options[1].nodes[0].num, 1);            // D string: half way
+      QCOMPARE(h.harmonics[0].options[1].nodes[0].den, 2);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   diagram layouts against the plugin's display lists (its fingerboard-check.qml,
+//   harm-board-check.qml and wind-check.qml, MuseScore 3.6.2). Each item is compared on the keys
+//   the plugin wrote, numbers to 0.001; the open-string colour is set to the plugin's teal here.
+//---------------------------------------------------------
+
+static QJsonObject readJson(const QString& path)
+      {
+      QFile f(path);
+      if (!f.open(QIODevice::ReadOnly))
+            return QJsonObject();
+      return QJsonDocument::fromJson(f.readAll()).object();
+      }
+
+static QJsonObject itemJson(const DrawItem& i)
+      {
+      static const char* const KIND[] = { "line", "rect", "circle", "text", "meta" };
+      QJsonObject o;
+      o["kind"] = KIND[int(i.kind)];
+      o["x1"] = i.x1; o["y1"] = i.y1; o["x2"] = i.x2; o["y2"] = i.y2;
+      o["x"] = i.x; o["y"] = i.y; o["w"] = i.w; o["h"] = i.h; o["r"] = i.r;
+      o["width"] = i.width;
+      o["opacity"] = i.opacity;
+      auto col = [](const QColor& c) { return c.isValid() ? QJsonValue(c.name()) : QJsonValue(); };
+      o["color"] = col(i.color);
+      o["fill"] = col(i.fill);
+      o["stroke"] = col(i.stroke);
+      o["halo"] = col(i.halo);
+      o["text"] = i.text;
+      o["size"] = i.size;
+      o["bold"] = i.bold;
+      o["align"] = i.align < 0 ? "left" : i.align == 0 ? "center" : "right";
+      o["smooth"] = i.smooth;
+      o["namesShown"] = i.namesShown;
+      return o;
+      }
+
+// an item as text: its kind's keys, the plugin's defaults where it left one out
+static QString canon(const QJsonObject& o)
+      {
+      static const std::map<QString, std::vector<std::pair<QString, QJsonValue>>> KEYS = {
+            { "line", { { "x1", 0 }, { "y1", 0 }, { "x2", 0 }, { "y2", 0 }, { "color", "" }, { "width", 1 }, { "opacity", 1 } } },
+            { "rect", { { "x", 0 }, { "y", 0 }, { "w", 0 }, { "h", 0 }, { "fill", "" }, { "opacity", 1 }, { "smooth", false } } },
+            { "circle", { { "x", 0 }, { "y", 0 }, { "r", 0 }, { "fill", "" }, { "stroke", "" }, { "width", 1 } } },
+            { "text", { { "x", 0 }, { "y", 0 }, { "text", "" }, { "size", 10 }, { "color", "" }, { "bold", false }, { "align", "left" }, { "halo", "" } } },
+            { "meta", { { "namesShown", false } } },
+            };
+      QString kind = o["kind"].toString();
+      QStringList parts { kind };
+      auto k = KEYS.find(kind);
+      if (k == KEYS.end())
+            return "?" + kind;
+      for (const auto& key : k->second) {
+            QJsonValue v = o.contains(key.first) && !o[key.first].isNull() ? o[key.first] : key.second;
+            QString s;
+            if (v.isDouble())
+                  s = QString::number(std::round(v.toDouble() * 1000) / 1000, 'f', 3);
+            else if (v.isBool())
+                  s = v.toBool() ? "true" : "false";
+            else
+                  s = v.toString().toLower();
+            parts << key.first + "=" + s;
+            }
+      return parts.join(" ");
+      }
+
+static void compareLayouts(const QJsonArray& want, const DisplayList& got, bool ordered, const QString& label)
+      {
+      QStringList w, g;
+      for (const QJsonValue& v : want)
+            w << canon(v.toObject());
+      for (const DrawItem& i : got)
+            g << canon(itemJson(i));
+      if (!ordered) {
+            w.sort();
+            g.sort();
+            }
+      if (w != g)
+            for (int i = 0; i < std::max(w.size(), g.size()); ++i)
+                  if (w.value(i) != g.value(i)) {
+                        qWarning("%s item %d\n want %s\n got  %s", qPrintable(label), i, qPrintable(w.value(i)), qPrintable(g.value(i)));
+                        break;
+                        }
+      QCOMPARE(g.size(), w.size());
+      QCOMPARE(g, w);
+      }
+
+static ChordInfo geomFromJson(const QJsonObject& o)
+      {
+      ChordInfo g;
+      g.kind = o["kind"].toString() == "harmonic" ? ChordInfo::Kind::HARMONIC : ChordInfo::Kind::STOP;
+      g.instrument = o["instrument"].toString();
+      for (const QJsonValue& v : o["strings"].toArray())
+            g.strings.push_back(v.toInt());
+      for (const QJsonValue& v : o["stringNames"].toArray())
+            g.stringNames << v.toString();
+      if (g.kind == ChordInfo::Kind::STOP) {
+            for (const QJsonValue& v : o["notes"].toArray()) {
+                  QJsonObject n = v.toObject();
+                  g.notes.push_back({ n["pitch"].toDouble(), n["name"].toString(), n["string"].toInt(), n["offset"].toDouble() });
+                  }
+            g.stopped = o["stopped"].toInt();
+            g.worst = o["worst"].toDouble();
+            g.position = o["position"].toDouble();
+            g.reach = o["reach"].toDouble();
+            }
+      else {
+            g.atNode = o["atNode"].toBool();
+            for (const QJsonValue& v : o["notes"].toArray()) {
+                  QJsonObject n = v.toObject();
+                  HarmonicNoteInfo hn { n["pitch"].toInt(), n["name"].toString(), {} };
+                  for (const QJsonValue& ov : n["options"].toArray()) {
+                        QJsonObject op = ov.toObject();
+                        HarmonicOptionInfo oi { op["string"].toInt(), op["partial"].toInt(), op["sounds"].toInt(),
+                                                op["soundsName"].toString(), op["solo"].toBool(), {} };
+                        for (const QJsonValue& nv : op["nodes"].toArray()) {
+                              QJsonObject nd = nv.toObject();
+                              oi.nodes.push_back({ nd["pitch"].toInt(), nd["name"].toString(), nd["num"].toInt(), nd["den"].toInt(), nd["solo"].toBool() });
+                              }
+                        hn.options.push_back(oi);
+                        }
+                  g.harmonics.push_back(hn);
+                  }
+            }
+      return g;
+      }
+
+void TestPlayability::fingerboardLayouts_data()
+      {
+      QTest::addColumn<QString>("file");
+      QTest::newRow("stops") << QString("fingerboard-layouts.json");
+      QTest::newRow("harmonics") << QString("harm-board-layouts.json");
+      }
+
+void TestPlayability::fingerboardLayouts()
+      {
+      QFETCH(QString, file);
+      QJsonObject ref = readJson(root + "/" + DIR + file);
+      QVERIFY(!ref.isEmpty());
+      QColor keep = Playability::openStringColor;
+      Playability::openStringColor = QColor("#00a0b0");
+      int n = 0;
+      for (const QJsonValue& v : ref["layouts"].toArray()) {
+            QJsonObject l = v.toObject();
+            if (!l.contains("geom") || l["geom"].isNull())
+                  continue;
+            double w = l.contains("w") ? l["w"].toDouble() : ref["width"].toDouble();
+            double h = l.contains("h") ? l["h"].toDouble() : ref["height"].toDouble();
+            DisplayList items = Playability::layoutFingerboard(geomFromJson(l["geom"].toObject()), w, h);
+            compareLayouts(l["items"].toArray(), items, true, l["label"].toString());
+            ++n;
+            }
+      Playability::openStringColor = keep;
+      QVERIFY(n > 10);
+      }
+
+void TestPlayability::windLayouts()
+      {
+      MasterScore* score = readScore(DIR + "wind-tests.mscx");
+      QVERIFY(score);
+      QJsonObject ref = readJson(root + "/" + DIR + "wind-layouts.json");
+      std::map<QString, QJsonObject> byLabel;
+      for (const QJsonValue& v : ref["layouts"].toArray())
+            byLabel[v.toObject()["label"].toString()] = v.toObject();
+
+      // the chord at or after a tick in a staff's voice 1, as the harness's chordAt
+      auto chordAtOrAfter = [&](int st, int tick) -> Ms::Chord* {
+            for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  if (s->tick().ticks() >= tick && s->element(st * VOICES) && s->element(st * VOICES)->isChord())
+                        return toChord(s->element(st * VOICES));
+            return nullptr;
+            };
+      auto run = [&](const QString& name, std::vector<std::pair<int, int>> sizes) -> int {
+            Playability::WindModel m = Playability::windModel(score, false);
+            int count = 0;
+            for (size_t g = 0; g < m.graphs.size(); ++g)
+                  for (const auto& sz : sizes) {
+                        QString label = QString("%1 graph %2 @ %3x%4").arg(name).arg(g).arg(sz.first).arg(sz.second);
+                        if (!byLabel.count(label)) {
+                              qWarning("no plugin layout %s", qPrintable(label));
+                              continue;
+                              }
+                        compareLayouts(byLabel[label]["items"].toArray(), Playability::layoutWindGraph(m, int(g), sz.first, sz.second), false, label);
+                        ++count;
+                        }
+            return count;
+            };
+      int total = 0;
+      // a: one clarinet note, bar 2 beat 2 of staff 3
+      score->deselectAll();
+      score->select(chordAtOrAfter(2, 480)->notes()[0], SelectType::SINGLE);
+      total += run("a", { { 320, 420 } });
+      // b: bars 1-2 over every staff
+      score->deselectAll();
+      // as the harness's selection.selectRange(0, 2 * 1920, 0, 15), then its startCmd / endCmd
+      score->selection().setRange(score->tick2leftSegmentMM(Fraction(0, 1)), score->tick2leftSegmentMM(Fraction::fromTicks(2 * 1920)),
+                                  0, std::min(15, score->nstaves()));
+      score->selection().updateSelectedElements();
+      total += run("b", { { 320, 420 }, { 220, 260 } });
+      // c: a violin note only: no graph
+      score->deselectAll();
+      score->select(chordAtOrAfter(6, 1920)->notes()[0], SelectType::SINGLE);
+      QVERIFY(!Playability::windModel(score, false).valid());
+      // e: flute 2 in bar 2 and the horn in bar 1
+      score->deselectAll();
+      score->select(chordAtOrAfter(1, 1920)->notes()[0], SelectType::SINGLE);
+      score->select(chordAtOrAfter(3, 0)->notes()[0], SelectType::ADD);
+      total += run("e", { { 320, 420 } });
+      int want = 0;
+      for (const auto& l : byLabel)
+            want += !l.first.startsWith("d ");
+      QCOMPARE(total, want);
+      delete score;
       }
 
 //---------------------------------------------------------

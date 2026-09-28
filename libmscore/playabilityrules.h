@@ -144,6 +144,26 @@ struct HarmonicResult {
 
 HarmonicResult classifyHarmonic(const StringInstrument& in, const std::vector<HarmonicNote>& list, const Spelling& sp);
 
+// Every way to play one natural harmonic, highest string first. atNode: the written pitch is the
+// node (diamond), else the sounding pitch (circle).
+struct HarmonicNode {
+      int pitch;
+      int num;                      // the node's place on the string from the nut: num / den
+      int den;
+      bool solo;                    // the 2/5 node
+      };
+struct HarmonicOption {
+      int string;
+      int partial;
+      int sounds;
+      bool solo;                    // every node for it is solo only
+      std::vector<HarmonicNode> nodes;
+      };
+std::vector<HarmonicOption> naturalOptions(const StringInstrument& in, int pitch, bool atNode);
+// the Selected line for a natural harmonic chord: every string, node and sounding pitch of each
+// note; empty when the chord is not a readable natural harmonic. atNode is set.
+QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNote>& list, const Spelling& sp, bool* atNode = nullptr);
+
 //---------------------------------------------------------
 //   Bowing (S10–S13)
 //---------------------------------------------------------

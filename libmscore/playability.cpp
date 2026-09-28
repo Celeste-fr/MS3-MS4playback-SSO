@@ -123,6 +123,7 @@ class Pass {
    public:
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
       void run();
+      ChordInfo inspect(Chord* chord);
       };
 
 int Pass::barOf(const Fraction& tick) const
@@ -768,6 +769,191 @@ void Pass::run()
             checkTremolos(st, part, staffName, walked);
             checkFastRuns(st, part, staffName, tx);
             }
+      for (PlayabilityRow& r : _res.rows)
+            r.staffShort = shortStaffName(_score->staff(r.track / VOICES)->part(), r.staff, r.tick);
+      }
+
+//---------------------------------------------------------
+//   inspect
+//    one chord, described for the panel by exactly the rules of the pass, so the readout cannot
+//    disagree with the colours on the score
+//---------------------------------------------------------
+
+ChordInfo Pass::inspect(Chord* chord)
+      {
+      ChordInfo info;
+      if (!chord || chord->notes().empty())
+            return info;
+      Chord* main = chord->isGrace() ? toChord(chord->parent()) : chord;
+      Fraction tick = main->tick();
+      Staff* staff = chord->staff();
+      Part* part = staff->part();
+
+      std::vector<SpelledNote> spelled;
+      struct Item { int pitch; double sound; bool diamond; bool circle; };
+      std::vector<Item> list;
+      bool chordCircle = false;
+      for (const Articulation* a : chord->articulations())
+            if (isHarmonicCircle(a->symId()))
+                  chordCircle = true;
+      bool anyD = false, anyC = chordCircle;
+      for (Note* n : chord->notes()) {
+            bool d = n->headGroup() == NoteHead::Group::HEAD_DIAMOND;
+            bool c = chordCircle;
+            for (const Element* e : n->el())
+                  if (e->isSymbol() && isHarmonicCircle(toSymbol(e)->sym()))
+                        c = true;
+            anyD |= d;
+            anyC |= c;
+            double cents = microCents(n);
+            spelled.push_back({ n->ppitch(), n->tpc1(), cents });
+            list.push_back({ n->ppitch(), soundingPitch(n->ppitch(), cents), d, c });
+            }
+      Spelling sp(spelled, int(staff->key(tick)));
+
+      const StringInstrument& in = instrumentAt(part, tick);
+      if (!in.valid()) {                  // not a bowed string: name what is selected, low to high
+            std::vector<double> ps;
+            for (const Item& i : list)
+                  ps.push_back(i.sound);
+            std::sort(ps.begin(), ps.end());
+            QStringList names;
+            for (double p : ps)
+                  names << sp.name(p);
+            info.text = names.join(" + ");
+            return info;
+            }
+      info.bowedString = true;
+      info.instrument = in.name;
+      info.strings = in.strings;
+      for (int s : in.strings)
+            info.stringNames << stringName(s);
+
+      if (anyD || anyC) {
+            std::vector<HarmonicNote> hl;
+            for (const Item& i : list)
+                  hl.push_back({ i.pitch, i.diamond, i.circle });
+            HarmonicResult h = classifyHarmonic(in, hl, sp);
+            if (h.harmonic) {
+                  if (h.verdict != HarmonicVerdict::IMPOSSIBLE) {
+                        bool atNode = false;
+                        QString all = inspectNatural(in, hl, sp, &atNode);     // every string, node and sound
+                        if (!all.isEmpty()) {
+                              info.text = (h.verdict == HarmonicVerdict::OK ? QString("natural harmonic") : h.reason) + "\n" + all;
+                              info.kind = ChordInfo::Kind::HARMONIC;
+                              info.atNode = atNode;
+                              for (const HarmonicNote& hn : hl) {
+                                    HarmonicNoteInfo hi { hn.pitch, sp.name(hn.pitch), {} };
+                                    for (const HarmonicOption& o : naturalOptions(in, hn.pitch, atNode)) {
+                                          HarmonicOptionInfo oi { o.string, o.partial, o.sounds, sp.name(o.sounds), o.solo, {} };
+                                          for (const HarmonicNode& nd : o.nodes)
+                                                oi.nodes.push_back({ nd.pitch, sp.name(nd.pitch), nd.num, nd.den, nd.solo });
+                                          hi.options.push_back(oi);
+                                          }
+                                    info.harmonics.push_back(hi);
+                                    }
+                              return info;
+                              }
+                        }
+                  info.text = h.detail + " " + QChar(0x2014) + " " + (h.verdict == HarmonicVerdict::OK ? QString("valid harmonic") : h.reason);
+                  return info;
+                  }
+            }
+      if (list.size() == 1) {
+            int o = openStringIndex(in, list[0].sound);
+            info.text = sp.name(list[0].sound) + " " + QChar(0x2014) + (o >= 0 ? QString(" open string %1").arg(ROMAN[o]) : QString(" stopped note"));
+            return info;
+            }
+      if (staffTexts(staff->idx()).div.on(tick.ticks())) {
+            info.text = QString("%1 notes ").arg(list.size()) + QChar(0x2014) + " div., not checked as a stop";
+            return info;
+            }
+      std::vector<double> pitches;
+      for (const Item& i : list)
+            pitches.push_back(i.sound);
+      std::sort(pitches.begin(), pitches.end(), std::greater<double>());
+      StopResult res = analyseStop(in, pitches);
+      info.text = describe(in, pitches, res, sp) + " " + QChar(0x2014) + " " + (res.verdict == Verdict::PLAYABLE ? QString("playable") : res.reason);
+      if (res.verdict != Verdict::PLAYABLE)
+            return info;
+      // the fingerboard: a playable stop
+      info.kind = ChordInfo::Kind::STOP;
+      double lowest = -1;
+      for (size_t k = 0; k < pitches.size(); ++k) {
+            int s = res.assign[k];
+            double off = pitches[k] - in.strings[s];
+            info.notes.push_back({ pitches[k], sp.name(pitches[k]), s, off });
+            if (off > 0) {
+                  info.stopped++;
+                  if (lowest < 0 || off < lowest)
+                        lowest = off;
+                  }
+            }
+      info.worst = res.worst;
+      info.position = lowest < 0 ? 0 : lowest;
+      info.reach = reachAt(in, info.position);
+      return info;
+      }
+
+//---------------------------------------------------------
+//   shortStaffName
+//    MuseScore's short name when the part has one (Vlns., Vc., …), else an abbreviation of the
+//    long name; a trailing number ("Violins I", "Violin 2") is kept
+//---------------------------------------------------------
+
+QString shortStaffName(const Part* part, const QString& longName, const Fraction& tick)
+      {
+      static const std::vector<std::pair<QRegularExpression, QString>> ABBR = [] {
+            const std::vector<std::pair<const char*, const char*>> list = {
+                  { "^violins\\b", "Vlns." }, { "^violin\\b", "Vln." }, { "^violas\\b", "Vlas." }, { "^viola\\b", "Vla." },
+                  { "^(violoncellos|violoncelli|cellos|celli)\\b", "Vcs." }, { "^(violoncello|cello)\\b", "Vc." },
+                  { "^(contrabasses|double\\s*basses|basses)\\b", "Cbs." }, { "^(contrabass|double\\s*bass)\\b", "Cb." },
+                  // winds, for scores whose parts have no short name
+                  { "^piccolo\\b", "Picc." }, { "^flutes?\\b", "Fl." }, { "^oboes?\\b", "Ob." }, { "^english horn\\b", "E.H." },
+                  { "^bass clarinet\\b", "B. Cl." }, { "^clarinets?\\b", "Cl." }, { "^contrabassoon\\b", "Cbsn." }, { "^bassoons?\\b", "Bsn." },
+                  { "^(\\w+) saxophone\\b", "Sax." }, { "^horns?\\b", "Hn." }, { "^trumpets?\\b", "Tpt." },
+                  { "^bass trombone\\b", "B. Tbn." }, { "^trombones?\\b", "Tbn." }, { "^tubas?\\b", "Tba." } };
+            std::vector<std::pair<QRegularExpression, QString>> out;
+            for (const auto& a : list)
+                  out.push_back({ QRegularExpression(a.first, QRegularExpression::CaseInsensitiveOption), a.second });
+            return out;
+            }();
+      QString sn = part->shortName(tick);
+      if (sn.isEmpty()) {
+            const Instrument* in = part->instrument(tick);
+            if (!in->shortNames().isEmpty())
+                  sn = in->shortNames().front().name();
+            }
+      if (!sn.isEmpty())
+            return sn;
+      for (const auto& a : ABBR) {
+            QRegularExpressionMatch m = a.first.match(longName);
+            if (m.hasMatch())
+                  return a.second + longName.mid(m.capturedLength());
+            }
+      return longName;
+      }
+
+//---------------------------------------------------------
+//   selectedChord
+//    walk up from whatever is selected: a note, or any part of a chord (accidental, stem, dot)
+//---------------------------------------------------------
+
+Chord* selectedChord(Score* score)
+      {
+      for (Element* e : score->selection().elements())
+            for (int depth = 0; e && depth < 4; ++depth, e = e->parent())
+                  if (e->isChord())
+                        return toChord(e);
+      return nullptr;
+      }
+
+ChordInfo inspect(Chord* chord)
+      {
+      if (!chord)
+            return ChordInfo();
+      PlayabilityResult res;
+      return Pass(chord->score(), res).inspect(chord);
       }
 
 //---------------------------------------------------------

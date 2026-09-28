@@ -528,6 +528,77 @@ HarmonicResult classifyHarmonic(const StringInstrument& in, const std::vector<Ha
       return res;
       }
 
+std::vector<HarmonicOption> naturalOptions(const StringInstrument& in, int pitch, bool atNode)
+      {
+      std::vector<HarmonicOption> out;
+      auto place = [](int partial, int off) { return int(jsRound(partial * (1 - std::pow(2.0, -off / 12.0)))); };
+      for (size_t i = 0; i < in.strings.size(); ++i) {
+            int open = in.strings[i];
+            if (atNode) {
+                  int p = lookupMap(NODES, pitch - open);
+                  if (p) {
+                        bool solo = pitch - open == SOLO_ONLY;
+                        out.push_back({ int(i), p, open + lookupMap(SOUNDS, p), solo, { { pitch, place(p, pitch - open), p, solo } } });
+                        }
+                  continue;
+                  }
+            for (const auto& q : SOUNDS) {
+                  if (open + q.second != pitch)
+                        continue;
+                  HarmonicOption o { int(i), q.first, pitch, true, {} };
+                  for (const auto& n : NODES)
+                        if (n.second == q.first) {
+                              o.nodes.push_back({ open + n.first, place(q.first, n.first), q.first, n.first == SOLO_ONLY });
+                              if (n.first != SOLO_ONLY)
+                                    o.solo = false;
+                              }
+                  std::sort(o.nodes.begin(), o.nodes.end(), [](const HarmonicNode& a, const HarmonicNode& b) { return a.pitch < b.pitch; });
+                  out.push_back(o);
+                  }
+            }
+      return out;
+      }
+
+// one line per string: "A string (II): node A5, sounds A6"
+static QString describeOptions(const StringInstrument& in, const std::vector<HarmonicOption>& opts, const Spelling& sp)
+      {
+      QStringList parts;
+      for (const HarmonicOption& o : opts) {
+            QStringList names;
+            for (const HarmonicNode& n : o.nodes)
+                  names << sp.name(n.pitch) + (n.pitch - in.strings[o.string] == SOLO_ONLY && o.nodes.size() > 1 ? " (solo only)" : "");
+            parts << stringName(in.strings[o.string]) + QString(" string (%1): node ").arg(ROMAN[o.string]) + names.join(" or ")
+                     + ", sounds " + sp.name(o.sounds) + (o.solo ? " (solo only)" : "");
+            }
+      return parts.join("\n");
+      }
+
+QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNote>& list, const Spelling& sp, bool* atNodeOut)
+      {
+      size_t diamonds = 0, circles = 0;
+      for (const HarmonicNote& n : list) {
+            diamonds += n.diamond;
+            circles += n.circle;
+            }
+      bool atNode;
+      if (diamonds && diamonds == list.size())
+            atNode = true;                  // node notation
+      else if (!diamonds && circles)
+            atNode = false;                 // sounding notation
+      else
+            return QString();
+      QStringList parts;
+      for (const HarmonicNote& n : list) {
+            std::vector<HarmonicOption> opts = naturalOptions(in, n.pitch, atNode);
+            if (opts.empty())
+                  return QString();
+            parts << (list.size() > 1 ? sp.name(n.pitch) + ":\n" : QString()) + describeOptions(in, opts, sp);
+            }
+      if (atNodeOut)
+            *atNodeOut = atNode;
+      return parts.join("\n");
+      }
+
 //---------------------------------------------------------
 //   bowing
 //---------------------------------------------------------

@@ -26,10 +26,12 @@
 #include <QColor>
 #include <QHash>
 #include <QString>
+#include <QStringList>
 
 namespace Ms {
 
 class Note;
+class Part;
 class Score;
 
 enum class PlayMark : char {
@@ -46,6 +48,7 @@ struct PlayabilityRow {
       int track { -1 };
       int grace { -1 };             // -1 the main chord, else its index in graceNotes()
       QString staff;                // the part's long name
+      QString staffShort;           // its short name, else an abbreviation of the long name
       QString kind;                 // "stop", "harmonic"
       QString verdict;              // "impossible", "outOfReach", "risky"
       QString reason;
@@ -64,6 +67,59 @@ struct PlayabilityResult {
       int harmonics { 0 };
       };
 
+class Chord;
+
+//---------------------------------------------------------
+//   ChordInfo: one chord for the panel, by the same rules as the pass: the Selected line and the
+//   fingerboard (a playable stop, or a natural harmonic's strings and nodes)
+//---------------------------------------------------------
+
+struct FingerNote {
+      double pitch;
+      QString name;
+      int string;
+      double offset;                // semitones above its open string
+      };
+
+struct HarmonicNodeInfo {
+      int pitch;
+      QString name;
+      int num, den;                 // the node's place from the nut
+      bool solo;
+      };
+
+struct HarmonicOptionInfo {
+      int string;
+      int partial;
+      int sounds;
+      QString soundsName;
+      bool solo;
+      std::vector<HarmonicNodeInfo> nodes;
+      };
+
+struct HarmonicNoteInfo {
+      int pitch;
+      QString name;
+      std::vector<HarmonicOptionInfo> options;
+      };
+
+struct ChordInfo {
+      enum class Kind : char { NONE, STOP, HARMONIC };
+      QString text;                 // the Selected line, without "Selected: "
+      bool bowedString { false };   // the chord is on a bowed string instrument
+      Kind kind { Kind::NONE };     // what the fingerboard shows
+      QString instrument;
+      std::vector<int> strings;
+      QStringList stringNames;
+      std::vector<FingerNote> notes;                // STOP
+      int stopped { 0 };
+      double worst { 0 };
+      double position { 0 };
+      double reach { 0 };
+      std::vector<HarmonicNoteInfo> harmonics;      // HARMONIC
+      bool atNode { false };
+      };
+
 namespace Playability {
 
 // the checker's switches, set from the preferences (mscore/musescore.cpp), like MScore::warnPitchRange
@@ -76,6 +132,12 @@ const QColor OUT_OF_REACH_COLOR = QColor(Qt::darkYellow);
 
 // the whole pass; always runs (tests call it directly), whatever `enabled` says
 PlayabilityResult analyse(Score* score);
+// the panel's view of one chord (a grace chord too)
+ChordInfo inspect(Chord* chord);
+// the chord a selection is about: the first selected note or part of a chord, walking up
+Chord* selectedChord(Score* score);
+// the staff column's name: the part's short name, else an abbreviation of its long name
+QString shortStaffName(const Part* part, const QString& longName, const Fraction& tick);
 // the colour Note::draw gives a note, or an invalid QColor
 QColor markColor(const Note* note, bool selected);
 
