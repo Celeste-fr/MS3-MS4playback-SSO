@@ -194,7 +194,7 @@ void TestSoundLibrary::spitfireMap()
             keys += p.scan == "keys" && p.keyScan;
             }
       QCOMPARE(int(lib->otherPatches.size()), 541);
-      QCOMPARE(values, 12);                                 // (the 4 Curated Ensembles' values are known)
+      QCOMPARE(values, 0);                                  // (every values patch's values are known)
       QCOMPARE(keys, 7);
       int scanned = 0;
       for (const SoundLib::LibInstrument& p : lib->otherPatches) {
@@ -213,6 +213,19 @@ void TestSoundLibrary::spitfireMap()
                   }
             if (p.name == "Curated String Ensembles")
                   QCOMPARE(int(p.articulations.size()), 16);
+            // the Core / Decorative techniques: the All techniques patch's values
+            if (p.name == "Violins 1 - Core techniques") {
+                  QCOMPARE(int(p.articulations.size()), 18);
+                  QVERIFY(p.scan.isEmpty());
+                  bool pizz = false, sulG = false;
+                  for (const SoundLib::Articulation& a : p.articulations) {
+                        pizz |= a.name == "Pizzicato" && a.value == 56;
+                        sulG |= a.name == "Long Sul G" && a.value == 112 && a.expect == "silent";
+                        }
+                  QVERIFY(pizz && sulG);
+                  }
+            if (p.name == "Violins 2 - Decorative techniques")
+                  QCOMPARE(int(p.articulations.size()), 12);
             }
       QCOMPARE(scanned, 4);
 

@@ -972,6 +972,13 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     the start that marked the name and its button as "changing by itself"; articulations that differed from
     "None" only there were lost. Now that picture is paired with the last value's during the scan
     (`scanPictures` `samePairs`). Test `scanPictures` (the old comparison misses, the new finds all).
+    With it (2026-09-28 00:09, run 177) 10 of the 12 came out complete, Long included; Ensembles and Violins
+    2 - Decorative went wrong that time (cause unknown) and come from the 21:29 scan. All 12 are in the map
+    now (`SCANNED`, (value, name) pairs; names as the `.nki` and Kontakt's window give them; review page
+    https://claude.ai/artifact/D7VXjMSZfd1xRy3x5TzzBZ, OCR confirmed by the owner): every value is the
+    instrument's All techniques value; Violins 2 - Decorative's Trill (Major 2nd), in neither scan, is 71
+    (confirmed by the owner in Kontakt); Long Sul G / C in Violins 1 / 2 and Celli - Core play nothing, as in
+    All techniques (`expect="silent"`). No `scan="values"` patch is left; the 7 key patches have no key names.
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

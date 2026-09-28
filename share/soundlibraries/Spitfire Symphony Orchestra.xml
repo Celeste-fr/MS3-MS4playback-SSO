@@ -2530,16 +2530,196 @@
   <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki" scan="keys" pitch="7"/>
   <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki" scan="keys" pitch="3"/>
   <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki" scan="keys" pitch="67"/>
-  <Patch name="Basses - Core techniques" nki="Instruments/Symphonic Strings/Basses - Core techniques.nki" setup="$iooxo=3" scan="values" pitch="39"/>
-  <Patch name="Basses - Decorative techniques" nki="Instruments/Symphonic Strings/Basses - Decorative techniques.nki" setup="$iooxo=3" scan="values" pitch="39"/>
-  <Patch name="Celli - Core techniques" nki="Instruments/Symphonic Strings/Celli - Core techniques.nki" setup="$iooxo=3" scan="values" pitch="59"/>
-  <Patch name="Celli - Decorative techniques" nki="Instruments/Symphonic Strings/Celli - Decorative techniques.nki" setup="$iooxo=3" scan="values" pitch="58"/>
-  <Patch name="Ensembles - Core techniques" nki="Instruments/Symphonic Strings/Ensembles - Core techniques.nki" setup="$iooxo=3" scan="values" pitch="61"/>
-  <Patch name="Ensembles - Decorative techniques" nki="Instruments/Symphonic Strings/Ensembles - Decorative techniques.nki" setup="$iooxo=3" scan="values" pitch="59"/>
-  <Patch name="Violas - Core techniques" nki="Instruments/Symphonic Strings/Violas - Core techniques.nki" setup="$iooxo=3" scan="values" pitch="69"/>
-  <Patch name="Violas - Decorative techniques" nki="Instruments/Symphonic Strings/Violas - Decorative techniques.nki" setup="$iooxo=3" scan="values" pitch="67"/>
-  <Patch name="Violins 1 - Core techniques" nki="Instruments/Symphonic Strings/Violins 1 - Core techniques.nki" setup="$iooxo=3" scan="values" pitch="76"/>
-  <Patch name="Violins 1 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 1 - Decorative techniques.nki" setup="$iooxo=3" scan="values" pitch="75"/>
-  <Patch name="Violins 2 - Core techniques" nki="Instruments/Symphonic Strings/Violins 2 - Core techniques.nki" setup="$iooxo=3" scan="values" pitch="76"/>
-  <Patch name="Violins 2 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 2 - Decorative techniques.nki" setup="$iooxo=3" scan="values" pitch="75"/>
+  <Patch name="Basses - Core techniques" nki="Instruments/Symphonic Strings/Basses - Core techniques.nki" setup="$iooxo=3" pitch="39">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Short Spicc-Pizz" value="41"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Staccato Dig" value="49"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+  </Patch>
+  <Patch name="Basses - Decorative techniques" nki="Instruments/Symphonic Strings/Basses - Decorative techniques.nki" setup="$iooxo=3" pitch="39">
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Sul Pont (Dist)" value="113"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Celli - Core techniques" nki="Instruments/Symphonic Strings/Celli - Core techniques.nki" setup="$iooxo=3" pitch="59">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul C" value="112" expect="silent"/>
+  </Patch>
+  <Patch name="Celli - Decorative techniques" nki="Instruments/Symphonic Strings/Celli - Decorative techniques.nki" setup="$iooxo=3" pitch="58">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trill (Minor 3rd)" value="72"/>
+    <Articulation name="Trill (Major 3rd)" value="73"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="Trem CS Ms (150bpm)" value="84"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Ensembles - Core techniques" nki="Instruments/Symphonic Strings/Ensembles - Core techniques.nki" setup="$iooxo=3" pitch="61">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Spiccato CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harm" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+  </Patch>
+  <Patch name="Ensembles - Decorative techniques" nki="Instruments/Symphonic Strings/Ensembles - Decorative techniques.nki" setup="$iooxo=3" pitch="59">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Long Sul String" value="112"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Violas - Core techniques" nki="Instruments/Symphonic Strings/Violas - Core techniques.nki" setup="$iooxo=3" pitch="69">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul C" value="112"/>
+  </Patch>
+  <Patch name="Violas - Decorative techniques" nki="Instruments/Symphonic Strings/Violas - Decorative techniques.nki" setup="$iooxo=3" pitch="67">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Violins 1 - Core techniques" nki="Instruments/Symphonic Strings/Violins 1 - Core techniques.nki" setup="$iooxo=3" pitch="76">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Tasto" value="17"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul G" value="112" expect="silent"/>
+  </Patch>
+  <Patch name="Violins 1 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 1 - Decorative techniques.nki" setup="$iooxo=3" pitch="75">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trill (Minor 3rd)" value="72"/>
+    <Articulation name="Trill (Major 3rd)" value="73"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="Trem CS Ms (150bpm)" value="84"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
+  <Patch name="Violins 2 - Core techniques" nki="Instruments/Symphonic Strings/Violins 2 - Core techniques.nki" setup="$iooxo=3" pitch="76">
+    <Articulation name="Long" value="1"/>
+    <Articulation name="Long CS" value="7"/>
+    <Articulation name="Long Flautando" value="8"/>
+    <Articulation name="Marcato Attack" value="9"/>
+    <Articulation name="Long Harmonics" value="10"/>
+    <Articulation name="Long Sul Pont" value="18"/>
+    <Articulation name="Spiccato" value="42"/>
+    <Articulation name="Short CS" value="47"/>
+    <Articulation name="Short Brushed" value="48"/>
+    <Articulation name="Short 0'5" value="50"/>
+    <Articulation name="Short 1'0" value="52"/>
+    <Articulation name="Pizzicato" value="56"/>
+    <Articulation name="Pizzicato Bartok" value="57"/>
+    <Articulation name="Col Legno" value="58"/>
+    <Articulation name="Short Harmonics" value="61"/>
+    <Articulation name="Short Brushed CS" value="62"/>
+    <Articulation name="Long Sul G" value="112" expect="silent"/>
+  </Patch>
+  <Patch name="Violins 2 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 2 - Decorative techniques.nki" setup="$iooxo=3" pitch="75">
+    <Articulation name="Long CS Blend" value="5"/>
+    <Articulation name="Tremolo" value="11"/>
+    <Articulation name="Trem CS" value="12"/>
+    <Articulation name="Trem Sul Pont" value="13"/>
+    <Articulation name="Long (Rachm.)" value="16"/>
+    <Articulation name="Long CS Sul Pont" value="19"/>
+    <Articulation name="Trill (Minor 2nd)" value="70"/>
+    <Articulation name="Trill (Major 2nd)" value="71"/>
+    <Articulation name="Trem Ms (150bpm)" value="81"/>
+    <Articulation name="Trem Ms (180bpm)" value="82"/>
+    <Articulation name="FX" value="90"/>
+    <Articulation name="Long Super Sul Tasto" value="114"/>
+  </Patch>
 </SoundLibrary>

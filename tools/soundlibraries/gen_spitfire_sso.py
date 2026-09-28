@@ -731,7 +731,29 @@ SCANNED = {
                                 'Wood Str. 1 Long', 'Wood Str. 1 Short', 'Wood Str. 2 Long', 'Wood Str. 2 Short'],
     'Curated Woodwind Ensembles': ['Beast Long', 'Beast Short', 'Chorus Long', 'Chorus Short', 'Light Short',
                                    'Orchestrator Long', 'Orchestrator Shorts', 'Slow Chr Long', 'Slow Orch. Long'],
+    # The Core / Decorative techniques string patches: (value, name as the .nki and Kontakt's window
+    # name it). The owner's scans of 2026-09-28 00:09 (run 177; 10 patches complete) and 2026-09-27 21:29
+    # (Ensembles and Violins 2 - Decorative, which the later scan got wrong), reviewed on
+    # https://claude.ai/artifact/D7VXjMSZfd1xRy3x5TzzBZ (the owner: "all the OCR looks fine"). Every
+    # value is the same as the same articulation's in the instrument's All techniques patch. Violins 2 -
+    # Decorative's Trill (Major 2nd) showed in neither scan: 71, as in Violins 2 - All techniques
+    # (and in every other Decorative patch's scan); the owner confirmed 71 in Kontakt (2026-09-28).
+    'Violins 1 - Core techniques': [(1, 'Long'), (7, 'Long CS'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (17, 'Long Sul Tasto'), (18, 'Long Sul Pont'), (42, 'Spiccato'), (47, 'Short CS'), (48, 'Short Brushed'), (50, "Short 0'5"), (52, "Short 1'0"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harmonics'), (62, 'Short Brushed CS'), (112, 'Long Sul G')],
+    'Violins 1 - Decorative techniques': [(5, 'Long CS Blend'), (11, 'Tremolo'), (13, 'Trem Sul Pont'), (16, 'Long (Rachm.)'), (19, 'Long CS Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (72, 'Trill (Minor 3rd)'), (73, 'Trill (Major 3rd)'), (81, 'Trem Ms (150bpm)'), (82, 'Trem Ms (180bpm)'), (84, 'Trem CS Ms (150bpm)'), (90, 'FX'), (114, 'Long Super Sul Tasto')],
+    'Violins 2 - Core techniques': [(1, 'Long'), (7, 'Long CS'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (18, 'Long Sul Pont'), (42, 'Spiccato'), (47, 'Short CS'), (48, 'Short Brushed'), (50, "Short 0'5"), (52, "Short 1'0"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harmonics'), (62, 'Short Brushed CS'), (112, 'Long Sul G')],
+    'Violins 2 - Decorative techniques': [(5, 'Long CS Blend'), (11, 'Tremolo'), (12, 'Trem CS'), (13, 'Trem Sul Pont'), (16, 'Long (Rachm.)'), (19, 'Long CS Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (81, 'Trem Ms (150bpm)'), (82, 'Trem Ms (180bpm)'), (90, 'FX'), (114, 'Long Super Sul Tasto')],
+    'Violas - Core techniques': [(1, 'Long'), (7, 'Long CS'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (18, 'Long Sul Pont'), (42, 'Spiccato'), (47, 'Short CS'), (48, 'Short Brushed'), (50, "Short 0'5"), (52, "Short 1'0"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harmonics'), (62, 'Short Brushed CS'), (112, 'Long Sul C')],
+    'Violas - Decorative techniques': [(5, 'Long CS Blend'), (11, 'Tremolo'), (12, 'Trem CS'), (13, 'Trem Sul Pont'), (16, 'Long (Rachm.)'), (19, 'Long CS Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (81, 'Trem Ms (150bpm)'), (82, 'Trem Ms (180bpm)'), (90, 'FX'), (114, 'Long Super Sul Tasto')],
+    'Celli - Core techniques': [(1, 'Long'), (7, 'Long CS'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (18, 'Long Sul Pont'), (42, 'Spiccato'), (47, 'Short CS'), (48, 'Short Brushed'), (50, "Short 0'5"), (52, "Short 1'0"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harmonics'), (62, 'Short Brushed CS'), (112, 'Long Sul C')],
+    'Celli - Decorative techniques': [(5, 'Long CS Blend'), (11, 'Tremolo'), (12, 'Trem CS'), (13, 'Trem Sul Pont'), (16, 'Long (Rachm.)'), (19, 'Long CS Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (72, 'Trill (Minor 3rd)'), (73, 'Trill (Major 3rd)'), (81, 'Trem Ms (150bpm)'), (82, 'Trem Ms (180bpm)'), (84, 'Trem CS Ms (150bpm)'), (90, 'FX'), (114, 'Long Super Sul Tasto')],
+    'Basses - Core techniques': [(1, 'Long'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (18, 'Long Sul Pont'), (41, 'Short Spicc-Pizz'), (42, 'Spiccato'), (49, 'Staccato Dig'), (50, "Short 0'5"), (52, "Short 1'0"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harmonics')],
+    'Basses - Decorative techniques': [(11, 'Tremolo'), (13, 'Trem Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (81, 'Trem Ms (150bpm)'), (82, 'Trem Ms (180bpm)'), (90, 'FX'), (113, 'Long Sul Pont (Dist)'), (114, 'Long Super Sul Tasto')],
+    'Ensembles - Core techniques': [(1, 'Long'), (7, 'Long CS'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (42, 'Spiccato'), (47, 'Spiccato CS'), (48, 'Short Brushed'), (50, "Short 0'5"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harm'), (62, 'Short Brushed CS')],
+    'Ensembles - Decorative techniques': [(5, 'Long CS Blend'), (11, 'Tremolo'), (12, 'Trem CS'), (13, 'Trem Sul Pont'), (18, 'Long Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (112, 'Long Sul String'), (114, 'Long Super Sul Tasto')],
 }
+# selected and shown, but they play nothing: as in the All techniques patches (SILENT above)
+SCANNED_SILENT = {('Violins 1 - Core techniques', 112), ('Violins 2 - Core techniques', 112),
+                  ('Celli - Core techniques', 112)}
 scannedUsed = set()
 out.append('  <!-- the library\'s other patches: set up and checked, not chosen by notation -->')
 for nki in NKI_FILES:
@@ -746,11 +768,16 @@ for nki in NKI_FILES:
     head = f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '')
     if name in SCANNED:
         # the values are known: the same names as the files', not scanned again
-        assert sorted(SCANNED[name]) == sorted(arts), name
+        known = SCANNED[name]
+        if not isinstance(known[0], tuple):
+            known = list(enumerate(known, 1))       # (in the names' order, 1 … n)
+        assert sorted(a for _, a in known) == sorted(arts), name
+        assert len({v for v, _ in known}) == len(known), name
         scannedUsed.add(name)
         out.append(head + pitch + '>')
-        for value, a in enumerate(SCANNED[name], 1):
-            out.append(f'    <Articulation name={q(a)} value="{value}"/>')
+        for value, a in known:
+            silent = ' expect="silent"' if (name, value) in SCANNED_SILENT else ''
+            out.append(f'    <Articulation name={q(a)} value="{value}"{silent}/>')
         out.append('  </Patch>')
     else:
         out.append(head + scan + pitch + '/>')
