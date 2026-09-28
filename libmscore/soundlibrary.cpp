@@ -182,6 +182,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         lib->dynamicsCC = a.value("cc").toInt();
                   if (a.hasAttribute("expression"))
                         lib->expressionValue = a.value("expression").toInt();
+                  if (a.hasAttribute("velocity"))
+                        lib->velocityDynamics = a.value("velocity").toString().split(' ', QString::SkipEmptyParts);
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Controller") {

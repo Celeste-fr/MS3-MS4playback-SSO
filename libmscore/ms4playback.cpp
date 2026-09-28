@@ -533,6 +533,16 @@ NoteResult note(Family fam, const std::vector<ArtRef>& arts, int D, bool snd)
             }
       else
             r.velocity = expressionLevel(pk.val);
+      // the dynamic level on the dynamics CC's scale, its articulations (accent …) as much above it as
+      // they put MS4's soundfont velocity above a plain note's at that level (the curve's peak itself
+      // would make an accented pp short ff)
+      r.levelVelocity = expressionLevel(D);
+      if (snd) {
+            const bool plain = arts.size() == 1 && arts[0].art == Art::Standard;
+            const int base = plain ? r.velocity : note(fam, { ArtRef { Art::Standard, false } }, D, true).velocity;
+            if (base > 0)
+                  r.levelVelocity = qBound(1, int(std::lround(r.levelVelocity * double(r.velocity) / base)), 127);
+            }
       for (const P& q : pats)
             r.arts.push_back(q.art);
       return r;

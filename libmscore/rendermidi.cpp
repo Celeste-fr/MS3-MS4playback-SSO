@@ -1203,6 +1203,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         events->registerChannel(libChannel);
                   const std::vector<const SoundLib::LibInstrument*> libPatches = li ? lp->patchesFor(li)
                                                                                      : std::vector<const SoundLib::LibInstrument*>();
+                  // a short (Spitfire: velocity, not CC1, sets its dynamics) at its level on the CC's scale,
+                  // so it follows the dynamics as the longs do; -1: MS4's velocity
+                  auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r) {
+                        return c && lp->velocityDynamics.contains(c.base) ? r.levelVelocity : -1;
+                        };
                   auto librarySwitch = [&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
                         if (c)
@@ -1318,6 +1323,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!li->kit && !note->tieBack()) {
                                     const Chord* ch = note->chord();
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
+                                    libNote.velocity = libVelocity(libChoice, r);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {
@@ -1374,8 +1380,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         SoundLib::Choice& libChoice = libNote.choice;
                         if (li && !libNote.builtIn) {
                               noteChannel = libChannel;
-                              if (!li->kit)
+                              if (!li->kit) {
                                     libChoice = librarySwitch(note, noteArts, start, length);
+                                    libNote.velocity = libVelocity(libChoice, r);
+                                    }
                               }
                         else if (sit != ctx.sounds.end()) {
                               noteChannel = instr->channel(sit->second.channelSlots[sit->second.slotFor(r.arts)].channel)->channel();
@@ -1766,7 +1774,12 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                   for (int ch : channels) {
                         NPlayEvent ev(ME_CONTROLLER, ch, controller, value);
                         ev.setOriginatingStaff(part->staff(0)->idx());
-                        events->insert(std::make_pair(tick + tickOffset, ev));
+                        // a library's dynamics CC ahead of the notes at its tick (a long starting on a
+                        // new dynamic would start at the old one); MS4's CC11 after them, as MS4 sends it
+                        if (lp)
+                              events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
+                        else
+                              events->insert(std::make_pair(tick + tickOffset, ev));
                         }
                   for (int ch : builtInChannels) {
                         NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, value);
@@ -3647,6 +3660,7 @@ void MidiRenderer::updateState()
                         Part* part = const_cast<Part*>(r.part);
                         LibPart& lp = libParts[part];
                         lp.route = r;
+                        lp.velocityDynamics = library->velocityDynamics;
                         lp.text.build(score, part);
                         for (const SoundLib::Controller& c : r.instrument->allControllers) {
                               if (c.cc < 0)       // a plug-in parameter: set on the instance (SoundLibraryHost)

@@ -156,6 +156,10 @@ class Library {
       int dynamicsCC { 1 };               // single-note dynamics (Spitfire: CC1); -1: velocity only
       QStringList plugins;                // the plug-in to host, by file name, in order of preference
       int expressionValue { 127 };        // CC11 at the start (when dynamicsCC is not 11)
+      // the articulation bases whose dynamics are the note's velocity, not the dynamics CC
+      // (<Dynamics velocity="short spiccato …">; Spitfire's shorts): those notes' velocity is their
+      // level on the dynamics CC's scale (pp 32, mf 80) instead of MS4's soundfont velocity
+      QStringList velocityDynamics;
       // microtones (<Tuning method="varispeed" tolerance tail>): the plug-in ignores a note's tuning
       // (Kontakt), so a part's notes are spread over copies of its patch ("lanes", Lanes below),
       // each played faster or slower by its tuning (Vst3Plugin::setPitch). A lane changes its

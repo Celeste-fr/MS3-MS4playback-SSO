@@ -53,6 +53,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void shortsFollowDynamics();
       void checkedAsExpected();
       void render();
       void renderPatches();
@@ -1737,6 +1738,70 @@ void TestSoundLibrary::externalPlugin()
       f.write(QJsonDocument(out).toJson());
       }
 #endif
+
+//---------------------------------------------------------
+//   shortsFollowDynamics
+//    Spitfire's shorts take their dynamics from velocity, not CC1 (the owner, 2026-09-28: at pp the
+//    staccatos stood out): a base listed in <Dynamics velocity> gets its level on CC1's scale (pp 32,
+//    mf 80), an accent as much above as MS4 puts it; the longs keep MS4's velocity. Without the
+//    attribute, MS4's velocity for all
+//---------------------------------------------------------
+
+void TestSoundLibrary::shortsFollowDynamics()
+      {
+      for (bool listed : { true, false }) {
+            auto lib = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'%1/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "<Articulation name='Staccato' value='40' techniques='short'/>"
+               "</Instrument></SoundLibrary>").arg(listed ? " velocity='short spiccato'" : ""));
+            QVERIFY(lib);
+            QCOMPARE(lib->velocityDynamics.size(), listed ? 2 : 0);
+            SoundLib::setCurrent(lib);
+            MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            // the note-ons in order: bar 1 pp A B C, bar 2 mf A B C, bar 3 pp A (accent) B C; the CC1 in
+            // force at each (sent ahead of a note on the same tick)
+            std::vector<int> velo, cc1;
+            int cc = -1;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.channel() != ch)
+                        continue;
+                  if (ev.type() == ME_CONTROLLER && ev.dataA() == 1)
+                        cc = ev.dataB();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                        velo.push_back(ev.velo());
+                        cc1.push_back(cc);
+                        }
+                  }
+            QCOMPARE(int(velo.size()), 9);
+            QCOMPARE(cc1[0], 32);
+            QCOMPARE(cc1[3], 80);
+            const int longPp = velo[2];                   // MS4's velocity (the soundfont's), either way
+            const int longMf = velo[5];
+            QVERIFY(longMf > longPp && longMf - longPp < 20);
+            if (listed) {
+                  QCOMPARE(velo[0], 32);
+                  QCOMPARE(velo[1], 32);
+                  QCOMPARE(velo[3], 80);
+                  QCOMPARE(velo[4], 80);
+                  QVERIFY2(velo[6] > 32 && velo[6] < 64, qPrintable(QString::number(velo[6])));    // accented pp: above pp, not ff
+                  QCOMPARE(velo[7], 32);
+                  }
+            else {
+                  QCOMPARE(velo[0], longPp);
+                  QCOMPARE(velo[3], longMf);
+                  }
+            delete score;
+            }
+      }
 
 QTEST_MAIN(TestSoundLibrary)
 #include "tst_soundlibrary.moc"
