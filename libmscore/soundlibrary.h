@@ -123,6 +123,8 @@ struct LibInstrument {
       std::vector<Articulation> articulations;
       bool kit { false };                 // percussion served by its extras' keys; no patch of its own
       bool keyScan { false };             // a percussion patch: the articulation check scans its keys
+      QString scan;                       // a <Patch> with several articulations (read from its files): "values"
+                                          // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;
       std::vector<Controller> controllers;          // its own (over the library's, by id)
       std::vector<Controller> allControllers;       // the library's with its own (Library::load)

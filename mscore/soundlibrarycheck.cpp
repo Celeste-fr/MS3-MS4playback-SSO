@@ -337,6 +337,22 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
             _tickAll->setProperty("ticked", tick);
             _tickAll->setText(tick ? tr("Untick all") : tr("Tick all"));
             });
+      // (the owner, 2026-09-28: the scan of the patches the map doesn't use, faster without missing
+      // anything: of SSO's 541, the files show 518 with one sound only; the map marks the 23 with
+      // several, scan="values" or "keys")
+      if (_library && std::any_of(_library->otherPatches.begin(), _library->otherPatches.end(),
+                                  [](const SoundLib::LibInstrument& p) { return !p.scan.isEmpty(); })) {
+            QPushButton* toScan = buttons->addButton(tr("Tick the patches to scan"), QDialogButtonBox::ActionRole);
+            toScan->setToolTip(tr("The patches not in the map whose files hold several articulations or sounds: "
+                                  "their values or keys are scanned (the others have one sound each)"));
+            connect(toScan, &QPushButton::clicked, this, [this]() {
+                  for (int row = 0; row < _table->rowCount(); ++row) {
+                        const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
+                        const bool tick = setup && _rows[row].added && !_rows[row].instrument->scan.isEmpty();
+                        _table->item(row, 0)->setCheckState(tick ? Qt::Checked : Qt::Unchecked);
+                        }
+                  });
+            }
       _all = buttons->addButton(tr("Tick what needs checking"), QDialogButtonBox::ActionRole);
       _check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
       _close = buttons->addButton(QDialogButtonBox::Close);

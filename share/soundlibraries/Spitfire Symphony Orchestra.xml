@@ -1950,10 +1950,10 @@
     <Switch type="none"/>
   </Instrument>
   <!-- the library's other patches: set up and checked, not chosen by notation -->
-  <Patch name="Curated Brass Ensembles" nki="Instruments/Curated Ensembles/Curated Brass Ensembles.nki" setup="$iooxo=3"/>
-  <Patch name="Curated String Ensembles" nki="Instruments/Curated Ensembles/Curated String Ensembles.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Tutti Ensembles" nki="Instruments/Curated Ensembles/Curated Tutti Ensembles.nki" setup="$iooxo=3"/>
-  <Patch name="Curated Woodwind Ensembles" nki="Instruments/Curated Ensembles/Curated Woodwind Ensembles.nki" setup="$iooxo=3"/>
+  <Patch name="Curated Brass Ensembles" nki="Instruments/Curated Ensembles/Curated Brass Ensembles.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Curated String Ensembles" nki="Instruments/Curated Ensembles/Curated String Ensembles.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Curated Tutti Ensembles" nki="Instruments/Curated Ensembles/Curated Tutti Ensembles.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Curated Woodwind Ensembles" nki="Instruments/Curated Ensembles/Curated Woodwind Ensembles.nki" setup="$iooxo=3" scan="values"/>
   <Patch name="Brass - Bass Trombone Solo - Fall" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Fall.nki" setup="$iooxo=3"/>
   <Patch name="Brass - Bass Trombone Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Cuivre.nki" setup="$iooxo=3"/>
   <Patch name="Brass - Bass Trombone Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Flutter.nki" setup="$iooxo=3"/>
@@ -2472,23 +2472,23 @@
   <Patch name="Woodwinds - Piccolo Flute - Short Tenuto" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Short Tenuto.nki" setup="$iooxo=3"/>
   <Patch name="Woodwinds - Piccolo Flute - Trill (Major 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Major 2nd).nki" setup="$iooxo=3"/>
   <Patch name="Woodwinds - Piccolo Flute - Trill (Minor 2nd)" nki="Instruments/Individual techniques/Woodwinds - Piccolo Flute - Trill (Minor 2nd).nki" setup="$iooxo=3"/>
-  <Patch name="Ensembles - Contemporary" nki="Instruments/Symphonic Percussion/Ensembles - Contemporary.nki"/>
-  <Patch name="Ensembles - Hands and hits" nki="Instruments/Symphonic Percussion/Ensembles - Hands and hits.nki"/>
-  <Patch name="Ensembles - Low Ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Low Ensemble.nki"/>
-  <Patch name="Ensembles - Metal Clangs" nki="Instruments/Symphonic Percussion/Ensembles - Metal Clangs.nki"/>
-  <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki"/>
-  <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki"/>
-  <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki"/>
-  <Patch name="Basses - Core techniques" nki="Instruments/Symphonic Strings/Basses - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Basses - Decorative techniques" nki="Instruments/Symphonic Strings/Basses - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Celli - Core techniques" nki="Instruments/Symphonic Strings/Celli - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Celli - Decorative techniques" nki="Instruments/Symphonic Strings/Celli - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Ensembles - Core techniques" nki="Instruments/Symphonic Strings/Ensembles - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Ensembles - Decorative techniques" nki="Instruments/Symphonic Strings/Ensembles - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violas - Core techniques" nki="Instruments/Symphonic Strings/Violas - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violas - Decorative techniques" nki="Instruments/Symphonic Strings/Violas - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 1 - Core techniques" nki="Instruments/Symphonic Strings/Violins 1 - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 1 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 1 - Decorative techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 2 - Core techniques" nki="Instruments/Symphonic Strings/Violins 2 - Core techniques.nki" setup="$iooxo=3"/>
-  <Patch name="Violins 2 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 2 - Decorative techniques.nki" setup="$iooxo=3"/>
+  <Patch name="Ensembles - Contemporary" nki="Instruments/Symphonic Percussion/Ensembles - Contemporary.nki" scan="keys"/>
+  <Patch name="Ensembles - Hands and hits" nki="Instruments/Symphonic Percussion/Ensembles - Hands and hits.nki" scan="keys"/>
+  <Patch name="Ensembles - Low Ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Low Ensemble.nki" scan="keys"/>
+  <Patch name="Ensembles - Metal Clangs" nki="Instruments/Symphonic Percussion/Ensembles - Metal Clangs.nki" scan="keys"/>
+  <Patch name="Ensembles - Snare ensemble" nki="Instruments/Symphonic Percussion/Ensembles - Snare ensemble.nki" scan="keys"/>
+  <Patch name="Ensembles - Traditional Orchestra" nki="Instruments/Symphonic Percussion/Ensembles - Traditional Orchestra.nki" scan="keys"/>
+  <Patch name="Other - Harp glissandi" nki="Instruments/Symphonic Percussion/Other - Harp glissandi.nki" scan="keys"/>
+  <Patch name="Basses - Core techniques" nki="Instruments/Symphonic Strings/Basses - Core techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Basses - Decorative techniques" nki="Instruments/Symphonic Strings/Basses - Decorative techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Celli - Core techniques" nki="Instruments/Symphonic Strings/Celli - Core techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Celli - Decorative techniques" nki="Instruments/Symphonic Strings/Celli - Decorative techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Ensembles - Core techniques" nki="Instruments/Symphonic Strings/Ensembles - Core techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Ensembles - Decorative techniques" nki="Instruments/Symphonic Strings/Ensembles - Decorative techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Violas - Core techniques" nki="Instruments/Symphonic Strings/Violas - Core techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Violas - Decorative techniques" nki="Instruments/Symphonic Strings/Violas - Decorative techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Violins 1 - Core techniques" nki="Instruments/Symphonic Strings/Violins 1 - Core techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Violins 1 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 1 - Decorative techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Violins 2 - Core techniques" nki="Instruments/Symphonic Strings/Violins 2 - Core techniques.nki" setup="$iooxo=3" scan="values"/>
+  <Patch name="Violins 2 - Decorative techniques" nki="Instruments/Symphonic Strings/Violins 2 - Decorative techniques.nki" setup="$iooxo=3" scan="values"/>
 </SoundLibrary>

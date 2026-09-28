@@ -187,6 +187,15 @@ void TestSoundLibrary::spitfireMap()
       QVERIFY2(lib, qPrintable(error));
       QCOMPARE(lib->name, QString("Spitfire Symphony Orchestra"));
       QCOMPARE(lib->dynamicsCC, 1);
+      // the patches the map doesn't use: 23 with several sounds in their files, to scan (values or keys)
+      int values = 0, keys = 0;
+      for (const SoundLib::LibInstrument& p : lib->otherPatches) {
+            values += p.scan == "values";
+            keys += p.scan == "keys" && p.keyScan;
+            }
+      QCOMPARE(int(lib->otherPatches.size()), 541);
+      QCOMPARE(values, 16);
+      QCOMPARE(keys, 7);
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);

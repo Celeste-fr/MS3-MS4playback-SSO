@@ -699,6 +699,16 @@ for i, line in enumerate(out):
     end = '/>' if rest.endswith('/>') else '>'
     rest = rest[:-len(end)]
     out[i] = f'  <Instrument name={q(name)}{rest} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + end
+# Each patch's articulations (or sounds) as its .nki's sample groups name them (the owner's library-files
+# extract of 2026-09-27, library.json: the top-level group names under the first mic, variants, round
+# robins, dynamic layers and release groups left out; sso_nki_articulations.json). For Violins 1 they are
+# the articulations Check articulations saw in Kontakt. A patch the map doesn't use with several gets
+# scan="values" (its switch values scanned) or, the percussion ensembles and harp glissandi, scan="keys";
+# the others (518 of 541) have one sound each, nothing to switch. The files give the names, not the switch
+# values: those are in Spitfire's script, so Kontakt is still needed for the 23.
+FILE_ARTICULATIONS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_articulations.json'),
+                                    encoding='utf-8'))
+assert len(FILE_ARTICULATIONS) == 700, len(FILE_ARTICULATIONS)
 out.append('  <!-- the library\'s other patches: set up and checked, not chosen by notation -->')
 for nki in NKI_FILES:
     if nki in used:
@@ -706,7 +716,9 @@ for nki in NKI_FILES:
     name = ntpath.splitext(ntpath.basename(nki))[0]
     assert name.lower() not in names, name
     v = setupValues(nki)
-    out.append(f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + '/>')
+    arts = FILE_ARTICULATIONS[nki]
+    scan = '' if len(arts) < 2 else ' scan="keys"' if '/Symphonic Percussion/' in '/' + nki else ' scan="values"'
+    out.append(f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + scan + '/>')
 out.append('</SoundLibrary>')
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed

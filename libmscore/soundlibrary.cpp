@@ -198,14 +198,16 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Patch") {
-                  // <Patch name="Violins 1 - Core techniques" nki="Instruments/…/….nki" setup="$iooxo=3"/>
+                  // <Patch name="Violins 1 - Core techniques" nki="Instruments/…/….nki" setup="$iooxo=3" scan="values"/>
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
                   li.setupValues = readSetupValues(a.value("setup").toString());
+                  li.scan = a.value("scan").toString();
+                  li.keyScan = li.scan == "keys";
                   li.switchType = defType;
                   li.switchNumber = defNumber;
-                  if (li.name.isEmpty() || li.nki.isEmpty())
+                  if (li.name.isEmpty() || li.nki.isEmpty() || !(li.scan.isEmpty() || li.scan == "values" || li.scan == "keys"))
                         return fail(QString("%1:%2: bad Patch").arg(path).arg(r.lineNumber()));
                   lib->otherPatches.push_back(li);
                   r.skipCurrentElement();

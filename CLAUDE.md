@@ -939,6 +939,16 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   both have plays on the kit patch and only a technique the kit lacks loads the drum's own patch. Their
   keys (`SINGLE_HITS` / `SINGLE_DRUMS`, at their defaults) are not known yet. Kickstart shows a technique with no key on C-2 (0). None of it heard in
   Kontakt yet.
+  - **Articulations from the files** (2026-09-28; the owner: scan faster without missing anything): each
+    `.nki`'s top-level sample-group names under the first mic are its articulations (variants, round robins,
+    dynamic layers, release groups left out; for Violins 1 exactly what Check articulations saw in Kontakt),
+    read from the owner's library-files extract into `tools/soundlibraries/sso_nki_articulations.json` (700
+    patches). Of the 541 patches the map doesn't use, 518 have one sound (single techniques, Performance): no
+    switch to scan. The 23 with several are marked in the map, `<Patch … scan="values">` (the 4 Curated
+    Ensembles, the 12 Core / Decorative techniques) or `scan="keys"` (the 6 percussion ensembles, Harp
+    glissandi; `keyScan`); *Check articulations* › *Tick the patches to scan* ticks them. The files give the
+    names only: which switch value plays which is in Spitfire's script, so Kontakt still scans those 23.
+    Test `spitfireMap` (16 values, 7 keys).
   - The scan also "found" many values that show "None": SSO leaves the RELEASE slider where
     the last short articulation put it, so their pictures differ from the first "None". They
     are silent at every pitch; the report now lists such values apart ("most likely none",
