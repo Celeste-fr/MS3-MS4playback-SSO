@@ -7,6 +7,7 @@
 #           "../../share/soundlibraries/Spitfire Symphony Orchestra.xml"
 #
 # Only the numbers are taken; which techniques each articulation plays is decided here (T).
+import json
 import re
 from xml.sax.saxutils import quoteattr as q
 # UACC values per SSO patch ("All techniques"), as extracted from the community bank
@@ -183,9 +184,17 @@ def controller(c, indent):
 
 out += [x for c in CONTROLLERS for x in controller(c, '  ')]
 patchControllersUsed = set()
+measuredMissing = []
 def patchControllers(name):
     patchControllersUsed.add(name)
-    return [x for c in PATCH_CONTROLLERS.get(name, []) for x in controller(c, '    ')]
+    cs = PATCH_CONTROLLERS.get(name)
+    if cs is None:
+        if name in MEASURED:
+            cs = measuredControllers(name)
+        else:
+            measuredMissing.append(name)
+            cs = []
+    return [x for c in cs for x in controller(c, '    ')]
 
 # Corrections from Spitfire's own Cubase expression maps for SSS / SSB / SSW (legacy downloads,
 # CC32 = UACC; see check_spitfire_expressionmaps.py), where they differ from the community bank
@@ -325,27 +334,26 @@ BRASS = ['Horn Solo', 'Horns a2', 'Horns a6', 'Trumpet Solo', 'Trumpets a2', 'Tr
          'Tenor Trombones a2', 'Trombones a6', 'Bass Trombone Solo', 'Bass Trombones a2', 'Contrabass Trombone',
          'Cimbasso Solo', 'Cimbassi a2', 'Tuba Solo', 'Contrabass Tuba', 'Motif Horns a4', 'Motif Trumpets a3',
          'Motif Trombones a5']
-VIB, REL, TIGHT, VAR, MUTE = _p('vibrato', 'Vibrato'), _p('release', 'Release'), _p('tightness', 'Tightness'), \
-    _p('variation', 'Variation'), _p('mute', 'Mute')
-FAMILY = {}
-for n in STRINGS:
-    FAMILY[n] = [VIB, REL, TIGHT] + MIX + mics(5)
-for n in WOODWINDS:
-    FAMILY[n] = [VIB, REL, VAR] + MIX + mics(4)
-for n in BRASS:
-    FAMILY[n] = [REL, TIGHT, VAR] + MIX + mics(4)
-PATCH_CONTROLLERS.update(FAMILY)
-# the extras: a Performance patch has no Release, a strings one has Mute; a single technique its family's
-for main, name, _ in EXTRAS:
-    if main not in FAMILY:
-        continue
-    fam = [c for c in FAMILY[main] if not ('Performance' in name and c[0] == 'release')]
-    if 'Performance' in name and main in STRINGS:
-        fam = fam[:2] + [MUTE] + fam[2:]
-    PATCH_CONTROLLERS[name] = fam
-PATCH_CONTROLLERS['Grand Piano'] = [_p('pedalvol', 'Pedal Vol'), _p('pedaldyn', 'Pedal Dyn')] + MIX + mics(4)
-for n in ('Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - Wood', 'Other - Toys'):
-    PATCH_CONTROLLERS[n] = [_p('releases', 'Releases'), VAR] + mics(3, named=False)
+# Each patch's controls as its script names them: the owner's extract of all 700 patches
+# (2026-09-27 18:34, run 151; sso_patch_controls.json, the titles of the named automation slots in
+# slot order, Kontakt's placeholders left out). They differ patch by patch (38 different sets), so
+# no family guesses any more: the solo strings have Vibrato and 3 mics, some woodwinds Tightness,
+# the Curated Ensembles Reverb, the harp its 7 pedals. Dynamics, Expression and Articulation
+# Controller are MuseScore's own (CC1, CC11, UACC). Mics named Close … Leader where a patch has 4 or 5
+# (the owner saw them in Kontakt); with 3, unnamed (which three isn't known).
+MEASURED = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_patch_controls.json'),
+                          encoding='utf-8'))
+NOT_SET = {'Dynamics', 'Expression', 'Articulation Controller'}
+IDS = {'Mic Mix Distance': 'micmix', 'Bow Emph.': 'bowemphasis'}
+NAMES = {'Mic Mix Distance': 'Mic Mix Distance (sets all mics)', 'Bow Emph.': 'Bow Emphasis'}
+def measuredControllers(name):
+    titles = [t for t in MEASURED[name] if t not in NOT_SET]
+    mic = [t for t in titles if re.match(r'Mic \d level$', t)]
+    other = [t for t in titles if t not in mic and t != 'Mic Mix Distance']
+    out = [_p(IDS.get(t, re.sub(r'[^a-z0-9]', '', t.lower())), NAMES.get(t, t), t) for t in other]
+    if 'Mic Mix Distance' in titles:
+        out += MIX                              # (first: it sets every mic level; a mic ticked wins)
+    return out + mics(len(mic), named=len(mic) >= 4)
 
 # What Check articulations hears on the owner's Kontakt where it isn't "switches", and why that is
 # right (eighth run, 2026-09-26; each one looked at in the pictures): the check counts these as
@@ -700,4 +708,5 @@ for nki in NKI_FILES:
 out.append('</SoundLibrary>')
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed
+assert not measuredMissing, measuredMissing         # (every map patch was in the extract)
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

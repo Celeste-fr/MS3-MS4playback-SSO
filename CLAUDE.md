@@ -293,18 +293,22 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   (undoable). From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
   suggested `CONTROLLERS` / `PATCH_CONTROLLERS` lines for `gen_spitfire_sso.py`. Test:
   `tst_soundlibrary::controllers`. SSO's map has them since 2026-09-27 (the owner: "build the
-  controls"), all as Kontakt parameters by title (`PATCH_CONTROLLERS` by family, from the second
-  plug-in extract): strings Vibrato, Release, Tightness, Mic 1-5, Mic Mix Distance; woodwinds Vibrato,
-  Release, Variation, Mic 1-4, Mic Mix Distance; brass Release, Tightness, Variation, Mic 1-4, Mic Mix
-  Distance; Performance extras without Release, strings' with Mute; Grand Piano Pedal Vol, Pedal Dyn,
-  Mic 1-4, Mic Mix Distance; the kits Releases, Variation, Mic 1-3. No defaults (the patch keeps its
-  own until a part has a value). Not Dynamics, Expression (MuseScore's CC1 / CC11) nor Articulation
-  Controller (UACC). The titles are guesses from the extract's summary ("Mic 1 level" …):
-  `Vst3Plugin::parameterId` matches loosely (case, spacing, punctuation, a slot number in front), and
-  the Controllers window lists the controls of all the part's patches and says "not in <patch>"
-  for a loaded patch without that title. Tried by the owner on run 91 (2026-09-27): no "not in",
-  Vibrato works; Mic 1-5 are Close, Tree, Ambient, Outrigger, Leader; Mic Mix Distance sets all
-  five faders (0: Ambient only, 127: Close only), so it is applied first and a mic level ticked wins.
+  controls"), all as Kontakt parameters by title. **Each patch's own list since 2026-09-28**: the owner's
+  extract of all 700 patches (2026-09-27 18:34, run 151, 54 min, every patch with named controls) is kept as
+  `tools/soundlibraries/sso_patch_controls.json` (the titles of each patch's named automation slots, in slot
+  order, Kontakt's placeholders left out), and `gen_spitfire_sso.py` (`measuredControllers`) gives every map
+  patch exactly its own; it stops if a map patch is missing from it. 38 different sets: e.g. the solo strings
+  Vibrato and 3 mics (the family guess had Release, Tightness and 5), Flute Solo Vibrato, Release, Variation,
+  some woodwinds Tightness, Performance strings Mute, 4 patches "Bow Emph.", the Curated Ensembles Reverb, some
+  Speed, the Harp Releases and Harp Pedal 1-7, the Grand Piano Pedal Vol / Pedal Dyn, the kits Releases,
+  Variation, 3 mics. Not Dynamics, Expression (MuseScore's CC1 / CC11) nor Articulation Controller (UACC). Mics
+  named Close … Leader where a patch has 4 or 5, unnamed where it has 3 (which three isn't known). No defaults
+  (the patch keeps its own until a part has a value). `Vst3Plugin::parameterId` matches titles loosely (case,
+  spacing, punctuation, a slot number in front), and the Controllers window lists the controls of all the
+  part's patches and says "not in <patch>" for a loaded patch without that title. Tried by the owner on run 91
+  (2026-09-27, with the family lists): Vibrato works; Mic 1-5 are Close, Tree, Ambient, Outrigger, Leader; Mic
+  Mix Distance sets all five faders (0: Ambient only, 127: Close only), so it is applied first and a mic level
+  ticked wins.
   **Values belong to the score; the library's default is SSO's own** (the owner): a parameter a
   score doesn't set is put back to the patch's value when another score set it on the same loaded
   instance (`Slot::patchValues`).
