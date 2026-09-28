@@ -13,6 +13,7 @@
 
 #include "articulation.h"
 #include "chord.h"
+#include "fingering.h"
 #include "dynamic.h"
 #include "hairpin.h"
 #include "instrument.h"
@@ -30,6 +31,7 @@
 #include "textbase.h"
 #include "tremolo.h"
 #include "tuning.h"
+#include "undo.h"
 
 #include <algorithm>
 #include <cmath>
@@ -68,6 +70,7 @@ struct StateList {
 struct StaffTexts {
       StateList div, jete, pizz, dyn;
       std::vector<std::pair<int, ScordaturaText>> scord;      // tick, retuning (or back to the String Data)
+      std::vector<std::pair<int, QString>> sul;               // tick, "G" / "IV" (a string to play on), or "" (off)
       };
 
 struct Walked {                                     // a voice's chords, in order
@@ -103,6 +106,7 @@ class Pass {
       int barOf(int tick) const { return barOf(Fraction::fromTicks(tick)); }
       const StringInstrument& instrumentAt(Part* part, const Fraction& tick);
       StringInstrument tunedAt(Part* part, const Fraction& tick, const StaffTexts& tx);
+      StringInstrument standardAt(Part* part, const Fraction& tick);
       StaffTexts staffTexts(int staffIdx) const;
       double microCents(const Note* note);
       void handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths);
@@ -128,6 +132,7 @@ class Pass {
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
       void run();
       ChordInfo inspect(Chord* chord);
+      QHash<const Note*, std::pair<int, int>> shifts();
       };
 
 int Pass::barOf(const Fraction& tick) const
@@ -173,6 +178,19 @@ const StringInstrument& Pass::instrumentAt(Part* part, const Fraction& tick)
       return _instruments[in] = si;
       }
 
+// the instrument's standard tuning (the table's), whatever its String Data says
+StringInstrument Pass::standardAt(Part* part, const Fraction& tick)
+      {
+      const Instrument* in = part->instrument(tick);
+      QString id = in->instrumentId();
+      QString name = in->longNames().isEmpty() ? QString() : in->longNames().front().name();
+      if (id.isEmpty() && name.isEmpty()) {
+            id = part->instrumentId();
+            name = part->longName();
+            }
+      return lookup(id, name, arcoProgram(in));
+      }
+
 // the instrument at a tick with the scordatura in force there (the last scordatura text at or
 // before it, unless that returned to normal tuning)
 StringInstrument Pass::tunedAt(Part* part, const Fraction& tick, const StaffTexts& tx)
@@ -209,6 +227,14 @@ StaffTexts Pass::staffTexts(int staffIdx) const
                   ScordaturaText st;
                   if (scordaturaText(text, &st))
                         tx.scord.push_back({ tick, st });
+                  static const QRegularExpression SUL("\\b[Ss]ul(?:la)?\\s+(?:the\\s+)?([A-G]|IV|V|I{1,3})(?![A-Za-z])");
+                  static const QRegularExpression SUL_OFF("(^|[^a-z])(ord(\\.|in)|nat(\\.|ural)|norm(\\.|al)|modo\\s+ordinario)",
+                                                          QRegularExpression::CaseInsensitiveOption);
+                  QRegularExpressionMatch sm = SUL.match(text);
+                  if (sm.hasMatch())
+                        tx.sul.push_back({ tick, sm.captured(1) });
+                  else if (SUL_OFF.match(text).hasMatch())
+                        tx.sul.push_back({ tick, QString() });
                   int vel = -1, change = 0;
                   if (e->isDynamic()) {
                         vel = e->getProperty(Pid::VELOCITY).toInt();
@@ -926,6 +952,139 @@ ChordInfo Pass::inspect(Chord* chord)
       }
 
 //---------------------------------------------------------
+//   shifts
+//    scordatura as fingered (see scordaturaShifts in the header)
+//---------------------------------------------------------
+
+// a note's place on the staff counted in diatonic steps, from its pitch and its letter's name
+static int stepOf(int pitch, const QString& name)
+      {
+      static const QString LETTERS = "CDEFGAB";
+      int letter = LETTERS.indexOf(name.at(0));
+      int alter = name.count('#') - name.count('b');
+      int octave = int(std::floor((pitch - alter) / 12.0)) - 1;
+      return (octave + 1) * 7 + letter;
+      }
+
+// a string number on the note (the Fingering palette's circled number: 1 is string I), or -1
+static int stringMark(const Note* n)
+      {
+      static const QStringList ROMANS = { "I", "II", "III", "IV", "V", "VI", "VII" };
+      for (const Element* e : n->el()) {
+            if (!e->isFingering() || toTextBase(e)->tid() != Tid::STRING_NUMBER)
+                  continue;
+            QString t = toTextBase(e)->plainText().trimmed().toUpper();
+            bool ok = false;
+            int v = t.toInt(&ok);
+            if (ok && v >= 1)
+                  return v - 1;
+            if (ROMANS.contains(t))
+                  return ROMANS.indexOf(t);
+            }
+      return -1;
+      }
+
+QHash<const Note*, std::pair<int, int>> Pass::shifts()
+      {
+      QHash<const Note*, std::pair<int, int>> out;
+      static const QStringList ROMANS = { "I", "II", "III", "IV", "V", "VI", "VII" };
+      for (int st = 0; st < _score->nstaves(); ++st) {
+            Staff* staff = _score->staff(st);
+            Part* part = staff->part();
+            StaffTexts tx;
+            bool texts = false;
+            for (int v = 0; v < VOICES; ++v) {
+                  int track = st * VOICES + v;
+                  for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                        Element* e = s->element(track);
+                        if (!e || !e->isChord())
+                              continue;
+                        Fraction tick = s->tick();
+                        StringInstrument standard = standardAt(part, tick);
+                        if (!standard.valid())
+                              continue;
+                        if (!texts) {
+                              tx = staffTexts(st);
+                              texts = true;
+                              }
+                        StringInstrument in = tunedAt(part, tick, tx);
+                        if (in.strings == standard.strings || in.strings.size() != standard.strings.size())
+                              continue;               // not retuned, or no standard to write for
+                        // the string named by a "sul" text in force
+                        int sul = -1;
+                        for (const auto& t : tx.sul) {
+                              if (t.first > tick.ticks())
+                                    break;
+                              sul = -1;
+                              if (ROMANS.contains(t.second))
+                                    sul = ROMANS.indexOf(t.second);
+                              else if (!t.second.isEmpty())
+                                    for (int k = 0; k < int(standard.strings.size()); ++k)
+                                          if (stringName(standard.strings[k]) == t.second)
+                                                sul = k;
+                              }
+                        auto shiftFor = [&](int s) -> std::pair<int, int> {
+                              int chromatic = standard.strings[s] - in.strings[s];
+                              QString tunedName = stringName(in, s);
+                              int diatonic = stepOf(standard.strings[s], stringName(standard.strings[s])) - stepOf(in.strings[s], tunedName);
+                              return { diatonic, chromatic };
+                              };
+                        std::vector<Chord*> chords(toChord(e)->graceNotes().begin(), toChord(e)->graceNotes().end());
+                        chords.push_back(toChord(e));
+                        for (Chord* c : chords) {
+                              bool harmonic = false;
+                              for (const Articulation* a : c->articulations())
+                                    harmonic |= isHarmonicCircle(a->symId());
+                              std::vector<std::pair<Note*, double>> notes;
+                              for (Note* n : c->notes()) {
+                                    harmonic |= n->headGroup() == NoteHead::Group::HEAD_DIAMOND;
+                                    for (const Element* x : n->el())
+                                          harmonic |= x->isSymbol() && isHarmonicCircle(toSymbol(x)->sym());
+                                    notes.push_back({ n, soundingPitch(n->ppitch(), microCents(n)) });
+                                    }
+                              if (harmonic)
+                                    continue;
+                              // the pass's strings for a chord
+                              std::stable_sort(notes.begin(), notes.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+                              std::vector<int> assign(notes.size(), -1);
+                              if (notes.size() > 1 && !tx.div.on(tick.ticks())) {
+                                    std::vector<double> pitches;
+                                    for (const auto& n : notes)
+                                          pitches.push_back(n.second);
+                                    assign = analyseStop(in, pitches).assign;
+                                    assign.resize(notes.size(), -1);
+                                    }
+                              for (size_t k = 0; k < notes.size(); ++k) {
+                                    double sound = notes[k].second;
+                                    int s = stringMark(notes[k].first);
+                                    if (s < 0 && sul >= 0 && sul < int(in.strings.size()) && sound >= in.strings[sul])
+                                          s = sul;
+                                    if (s < 0)
+                                          s = assign[k];
+                                    if (s < 0)                    // the highest string it lies on
+                                          for (int i = 0; i < int(in.strings.size()) && s < 0; ++i)
+                                                if (sound >= in.strings[i])
+                                                      s = i;
+                                    if (s < 0 || s >= int(in.strings.size()))
+                                          continue;
+                                    std::pair<int, int> sh = shiftFor(s);
+                                    if (sh.second != 0 || sh.first != 0)
+                                          out.insert(notes[k].first, sh);
+                                    }
+                              }
+                        }
+                  }
+            }
+      return out;
+      }
+
+QHash<const Note*, std::pair<int, int>> scordaturaShifts(Score* score)
+      {
+      PlayabilityResult res;
+      return Pass(score, res).shifts();
+      }
+
+//---------------------------------------------------------
 //   shortStaffName
 //    MuseScore's short name when the part has one (Vlns., Vc., …), else an abbreviation of the
 //    long name; a trailing number ("Violins I", "Violin 2") is kept
@@ -1036,6 +1195,44 @@ void Score::updatePlayability()
             return;
             }
       _playability = std::make_shared<PlayabilityResult>(Playability::analyse(this));
+      }
+
+//---------------------------------------------------------
+//   scordatura shown as fingered
+//    a view of this score only (a part can show it while the full score doesn't), not saved;
+//    switched through the undo stack, as the accidentals the layout sets change with it
+//---------------------------------------------------------
+
+void Score::setScordaturaView(bool v)
+      {
+      _scordaturaView = v;
+      updateScordaturaShifts();
+      setLayoutAll();
+      }
+
+void Score::cmdToggleScordaturaView()
+      {
+      undo(new ChangeScordaturaView(this, !_scordaturaView));
+      }
+
+void Score::updateScordaturaShifts()
+      {
+      if (_scordaturaView)
+            _scordaturaShifts = Playability::scordaturaShifts(this);
+      else
+            _scordaturaShifts.clear();
+      }
+
+bool Score::scordaturaShift(const Note* n, int* diatonic, int* chromatic) const
+      {
+      if (!_scordaturaView)
+            return false;
+      auto i = _scordaturaShifts.find(n);
+      if (i == _scordaturaShifts.end())
+            return false;
+      *diatonic = i->first;
+      *chromatic = i->second;
+      return true;
       }
 
 }     // namespace Ms

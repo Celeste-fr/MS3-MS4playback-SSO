@@ -422,6 +422,8 @@ class Score : public QObject, public ScoreElement {
       static std::set<Score*> validScores;
       int _linkId { 0 };
       std::shared_ptr<PlayabilityResult> _playability;      // playability.h: the checker's last pass
+      bool _scordaturaView { false };                       // show scordatura as fingered (not saved)
+      QHash<const Note*, std::pair<int, int>> _scordaturaShifts;   // playability.h scordaturaShifts
       MasterScore* _masterScore { 0 };
       QList<MuseScoreView*> viewer;
       Excerpt* _excerpt  { 0 };
@@ -1082,6 +1084,11 @@ class Score : public QObject, public ScoreElement {
       void doLayoutRange(const Fraction&, const Fraction&);
       void updatePlayability();
       const PlayabilityResult* playability() const { return _playability.get(); }
+      bool scordaturaView() const { return _scordaturaView; }
+      void setScordaturaView(bool v);                   // not undoable: cmdToggleScordaturaView
+      void cmdToggleScordaturaView();
+      void updateScordaturaShifts();
+      bool scordaturaShift(const Note* n, int* diatonic, int* chromatic) const;
       void layoutLinear(bool layoutAll, LayoutContext& lc);
 
       void layoutChords1(Segment* segment, int staffIdx);

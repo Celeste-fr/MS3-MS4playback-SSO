@@ -1401,7 +1401,18 @@ void Note::write(XmlWriter& xml) const
       xml.stag(this);
       Element::writeProperties(xml);
 
-      if (_accidental)
+      if (_soundingAccidentalValid && score()->scordaturaView()) {
+            // scordatura shown as fingered: the accidental the note has at sounding pitch, so the file
+            // is the one the sounding view writes (the round trip to MuseScore 3.6)
+            if (_soundingHasAccidental) {
+                  Accidental* a = _accidental ? _accidental->clone() : new Accidental(score());
+                  a->setParent(const_cast<Note*>(this));
+                  a->setAccidentalType(AccidentalType(_soundingAccidental));
+                  a->write(xml);
+                  delete a;
+                  }
+            }
+      else if (_accidental)
             _accidental->write(xml);
       // stacked accidental modifiers (Accidental::isStackModifier): saved where the accidental draws
       // them, so that MuseScore 3.6, which shows them as plain symbols, puts them there too
@@ -2298,24 +2309,104 @@ bool Note::dotIsUp() const
             return (_userDotPosition == Direction::UP);
       }
 
-static bool hasAlteredUnison(Note* note)
+// display: as shown (a scordatura shown as fingered), else at sounding pitch
+static bool hasAlteredUnison(Note* note, bool display = true)
       {
       const auto& chordNotes = note->chord()->notes();
-      AccidentalVal accVal = tpc2alter(note->tpc());
-      int absLine = absStep(note->tpc(), note->epitch());
-      return std::find_if(chordNotes.begin(), chordNotes.end(), [note, accVal, absLine](Note* n) {
-            return n != note && !n->hidden() && absStep(n->tpc(), n->epitch()) == absLine && tpc2alter(n->tpc()) != accVal;
+      auto tpcOf = [display](const Note* n) { return display ? n->displayTpc() : n->tpc(); };
+      auto pitchOf = [display](const Note* n) { return display ? n->displayEpitch() : n->epitch(); };
+      AccidentalVal accVal = tpc2alter(tpcOf(note));
+      int absLine = absStep(tpcOf(note), pitchOf(note));
+      return std::find_if(chordNotes.begin(), chordNotes.end(), [&](Note* n) {
+            return n != note && !n->hidden() && absStep(tpcOf(n), pitchOf(n)) == absLine && tpc2alter(tpcOf(n)) != accVal;
             }) != chordNotes.end();
 }
+
+//---------------------------------------------------------
+//   displayTpc, displayEpitch
+//    a note on a retuned string, while the score shows scordatura as fingered
+//    (Score::scordaturaView), is placed where it would be fingered on the string's standard
+//    tuning; everything else is placed as it sounds (epitch) and spelled as written (tpc)
+//---------------------------------------------------------
+
+int Note::displayTpc() const
+      {
+      int d, c;
+      if (score() && score()->scordaturaShift(this, &d, &c)) {
+            // written the plainest way, where the finger goes: E#, B#, Fb, Cb and doubles respelled
+            // (E5 on an E-flat string is written F5)
+            int t = Ms::transposeTpc(tpc(), Interval(d, c), false);
+            while (t > Tpc::TPC_A_S)
+                  t -= TPC_DELTA_ENHARMONIC;
+            while (t < Tpc::TPC_G_B)
+                  t += TPC_DELTA_ENHARMONIC;
+            return t;
+            }
+      return tpc();
+      }
+
+int Note::displayEpitch() const
+      {
+      int d, c;
+      if (score() && score()->scordaturaShift(this, &d, &c))
+            return epitch() + c;
+      return epitch();
+      }
 
 //---------------------------------------------------------
 //   updateAccidental
 //    set _accidental and _line depending on tpc
 //---------------------------------------------------------
 
-void Note::updateAccidental(AccidentalState* as)
+void Note::updateAccidental(AccidentalState* as, AccidentalState* sounding)
       {
-      int absLine = absStep(tpc(), epitch());
+      // scordatura shown as fingered: first the accidental this note has at sounding pitch, kept for
+      // Note::write (the same rules as below, on the sounding state, changing nothing)
+      _soundingAccidentalValid = sounding != nullptr;
+      if (sounding) {
+            AccidentalType acci = AccidentalType::NONE;
+            int sAbsLine = absStep(tpc(), epitch());
+            if (_accidental && Accidental::isMicrotonal(_accidental->accidentalType())) {
+                  sounding->setAccidentalVal(sAbsLine, Accidental::subtype2value(_accidental->accidentalType()), _tieBack != 0 && _accidental == 0);
+                  _soundingHasAccidental = true;
+                  _soundingAccidental = int(_accidental->accidentalType());
+                  }
+            else {
+                  AccidentalVal accVal = tpc2alter(tpc());
+                  bool error = false;
+                  int eAbsLine = absStep(tpc(), epitch() + ottaveCapoFret());
+                  AccidentalVal absLineAccVal = sounding->accidentalVal(eAbsLine, error);
+                  if (error)
+                        _soundingAccidentalValid = false;
+                  else {
+                        if ((accVal != absLineAccVal) || hidden() || sounding->tieContext(eAbsLine)) {
+                              sounding->setAccidentalVal(eAbsLine, accVal, _tieBack != 0 && _accidental == 0);
+                              acci = Accidental::value2subtype(accVal);
+                              if (_tieBack && _tieBack->startNote()->tpc1() == tpc1())
+                                    acci = AccidentalType::NONE;
+                              else if (acci == AccidentalType::NONE)
+                                    acci = AccidentalType::NATURAL;
+                              }
+                        else if (hasAlteredUnison(this, false)) {
+                              if ((acci = Accidental::value2subtype(accVal)) == AccidentalType::NONE)
+                                    acci = AccidentalType::NATURAL;
+                              }
+                        if (acci != AccidentalType::NONE && !_hidden) {
+                              _soundingHasAccidental = true;
+                              _soundingAccidental = int(acci);
+                              }
+                        else if (_accidental && _accidental->role() != AccidentalRole::AUTO) {
+                              acci = Accidental::value2subtype(accVal);
+                              _soundingHasAccidental = true;
+                              _soundingAccidental = int(acci == AccidentalType::NONE ? AccidentalType::NATURAL : acci);
+                              }
+                        else
+                              _soundingHasAccidental = false;
+                        }
+                  }
+            }
+
+      int absLine = absStep(displayTpc(), displayEpitch());
 
       // don't touch accidentals that don't concern tpc such as
       // quarter tones
@@ -2323,9 +2414,9 @@ void Note::updateAccidental(AccidentalState* as)
             // calculate accidental
             AccidentalType acci = AccidentalType::NONE;
 
-            AccidentalVal accVal = tpc2alter(tpc());
+            AccidentalVal accVal = tpc2alter(displayTpc());
             bool error = false;
-            int eAbsLine = absStep(tpc(), epitch()+ottaveCapoFret());
+            int eAbsLine = absStep(displayTpc(), displayEpitch()+ottaveCapoFret());
             AccidentalVal absLineAccVal = as->accidentalVal(eAbsLine, error);
             if (error) {
                   qDebug("error accidentalVal()");
@@ -2893,7 +2984,7 @@ void Note::updateRelLine(int absLine, bool undoable)
 
 void Note::updateLine()
       {
-      int absLine = absStep(tpc(), epitch());
+      int absLine = absStep(displayTpc(), displayEpitch());
       updateRelLine(absLine, false);
       }
 

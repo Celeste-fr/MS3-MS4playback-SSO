@@ -2185,7 +2185,7 @@ MuseScore::MuseScore()
       menuView->addAction(getAction("mark-irregular"));
       menuView->addSeparator();
       // the playability checker (libmscore/playability.h)
-      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings" }) {
+      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings", "toggle-scordatura-view" }) {
             a = getAction(name);
             a->setCheckable(true);
             menuView->addAction(a);
@@ -3099,6 +3099,8 @@ void MuseScore::updateInspector()
             _inspector->update(cs);
       if (_playabilityPanel && _playabilityPanel->isVisible())
             _playabilityPanel->setScore(cs);
+      if (QAction* sv = getAction("toggle-scordatura-view"))
+            sv->setChecked(cs && cs->scordaturaView());
       }
 
 //---------------------------------------------------------
@@ -7293,6 +7295,15 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   }
             else if (cmd == "toggle-playability-panel")
                   showPlayabilityPanel(a->isChecked());
+            else if (cmd == "toggle-scordatura-view") {
+                  // this score (a part can show it while the full score doesn't); undoable
+                  if (cs) {
+                        cs->startCmd();
+                        cs->cmdToggleScordaturaView();
+                        cs->endCmd();
+                        }
+                  a->setChecked(cs && cs->scordaturaView());
+                  }
             else if (cmd == "toggle-playability" || cmd == "toggle-playability-open-strings") {
                   bool check = cmd == "toggle-playability";
                   preferences.setPreference(check ? PREF_SCORE_PLAYABILITY_CHECK : PREF_SCORE_PLAYABILITY_OPENSTRINGS, a->isChecked());

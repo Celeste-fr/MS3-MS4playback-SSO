@@ -139,6 +139,12 @@ ChordInfo inspect(Chord* chord);
 Chord* selectedChord(Score* score);
 // the staff column's name: the part's short name, else an abbreviation of its long name
 QString shortStaffName(const Part* part, const QString& longName, const Fraction& tick);
+// Scordatura shown as fingered (Score::scordaturaView): per note on a retuned string, the interval
+// from what it sounds to what is written for it, as if the string had its standard tuning:
+// { diatonic steps, semitones }. The string: a string number on the note, else a "sul G" / "sul
+// IV" text in force, else the pass's own choice (a chord's strings; a single note: the highest
+// string it lies on). Harmonics are left as they are.
+QHash<const Note*, std::pair<int, int>> scordaturaShifts(Score* score);
 // the colour Note::draw gives a note, or an invalid QColor
 QColor markColor(const Note* note, bool selected);
 

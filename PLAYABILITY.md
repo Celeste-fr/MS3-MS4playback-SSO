@@ -92,6 +92,21 @@ headless test scores and their checked results are the parity tests.
   `withStrings`; `Pass::tunedAt`). Tests `scordaturaText`, `scordatura` (scord-tests.mscx, from
   `tools/playability/gen_scord_tests.py`). The contrabass has no String Data in instruments.xml:
   E A D G from the table unless the score gives one.
+- **Scordatura shown as fingered (2026-09-28, the owner: a display toggle):** *View › Show
+  Scordatura as Fingered*, per score (a part can show it while the full score stays at sounding
+  pitch), undoable (`ChangeScordaturaView`), not saved. A note on a retuned string is placed where
+  it would be fingered on the string's standard tuning (the table's: G D A E, C G D A, C G D A,
+  E A D G), spelled the plainest way (E5 on an E-flat string is F5, not E#5); pitches, playback and
+  the checker stay at sounding pitch. The string: a string number on the note (Fingering palette,
+  Tid::STRING_NUMBER, "1"–"7" or "I"–"VII"), else a "sul G" / "sul IV" text in force (cancelled by
+  ord. / nat. / normale / modo ordinario), else the checker's choice (a chord's strings, a single
+  note the highest string it lies on). Harmonics are left as they are. `Playability::scordaturaShifts`
+  (per note { diatonic, chromatic }), `Score::scordaturaShift`, `Note::displayTpc` / `displayEpitch`
+  (used by `updateAccidental` and `updateLine` only). **Files:** the layout keeps a second accidental
+  state at sounding pitch while the view is on, and `Note::write` saves each note's sounding
+  accidental, so a file saved with the view on is byte for byte the one saved without it (test
+  `scordaturaView`; the round-trip rule). Edits in the view are made at sounding pitch; MusicXML
+  export writes the displayed accidentals (export with the view off).
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1

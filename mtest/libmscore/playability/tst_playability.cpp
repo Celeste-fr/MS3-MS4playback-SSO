@@ -20,6 +20,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include "libmscore/accidental.h"
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
@@ -52,6 +53,7 @@ class TestPlayability : public QObject, public MTest
       void inspectChords();
       void scordaturaText();
       void scordatura();
+      void scordaturaView();
       void fingerboardLayouts_data();
       void fingerboardLayouts();
       void windLayouts();
@@ -666,6 +668,61 @@ void TestPlayability::scordatura()
       QCOMPARE(b.stringNames, QStringList({ "E", "A", "D", "F" }));
       ChordInfo c = Playability::inspect(chordAt(score, 2400));
       QVERIFY(c.kind == ChordInfo::Kind::STOP);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   scordaturaView: shown as fingered, each note on a retuned string is placed where it would be
+//   fingered on the standard tuning; the file saved with the view on is the one saved without it
+//---------------------------------------------------------
+
+static QByteArray saved(Score* score)
+      {
+      QBuffer buf;
+      buf.open(QIODevice::WriteOnly);
+      score->Score::saveFile(&buf, false, false);
+      return buf.data();
+      }
+
+static QString accidentalOf(const Note* n)
+      {
+      return n->accidental() ? Accidental::subtype2name(n->accidental()->accidentalType()) : QString("none");
+      }
+
+void TestPlayability::scordaturaView()
+      {
+      MasterScore* score = readScore(DIR + "scord-tests.mscx");
+      QVERIFY(score);
+      score->doLayout();
+      QByteArray before = saved(score);
+      Note* eb5 = chordAt(score, 0)->notes()[0];            // E-flat string open (String Data G D A Eb)
+      Note* e5 = chordAt(score, 960)->notes()[0];           // stopped a semitone up on it
+      Note* f3 = chordAt(score, 1920)->notes()[0];          // "scord. F D A E": the F string open
+      Note* e5b = chordAt(score, 2880)->notes()[0];         // the E string, not retuned there
+      QCOMPARE(accidentalOf(eb5), QString("accidentalFlat"));
+      QCOMPARE(accidentalOf(e5), QString("accidentalNatural"));
+
+      score->startCmd();
+      score->cmdToggleScordaturaView();
+      score->endCmd();
+      QVERIFY(score->scordaturaView());
+      QCOMPARE(tpc2name(eb5->displayTpc(), NoteSpellingType::STANDARD, NoteCaseType::AUTO), QString("E"));   // written E5
+      QCOMPARE(eb5->displayEpitch(), 76);
+      QCOMPARE(accidentalOf(eb5), QString("none"));
+      QCOMPARE(tpc2name(e5->displayTpc(), NoteSpellingType::STANDARD, NoteCaseType::AUTO), QString("F"));    // written F5
+      QCOMPARE(accidentalOf(e5), QString("none"));
+      QCOMPARE(tpc2name(f3->displayTpc(), NoteSpellingType::STANDARD, NoteCaseType::AUTO), QString("G"));    // written G3
+      QCOMPARE(f3->displayEpitch(), 55);
+      QCOMPARE(e5b->displayEpitch(), 76);
+      QCOMPARE(eb5->pitch(), 75);                           // sounds as before
+      QCOMPARE(saved(score), before);                       // the file doesn't change
+
+      score->undoRedo(true, nullptr);                       // undo: the sounding view again
+      score->doLayout();
+      QVERIFY(!score->scordaturaView());
+      QCOMPARE(accidentalOf(eb5), QString("accidentalFlat"));
+      QCOMPARE(eb5->displayEpitch(), 75);
+      QCOMPARE(saved(score), before);
       delete score;
       }
 
