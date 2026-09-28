@@ -351,6 +351,9 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                     track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_PITCHBEND, channel,
                                                                      event.dataA(), event.dataB()));
                                     }
+                              else if (event.type() == ME_PARAMETER) {
+                                    // (automation of a hosted plug-in's parameter: not MIDI)
+                                    }
                               else {
                                     qDebug("writeMidi: unknown midi event 0x%02x", event.type());
                                     }

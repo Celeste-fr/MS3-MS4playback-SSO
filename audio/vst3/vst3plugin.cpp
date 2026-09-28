@@ -1085,6 +1085,11 @@ void Vst3Plugin::setParameter(unsigned id, double normalized)
             d->controller->setParamNormalized(id, normalized);
       }
 
+void Vst3Plugin::queueParameter(unsigned id, double normalized)
+      {
+      d->addParam(id, qBound(0.0, normalized, 1.0));
+      }
+
 long Vst3Plugin::controllerParameter(int channel, int cc) const
       {
       if (channel < 0 || channel > 15 || cc < 0 || cc >= 130 || d->ccParam.empty())

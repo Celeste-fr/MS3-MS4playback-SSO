@@ -1764,6 +1764,24 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                         for (; t != c.texts.end() && t->first < tick2; ++t)
                               putCtrl(t->first, t->second);
                         }
+                  // automation lanes: the value in force at the chunk's start, then their points and ramps
+                  // (a MIDI controller to 1/127, a plug-in parameter to 1/1000, every 30 ticks along a ramp)
+                  for (const LibPart::Auto& a : lp->automation) {
+                        const bool param = a.param >= 0;
+                        for (const auto& tv : a.lane.events(tick1, tick2, 30, param ? 0.001 : 1.0 / 127)) {
+                              for (const auto& ip : *part->instruments()) {
+                                    if (!libraryPlays(ip.second))
+                                          continue;
+                                    NPlayEvent ev = param ? NPlayEvent(ME_PARAMETER, ip.second->channel(0)->channel(), a.param, 0)
+                                                          : NPlayEvent(ME_CONTROLLER, ip.second->channel(0)->channel(), a.cc,
+                                                                       int(std::lround(tv.second * 127)));
+                                    if (param)
+                                          ev.setTuning(float(tv.second));
+                                    ev.setOriginatingStaff(part->staff(0)->idx());
+                                    events->insert(events->lower_bound(tv.first + tickOffset), std::make_pair(tv.first + tickOffset, ev));
+                                    }
+                              }
+                        }
                   if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
                         continue;
                   controller = library->dynamicsCC;
@@ -3652,12 +3670,14 @@ void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
       const QString controllers = score->masterScore()->metaTag(PartControllers::metaTag);
+      const QString automation = score->masterScore()->metaTag(Automation::metaTag);
       if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
-          || controllers != partControllers)
+          || controllers != partControllers || automation != partAutomation)
             needUpdate = true;
       if (needUpdate) {
             partModes = modes;
             partControllers = controllers;
+            partAutomation = automation;
             // Update the related structures inside score
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
@@ -3671,6 +3691,7 @@ void MidiRenderer::updateState()
             libGeneration = SoundLib::routesGeneration();
             if (library) {
                   const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
+                  const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
                   for (const SoundLib::Route& r : routes) {
                         if (r.patch != 0 || r.lane != 0)
@@ -3680,8 +3701,32 @@ void MidiRenderer::updateState()
                         lp.route = r;
                         lp.velocityDynamics = library->velocityDynamics;
                         lp.text.build(score, part);
+                        // automation: a lane takes its controller's place (its part value, its staff texts)
+                        QSet<QString> automated;
+                        for (const Automation::Lane& lane : Automation::lanes(part, allLanes)) {
+                              LibPart::Auto a;
+                              a.lane = lane;
+                              a.cc = lane.cc();
+                              if (a.cc < 0) {
+                                    const auto& all = r.instrument->allControllers;
+                                    for (int i = 0; i < int(all.size()); ++i) {
+                                          if (all[size_t(i)].id != lane.target)
+                                                continue;
+                                          if (all[size_t(i)].cc >= 0)
+                                                a.cc = all[size_t(i)].cc;
+                                          else if (!all[size_t(i)].param.isEmpty() && SoundLib::output() == SoundLib::Output::PLUGIN)
+                                                a.param = i;
+                                          }
+                                    }
+                              if (a.cc < 0 && a.param < 0)
+                                    continue;         // (a controller this library doesn't have)
+                              automated.insert(lane.target);
+                              lp.automation.push_back(a);
+                              }
                         for (const SoundLib::Controller& c : r.instrument->allControllers) {
                               if (c.cc < 0)       // a plug-in parameter: set on the instance (SoundLibraryHost)
+                                    continue;
+                              if (automated.contains(c.id) || automated.contains(QString("cc%1").arg(c.cc)))
                                     continue;
                               lp.controllers.push_back({ c.cc, PartControllers::value(part, c, values),
                                                          SoundLib::controllerTexts(score, part, c) });

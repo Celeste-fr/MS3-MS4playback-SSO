@@ -657,7 +657,8 @@ void Seq::playEvent(const NPlayEvent& event, unsigned framePos)
                         }
                   }
             }
-      else if (type == ME_CONTROLLER || type == ME_PITCHBEND || type == ME_AFTERTOUCH || type == ME_POLYAFTER)
+      else if (type == ME_CONTROLLER || type == ME_PITCHBEND || type == ME_AFTERTOUCH || type == ME_POLYAFTER
+               || type == ME_PARAMETER)            // (automation of a hosted plug-in's parameter)
             putEvent(event, framePos);
       }
 

@@ -360,6 +360,24 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
   Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
   Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
+  **Automation (infrastructure, no UI yet; the owner, 2026-09-28: "start building a full automation system …
+  just build the infrastructure")**: `libmscore/automation.*`. Per part, lanes: a target (a map controller id —
+  vibrato, mic1, … — or "cc<n>") and points (score tick, value 0-1, step / linear to the next); before the
+  first point a lane says nothing, after the last it stays. metaTag `automation` (JSON, by part as
+  partcontrollers; kept by 3.6). `Lane::valueAt`, `Lane::events(tick1, tick2, step, resolution)` (the value at a
+  chunk's start, points, ramps every 30 ticks). Rendered (`LibPart::automation`, built with the routes, rebuilt
+  when the metaTag changes): a lane takes its controller's place (part value, staff texts); a CC lane as
+  CC events, a plug-in parameter's as **ME_PARAMETER** events (event.h 0x5: dataA the controller's index in
+  the main patch's allControllers, the value 0-1 in tuning(): MuseScore's event bytes can't hold more —
+  a first try with controller numbers from 4096 was cut to a byte and became CC1). Only with the plug-in
+  output. Seq::playEvent passes ME_PARAMETER to the plug-in; MIDI export skips it. `Vst3Synth::deliver`:
+  `_parameters[slot][index]` -> `Vst3Plugin::queueParameter` (processor only, audio thread);
+  `SoundLibraryHost::sync` and the command-line export fill the ids (`parameterIds`: the part's main patch
+  controllers' titles, looked up on each slot's instance). The SSO extract (sso_patch_controls.json) names
+  what can be automated per patch (Dynamics, Expression, Mic 1-5 level, Mic Mix Distance, Release,
+  Tightness, Vibrato, Variation, Reverb …). Not yet: a UI; a dynamics lane (CC1 from notation stays);
+  which mic "Mic 1 … 5" is; whether Spitfire's scripts keep a value set this way (untried with Kontakt).
+  Test `automation`.
   **Recommended short notes' balance** (the owner, 2026-09-28: "measure out a recommended number for each of the
   sections, and add a button called recommended"): each dynamics note also gets a perceived loudness
   (`ArticulationCheck::perceivedLoudnessDb`: K-weighting (BS.1770), auditory filters one ERB apart with a

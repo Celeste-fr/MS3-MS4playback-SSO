@@ -645,6 +645,24 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QS
 //    has nothing to put back) keeps the setup's value of each parameter set, to put it back
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   parameterIds
+//    automation: a route's instance's parameter id of each controller of the part's main patch
+//    (the renderer's ME_PARAMETER events are by that index), as titled on this instance
+//---------------------------------------------------------
+
+static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, const std::vector<SoundLib::Route>& routes)
+      {
+      const SoundLib::LibInstrument* main = r.instrument;
+      for (const SoundLib::Route& m : routes)
+            if (m.part == r.part && m.patch == 0 && m.lane == 0)
+                  main = m.instrument;
+      std::vector<long> ids;
+      for (const SoundLib::Controller& c : main->allControllers)
+            ids.push_back(c.param.isEmpty() ? -1 : p->parameterId(c.param));
+      return ids;
+      }
+
 static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values,
                             std::map<unsigned, double>* patchValues)
       {
@@ -944,6 +962,13 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   if (!r.instrument->kit)
                         if (Vst3Plugin* p = vst->plugin(r.port * 16 + r.channel))
                               applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
+            // automation: each slot's parameter ids by the part's main patch controller index (the
+            // renderer's ME_PARAMETER events), as titled on this slot's instance
+            for (const SoundLib::Route& r : routes) {
+                  const int slot = r.port * 16 + r.channel;
+                  if (Vst3Plugin* p = r.instrument->kit ? nullptr : vst->plugin(slot))
+                        vst->setParameterIds(slot, parameterIds(p, r, routes));
+                  }
             }
       for (int k = 0; k < 64; ++k) {
             if (!used[k] && (vst->plugin(k) || !_slots[k].instrument.isEmpty())) {
@@ -1076,7 +1101,8 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
             _own.reset(new Vst3Synth);
             _own->init(sampleRate);
             _own->setVarispeed(SoundLib::current() && SoundLib::current()->varispeed);
-            for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+            const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+            for (const SoundLib::Route& r : routes) {
                   if (r.instrument->kit)
                         continue;
                   std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, &error);
@@ -1088,6 +1114,7 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                       && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &error))
                         qWarning("Sound library: %s", qPrintable(error));
                   applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
+                  _own->setParameterIds(r.port * 16 + r.channel, parameterIds(p.get(), r, routes));
                   _own->setPlugin(r.port * 16 + r.channel, std::move(p));
                   }
             _vst = _own.get();

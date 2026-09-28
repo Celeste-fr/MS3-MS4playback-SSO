@@ -31,6 +31,7 @@
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "libmscore/segment.h"
+#include "libmscore/automation.h"
 #include "libmscore/chord.h"
 #include "libmscore/tempo.h"
 #endif
@@ -55,6 +56,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void automation();
       void perceivedLoudness();
       void noteSecondsWritten();
       void dynamicsCalibration();
@@ -2248,6 +2250,139 @@ void TestSoundLibrary::perceivedLoudness()
             noise.push_back(0), noise.push_back(0);
       const double n = AC::perceivedLoudnessDb(noise, sr);
       QVERIFY2(n - a > 5.0, qPrintable(QString::number(n - a)));
+      }
+
+//---------------------------------------------------------
+//   automation
+//    lanes (automation.h): their values and events, kept in the score; played, a MIDI controller's
+//    lane in place of the part's value (CC events, ramps), a plug-in parameter's as parameter events
+//    (ME_PARAMETER) that Vst3Synth hands to the instance (the test synth's Tone scales its level)
+//---------------------------------------------------------
+
+void TestSoundLibrary::automation()
+      {
+      using namespace Automation;
+      Lane lane;
+      lane.target = "vibrato";
+      lane.points = { { 480, 0.2, Curve::STEP }, { 960, 0.2, Curve::LINEAR }, { 1920, 1.0, Curve::STEP } };
+      QCOMPARE(lane.valueAt(0), -1.0);                    // before its first point: says nothing
+      QCOMPARE(lane.valueAt(480), 0.2);
+      QCOMPARE(lane.valueAt(700), 0.2);                   // step
+      QVERIFY(std::fabs(lane.valueAt(1440) - 0.6) < 1e-9);  // half way up the ramp
+      QCOMPARE(lane.valueAt(5000), 1.0);                  // after the last: stays
+      QCOMPARE(lane.cc(), -1);
+      Lane raw;
+      raw.target = "cc21";
+      QCOMPARE(raw.cc(), 21);
+      const auto ev = lane.events(600, 2000, 30, 0.1);
+      QCOMPARE(ev.front().first, 600);                    // the value in force at the chunk's start
+      QCOMPARE(ev.front().second, 0.2);
+      QCOMPARE(ev.back().first, 1920);
+      QCOMPARE(ev.back().second, 1.0);
+      int ramp = 0;
+      for (const auto& e : ev)
+            ramp += e.first > 960 && e.first < 1920;
+      QVERIFY2(ramp >= 6 && ramp <= 8, qPrintable(QString::number(ramp)));    // every 0.1 of the way up
+
+      // kept in the score
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      Lane tone;
+      tone.target = "tone";
+      tone.points = { { 0, 1.0, Curve::STEP }, { 1920, 0.25, Curve::STEP } };
+      std::map<const Part*, PartLanes> all { { score->parts()[0], { lane, tone } } };
+      score->setMetaTag(metaTag, write(score, all));
+      const std::map<const Part*, PartLanes> back = read(score);
+      QCOMPARE(int(back.size()), 1);
+      QCOMPARE(int(back.at(score->parts()[0]).size()), 2);
+      QCOMPARE(back.at(score->parts()[0])[0].points[1].curve, Curve::LINEAR);
+
+      // played
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Controller id='vibrato' name='Vibrato' cc='21' default='64'/>"
+         "<Controller id='tone' name='Tone' param='Tone'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      const SoundLib::Output output = SoundLib::output();
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      score->rebuildMidiMapping();
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      int toneIndex = -1;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            for (int i = 0; i < int(li.allControllers.size()); ++i)
+                  if (li.allControllers[size_t(i)].id == "tone")
+                        toneIndex = i;
+      QVERIFY(toneIndex >= 0);
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      SoundLib::setOutput(output);
+      std::vector<std::pair<int, int>> cc21, params;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (e.channel() != ch || e.type() != ME_CONTROLLER)
+                  continue;
+            if (e.dataA() == 21)
+                  cc21.push_back({ te.first, e.dataB() });
+            }
+      for (const auto& te : events)
+            if (te.second.channel() == ch && te.second.type() == ME_PARAMETER && te.second.dataA() == toneIndex)
+                  params.push_back({ te.first, int(std::lround(te.second.tuning() * 16383)) });
+      QVERIFY(!cc21.empty());
+      // the part's value (the map's default, 64 from the start) gives way to the lane: nothing before
+      // its first point
+      QCOMPARE(cc21.front(), std::make_pair(480, 25));    // 0.2
+      QCOMPARE(cc21.back().second, 127);
+      bool rising = true;
+      for (size_t i = 1; i < cc21.size(); ++i)
+            rising = rising && cc21[i].second >= cc21[i - 1].second;
+      QVERIFY(rising);
+      QVERIFY(params.size() >= 2);
+      QCOMPARE(params.front(), std::make_pair(0, 16383));
+      bool quarter = false;
+      for (const auto& p : params)
+            quarter = quarter || (p.first == 1920 && std::abs(p.second - 4096) <= 1);
+      QVERIFY(quarter);
+      delete score;
+
+      // heard: a parameter event reaches the instance
+      QString error;
+      Vst3Synth synth;
+      synth.init(48000);
+      synth.setPlugin(0, Vst3Plugin::load(TESTSYNTH, 48000, 512, &error));
+      QVERIFY2(synth.plugin(0), qPrintable(error));
+      const long toneId = synth.plugin(0)->parameterId("Tone");
+      QVERIFY(toneId >= 0);
+      synth.setParameterIds(0, { toneId });
+      auto peakWith = [&](int value) {
+            PlayEvent p(ME_PARAMETER, 0, 0, 0);
+            p.setTuning(float(value / 16383.0));
+            synth.play(p);
+            PlayEvent on(ME_NOTEON, 0, 69, 100);
+            synth.play(on);
+            double peak = 0;
+            std::vector<float> b(2 * 512, 0.f);
+            for (int i = 0; i < 40; ++i) {
+                  std::fill(b.begin(), b.end(), 0.f);
+                  synth.process(512, b.data(), nullptr, nullptr);
+                  if (i >= 10)
+                        for (float x : b)
+                              peak = std::max(peak, double(std::fabs(x)));
+                  }
+            PlayEvent off(ME_NOTEON, 0, 69, 0);
+            synth.play(off);
+            for (int i = 0; i < 20; ++i)
+                  synth.process(512, b.data(), nullptr, nullptr);
+            return peak;
+            };
+      const double full = peakWith(16383);
+      const double none = peakWith(0);
+      QVERIFY2(full > 0 && none > 0 && 20 * std::log10(full / none) > 10, qPrintable(QString("%1 %2").arg(full).arg(none)));
       }
 
 QTEST_MAIN(TestSoundLibrary)

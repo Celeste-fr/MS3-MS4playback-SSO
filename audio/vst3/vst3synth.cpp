@@ -77,6 +77,16 @@ void Vst3Synth::playPending()
 
 // an event to its slot's plug-in (with _mutex held). Varispeed: a note-on sets the slot's speed
 // from its tuning (at once when the slot is silent, else gliding) and goes to the plug-in untuned
+void Vst3Synth::setParameterIds(int slot, const std::vector<long>& ids)
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return;
+      std::lock_guard<std::mutex> lock(_mutex);
+      if (int(_parameters.size()) <= slot)
+            _parameters.resize(size_t(slot) + 1);
+      _parameters[size_t(slot)] = ids;
+      }
+
 void Vst3Synth::deliver(const PlayEvent& event)
       {
       const int slot = event.channel();
@@ -90,6 +100,13 @@ void Vst3Synth::deliver(const PlayEvent& event)
             for (unsigned char n : sounding)
                   any = any || n > 0;
             _slots[slot]->setPitch(event.tuning(), any ? LEGATO_GLIDE : 0.0);
+            }
+      // automation of a plug-in parameter (not MIDI): the controller's parameter on this slot's instance
+      if (event.type() == ME_PARAMETER) {
+            const size_t index = size_t(event.dataA());
+            if (size_t(slot) < _parameters.size() && index < _parameters[size_t(slot)].size() && _parameters[size_t(slot)][index] >= 0)
+                  _slots[slot]->queueParameter(unsigned(_parameters[size_t(slot)][index]), double(event.tuning()));
+            return;
             }
       const int key = event.dataA() & 0x7f;
       if (noteOn && sounding[size_t(key)] < 255)
