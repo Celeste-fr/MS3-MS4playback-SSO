@@ -168,22 +168,25 @@ double ArticulationCheck::distance(const std::vector<double>& a, const std::vect
 //   drumIcons
 //    the drum icons of a Kickstart patch's window (SSO's percussion, in MuseScore's editor window,
 //    1377 x 679 at 100 %): right-aligned on a grid of 100 pixels, each with its name under it (the
-//    owner's pictures of the six percussion ensembles, 2026-09-27 20:15: 4-7 icons, every one found).
-//    Their centres, right to left, while a name is there; none left of the patch's title
+//    owner's pictures of the six percussion ensembles, 2026-09-27 20:15 and 2026-09-28 04:41: 4, 5, 6, 8, 8
+//    and 9 icons, as many drums as each patch's file has). Their centres, right to left, while a name is there
 //---------------------------------------------------------
 
 std::vector<QPoint> ArticulationCheck::drumIcons(const QImage& window)
       {
       std::vector<QPoint> icons;
-      if (window.width() < 400 || window.height() < 300)
+      // (Kontakt's whole window only: while it opens it is drawn at another size first, 1010 x 647 on the
+      // owner's run of 2026-09-28 04:41, where the grid is elsewhere)
+      const double aspect = window.height() > 0 ? double(window.width()) / window.height() : 0;
+      if (window.width() < 400 || window.height() < 300 || aspect < 1.9 || aspect > 2.15)
             return icons;
       const QImage img = window.convertToFormat(QImage::Format_RGB32);
       const double sx = img.width() / 1377.0;
       const double sy = img.height() / 679.0;
       for (int k = 0; k < 12; ++k) {
             const int cx = int(std::lround((1303 - 100 * k) * sx));
-            if (cx - 45 * sx < 620 * sx)
-                  break;                              // (the patch's title)
+            if (cx - 45 * sx < 365 * sx)
+                  break;                              // (the panel's left edge)
             int label = 0;                            // light grey pixels in the name's row
             for (int y = int(std::lround(438 * sy)); y < int(std::lround(462 * sy)); ++y) {
                   const QRgb* line = reinterpret_cast<const QRgb*>(img.constScanLine(y));

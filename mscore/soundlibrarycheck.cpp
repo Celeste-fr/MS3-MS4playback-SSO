@@ -3055,7 +3055,26 @@ bool ArticulationCheckDialog::picturePatch(int index, const QString& pluginPath,
                   pictures.append(o);
                   }
             };
-      const QImage first = grab();
+      // until Kontakt has drawn its window: at its full size, the drum row there, and a picture like the last
+      // (the owner's run of 2026-09-28 04:41: grabbed after 3 s, 46 of 48 windows were still 1010 x 647, the
+      // row not drawn, no icon found)
+      auto settled = [&](int maxMs, bool wantIcons) {
+            QElapsedTimer t;
+            t.start();
+            QImage last = grab();
+            for (;;) {
+                  pump.run(500);
+                  QImage now = grab();
+                  const bool same = !now.isNull() && now.size() == last.size()
+                                    && differing(now, last, now.rect()) < now.width() * now.height() / 500;
+                  last = now;
+                  if (same && (!wantIcons || !ArticulationCheck::drumIcons(now).empty()))
+                        return now;
+                  if (t.elapsed() > maxMs || !w || _cancel)
+                        return now;
+                  }
+            };
+      const QImage first = settled(30000, true);
       save(first, "", "as loaded");
       QStringList lines;
 
@@ -3065,8 +3084,8 @@ bool ArticulationCheckDialog::picturePatch(int index, const QString& pluginPath,
             for (int k = 0; k < int(icons.size()) && w && !_cancel; ++k) {
                   if (!pluginMouse(w, from, icons[k]))
                         return int(icons.size());
-                  pump.run(1200);
-                  save(grab(), QString(" - %1%2").arg(prefix).arg(k + 1),
+                  pump.run(600);
+                  save(settled(5000, false), QString(" - %1%2").arg(prefix).arg(k + 1),
                        QString("drum icon %1 from the right clicked (%2, %3)").arg(k + 1).arg(icons[k].x()).arg(icons[k].y()));
                   }
             return int(icons.size());
@@ -3078,29 +3097,8 @@ bool ArticulationCheckDialog::picturePatch(int index, const QString& pluginPath,
       if (icons)
             lines << "(clicks only on Windows: the icons' lists not taken)";
 #endif
-      // more drums than the row shows (Ensembles - Contemporary: 8 in the file, 7 shown): the wheel over
-      // the row, both ways; a row that moved is clicked again
-      if (icons >= 5 && w) {
-            const double sx = first.width() / 1377.0;
-            const double sy = first.height() / 679.0;
-            const QPoint row(int(std::lround(900 * sx)), int(std::lround(400 * sy)));
-            const QRect band(int(std::lround(640 * sx)), int(std::lround(350 * sy)), int(std::lround(730 * sx)),
-                             int(std::lround(120 * sy)));
-            QImage before = grab();
-            for (int wheel : { 120, -120 }) {
-                  for (int i = 0; i < 3; ++i)
-                        pluginMouse(w, first, row, wheel);
-                  pump.run(1000);
-                  const QImage after = grab();
-                  if (differing(before, after, band) > 200) {
-                        save(after, QString(" - scrolled %1").arg(wheel > 0 ? "up" : "down"), "the drum row after the mouse wheel");
-                        const int more = clickAll(after, wheel > 0 ? "up " : "down ");
-                        lines << QString("the wheel moved the row (%1): %2 icon(s)").arg(wheel > 0 ? "up" : "down").arg(more);
-                        out[wheel > 0 ? "scrolledUp" : "scrolledDown"] = more;
-                        before = grab();
-                        }
-                  }
-            }
+      // (every ensemble's row shows all its drums: 4-9, as many as its file has; the owner's run of
+      // 2026-09-28 04:41 and the files)
       {
             std::lock_guard<std::mutex> lock(pictureWindowsMutex);
             if (w)

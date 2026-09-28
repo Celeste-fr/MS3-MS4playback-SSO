@@ -1574,6 +1574,10 @@ void TestSoundLibrary::drumIcons()
                   QVERIFY(std::abs(icons[k].y() - 400 * scale) <= 2);
                   }
             }
+      // Kontakt's window before it has its size (1010 x 647): none
+      QImage early(1010, 647, QImage::Format_RGB32);
+      early.fill(qRgb(190, 190, 190));
+      QVERIFY(ArticulationCheck::drumIcons(early).empty());
       // a window with no drum row (an orchestral patch): none
       QImage plain(1377, 679, QImage::Format_RGB32);
       plain.fill(qRgb(30, 30, 30));

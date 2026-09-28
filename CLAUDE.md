@@ -1074,10 +1074,13 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     "Percussion - …" or "Ensembles - …" (`isPicturePatch`, 48), loads it on one instance, waits until it sounds, opens
     its window off the screen (-20000, not activated, a Tool window; `DialogWatch` leaves it: `isPictureWindow`),
     grabs it (PrintWindow; if that is blank, a moment in the screen's corner), then clicks each drum icon
-    (`ArticulationCheck::drumIcons`: a name under each slot of a 100-pixel grid from the right, found on all six
-    ensemble pictures of 2026-09-27 20:15; `pluginMouse`: WM_LBUTTONDOWN/UP posted to the plug-in's window under the
-    point, Windows only) and, with 5 or more icons, turns the mouse wheel over the row both ways and clicks again if
-    it moved. `<library> windows <date>/`: `<patch>.png`, `<patch> - n.png` (icon n from the right), pictures.json,
+    (`ArticulationCheck::drumIcons`: a name under each slot of a 100-pixel grid from the right, Kontakt's whole window
+    only; `pluginMouse`: WM_LBUTTONDOWN/UP posted to the plug-in's window under the point, Windows only), each picture
+    once the window has settled (`settled`: the same twice, the drum row drawn; up to 30 s). **The owner's first run
+    (2026-09-28 04:41, run 194, 6 min):** the clicks work off the screen (Traditional Orchestra's Toms: Tom 1-5 on C3
+    E3 G3 B3 D4), but the pictures were taken 3 s after opening, while Kontakt still drew its window at 1010 x 647, so
+    46 of 48 had no row and no icon; hence `settled`. Every ensemble's row shows all its drums (4, 5, 6, 8, 8, 9: as
+    many as each file has), so the wheel step was dropped. `<library> windows <date>/`: `<patch>.png`, `<patch> - n.png` (icon n from the right), pictures.json,
     summary.txt, zip. Tried here only with the test synth (no editor: "the plug-in has no window"); the window,
     the off-screen grab and the clicks are untried with Kontakt. Test `drumIcons`.
     Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
