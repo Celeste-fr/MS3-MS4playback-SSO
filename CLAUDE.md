@@ -964,6 +964,14 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     of silence left no listening. Now a picture 4 or more values share is "no articulation" too
     (`scanPictures`; on the owner's sheets: Celli Core 65 → 14, Violins 1 Core 67 → 17, the files list 17 / 18),
     and the offline wait plays the value heard while loading. Test `scanPictures` (a slider like SSO's).
+    The re-scan of those 4 (2026-09-27 23:32, run 170) worked (14-15 each, every value and name the same as
+    the map's All techniques patch of that instrument), but it and the 21:29 scan missed articulations the
+    files list: Pizzicato (Core), Pizzicato / Bartok / Col Legno (Basses Core), Short Brushed / Spiccato CS
+    (Ensembles Core), Long CS Sul Pont and three trills (Violins 1 Decorative). A patch not in the map starts
+    as it loaded (Long) and the scan can't go back there, so its after-scan picture showed "None", and against
+    the start that marked the name and its button as "changing by itself"; articulations that differed from
+    "None" only there were lost. Now that picture is paired with the last value's during the scan
+    (`scanPictures` `samePairs`). Test `scanPictures` (the old comparison misses, the new finds all).
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

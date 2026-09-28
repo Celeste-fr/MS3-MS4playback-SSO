@@ -130,8 +130,11 @@ class ArticulationCheck {
       // more than a few other pixels differ. A picture 4 or more values share is "no articulation"
       // too (SSO's "None" with its RELEASE slider moved). none: the index of the "no articulation"
       // picture
+      // samePairs: more pictures of one state, two by two (the last value's picture during the scan and
+      // once more after it, when the scan can't go back to the state base shows)
       static std::vector<bool> scanPictures(const QImage& base, const std::vector<QImage>& sameState, const std::vector<QImage>& shots,
-                                            const QRect& area, const std::vector<int>& candidates, int* none = nullptr);
+                                            const QRect& area, const std::vector<int>& candidates, int* none = nullptr,
+                                            const std::vector<std::pair<QImage, QImage>>& samePairs = {});
 
       // features of a stereo interleaved clip (the note from its start, noteFrames long, then
       // its tail) and their distance, for the tests

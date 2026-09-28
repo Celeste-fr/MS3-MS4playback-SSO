@@ -169,7 +169,8 @@ double ArticulationCheck::distance(const std::vector<double>& a, const std::vect
 //---------------------------------------------------------
 
 std::vector<bool> ArticulationCheck::scanPictures(const QImage& base, const std::vector<QImage>& sameState, const std::vector<QImage>& shots,
-                                                  const QRect& area, const std::vector<int>& candidates, int* noneIndex)
+                                                  const QRect& area, const std::vector<int>& candidates, int* noneIndex,
+                                                  const std::vector<std::pair<QImage, QImage>>& samePairs)
       {
       const int n = int(shots.size());
       std::vector<bool> articulation(n, false);
@@ -191,16 +192,19 @@ std::vector<bool> ArticulationCheck::scanPictures(const QImage& base, const std:
       const int cw = (w + C - 1) / C;
       const int ch = (h + C - 1) / C;
       std::vector<char> noisy(cw * ch, 0);
-      for (const QImage& s : sameState) {
-            const QImage q = prepared(s);
+      auto noise = [&](const QImage& one, const QImage& other) {
             for (int y = 0; y < h; ++y) {
-                  const QRgb* p1 = reinterpret_cast<const QRgb*>(b.constScanLine(y));
-                  const QRgb* p2 = reinterpret_cast<const QRgb*>(q.constScanLine(y));
+                  const QRgb* p1 = reinterpret_cast<const QRgb*>(one.constScanLine(y));
+                  const QRgb* p2 = reinterpret_cast<const QRgb*>(other.constScanLine(y));
                   for (int x = 0; x < w; ++x)
                         if (differs(p1[x], p2[x]))
                               noisy[(y / C) * cw + x / C] = 1;
                   }
-            }
+            };
+      for (const QImage& s : sameState)
+            noise(b, prepared(s));
+      for (const auto& pair : samePairs)
+            noise(prepared(pair.first), prepared(pair.second));
       std::vector<char> masked(cw * ch, 0);
       for (int y = 0; y < ch; ++y)
             for (int x = 0; x < cw; ++x)

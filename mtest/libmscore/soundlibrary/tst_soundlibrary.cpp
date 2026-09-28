@@ -1521,6 +1521,30 @@ void TestSoundLibrary::scanPictures()
       QVERIFY(!patch.count(none));
       for (int v = 0; v < 128; ++v)
             QVERIFY2(found[v] == bool(patch.count(v)), qPrintable(QString("value %1").arg(v)));
+
+      // a patch not in the map: the scan can't go back to the state it loaded in (Long), so the
+      // picture after it shows the last value's "None". Compared with the start, that left the
+      // name out as "changing by itself" (the owner's scan of 2026-09-27 23:32 missed Pizzicato
+      // and trills); compared with the last value's picture during the scan, it doesn't
+      memory = 700;
+      release = 0;
+      const QImage loaded = picture(1);
+      std::vector<QImage> same { picture(1), picture(1), picture(1) };
+      shots.clear();
+      for (int v = 0; v < 128; ++v)
+            shots.push_back(picture(v));
+      const QImage after = picture(127);
+      const std::vector<bool> found2 = ArticulationCheck::scanPictures(loaded, same, shots, QRect(), { 0, 127, 126, 99, 64 },
+                                                                        &none, { { shots.back(), after } });
+      for (int v = 0; v < 128; ++v)
+            QVERIFY2(found2[v] == bool(patch.count(v)), qPrintable(QString("not in the map: value %1").arg(v)));
+      std::vector<QImage> wrong = same;             // (as it was)
+      wrong.push_back(after);
+      const std::vector<bool> found3 = ArticulationCheck::scanPictures(loaded, wrong, shots, QRect(), { 0, 127, 126, 99, 64 }, &none);
+      int missed = 0;
+      for (int v = 0; v < 128; ++v)
+            missed += patch.count(v) && !found3[v];
+      QVERIFY(missed > 0);
       }
 //---------------------------------------------------------
 //   pluginDescribe

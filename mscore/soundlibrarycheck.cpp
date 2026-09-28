@@ -1344,6 +1344,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       QString sheetNote;
       QImage base, again;
       std::vector<QImage> sameState;      // pictures of the starting state (what changes by itself)
+      std::vector<std::pair<QImage, QImage>> samePairs;     // two pictures of another state
       std::vector<QImage> shots;
       QRect region;
       status(tr("opening its window…"));
@@ -1375,6 +1376,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   pump.run(GRAB_WAIT_MS);
                   again = grabPlugin(w);
                   sameState = { again };
+                  samePairs.clear();
                   for (int k = 0; scan && k < 3 && w; ++k) {
                         pump.run(GRAB_WAIT_MS);
                         sameState.push_back(grabPlugin(w));
@@ -1396,11 +1398,20 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                               }
                         }
                   // back to the start: what changed by itself during the scan (a memory
-                  // display …) is left out of the comparison
+                  // display …) is left out of the comparison. A patch with no value to go
+                  // back to (not in the map: it started as it loaded) stays on the last
+                  // value, so that picture is compared with the last value's during the scan:
+                  // compared with the start, the articulation's own name and button were
+                  // left out as "changing by itself", and articulations that differed from
+                  // "None" only there were missed (the owner's scan of 2026-09-27 23:32:
+                  // Pizzicato in the Core techniques, trills in Violins 1 - Decorative)
                   if (scan && w && !_cancel) {
                         switchTo(start);
                         pump.run(2 * GRAB_WAIT_MS);
-                        sameState.push_back(grabPlugin(w));
+                        if (start >= 0 || shots.empty())
+                              sameState.push_back(grabPlugin(w));
+                        else
+                              samePairs.push_back({ shots.back(), grabPlugin(w) });
                         }
                   if (int(shots.size()) == int(values.size()))
                         region = changedRegion(base, again, shots);
@@ -1442,7 +1453,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   status(tr("comparing the pictures…"));
                   int none = 0;
                   const std::vector<bool> isArticulation = ArticulationCheck::scanPictures(
-                     base, sameState, shots, region, { 0, 127, 126, 99, 64 }, &none);
+                     base, sameState, shots, region, { 0, 127, 126, 99, 64 }, &none, samePairs);
                   drawn.clear();
                   listen.clear();
                   for (int i = 0; i < int(values.size()); ++i) {
