@@ -4605,6 +4605,42 @@ static const int MAX_SUPERVISED_ROUNDS = 100;
 //    and zip
 //---------------------------------------------------------
 
+#ifdef Q_OS_WIN
+// a supervised round's crash: which module the fault was in, and where (Kontakt or MuseScore), for the
+// supervisor's log (the owner's run of 2026-09-28 09:31: 11 access violations during "every controller",
+// the log naming neither the controller nor the module). Only Win32 calls in the filter.
+static wchar_t extractCrashFile[1024];
+
+static LONG WINAPI extractCrashFilter(EXCEPTION_POINTERS* e)
+      {
+      char module[MAX_PATH] = "?";
+      HMODULE m = nullptr;
+      void* const address = e && e->ExceptionRecord ? e->ExceptionRecord->ExceptionAddress : nullptr;
+      if (address && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                        (LPCSTR)address, &m))
+            GetModuleFileNameA(m, module, MAX_PATH);
+      const char* name = strrchr(module, '\\');
+      name = name ? name + 1 : module;
+      char line[MAX_PATH + 128];
+      const int n = _snprintf_s(line, sizeof(line), _TRUNCATE, "exception %08lX in %s +0x%llX (thread %lu)",
+                                e && e->ExceptionRecord ? e->ExceptionRecord->ExceptionCode : 0ul, name,
+                                (unsigned long long)((const char*)address - (const char*)m), GetCurrentThreadId());
+      HANDLE h = CreateFileW(extractCrashFile, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+      if (h != INVALID_HANDLE_VALUE) {
+            DWORD written = 0;
+            WriteFile(h, line, DWORD(n > 0 ? n : 0), &written, nullptr);
+            CloseHandle(h);
+            }
+      return EXCEPTION_CONTINUE_SEARCH;
+      }
+#endif
+
+static QString readRunFile(const QString& path)
+      {
+      QFile f(path);
+      return f.open(QIODevice::ReadOnly | QIODevice::Text) ? QString::fromUtf8(f.readAll()).trimmed() : QString();
+      }
+
 static bool superviseExtract(const QString& root)
       {
       QDir().mkpath(root);
@@ -4619,8 +4655,20 @@ static bool superviseExtract(const QString& root)
       QString patches = extractPatches;
       QStringList skipped;
       bool ok = true;
+      // a crash: the patch once more, without the step it crashed on (a controller, a parameter, a switch
+      // value, pitch bend: "background extract skip.txt"), up to 3 tries; a crash elsewhere (loading,
+      // describing) once more as it was, then left out
+      const QString stepFile = ArticulationCheckDialog::runFile(root, "step");
+      const QString skipFile = ArticulationCheckDialog::runFile(root, "skip");
+      const QString crashFile = ArticulationCheckDialog::runFile(root, "crash");
+      QFile::remove(skipFile);
+      QFile::remove(ArticulationCheckDialog::runFile(root, "finished"));
+      std::map<QString, int> tries;
+      const QByteArray runStart = QByteArray::number(QDateTime::currentMSecsSinceEpoch());
       for (int round = 1; round <= MAX_SUPERVISED_ROUNDS; ++round) {
             QFile::remove(progress);
+            QFile::remove(stepFile);
+            QFile::remove(crashFile);
             QStringList args { "--extract-library", extractLibrary, "--extract-patches", patches, "--extract-child",
                                "--extract-round", QString::number(round) };
             if (extractPitchBend)
@@ -4630,6 +4678,9 @@ static bool superviseExtract(const QString& root)
             const QDateTime started = QDateTime::currentDateTime().addSecs(-60);
             QProcess child;
             child.setProcessChannelMode(QProcess::ForwardedChannels);
+            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+            env.insert("MS_EXTRACT_RUN_START", runStart);           // (the time left over every round)
+            child.setProcessEnvironment(env);
             child.start(QCoreApplication::applicationFilePath(), args);
             if (!child.waitForStarted(60000)) {
                   ArticulationCheckDialog::logBackground("could not start a MuseScore for the extract; stopped");
@@ -4663,21 +4714,46 @@ static bool superviseExtract(const QString& root)
                   break;
                   }
             const QString where = left.takeFirst();
-            skipped << where;
             const bool crashed = child.exitStatus() == QProcess::CrashExit || child.exitCode() != 0;
+            // where it was: the step, and (Windows) the module the fault was in
+            const QString stepLine = readRunFile(stepFile);
+            const QString step = stepLine.section('\t', 0, 0) == where ? stepLine.section('\t', 1).trimmed() : QString();
+            const QString fault = readRunFile(crashFile);
+            const bool skippable = step.startsWith("cc ") || step.startsWith("parameter ") || step.startsWith("switch ")
+                                   || step == "pitch bend";
+            const int tried = ++tries[where];
+            const bool again = (crashed || hung) && (skippable ? tried <= 3 : tried <= 2);
+            if (again && skippable) {
+                  QFile sf(skipFile);
+                  if (sf.open(QIODevice::Append | QIODevice::Text))
+                        sf.write((where + "\t" + step + "\n").toUtf8());
+                  }
+            if (!again)
+                  skipped << where;
             // what that round did before: its extract folder, zipped here (it ended before zipping it)
+            // (not "background extract setups", the setups' folder, which the pattern also matches)
             for (const QFileInfo& fi : QDir(root).entryInfoList({ "* extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+                  if (fi.fileName().startsWith("background extract"))
+                        continue;
                   if (fi.lastModified() >= started && !QFileInfo::exists(fi.absoluteFilePath() + ".zip")) {
                         const QString z = ArticulationCheckDialog::zip(fi.absoluteFilePath());
                         if (!z.isEmpty())
                               ArticulationCheckDialog::logBackground(QString("that round's patches so far: %1").arg(QDir::toNativeSeparators(z)));
                         }
                   }
-            ArticulationCheckDialog::logBackground(QString("%1 on %2 (left out)%3; %4 patches left")
-                                                   .arg(hung ? QString("stopped (hung)") : crashed
-                                                        ? QString("MuseScore crashed (exit code %1)").arg(QString::number(uint(child.exitCode()), 16))
-                                                        : QString("Kontakt stopped running patch scripts"))
-                                                   .arg(where).arg(crashed || hung ? ", its data not written" : QString()).arg(left.size()));
+            const QString what = hung ? QString("stopped (hung)") : crashed
+                                 ? QString("MuseScore crashed (exit code %1%2)").arg(QString::number(uint(child.exitCode()), 16))
+                                   .arg(fault.isEmpty() ? QString() : "; " + fault)
+                                 : QString("Kontakt stopped running patch scripts");
+            const QString at = step.isEmpty() ? QString() : QString(" at %1").arg(step);
+            const QString then = !again ? QString(" (left out), its data not written")
+                                 : skippable ? QString(": once more without %1 (try %2 of 3)").arg(step).arg(tried + 1)
+                                 : QString(": once more (try %1 of 2)").arg(tried + 1);
+            ArticulationCheckDialog::logBackground(QString("%1 on %2%3%4; %5 patches left")
+                                                   .arg(what, where, at, crashed || hung ? then : QString(" (left out)"))
+                                                   .arg(left.size() + (again ? 1 : 0)));
+            if (again)
+                  left.prepend(where);
             if (left.isEmpty())
                   break;
             if (round == MAX_SUPERVISED_ROUNDS) {
@@ -4696,6 +4772,8 @@ static bool superviseExtract(const QString& root)
             ArticulationCheckDialog::logBackground(QString("going on in a new MuseScore (round %1)").arg(round + 1));
             }
       QFile::remove(progress);
+      QFile::remove(stepFile);
+      QFile::remove(crashFile);
       ArticulationCheckDialog::logBackground(skipped.isEmpty() ? QString("the extract is done")
                                              : QString("the extract is done; left out: %1").arg(skipped.join(", ")));
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
@@ -4717,8 +4795,14 @@ static bool extractInBackground()
       // the extract itself (not a key scan, pictures or the dynamics check): under a supervisor
       if (!extractChild && !scanKeysMode && !picturesMode && !checkDynamicsMode)
             return superviseExtract(root);
-      if (extractChild)
+      if (extractChild) {
             ArticulationCheckDialog::setProgressFile(root + "/background extract current.txt");
+#ifdef Q_OS_WIN
+            const std::wstring crash = QDir::toNativeSeparators(ArticulationCheckDialog::runFile(root, "crash")).toStdWString();
+            wcsncpy_s(extractCrashFile, crash.c_str(), _TRUNCATE);
+            SetUnhandledExceptionFilter(extractCrashFilter);
+#endif
+            }
       // the library's map: a file, a name in share/soundlibraries, else the one Preferences name
       QString path = extractLibrary;
       if (!QFileInfo::exists(path)) {

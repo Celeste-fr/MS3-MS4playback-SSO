@@ -78,6 +78,12 @@ class PluginExtract {
             // Quick (set: controllers() puts the patch back with it, reloading its state, instead
             // of searching each controller's own value; false: it failed)
             std::function<bool()> restore;
+            // a background run (ArticulationCheckDialog::extractPatch, superviseExtract): each step's key
+            // before it is tried ("cc 7", "parameter 1234", "switch 5", "controllers: baseline" …), and
+            // the keys not to try (they crashed the plug-in in an earlier round; listed in the JSON as
+            // "skippedAfterCrash")
+            std::function<void(const QString&)> step;
+            std::function<bool(const QString&)> skip;
             };
 
       // something that changed the window: its pictures at the low and the high value (the

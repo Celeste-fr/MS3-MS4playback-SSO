@@ -398,6 +398,18 @@ bool restartNote(Vst3Plugin* p, const PluginExtract::Settings& s, PluginExtract:
       return run(400, nullptr);
       }
 
+// a background run's step: its key noted (a crash names it), or false when it is to be left out
+bool stepAllowed(const PluginExtract::Settings& s, const QString& key, QJsonArray* skipped)
+      {
+      if (s.skip && s.skip(key)) {
+            skipped->append(key);
+            return false;
+            }
+      if (s.step)
+            s.step(key);
+      return true;
+      }
+
 double levelDistance(const PluginExtract::Level& a, const PluginExtract::Level& b)
       {
       const bool both = a.db > -90 && b.db > -90;
@@ -415,6 +427,9 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
       QJsonObject out;
       Context c = makeContext(p, s, run, grab);
       auto stop = [&]() { if (cancelled) *cancelled = true; out["cancelled"] = true; return out; };
+      QJsonArray skippedAfterCrash;
+      if (s.step)
+            s.step("controllers: baseline");
 
       // what changes by itself: the window (meters …) and the sound (vibrato, round robins)
       Level a, b;
@@ -474,6 +489,8 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                   notMapped.append(cc);
                   continue;
                   }
+            if (!stepAllowed(s, QString("cc %1").arg(cc), &skippedAfterCrash))
+                  continue;
             const QString name = controllerName(cc);
             if (status)
                   status(QString("controller %1%2 (%3 of %4)").arg(cc < 128 ? QString("CC %1").arg(cc) : name)
@@ -658,6 +675,8 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
       // the patch as it was at the start? (each controller went back to the value that sounds or looks
       // like before; the value its parameter had can be one Kontakt never received: CC 7 at 0 is silence,
       // the owner's background run of 2026-09-28 08:54 measured every later controller on a silent patch)
+      if (s.step)
+            s.step("controllers: end");
       Level end;
       if (!listen(6, &end))
             return stop();
@@ -668,6 +687,8 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
       out["effects"] = effects;
       out["noEffect"] = none;
       out["notMapped"] = notMapped;
+      if (!skippedAfterCrash.isEmpty())
+            out["skippedAfterCrash"] = skippedAfterCrash;
       return out;
       }
 
@@ -717,6 +738,9 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
             tried.resize(200);
             }
 
+      QJsonArray skippedAfterCrash;
+      if (s.step)
+            s.step("parameters: baseline");
       Level a, b;
       QImage g1;
       if (!c.learnSelfChanging([&]() {
@@ -735,6 +759,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
       int done = 0;
       for (const Vst3Plugin::Parameter& par : tried) {
             ++done;
+            if (!stepAllowed(s, QString("parameter %1").arg(par.id), &skippedAfterCrash))
+                  continue;
             if (status)
                   status(QString("parameter %1 \"%2\" (%3 of %4)").arg(par.id).arg(par.title).arg(done).arg(tried.size()));
             std::set<unsigned> skip { par.id };
@@ -805,6 +831,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
       run(300, nullptr);
       out["effects"] = effects;
       out["noEffect"] = none;
+      if (!skippedAfterCrash.isEmpty())
+            out["skippedAfterCrash"] = skippedAfterCrash;
       return out;
       }
 
@@ -837,8 +865,11 @@ QJsonObject PluginExtract::switches(Vst3Plugin* p, const Settings& s, Run run, S
       c.reported(skip);
       Snapshot last = c.snapshot();
       QJsonObject changes;
+      QJsonArray skippedAfterCrash;
       int any = 0;
       for (int value : s.switchValues) {
+            if (!stepAllowed(s, QString("switch %1").arg(value), &skippedAfterCrash))
+                  continue;
             if (status)
                   status(QString("switch value %1").arg(value));
             p->midi(ME_CONTROLLER, s.channel, s.switchCC, value);
@@ -862,6 +893,8 @@ QJsonObject PluginExtract::switches(Vst3Plugin* p, const Settings& s, Run run, S
             }
       out["values"] = changes;
       out["valuesChangingParameters"] = any;
+      if (!skippedAfterCrash.isEmpty())
+            out["skippedAfterCrash"] = skippedAfterCrash;
       p->midi(ME_CONTROLLER, s.channel, s.switchCC, s.switchValues.front());
       run(300, nullptr);
       return out;

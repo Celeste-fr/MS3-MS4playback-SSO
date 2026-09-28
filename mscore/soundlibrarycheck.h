@@ -161,6 +161,7 @@ class ArticulationCheckDialog : public QDialog {
       // normally. Left behind, it tells the supervisor where a crash or a hang was (the first line, skipped) and
       // what is left. Set: the extract doesn't open its folder at the end (the supervisor does)
       static void setProgressFile(const QString& path);
+      static QString runFile(const QString& root, const QString& what);   // superviseExtract's files: step, skip, finished, crash
       static QString zip(const QString& folder);                  // the folder zipped next to it (its path; empty: failed)
       // Check articulations without the dialog (MuseScore --scan-keys) on the patches to scan
       // (toScanNow), or on those a file lists (one patch name a line); listening only, no window

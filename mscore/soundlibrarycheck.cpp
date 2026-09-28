@@ -660,6 +660,69 @@ static void writeProgress(const QStringList& patches)
             }
       }
 
+// a supervised round's other files, next to the progress file (superviseExtract): the step being tried
+// ("<patch>\t<step>", written before each: a crash names it), the steps not to try again ("<patch>\t<step>"
+// per line: they crashed the plug-in), the patches finished in the run (one per line: the estimate of
+// the time left over every round)
+QString ArticulationCheckDialog::runFile(const QString& root, const QString& what)
+      {
+      return root + "/background extract " + what + ".txt";
+      }
+
+static QString runFileHere(const QString& what)
+      {
+      return progressFile().isEmpty() ? QString() : ArticulationCheckDialog::runFile(QFileInfo(progressFile()).absolutePath(), what);
+      }
+
+static void writeStep(const QString& patch, const QString& step)
+      {
+      const QString path = runFileHere("step");
+      if (path.isEmpty())
+            return;
+      QFile f(path);
+      if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            f.write((patch + "\t" + step + "\n").toUtf8());
+            f.flush();
+            f.close();
+            }
+      // (a test of the supervisor: this process crashes at that step, "<patch>\t<step>")
+      static const QString testCrash = qEnvironmentVariable("MS_EXTRACT_TEST_CRASH_STEP");
+      if (!testCrash.isEmpty() && testCrash == patch + "\t" + step)
+            std::abort();
+      }
+
+static QSet<QString> stepsToSkip(const QString& patch)
+      {
+      QSet<QString> steps;
+      QFile f(runFileHere("skip"));
+      if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+            for (const QString& l : QString::fromUtf8(f.readAll()).split('\n'))
+                  if (l.section('\t', 0, 0) == patch && !l.section('\t', 1).trimmed().isEmpty())
+                        steps.insert(l.section('\t', 1).trimmed());
+      return steps;
+      }
+
+static int finishedInRun()
+      {
+      QFile f(runFileHere("finished"));
+      if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            return 0;
+      int n = 0;
+      for (const QString& l : QString::fromUtf8(f.readAll()).split('\n'))
+            n += !l.trimmed().isEmpty();
+      return n;
+      }
+
+static void addFinished(const QString& patch)
+      {
+      const QString path = runFileHere("finished");
+      if (path.isEmpty())
+            return;
+      QFile f(path);
+      if (f.open(QIODevice::Append | QIODevice::Text))
+            f.write((patch + "\n").toUtf8());
+      }
+
 void ArticulationCheckDialog::logBackground(const QString& line)
       {
       const QString stamped = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss") + " " + line;
@@ -2629,11 +2692,20 @@ void ArticulationCheckDialog::extract()
       total.start();
       int noneInARow = 0;
       bool sawNamed = false;
+      // the time left from the whole run, over every round of a supervised one (the owner's run of
+      // 2026-09-28 09:31: each new round started its estimate over, 180 to 3081 minutes and back), from
+      // the time the supervisor started it (MS_EXTRACT_RUN_START, ms since the epoch) and the patches
+      // finished before this round
+      const qint64 runStart = qEnvironmentVariableIsSet("MS_EXTRACT_RUN_START")
+                              ? qEnvironmentVariable("MS_EXTRACT_RUN_START").toLongLong() : 0;
+      const int finishedBefore = runStart > 0 ? finishedInRun() : 0;
       for (int k = 0; k < int(chosen.size()) && !_cancel; ++k) {
             _progress->setValue(1000 * k / int(chosen.size()));
             _table->scrollToItem(_table->item(chosen[k], 0));
-            const QString left = k > 0 ? tr("about %1 min left").arg((total.elapsed() / k * (int(chosen.size()) - k) + 59999) / 60000)
-                                       : QString();
+            const qint64 elapsed = runStart > 0 ? QDateTime::currentMSecsSinceEpoch() - runStart : total.elapsed();
+            const int done = finishedBefore + k;
+            const QString left = done > 0 ? tr("about %1 min left").arg((elapsed / done * (int(chosen.size()) - k) + 59999) / 60000)
+                                          : QString();
             if (k > 0)
                   _progress->setFormat(tr("%p% — %1").arg(left));
             say(QString("[%1/%2] %3%4").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
@@ -2654,6 +2726,8 @@ void ArticulationCheckDialog::extract()
             const QString before = summary;
             int named = -1;
             bool ok = extractPatch(chosen[k], path, folder, empty, instance, summary, &named);
+            if (_headless)
+                  addFinished(_rows[chosen[k]].instrument->name);
             // (a test: Kontakt broken from this patch on, in this process only)
             static const QString testBroken = qEnvironmentVariable("MS_EXTRACT_TEST_BROKEN");
             static bool testBrokenNow = false;
@@ -2754,6 +2828,14 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       QJsonObject out;
       out["patch"] = ins.name;
       out["setup"] = QString(setupHash(ins.name));
+      // (a supervised background run: each step noted before it, and those that crashed the plug-in in an
+      // earlier round left out; superviseExtract)
+      const QSet<QString> skipSteps = _headless ? stepsToSkip(ins.name) : QSet<QString>();
+      auto step = [&](const QString& what) {
+            if (_headless)
+                  writeStep(ins.name, what);
+            };
+      step("load");
       auto fail = [&](const QString& message) {
             out["error"] = message;
             writeFile(folder + "/" + fileBase + ".json", QJsonDocument(out).toJson());
@@ -2800,7 +2882,8 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             if (_library->dynamicsCC != 11)
                   p->midi(ME_CONTROLLER, 0, 11, _library->expressionValue);
             };
-      const int pitch = testPitch(ins);
+      int pitch = testPitch(ins);
+      const int mapPitch = pitch;
       out["pitch"] = pitch;
 
       // the patch loads its samples: until a note sounds (up to 2 minutes), only when something is to
@@ -2828,9 +2911,19 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             prepare();
             pump.run(1500);
             }
+      // the test pitch first; still silent after 20 s, the pitches around it in turn (8 s each), the one
+      // that sounds kept (the owner's run of 2026-09-28 09:31: Basses, Piccolo, Contrabassoon, Contrabass
+      // Trombone, Cimbassi a2, Contrabass Tuba were silent at the pitch this branch's map gave them, waited
+      // the full 2 minutes, then tried every controller in real time on a silent note: 8 minutes each)
       auto waitForSound = [&](const QString& what) {
             sounds = false;
+            const int base = pitch;
+            static const int SHIFTS[6] = { 12, -12, 7, -5, 24, -24 };
             for (int i = 0; i < 60 && !_cancel && !sounds; ++i) {
+                  if (i >= 10) {
+                        const int shifted = base + SHIFTS[((i - 10) / 4) % 6];
+                        pitch = shifted >= 0 && shifted <= 127 ? shifted : base;
+                        }
                   status(what.arg(i * 2));
                   pump.peak = 0;
                   prepare();
@@ -2841,12 +2934,14 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                   sounds = pump.peak > 1e-5;
                   }
             };
+      step("until it sounds");
       if (listen)
             waitForSound(tr("waiting for the patch to load (%1 s)…"));
       if (offline && sounds && !_cancel) {
             if (_headless)
                   say(QString("   %1: sounds; offline from here").arg(ins.name));
             pump.run(1000);
+            step("offline");
             p->setOffline(true);
             online.on = true;
             pump.fast = true;
@@ -2857,12 +2952,21 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             return false;
       if (listen) {
             out["sounds"] = sounds;
+            if (!sounds)
+                  pitch = mapPitch;
+            out["pitch"] = pitch;
+            if (pitch != mapPitch) {
+                  out["mapPitch"] = mapPitch;
+                  if (_headless)
+                        say(QString("   %1: silent at %2, sounds at %3").arg(ins.name).arg(mapPitch).arg(pitch));
+                  }
             pump.run(1000);
             lap("until it sounds");
             }
       else
             lap("start");
 
+      step("describe");
       status(tr("asking the plug-in…"));
       // (only what differs from the plug-in with nothing loaded; no state files: MuseScore makes the
       // patches' setups from their .nki, and the state is in its setups folder)
@@ -2878,7 +2982,14 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       // what pitch bend does to its pitch (the owner, 2026-09-27: microtones through the library, as
       // Kontakt ignores a note's own tuning): the test note at each bend, its spectrum against the
       // unbent note's (PluginExtract::centsShift). The unbent note twice (start, end): the noise
-      if (sounds && !_cancel && _pitchBend->isChecked()) {
+      const bool bendSkipped = skipSteps.contains("pitch bend");
+      if (bendSkipped) {
+            out["skippedAfterCrash"] = QJsonArray { "pitch bend" };
+            say(QString("   %1: pitch bend left out (it crashed the plug-in before)").arg(ins.name));
+            }
+      else
+            step("pitch bend");
+      if (sounds && !_cancel && _pitchBend->isChecked() && !bendSkipped) {
             PluginExtract::Settings s;
             s.pitch = pitch;
             s.sampleRate = MScore::sampleRate;
@@ -2927,6 +3038,12 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             s.switchCC = switching ? ins.switchNumber : -1;
             s.switchValues = switching ? switchValues : std::vector<int>();
             s.grabWait = GRAB_WAIT_MS;
+            if (_headless) {
+                  s.step = step;
+                  s.skip = [&](const QString& key) { return skipSteps.contains(key); };
+                  if (!skipSteps.isEmpty())
+                        say(QString("   %1: leaving out %2 (it crashed the plug-in before)").arg(ins.name, QStringList(skipSteps.values()).join(", ")));
+                  }
             // (a background run: each controller's own value searched by sound, offline that is quick; Quick's
             // reload per controller is for the dialog's real time)
             if (!_headless && _quick->isChecked()) {

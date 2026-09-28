@@ -852,6 +852,25 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   out). The children don't open a "stopped working" window (SetErrorMode). Tried here with the test synth and
   `MS_EXTRACT_TEST_CRASH=<patch>` (the child aborts on that patch): 3 patches, the 2nd left out, two zips; the hang
   timeout (`MS_EXTRACT_HANG_MINUTES`) not tried.
+  **The third run (build a9c2251, 09:31), 2 hours in:** 11 access violations (Violas, Strings Ensemble, Flute Solo,
+  Oboe Solo, Oboes a2, Clarinet Solo, Contrabass Clarinet, Horn Solo, Trumpet Solo, Trumpets a2, Timpani), each a few
+  seconds into "every controller" offline, those patches left out; six low or high patches (Basses, Piccolo,
+  Contrabassoon, Contrabass Trombone, Cimbassi a2, Contrabass Tuba) silent at their test pitch (this branch's map had
+  no `pitch=` yet: merged from main, 273e186), 2 minutes waiting then 6 in real time each; the estimate started over
+  in every round (180 → 3081 → 181 min). Now:
+  - a silent patch tries the pitches around its test pitch (±12, 7, −5, ±24; 8 s each after 20 s), keeps the one that
+    sounds (JSON `mapPitch` when it moved; log "silent at …, sounds at …");
+  - each step is written before it is tried to `background extract step.txt` ("<patch>\t<step>": load, until it
+    sounds, offline, describe, pitch bend, controllers: baseline, cc N, parameters: baseline, parameter <id>, switch
+    N, controllers: end), and on Windows the fault's module and offset to `background extract crash.txt`
+    (`SetUnhandledExceptionFilter` in the child); the supervisor logs both ("… crashed (exit code c0000005;
+    exception C0000005 in Kontakt 8.vst3 +0x…) on Violas at cc 32");
+  - a crash at a controller, parameter, switch value or pitch bend: the patch once more without that step
+    (`background extract skip.txt`; `PluginExtract::Settings::step/skip`, JSON `skippedAfterCrash`), up to 3 tries;
+    elsewhere once more as it was; then left out;
+  - the time left from the run's start over every round (`MS_EXTRACT_RUN_START` from the supervisor, patches
+    finished in `background extract finished.txt`).
+  Test: `MS_EXTRACT_TEST_CRASH_STEP="<patch>\t<step>"` aborts the child at that step.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
