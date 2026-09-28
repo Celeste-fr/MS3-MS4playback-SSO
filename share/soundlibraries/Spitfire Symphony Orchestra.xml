@@ -43,8 +43,8 @@
     <Articulation name="Long Sul G" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques="short"/>
-    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short 0.5" value="50" techniques="short" length="0.5"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
@@ -85,8 +85,8 @@
     <Articulation name="Long Sul G" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques="short"/>
-    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short 0.5" value="50" techniques="short" length="0.5"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
@@ -125,8 +125,8 @@
     <Articulation name="Long Sul C" value="112" techniques="long legato" modifiers="sulc"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques="short"/>
-    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short 0.5" value="50" techniques="short" length="0.5"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
@@ -165,8 +165,8 @@
     <Articulation name="Long Sul C" value="112" techniques="" expect="silent"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques="short"/>
-    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short 0.5" value="50" techniques="short" length="0.5"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0"/>
     <Articulation name="Short Brushed" value="48" techniques=""/>
     <Articulation name="Short Brushed CS" value="62" techniques=""/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
@@ -206,8 +206,8 @@
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques="short"/>
-    <Articulation name="Short 1.0" value="52" techniques="tenuto"/>
+    <Articulation name="Short 0.5" value="50" techniques="short" length="0.5"/>
+    <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0"/>
     <Articulation name="Staccato Dig" value="49" techniques=""/>
     <Articulation name="Short Spicc-Pizz" value="41" techniques=""/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
@@ -240,7 +240,7 @@
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics"/>
     <Articulation name="Marcato Attack" value="9" techniques="longmarcato"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
-    <Articulation name="Short 0.5" value="50" techniques="short"/>
+    <Articulation name="Short 0.5" value="50" techniques="short" length="0.5"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
     <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
     <Articulation name="Col Legno" value="58" techniques="collegno"/>

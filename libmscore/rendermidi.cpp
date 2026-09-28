@@ -1860,8 +1860,9 @@ SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::
       for (const Ms4::ArtRef& a : noteArts)
             if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
                   trill = SoundLib::trillSemitones(note);
-      const TempoMap* tm = score->tempomap();
-      const double seconds = tm->tick2time(tick + qMax(0, ticks)) - tm->tick2time(tick);
+      // its written length (not the Play Panel's speed), with the notes tied to it
+      const int tied = note->tieFor() && !note->tieBack() ? note->playTicks() - note->chord()->actualTicks().ticks() : 0;
+      const double seconds = score->tempomap()->writtenTime(tick, tick + qMax(0, ticks) + qMax(0, tied));
       return SoundLib::choose(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill));
       }
 

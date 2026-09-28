@@ -379,10 +379,15 @@ EXPECT = {
 }
 expectUsed = set()
 
+# how long a short's sample lasts, as Spitfire names it: not chosen for a note under 90 % of it (a fast
+# staccato plays Spiccato; the owner, 2026-09-28: "Whence" bar 8's accented eighths on Short 0'5 rang on)
+LENGTHS = {'Short 0.5': 0.5, 'Short 1.0': 1.0}
+
 def articulation(n, v, t, m, patch=None, prefer=''):
     a=f'    <Articulation name={q(n)} value="{v}" techniques={q(t)}'
     if m: a+=f' modifiers={q(m)}'
     if prefer: a+=f' prefer={q(prefer)}'
+    if t and n in LENGTHS: a+=f' length="{LENGTHS[n]}"'
     if (patch, v) in EXPECT:
         a+=f' expect={q(EXPECT[(patch, v)])}'
         expectUsed.add((patch, v))

@@ -27,6 +27,7 @@
 #include "sym.h"
 #include "symbol.h"
 #include "slur.h"
+#include "tempo.h"
 #include "tempotext.h"
 #include "textbase.h"
 #include "tremolo.h"
@@ -98,7 +99,6 @@ class Pass {
       PlayabilityResult& _res;
       std::vector<Fraction> _barStarts;
       std::map<const Instrument*, StringInstrument> _instruments;
-      std::vector<std::pair<int, double>> _tempo;   // tick, quarter notes per second
       std::map<int, std::vector<std::pair<int, int>>> _slurs;     // track -> [from, to]
       std::map<int, std::vector<HairpinSpan>> _hairpins;          // staff -> hairpins
 
@@ -117,7 +117,6 @@ class Pass {
                   _res.marks[n] = m;
             }
       void collectSpanners();
-      void collectTempo();
       double secondsBetween(double t0, double t1) const;
       QString topName(const Chord* c) const;
       BowUse bowUse(const StringInstrument& in, const StateList& dyn, const std::vector<HairpinSpan>& allHairpins,
@@ -265,35 +264,12 @@ void Pass::collectSpanners()
             std::stable_sort(t.second.begin(), t.second.end());
       }
 
-// Tempo marks as the plugin reads them: every tempo text's quarter notes per second, the first
-// at a tick; ♩ = 120 before any.
-void Pass::collectTempo()
-      {
-      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
-            for (Element* e : s->annotations())
-                  if (e->isTempoText() && toTempoText(e)->tempo() > 0
-                     && (_tempo.empty() || _tempo.back().first != s->tick().ticks()))
-                        _tempo.push_back({ s->tick().ticks(), toTempoText(e)->tempo() });
-      }
-
-// seconds from tick t0 to t1 (480 ticks to a quarter note)
+// seconds from tick t0 to t1 as written: the score's tempo map (every tempo change, gradual tempo
+// lines, fermatas), not the Play Panel's speed (TempoMap::writtenTime; the owner, 2026-09-28: the
+// same note lengths as playback's articulation choice). The plugin read tempo texts only.
 double Pass::secondsBetween(double t0, double t1) const
       {
-      double secs = 0, t = t0, qps = 2;
-      for (const auto& m : _tempo)
-            if (m.first <= t0)
-                  qps = m.second;
-      for (size_t j = 0; j < _tempo.size() && t < t1; ++j) {
-            if (_tempo[j].first <= t)
-                  continue;
-            double edge = std::min(double(_tempo[j].first), t1);
-            secs += (edge - t) / 480 / qps;
-            t = edge;
-            qps = _tempo[j].second;
-            }
-      if (t < t1)
-            secs += (t1 - t) / 480 / qps;
-      return secs;
+      return _score->masterScore()->tempomap()->writtenTime(int(std::lround(t0)), int(std::lround(t1)));
       }
 
 // the chord's top note, spelled as written
@@ -780,7 +756,6 @@ void Pass::run()
       for (Measure* m = _score->firstMeasure(); m; m = m->nextMeasure())
             _barStarts.push_back(m->tick());
       collectSpanners();
-      collectTempo();
 
       for (int st = 0; st < _score->nstaves(); ++st) {
             Staff* staff = _score->staff(st);

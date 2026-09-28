@@ -32,6 +32,7 @@
 #include "audio/vst3/vst3synth.h"
 #include "libmscore/segment.h"
 #include "libmscore/chord.h"
+#include "libmscore/tempo.h"
 #endif
 
 #define DIR QString("libmscore/soundlibrary/")
@@ -54,6 +55,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void noteSecondsWritten();
       void dynamicsCalibration();
       void heldOnPerformance();
       void dynamicsCheck();
@@ -321,6 +323,27 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 1", { { "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
       QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1 - Performance: Legato"));
       QCOMPARE(patchFor("Violins 1", { { "short" }, { "espressivo" } }), QString("Violins 1: Short 0.5"));
+      // shorts by the note's written length (2026-09-28, "Whence" bar 8): Short 0'5 from 0.45 s, Short 1'0
+      // from 0.9 s, else the next shorter, down to Spiccato
+      auto byLength = [&](std::vector<Ms4::Art> arts, double seconds) {
+            std::vector<Ms4::ArtRef> refs;
+            for (Ms4::Art a : arts)
+                  refs.push_back(Ms4::ArtRef { a, false });
+            return patchFor("Violins 2", SoundLib::want(refs, SoundLib::TextState(), seconds, 0));
+            };
+      using A = Ms4::Art;
+      QCOMPARE(byLength({ A::Staccato }, 0.27), QString("Violins 2: Spiccato"));          // an eighth at 110
+      QCOMPARE(byLength({ A::Staccato }, 0.55), QString("Violins 2: Short 0.5"));         // a quarter at 110
+      QCOMPARE(byLength({ A::Staccato, A::Accent }, 0.27), QString("Violins 2: Spiccato"));
+      QCOMPARE(byLength({ A::Tenuto }, 1.1), QString("Violins 2 - Performance: Legato"));   // a held note
+      QCOMPARE(byLength({ A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
+      QCOMPARE(byLength({ A::Tenuto }, 0.3), QString("Violins 2 - Performance: Legato"));    // fast: no spiccato
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 1.0), QString("Violins 2: Short 1.0")); // portato
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.27), QString("Violins 2: Spiccato"));
+      QCOMPARE(byLength({ A::Staccatissimo }, 1.0), QString("Violins 2: Spiccato"));
+      // (a length unknown: as before)
+      QCOMPARE(patchFor("Violins 2", { { "short" }, {} }), QString("Violins 2: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
       QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
@@ -2092,6 +2115,26 @@ void TestSoundLibrary::dynamicsCalibration()
       cal2->setCurve("Violin", 1, line("controller", -45, 0.2));
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 32), 41);
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 80), 65);
+      }
+
+//---------------------------------------------------------
+//   noteSecondsWritten
+//    a note's written length (SoundLib::noteSeconds, TempoMap::writtenTime): not the Play Panel's
+//    speed (the articulation a note plays mustn't change with it), and its whole tie chain
+//---------------------------------------------------------
+
+void TestSoundLibrary::noteSecondsWritten()
+      {
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");       // quarters at 120: 0.5 s
+      QVERIFY(score);
+      Segment* s = score->firstSegment(SegmentType::ChordRest);
+      const Note* n = toChord(s->element(0))->upNote();
+      QVERIFY(std::fabs(SoundLib::noteSeconds(n) - 0.5) < 1e-6);
+      score->tempomap()->setRelTempo(0.5);
+      QVERIFY(std::fabs(SoundLib::noteSeconds(n) - 0.5) < 1e-6);
+      QVERIFY(std::fabs(score->tempomap()->tick2time(480) - 1.0) < 1e-6);       // (playback: twice as slow)
+      score->tempomap()->setRelTempo(1.0);
+      delete score;
       }
 
 QTEST_MAIN(TestSoundLibrary)

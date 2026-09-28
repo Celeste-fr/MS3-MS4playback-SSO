@@ -84,6 +84,7 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.modifiers = words(a.value("modifiers").toString());
       art.expect = a.value("expect").toString();
       art.prefer = words(a.value("prefer").toString());
+      art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -446,6 +447,13 @@ DrumChoice drum(const std::vector<const LibInstrument*>& patches, int pitch, con
       return DrumChoice();
       }
 
+double noteSeconds(const Note* note)
+      {
+      const Note* first = note->firstTiedNote();
+      const int t0 = first->chord()->tick().ticks();
+      return note->score()->masterScore()->tempomap()->writtenTime(t0, t0 + note->playTicks());
+      }
+
 Choice choose(const LibInstrument& instrument, const Want& want)
       {
       return choose(std::vector<const LibInstrument*> { &instrument }, want);
@@ -460,6 +468,9 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
             for (int p = 0; p < int(patches.size()); ++p) {
                   for (const Articulation& a : patches[p]->articulations) {
                         if (!a.techniques.contains(base))
+                              continue;
+                        // a short that lasts longer than the note (Short 0'5 for a fast eighth): not this one
+                        if (a.length > 0 && want.seconds > 0 && want.seconds < 0.9 * a.length)
                               continue;
                         bool fits = true;
                         for (const QString& m : a.modifiers)
@@ -811,7 +822,6 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
       dynamics.build(sc, const_cast<Part*>(part));
       TextTechniques text;
       text.build(sc, part);
-      const TempoMap* tm = score->tempomap();
       const int strack = part->startTrack();
       const int etrack = part->endTrack();
       for (Segment* seg = sc->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
@@ -834,8 +844,8 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                         }
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
                   const int tick = chord->tick().ticks();
-                  const double seconds = tm->tick2time(tick + chord->actualTicks().ticks()) - tm->tick2time(tick);
                   for (const Note* note : chord->notes()) {
+                        const double seconds = noteSeconds(note);
                         const std::vector<Ms4::ArtRef> arts = Ms4::noteArticulations(note, chordArts);
                         int trill = 0;
                         for (const Ms4::ArtRef& a : arts)
@@ -892,8 +902,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   const Chord* chord = toChord(e);
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
                   const int tick = chord->tick().ticks();
-                  const double seconds = tm->tick2time(tick + chord->actualTicks().ticks()) - tm->tick2time(tick);
                   auto add = [&](const Note* note, double on, double off) {
+                        const double seconds = noteSeconds(note);
                         if (note->tieBack() && note->firstTiedNote() && note->firstTiedNote() != note) {
                               tiedTo[note] = note->firstTiedNote();
                               return;
@@ -1123,6 +1133,7 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             return false;
             };
       Want w;
+      w.seconds = seconds;
       w.modifiers = text.modifiers;
       if (has(Art::Mute) || has(Art::PalmMute)) {
             if (!w.modifiers.contains("muted"))
@@ -1167,6 +1178,8 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
 
       const bool accent = has(Art::Accent) || has(Art::Marcato);
       const bool shortNote = seconds < 0.6;
+      // (a short with a length - Short 0'5, Short 1'0 - is skipped for a note shorter than it: then
+      // the next shorter one, down to spiccato; the owner, 2026-09-28: a fast staccato on Short 0'5 rang on)
       if (has(Art::Staccatissimo))
             b << "staccatissimo" << "spiccato" << "short";
       else if (has(Art::Staccato)) {
@@ -1174,7 +1187,7 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
                   b << "marcato";
             else if (has(Art::Tenuto))
                   b << "tenuto";
-            b << "short";
+            b << "short" << "spiccato";
             }
       else if (accent) {
             if (shortNote)
@@ -1182,8 +1195,9 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             b << "longmarcato" << "long";
             }
       else if (has(Art::Tenuto)) {
+            // (a fast tenuto: never a bouncing spiccato; Short 0'5 if it fits, else the held note)
             if (shortNote)
-                  b << "tenuto";
+                  b << "tenuto" << "short";
             b << "long";
             }
       else if (has(Art::Legato))

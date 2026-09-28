@@ -79,6 +79,8 @@ struct Articulation {
                                           // and that is right ("silent", "ignored", "unclear")
       QStringList prefer;                 // bases it plays over another patch's equal fit (<Articulation
                                           // prefer>: SSO's Performance legato for held notes)
+      double length { -1 };               // seconds its sample lasts (<Articulation length>: SSO's Short 0'5,
+                                          // Short 1'0): not chosen for a note under 90 % of it
       };
 
 struct DrumKey {
@@ -149,6 +151,7 @@ struct LibInstrument {
 struct Want {
       QStringList bases;                  // in order of preference
       QStringList modifiers;
+      double seconds { -1 };              // the note's written length (noteSeconds); -1: unknown
       };
 
 //---------------------------------------------------------
@@ -201,6 +204,9 @@ struct Choice {
       bool sampledOrnament() const;       // a trill or tremolo sample: play the note once
       explicit operator bool() const { return articulation; }
       };
+
+// a note's written length in seconds, its whole tie chain (TempoMap::writtenTime)
+double noteSeconds(const Note* note);
 
 Choice choose(const LibInstrument& instrument, const Want& want);
 // of several patches: the best fit of all; of equal ones, the earlier patch

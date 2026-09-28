@@ -360,6 +360,16 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
   Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
   Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
+  **Shorts by the note's length** (the owner, 2026-09-28, "Whence" bar 8: accented staccato eighths at 110 on
+  Short 0'5 rang on; "I thought we were already calculating the note's actual length"): `<Articulation
+  length>` (Short 0.5 = 0.5 s, Short 1.0 = 1.0 s; gen_spitfire_sso.py `LENGTHS`) is skipped for a note under
+  90 % of it (`choose`, `Want::seconds`); staccato falls back to spiccato, portato (staccato + tenuto) Short
+  1'0 -> Short 0'5 -> spiccato, a fast plain tenuto Short 0'5 -> the held note (never a bouncing spiccato).
+  A note's length: `SoundLib::noteSeconds` / `TempoMap::writtenTime` (the tempo map: tempo changes, gradual
+  tempo lines, fermatas; not the Play Panel's speed, `relTempo`, which used to change the choice) over the
+  whole tie chain (it used the first chord only). The playability checker's `secondsBetween` uses it too
+  (it read tempo texts only: no rit./accel. lines, fermatas). Tests `spitfireMap` (by length),
+  `noteSecondsWritten`. "Whence" bars 7-8 Violins 2: Spiccato (were Short 0'5).
   **Held notes on the Performance patch** (the owner, 2026-09-28: lone held notes quiet and "the pan is
   broken"; bar 12's lone pickup eighths barely audible): a part's slurred notes played "X - Performance"
   and its lone held / unmarked notes the All techniques patch's Long, another recording with its own

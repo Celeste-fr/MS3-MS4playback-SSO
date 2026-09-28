@@ -61,6 +61,9 @@ class TempoMap : public std::map<int, TEvent> {
 
       void setRelTempo(qreal val);
       qreal relTempo() const { return _relTempo; }
+      // seconds from tick0 to tick1 as written: every tempo change, gradual tempo lines and
+      // fermatas, but not the Play Panel's speed (relTempo), which is only how fast one listens
+      qreal writtenTime(int tick0, int tick1) const { return (tick2time(tick1) - tick2time(tick0)) * _relTempo; }
       };
 
 }     // namespace Ms
