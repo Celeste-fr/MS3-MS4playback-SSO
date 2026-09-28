@@ -89,6 +89,21 @@ static const int CHECK_VERSION = 4;       // 4: patches without switching (liste
 
 int ArticulationCheckDialog::testPitch(const SoundLib::LibInstrument& instrument)
       {
+      // a drum patch: its first hit that has a key (the owner's controller run of 2026-09-28 13:09: the one-drum
+      // patches' samples sit on keys 0-31 and Spitfire's script lays the hits out from about 36, so the middle of
+      // the samples' keys played nothing; 7 of them took 7.6 minutes each, measuring silence)
+      // (a hit if there is one: a swell is slow to speak)
+      int firstKey = -1;
+      for (const SoundLib::DrumKey& d : instrument.drums) {
+            if (d.key < 0 || d.offByDefault)
+                  continue;
+            if (d.name.contains("hit", Qt::CaseInsensitive))
+                  return d.key;
+            if (firstKey < 0)
+                  firstKey = d.key;
+            }
+      if (firstKey >= 0)
+            return firstKey;
       // (a patch the map doesn't use: the middle of its samples' keys, from its files)
       if (instrument.testPitch >= 0 && instrument.testPitch <= 127)
             return instrument.testPitch;
@@ -3083,7 +3098,12 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
       if (_pitchBend->isChecked())
             lap("pitch bend");
 
-      if (_tryAll->isChecked() && !_cancel) {
+      // a patch that never sounded: every controller measured on silence says nothing and, not offline, takes minutes
+      if (_tryAll->isChecked() && !_cancel && !sounds) {
+            say(QString("   %1: played nothing at any pitch tried: described only").arg(ins.name));
+            out["controllers"] = QJsonObject { { "notMeasured", "the patch played nothing" } };
+            }
+      else if (_tryAll->isChecked() && !_cancel) {
             QPointer<Vst3EditorWindow> w;
             // (a background run: no window, sound and parameters only; which named control a controller
             // moves needs the window's pictures, in real time)

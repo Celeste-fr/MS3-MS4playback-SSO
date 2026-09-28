@@ -888,6 +888,11 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   through. So the crashes come and go rather than follow a step: now the first crash at a step is tried again as it
   was, and a step is left out only at a second crash there (4 tries); a patch measured with a step left out
   (`skippedAfterCrash` in its controllers, parameters or switches) is measured again by the next run.
+  Its first 92 minutes (81 patches): 74 took about 30 s each; 7 percussion patches (Bongos, Congas, Snare 3,
+  Timbales, Toys, Wood) 7.6 minutes each, silent at their map `pitch=` (the one-drum patches' samples sit on keys
+  0-31; Spitfire's script lays the hits out higher), so 2 minutes of waiting and every controller in real time on
+  silence. Now a patch with `<Drum key>` entries is tested on a hit's key (else its first key; `testPitch`), and a
+  patch that played nothing at any pitch tried is described only (`controllers.notMeasured`).
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
