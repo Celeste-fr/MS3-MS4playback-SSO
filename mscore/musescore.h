@@ -85,6 +85,7 @@ class WebPageDockWidget;
 class ChordList;
 class Capella;
 class Inspector;
+class PlayabilityPanel;
 class OmrPanel;
 class NScrollArea;
 class TDockWidget;
@@ -345,6 +346,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       PaletteWidget* paletteWidget { nullptr };
 
       Inspector* _inspector          { 0 };
+      PlayabilityPanel* _playabilityPanel { 0 };
       OmrPanel* omrPanel             { 0 };
 
       QPushButton* showMidiImportButton {0};
@@ -920,6 +922,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       void reDisplayDockWidget(QDockWidget* widget, bool visible);
       void showPlayPanel(bool);
       void updatePlayabilityMarks();
+      void showPlayabilityPanel(bool);
 
       QFileInfoList recentScores() const;
       void saveDialogState(const char* name, QFileDialog* d);
