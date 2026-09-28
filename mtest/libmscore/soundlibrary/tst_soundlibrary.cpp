@@ -53,6 +53,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void heldOnPerformance();
       void dynamicsCheck();
       void shortsFollowDynamics();
       void checkedAsExpected();
@@ -251,7 +252,10 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "muted" } }), QString("Violins 1: Long CS"));
       QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "sulg" } }), QString("Violins 1 - Sul G - Performance: Legato Sul G"));
       QCOMPARE(patchFor("Violins 1", { { "long" }, { "sulg" } }), QString("Strings - Violins 1 - Long Sul G: Long Sul G"));
-      QCOMPARE(patchFor("Violins 1", { { "long" }, {} }), QString("Violins 1: Long"));
+      // a held note on the Performance patch with the slurred ones (prefer="long"; 2026-09-28)
+      QCOMPARE(patchFor("Violins 1", { { "long" }, {} }), QString("Violins 1 - Performance: Legato"));
+      QCOMPARE(patchFor("Solo Violin 1", { { "long" }, {} }), QString("Solo Violin - Performance: Legato"));
+      QCOMPARE(patchFor("Solo Violin 1", { { "short", "staccatissimo" }, {} }), QString("Solo Violin 1: staccato"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
       QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
@@ -1760,9 +1764,8 @@ void TestSoundLibrary::externalPlugin()
 //   shortsFollowDynamics
 //    Spitfire's shorts take their dynamics from velocity, not CC1 (the owner, 2026-09-28: at pp the
 //    staccatos stood out): a base listed in <Dynamics velocity> gets its level on CC1's scale (pp 32,
-//    mf 80), an accent as much above as MS4 puts it; a held note (long) too when listed (the owner:
-//    a single held note sounded quieter than the rest), a slurred one (legato: Spitfire's transition
-//    speed) never. Without the attribute, MS4's velocity for all
+//    mf 80), an accent as much above as MS4 puts it; the longs keep MS4's velocity. Without the
+//    attribute, MS4's velocity for all
 //---------------------------------------------------------
 
 void TestSoundLibrary::shortsFollowDynamics()
@@ -1773,9 +1776,9 @@ void TestSoundLibrary::shortsFollowDynamics()
                "<Instrument name='Violin' ids='violin'>"
                "<Articulation name='Long' value='1' techniques='long legato'/>"
                "<Articulation name='Staccato' value='40' techniques='short'/>"
-               "</Instrument></SoundLibrary>").arg(listed ? " velocity='short spiccato long'" : ""));
+               "</Instrument></SoundLibrary>").arg(listed ? " velocity='short spiccato'" : ""));
             QVERIFY(lib);
-            QCOMPARE(lib->velocityDynamics.size(), listed ? 3 : 0);
+            QCOMPARE(lib->velocityDynamics.size(), listed ? 2 : 0);
             SoundLib::setCurrent(lib);
             MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
             QVERIFY(score);
@@ -1784,8 +1787,7 @@ void TestSoundLibrary::shortsFollowDynamics()
             EventMap events;
             SynthesizerState ss;
             score->renderMidi(&events, false, true, ss);
-            // the note-ons in order: bar 1 pp A B C, bar 2 mf A B C, bar 3 pp A (accent) B C, bar 4 mf A C
-            // slurred; the CC1 in
+            // the note-ons in order: bar 1 pp A B C, bar 2 mf A B C, bar 3 pp A (accent) B C; the CC1 in
             // force at each (sent ahead of a note on the same tick)
             std::vector<int> velo, cc1;
             int cc = -1;
@@ -1800,12 +1802,12 @@ void TestSoundLibrary::shortsFollowDynamics()
                         cc1.push_back(cc);
                         }
                   }
-            QCOMPARE(int(velo.size()), 11);
+            QCOMPARE(int(velo.size()), 9);
             QCOMPARE(cc1[0], 32);
             QCOMPARE(cc1[3], 80);
-            const int legatoMf = velo[10];                // MS4's velocity (the soundfont's), either way
-            QVERIFY(legatoMf > 40 && legatoMf < 80);
-            QCOMPARE(velo[9], velo[10]);
+            const int longPp = velo[2];                   // MS4's velocity (the soundfont's), either way
+            const int longMf = velo[5];
+            QVERIFY(longMf > longPp && longMf - longPp < 20);
             if (listed) {
                   QCOMPARE(velo[0], 32);
                   QCOMPARE(velo[1], 32);
@@ -1813,14 +1815,10 @@ void TestSoundLibrary::shortsFollowDynamics()
                   QCOMPARE(velo[4], 80);
                   QVERIFY2(velo[6] > 32 && velo[6] < 64, qPrintable(QString::number(velo[6])));    // accented pp: above pp, not ff
                   QCOMPARE(velo[7], 32);
-                  QCOMPARE(velo[2], 32);                  // held
-                  QCOMPARE(velo[5], 80);
-                  QVERIFY(velo[10] != 80);                // slurred: MS4's
                   }
             else {
-                  QCOMPARE(velo[0], velo[2]);             // staccato and held alike: MS4's
-                  QCOMPARE(velo[3], velo[5]);
-                  QVERIFY(velo[5] - velo[2] < 20);
+                  QCOMPARE(velo[0], longPp);
+                  QCOMPARE(velo[3], longMf);
                   }
             delete score;
             }
@@ -1858,6 +1856,44 @@ void TestSoundLibrary::dynamicsCheck()
             }
       // as sent: velocity and CC1 together on the velocity list's scale climb more than CC1 alone
       QVERIFY(r[1].sentDb[2] - r[1].sentDb[0] > r[0].sentDb[2] - r[0].sentDb[0] + 6);
+      }
+
+//---------------------------------------------------------
+//   heldOnPerformance
+//    <Articulation prefer>: a held note plays SSO's Performance legato patch with the slurred ones
+//    (the owner, 2026-09-28: lone held notes on the All techniques patch's Long came out quiet and
+//    placed elsewhere); a staccato and a muted held note (only the main patch has them) stay there
+//---------------------------------------------------------
+
+void TestSoundLibrary::heldOnPerformance()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Viola' ids='viola'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Long CS' value='7' techniques='long legato' modifiers='muted'/>"
+         "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
+         "</Instrument>"
+         "<Instrument name='Viola - Performance' with='Viola'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' prefer='long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::LibInstrument* main = nullptr;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.name == "Viola")
+                  main = &li;
+      QVERIFY(main);
+      const std::vector<const SoundLib::LibInstrument*> patches = main->patches();
+      QCOMPARE(int(patches.size()), 2);
+      QCOMPARE(patches[1]->articulations[0].prefer, QStringList({ "long" }));
+      auto chosen = [&](QStringList bases, QStringList modifiers) {
+            const SoundLib::Choice c = SoundLib::choose(patches, SoundLib::Want { bases, modifiers });
+            return c ? QString("%1 %2").arg(c.patch).arg(c.articulation->name) : QString("none");
+            };
+      QCOMPARE(chosen({ "long" }, {}), QString("1 Legato"));                // held
+      QCOMPARE(chosen({ "legato", "long" }, {}), QString("1 Legato"));      // slurred
+      QCOMPARE(chosen({ "short" }, {}), QString("0 Staccato"));
+      QCOMPARE(chosen({ "long" }, { "muted" }), QString("0 Long CS"));       // con sord.
       }
 
 QTEST_MAIN(TestSoundLibrary)

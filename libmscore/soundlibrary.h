@@ -76,6 +76,8 @@ struct Articulation {
       int value { -1 };                   // CC value, keyswitch pitch or program
       QString expect;                     // what Check articulations hears where it isn't "switches"
                                           // and that is right ("silent", "ignored", "unclear")
+      QStringList prefer;                 // bases it plays over another patch's equal fit (<Articulation
+                                          // prefer>: SSO's Performance legato for held notes)
       };
 
 struct DrumKey {

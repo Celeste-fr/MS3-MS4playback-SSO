@@ -258,6 +258,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               art.techniques = words(aa.value("techniques").toString());
                               art.modifiers = words(aa.value("modifiers").toString());
                               art.expect = aa.value("expect").toString();
+                              art.prefer = aa.value("prefer").toString().split(' ', QString::SkipEmptyParts);
                               bool ok = false;
                               art.value = aa.value("value").toInt(&ok);
                               if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -442,11 +443,15 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
                         bool fits = true;
                         for (const QString& m : a.modifiers)
                               fits &= want.modifiers.contains(m);
-                        // of equal fits in different patches, the one made for the base (listed
-                        // first: a Staccatissimo patch over a staccato that also plays it)
+                        // of equal fits in different patches, one that prefers the base (a held note
+                        // on the Performance legato patch, with the slurred ones), else the one made
+                        // for it (listed first: a Staccatissimo patch over a staccato that also plays it)
+                        const bool prefers = a.prefer.contains(base);
+                        const bool bestPrefers = best && best->prefer.contains(base);
                         const bool better = a.modifiers.size() > bestCount
                            || (a.modifiers.size() == bestCount && p != bestPatch
-                               && a.techniques.indexOf(base) < best->techniques.indexOf(base));
+                               && (prefers != bestPrefers ? prefers
+                                   : a.techniques.indexOf(base) < best->techniques.indexOf(base)));
                         if (fits && better) {
                               best = &a;
                               bestPatch = p;

@@ -152,11 +152,9 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '-->',
 '<SoundLibrary name="Spitfire Symphony Orchestra">',
 '  <Switch type="cc" number="32"/>',
-'  <!-- velocity follows the dynamics on CC1\'s scale for these bases: shorts (Spitfire sets their',
-'       dynamics by velocity; the owner, 2026-09-28: staccatos stood out at pp) and held notes (long: a',
-'       single held note sounded quieter than the rest; its Long samples aren\'t, at equal velocity and',
-'       CC1). Not legato: its velocity is the transition speed -->',
-'  <Dynamics cc="1" expression="127" velocity="long short staccatissimo spiccato marcato tenuto pizzicato bartok collegno"/>',
+'  <!-- shorts: Spitfire sets their dynamics by velocity (CC1 only moves the longs), so their velocity',
+'       follows the dynamics on CC1\'s scale (the owner, 2026-09-28: staccatos stood out at pp) -->',
+'  <Dynamics cc="1" expression="127" velocity="short staccatissimo spiccato marcato tenuto pizzicato bartok collegno"/>',
 '  <!-- microtones: Kontakt ignores a note\'s tuning and SSO\'s pitch bend bends nothing (the owner\'s',
 '       extracts of 2026-09-27), so notes of other tunings play on copies of the patch played',
 '       faster or slower (libmscore/soundlibrary.h: Lanes) -->',
@@ -260,10 +258,13 @@ SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), 
 # Extra patches (soundlibrary.h): other patches a part plays alongside its main one, each loaded
 # only when the part's notation asks for one of its articulations (and, hosted, once it is set
 # up). Named as the owner's .nki files. (main patch, extra patch, articulations)
-# - Performance: Spitfire's legato (the "All techniques" patches have none) for slurred notes.
-#   Its UACC value is not known yet (20 = the standard's legato); a single-articulation patch
-#   ignores it.
-LEGATO = [('Legato', 20, 'legato', '')]
+# - Performance: Spitfire's legato (the "All techniques" patches have none) for slurred notes,
+#   and for held notes too (prefer="long"; the owner, 2026-09-28: a lone held note played the All
+#   techniques patch's Long, another recording with its own level and place, quiet and slow to
+#   speak, amid the slurred notes on this patch; a note that doesn't overlap the one before plays
+#   with its own attack here). Its UACC value is not known yet (20 = the standard's legato); a
+#   single-articulation patch ignores it.
+LEGATO = [('Legato', 20, 'legato long', '', 'long')]
 PERFORMANCE = {
     'Violins 1': 'Violins 1 - Performance', 'Violins 2': 'Violins 2 - Performance',
     'Violas': 'Violas - Performance', 'Celli': 'Celli - Performance', 'Basses': 'Basses - Performance',
@@ -373,9 +374,10 @@ EXPECT = {
 }
 expectUsed = set()
 
-def articulation(n, v, t, m, patch=None):
+def articulation(n, v, t, m, patch=None, prefer=''):
     a=f'    <Articulation name={q(n)} value="{v}" techniques={q(t)}'
     if m: a+=f' modifiers={q(m)}'
+    if prefer: a+=f' prefer={q(prefer)}'
     if (patch, v) in EXPECT:
         a+=f' expect={q(EXPECT[(patch, v)])}'
         expectUsed.add((patch, v))
@@ -416,8 +418,8 @@ for main, name, arts in EXTRAS:
     # and silence it (Check articulations, 2026-09-25: Solo strings / brass Performance, the
     # single techniques)
     out.append('    <Switch type="none"/>')
-    for n, v, t, m in arts:
-        out.append(articulation(n, v, t, m))
+    for art in arts:
+        out.append(articulation(*art[:4], prefer=art[4] if len(art) > 4 else ''))
     out += patchControllers(name)
     out.append('  </Instrument>')
 

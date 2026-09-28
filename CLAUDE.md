@@ -288,13 +288,21 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   curve's peak would make an accented pp short 113). Longs and legato keep MS4's velocity (Spitfire's legato
   speed is on velocity). The library's dynamics CC now goes ahead of the notes at its tick (a long starting on
   a new dynamic started at the old one); MS4's CC11 for the built-in sounds keeps MS4's order.
-  Held notes too (2026-09-28, the owner: "why does single held note still sound quieter than everything
-  else"): a lone held note (base `long`, SSO's Long) had CC1 like its neighbours but MS4's velocity (67 at f,
-  the staccatos 96); SSO's Long is not a quiet sample (checks of 2026-09-25 at velocity 100 / CC1 100: Violas
-  Long -19.2 dB peak, Spiccato -26.4, Short 1.0 -22.4), so velocity moves its level too: `long` is listed.
-  A slurred note chooses `legato` (same Long articulation, other base) and keeps MS4's velocity (Spitfire's
-  legato speed). To confirm with the Dynamics check (drivenBy of Long).
-  Test `shortsFollowDynamics` (shorts-dynamics.musicxml; bar 4 slurred).
+  Test `shortsFollowDynamics` (shorts-dynamics.musicxml).
+  **The owner's Dynamics check, Violas (2026-09-27 21:57 local):** Long and every long / tremolo / trill is on
+  CC1 only (velocity 32 vs 127: no change), so `long` is not listed (18492e8 reverted). CC1 moves a Long 8-16
+  dB (Long: -35.2 dB at 32, -27.1 at 80, -26.7 at 127: little above mf); velocity moves a short far more
+  (Spiccato -58.8 at 32 -> -19.4 at 127, Bartok 28 dB, Col legno 21 dB). So at pp the listed shorts are
+  25 dB under the longs, at ff level with them: their velocity scale may need narrowing (open; the owner's ear).
+  **Held notes on the Performance patch** (the owner, 2026-09-28: lone held notes quiet and "the pan is
+  broken"; bar 12's lone pickup eighths barely audible): a part's slurred notes played "X - Performance"
+  and its lone held / unmarked notes the All techniques patch's Long, another recording with its own
+  level and place (Solo Viola Long -30.9 dB peak at 100/100) and slow to speak. `<Articulation prefer>`
+  (`Articulation::prefer`, `choose`: of equal fits in different patches, one that prefers the base wins):
+  the Performance legato is `techniques="legato long" prefer="long"`, so held notes play it too (not
+  overlapping, a note plays with its own attack). Shorts, pizzicato, con sord., sul G … stay on their
+  patches (their modifiers or techniques). The Performance patch now gets lanes for other tunings.
+  Tests `heldOnPerformance`, `spitfireMap`.
   **Check of it with the library** (the owner, 2026-09-28: "verify that dynamics is consistent across all
   techniques"; not knowable here: which of SSO's articulations are on velocity is Spitfire's, the list above a
   guess for tenuto and marcato): *Check articulations* › *Dynamics* (`ArticulationCheck::dynamics`): each
