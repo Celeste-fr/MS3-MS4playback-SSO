@@ -194,11 +194,27 @@ void TestSoundLibrary::spitfireMap()
             keys += p.scan == "keys" && p.keyScan;
             }
       QCOMPARE(int(lib->otherPatches.size()), 541);
-      QCOMPARE(values, 16);
+      QCOMPARE(values, 12);                                 // (the 4 Curated Ensembles' values are known)
       QCOMPARE(keys, 7);
-      for (const SoundLib::LibInstrument& p : lib->otherPatches)
+      int scanned = 0;
+      for (const SoundLib::LibInstrument& p : lib->otherPatches) {
             if (p.name == "Basses - Core techniques")
                   QCOMPARE(p.testPitch, 39);                    // (its samples' keys: 24-78; 60 has none)
+            if (p.name.startsWith("Curated ") && p.name.endsWith(" Ensembles")) {
+                  ++scanned;
+                  QVERIFY(p.scan.isEmpty());
+                  for (const SoundLib::Articulation& a : p.articulations)
+                        QVERIFY(a.techniques.isEmpty());      // (listed for reference)
+                  }
+            if (p.name == "Curated Tutti Ensembles") {
+                  QCOMPARE(int(p.articulations.size()), 13);
+                  QCOMPARE(p.articulations[4].name, QString("Long"));
+                  QCOMPARE(p.articulations[4].value, 5);
+                  }
+            if (p.name == "Curated String Ensembles")
+                  QCOMPARE(int(p.articulations.size()), 16);
+            }
+      QCOMPARE(scanned, 4);
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);

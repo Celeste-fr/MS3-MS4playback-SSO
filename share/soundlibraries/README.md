@@ -143,8 +143,10 @@ switch value of each articulation. For example:
   folder…*). Each `Instrument` and `Patch` gives its `.nki`; `setup` lists values of the patch's
   script to set, `name=value;…` (only where the script has the name with a value of the same
   length: SSO's `$iooxo=3` is "UACC & UI only"). A `<Patch>` is one of the library's other
-  patches: never chosen by notation, but set up and checked (always scanned) by *Check
-  articulations*. See `audio/vst3/kontaktsetup.h` for how a setup is made.
+  patches: never chosen by notation, but set up and checked by *Check articulations*. `scan`
+  (`values` or `keys`) marks one whose switch values or keys are still to be found (*Tick the
+  patches to scan*); `pitch` is its test note. Once they are known, they are listed as
+  `<Articulation name value/>` children (no techniques: for reference). See `audio/vst3/kontaktsetup.h` for how a setup is made.
 - `techniques` lists what the articulation can play (an empty list: no notation asks for it; it
   is listed for reference and checked by *Check articulations*, but never chosen): `long legato short staccatissimo spiccato
   tenuto marcato longmarcato pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3

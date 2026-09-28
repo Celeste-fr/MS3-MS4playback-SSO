@@ -948,7 +948,14 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     Ensembles, the 12 Core / Decorative techniques) or `scan="keys"` (the 6 percussion ensembles, Harp
     glissandi; `keyScan`); *Check articulations* › *Tick the patches to scan* ticks them. The files give the
     names only: which switch value plays which is in Spitfire's script, so Kontakt still scans those 23.
-    Test `spitfireMap` (16 values, 7 keys).
+    The owner's scan of 2026-09-27 20:15 (run 165) gave the 4 Curated Ensembles' values: their names in
+    alphabetical order, 1 … n (reviewed on https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR; Tutti 5 = Long
+    confirmed by the owner in Kontakt). They are in the map as `<Articulation>` children of their `<Patch>`
+    (`SCANNED` in gen_spitfire_sso.py; no techniques, no `scan`), so 12 values and 7 keys patches are left.
+    Test `spitfireMap`. Scan blind spot: the articulation selected at load (Curated: value 1, Beast Long)
+    looks like the values the patch lacks, which show it too, so neither picture nor sound tells its value.
+    The picture most values show now goes on the sheet as its last cell (`noneOnSheet` in results.json);
+    `read_check_names.py` flags it "AT LOAD" with the UACC number it reads when it isn't SSO's "None".
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6

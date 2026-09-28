@@ -8,7 +8,10 @@
 # Prints the values whose name differs (or shows SSO's "None": the patch lacks the value), and
 # with --all every value. Needs ImageMagick (convert) and tesseract. OCR misreads (Long ->
 # "Large", Tenuto -> "Terait"): look at the sheet for anything it flags before changing the
-# map. Made for SSO's window (the name is the third bright text line in its left panel).
+# map. "AT LOAD": the picture most values showed (the sheet's last cell) is an articulation, not
+# "None": the one selected when the patch loaded, which the scan can't find by picture (the
+# values the patch lacks show it too); its UACC line gives its value.
+# Made for SSO's window (the name is the third bright text line in its left panel).
 import json, subprocess, sys, os, csv, io, difflib, re
 folder = sys.argv[1]
 show_all = '--all' in sys.argv[2:]
@@ -54,6 +57,15 @@ for p in d['patches']:
         ratio = max([difflib.SequenceMatcher(None, norm(n), norm(name)).ratio() for n in a['names']] or [0])
         none = re.match(r'n[oa]ne\b', name.lower()) is not None
         flag = 'NONE' if none else ('check' if ratio < 0.62 else '')
+        if p.get('noneOnSheet') and i == len(order) - 1 and v == p.get('noneValueLike'):
+            # the picture most values showed: "None", or the articulation selected at load,
+            # whose own value (the UACC line) the scan could not tell from the values it lacks
+            if none:
+                flag = ''
+            else:
+                u = re.search(r'(\d+)', ocr('/tmp/_u.png'))
+                a = dict(a, names=['(most values show this)'])
+                flag = 'AT LOAD' + (f": UACC {u.group(1)}?" if u else '')
         if show_all or flag:
             print('\t'.join(str(x) for x in (p['patch'], a['value'], ' / '.join(a['names']) or '(not in map)', name,
                                               a['sound'] + (f" @{a['pitch']}" if 'pitch' in a else ''), flag)))

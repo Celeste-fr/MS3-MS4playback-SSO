@@ -1950,10 +1950,61 @@
     <Switch type="none"/>
   </Instrument>
   <!-- the library's other patches: set up and checked, not chosen by notation -->
-  <Patch name="Curated Brass Ensembles" nki="Instruments/Curated Ensembles/Curated Brass Ensembles.nki" setup="$iooxo=3" scan="values" pitch="54"/>
-  <Patch name="Curated String Ensembles" nki="Instruments/Curated Ensembles/Curated String Ensembles.nki" setup="$iooxo=3" scan="values" pitch="61"/>
-  <Patch name="Curated Tutti Ensembles" nki="Instruments/Curated Ensembles/Curated Tutti Ensembles.nki" setup="$iooxo=3" scan="values" pitch="58"/>
-  <Patch name="Curated Woodwind Ensembles" nki="Instruments/Curated Ensembles/Curated Woodwind Ensembles.nki" setup="$iooxo=3" scan="values" pitch="64"/>
+  <Patch name="Curated Brass Ensembles" nki="Instruments/Curated Ensembles/Curated Brass Ensembles.nki" setup="$iooxo=3" pitch="54">
+    <Articulation name="Beast Long" value="1"/>
+    <Articulation name="Beast Short" value="2"/>
+    <Articulation name="Choir Long" value="3"/>
+    <Articulation name="Choir Short" value="4"/>
+    <Articulation name="Power Long" value="5"/>
+    <Articulation name="Slow Choir Long" value="6"/>
+    <Articulation name="Slow Sup. Choir" value="7"/>
+    <Articulation name="Sup. Choir Long" value="8"/>
+    <Articulation name="Sup. Choir Short" value="9"/>
+  </Patch>
+  <Patch name="Curated String Ensembles" nki="Instruments/Curated Ensembles/Curated String Ensembles.nki" setup="$iooxo=3" pitch="61">
+    <Articulation name="Cool Strings 1" value="1"/>
+    <Articulation name="Cool Strings 2" value="2"/>
+    <Articulation name="Cool Strings 3" value="3"/>
+    <Articulation name="Cool Strings 4" value="4"/>
+    <Articulation name="Giant Epic Long" value="5"/>
+    <Articulation name="Giant Epic Short" value="6"/>
+    <Articulation name="Ligeti Strings" value="7"/>
+    <Articulation name="Mondo Plucks" value="8"/>
+    <Articulation name="Slow Cool Strings 1" value="9"/>
+    <Articulation name="Slow Cool Strings 2" value="10"/>
+    <Articulation name="Slow Cool Strings 3" value="11"/>
+    <Articulation name="Slow Cool Strings 4" value="12"/>
+    <Articulation name="Slow Strings 1" value="13"/>
+    <Articulation name="Slow Strings 2" value="14"/>
+    <Articulation name="Super Slow Strings 1" value="15"/>
+    <Articulation name="Super Slow Strings 2" value="16"/>
+  </Patch>
+  <Patch name="Curated Tutti Ensembles" nki="Instruments/Curated Ensembles/Curated Tutti Ensembles.nki" setup="$iooxo=3" pitch="58">
+    <Articulation name="Beast Long" value="1"/>
+    <Articulation name="Beast Short" value="2"/>
+    <Articulation name="Brs Str Choir Long" value="3"/>
+    <Articulation name="Brs Str Chr Short" value="4"/>
+    <Articulation name="Long" value="5"/>
+    <Articulation name="Low Brass String Stab" value="6"/>
+    <Articulation name="Low Wood String Stb" value="7"/>
+    <Articulation name="Nutcracker" value="8"/>
+    <Articulation name="Staccato" value="9"/>
+    <Articulation name="Wood Str. 1 Long" value="10"/>
+    <Articulation name="Wood Str. 1 Short" value="11"/>
+    <Articulation name="Wood Str. 2 Long" value="12"/>
+    <Articulation name="Wood Str. 2 Short" value="13"/>
+  </Patch>
+  <Patch name="Curated Woodwind Ensembles" nki="Instruments/Curated Ensembles/Curated Woodwind Ensembles.nki" setup="$iooxo=3" pitch="64">
+    <Articulation name="Beast Long" value="1"/>
+    <Articulation name="Beast Short" value="2"/>
+    <Articulation name="Chorus Long" value="3"/>
+    <Articulation name="Chorus Short" value="4"/>
+    <Articulation name="Light Short" value="5"/>
+    <Articulation name="Orchestrator Long" value="6"/>
+    <Articulation name="Orchestrator Shorts" value="7"/>
+    <Articulation name="Slow Chr Long" value="8"/>
+    <Articulation name="Slow Orch. Long" value="9"/>
+  </Patch>
   <Patch name="Brass - Bass Trombone Solo - Fall" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Fall.nki" setup="$iooxo=3" pitch="48"/>
   <Patch name="Brass - Bass Trombone Solo - Long Cuivre" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Cuivre.nki" setup="$iooxo=3" pitch="47"/>
   <Patch name="Brass - Bass Trombone Solo - Long Flutter" nki="Instruments/Individual techniques/Brass - Bass Trombone Solo - Long Flutter.nki" setup="$iooxo=3" pitch="49"/>

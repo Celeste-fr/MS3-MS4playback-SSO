@@ -714,6 +714,25 @@ assert len(FILE_ARTICULATIONS) == 700, len(FILE_ARTICULATIONS)
 # owner's scan of 2026-09-27 20:15 waited on "Basses - Core techniques" at pitch 60, above its zones (24-78,
 # median 39), for a note that never sounded.
 FILE_KEYS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_keys.json'), encoding='utf-8'))
+# Switch values found by scanning (Check articulations, the owner's scan of 2026-09-27 20:15, reviewed on
+# https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR): the Curated Ensembles' values follow their names in
+# alphabetical order. Each patch's value 1 (Tutti's 5) wasn't pictured apart (the articulation selected at
+# load: the values a patch lacks show it too), so it comes from that order; the owner saw Tutti's 5, Long,
+# in Kontakt. A patch listed here is not scanned again. Listed for reference: no notation asks for them.
+SCANNED = {
+    'Curated Brass Ensembles': ['Beast Long', 'Beast Short', 'Choir Long', 'Choir Short', 'Power Long',
+                                'Slow Choir Long', 'Slow Sup. Choir', 'Sup. Choir Long', 'Sup. Choir Short'],
+    'Curated String Ensembles': ['Cool Strings 1', 'Cool Strings 2', 'Cool Strings 3', 'Cool Strings 4',
+                                 'Giant Epic Long', 'Giant Epic Short', 'Ligeti Strings', 'Mondo Plucks',
+                                 'Slow Cool Strings 1', 'Slow Cool Strings 2', 'Slow Cool Strings 3', 'Slow Cool Strings 4',
+                                 'Slow Strings 1', 'Slow Strings 2', 'Super Slow Strings 1', 'Super Slow Strings 2'],
+    'Curated Tutti Ensembles': ['Beast Long', 'Beast Short', 'Brs Str Choir Long', 'Brs Str Chr Short', 'Long',
+                                'Low Brass String Stab', 'Low Wood String Stb', 'Nutcracker', 'Staccato',
+                                'Wood Str. 1 Long', 'Wood Str. 1 Short', 'Wood Str. 2 Long', 'Wood Str. 2 Short'],
+    'Curated Woodwind Ensembles': ['Beast Long', 'Beast Short', 'Chorus Long', 'Chorus Short', 'Light Short',
+                                   'Orchestrator Long', 'Orchestrator Shorts', 'Slow Chr Long', 'Slow Orch. Long'],
+}
+scannedUsed = set()
 out.append('  <!-- the library\'s other patches: set up and checked, not chosen by notation -->')
 for nki in NKI_FILES:
     if nki in used:
@@ -724,8 +743,19 @@ for nki in NKI_FILES:
     arts = FILE_ARTICULATIONS[nki]
     scan = '' if len(arts) < 2 else ' scan="keys"' if '/Symphonic Percussion/' in '/' + nki else ' scan="values"'
     pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
-    out.append(f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '') + scan + pitch + '/>')
+    head = f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '')
+    if name in SCANNED:
+        # the values are known: the same names as the files', not scanned again
+        assert sorted(SCANNED[name]) == sorted(arts), name
+        scannedUsed.add(name)
+        out.append(head + pitch + '>')
+        for value, a in enumerate(SCANNED[name], 1):
+            out.append(f'    <Articulation name={q(a)} value="{value}"/>')
+        out.append('  </Patch>')
+    else:
+        out.append(head + scan + pitch + '/>')
 out.append('</SoundLibrary>')
+assert scannedUsed == set(SCANNED), set(SCANNED) - scannedUsed
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed
 assert not measuredMissing, measuredMissing         # (every map patch was in the extract)

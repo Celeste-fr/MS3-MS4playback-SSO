@@ -1429,6 +1429,7 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
       std::vector<int> drawn;                   // on the sheet (indices into values)
       std::vector<int> noneInMap;               // map values showing no articulation
       std::vector<int> notInMap;                // articulations found the map lacks
+      int noneShown = -1;                       // the picture most values show, on the sheet (index)
       for (int i = 0; i < int(values.size()); ++i)
             drawn.push_back(i);
       if (scan) {
@@ -1484,6 +1485,15 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                         out["notInMap"] = extra;
                         }
                   out["noneValueLike"] = values[none];
+                  // the picture taken for "no articulation" goes on the sheet as the last cell:
+                  // a patch whose values it lacks show the articulation selected at load (SSO's
+                  // Curated Ensembles: Beast Long, UACC 1) shows that one there, and its own
+                  // value, looking the same, was not found (read_check_names.py reads it)
+                  if (!out.contains("scanInconclusive") && std::find(drawn.begin(), drawn.end(), none) == drawn.end()) {
+                        drawn.push_back(none);
+                        noneShown = none;
+                        out["noneOnSheet"] = true;
+                        }
                   }
             }
       // the first value listened to: the map's first when found
@@ -1626,7 +1636,12 @@ bool ArticulationCheckDialog::checkPatch(int index, const QString& pluginPath, c
                   font.setBold(false);
                   pt.setFont(font);
                   pt.setPen(colour);
-                  if (none) {
+                  if (i == noneShown) {
+                        pt.setPen(QColor(90, 90, 90));
+                        pt.drawText(QRect(x, y + 18, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
+                                    tr("picture most values show (taken for no articulation)"));
+                        }
+                  else if (none) {
                         pt.setPen(QColor(190, 0, 0));
                         pt.drawText(QRect(x, y + 18, cell.width(), 18), Qt::AlignLeft | Qt::AlignVCenter,
                                     tr("picture: no articulation (the patch lacks this value)"));
