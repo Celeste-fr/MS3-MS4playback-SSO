@@ -7,15 +7,18 @@ rem "Extract SSO in background.bat" (MuseScore --extract-library ... --extract-c
 rem --extract-pitch-bend, mscore/musescore.cpp): all 700 patches, one after the other, in one
 rem Kontakt instance, at below-normal priority. On each patch it plays a note while it sets every
 rem MIDI controller (0-119, channel pressure, pitch bend) to 0 and to 127 and listens to what
-rem changes (level, brightness, balance, Kontakt's parameters), puts the patch back, tries the
+rem changes (level, brightness, balance, Kontakt's parameters), finds its own value again, tries the
 rem parameters no controller moves, and measures how far pitch bend bends the note. It plays offline,
 rem as fast as Kontakt renders (no sound comes out and no window opens), so it takes hours, not days.
 rem It leaves the MuseScore you work in alone: its setups are the extract's copy, it opens no
 rem audio or MIDI device. Only one background run at a time.
 rem
 rem Progress: Documents\MuseScore Sound Library Check\background extract.log
-rem When it is done, that folder opens; hand back the newest "... extract <date>.zip" files.
-rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
+rem If Kontakt crashes or hangs on a patch, a new MuseScore goes on without that patch (the log
+rem names it); each such round writes its own zip.
+rem When it is done, that folder opens; hand back all the "... extract <date>.zip" files of the run.
+rem To stop it: Task Manager, end both @MSCORE_OUTPUT_NAME@.exe without a window (the one that
+rem started first, then the other).
 
 start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --extract-patches all --extract-controllers --extract-pitch-bend
 

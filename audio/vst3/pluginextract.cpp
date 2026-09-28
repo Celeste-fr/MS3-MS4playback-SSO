@@ -551,16 +551,6 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             if (!reportedLow.isEmpty() || !reportedHigh.isEmpty())
                   e["reportedByPlugin"] = QJsonArray { reportedLow, reportedHigh };
 
-            // put back to the value its parameter had, no reload
-            if (s.putBack && cc != PITCHBEND) {
-                  sendController(p, s.channel, cc, previous);
-                  e["putBack"] = previous;
-                  if (!run(s.grabWait, nullptr))
-                        return stop();
-                  c.reported(skip);
-                  effects.append(e);
-                  continue;
-                  }
             // Quick: the patch reloaded, as it was before (its own value of every controller); the
             // controller's own value is not known then ("patchValue" left out)
             if (s.restore && cc != PITCHBEND) {
@@ -665,6 +655,14 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                                      gLow.copy(r), gHigh.copy(r) });
                   }
             }
+      // the patch as it was at the start? (each controller went back to the value that sounds or looks
+      // like before; the value its parameter had can be one Kontakt never received: CC 7 at 0 is silence,
+      // the owner's background run of 2026-09-28 08:54 measured every later controller on a silent patch)
+      Level end;
+      if (!listen(6, &end))
+            return stop();
+      out["endDb"] = QJsonArray { round1(end.db), round1(end.brightness), round1(end.balance) };
+      out["endDistanceDb"] = round1(levelDistance(end, baseline));
       p->midi(ME_NOTEON, s.channel, s.pitch, 0);
       run(300, nullptr);
       out["effects"] = effects;

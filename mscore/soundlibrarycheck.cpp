@@ -631,6 +631,35 @@ void ArticulationCheckDialog::setBackgroundLog(const QString& fileName)
       backgroundLog() = fileName;
       }
 
+static QString zipFolder(const QString& folder);
+
+static QString& progressFile()
+      {
+      static QString path;
+      return path;
+      }
+
+QString ArticulationCheckDialog::zip(const QString& folder)
+      {
+      return zipFolder(folder);
+      }
+
+void ArticulationCheckDialog::setProgressFile(const QString& path)
+      {
+      progressFile() = path;
+      }
+
+static void writeProgress(const QStringList& patches)
+      {
+      if (progressFile().isEmpty())
+            return;
+      QFile f(progressFile());
+      if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            f.write((patches.join("\n") + "\n").toUtf8());
+            f.flush();
+            }
+      }
+
 void ArticulationCheckDialog::logBackground(const QString& line)
       {
       const QString stamped = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss") + " " + line;
@@ -2523,7 +2552,7 @@ void ArticulationCheckDialog::extract()
       QString summary = QString("%1: plug-in data of %2, %3 (MuseScore %4)\n%5\n\n")
                         .arg(_library->name, QFileInfo(path).fileName(), stamp, QString(VERSION),
                              !_tryAll->isChecked() ? QString("described only")
-                             : _headless ? QString("with every controller and parameter tried (offline, each put back to its parameter's value, no value search)")
+                             : _headless ? QString("with every controller and parameter tried (offline, each controller's own value searched by sound)")
                              : _quick->isChecked() ? QString("with every controller and parameter tried (quick: the patch reloaded, no value search)")
                              : QString("with every controller and parameter tried"));
 
@@ -2563,9 +2592,19 @@ void ArticulationCheckDialog::extract()
                   _progress->setFormat(tr("%p% — %1").arg(left));
             say(QString("[%1/%2] %3%4").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
                 .arg(left.isEmpty() ? QString() : " (" + left + ")"));
+            if (_headless) {
+                  QStringList rest;
+                  for (int j = k; j < int(chosen.size()); ++j)
+                        rest << _rows[chosen[j]].instrument->name;
+                  writeProgress(rest);
+                  }
             // a patch whose script named no controls: once more on a new Kontakt instance (the owner's
             // background run, 2026-09-27: after a warning of Kontakt's on Celli - Performance, the
             // instance ran no patch's script any more, and 545 patches came out with none named)
+            // (a test of the supervisor: this process crashes on that patch)
+            if (_headless && !qEnvironmentVariable("MS_EXTRACT_TEST_CRASH").isEmpty()
+                && _rows[chosen[k]].instrument->name == qEnvironmentVariable("MS_EXTRACT_TEST_CRASH"))
+                  std::abort();
             const QString before = summary;
             int named = -1;
             bool ok = extractPatch(chosen[k], path, folder, empty, instance, summary, &named);
@@ -2596,6 +2635,7 @@ void ArticulationCheckDialog::extract()
                                     _left << _rows[chosen[j]].instrument->name;
                               summary += QString("\n(Stopped: Kontakt runs no patch script any more in this process since %1; "
                                                  "%2 patches left for a new one.)\n").arg(_broken).arg(_left.size());
+                              writeProgress(QStringList(_broken) + _left);     // (a supervisor goes on without it)
                               break;
                               }
                         }
@@ -2629,6 +2669,11 @@ void ArticulationCheckDialog::extract()
       _status->setText(tr("Done: %1").arg(QDir::toNativeSeparators(zipPath)));
       if (_headless) {
             say(QString("done in %1 min: %2").arg(total.elapsed() / 60000.0, 0, 'f', 1).arg(QDir::toNativeSeparators(zipPath)));
+            if (!progressFile().isEmpty()) {
+                  if (_broken.isEmpty())
+                        QFile::remove(progressFile());              // (the supervisor: all done)
+                  return;
+                  }
             if (_broken.isEmpty())                                   // (else a new process goes on)
                   QDesktopServices::openUrl(QUrl::fromLocalFile(root));    // (so the owner sees it's done)
             return;
@@ -2836,9 +2881,9 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             s.switchCC = switching ? ins.switchNumber : -1;
             s.switchValues = switching ? switchValues : std::vector<int>();
             s.grabWait = GRAB_WAIT_MS;
-            if (_headless)
-                  s.putBack = true;       // (a reload per controller took Kontakt offline far too long)
-            else if (_quick->isChecked()) {
+            // (a background run: each controller's own value searched by sound, offline that is quick; Quick's
+            // reload per controller is for the dialog's real time)
+            if (!_headless && _quick->isChecked()) {
                   s.restore = [&]() {
                         if (!p->setState(patchState))
                               return false;
@@ -2931,14 +2976,18 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                         lines << (e.contains("cc")
                            ? QString("CC %1%2: %3 · %4 · patch value %5").arg(e.value("cc").toInt())
                              .arg(e.contains("name") ? " (" + e.value("name").toString() + ")" : QString())
-                             .arg(what.join(", "), levels).arg(e.contains("patchValue") ? QString::number(e.value("patchValue").toInt())
-                                  : e.contains("putBack") ? QString("unknown (put back to %1)").arg(e.value("putBack").toInt()) : QString("(reloaded)"))
+                             .arg(what.join(", "), levels).arg(e.contains("patchValue") ? QString::number(e.value("patchValue").toInt()) : QString("(reloaded)"))
                            : QString("%1 \"%2\": %3 · %4").arg(e.value("id").toDouble()).arg(e.value("title").toString())
                              .arg(what.join(", "), levels));
                         }
                   summary += QString("   %1 that change something: %2\n").arg(part).arg(lines.size());
                   for (const QString& l : lines)
                         summary += "      " + l + "\n";
+                  if (r.contains("endDistanceDb"))
+                        summary += QString("      the patch after them against before: %1 dB apart (sound noise %2 dB)%3\n")
+                                   .arg(r.value("endDistanceDb").toDouble()).arg(r.value("soundNoiseDb").toDouble())
+                                   .arg(r.value("endDistanceDb").toDouble() > std::max(1.5, 3 * r.value("soundNoiseDb").toDouble())
+                                        ? " ! not put back: the controllers after the change measured another patch" : "");
                   }
             QStringList moves;
             for (const QJsonValue& v : out.value("controllersToControls").toArray()) {

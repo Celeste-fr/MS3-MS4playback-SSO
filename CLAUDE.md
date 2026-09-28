@@ -749,8 +749,21 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   offline right after its setup and rendered flat out while it still loaded the patch. Now, as in Check
   articulations (offline with Kontakt since run 3), the patch first sounds in real time, then goes offline and
   must sound again; the log names each step (sounds / pitch bend / every controller) and the current one at
-  least once a minute. A background run puts each controller back to its parameter's value (`putBack`, JSON
-  "putBack") instead of Quick's reload (setState) per controller. Tried here with the test synth only.
+  least once a minute. Tried here with the test synth only.
+  **The second run (build fe5d050, run 211, 08:54):** Violins 1 and 2 done (about 12 s a patch offline), then a crash
+  on Violas' controllers. Its data showed a fault of that build: each controller was put back to the value Kontakt
+  reported for its parameter, which is 0 for a CC it never received, so CC 7 (volume) at 0 silenced the patch and
+  every later controller and parameter read "no effect". Gone: a background run searches each controller's own value
+  by sound, as the dialog did before Quick (offline that is quick), and `controllers()` compares the patch at the end
+  with the start (JSON `endDistanceDb`; summary "the patch after them against before", "!" when not put back).
+  **A supervisor** (`superviseExtract`, musescore.cpp): `--extract-library` without `--extract-child` starts the
+  extract as child processes one round after another. Each writes at every patch's start that patch and those after
+  it to `background extract current.txt` (`ArticulationCheckDialog::setProgressFile`), removed at a normal end. A round
+  that leaves it (a crash, Kontakt broken, or nothing in the log for 15 minutes: killed) has that patch left out, its
+  folder zipped as it is, and the next round goes on with the rest (at most 100 rounds; the log names every patch left
+  out). The children don't open a "stopped working" window (SetErrorMode). Tried here with the test synth and
+  `MS_EXTRACT_TEST_CRASH=<patch>` (the child aborts on that patch): 3 patches, the 2nd left out, two zips; the hang
+  timeout (`MS_EXTRACT_HANG_MINUTES`) not tried.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

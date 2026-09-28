@@ -249,6 +249,7 @@ static QString extractLibrary;
 static QString extractPatches = "all";
 static bool extractPitchBend = false;
 static bool extractControllers = false;     // --extract-controllers: every controller tried too (offline, no window)
+static bool extractChild = false;           // --extract-child: a round of an extract, started by its supervisor (superviseExtract)
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
@@ -4536,6 +4537,115 @@ struct DialogWatch {
 #endif
 
 static const int MAX_EXTRACT_ROUNDS = 20;
+static const int MAX_SUPERVISED_ROUNDS = 100;
+
+//---------------------------------------------------------
+//   superviseExtract
+//    the extract, one MuseScore after another (--extract-child), until every patch is done: Kontakt crashes
+//    now and then (the owner's background controller runs of 2026-09-28: an access violation in Kontakt
+//    8.vst3 on the 1st and on the 3rd patch, which ended the run and left nothing to hand back). Each round
+//    writes at every patch's start that patch and the ones after it (ArticulationCheckDialog::setProgressFile);
+//    a round that ends leaving it (a crash, Kontakt broken, or no line in the log for HANG_MINUTES: stopped)
+//    has its first patch left out and the next round goes on with the rest. Each round writes its own extract
+//    and zip
+//---------------------------------------------------------
+
+static bool superviseExtract(const QString& root)
+      {
+      QDir().mkpath(root);
+      QLockFile lock(root + "/background extract supervisor.lock");
+      if (!lock.tryLock(0)) {
+            ArticulationCheckDialog::logBackground("a background extract is already running; this one stops");
+            return false;
+            }
+      const QString progress = root + "/background extract current.txt";
+      const QString log = root + "/background extract.log";
+      const int hangMinutes = qEnvironmentVariableIsSet("MS_EXTRACT_HANG_MINUTES") ? qEnvironmentVariableIntValue("MS_EXTRACT_HANG_MINUTES") : 15;
+      QString patches = extractPatches;
+      QStringList skipped;
+      bool ok = true;
+      for (int round = 1; round <= MAX_SUPERVISED_ROUNDS; ++round) {
+            QFile::remove(progress);
+            QStringList args { "--extract-library", extractLibrary, "--extract-patches", patches, "--extract-child",
+                               "--extract-round", QString::number(round) };
+            if (extractPitchBend)
+                  args << "--extract-pitch-bend";
+            if (extractControllers)
+                  args << "--extract-controllers";
+            const QDateTime started = QDateTime::currentDateTime().addSecs(-60);
+            QProcess child;
+            child.setProcessChannelMode(QProcess::ForwardedChannels);
+            child.start(QCoreApplication::applicationFilePath(), args);
+            if (!child.waitForStarted(60000)) {
+                  ArticulationCheckDialog::logBackground("could not start a MuseScore for the extract; stopped");
+                  return false;
+                  }
+            // a hang: nothing written to the log for so long (a patch logs its step at least once a minute)
+            bool hung = false;
+            while (!child.waitForFinished(30000)) {
+                  const QDateTime last = QFileInfo(log).lastModified();
+                  if (last.isValid() && last.secsTo(QDateTime::currentDateTime()) > hangMinutes * 60) {
+                        ArticulationCheckDialog::logBackground(QString("nothing in the log for %1 minutes: that MuseScore is stopped").arg(hangMinutes));
+                        child.kill();
+                        child.waitForFinished(60000);
+                        hung = true;
+                        break;
+                        }
+                  }
+            QStringList left;
+            QFile f(progress);
+            if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                  for (const QString& l : QString::fromUtf8(f.readAll()).split('\n'))
+                        if (!l.trimmed().isEmpty())
+                              left << l.trimmed();
+                  }
+            if (left.isEmpty()) {
+                  if (!hung && child.exitStatus() == QProcess::NormalExit)
+                        break;                                    // (all done)
+                  ArticulationCheckDialog::logBackground(QString("MuseScore ended before its first patch (exit code %1); stopped")
+                                                         .arg(QString::number(uint(child.exitCode()), 16)));
+                  ok = false;
+                  break;
+                  }
+            const QString where = left.takeFirst();
+            skipped << where;
+            const bool crashed = child.exitStatus() == QProcess::CrashExit || child.exitCode() != 0;
+            // what that round did before: its extract folder, zipped here (it ended before zipping it)
+            for (const QFileInfo& fi : QDir(root).entryInfoList({ "* extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+                  if (fi.lastModified() >= started && !QFileInfo::exists(fi.absoluteFilePath() + ".zip")) {
+                        const QString z = ArticulationCheckDialog::zip(fi.absoluteFilePath());
+                        if (!z.isEmpty())
+                              ArticulationCheckDialog::logBackground(QString("that round's patches so far: %1").arg(QDir::toNativeSeparators(z)));
+                        }
+                  }
+            ArticulationCheckDialog::logBackground(QString("%1 on %2 (left out)%3; %4 patches left")
+                                                   .arg(hung ? QString("stopped (hung)") : crashed
+                                                        ? QString("MuseScore crashed (exit code %1)").arg(QString::number(uint(child.exitCode()), 16))
+                                                        : QString("Kontakt stopped running patch scripts"))
+                                                   .arg(where).arg(crashed || hung ? ", its data not written" : QString()).arg(left.size()));
+            if (left.isEmpty())
+                  break;
+            if (round == MAX_SUPERVISED_ROUNDS) {
+                  ArticulationCheckDialog::logBackground(QString("%1 rounds already: stopped, %2 patches not done").arg(round).arg(left.size()));
+                  ok = false;
+                  break;
+                  }
+            patches = root + QString("/background extract round %1.txt").arg(round + 1);
+            QFile next(patches);
+            if (!next.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+                  ArticulationCheckDialog::logBackground(QString("cannot write %1").arg(QDir::toNativeSeparators(patches)));
+                  return false;
+                  }
+            next.write(("# left after " + where + "\n" + left.join("\n") + "\n").toUtf8());
+            next.close();
+            ArticulationCheckDialog::logBackground(QString("going on in a new MuseScore (round %1)").arg(round + 1));
+            }
+      QFile::remove(progress);
+      ArticulationCheckDialog::logBackground(skipped.isEmpty() ? QString("the extract is done")
+                                             : QString("the extract is done; left out: %1").arg(skipped.join(", ")));
+      QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+      return ok;
+      }
 
 static bool extractInBackground()
       {
@@ -4545,7 +4655,15 @@ static bool extractInBackground()
       // loading a patch 46-54 s instead of 0.2-0.7, describing it 25-35 s instead of 0.7-0.9: the
       // lowest disk and memory priority starved Kontakt)
       SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+      // a crash ends the process at once, with no "stopped working" window to wait on (the supervisor goes on)
+      SetErrorMode(GetErrorMode() | SEM_NOGPFAULTERRORBOX | SEM_FAILCRITICALERRORS);
 #endif
+      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      // the extract itself (not a key scan, pictures or the dynamics check): under a supervisor
+      if (!extractChild && !scanKeysMode && !picturesMode && !checkDynamicsMode)
+            return superviseExtract(root);
+      if (extractChild)
+            ArticulationCheckDialog::setProgressFile(root + "/background extract current.txt");
       // the library's map: a file, a name in share/soundlibraries, else the one Preferences name
       QString path = extractLibrary;
       if (!QFileInfo::exists(path)) {
@@ -4626,7 +4744,8 @@ static bool extractInBackground()
       // a new instance): a new MuseScore goes on with the patches left, without that one (the owner's
       // run of 2026-09-27 17:20 stopped at Celli - Performance, patch 59 of 700). Each process
       // writes its own extract and zip
-      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      if (extractChild)
+            return ok;          // (the supervisor goes on: a patch left out, the rest in a new MuseScore)
       if (!dialog.brokenOn().isEmpty()) {
             const QStringList left = dialog.patchesLeft();
             ArticulationCheckDialog::logBackground(QString("Kontakt stopped running patch scripts on %1 (left out)")
@@ -8614,6 +8733,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("extract-pitch-bend", "Use with --extract-library: also measure pitch bend (about 25 s a patch)"));
       parser.addOption(QCommandLineOption("extract-controllers", "Use with --extract-library: also try every MIDI controller and parameter "
                                           "on each patch, offline (sound and parameters; no window)"));
+      parser.addOption(QCommandLineOption("extract-child", "Use with --extract-library: set by the extract's supervisor for each "
+                                          "process it starts"));
       parser.addOption(QCommandLineOption("extract-round", "Use with --extract-library: set by the extract itself when it goes on in a new "
                                           "process", "n"));
       parser.addOption(QCommandLineOption("check-dynamics", "Use with --extract-library: measure the patches' dynamics (Check articulations › "
@@ -8702,6 +8823,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                   extractPatches = parser.value("extract-patches");
             extractPitchBend = parser.isSet("extract-pitch-bend");
             extractControllers = parser.isSet("extract-controllers");
+            extractChild = parser.isSet("extract-child");
             checkDynamicsMode = parser.isSet("check-dynamics");
             if (parser.isSet("extract-round"))
                   extractRound = qMax(1, parser.value("extract-round").toInt());

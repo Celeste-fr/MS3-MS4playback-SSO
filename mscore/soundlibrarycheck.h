@@ -156,6 +156,12 @@ class ArticulationCheckDialog : public QDialog {
       bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false,   // dynamics: Dynamics only instead of the extract
                        bool controllers = false);   // controllers: every controller tried too (offline, no window: sound and parameters)
       static void setBackgroundLog(const QString& fileName);      // in Documents/MuseScore Sound Library Check (default "background extract.log")
+      // an extract under a supervisor (MuseScore --extract-library without --extract-child starts one per round):
+      // at each patch's start, the patch and those after it, one a line, in this file; removed when the run ends
+      // normally. Left behind, it tells the supervisor where a crash or a hang was (the first line, skipped) and
+      // what is left. Set: the extract doesn't open its folder at the end (the supervisor does)
+      static void setProgressFile(const QString& path);
+      static QString zip(const QString& folder);                  // the folder zipped next to it (its path; empty: failed)
       // Check articulations without the dialog (MuseScore --scan-keys) on the patches to scan
       // (toScanNow), or on those a file lists (one patch name a line); listening only, no window
       bool runHeadlessKeyScan(const QString& patches, QString* zip);
