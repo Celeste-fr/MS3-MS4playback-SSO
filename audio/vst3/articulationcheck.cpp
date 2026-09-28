@@ -441,7 +441,7 @@ struct Player {
             if (s.dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, s.channel, s.dynamicsCC, s.dynamicsValue);
             if (s.expressionCC >= 0 && s.expressionCC != s.dynamicsCC)
-                  p->midi(ME_CONTROLLER, s.channel, s.expressionCC, 127);
+                  p->midi(ME_CONTROLLER, s.channel, s.expressionCC, qBound(0, s.expressionValue, 127));
             render(frames(0.1));
             lastPitch = pitch;
             p->midi(ME_NOTEON, s.channel, pitch, s.velocity);
@@ -477,6 +477,7 @@ struct Player {
 //---------------------------------------------------------
 
 constexpr int ArticulationCheck::CURVE_POINTS[8];
+constexpr int ArticulationCheck::EXPRESSION_POINTS[7];
 
 const char* ArticulationCheck::DynamicsResult::drivenBy() const
       {
@@ -494,7 +495,7 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
       Player player { plugin, settings, {} };
       player.relativeSettle = true;
       int done = 0;
-      const int total = 8 * n;                  // (about: 3 to classify, 2 to 7 more)
+      const int total = 8 * n;                  // (about: 3 to classify, 2 to 7 more; 7 for a held note's volume)
       double pdb = -200;                  // the last note's perceived loudness
       auto at = [&](int value, int pitch, int velocity, int cc, double* db) {
             player.s.velocity = qBound(1, velocity, 127);
@@ -557,6 +558,26 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
                               }
                         r.curve.push_back({ x, db });
                         r.perceived.push_back({ x, pd });
+                        }
+                  // the held note on the controller: the expression CC's volume (even dynamic steps,
+                  // SoundLib::evenStep), at mf; 127 is the curve's 80
+                  if (full[size_t(i)] && by != "velocity" && settings.expressionCC >= 0) {
+                        for (int x : EXPRESSION_POINTS) {
+                              double db;
+                              player.s.expressionValue = x;
+                              const bool go = at(r.value, r.pitch, 80, 80, &db);
+                              player.s.expressionValue = 127;
+                              if (!go)
+                                    return out;
+                              r.expression.push_back({ x, db });
+                              r.expressionPerceived.push_back({ x, pdb });
+                              }
+                        for (size_t k = 0; k < r.curve.size(); ++k) {
+                              if (r.curve[k].first == 80) {
+                                    r.expression.push_back({ 127, r.curve[k].second });
+                                    r.expressionPerceived.push_back({ 127, r.perceived[k].second });
+                                    }
+                              }
                         }
                   }
             else {

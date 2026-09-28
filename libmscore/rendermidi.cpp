@@ -1211,11 +1211,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
                         if (!c)
                               return -1;
-                        const int cc = Ms4::expressionLevel(dynLevel);
-                        const double accent = cc > 0 ? double(r.levelVelocity) / cc : 1.0;
+                        const int level = Ms4::expressionLevel(dynLevel);
+                        const double accent = level > 0 ? double(r.levelVelocity) / level : 1.0;
                         if (cal) {
                               const SoundLib::Choice held = SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} });
                               if (held) {
+                                    // as loud as the held note plays: at the dynamics CC even steps send
+                                    // (their volume turns both down alike)
+                                    const int cc = SoundLib::evenStep(SoundLib::heldCurve(*cal, libPatches), SoundLib::evenSteps(score),
+                                                                      level).dynamics;
                                     const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
                                                                                libPatches[held.patch]->name, held.articulation->value, cc,
                                                                                SoundLib::family(*libPatches.front()), score);
@@ -1738,6 +1742,15 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
             int controller = CTRL_EXPRESSION;
             std::vector<int> channels;
+            // a library part's: per channel, its held note's curve for even steps (SoundLib::evenStep), and
+            // whether they turn the expression CC (not when an automation lane has it)
+            std::map<int, const SoundLib::DynamicsCurve*> heldCurves;
+            const SoundLib::EvenSteps evenSteps = lp ? SoundLib::evenSteps(score) : SoundLib::EvenSteps::OFF;
+            bool evenVolume = evenSteps == SoundLib::EvenSteps::VOLUME_HEARING || evenSteps == SoundLib::EvenSteps::VOLUME_ENERGY;
+            if (lp)
+                  for (const LibPart::Auto& a : lp->automation)
+                        if (a.cc == CTRL_EXPRESSION)
+                              evenVolume = false;
             std::vector<int> builtInChannels;     // a kit's drum sounds the built-in synthesizer plays
             if (lp) {
                   if (ctx.snd)
@@ -1785,12 +1798,19 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                   if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
                         continue;
                   controller = library->dynamicsCC;
+                  if (controller == CTRL_EXPRESSION)
+                        evenVolume = false;
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
                   for (const auto& ip : *part->instruments()) {
                         if (!libraryPlays(ip.second))
                               continue;
                         const int ch = ip.second->channel(0)->channel();
                         channels.push_back(ch);
-                        if (controller != CTRL_EXPRESSION) {
+                        auto li = lp->instruments.find(ip.second);
+                        if (cal && evenSteps != SoundLib::EvenSteps::OFF && li != lp->instruments.end() && li->second)
+                              heldCurves[ch] = SoundLib::heldCurve(*cal, lp->patchesFor(li->second));
+                        // (even steps' volume: put() sends it with each level)
+                        if (controller != CTRL_EXPRESSION && !(evenVolume && heldCurves[ch] && heldCurves[ch]->expression.size() >= 2)) {
                               NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, library->expressionValue, 127));
                               ev.setOriginatingStaff(part->staff(0)->idx());
                               events->insert(std::make_pair(tick1 + tickOffset, ev));
@@ -1807,7 +1827,14 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
             auto put = [&](int tick, int level) {
                   const int value = Ms4::expressionLevel(level);
                   for (int ch : channels) {
-                        NPlayEvent ev(ME_CONTROLLER, ch, controller, value);
+                        auto hc = heldCurves.find(ch);
+                        const SoundLib::Step step = SoundLib::evenStep(hc == heldCurves.end() ? nullptr : hc->second, evenSteps, value);
+                        if (evenVolume && step.expression >= 0) {
+                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, step.expression);
+                              ev.setOriginatingStaff(part->staff(0)->idx());
+                              events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
+                              }
+                        NPlayEvent ev(ME_CONTROLLER, ch, controller, step.dynamics);
                         ev.setOriginatingStaff(part->staff(0)->idx());
                         // a library's dynamics CC ahead of the notes at its tick (a long starting on a
                         // new dynamic would start at the old one); MS4's CC11 after them, as MS4 sends it

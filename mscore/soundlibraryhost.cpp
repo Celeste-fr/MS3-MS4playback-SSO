@@ -26,6 +26,7 @@
 #include <QSet>
 #include <QSettings>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGridLayout>
 #include <QSlider>
 #include <QSpinBox>
@@ -1566,6 +1567,41 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             form->addRow(l, row);
             if (!SoundLib::dynamicsCalibration())
                   row->setEnabled(false), row->setToolTip(tr("Measure the dynamics first (below)"));
+
+            // even dynamic steps (SoundLib::evenStep)
+            _evenSteps = new QComboBox(scoreBox);
+            _evenSteps->addItem(tr("Off: as the library plays them"), int(SoundLib::EvenSteps::OFF));
+            _evenSteps->addItem(tr("Volume, judged by ear"), int(SoundLib::EvenSteps::VOLUME_HEARING));
+            _evenSteps->addItem(tr("Volume, judged by energy"), int(SoundLib::EvenSteps::VOLUME_ENERGY));
+            _evenSteps->addItem(tr("Recording, judged by ear"), int(SoundLib::EvenSteps::RECORDING_HEARING));
+            _evenSteps->addItem(tr("Recording, judged by energy"), int(SoundLib::EvenSteps::RECORDING_ENERGY));
+            _evenSteps->setToolTip(tr("Spaces ppp … fff evenly within each held note's own loudness range.\n"
+                                      "Volume: every dynamic keeps the library's recording (its tone); the volume is turned "
+                                      "down where a step is too small.\n"
+                                      "Recording: another point between the library's recordings is played, so the tone moves.\n"
+                                      "By ear: judged with a model of hearing (brighter sounds louder). By energy: the "
+                                      "loudest 50 ms, as the short notes are matched.\n"
+                                      "Needs the dynamics measured (below); Volume needs a measurement made with this build."));
+            QLabel* el = new QLabel(tr("Even dynamic steps:"), scoreBox);
+            el->setToolTip(_evenSteps->toolTip());
+            form->addRow(el, _evenSteps);
+            if (!SoundLib::dynamicsCalibration())
+                  _evenSteps->setEnabled(false);
+            connect(_evenSteps, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+                  const SoundLib::EvenSteps mode = SoundLib::EvenSteps(_evenSteps->currentData().toInt());
+                  setMetaTag(SoundLib::evenStepsMetaTag, SoundLib::evenStepsName(mode));
+                  const bool volume = mode == SoundLib::EvenSteps::VOLUME_HEARING || mode == SoundLib::EvenSteps::VOLUME_ENERGY;
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+                  bool measured = false;
+                  if (cal)
+                        for (const auto& p : cal->patches())
+                              for (const auto& a : p.second)
+                                    measured = measured || (volume ? !a.second.expression.empty() : a.second.points.size() >= 2);
+                  if (mode != SoundLib::EvenSteps::OFF && !measured)
+                        QMessageBox::information(this, windowTitle(), tr("This needs the dynamics measured in the background "
+                                                                         "with this build (below), then a restart of MuseScore. "
+                                                                         "Until then the dynamics play as before."));
+                  });
       }
       layout->addWidget(scoreBox);
 
@@ -1639,6 +1675,10 @@ void SoundLibraryOptions::load()
       for (auto& b : _balance) {
             const QSignalBlocker blocker(b.second);
             b.second->setValue(cal ? SoundLib::shortNotesBalance(_score, *cal, b.first) : 0.0);
+            }
+      if (_evenSteps) {
+            const QSignalBlocker blocker(_evenSteps);
+            _evenSteps->setCurrentIndex(std::max(0, _evenSteps->findData(int(SoundLib::evenSteps(_score)))));
             }
       if (_folder) {
             const QString folder = SoundLibraryHost::libraryFolder(*_library);

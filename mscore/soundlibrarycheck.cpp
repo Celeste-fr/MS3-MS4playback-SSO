@@ -1079,6 +1079,8 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             c.drivenBy = d.drivenBy();
             c.points = d.curve;
             c.perceived = d.perceived;
+            c.expression = d.expression;
+            c.expressionPerceived = d.expressionPerceived;
             cal.setCurve(ins.name, d.value, c);
             QJsonArray pts;
             for (const auto& pt : d.curve)
@@ -1088,6 +1090,15 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             for (const auto& pt : d.perceived)
                   per.append(QJsonArray({ pt.first, r1(pt.second) }));
             o["perceived"] = per;
+            if (!d.expression.empty()) {
+                  QJsonArray ex, exp;
+                  for (const auto& pt : d.expression)
+                        ex.append(QJsonArray({ pt.first, r1(pt.second) }));
+                  for (const auto& pt : d.expressionPerceived)
+                        exp.append(QJsonArray({ pt.first, r1(pt.second) }));
+                  o["expression"] = ex;
+                  o["expressionPerceived"] = exp;
+                  }
             o["velocityDb"] = QJsonArray({ r1(d.velocityDb[0]), r1(d.velocityDb[1]) });
             o["controllerDb"] = QJsonArray({ r1(d.ccDb[0]), r1(d.ccDb[1]) });
             o["drivenBy"] = c.drivenBy;
@@ -1095,6 +1106,13 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             lines << QString("%1 (%2): on %3, %4 / %5 / %6 dB at pp / mf / ff%7").arg(names[d.value].join(" / ")).arg(d.value)
                .arg(c.drivenBy).arg(r1(c.at(32))).arg(r1(c.at(80))).arg(r1(c.at(112)))
                .arg(d.pitch != pitch ? QString(" (pitch %1)").arg(d.pitch) : QString());
+            if (d.expression.size() >= 2) {     // the held note's volume (CC11) against 127, at mf
+                  SoundLib::DynamicsCurve ex;
+                  ex.points = d.expression;
+                  const double top = ex.at(127);
+                  lines << QString("   volume (CC11) 32 / 64 / 96: %1 / %2 / %3 dB against 127")
+                     .arg(r1(ex.at(32) - top)).arg(r1(ex.at(64) - top)).arg(r1(ex.at(96) - top));
+                  }
             }
       if (!dr.empty()) {
             QDir().mkpath(QFileInfo(calFile).absolutePath());

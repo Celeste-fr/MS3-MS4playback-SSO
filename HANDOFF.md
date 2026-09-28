@@ -114,9 +114,18 @@ with *Dynamics* ticked on the patches they use (one per family at least: strings
 Performance patch) and hands back the zip; from summary.txt, fix `<Dynamics velocity>` in `gen_spitfire_sso.py`
 (techniques flagged "on velocity but not listed" / "not needed") and look at the flagged spans.
 
-## Automation (2026-09-28): infrastructure in, no UI
+## Even dynamic steps (2026-09-28): in, waiting for the owner's ear
 
-See `CLAUDE.md` › Automation. Next: the UI (lanes to draw per part, targets from the part's patch's
+See `CLAUDE.md` › Even dynamic steps. Next: the owner runs *Measure dynamics in the background* with this build
+(it measures the held notes' CC11 curves; the recording modes work from the older measurement too), restarts,
+then compares the four modes of Advanced Options › *Even dynamic steps* on a score and picks one. Then: make
+the chosen one the default (or keep the switch) and drop the others if the owner wants.
+
+## Automation (2026-09-28): infrastructure in, no UI; being redone through Ableton Live
+
+The owner (2026-09-28): edit automation in Live 12 instead of an editor of our own; MuseScore keeps playing on
+its own, Live's automation imported back read-only. Built on branch `live-integration` (worktree `wt-live`).
+See `CLAUDE.md` › Automation. Earlier next steps: the UI (lanes to draw per part, targets from the part's patch's
 controllers), a dynamics lane on top of the notation's, the map's controller entries for SSO's named
 controls (`gen_spitfire_sso.py` from sso_patch_controls.json), and one try with Kontakt that a parameter
 set by automation is heard (e.g. Vibrato on Violins 1).

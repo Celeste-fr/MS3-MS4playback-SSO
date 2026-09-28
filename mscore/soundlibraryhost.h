@@ -51,6 +51,7 @@ class QTreeWidget;
 class QLabel;
 class QDoubleSpinBox;
 class QSpinBox;
+class QComboBox;
 
 namespace Ms {
 
@@ -204,6 +205,7 @@ class SoundLibraryOptions : public QDialog {
       QDoubleSpinBox* _tail { nullptr };
       QSpinBox* _maxLanes { nullptr };
       std::map<QString, QDoubleSpinBox*> _balance;
+      QComboBox* _evenSteps { nullptr };
       QLabel* _folder { nullptr };
 
       void load();

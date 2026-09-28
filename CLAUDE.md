@@ -388,6 +388,17 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   per family, shorts matched in energy to the held note (balance 0) at pp / mf / ff, how much louder they
   sound, the median negated to 0.5 dB. Advanced Options › *Recommended* (right of *Library's*); the report
   lists the recommendations. Needs one background dynamics run with this build. Test `perceivedLoudness`.
+  **Even dynamic steps** (the owner, 2026-09-28; "try both", decide by ear): SSO's held notes climb 5–12 dB pp→mf
+  and 1–4 dB (sometimes less than 0) mf→ff on CC1 32/80/112. `SoundLib::evenStep(heldCurve, mode, cc)`: the held
+  note's own range, ppp (CC 16) to fff (127), split linearly over MS4's CC scale; judged on the energy or the
+  perceived curve; reached by VOLUME (CC1 unchanged, so each marking keeps Spitfire's recording/tone; CC11 turned
+  down where the curve is above the step; it can't go up: CC11 is at 127 otherwise) or RECORDING (another CC1,
+  the curve's inverse; the tone moves). Per score: metaTag `soundLibraryEvenSteps` = volume-hearing /
+  volume-energy / recording-hearing / recording-energy (none: off), Advanced Options › *Even dynamic steps*.
+  Rendering: `renderMs4Dynamics` per channel (`heldCurves`), CC11 only when no automation lane has CC11; the
+  shorts' velocity is matched at the CC1 sent (`libVelocity`). The volume needs the held note's CC11 curve:
+  the dynamics check measures it (CC11 16…112 with CC1 and velocity 80, `DynamicsResult::expression` /
+  `expressionPerceived`, "expression" in dynamics.json; 127 = the curve's 80). Test `evenDynamicSteps`.
   **UI (2026-09-28, the owner: "tidy up the Sound Library menu")**: *View › Sound Library…* is the overview: a
   tree (`SoundLibraryDialog::_tree`), each part's row with its patch, *Controllers…* (kept until the automation
   system: the owner), setup state, *Show*, memory; its extra patches (+) and copies for other tunings (~) under
