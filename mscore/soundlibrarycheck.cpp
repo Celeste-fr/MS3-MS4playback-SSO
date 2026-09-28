@@ -1268,7 +1268,9 @@ QString ArticulationCheckDialog::balanceReport() const
             const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
             const QString heldPatch = held ? patches[size_t(held.patch)]->name : QString();
             const SoundLib::DynamicsCurve* ref = held ? cal->curve(heldPatch, held.articulation->value) : nullptr;
-            text += QString("## %1\n").arg(main->name);
+            const QString fam = SoundLib::family(*main);
+            const double balance = cal->balanceFor(fam);
+            text += QString("## %1 (%2, short notes %3 dB)\n").arg(main->name, fam, f1(balance));
             if (!ref) {
                   text += "   " + tr("held notes play %1 (%2), not measured yet: check it with Dynamics too")
                      .arg(heldPatch, held ? held.articulation->name : QString("?")) + "\n";
@@ -1294,8 +1296,8 @@ QString ArticulationCheckDialog::balanceReport() const
                                  : Ms4::note(Ms4::Family(0), { Ms4::ArtRef { Ms4::Art::Standard, false } }, LEVELS[k], true).velocity;
                               double n;
                               if (onVelocity) {
-                                    const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc);
-                                    n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - cal->balanceDb;
+                                    const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc, fam);
+                                    n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - balance;
                                     }
                               else
                                     n = c->at(cc) - refDb;          // on the controller: the part's CC, as it is
@@ -1320,7 +1322,7 @@ QString ArticulationCheckDialog::balanceReport() const
             }
       if (text.isEmpty())
             return QString();
-      return "\n# " + tr("Dynamics balance (loudest 50 ms; the short notes' balance setting: %1 dB)").arg(f1(cal->balanceDb))
+      return "\n# " + tr("Dynamics balance (loudest 50 ms; against the held note plus each family's short notes setting)")
              + "\n" + text;
       }
 

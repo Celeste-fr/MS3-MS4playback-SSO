@@ -323,6 +323,19 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 1", { { "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
       QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1 - Performance: Legato"));
       QCOMPARE(patchFor("Violins 1", { { "short" }, { "espressivo" } }), QString("Violins 1: Short 0.5"));
+      // the balance families, from the patches' folders (an extra patch: its main patch's)
+      auto familyOf = [&](const QString& name) {
+            for (const SoundLib::LibInstrument& li : lib->instruments)
+                  if (li.name == name)
+                        return SoundLib::family(li);
+            return QString("?");
+            };
+      QCOMPARE(familyOf("Violins 1"), QString("strings"));
+      QCOMPARE(familyOf("Solo Viola"), QString("solo strings"));
+      QCOMPARE(familyOf("Oboe Solo"), QString("woodwinds"));
+      QCOMPARE(familyOf("Horns a6"), QString("brass"));
+      QCOMPARE(familyOf("Motif Horns a4"), QString("brass"));
+      QCOMPARE(familyOf("Harp"), QString("other"));
       // shorts by the note's written length (2026-09-28, "Whence" bar 8): Short 0'5 from 0.45 s, Short 1'0
       // from 0.9 s, else the next shorter, down to Spiccato
       auto byLength = [&](std::vector<Ms4::Art> arts, double seconds) {
@@ -2067,6 +2080,17 @@ void TestSoundLibrary::dynamicsCalibration()
       QCOMPARE(int(back->curve("Violin", 40)->points.size()), 8);
       // -2 dB: pp -38.8 -> 78
       QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32), 78);
+      // per family: its own, else balanceDb; written and read back
+      back->familyBalanceDb["strings"] = -4;
+      QCOMPARE(back->balanceFor("strings"), -4.0);
+      QCOMPARE(back->balanceFor("brass"), -2.0);
+      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32, "strings"), 73);   // -40.8 dB
+      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32, "brass"), 78);
+      QVERIFY(back->write(dir.path() + "/dynamics.json"));
+      SoundLib::DynamicsCalibration again;
+      QVERIFY(again.read(dir.path() + "/dynamics.json"));
+      QCOMPARE(again.balanceFor("strings"), -4.0);
+      QCOMPARE(again.balanceFor("woodwinds"), -2.0);
 
       // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
       back->balanceDb = 0;

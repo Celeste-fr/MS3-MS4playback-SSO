@@ -360,6 +360,14 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `espressivo` (until "non vib." / "senza vib." / "ord."): a held note plays Long (Rachm.) (Rachmaninoff:
   Spitfire's romantic long), a slurred one keeps the Performance legato (legato is tried before long).
   Not the default held sound (the owner). Short Brushed (CS) and Fx stay unmapped.
+  **Short notes' balance per family** (the owner, 2026-09-28, "Whence" bar 15: staccatos quite a bit louder than
+  legato): the calibration matched them (Violins 1: Spiccato at velocity 88 and the legato at CC 64 both -39.1 dB
+  loudest 50 ms; uncalibrated, Spiccato at ~64 was -46 dB: Spitfire's own balance ~7 dB under), but a bright
+  bow attack stands out by ear more than a flat 50 ms energy says. Balance per family ("why not just do this
+  regardless"): `DynamicsCalibration::familyBalanceDb` ("familyBalanceDb" in dynamics.json; `balanceFor`, else
+  `balanceDb`), `SoundLib::family(main)` from the main patch's folder (strings, solo strings, woodwinds, brass,
+  other), `calibratedVelocity(…, family)`; *View › Sound Library…* one box per family; the report's per-patch
+  header shows the family and its setting.
   **Shorts by the note's length** (the owner, 2026-09-28, "Whence" bar 8: accented staccato eighths at 110 on
   Short 0'5 rang on; "I thought we were already calculating the note's actual length"): `<Articulation
   length>` (Short 0.5 = 0.5 s, Short 1.0 = 1.0 s; gen_spitfire_sso.py `LENGTHS`) is skipped for a note under

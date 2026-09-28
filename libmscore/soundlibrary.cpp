@@ -605,6 +605,10 @@ bool DynamicsCalibration::read(const QString& file)
             return false;
       const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
       balanceDb = o.value("balanceDb").toDouble(0);
+      familyBalanceDb.clear();
+      const QJsonObject fam = o.value("familyBalanceDb").toObject();
+      for (auto f = fam.begin(); f != fam.end(); ++f)
+            familyBalanceDb[f.key()] = f.value().toDouble(0);
       _patches.clear();
       const QJsonObject patches = o.value("patches").toObject();
       for (auto p = patches.begin(); p != patches.end(); ++p) {
@@ -637,6 +641,11 @@ bool DynamicsCalibration::write(const QString& file) const
             }
       QJsonObject o;
       o["balanceDb"] = balanceDb;
+      QJsonObject fam;
+      for (const auto& f : familyBalanceDb)
+            fam[f.first] = f.second;
+      if (!fam.isEmpty())
+            o["familyBalanceDb"] = fam;
       o["patches"] = patches;
       QFile f(file);
       if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -673,14 +682,36 @@ int calibratedController(const DynamicsCalibration& cal, const QString& patch, i
       return c->inverse(ref->at(cc));
       }
 
+const char* const FAMILIES[5] = { "strings", "solo strings", "woodwinds", "brass", "other" };
+
+double DynamicsCalibration::balanceFor(const QString& family) const
+      {
+      auto f = familyBalanceDb.find(family);
+      return f == familyBalanceDb.end() ? balanceDb : f->second;
+      }
+
+QString family(const LibInstrument& main)
+      {
+      const QString folder = main.nki.section('/', 1, 1);         // Instruments/<folder>/…
+      if (folder == "Solo Strings")
+            return "solo strings";
+      if (folder.endsWith("Strings"))
+            return "strings";
+      if (folder.endsWith("Woodwinds"))
+            return "woodwinds";
+      if (folder.endsWith("Brass"))
+            return "brass";
+      return "other";
+      }
+
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc)
+                       const QString& refPatch, int refValue, int cc, const QString& family)
       {
       const DynamicsCurve* c = cal.curve(patch, value);
       const DynamicsCurve* ref = cal.curve(refPatch, refValue);
       if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
             return -1;
-      return c->inverse(ref->at(cc) + cal.balanceDb);
+      return c->inverse(ref->at(cc) + cal.balanceFor(family));
       }
 
 int routesGeneration()

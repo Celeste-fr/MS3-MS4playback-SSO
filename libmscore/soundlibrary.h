@@ -267,7 +267,11 @@ struct DynamicsCurve {
 class DynamicsCalibration {
       std::map<QString, std::map<int, DynamicsCurve>> _patches;    // patch name -> articulation value -> curve
    public:
-      double balanceDb { 0 };
+      double balanceDb { 0 };             // every family's, unless it has its own
+      // per family (family(): the owner, 2026-09-28: "why not just do this regardless"): strings,
+      // solo strings, woodwinds, brass, other
+      std::map<QString, double> familyBalanceDb;
+      double balanceFor(const QString& family) const;
       const DynamicsCurve* curve(const QString& patch, int value) const;
       void setCurve(const QString& patch, int value, const DynamicsCurve& c) { _patches[patch][value] = c; }
       const std::map<QString, std::map<int, DynamicsCurve>>& patches() const { return _patches; }
@@ -280,7 +284,11 @@ std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
 // a short's velocity for the dynamics CC value cc: -1 when either curve is missing or the
 // articulation isn't on velocity
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc);
+                       const QString& refPatch, int refValue, int cc, const QString& family = QString());
+// a patch's family for the balance, from its main patch's folder in the library (SSO: Symphonic
+// Strings, Solo Strings, Symphonic Woodwinds, Symphonic / Motif Brass; else "other")
+QString family(const LibInstrument& main);
+extern const char* const FAMILIES[5];
 // the dynamics CC value for a patch other than the held note's (the owner's check of 2026-09-28:
 // Violas' All techniques Long 10 dB over the Performance legato at pp): the value at which the
 // patch's own long (longValue) is as loud as the held note at cc; -1: a curve missing or not on

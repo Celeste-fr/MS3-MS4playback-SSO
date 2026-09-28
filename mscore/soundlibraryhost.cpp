@@ -1297,38 +1297,46 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
             connect(_maxLanes, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
             connect(defaults, &QPushButton::clicked, this, [this]() { setLaneSettings(true); });
             }
-      // the measured dynamics (Check articulations › Dynamics): short notes against held ones
+      // the measured dynamics (Check articulations › Dynamics): short notes against held ones, per family
       if (library) {
             QWidget* balanceRow = new QWidget(this);
             QHBoxLayout* row = new QHBoxLayout(balanceRow);
             row->setContentsMargins(0, 0, 0, 0);
-            QLabel* label = new QLabel(tr("Short notes against held notes (measured dynamics):"), balanceRow);
+            QLabel* label = new QLabel(tr("Short notes against held notes:"), balanceRow);
             label->setToolTip(tr("Check articulations with Dynamics measures each articulation; a short note then plays as loud as "
-                                 "the part's held note at its dynamic, plus this"));
+                                 "the part's held note at its dynamic, plus this (your ear: short notes stand out more than the "
+                                 "measure says)"));
             row->addWidget(label);
-            _balance = new QDoubleSpinBox(balanceRow);
-            _balance->setRange(-24.0, 24.0);
-            _balance->setDecimals(1);
-            _balance->setSingleStep(1.0);
-            _balance->setSuffix(tr(" dB"));
-            _balance->setKeyboardTracking(false);
-            row->addWidget(_balance);
+            const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+            static const char* const NAMES[5] = { QT_TR_NOOP("Strings"), QT_TR_NOOP("Solo strings"), QT_TR_NOOP("Woodwinds"),
+                                                  QT_TR_NOOP("Brass"), QT_TR_NOOP("Other") };
+            for (int i = 0; i < 5; ++i) {
+                  const QString fam = SoundLib::FAMILIES[i];
+                  QDoubleSpinBox* box = new QDoubleSpinBox(balanceRow);
+                  box->setRange(-24.0, 24.0);
+                  box->setDecimals(1);
+                  box->setSingleStep(1.0);
+                  box->setSuffix(tr(" dB"));
+                  box->setPrefix(tr(NAMES[i]) + " ");
+                  box->setKeyboardTracking(false);
+                  box->setValue(cal ? cal->balanceFor(fam) : 0.0);
+                  row->addWidget(box);
+                  _balance[fam] = box;
+                  connect(box, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this, fam](double db) {
+                        SoundLib::DynamicsCalibration c;
+                        const QString file = SoundLibraryHost::calibrationFile(*_library);
+                        if (!c.read(file))
+                              return;
+                        c.familyBalanceDb[fam] = db;
+                        if (seq && seq->isPlaying())
+                              seq->stopWait();
+                        c.write(file);
+                        SoundLibraryHost::loadCalibration();
+                        });
+                  }
             row->addStretch();
             layout->addWidget(balanceRow);
-            const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
-            _balance->setValue(cal ? cal->balanceDb : 0.0);
             balanceRow->setVisible(bool(cal));
-            connect(_balance, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this](double db) {
-                  SoundLib::DynamicsCalibration cal;
-                  const QString file = SoundLibraryHost::calibrationFile(*_library);
-                  if (!cal.read(file))
-                        return;
-                  cal.balanceDb = db;
-                  if (seq && seq->isPlaying())
-                        seq->stopWait();
-                  cal.write(file);
-                  SoundLibraryHost::loadCalibration();
-                  });
             }
       _table = new QTableWidget(this);
       _table->setEditTriggers(QAbstractItemView::NoEditTriggers);

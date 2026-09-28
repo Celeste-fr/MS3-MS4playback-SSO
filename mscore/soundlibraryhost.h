@@ -182,7 +182,7 @@ class SoundLibraryDialog : public QDialog {
       QDoubleSpinBox* _tolerance { nullptr };
       QDoubleSpinBox* _tail { nullptr };
       QSpinBox* _maxLanes { nullptr };
-      QDoubleSpinBox* _balance { nullptr };   // the calibration's short notes against held ones (dB)
+      std::map<QString, QDoubleSpinBox*> _balance;   // per family: the calibration's short notes against held ones (dB)
       QTableWidget* _table;
       void setLaneSettings(bool libraryDefaults);
 
