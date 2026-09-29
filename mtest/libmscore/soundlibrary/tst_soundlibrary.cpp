@@ -1645,13 +1645,17 @@ void TestSoundLibrary::articulationCheck()
 void TestSoundLibrary::controlsMoved()
       {
       int frame = 0;
-      auto window = [&](int slider, int value) {
+      auto window = [&](int slider, int value, bool meter = false) {
             QImage img(1024, 656, QImage::Format_RGB32);
             img.fill(QColor(40, 40, 40));
             QPainter p(&img);
             // the meters: another reading each time
             p.fillRect(QRect(300, 4, 40 + (frame * 37) % 300, 12), QColor(200, 200, 60));
             ++frame;
+            // an output meter in the header that follows the level: up with slider 4 (Mic 1 level) and with the
+            // controller that moves slider 3 (Kontakt's, run 236: CC 23 -> Mic 1 level on the tuba)
+            if (meter && value == 127)
+                  p.fillRect(QRect(100, 0, 900, 48), QColor(60, 200, 60));
             // the sliders: 5 at y 150 … 550, each 700 px long; the one moved at value, the others at the middle
             for (int k = 0; k < 5; ++k) {
                   const int v = k == slider ? value : 64;
@@ -1666,7 +1670,7 @@ void TestSoundLibrary::controlsMoved()
       QJsonArray pe;
       const char* titles[5] = { "Dynamics", "Vibrato", "Release", "Tightness", "Mic 1 level" };
       for (int k = 0; k < 5; ++k) {
-            const QImage lo = window(k, 0), hi = window(k, 127);
+            const QImage lo = window(k, 0, k == 4), hi = window(k, 127, k == 4);
             QRect box = PluginExtract::changedRect(lo, hi);
             QVERIFY(box.top() < 20);                  // (the meters are in every box)
             QJsonObject e;
@@ -1678,23 +1682,29 @@ void TestSoundLibrary::controlsMoved()
             }
       parameters["effects"] = pe;
       QJsonArray ce;
-      const int moves[3][2] = { { 1, 0 }, { 21, 1 }, { 23, 4 } };      // cc, slider
+      const int moves[4][2] = { { 1, 0 }, { 21, 1 }, { 23, 4 }, { 24, 3 } };      // cc, slider
       for (const auto& m : moves) {
             QJsonObject e;
             e["cc"] = m[0];
-            e["cells"] = PluginExtract::changedCells(window(m[1], 0), window(m[1], 127));
+            e["cells"] = PluginExtract::changedCells(window(m[1], 0, m[0] == 24), window(m[1], 127, m[0] == 24));
             ce.append(e);
             }
       QJsonObject noWindow;                     // a controller that changes only the sound
       noWindow["cc"] = 7;
       ce.append(noWindow);
       controllers["effects"] = ce;
+      controllers["windowSize"] = QJsonArray { 1024, 656 };
+      controllers["cellSize"] = PluginExtract::CELL;
+      // without the frame, the header meter (in 2 of 9 tries: not noise) ties CC 24 to Mic 1 level
+      QCOMPARE(PluginExtract::controlsMoved(controllers, parameters)[3].toObject().value("control").toString(), QString("Mic 1 level"));
+      controllers["frame"] = QJsonArray { 48, 0 };
       const QJsonArray links = PluginExtract::controlsMoved(controllers, parameters);
-      QCOMPARE(links.size(), 4);
+      QCOMPARE(links.size(), 5);
       QCOMPARE(links[0].toObject().value("control").toString(), QString("Dynamics"));
       QCOMPARE(links[1].toObject().value("control").toString(), QString("Vibrato"));
       QCOMPARE(links[2].toObject().value("control").toString(), QString("Mic 1 level"));
-      QVERIFY(links[3].toObject().value("control").isNull());
+      QCOMPARE(links[3].toObject().value("control").toString(), QString("Tightness"));
+      QVERIFY(links[4].toObject().value("control").isNull());
       }
 
 //---------------------------------------------------------

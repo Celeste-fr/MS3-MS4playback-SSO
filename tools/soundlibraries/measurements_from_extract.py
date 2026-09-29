@@ -61,6 +61,47 @@ def patch_jsons(path):
         yield from from_zip(zipfile.ZipFile(path), path)
 
 
+KONTAKT_FRAME = (48, 352)   # Kontakt's header and instrument rack, pixels (soundlibrarycheck.cpp KONTAKT_FRAME_*)
+
+
+def controls_moved(j):
+    """which named control each controller moves, from the window cells (PluginExtract::controlsMoved, recomputed
+    here so runs before the "frame" was written (build 236) get it too): {cc: control or None}; None: no cells"""
+    c = j.get("controllers") or {}
+    p = j.get("parameters") or {}
+    if "noiseCells" not in c or not c.get("windowSize"):
+        return None
+    cell = c.get("cellSize", 16)
+    columns = (c["windowSize"][0] + cell - 1) // cell
+    top, left = c.get("frame") or KONTAKT_FRAME
+    noise = set(c.get("noiseCells", [])) | set(p.get("noiseCells", []))
+    ce, pe = c.get("effects", []), p.get("effects", []) if isinstance(p, dict) else []
+    seen, tries = {}, 0
+    for e in ce + pe:
+        cells = set(e.get("cells", []))
+        tries += bool(cells)
+        for x in cells:
+            seen[x] = seen.get(x, 0) + 1
+    if tries >= 5:
+        noise |= { x for x, n in seen.items() if n * 10 > tries * 4 }
+    def clean(e):
+        return { x for x in e.get("cells", []) if x not in noise and (x // columns) * cell >= top and (x % columns) * cell >= left }
+    out = {}
+    for e in ce:
+        cc, best, control = clean(e), 0.0, None
+        changed = { x.get("id") for k in ("parametersLowToHigh", "parametersBeforeToLow") for x in e.get(k, []) }
+        for q in pe:
+            if q.get("id") in changed:
+                best, control = 2.0, q.get("title")
+            pc = clean(q)
+            if cc and pc:
+                iou = len(cc & pc) / len(cc | pc)
+                if iou > 0.3 and iou > best:
+                    best, control = iou, q.get("title")
+        out[str(e["cc"])] = control
+    return out
+
+
 def status(j):
     c = j.get("controllers") or {}
     if "notMeasured" in c:
@@ -129,11 +170,10 @@ def main():
             name = j.get("patch")
             if not name or "controllers" not in j:
                 continue
-            c2c = j.get("controllersToControls")
             # (only links from window cells: the box-based ones of the owner's run of 2026-09-28 were wrong)
-            cells = "noiseCells" in (j.get("controllers") or {})
-            if cells and c2c and any(m.get("control") for m in c2c) and (name not in links or where > links[name][0]):
-                links[name] = (where, { str(m["cc"]): m.get("control") for m in c2c })
+            moved = controls_moved(j)
+            if moved and any(moved.values()) and (name not in links or where > links[name][0]):
+                links[name] = (where, moved)
             if j.get("plan") == "links" and "pitchBend" not in j:
                 continue        # (the rest was measured before; a links run's numbers are of a few controllers only)
             st = status(j)

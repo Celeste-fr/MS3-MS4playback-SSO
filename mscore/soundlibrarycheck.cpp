@@ -77,7 +77,9 @@ namespace Ms {
 extern Seq* seq;
 
 static const int GRAB_WAIT_MS = 400;      // after a switch, for the window to show it
-static const int REAL_GRAB_MS = 250;      // offline: real time for the plug-in's window to show a change
+static const int REAL_GRAB_MS = 250;
+static const int KONTAKT_FRAME_TOP = 48;    // Kontakt's header, pixels (its output meter moves with the level)
+static const int KONTAKT_FRAME_LEFT = 352;  // its instrument rack (a slot meter moves with every note)      // offline: real time for the plug-in's window to show a change
 
 // the check's version: raise it when a change makes earlier results stale (all patches are then
 // checked again)
@@ -3274,6 +3276,13 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                   say(linksOnly ? QString("   %1: which control %2 controllers move").arg(ins.name).arg(planned->controllers.size())
                                 : QString("   %1: every controller").arg(ins.name));
             out["controllers"] = PluginExtract::controllers(p, s, run, grab, status, &found, &stopped);
+            // Kontakt's own frame, left out of which control a controller moves (PluginExtract::controlsMoved): its
+            // header (the output meter) and its instrument rack (a slot meter), at 100 % scale
+            if (p->name().contains("Kontakt", Qt::CaseInsensitive)) {
+                  QJsonObject c = out.value("controllers").toObject();
+                  c["frame"] = QJsonArray { KONTAKT_FRAME_TOP, KONTAKT_FRAME_LEFT };
+                  out["controllers"] = c;
+                  }
             if (!stopped)
                   out["parameters"] = PluginExtract::parameters(p, s, run, grab, status, &found, &stopped);
             if (!stopped && switching && !linksOnly)

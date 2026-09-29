@@ -970,6 +970,16 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   a patch's tries changed) and matches by the cells' overlap. `linkedBefore` counts only JSONs with `noiseCells`, and
   `measurements_from_extract.py` takes links only from them. Test `controlsMoved` (a Kontakt-like window: meters that
   change every time, five sliders). Untried with Kontakt: the next links run (2 a group) is its first try.
+  **First look at that run (build 236; a folder of 53 patches the owner sent, 2026-09-29):** the cells work, but CC 23
+  came out as Mic 1 level on the Contrabass Tuba and a few others: Kontakt's own frame moves too, its header's output
+  meter (y 32-47, with the level: a mic fader changes it) and its instrument rack's slot meter (x 304, with every note),
+  and those cells aren't in 40 % of the tries. So Kontakt's frame (top 48, left 352 pixels; the window is 1377 x 679 in
+  all 53) is left out too: `controllers.frame`, written for Kontakt (`KONTAKT_FRAME_TOP/LEFT`), read by `controlsMoved`,
+  and `measurements_from_extract.py` recomputes every patch's links from its cells (`controls_moved`, the frame taken
+  as Kontakt's when a JSON has none), so build 236's data needs no new run. On the 53: CC 1 Dynamics, 11 Expression,
+  16 Mute, 17 Release, 18 Variation, 21 (and 104 on the Performance patches) Vibrato, 22-25 Mic 1-4 level, 40-46 Harp
+  Pedal 1-7; CC 7, 10, 64, 66, 103, 111 and pitch bend change the sound but no named control. Test `controlsMoved`
+  has a header meter that follows one mic: wrong without the frame, right with it.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

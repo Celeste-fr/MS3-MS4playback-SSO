@@ -111,11 +111,22 @@ QJsonArray PluginExtract::changedCells(const QImage& a, const QImage& b)
 //    baselines' noiseCells, and any cell more than 40 % of the tries changed: Kontakt's CPU and voice meters move with
 //    every note), the most overlap (intersection over union) over 0.3; or a parameter the controller's own try changed.
 //    (It compared one box around each change until 2026-09-29: the meters made every box most of the window, and the
-//    owner's links run matched nonsense, CC 1 -> Mic 5 level)
+//    owner's links run matched nonsense, CC 1 -> Mic 5 level). The cells of the host plug-in's own frame are left out
+//    too (controllers' "frame": [top, left] in pixels; Kontakt's header, whose output meter moves with a mic's level,
+//    and its instrument rack, whose slot meter moves with every note: run 236's CC 23 -> Mic 1 level on the tuba)
 //---------------------------------------------------------
 
 QJsonArray PluginExtract::controlsMoved(const QJsonObject& controllers, const QJsonObject& parameters)
       {
+      const QJsonArray frame = controllers.value("frame").toArray();
+      const int frameTop = frame.size() == 2 ? frame[0].toInt() : 0;
+      const int frameLeft = frame.size() == 2 ? frame[1].toInt() : 0;
+      const QJsonArray size = controllers.value("windowSize").toArray();
+      const int cell = controllers.value("cellSize").toInt(CELL);
+      const int columns = size.size() == 2 ? (size[0].toInt() + cell - 1) / cell : 0;
+      auto inFrame = [&](int x) {
+            return columns > 0 && ((x / columns) * cell < frameTop || (x % columns) * cell < frameLeft);
+            };
       auto cellsOf = [](const QJsonObject& e) {
             std::set<int> c;
             for (const QJsonValue& v : e.value("cells").toArray())
@@ -144,7 +155,7 @@ QJsonArray PluginExtract::controlsMoved(const QJsonObject& controllers, const QJ
       auto clean = [&](const QJsonObject& e) {
             std::set<int> c;
             for (int x : cellsOf(e))
-                  if (!noise.count(x))
+                  if (!noise.count(x) && !inFrame(x))
                         c.insert(x);
             return c;
             };
