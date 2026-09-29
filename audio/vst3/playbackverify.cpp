@@ -506,16 +506,16 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             std::map<int, std::map<int, double>> base;
             for (auto& bk : byPitch) {
                   for (const auto& bp : bk.second) {
-                        std::vector<double> near;
+                        std::vector<double> nearby;
                         for (int w = 3; w <= 128; w *= 2) {
-                              near.clear();
+                              nearby.clear();
                               for (int q = bp.first - w; q <= bp.first + w; ++q)
                                     if (bk.second.count(q))
-                                          near.insert(near.end(), bk.second[q].begin(), bk.second[q].end());
-                              if (near.size() >= 12)
+                                          nearby.insert(nearby.end(), bk.second[q].begin(), bk.second[q].end());
+                              if (nearby.size() >= 12)
                                     break;
                               }
-                        base[bk.first][bp.first] = median(near);
+                        base[bk.first][bp.first] = median(nearby);
                         }
                   }
             for (size_t i = 0; i < notes.size(); ++i) {
