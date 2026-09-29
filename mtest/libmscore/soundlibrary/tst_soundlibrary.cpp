@@ -2196,6 +2196,33 @@ void TestSoundLibrary::pedalChangeAfterChord()
                   QCOMPARE(pedal[2], std::make_pair(1920, 127));
                   }
             QCOMPARE(pedal[3].second, 0);
+            // the last pedal ends where the score does: no chord there, at its end
+            QCOMPARE(pedal[3].first, 3840);
+            delete score;
+            }
+      // a pedal that ends where a chord starts, with no pedal after it (the owner's piece at 8:37):
+      // up 40 ms after that chord with the library, at its tick without
+      for (bool withLibrary : { true, false }) {
+            auto lib = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Grand Piano' ids='piano'>"
+               "<Articulation name='Direct' value='1' techniques='long legato short'/>"
+               "</Instrument></SoundLibrary>");
+            SoundLib::setCurrent(withLibrary ? lib : nullptr);
+            MasterScore* score = readScore(DIR + "pedal-end.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::pair<int, int>> pedal;
+            for (const auto& te : events)
+                  if (te.second.channel() == ch && te.second.type() == ME_CONTROLLER && te.second.dataA() == CTRL_SUSTAIN)
+                        pedal.push_back({ te.first, te.second.dataB() });
+            QCOMPARE(int(pedal.size()), 2);
+            QCOMPARE(pedal[1].second, 0);
+            QVERIFY2(withLibrary ? pedal[1].first == 1920 + 19 : pedal[1].first <= 1920, qPrintable(QString::number(pedal[1].first)));
             delete score;
             }
       SoundLib::setCurrent(nullptr);

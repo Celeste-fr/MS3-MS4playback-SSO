@@ -2316,10 +2316,23 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               }
                         if (prev)
                               down = from + std::min(after(from, 90), std::max(1, (to - from) / 2));
-                        if (next) {
-                              const int nextFrom = next->tick().ticks();
-                              const int nextLength = pc->second.dynamics.spannerStop(next) - nextFrom;
-                              up = nextFrom + std::min(after(nextFrom, 40), std::max(0, nextLength / 4));
+                        // the chord it goes up with: the next pedal's, else one of the part's starting where
+                        // this one ends (up to 5 ticks on; the owner, 2026-09-28: a chord where a pedal ended,
+                        // not a change, was missing too, the pedal up at its tick)
+                        int chordTick = next ? next->tick().ticks() : -1;
+                        for (int k = 0; chordTick < 0 && k <= 5; ++k) {
+                              if (Segment* seg = score->tick2segment(Fraction::fromTicks(to + k), true, SegmentType::ChordRest)) {
+                                    for (int track = s->part()->startTrack(); track < s->part()->endTrack(); ++track) {
+                                          if (seg->element(track) && seg->element(track)->isChord()) {
+                                                chordTick = to + k;
+                                                break;
+                                                }
+                                          }
+                                    }
+                              }
+                        if (chordTick >= 0) {
+                              const int nextLength = next ? pc->second.dynamics.spannerStop(next) - chordTick : 1 << 30;
+                              up = chordTick + std::min(after(chordTick, 40), std::max(0, nextLength / 4));
                               }
                         }
                   auto put = [&](int tick, int value) {
@@ -2334,13 +2347,20 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               ev.setLayer(0);
                         events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
                         };
-                  // (put in the chunk the pedal's own tick is in; moved past its end, where playback may
-                  // jump (a repeat), it stays at that tick)
+                  // (put in the chunk the pedal's own tick is in. Moved past its end, where playback may
+                  // jump (a repeat): the down at its tick, the up 40 ms before the chord instead of after
+                  // it, still well clear of it)
                   const bool lastChunk = score->lastMeasure() && tick2 >= score->lastMeasure()->endTick().ticks();
                   if (from >= tick1 && from < tick2)
                         put(down < tick2 ? down : from, 127);
-                  if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2))
-                        put(up < tick2 || (lastChunk && up == tick2) ? up : to, 0);
+                  if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2)) {
+                        int at = up;
+                        if (!(up < tick2 || (lastChunk && up == tick2))) {
+                              const double beatsPerSecond = score->tempomap()->tempo(to);
+                              at = std::max(std::max(from + 1, tick1), to - int(std::lround(0.040 * beatsPerSecond * DIVISION)));
+                              }
+                        put(at, 0);
+                        }
                   continue;
                   }
             if (s->isPedal() || s->isLetRing()) {
