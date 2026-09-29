@@ -134,6 +134,7 @@
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
 #include "soundlibrarycheck.h"
+#include "soundlibraryloadtimes.h"
 #include <QLockFile>
 #include <atomic>
 #include <map>
@@ -253,6 +254,10 @@ static bool extractPitchBend = false;
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
+static bool measureLoadTimesMode = false;  // --measure-load-times: the sound library's load times (soundlibraryloadtimes.h; extractMode too)
+static QString measureProbe;               // --measure-probe: its phase 5's patch
+static QString measureThreads = "2,4";     // --measure-threads: its phase 3's thread counts (0: none)
+static bool measureNoProbe = false;        // --measure-no-probe
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -4585,14 +4590,15 @@ struct DialogWatch {
 
 static const int MAX_EXTRACT_ROUNDS = 20;
 
-static bool extractInBackground()
+static bool extractInBackground(const QStringList& argv)
       {
 #ifdef Q_OS_WIN
       // below normal: the MuseScore one works in comes first for the processor; disk and memory as
       // usual (the owner's first run with PROCESS_MODE_BACKGROUND_BEGIN and "start /low", 2026-09-27:
       // loading a patch 46-54 s instead of 0.2-0.7, describing it 25-35 s instead of 0.7-0.9: the
       // lowest disk and memory priority starved Kontakt)
-      SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+      if (!measureLoadTimesMode)          // (the load times as MuseScore has them, at its normal priority)
+            SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
 #endif
       // the library's map: a file, a name in share/soundlibraries, else the one Preferences name
       QString path = extractLibrary;
@@ -4615,8 +4621,8 @@ static bool extractInBackground()
       const QString mine = SoundLibraryHost::setupsFolder(*library);
       // the dynamics check: a folder, lock and log of its own (it may run beside an extract, and
       // beside the MuseScore the owner tests other builds in; the owner, 2026-09-28)
-      const QString what = checkDynamicsMode ? "background dynamics check" : "background extract";
-      if (checkDynamicsMode)
+      const QString what = measureLoadTimesMode ? "background load times" : checkDynamicsMode ? "background dynamics check" : "background extract";
+      if (checkDynamicsMode || measureLoadTimesMode)
             ArticulationCheckDialog::setBackgroundLog(what + ".log");
       // (outside MuseScore's data folder altogether, next to the extract's output; the owner, 2026-09-27)
       SoundLibraryHost::setDataFolder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
@@ -4637,6 +4643,36 @@ static bool extractInBackground()
       ArticulationCheckDialog::logBackground(QString("%4 started; setups in %1 (%2 copied from %3)")
                                              .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine))
                                              .arg(scanKeysMode ? QString("background key scan") : what));
+      if (measureLoadTimesMode) {
+            // (the library the scores play, through its plug-in: SoundLibraryHost's setups, SoundLib::routes)
+            SoundLib::setCurrent(library);
+            PartPlaybackModes::setLibraryDefault(true);
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            LoadTimes::Options o;
+            for (const QString& a : argv)
+                  o.scores << QFileInfo(a).absoluteFilePath();
+            if (extractPatches != "all" && extractPatches != "mapped")
+                  o.patchesFile = extractPatches;
+            o.probePatch = measureProbe;
+            o.probe = !measureNoProbe;
+            o.threads.clear();
+            for (const QString& t : measureThreads.split(',', QString::SkipEmptyParts))
+                  if (t.trimmed().toInt() > 0)
+                        o.threads << t.trimmed().toInt();
+            QString report;
+            bool ok;
+            {
+#ifdef Q_OS_WIN
+                  DialogWatch watch;
+#endif
+                  ok = LoadTimes::run(library, o, &report);
+            }
+            ArticulationCheckDialog::logBackground(QString("load times measured%1: %2").arg(ok ? "" : " (not all)")
+                                                   .arg(QDir::toNativeSeparators(report)));
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                                          + "/MuseScore Sound Library Check"));
+            return ok;
+            }
       ArticulationCheckDialog dialog(library);
       QString zip;
       bool ok;
@@ -4710,7 +4746,7 @@ static bool extractInBackground()
 static bool processNonGui(const QStringList& argv)
       {
       if (extractMode)
-            return extractInBackground();
+            return extractInBackground(argv);
       if (cliSaveOnline)
             return mscore->saveOnline(argv);
       if (exportScoreMedia)
@@ -8684,6 +8720,14 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("scan-keys", "Check articulations' key scan of a sound library's patches whose keys are not "
                                           "known yet, without a window, as a process of its own like --extract-library (listening "
                                           "only); --extract-patches <file> for other patches", "library"));
+      parser.addOption(QCommandLineOption("measure-load-times", "Measure how long a sound library's instances take to load (score "
+                                          "files as arguments: what they play; else --extract-patches <file>, else a few patches), "
+                                          "without a window, as a process of its own like --extract-library; a report in "
+                                          "Documents/MuseScore Sound Library Check", "library"));
+      parser.addOption(QCommandLineOption("measure-probe", "Use with --measure-load-times: the patch whose script values are probed", "patch"));
+      parser.addOption(QCommandLineOption("measure-threads", "Use with --measure-load-times: worker thread counts to try, e.g. 2,4 "
+                                          "(0: none)", "counts"));
+      parser.addOption(QCommandLineOption("measure-no-probe", "Use with --measure-load-times: no probe of the script values"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8750,9 +8794,14 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                   parser.showHelp(EXIT_FAILURE);
             }
       scanKeysMode = parser.isSet("scan-keys");
-      if ((extractMode = parser.isSet("extract-library") || scanKeysMode)) {
+      measureLoadTimesMode = parser.isSet("measure-load-times");
+      if ((extractMode = parser.isSet("extract-library") || scanKeysMode || measureLoadTimesMode)) {
             MScore::noGui = true;
-            extractLibrary = parser.value(scanKeysMode ? "scan-keys" : "extract-library");
+            extractLibrary = parser.value(scanKeysMode ? "scan-keys" : measureLoadTimesMode ? "measure-load-times" : "extract-library");
+            measureProbe = parser.value("measure-probe");
+            if (parser.isSet("measure-threads"))
+                  measureThreads = parser.value("measure-threads");
+            measureNoProbe = parser.isSet("measure-no-probe");
             if (scanKeysMode)
                   extractPatches = parser.isSet("extract-patches") ? parser.value("extract-patches") : QString("toscan");
             else if (parser.isSet("extract-patches"))
