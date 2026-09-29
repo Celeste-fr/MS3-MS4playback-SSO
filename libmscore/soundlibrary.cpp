@@ -576,10 +576,10 @@ double DynamicsCurve::perceivedAt(int x) const
       return interpolate(perceived, x);
       }
 
-int DynamicsCurve::inverse(double db) const
+// the lowest x that reaches db (a curve with a dip from round robins: the first crossing);
+// under the first point, the first segment's slope goes on (ppp under a curve measured from 32)
+static int inverseOf(const std::vector<std::pair<int, double>>& points, double db)
       {
-      // the lowest x that reaches db (a curve with a dip from round robins: the first crossing);
-      // under the first point, the first segment's slope goes on (ppp under a curve measured from 32)
       if (points.empty())
             return -1;
       if (db <= points.front().second) {
@@ -597,6 +597,11 @@ int DynamicsCurve::inverse(double db) const
                   return qBound(1, int(std::lround(a.first + (db - a.second) * (b.first - a.first) / (b.second - a.second))), 127);
             }
       return 127;
+      }
+
+int DynamicsCurve::inverse(double db) const
+      {
+      return inverseOf(points, db);
       }
 
 const DynamicsCurve* DynamicsCalibration::curve(const QString& patch, int value) const
@@ -629,10 +634,15 @@ bool DynamicsCalibration::read(const QString& file)
                   curve.drivenBy = c.value("drivenBy").toString();
                   for (const QJsonValue& pt : c.value("curve").toArray())
                         curve.points.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
-                  for (const QJsonValue& pt : c.value("perceived").toArray())
-                        curve.perceived.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                  auto readPoints = [&](const char* key, std::vector<std::pair<int, double>>* out) {
+                        for (const QJsonValue& pt : c.value(key).toArray())
+                              out->push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                        std::sort(out->begin(), out->end());
+                        };
+                  readPoints("perceived", &curve.perceived);
+                  readPoints("expression", &curve.expression);
+                  readPoints("expressionPerceived", &curve.expressionPerceived);
                   std::sort(curve.points.begin(), curve.points.end());
-                  std::sort(curve.perceived.begin(), curve.perceived.end());
                   _patches[p.key()][a.key().toInt()] = curve;
                   }
             }
@@ -649,12 +659,17 @@ bool DynamicsCalibration::write(const QString& file) const
                   for (const auto& pt : a.second.points)
                         pts.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
                   QJsonObject o({ { "drivenBy", a.second.drivenBy }, { "curve", pts } });
-                  if (!a.second.perceived.empty()) {
+                  auto writePoints = [&](const char* key, const std::vector<std::pair<int, double>>& in) {
+                        if (in.empty())
+                              return;
                         QJsonArray per;
-                        for (const auto& pt : a.second.perceived)
+                        for (const auto& pt : in)
                               per.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
-                        o["perceived"] = per;
-                        }
+                        o[key] = per;
+                        };
+                  writePoints("perceived", a.second.perceived);
+                  writePoints("expression", a.second.expression);
+                  writePoints("expressionPerceived", a.second.expressionPerceived);
                   arts[QString::number(a.first)] = o;
                   }
             patches[p.first] = arts;
@@ -792,6 +807,121 @@ int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int
       if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
             return -1;
       return c->inverse(ref->at(cc) + shortNotesBalance(score, cal, family));
+      }
+
+//---------------------------------------------------------
+//   evenSteps
+//---------------------------------------------------------
+
+const char* evenStepsMetaTag = "soundLibraryEvenSteps";
+
+static const char* const EVEN_STEPS_NAMES[5] = { "", "volume-hearing", "volume-energy", "recording-hearing", "recording-energy" };
+
+QString evenStepsName(EvenSteps mode)
+      {
+      return EVEN_STEPS_NAMES[int(mode)];
+      }
+
+bool evenStepsEnabled()
+      {
+      // (the owner, 2026-09-28: "just disable this option for now" -- Spitfire's own pp -> ff shape may be
+      // meant; the code stays, off unless MS_EVEN_DYNAMIC_STEPS is set)
+      static const bool enabled = qEnvironmentVariableIsSet("MS_EVEN_DYNAMIC_STEPS");
+      return enabled;
+      }
+
+EvenSteps evenSteps(const Score* score)
+      {
+      if (!score || !evenStepsEnabled())
+            return EvenSteps::OFF;
+      const QString tag = score->masterScore()->metaTag(evenStepsMetaTag).trimmed();
+      for (int i = 1; i < 5; ++i)
+            if (tag == EVEN_STEPS_NAMES[i])
+                  return EvenSteps(i);
+      return EvenSteps::OFF;
+      }
+
+const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches)
+      {
+      const Choice held = choose(patches, Want { { "long" }, {} });
+      return held ? cal.curve(patches[size_t(held.patch)]->name, held.articulation->value) : nullptr;
+      }
+
+// a curve made never to fall (pool adjacent violators): each point of the measurement is one note, and a
+// patch's round robins differ by 1 to 2 dB (the owner's run of 2026-09-28 12:30: steps of -4 dB between
+// markings on held notes that climb), which even steps would otherwise follow
+static std::vector<std::pair<int, double>> rising(const std::vector<std::pair<int, double>>& points)
+      {
+      struct Block { double sum; int n; };
+      std::vector<Block> blocks;
+      for (const auto& p : points) {
+            blocks.push_back({ p.second, 1 });
+            while (blocks.size() >= 2) {
+                  Block& b = blocks.back();
+                  Block& a = blocks[blocks.size() - 2];
+                  if (a.sum / a.n <= b.sum / b.n)
+                        break;
+                  a.sum += b.sum;
+                  a.n += b.n;
+                  blocks.pop_back();
+                  }
+            }
+      std::vector<std::pair<int, double>> out;
+      size_t i = 0;
+      for (const Block& b : blocks)
+            for (int k = 0; k < b.n; ++k, ++i)
+                  out.push_back({ points[i].first, b.sum / b.n });
+      return out;
+      }
+
+Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
+      {
+      Step s { cc, -1 };
+      if (!held || mode == EvenSteps::OFF)
+            return s;
+      if (cc < 16) {                      // a MuseScore 3 fade under ppp: ppp's step, faded as before
+            const Step ppp = evenStep(held, mode, 16);
+            if (mode == EvenSteps::RECORDING_HEARING || mode == EvenSteps::RECORDING_ENERGY)
+                  s.dynamics = int(std::lround(ppp.dynamics * cc / 16.0));
+            s.expression = ppp.expression;
+            return s;
+            }
+      const bool hearing = mode == EvenSteps::VOLUME_HEARING || mode == EvenSteps::RECORDING_HEARING;
+      const std::vector<std::pair<int, double>> curve = rising(hearing ? held->perceived : held->points);
+      if (curve.size() < 2)
+            return s;
+      const int x = std::min(cc, 127);
+      const double lo = interpolate(curve, 16);
+      const double hi = interpolate(curve, 127);
+      if (hi <= lo)
+            return s;
+      const double target = lo + (hi - lo) * (x - 16) / 111.0;
+      if (mode == EvenSteps::RECORDING_HEARING || mode == EvenSteps::RECORDING_ENERGY) {
+            // where the curve is flat at the step (a stretch pooled by rising(), or a patch that stops
+            // getting louder), the CC nearest the one sent without even steps: the step is as loud
+            // anywhere there, and the tone stays nearest the marking's (the owner's run of 2026-09-28
+            // 12:30, Clarinets a2 - Performance by energy: flat from 48 up, fff would have been 48)
+            int first = -1, last = -1;
+            for (int v = 1; v <= 127; ++v) {
+                  if (std::fabs(interpolate(curve, v) - target) < 0.05) {
+                        if (first < 0)
+                              first = v;
+                        last = v;
+                        }
+                  }
+            s.dynamics = first >= 0 ? qBound(first, x, last) : qBound(1, inverseOf(curve, target), 127);
+            return s;
+            }
+      // the volume: down by what the curve is above the step (it can't go up: the expression CC is at
+      // its top without even steps)
+      const std::vector<std::pair<int, double>>& volume = hearing ? held->expressionPerceived : held->expression;
+      // (a patch that barely follows the expression CC: as before; the owner's run of 2026-09-28 12:30,
+      // Tuba Solo - Performance: 0.6 dB from 127 to 32)
+      if (volume.size() < 2 || interpolate(volume, 127) - interpolate(volume, 16) < 6)
+            return s;
+      const double down = std::min(0.0, target - interpolate(curve, x));
+      s.expression = down > -0.05 ? 127 : qBound(1, inverseOf(volume, interpolate(volume, 127) + down), 127);
+      return s;
       }
 
 int routesGeneration()

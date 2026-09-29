@@ -53,6 +53,7 @@ class QDoubleSpinBox;
 class QSpinBox;
 class QCheckBox;
 class QPushButton;
+class QComboBox;
 
 namespace Ms {
 
@@ -206,6 +207,7 @@ class SoundLibraryOptions : public QDialog {
       QDoubleSpinBox* _tail { nullptr };
       QSpinBox* _maxLanes { nullptr };
       std::map<QString, QDoubleSpinBox*> _balance;
+      QComboBox* _evenSteps { nullptr };
       QLabel* _folder { nullptr };
       QLabel* _liveSet { nullptr };
       QCheckBox* _liveAuto { nullptr };
@@ -214,6 +216,7 @@ class SoundLibraryOptions : public QDialog {
       void load();
       void setLaneSettings(bool libraryDefaults);
       void setBalance(bool libraryDefaults);
+      void exportEvenSteps();
       void setMetaTag(const char* tag, const QString& value);
       void startBackground(const QStringList& args, const QString& what);
 

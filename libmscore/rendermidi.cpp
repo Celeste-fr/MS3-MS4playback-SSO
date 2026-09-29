@@ -1211,11 +1211,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
                         if (!c)
                               return -1;
-                        const int cc = Ms4::expressionLevel(dynLevel);
-                        const double accent = cc > 0 ? double(r.levelVelocity) / cc : 1.0;
+                        const int level = Ms4::expressionLevel(dynLevel);
+                        const double accent = level > 0 ? double(r.levelVelocity) / level : 1.0;
                         if (cal) {
                               const SoundLib::Choice held = SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} });
                               if (held) {
+                                    // as loud as the held note plays: at the dynamics CC even steps send
+                                    // (their volume turns both down alike)
+                                    const int cc = SoundLib::evenStep(SoundLib::heldCurve(*cal, libPatches), SoundLib::evenSteps(score),
+                                                                      level).dynamics;
                                     const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
                                                                                libPatches[held.patch]->name, held.articulation->value, cc,
                                                                                SoundLib::family(*libPatches.front()), score);
@@ -1738,6 +1742,15 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
             int controller = CTRL_EXPRESSION;
             std::vector<int> channels;
+            // a library part's: per channel, its held note's curve for even steps (SoundLib::evenStep), and
+            // whether they turn the expression CC (not when an automation lane has it)
+            std::map<int, const SoundLib::DynamicsCurve*> heldCurves;
+            const SoundLib::EvenSteps evenSteps = lp ? SoundLib::evenSteps(score) : SoundLib::EvenSteps::OFF;
+            bool evenVolume = evenSteps == SoundLib::EvenSteps::VOLUME_HEARING || evenSteps == SoundLib::EvenSteps::VOLUME_ENERGY;
+            if (lp)
+                  for (const LibPart::Auto& a : lp->automation)
+                        if (a.cc == CTRL_EXPRESSION)
+                              evenVolume = false;
             std::vector<int> builtInChannels;     // a kit's drum sounds the built-in synthesizer plays
             if (lp) {
                   if (ctx.snd)
@@ -1785,12 +1798,19 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                   if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
                         continue;
                   controller = library->dynamicsCC;
+                  if (controller == CTRL_EXPRESSION)
+                        evenVolume = false;
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
                   for (const auto& ip : *part->instruments()) {
                         if (!libraryPlays(ip.second))
                               continue;
                         const int ch = ip.second->channel(0)->channel();
                         channels.push_back(ch);
-                        if (controller != CTRL_EXPRESSION) {
+                        auto li = lp->instruments.find(ip.second);
+                        if (cal && evenSteps != SoundLib::EvenSteps::OFF && li != lp->instruments.end() && li->second)
+                              heldCurves[ch] = SoundLib::heldCurve(*cal, lp->patchesFor(li->second));
+                        // (even steps' volume: put() sends it with each level)
+                        if (controller != CTRL_EXPRESSION && !(evenVolume && heldCurves[ch] && heldCurves[ch]->expression.size() >= 2)) {
                               NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, library->expressionValue, 127));
                               ev.setOriginatingStaff(part->staff(0)->idx());
                               events->insert(std::make_pair(tick1 + tickOffset, ev));
@@ -1807,7 +1827,14 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
             auto put = [&](int tick, int level) {
                   const int value = Ms4::expressionLevel(level);
                   for (int ch : channels) {
-                        NPlayEvent ev(ME_CONTROLLER, ch, controller, value);
+                        auto hc = heldCurves.find(ch);
+                        const SoundLib::Step step = SoundLib::evenStep(hc == heldCurves.end() ? nullptr : hc->second, evenSteps, value);
+                        if (evenVolume && step.expression >= 0) {
+                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, step.expression);
+                              ev.setOriginatingStaff(part->staff(0)->idx());
+                              events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
+                              }
+                        NPlayEvent ev(ME_CONTROLLER, ch, controller, step.dynamics);
                         ev.setOriginatingStaff(part->staff(0)->idx());
                         // a library's dynamics CC ahead of the notes at its tick (a long starting on a
                         // new dynamic would start at the old one); MS4's CC11 after them, as MS4 sends it
@@ -2259,6 +2286,55 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                   const int to = pc->second.dynamics.spannerStop(s);
                   if (to <= from)
                         continue;
+                  // a sound library part: a pedal change after the chord it comes with, as a pianist
+                  // changes it (legato pedalling: up 40 ms after the chord, down again at 90 ms). The
+                  // owner, 2026-09-28: SSO's Grand Piano dropped about 1 chord in 8 at a pedal change
+                  // (28 of 220, 1 of 2442 elsewhere, in a piano piece's export), the pedal lifted a tick
+                  // before the chord and put down with it
+                  int down = from;
+                  int up = to;
+                  if (libParts.count(s->part())) {
+                        auto isPedal = [&](const Spanner* o) {
+                              return o != s && o->part() == s->part() && (o->isPedal() || o->isLetRing())
+                                     && (!o->staff() || o->staff()->primaryStaff());
+                              };
+                        auto after = [&](int tick, double ms) {
+                              const double beatsPerSecond = score->tempomap()->tempo(tick);
+                              return std::max(1, int(std::lround(ms / 1000.0 * beatsPerSecond * DIVISION)));
+                              };
+                        const Spanner* prev = nullptr;
+                        const Spanner* next = nullptr;
+                        for (const auto& o : score->spannerMap().map()) {
+                              if (!isPedal(o.second))
+                                    continue;
+                              const int oFrom = o.second->tick().ticks();
+                              const int oTo = pc->second.dynamics.spannerStop(o.second);
+                              if (oFrom < from && (oTo == from - 1 || oTo == from))
+                                    prev = o.second;
+                              if (oFrom > from && (oFrom == to + 1 || oFrom == to))
+                                    next = o.second;
+                              }
+                        if (prev)
+                              down = from + std::min(after(from, 90), std::max(1, (to - from) / 2));
+                        // the chord it goes up with: the next pedal's, else one of the part's starting where
+                        // this one ends (up to 5 ticks on; the owner, 2026-09-28: a chord where a pedal ended,
+                        // not a change, was missing too, the pedal up at its tick)
+                        int chordTick = next ? next->tick().ticks() : -1;
+                        for (int k = 0; chordTick < 0 && k <= 5; ++k) {
+                              if (Segment* seg = score->tick2segment(Fraction::fromTicks(to + k), true, SegmentType::ChordRest)) {
+                                    for (int track = s->part()->startTrack(); track < s->part()->endTrack(); ++track) {
+                                          if (seg->element(track) && seg->element(track)->isChord()) {
+                                                chordTick = to + k;
+                                                break;
+                                                }
+                                          }
+                                    }
+                              }
+                        if (chordTick >= 0) {
+                              const int nextLength = next ? pc->second.dynamics.spannerStop(next) - chordTick : 1 << 30;
+                              up = chordTick + std::min(after(chordTick, 40), std::max(0, nextLength / 4));
+                              }
+                        }
                   auto put = [&](int tick, int value) {
                         NPlayEvent ev(ME_CONTROLLER, channel, CTRL_SUSTAIN, value);
                         ev.setOriginatingStaff(staff);
@@ -2271,11 +2347,20 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               ev.setLayer(0);
                         events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
                         };
-                  if (from >= tick1 && from < tick2)
-                        put(from, 127);
+                  // (put in the chunk the pedal's own tick is in. Moved past its end, where playback may
+                  // jump (a repeat): the down at its tick, the up 40 ms before the chord instead of after
+                  // it, still well clear of it)
                   const bool lastChunk = score->lastMeasure() && tick2 >= score->lastMeasure()->endTick().ticks();
-                  if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2))
-                        put(to, 0);
+                  if (from >= tick1 && from < tick2)
+                        put(down < tick2 ? down : from, 127);
+                  if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2)) {
+                        int at = up;
+                        if (!(up < tick2 || (lastChunk && up == tick2))) {
+                              const double beatsPerSecond = score->tempomap()->tempo(to);
+                              at = std::max(std::max(from + 1, tick1), to - int(std::lround(0.040 * beatsPerSecond * DIVISION)));
+                              }
+                        put(at, 0);
+                        }
                   continue;
                   }
             if (s->isPedal() || s->isLetRing()) {

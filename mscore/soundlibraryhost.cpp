@@ -28,6 +28,7 @@
 #include <QSet>
 #include <QSettings>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGridLayout>
 #include <QSlider>
 #include <QSpinBox>
@@ -1568,6 +1569,54 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             form->addRow(l, row);
             if (!SoundLib::dynamicsCalibration())
                   row->setEnabled(false), row->setToolTip(tr("Measure the dynamics first (below)"));
+
+            // even dynamic steps (SoundLib::evenStep; disabled for now: SoundLib::evenStepsEnabled)
+            if (SoundLib::evenStepsEnabled()) {
+            _evenSteps = new QComboBox(scoreBox);
+            _evenSteps->addItem(tr("Off: as the library plays them"), int(SoundLib::EvenSteps::OFF));
+            _evenSteps->addItem(tr("Volume, judged by ear"), int(SoundLib::EvenSteps::VOLUME_HEARING));
+            _evenSteps->addItem(tr("Volume, judged by energy"), int(SoundLib::EvenSteps::VOLUME_ENERGY));
+            _evenSteps->addItem(tr("Recording, judged by ear"), int(SoundLib::EvenSteps::RECORDING_HEARING));
+            _evenSteps->addItem(tr("Recording, judged by energy"), int(SoundLib::EvenSteps::RECORDING_ENERGY));
+            _evenSteps->setToolTip(tr("Spaces ppp … fff evenly within each held note's own loudness range.\n"
+                                      "Volume: every dynamic keeps the library's recording (its tone); the volume is turned "
+                                      "down where a step is too small.\n"
+                                      "Recording: another point between the library's recordings is played, so the tone moves.\n"
+                                      "By ear: judged with a model of hearing (brighter sounds louder). By energy: the "
+                                      "loudest 50 ms, as the short notes are matched.\n"
+                                      "Needs the dynamics measured (below); Volume needs a measurement made with this build."));
+            QLabel* el = new QLabel(tr("Even dynamic steps:"), scoreBox);
+            el->setToolTip(_evenSteps->toolTip());
+            // (the owner, 2026-09-28: switching while listening, the settings were hard to tell apart; one
+            // audio file per setting to compare)
+            QWidget* evenRow = new QWidget(scoreBox);
+            QHBoxLayout* eh = new QHBoxLayout(evenRow);
+            eh->setContentsMargins(0, 0, 0, 0);
+            eh->addWidget(_evenSteps);
+            QPushButton* compare = new QPushButton(tr("Export each to audio…"), evenRow);
+            compare->setToolTip(tr("This score as a WAV file with each setting (Off and the four), to compare them"));
+            eh->addWidget(compare);
+            eh->addStretch();
+            connect(compare, &QPushButton::clicked, this, &SoundLibraryOptions::exportEvenSteps);
+            form->addRow(el, evenRow);
+            if (!SoundLib::dynamicsCalibration())
+                  _evenSteps->setEnabled(false);
+            connect(_evenSteps, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+                  const SoundLib::EvenSteps mode = SoundLib::EvenSteps(_evenSteps->currentData().toInt());
+                  setMetaTag(SoundLib::evenStepsMetaTag, SoundLib::evenStepsName(mode));
+                  const bool volume = mode == SoundLib::EvenSteps::VOLUME_HEARING || mode == SoundLib::EvenSteps::VOLUME_ENERGY;
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+                  bool measured = false;
+                  if (cal)
+                        for (const auto& p : cal->patches())
+                              for (const auto& a : p.second)
+                                    measured = measured || (volume ? !a.second.expression.empty() : a.second.points.size() >= 2);
+                  if (mode != SoundLib::EvenSteps::OFF && !measured)
+                        QMessageBox::information(this, windowTitle(), tr("This needs the dynamics measured in the background "
+                                                                         "with this build (below), then a restart of MuseScore. "
+                                                                         "Until then the dynamics play as before."));
+                  });
+            }
       }
       layout->addWidget(scoreBox);
 
@@ -1694,12 +1743,61 @@ void SoundLibraryOptions::load()
             _liveAuto->setEnabled(!set.isEmpty());
             _liveUnlink->setEnabled(!set.isEmpty());
             }
+      if (_evenSteps) {
+            const QSignalBlocker blocker(_evenSteps);
+            _evenSteps->setCurrentIndex(std::max(0, _evenSteps->findData(int(SoundLib::evenSteps(_score)))));
+            }
       if (_folder) {
             const QString folder = SoundLibraryHost::libraryFolder(*_library);
             _folder->setText(folder.isEmpty() ? tr("%1 was not found on this computer: choose its folder (the one with "
                                                    "Instruments and Samples).").arg(_library->name)
                                               : tr("Installed in %1").arg(QDir::toNativeSeparators(folder)));
             }
+      }
+
+// the score exported once per even steps setting (SoundLib::EvenSteps), "<score> - 1 Off.wav" …, the
+// score's own setting put back (not an edit: nothing to undo or save)
+void SoundLibraryOptions::exportEvenSteps()
+      {
+      if (!_score || !mscore)
+            return;
+      const QFileInfo* fi = _score->fileInfo();
+      const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder for the audio files"), fi->absolutePath());
+      if (dir.isEmpty())
+            return;
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      const QString base = fi->completeBaseName().isEmpty() ? QString("Score") : fi->completeBaseName();
+      const QMap<QString, QString> keep = _score->metaTags();
+      const std::pair<SoundLib::EvenSteps, QString> modes[5] = {
+            { SoundLib::EvenSteps::OFF, "1 Off" },
+            { SoundLib::EvenSteps::VOLUME_HEARING, "2 Volume by ear" },
+            { SoundLib::EvenSteps::VOLUME_ENERGY, "3 Volume by energy" },
+            { SoundLib::EvenSteps::RECORDING_HEARING, "4 Recording by ear" },
+            { SoundLib::EvenSteps::RECORDING_ENERGY, "5 Recording by energy" } };
+      QStringList written;
+      bool ok = true;
+      for (const auto& m : modes) {
+            QMap<QString, QString> tags = keep;
+            if (m.first == SoundLib::EvenSteps::OFF)
+                  tags.remove(SoundLib::evenStepsMetaTag);
+            else
+                  tags.insert(SoundLib::evenStepsMetaTag, SoundLib::evenStepsName(m.first));
+            _score->setMetaTags(tags);
+            _score->setPlaylistDirty();
+            const QString path = dir + "/" + base + " - " + m.second + ".wav";
+            if (!mscore->saveAudio(_score, path)) {
+                  ok = false;
+                  break;
+                  }
+            written << QFileInfo(path).fileName();
+            }
+      _score->setMetaTags(keep);
+      _score->setPlaylistDirty();
+      if (ok)
+            QMessageBox::information(this, windowTitle(), tr("Written in %1:\n%2").arg(QDir::toNativeSeparators(dir), written.join("\n")));
+      else
+            QMessageBox::warning(this, windowTitle(), tr("The audio export failed after %1 file(s).").arg(written.size()));
       }
 
 // a score metaTag as an undoable change, then played again
