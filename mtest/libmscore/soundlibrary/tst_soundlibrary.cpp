@@ -65,6 +65,7 @@ class TestSoundLibrary : public QObject, public MTest
       void attackSalience();
       void noteSecondsWritten();
       void dynamicsCalibration();
+      void salienceFit();
       void heldOnPerformance();
       void dynamicsCheck();
       void shortsFollowDynamics();
@@ -2475,6 +2476,164 @@ void TestSoundLibrary::dynamicsCalibration()
       cal2->setCurve("Violin", 1, line("controller", -45, 0.2));
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 32), 41);
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 80), 65);
+      }
+
+//---------------------------------------------------------
+//   salienceFit
+//    the recommended short notes' balance with attack salience (SoundLib::recommendation, fitSalience):
+//    a dynamics.json from before it (no attack curves, no heardBalanceDb) reads and recommends as
+//    before; with attack curves, the weight fitted to the owner's ear (the map's <Dynamics heard>,
+//    dynamics.json's heardBalanceDb) reproduces one reference exactly, several by least squares
+//---------------------------------------------------------
+
+void TestSoundLibrary::salienceFit()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short' heard='strings=-4 solo_strings=-2'/>"
+         "<Instrument name='Violin' ids='violin' nki='Instruments/Symphonic Strings/Violin.nki'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Trumpet' ids='trumpet' nki='Instruments/Symphonic Brass/Trumpet.nki'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Flute' ids='flute' nki='Instruments/Symphonic Woodwinds/Flute.nki'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(int(lib->heardBalance.size()), 2);
+      QCOMPARE(lib->heardBalance.at("strings"), -4.0);
+      QCOMPARE(lib->heardBalance.at("solo strings"), -2.0);
+      // a file from before attack salience: the held note -40 + 0.1 x dB (perceived +50), the staccato
+      // -70 + 0.4 x (perceived +49: matched in energy it sounds 1 dB softer, the loudness model's
+      // strings +1 dB); brass's staccato sounds 1.5 dB louder (-1.5 dB)
+      QTemporaryDir dir;
+      const QString file = dir.path() + "/dynamics.json";
+      {
+            auto pts = [](double a, double b, double off) {
+                  QJsonArray arr;
+                  for (int x : { 16, 32, 48, 64, 80, 96, 112, 127 })
+                        arr.append(QJsonArray({ x, a + b * x + off }));
+                  return arr;
+                  };
+            auto art = [&](const char* by, double a, double b, double per) {
+                  return QJsonObject({ { "drivenBy", by }, { "curve", pts(a, b, 0) }, { "perceived", pts(a, b, per) } });
+                  };
+            QJsonObject patches;
+            patches["Violin"] = QJsonObject({ { "1", art("controller", -40, 0.1, 50) }, { "40", art("velocity", -70, 0.4, 49) } });
+            patches["Trumpet"] = QJsonObject({ { "1", art("controller", -40, 0.1, 50) }, { "40", art("velocity", -70, 0.4, 51.5) } });
+            QJsonObject o({ { "balanceDb", 0 }, { "patches", patches } });
+            QFile f(file);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QJsonDocument(o).toJson());
+      }
+      SoundLib::DynamicsCalibration old;
+      QVERIFY(old.read(file));
+      QVERIFY(old.heardBalanceDb.empty());
+      QVERIFY(old.curve("Violin", 40)->attack.empty());
+      QCOMPARE(old.curve("Violin", 40)->attackAt(80), -200.0);
+      double db = 0;
+      QVERIFY(SoundLib::recommendedBalance(*lib, old, "strings", &db));
+      QCOMPARE(db, 1.0);                                          // loudness only, as before
+      QVERIFY(SoundLib::recommendedBalance(*lib, old, "brass", &db));
+      QCOMPARE(db, -1.5);
+      QVERIFY(!SoundLib::recommendedBalance(*lib, old, "woodwinds", &db));
+      QVERIFY(!SoundLib::fitSalience(*lib, old).ok);
+      {
+            const SoundLib::Recommendation r = SoundLib::recommendation(*lib, old, "strings", SoundLib::fitSalience(*lib, old));
+            QVERIFY(r.loudness && !r.salience);
+            QCOMPARE(r.notes, 3);                                 // pp, mf, ff
+            QCOMPARE(r.attackNotes, 0);
+      }
+      {
+            const QString report = SoundLib::recommendationReport(*lib, old);
+            QVERIFY2(report.contains("Recommended short notes settings: strings +1 dB, woodwinds") == false
+                     && report.contains("Recommended short notes settings: strings +1 dB, brass -1.5 dB"), qPrintable(report));
+            QVERIFY2(report.contains("strings: loudness only +1 dB (3 notes; no attack measured"), qPrintable(report));
+            QVERIFY2(report.contains("heard right: -4 dB"), qPrintable(report));
+            QVERIFY2(report.contains("solo strings: nothing measured; heard right: -2 dB"), qPrintable(report));
+            QVERIFY2(report.contains("attack salience not used: no attack measured"), qPrintable(report));
+      }
+      QVERIFY(old.write(file));                                   // written back: still no attack, no heard
+      {
+            QFile f(file);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            const QByteArray json = f.readAll();
+            QVERIFY(!json.contains("\"attack\""));
+            QVERIFY(!json.contains("heardBalanceDb"));
+      }
+
+      // measured with attack salience: strings' shorts' attacks 2.5 dB beyond their loudness (S), brass's 1
+      SoundLib::DynamicsCalibration cal = old;
+      auto withAttack = [&](const QString& patch, int value, double beyond) {
+            SoundLib::DynamicsCurve c = *cal.curve(patch, value);
+            for (const auto& p : c.perceived)
+                  c.attack.push_back({ p.first, p.second + beyond });
+            cal.setCurve(patch, value, c);
+            };
+      withAttack("Violin", 1, 0);
+      withAttack("Violin", 40, 2.5);
+      withAttack("Trumpet", 1, 0);
+      withAttack("Trumpet", 40, 1.0);
+      // one reference, strings -4 (solo strings' has nothing measured): w = (1 + 4) / 2.5 = 2, exactly -4
+      SoundLib::SalienceFit fit = SoundLib::fitSalience(*lib, cal);
+      QVERIFY(fit.ok);
+      QCOMPARE(fit.used, QStringList({ "strings" }));
+      QVERIFY2(std::fabs(fit.weight - 2.0) < 1e-9, qPrintable(QString::number(fit.weight)));
+      SoundLib::Recommendation rs = SoundLib::recommendation(*lib, cal, "strings", fit);
+      QVERIFY(rs.salience);
+      QVERIFY2(std::fabs(rs.salienceDb - -4.0) < 1e-9, qPrintable(QString::number(rs.salienceDb)));
+      QVERIFY2(std::fabs(rs.loudnessDb - 1.0) < 1e-9, qPrintable(QString::number(rs.loudnessDb)));
+      QVERIFY(SoundLib::recommendedBalance(*lib, cal, "strings", &db));
+      QCOMPARE(db, -4.0);
+      // brass by the same weight: -(1.5 + 2 * 1) = -3.5
+      QVERIFY(SoundLib::recommendedBalance(*lib, cal, "brass", &db));
+      QCOMPARE(db, -3.5);
+      {
+            const QString report = SoundLib::recommendationReport(*lib, cal);
+            QVERIFY2(report.contains("Recommended short notes settings: strings -4 dB, brass -3.5 dB"), qPrintable(report));
+            QVERIFY2(report.contains("strings: loudness only +1 dB, with attack salience -4 dB (matched shorts sound -1 dB "
+                                     "against the held note, their attacks 2.5 dB beyond that; 3 notes); heard right: -4 dB"), qPrintable(report));
+            QVERIFY2(report.contains("brass: loudness only -1.5 dB, with attack salience -3.5 dB"), qPrintable(report));
+            QVERIFY2(report.contains("attack salience weight 2.00, fitted to what was heard right (strings)"), qPrintable(report));
+      }
+      // a family measured without attack curves stays on loudness only
+      {
+            SoundLib::DynamicsCalibration mixed = cal;
+            mixed.setCurve("Trumpet", 40, *old.curve("Trumpet", 40));
+            QVERIFY(SoundLib::recommendedBalance(*lib, mixed, "brass", &db));
+            QCOMPARE(db, -1.5);
+            QVERIFY(SoundLib::recommendedBalance(*lib, mixed, "strings", &db));
+            QCOMPARE(db, -4.0);
+      }
+      // the owner's ear in dynamics.json: another strings reference replaces the map's (-3: w = 4 / 2.5)
+      cal.heardBalanceDb["strings"] = -3;
+      fit = SoundLib::fitSalience(*lib, cal);
+      QVERIFY2(std::fabs(fit.weight - 1.6) < 1e-9, qPrintable(QString::number(fit.weight)));
+      QVERIFY2(std::fabs(SoundLib::recommendation(*lib, cal, "strings", fit).salienceDb - -3.0) < 1e-9, "");
+      // two references, strings -4 and brass -3: least squares, w = (2.5 * 5 + 1 * 1.5) / (2.5^2 + 1^2)
+      cal.heardBalanceDb["strings"] = -4;
+      cal.heardBalanceDb["brass"] = -3;
+      fit = SoundLib::fitSalience(*lib, cal);
+      QCOMPARE(fit.used, QStringList({ "brass", "strings" }));
+      QVERIFY2(std::fabs(fit.weight - 14.0 / 7.25) < 1e-9, qPrintable(QString::number(fit.weight)));
+      // written and read back
+      QVERIFY(cal.write(file));
+      SoundLib::DynamicsCalibration back;
+      QVERIFY(back.read(file));
+      QCOMPARE(back.heardBalanceDb.at("brass"), -3.0);
+      QCOMPARE(int(back.curve("Violin", 40)->attack.size()), 8);
+      QVERIFY(std::fabs(SoundLib::fitSalience(*lib, back).weight - 14.0 / 7.25) < 1e-9);
+      // an ear that wants the shorts louder than loudness says: no negative weight (loudness only)
+      SoundLib::DynamicsCalibration louder = cal;
+      louder.heardBalanceDb = { { "strings", 3 } };
+      fit = SoundLib::fitSalience(*lib, louder);
+      QVERIFY(fit.ok);
+      QCOMPARE(fit.weight, 0.0);
+      QVERIFY(SoundLib::recommendedBalance(*lib, louder, "strings", &db));
+      QCOMPARE(db, 1.0);
       }
 
 //---------------------------------------------------------
