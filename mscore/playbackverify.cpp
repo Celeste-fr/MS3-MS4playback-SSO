@@ -40,6 +40,7 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QThread>
 
 #include "libmscore/chord.h"
 #include "libmscore/measure.h"
@@ -54,6 +55,7 @@
 #include "musescore.h"
 #include "preferences.h"
 #include "soundlibraryhost.h"
+#include "soundlibrarycheck.h"
 #include "thirdparty/qzip/qzipwriter_p.h"
 
 #ifdef USE_VST3
@@ -937,6 +939,62 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                   return fail("the library's plug-in: " + error);
             log(QString("%1: %2 instances loaded in %3 s").arg(name).arg(patches.size()).arg(t.elapsed() / 1000.0, 0, 'f', 1));
             js["loadSeconds"] = t.elapsed() / 1000.0;
+            // Kontakt goes on loading samples after its state is set: each patch is played a test note in
+            // real time until it sounds (the owner, 2026-09-29: SSO's Grand Piano "takes a really long time
+            // to load" even on their PC; rendered at once, it came out silent on a VM reading the samples
+            // over the network). MS_VERIFY_LOAD_WAIT: seconds at most (default 300)
+            const int waitLimit = qEnvironmentVariableIsSet("MS_VERIFY_LOAD_WAIT") ? qEnvironmentVariableIntValue("MS_VERIFY_LOAD_WAIT") : 300;
+            QElapsedTimer waited;
+            waited.start();
+            std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
+            QStringList silent;
+            QStringList took;
+            for (const auto& sp : patches) {
+                  const int slot = sp.first;
+                  const SoundLib::LibInstrument* li = lib ? SoundLibraryHost::findPatch(*lib, sp.second) : nullptr;
+                  if (!li || li->kit)
+                        continue;
+                  const int pitch = ArticulationCheckDialog::testPitch(*li);
+                  QElapsedTimer one;
+                  one.start();
+                  bool sounded = false;
+                  const unsigned block = 512;
+                  std::vector<float> buf(2 * block);
+                  while (!sounded && waited.elapsed() < waitLimit * 1000) {
+                        if (li->switchType == SoundLib::SwitchType::CC && !li->articulations.empty())
+                              vst->play(PlayEvent(ME_CONTROLLER, slot, li->switchNumber, li->articulations.front().value));
+                        if (lib->dynamicsCC >= 0)
+                              vst->play(PlayEvent(ME_CONTROLLER, slot, lib->dynamicsCC, 100));
+                        vst->play(PlayEvent(ME_NOTEON, slot, pitch, 100));
+                        // about 1.2 s in real time, then its note off and 0.4 s
+                        for (int b = 0; b < int(1.6 * rate / block) && !sounded; ++b) {
+                              if (b == int(1.2 * rate / block))
+                                    vst->play(PlayEvent(ME_NOTEON, slot, pitch, 0));
+                              std::fill(buf.begin(), buf.end(), 0.f);
+                              vst->process(block, buf.data(), nullptr, nullptr);
+                              for (float x : buf)
+                                    sounded = sounded || std::fabs(x) > 1e-4f;
+                              QThread::usleep(unsigned(1e6 * block / rate));
+                              }
+                        vst->play(PlayEvent(ME_NOTEON, slot, pitch, 0));
+                        }
+                  if (sounded)
+                        took << QString("%1 %2 s").arg(sp.second).arg(one.elapsed() / 1000.0, 0, 'f', 1);
+                  else
+                        silent << sp.second;
+                  }
+            vst->allNotesOff(-1);
+            {
+                  std::vector<float> buf(2 * 4096);                 // (what rings of the test notes: gone)
+                  for (int b = 0; b < int(2 * rate / 4096); ++b)
+                        vst->process(4096, buf.data(), nullptr, nullptr);
+            }
+            log(QString("%1: until the patches sounded %2 s%3%4").arg(name).arg(waited.elapsed() / 1000.0, 0, 'f', 1)
+                .arg(took.isEmpty() ? QString() : " (" + took.join(", ") + ")")
+                .arg(silent.isEmpty() ? QString() : "; never sounded: " + silent.join(", ")));
+            js["soundWaitSeconds"] = waited.elapsed() / 1000.0;
+            if (!silent.isEmpty())
+                  js["neverSounded"] = QJsonArray::fromStringList(silent);
             }
       auto patchesOf = [&](const Part* p) {
             QStringList l;
