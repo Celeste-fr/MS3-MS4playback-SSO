@@ -18,7 +18,11 @@ own files:
     "links": {"<cc>": "<named control>" | null, ...}   which named control each controller moves (from Kontakt's
                                                window: a links run, --extract-plan, or a run with the window
                                                open); null: none it could tell
+    "linksFrom": ["<patch>", ...]              the links not measured on this patch but on these of its group (same
+                                               named controls, same folder family: links_plan.groups()), which
+                                               agree on every controller this patch changes
   }
+A group whose measured patches disagree is listed on stderr ("links differ"): measure it in full (links_plan.py --all).
 
 cc 128 is channel pressure, 129 pitch bend (as pluginextract.cpp names them); patchValue null when
 not searched. Levels are the loudest 50 ms in dBFS; brightness and balance in dB (pluginextract.cpp).
@@ -29,6 +33,8 @@ import json
 import os
 import sys
 import zipfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))     # (links_plan.groups)
 
 RANK = { "complete": 5, "stepLeftOut": 4, "notPutBack": 3, "silent": 2, "partial": 1 }
 
@@ -135,6 +141,34 @@ def main():
     for n, (_, l) in links.items():
         if n in out:
             out[n]["links"] = l
+    # a group's other patches: the links its measured patches agree on, for the controllers each changes
+    from links_plan import groups
+    for (_, family), members in groups().items():
+        measured = [m for m in members if m in out and "links" in out[m]]
+        if not measured:
+            continue
+        agreed = {}
+        differ = set()
+        for m in measured:
+            for cc, control in out[m]["links"].items():
+                if control is None:
+                    continue
+                if cc in agreed and agreed[cc] != control:
+                    differ.add(cc)
+                agreed.setdefault(cc, control)
+        for cc in differ:
+            del agreed[cc]
+        if differ:
+            print(f"links differ in the group of {', '.join(measured)} ({family}): cc {', '.join(sorted(differ, key=int))}",
+                  file=sys.stderr)
+        for n in members:
+            if n not in out or "links" in out[n]:
+                continue
+            ccs = [str(c[0]) for c in out[n].get("controllers", []) if c[0] is not None]
+            l = { cc: agreed.get(cc) for cc in ccs }
+            if any(l.values()):
+                out[n]["links"] = l
+                out[n]["linksFrom"] = measured
     with open(a.out, "w", encoding="utf-8") as f:
         f.write("{\n" + ",\n".join(json.dumps(n) + ": " + json.dumps(v, separators=(",", ":")) for n, v in out.items()) + "\n}\n")
     counts = {}

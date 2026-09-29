@@ -951,6 +951,14 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   pictures and the time (estimated 3-5 hours for 700) are untried with Kontakt. `sso_patch_controls.json`'s 58 trill and
   measured-tremolo keys were cut at the bracket ("… Trill (Major 2nd) (… Trill"): fixed (the map didn't use them).
   The supervisor's "try n of m" said 4 / 2 where 5 / 3 tries are made: fixed.
+  **Two patches a group** (the owner's run on build 226, 2026-09-28 20:14: about 25 s a patch, so 700 about 5 hours;
+  "this'll take forever"): which control a controller moves is Spitfire's script's, and patches share scripts, so
+  `links_plan.py` groups them (`groups()`: the same named controls in the same folder family, the `.nki`'s folder under
+  Instruments, "Individual techniques" by the name's first part: 64 groups) and plans 2 of each (`--per-group`, spread
+  by name; `--all`: every patch): 113 patches plus the 11 in full, about an hour. `measurements_from_extract.py` gives
+  a group's other patches the links its measured ones agree on, for the controllers each changes (`linksFrom`), and
+  lists a group whose patches disagree ("links differ": measure it with `--all`). The plan is a file next to the .bat:
+  a new one needs no new build. Tried with made-up links JSONs only.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
