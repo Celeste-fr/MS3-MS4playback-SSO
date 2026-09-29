@@ -28,6 +28,7 @@
 #include "audio/vst3/articulationcheck.h"
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/pluginextract.h"
+#include "audio/vst3/playbackverify.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "libmscore/segment.h"
@@ -83,6 +84,8 @@ class TestSoundLibrary : public QObject, public MTest
       void pitchShift();
       void tuningLanes();
       void externalPlugin();
+      void playbackVerify();
+      void playbackVerifyDrift();
 #endif
       };
 
@@ -2656,6 +2659,197 @@ void TestSoundLibrary::automation()
       const double full = peakWith(16383);
       const double none = peakWith(0);
       QVERIFY2(full > 0 && none > 0 && 20 * std::log10(full / none) > 10, qPrintable(QString("%1 %2").arg(full).arg(none)));
+      }
+
+//---------------------------------------------------------
+//   playbackVerify
+//    the analysis core of --verify-playback (audio/vst3/playbackverify.h) on synthetic audio: a
+//    "library" and a "built-in synth" playing the same notes with different timbres, the library
+//    20 ms late. Played right, nothing is flagged: not a chord struck while the same notes ring, soft
+//    notes, legato lines, nor short notes; with faults put in, each is found where it is (a whole
+//    chord dropped, one note of a chord dropped, a held note cut, a note dropped from a legato line)
+//    and nothing else. Clipping is found too.
+//---------------------------------------------------------
+
+namespace {
+
+struct SynthNote { double on, off; int pitch; double amp; };
+
+// harmonic tones: decaying (piano-like) or held, harmonics 1-6 at 1/k^tilt, 3 ms attack, 30 ms release
+static void synthesize(std::vector<float>& x, double rate, const std::vector<SynthNote>& notes, double tilt, double decay,
+                       double latency, double stretch = 1.0)
+      {
+      for (const SynthNote& n : notes) {
+            const double on = n.on * stretch + latency, off = n.off * stretch + latency;
+            const double f0 = 440.0 * std::pow(2.0, (n.pitch - 69) / 12.0);
+            const long a = long(on * rate), b = std::min(long(x.size()), long((off + 0.03) * rate));
+            for (long i = std::max(0L, a); i < b; ++i) {
+                  const double t = i / rate - on;
+                  double env = n.amp * std::min(1.0, t / 0.003) * (decay > 0 ? std::exp(-t / decay) : 1.0);
+                  if (i / rate > off)
+                        env *= 1.0 - (i / rate - off) / 0.03;
+                  double s = 0;
+                  for (int k = 1; k <= 6; ++k)
+                        s += std::sin(2 * M_PI * k * f0 * t) / std::pow(k, tilt);
+                  x[size_t(i)] += float(env * s * 0.1);
+                  }
+            }
+      // a noise floor (-90 dB), as a real rendering has
+      unsigned seed = 1;
+      for (float& v : x) {
+            seed = seed * 1103515245u + 12345u;
+            v += float((int((seed >> 16) & 0x7fff) - 16384) / 16384.0 * 3e-5);
+            }
+      }
+
+}
+
+void TestSoundLibrary::playbackVerify()
+      {
+      namespace PV = PlaybackVerify;
+      const double rate = 44100;
+      std::vector<SynthNote> notes;
+      // 1-16: chords every 0.5 s, some soft (-30 dB), some struck again while the same notes ring
+      const std::vector<std::vector<int>> chords { { 48, 64, 67 }, { 45, 64, 69 }, { 41, 65, 69 }, { 43, 62, 71 } };
+      for (int k = 0; k < 16; ++k) {
+            const std::vector<int>& c = chords[size_t(k % 4)];
+            const double amp = k >= 8 && k < 12 ? 0.03 : 1.0;
+            for (int p : c)
+                  notes.push_back({ 0.5 + 0.5 * k, 0.5 + 0.5 * k + 0.45, p, amp });
+            }
+      for (int k = 0; k < 4; ++k)                 // the same chord again, twice, while it rings
+            for (int p : { 48, 60, 64 })
+                  notes.push_back({ 9.0 + 0.5 * k, 9.0 + 0.5 * k + 0.45, p, 0.7 });
+      // a legato line (each note into the next by 30 ms), then held notes, then short notes
+      const int line[] = { 72, 74, 76, 77, 79, 77, 76, 74 };
+      for (int k = 0; k < 8; ++k)
+            notes.push_back({ 11.0 + 0.4 * k, 11.0 + 0.4 * k + 0.43, line[k], 0.6 });
+      for (int k = 0; k < 4; ++k)
+            notes.push_back({ 14.5 + 1.2 * k, 14.5 + 1.2 * k + 1.1, 55 + 2 * k, 0.8 });
+      for (int k = 0; k < 8; ++k)
+            notes.push_back({ 19.5 + 0.25 * k, 19.5 + 0.25 * k + 0.08, 62 + k, 0.8 });
+      // two chords whose top notes are no other note's partials (D3 F#4 C#5, E3 G#4 D#5)
+      for (int p : { 50, 66, 73 })
+            notes.push_back({ 21.6, 22.05, p, 1.0 });
+      for (int p : { 52, 68, 75 })
+            notes.push_back({ 22.1, 22.55, p, 1.0 });
+      std::vector<PV::Note> pv;
+      for (const SynthNote& n : notes) {
+            PV::Note p;
+            p.on = n.on;
+            p.off = n.off;
+            p.pitch = n.pitch;
+            p.id = int(pv.size());
+            pv.push_back(p);
+            }
+      const size_t frames = size_t(23.5 * rate);
+      // the reference: held tones; the library: brighter, slowly decaying, 20 ms late
+      std::vector<float> ref(frames, 0.f), lib(frames, 0.f);
+      synthesize(ref, rate, notes, 1.0, 0, 0);
+      synthesize(lib, rate, notes, 0.7, 3.0, 0.02);
+      PV::Spectrogram refSpec(ref, rate), libSpec(lib, rate);
+      PV::Settings settings;
+      const PV::Result refResult = PV::analyse(refSpec, pv, settings);
+      const PV::Result clean = PV::analyse(libSpec, pv, settings, &refResult, &refSpec);
+      QVERIFY2(std::fabs(clean.offset - 0.02) < 0.012, qPrintable(QString::number(clean.offset)));
+      QString found;
+      for (const PV::Finding& f : clean.findings)
+            found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+      QVERIFY2(clean.findings.empty(), qPrintable(found));
+
+      // the faults: the 3rd chord dropped, the top note of the D3 F#4 C#5 chord dropped (a note whose
+      // partials are no other note's: an A4 over an A2, in the A2's 4th harmonic, is not found this
+      // way, nor a note struck again while it rings), the 2nd held note cut
+      // after 150 ms, the 4th note of the legato line dropped
+      std::vector<SynthNote> faulty;
+      std::vector<int> dropped, cut;
+      for (size_t i = 0; i < notes.size(); ++i) {
+            SynthNote n = notes[i];
+            if (std::fabs(n.on - 1.5) < 1e-6 || (std::fabs(n.on - 21.6) < 1e-6 && n.pitch == 73)
+                || (std::fabs(n.on - 12.2) < 1e-6)) {
+                  dropped.push_back(int(i));
+                  continue;
+                  }
+            if (std::fabs(n.on - 15.7) < 1e-6) {
+                  n.off = n.on + 0.15;
+                  cut.push_back(int(i));
+                  }
+            faulty.push_back(n);
+            }
+      QCOMPARE(int(dropped.size()), 5);
+      QCOMPARE(int(cut.size()), 1);
+      std::vector<float> bad(frames, 0.f);
+      synthesize(bad, rate, faulty, 0.7, 3.0, 0.02);
+      PV::Spectrogram badSpec(bad, rate);
+      const PV::Result r = PV::analyse(badSpec, pv, settings, &refResult, &refSpec);
+      found.clear();
+      for (const PV::Finding& f : r.findings)
+            found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+      auto has = [&](PV::Finding::Kind kind, double time) {
+            return std::any_of(r.findings.begin(), r.findings.end(), [&](const PV::Finding& f) {
+                  return f.kind == kind && std::fabs(f.time - time) < 0.02;
+                  });
+            };
+      QVERIFY2(has(PV::Finding::Kind::MissingAttack, 1.5), qPrintable(found));       // the whole chord
+      QVERIFY2(has(PV::Finding::Kind::MissingNote, 21.6), qPrintable(found));        // C#5 of D3 F#4 C#5
+      QVERIFY2(has(PV::Finding::Kind::CutShort, 15.7), qPrintable(found));           // held, cut
+      QVERIFY2(has(PV::Finding::Kind::MissingAttack, 12.2) || has(PV::Finding::Kind::MissingNote, 12.2), qPrintable(found));
+      // nothing else (a silence where the legato note is missing is the same fault)
+      for (const PV::Finding& f : r.findings) {
+            const bool known = std::fabs(f.time - 1.5) < 0.45 || std::fabs(f.time - 21.6) < 0.02 || std::fabs(f.time - 15.7) < 0.9
+                               || std::fabs(f.time - 12.2) < 0.45;
+            QVERIFY2(known, qPrintable(found));
+            }
+      // the note of a flagged strike and the finding's notes: the dropped ones
+      for (const PV::Finding& f : r.findings)
+            if (f.kind == PV::Finding::Kind::MissingNote && std::fabs(f.time - 21.6) < 0.02)
+                  QCOMPARE(pv[size_t(f.notes.front())].pitch, 73);
+
+      // clipping: a stereo run over full scale
+      std::vector<float> st(2 * 44100, 0.1f);
+      for (size_t i = 2 * 20000; i < 2 * 20100; ++i)
+            st[i] = 1.4f;
+      double peakDb = 0;
+      const std::vector<PV::Finding> clips = PV::clipping(st.data(), st.size() / 2, 2, rate, &peakDb);
+      QCOMPARE(int(clips.size()), 1);
+      QVERIFY(std::fabs(clips[0].time - 20000 / rate) < 1e-3);
+      QVERIFY(std::fabs(peakDb - 20 * std::log10(1.4)) < 0.01);
+      }
+
+//---------------------------------------------------------
+//   playbackVerifyDrift
+//    a rendering that runs 0.3 % slow drifts 180 ms over a minute: found; one in time: not
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackVerifyDrift()
+      {
+      namespace PV = PlaybackVerify;
+      const double rate = 22050;
+      std::vector<SynthNote> notes;
+      std::vector<PV::Note> pv;
+      for (int k = 0; k < 120; ++k) {
+            const SynthNote n { 0.5 + 0.5 * k, 0.5 + 0.5 * k + 0.3, 60 + (k * 7) % 12, 0.8 };
+            notes.push_back(n);
+            PV::Note p;
+            p.on = n.on;
+            p.off = n.off;
+            p.pitch = n.pitch;
+            pv.push_back(p);
+            }
+      const size_t frames = size_t(62 * rate);
+      std::vector<float> steady(frames, 0.f), slow(frames, 0.f);
+      synthesize(steady, rate, notes, 1.0, 0.5, 0.0);
+      synthesize(slow, rate, notes, 1.0, 0.5, 0.0, 1.003);
+      PV::Settings settings;
+      settings.offsetFrom = -0.2;
+      settings.offsetTo = 0.3;
+      const PV::Result a = PV::analyse(PV::Spectrogram(steady, rate), pv, settings);
+      const PV::Result b = PV::analyse(PV::Spectrogram(slow, rate), pv, settings);
+      auto drift = [](const PV::Result& r) {
+            return std::any_of(r.findings.begin(), r.findings.end(), [](const PV::Finding& f) { return f.kind == PV::Finding::Kind::Drift; });
+            };
+      QVERIFY(!drift(a));
+      QVERIFY(drift(b));
       }
 
 QTEST_MAIN(TestSoundLibrary)
