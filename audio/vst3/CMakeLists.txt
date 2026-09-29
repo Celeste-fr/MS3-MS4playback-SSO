@@ -15,6 +15,8 @@ add_library(vst3host STATIC
       articulationcheck.h
       kontaktsetup.cpp
       kontaktsetup.h
+      librarycontrollers.cpp
+      librarycontrollers.h
       pluginextract.cpp
       pluginextract.h
       playbackverify.cpp

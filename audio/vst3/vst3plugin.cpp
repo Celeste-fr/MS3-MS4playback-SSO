@@ -1153,10 +1153,16 @@ QString Vst3Plugin::parameterText(unsigned id, double normalized) const
       return fromTChars(text);
       }
 
+// (GUI thread, while the audio thread may be in process(): inChanges is the audio thread's, so the
+// processor's change waits with the editor's edits, taken at the next process(); the Controllers
+// window sets parameters live, during playback)
 void Vst3Plugin::setParameter(unsigned id, double normalized)
       {
       normalized = qBound(0.0, normalized, 1.0);
-      d->addParam(id, normalized);
+      {
+            std::lock_guard<std::mutex> lock(d->handler.mutex);
+            d->handler.edits.emplace_back(id, normalized);
+      }
       if (d->controller)
             d->controller->setParamNormalized(id, normalized);
       }

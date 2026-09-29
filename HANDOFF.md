@@ -159,6 +159,27 @@ the test synth only. The owner, on a Windows build of this branch, with an SSO s
   patch, port / channel greyed; switch the part to "MuseScore 4" in "This part plays:": all back as before;
 - if Kontakt was relied on for pan (its own Pan knob): it stays where the setup put it; the Mixer adds to it.
 
+## Controllers and the Mixer live while playing (2026-09-29, branch `live-controls`): in, waiting for the owner's Windows check
+
+The owner: "make what I do in the mixer or sound library controller reflect in the live playback". The
+Controllers window (*View › Sound Library…* › *Controllers…*) was modal and stopped playback on OK; plug-in
+parameters were only set at the next play. Now it is a window of its own that playback goes on behind: each
+move is heard at once (Kontakt parameters on all the part's patches, extras and tuning copies; MIDI controllers
+sent now and the ~10 measures rendered ahead corrected), OK keeps the values (undoable), Cancel puts back what
+the part had. The Mixer was already live (volume, pan, mute, solo); the idle timer now also runs while the
+patches load at score open. See `CLAUDE.md` › Controllers › Live. Tested with the test synth only (unit tests;
+the window itself not run here). The owner, on a Windows build of this branch, with an SSO score playing:
+- open *Controllers…* for a string part and drag Mic 1-5 levels / Mic Mix Distance / Release while it plays:
+  the sound should change at once, without clicks or dropouts; the same on a part with extra patches (the
+  Performance legato plus shorts): every patch follows;
+- untick a control while playing: the patch's own setting comes back; Cancel: everything back as it was
+  when the window opened; OK: playback goes on, Ctrl+Z undoes the change (heard from the next play);
+- stop and start playback with the window open: the values stay as set in the window;
+- does Kontakt keep a value set this way (a Spitfire script could reset a mic fader on the next note)? If a
+  change is heard and then jumps back, say which control;
+- the Mixer while playing, right after pressing play and just after opening a score (patches still loading):
+  volume, pan, mute, solo act at once.
+
 ## Merging with claude/intelligent-cray-6pd4o1 (prepared 2026-09-28; done 2026-09-28 on that branch, as planned)
 
 The owner decides what goes to main; this is the plan. Both branches start at main 16e6933. That

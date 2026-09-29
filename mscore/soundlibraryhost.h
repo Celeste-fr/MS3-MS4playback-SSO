@@ -44,6 +44,7 @@
 #include <QPointer>
 #include <QTimer>
 
+#include "libmscore/partcontrollers.h"
 #include "libmscore/soundlibrary.h"
 
 class QTableWidget;
@@ -185,6 +186,9 @@ class SoundLibraryHost : public QObject {
       // 50 ms (so mute and solo from anywhere reach them: the Mixer, the old part editor, OSC)
       void applyMixer(const Score* score = nullptr);
       std::vector<int> slotsOf(const Part* part) const;   // the part's slots (last sync)
+      // live (the Controllers window): the part's plug-in parameter controllers at values (its own
+      // now) on all its loaded slots at once; the slots set
+      std::vector<int> applyPartControllers(MasterScore* ms, const Part* part, const PartControllers::Values& values);
 
    protected:
       bool eventFilter(QObject* o, QEvent* e) override;
