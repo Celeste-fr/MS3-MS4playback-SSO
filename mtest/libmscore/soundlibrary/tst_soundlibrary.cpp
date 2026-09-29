@@ -71,7 +71,10 @@ class TestSoundLibrary : public QObject, public MTest
       void renderKit();
       void renderKitRoll();
       void controllers();
+      void partMix();
 #ifdef TESTSYNTH
+      void mixerSlot();
+      void mixerScore();
       void kontaktSetup();
       void kontaktSetupReal();
       void vst3Plugin();
@@ -2656,6 +2659,345 @@ void TestSoundLibrary::automation()
       const double none = peakWith(0);
       QVERIFY2(full > 0 && none > 0 && 20 * std::log10(full / none) > 10, qPrintable(QString("%1 %2").arg(full).arg(none)));
       }
+
+
+//---------------------------------------------------------
+//   setPartMix
+//    as the Mixer's part row sets them: every channel of the part (its playback channels)
+//---------------------------------------------------------
+
+static void setPartMix(Part* part, int volume, int pan, bool mute = false, bool solo = false, bool soloMute = false)
+      {
+      for (const auto& ip : *part->instruments()) {
+            for (const Channel* ch : ip.second->channel()) {
+                  Channel* c = part->masterScore()->playbackChannel(ch);
+                  c->setVolume(char(volume));
+                  c->setPan(char(pan));
+                  c->setMute(mute);
+                  c->setSolo(solo);
+                  c->setSoloMute(soloMute);
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   partMix
+//    a library part's Mixer values: its first channel's volume, pan, reverb, chorus; muted when all
+//    its channels are (a channel muted alone mutes its own notes only); solo counts live, not in an
+//    export
+//---------------------------------------------------------
+
+void TestSoundLibrary::partMix()
+      {
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Part* violin = score->parts()[0];
+      SoundLib::PartMix m = SoundLib::partMix(violin, true);
+      QCOMPARE(m.volume, 100);
+      QCOMPARE(m.pan, 63);                        // (MusicXML's pan 0 imports as 63)
+      QVERIFY(!m.muted);
+      setPartMix(violin, 50, 10);
+      Channel* first = score->playbackChannel(violin->instrument()->channel(0));
+      first->setReverb(30);
+      first->setChorus(20);
+      m = SoundLib::partMix(violin, true);
+      QCOMPARE(m.volume, 50);
+      QCOMPARE(m.pan, 10);
+      QCOMPARE(m.reverb, 30);
+      QCOMPARE(m.chorus, 20);
+      // one channel muted (the Mixer's channel row): not the part (a violin has arco, pizzicato, tremolo)
+      QVERIFY(violin->instrument()->channel().size() >= 2);
+      first->setMute(true);
+      QVERIFY(!SoundLib::partMix(violin, true).muted);
+      // the part's row: all of them
+      setPartMix(violin, 50, 10, true);
+      QVERIFY(SoundLib::partMix(violin, true).muted);
+      QVERIFY(SoundLib::partMix(violin, false).muted);
+      // another part soloed: silenced live, not in an export (MuseScore's export plays mute, not solo)
+      setPartMix(violin, 50, 10, false, false, true);
+      QVERIFY(SoundLib::partMix(violin, true).muted);
+      QVERIFY(!SoundLib::partMix(violin, false).muted);
+      delete score;
+      }
+
+#ifdef TESTSYNTH
+
+//---------------------------------------------------------
+//   held
+//    the test synth's A4 held on slot 0 of vst (after a settling time), then frames of it
+//---------------------------------------------------------
+
+static std::vector<float> run(Vst3Synth& vst, int frames)
+      {
+      std::vector<float> b(2 * size_t(frames), 0.f);
+      for (int done = 0; done < frames; done += 256)
+            vst.process(unsigned(std::min(256, frames - done)), b.data() + 2 * done, nullptr, nullptr);
+      return b;
+      }
+
+static double rms(const std::vector<float>& b, int side)
+      {
+      double sum = 0;
+      for (size_t i = size_t(side); i < b.size(); i += 2)
+            sum += double(b[i]) * b[i];
+      return std::sqrt(sum / double(b.size() / 2));
+      }
+
+static double dB(double a, double b)
+      {
+      return 20 * std::log10(a / b);
+      }
+
+//---------------------------------------------------------
+//   mixerSlot
+//    the Mixer on a hosted instance (Vst3Synth::setMix), in the host: volume on the General MIDI
+//    curve relative to 100, constant-power pan with 0 dB in the middle, mute, gliding (no step), an
+//    export's own values, and nothing changed at the defaults; all notes off ends a plug-in's notes
+//    even when it maps no CC123 (the test synth doesn't)
+//---------------------------------------------------------
+
+void TestSoundLibrary::mixerSlot()
+      {
+      const int rate = 48000;
+      QString error;
+      // at the defaults: exactly what the plug-in plays
+      {
+            Vst3Synth vst;
+            vst.init(rate);
+            vst.setPlugin(0, Vst3Plugin::load(TESTSYNTH, rate, 256, &error));
+            QVERIFY2(vst.plugin(0), qPrintable(error));
+            std::unique_ptr<Vst3Plugin> raw = Vst3Plugin::load(TESTSYNTH, rate, 256, &error);
+            QVERIFY(raw);
+            vst.play(PlayEvent(ME_NOTEON, 0, 69, 100));
+            raw->midi(ME_NOTEON, 0, 69, 100);
+            const std::vector<float> a = run(vst, 4800);
+            std::vector<float> b(a.size(), 0.f);
+            for (int done = 0; done < 4800; done += 256)
+                  raw->process(std::min(256, 4800 - done), b.data() + 2 * done);
+            QVERIFY(rms(a, 0) > 0.01);
+            QVERIFY(a == b);
+      }
+
+      Vst3Synth vst;
+      vst.init(rate);
+      vst.setPlugin(0, Vst3Plugin::load(TESTSYNTH, rate, 256, &error));
+      QVERIFY2(vst.plugin(0), qPrintable(error));
+      vst.play(PlayEvent(ME_NOTEON, 0, 69, 100));
+      run(vst, 4800);
+      const std::vector<float> ref = run(vst, 4800);
+      const double l0 = rms(ref, 0);
+      const double r0 = rms(ref, 1);
+      QVERIFY(l0 > 0.01 && std::fabs(l0 - r0) < 1e-6);
+      auto settled = [&]() { run(vst, 4800); return run(vst, 4800); };   // 100 ms: the glide is over
+
+      // volume: 50 is -12.04 dB, 127 +4.15 dB, 0 silent
+      vst.setMix(0, 50, 64, false);
+      std::vector<float> b = settled();
+      QVERIFY2(std::fabs(dB(rms(b, 0), l0) - 40 * std::log10(0.5)) < 0.01, qPrintable(QString::number(dB(rms(b, 0), l0))));
+      QVERIFY(std::fabs(dB(rms(b, 1), r0) - 40 * std::log10(0.5)) < 0.01);
+      vst.setMix(0, 127, 64, false);
+      b = settled();
+      QVERIFY(std::fabs(dB(rms(b, 0), l0) - 40 * std::log10(1.27)) < 0.01);
+      vst.setMix(0, 0, 64, false);
+      QCOMPARE(rms(settled(), 0), 0.0);
+
+      // pan: hard left, the right silent and the left +3 dB; hard right likewise; a quarter left keeps
+      // the power
+      vst.setMix(0, 100, 0, false);
+      b = settled();
+      QCOMPARE(rms(b, 1), 0.0);
+      QVERIFY2(std::fabs(dB(rms(b, 0), l0) - 3.0103) < 0.01, qPrintable(QString::number(dB(rms(b, 0), l0))));
+      vst.setMix(0, 100, 127, false);
+      b = settled();
+      QCOMPARE(rms(b, 0), 0.0);
+      QVERIFY(std::fabs(dB(rms(b, 1), r0) - 3.0103) < 0.01);
+      vst.setMix(0, 100, 32, false);
+      b = settled();
+      QVERIFY(rms(b, 0) > rms(b, 1) * 2);
+      const double power = rms(b, 0) * rms(b, 0) + rms(b, 1) * rms(b, 1);
+      QVERIFY(std::fabs(10 * std::log10(power / (l0 * l0 + r0 * r0))) < 0.01);
+
+      // mute: silent, gliding there (no click: the first samples barely change), and back
+      vst.setMix(0, 100, 64, false);
+      settled();
+      vst.setMix(0, 100, 64, true);
+      b = run(vst, 4800);
+      double early = 0;                             // the first 110 frames (a period of A4): the gain 1 -> 0.6
+      for (int i = 0; i < 110; ++i)
+            early += double(b[2 * size_t(i)]) * b[2 * size_t(i)];
+      early = std::sqrt(early / 110);
+      QVERIFY2(early > 0.6 * l0 && early < 0.95 * l0, qPrintable(QString("%1 %2").arg(early).arg(l0)));
+      double tail = 0;
+      for (size_t i = b.size() - 960; i < b.size(); ++i)
+            tail = std::max(tail, double(std::fabs(b[i])));
+      QVERIFY(tail < 1e-4 * l0);
+      QCOMPARE(rms(run(vst, 4800), 0), 0.0);
+      vst.setMix(0, 100, 64, false);
+      b = settled();
+      QVERIFY(std::fabs(dB(rms(b, 0), l0)) < 0.01);
+
+      // an export has its own values (live: middle; export: hard left), and live comes back after it
+      vst.setExportMix(0, 100, 0, false);
+      vst.beginExport(rate);
+      vst.play(PlayEvent(ME_NOTEON, 0, 69, 100));
+      b = run(vst, 4800);
+      QCOMPARE(rms(b, 1), 0.0);
+      QVERIFY(rms(b, 0) > l0);
+      vst.endExport();
+      vst.play(PlayEvent(ME_NOTEON, 0, 69, 100));
+      b = run(vst, 4800);
+      QVERIFY(rms(b, 1) > 0.01 && std::fabs(dB(rms(b, 1), rms(b, 0))) < 0.001);   // (the middle again; a new round robin)
+
+      // all notes off (the Mixer's mute of the part, Seq::stopNotes): the held note ends
+      PlayEvent off(ME_CONTROLLER, 0, CTRL_ALL_NOTES_OFF, 0);
+      vst.play(off);
+      QCOMPARE(rms(run(vst, 4800), 0), 0.0);
+      }
+
+//---------------------------------------------------------
+//   mixerScore
+//    a score's library parts through their instances, each slot at its part's Mixer values as the
+//    host sets them (SoundLibraryExport: every route of the part, extras and copies for other
+//    tunings too): panned hard left the right side is silent; -12 dB all through; muted silent;
+//    another part soloed (live) leaves exactly that part's sound
+//---------------------------------------------------------
+
+static std::vector<float> renderThrough(MasterScore* score, const SoundLib::Library& lib, bool withSolo, std::set<const Part*> loaded = {})
+      {
+      const int rate = 48000;
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      Vst3Synth vst;
+      vst.init(rate);
+      vst.setVarispeed(lib.varispeed);
+      QString error;
+      for (const SoundLib::Route& r : SoundLib::routes(score, lib)) {
+            const int slot = r.port * 16 + r.channel;
+            if (!loaded.empty() && !loaded.count(r.part))
+                  continue;
+            vst.setPlugin(slot, Vst3Plugin::load(TESTSYNTH, rate, 4096, &error));
+            const SoundLib::PartMix m = SoundLib::partMix(r.part, withSolo);
+            vst.setExportMix(slot, m.volume, m.pan, m.muted);
+            }
+      vst.beginExport(rate);
+      std::vector<float> buffer;
+      int frame = 0;
+      for (const auto& te : events) {
+            const int f = int(score->utick2utime(te.first) * rate);
+            if (f > frame) {
+                  const size_t at = buffer.size();
+                  buffer.resize(at + 2 * size_t(f - frame), 0.f);
+                  vst.process(unsigned(f - frame), buffer.data() + at, nullptr, nullptr);
+                  frame = f;
+                  }
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            PlayEvent e(ev);
+            e.setChannel(ev.extPort() * 16 + ev.extChannel());
+            vst.play(e);
+            }
+      const size_t at = buffer.size();
+      buffer.resize(at + 2 * size_t(rate), 0.f);
+      vst.process(unsigned(rate), buffer.data() + at, nullptr, nullptr);
+      vst.endExport();
+      return buffer;
+      }
+
+void TestSoundLibrary::mixerScore()
+      {
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      // a part with extra patches (four routes)
+      {
+            auto lib = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long'/>"
+               "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
+               "</Instrument>"
+               "<Instrument name='Violin Legato' with='Violin'>"
+               "<Articulation name='Legato' value='20' techniques='legato'/>"
+               "</Instrument>"
+               "<Instrument name='Violin Sul G' with='Violin'>"
+               "<Articulation name='Long Sul G' value='1' techniques='long legato' modifiers='sulg'/>"
+               "</Instrument>"
+               "<Instrument name='Violin Staccatissimo' with='Violin'>"
+               "<Articulation name='Staccatissimo' value='1' techniques='staccatissimo'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY(lib);
+            SoundLib::setCurrent(lib);
+            MasterScore* score = readScore(DIR + "patches.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+            QCOMPARE(int(routes.size()), 4);
+            setPartMix(score->parts()[0], 100, 64);     // (MusicXML's middle imports as 63)
+            const std::vector<float> centre = renderThrough(score, *lib, true);
+            QVERIFY(rms(centre, 1) > 0.001);
+            setPartMix(score->parts()[0], 100, 0);
+            const std::vector<float> left = renderThrough(score, *lib, true);
+            QCOMPARE(rms(left, 1), 0.0);                // every patch's instance panned
+            QVERIFY(std::fabs(dB(rms(left, 0), rms(centre, 0)) - 3.0103) < 0.01);
+            setPartMix(score->parts()[0], 100, 64, true);
+            QCOMPARE(rms(renderThrough(score, *lib, false), 0), 0.0);
+            delete score;
+      }
+      // a part on two copies for other tunings: -12 dB all through
+      {
+            auto lib = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY(lib);
+            SoundLib::setCurrent(lib);
+            MasterScore* score = readScore(DIR + "quartertones.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
+            setPartMix(score->parts()[0], 100, 64);
+            const std::vector<float> full = renderThrough(score, *lib, true);
+            setPartMix(score->parts()[0], 50, 64);
+            const std::vector<float> less = renderThrough(score, *lib, true);
+            QVERIFY(rms(full, 0) > 0.001);
+            QVERIFY2(std::fabs(dB(rms(less, 0), rms(full, 0)) - 40 * std::log10(0.5)) < 0.01, qPrintable(QString::number(dB(rms(less, 0), rms(full, 0)))));
+            delete score;
+      }
+      // two library parts: the piano soloed leaves the piano's sound exactly (live); an export plays both
+      {
+            auto lib = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "</Instrument>"
+               "<Instrument name='Piano' ids='piano'>"
+               "<Articulation name='Normal' value='1' techniques='long'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY(lib);
+            SoundLib::setCurrent(lib);
+            MasterScore* score = readScore(DIR + "articulations.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
+            Part* violin = score->parts()[0];
+            Part* piano = score->parts()[1];
+            setPartMix(violin, 100, 64);
+            setPartMix(piano, 100, 64);
+            const std::vector<float> both = renderThrough(score, *lib, true);
+            const std::vector<float> pianoOnly = renderThrough(score, *lib, true, { piano });
+            QVERIFY(rms(pianoOnly, 0) > 0.001 && rms(both, 0) > rms(pianoOnly, 0) * 1.05);
+            setPartMix(piano, 100, 64, false, true, false);
+            setPartMix(violin, 100, 64, false, false, true);
+            QVERIFY(renderThrough(score, *lib, true) == pianoOnly);
+            QVERIFY(renderThrough(score, *lib, false) == both);
+            delete score;
+      }
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      }
+#endif
 
 QTEST_MAIN(TestSoundLibrary)
 #include "tst_soundlibrary.moc"

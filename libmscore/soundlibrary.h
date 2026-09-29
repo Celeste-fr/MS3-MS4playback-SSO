@@ -355,6 +355,27 @@ struct Route {
 
 std::vector<Route> routes(const Score* score, const Library& library);
 
+//---------------------------------------------------------
+//   PartMix
+//    the Mixer's values for a library part, for all its routes (its patch, extras, copies for
+//    other tunings): the volume, pan, reverb and chorus of the channel its notes play on (the
+//    renderer's: its first instrument's first channel; the part's row in the Mixer sets all its
+//    channels alike). muted: every channel of the part is muted (withSolo: or silenced by another
+//    part's solo; an audio export plays mute but not solo, as MuseScore's own). A channel of it
+//    muted alone silences its own notes only (NPlayEvent::isMuted), as for the built-in sounds.
+//    Hosted: Vst3Synth::setMix; over MIDI out: CC7 / CC10 / CC91 / CC93 on each route
+//---------------------------------------------------------
+
+struct PartMix {
+      int volume { 100 };
+      int pan { 64 };
+      int reverb { 0 };
+      int chorus { 0 };
+      bool muted { false };
+      };
+
+PartMix partMix(const Part* part, bool withSolo);
+
 // which of the patches (patches() of the part's main patch) the part's notation plays
 std::vector<bool> usedPatches(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches);
 

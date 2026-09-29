@@ -81,6 +81,11 @@ class SoundLibraryHost : public QObject {
             qint64 memory { -1 };         // bytes the process grew by as it loaded (-1: not measured)
             };
       std::array<Slot, 64> _slots;
+      // the part each slot plays (its patch, an extra, a copy for another tuning) and the score, from
+      // the last sync: the Mixer's values go to the slots (applyMixer). Only compared with the score's
+      // parts before use (a part deleted since isn't read)
+      std::array<const Part*, 64> _slotParts {};
+      const MasterScore* _slotScore { nullptr };
       // instances set aside by syncSome: a patch the score being loaded doesn't play in their slot
 #ifdef USE_VST3
       struct Spare {
@@ -142,6 +147,11 @@ class SoundLibraryHost : public QObject {
       static qint64 processMemory();      // the process's own memory (Task Manager's "Memory"), bytes; -1: unknown
       bool showEditor(int slot, QString* error = nullptr);
       static void routesMayChange();
+      // the Mixer (volume, pan, mute, solo) of the score's library parts on their slots
+      // (Vst3Synth::setMix): after each sync, at once from the Mixer and Seq::setController, and every
+      // 50 ms (so mute and solo from anywhere reach them: the Mixer, the old part editor, OSC)
+      void applyMixer(const Score* score = nullptr);
+      std::vector<int> slotsOf(const Part* part) const;   // the part's slots (last sync)
 
    protected:
       bool eventFilter(QObject* o, QEvent* e) override;
