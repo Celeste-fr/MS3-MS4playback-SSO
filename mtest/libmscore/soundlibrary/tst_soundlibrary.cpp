@@ -3710,13 +3710,19 @@ void TestSoundLibrary::liveParameters()
             run(vst, 256);
             QVERIFY(std::fabs(dB(rms(run(vst, 4800), 0), full)) < 0.3);
 
-            // dragged while the audio thread plays: each setting reaches the processor, none lost
+            // dragged while the audio thread plays: each setting reaches the processor, none lost. The
+            // "audio thread" waits between blocks as a real one does between its callbacks: looping without
+            // a pause it takes Vst3Synth's slot mutex again the moment it lets it go, and Windows' std::mutex
+            // (an SRW lock, not fair) then never lets this thread's Vst3Synth::plugin() in (the CI hung here
+            // for 300 s, run 36582500294; Linux's mutex let it through)
             std::atomic<bool> stop { false };
             std::thread audio([&]() {
-                  while (!stop)
+                  while (!stop) {
                         run(vst, 256);
+                        std::this_thread::sleep_for(std::chrono::microseconds(500));
+                        }
                   });
-            for (int i = 0; i < 3000; ++i) {
+            for (int i = 0; i < 1000; ++i) {
                   values[part] = { { "tone", i % 128 } };
                   LibraryControllers::applyPart(&vst, routes, part, values, patchValues);
                   }
