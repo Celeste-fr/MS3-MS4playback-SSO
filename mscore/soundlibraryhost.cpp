@@ -1634,6 +1634,50 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
 //   SoundLibraryExport
 //---------------------------------------------------------
 
+#ifdef USE_VST3
+std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float sampleRate, QString* error,
+                                                             std::map<int, QString>* patches)
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!library) {
+            if (error)
+                  *error = QObject::tr("No sound library");
+            return nullptr;
+            }
+      const QString path = SoundLibraryHost::pluginPath(*library, error);
+      if (path.isEmpty())
+            return nullptr;
+      std::shared_ptr<Vst3Synth> own(new Vst3Synth);
+      own->init(sampleRate);
+      own->setVarispeed(library->varispeed);
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      for (const SoundLib::Route& r : routes) {
+            if (r.instrument->kit)
+                  continue;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
+            if (!p)
+                  return nullptr;
+            QString e;
+            if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
+                && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e))
+                  qWarning("Sound library: %s", qPrintable(e));
+            applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
+            own->setParameterIds(r.port * 16 + r.channel, parameterIds(p.get(), r, routes));
+            own->setPlugin(r.port * 16 + r.channel, std::move(p));
+            if (patches)
+                  (*patches)[r.port * 16 + r.channel] = r.instrument->name;
+            }
+      return own;
+      }
+#else
+std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score*, float, QString* error, std::map<int, QString>*)
+      {
+      if (error)
+            *error = QObject::tr("This MuseScore was built without plug-in hosting.");
+      return nullptr;
+      }
+#endif
+
 SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, float sampleRate)
       {
 #ifdef USE_VST3
@@ -1648,30 +1692,10 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
             }
       else {
             // no sequencer (a conversion from the command line): instances of its own
-            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-            const QString path = SoundLibraryHost::pluginPath(*library, &error);
-            if (path.isEmpty()) {
+            _own = loadInstances(score, sampleRate, &error);
+            if (!_own) {
                   qWarning("Sound library: %s", qPrintable(error));
                   return;
-                  }
-            _own.reset(new Vst3Synth);
-            _own->init(sampleRate);
-            _own->setVarispeed(SoundLib::current() && SoundLib::current()->varispeed);
-            const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
-            for (const SoundLib::Route& r : routes) {
-                  if (r.instrument->kit)
-                        continue;
-                  std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, &error);
-                  if (!p) {
-                        qWarning("Sound library: %s", qPrintable(error));
-                        return;
-                        }
-                  if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
-                      && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &error))
-                        qWarning("Sound library: %s", qPrintable(error));
-                  applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
-                  _own->setParameterIds(r.port * 16 + r.channel, parameterIds(p.get(), r, routes));
-                  _own->setPlugin(r.port * 16 + r.channel, std::move(p));
                   }
             _vst = _own.get();
             }
@@ -1695,6 +1719,23 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
       Q_UNUSED(score);
       Q_UNUSED(synth);
       Q_UNUSED(sampleRate);
+#endif
+      }
+
+SoundLibraryExport::SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own)
+      {
+#ifdef USE_VST3
+      if (!own)
+            return;
+      _own = own;
+      _vst = _own.get();
+      _synth = synth;
+      _synth->addGuest(_vst);
+      _vst->beginExport(sampleRate);
+#else
+      Q_UNUSED(synth);
+      Q_UNUSED(sampleRate);
+      Q_UNUSED(own);
 #endif
       }
 

@@ -135,6 +135,7 @@
 #include "soundlibraryhost.h"
 #include "soundlibrarycheck.h"
 #include "soundlibraryloadtimes.h"
+#include "playbackverify.h"
 #include <QLockFile>
 #include <atomic>
 #include <map>
@@ -258,6 +259,13 @@ static bool measureLoadTimesMode = false;  // --measure-load-times: the sound li
 static QString measureProbe;               // --measure-probe: its phase 5's patch
 static QString measureThreads = "2,4";     // --measure-threads: its phase 3's thread counts (0: none)
 static bool measureNoProbe = false;        // --measure-no-probe
+static bool verifyMode = false;            // --verify-playback: render scores with the library and check the audio (playbackverify.h)
+static QStringList verifyInputs;           // its scores and folders
+static QString verifyOut;                  // --verify-out
+static QString verifyAudio;                // --verify-audio
+static QString verifyLibrary;              // --verify-library
+static bool verifyWav = false;             // --verify-wav
+static bool verifyShareable = false;       // --verify-shareable
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -2584,7 +2592,7 @@ MuseScore::MuseScore()
       Workspace::addMenuAndString(menuHelp,        "menu-help");
       Workspace::addMenuAndString(menuTours,       "menu-tours");
 
-      if (!extractMode)                   // (the background extract writes nothing of the working MuseScore's)
+      if (!extractMode && !verifyMode)    // (the background extract writes nothing of the working MuseScore's)
             Workspace::writeGlobalMenuBar(mb);
 
       if (!MScore::noGui) {
@@ -4743,8 +4751,98 @@ static bool extractInBackground(const QStringList& argv)
       return ok;
       }
 
+//---------------------------------------------------------
+//   verifyInBackground
+//    MuseScore --verify-playback <score or folder> [more …] [--verify-out <folder>] [--verify-library <library>]
+//    [--verify-audio <file>] [--verify-wav]: PlaybackVerifier (playbackverify.h) as a process of its own,
+//    like the background extract: no window, below-normal priority, its own copy of the setups
+//    (Documents/MuseScore Sound Library Check/background verify setups), lock and log (background playback
+//    verify.log), nothing of the working MuseScore's written; the report's folder opens when done (not with
+//    --verify-out: an automated run)
+//---------------------------------------------------------
+
+static bool verifyInBackground(const QStringList& argv)
+      {
+#ifdef Q_OS_WIN
+      SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+#endif
+      ArticulationCheckDialog::setBackgroundLog("background playback verify.log");
+      auto log = [](const QString& line) { ArticulationCheckDialog::logBackground(line); };
+      // the library: a map file, a name in share/soundlibraries, else the one the working MuseScore plays
+      QString path = verifyLibrary;
+      if (!path.isEmpty() && !QFileInfo::exists(path))
+            path = mscoreGlobalShare + "soundlibraries/" + verifyLibrary + ".xml";
+      if (path.isEmpty()) {
+            path = preferences.getString(PREF_IO_SOUNDLIBRARY);
+            if (path.isEmpty())
+                  path = soundLibraryPath();
+            }
+      if (path.isEmpty() || !QFileInfo::exists(path)) {
+            log(QString("no sound library \"%1\" (share/soundlibraries has its maps)").arg(verifyLibrary));
+            return false;
+            }
+      QString error;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::Library::load(path, &error);
+      if (!library) {
+            log(error);
+            return false;
+            }
+      SoundLib::setCurrent(library);
+      const QString mine = SoundLibraryHost::setupsFolder(*library);
+      SoundLibraryHost::setDataFolder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                      + "/MuseScore Sound Library Check/background verify setups");
+      const QString copy = SoundLibraryHost::setupsFolder(*library);
+      QDir().mkpath(copy);
+      QLockFile lock(copy + "/background playback verify.lock");
+      if (!lock.tryLock(0)) {
+            log("a playback verification is already running; this one stops");
+            return false;
+            }
+      int copied = 0;
+      for (const QFileInfo& fi : QDir(mine).entryInfoList(QDir::Files)) {
+            if (fi.fileName() == "load times.log")
+                  continue;
+            // (the calibration always the working one's: this run never changes it)
+            const QString to = copy + "/" + fi.fileName();
+            if (fi.fileName() == "dynamics.json")
+                  QFile::remove(to);
+            else if (QFileInfo::exists(to))
+                  continue;
+            copied += QFile::copy(fi.absoluteFilePath(), to);
+            }
+      log(QString("playback verification started; setups in %1 (%2 copied from %3)")
+          .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)));
+      SoundLibraryHost::loadCalibration();
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
+            return l && SoundLibraryHost::hasSetup(*l, li.name);
+            });
+      PlaybackVerifier::Options options;
+      options.inputs = verifyInputs + argv;
+      for (QString& in : options.inputs)
+            if (in == "default")            // the scores that come with MuseScore
+                  in = mscoreGlobalShare + "verifyplayback";
+      options.out = verifyOut;
+      options.audio = verifyAudio;
+      options.wav = verifyWav;
+      options.shareable = verifyShareable;
+      QString folder;
+      {
+#ifdef Q_OS_WIN
+            DialogWatch watch;
+#endif
+            folder = PlaybackVerifier::run(options, log);
+      }
+      if (!folder.isEmpty() && verifyOut.isEmpty())
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(folder).absolutePath()));
+      return !folder.isEmpty();
+      }
+
 static bool processNonGui(const QStringList& argv)
       {
+      if (verifyMode)
+            return verifyInBackground(argv);
       if (extractMode)
             return extractInBackground(argv);
       if (cliSaveOnline)
@@ -8728,6 +8826,18 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("measure-threads", "Use with --measure-load-times: worker thread counts to try, e.g. 2,4 "
                                           "(0: none)", "counts"));
       parser.addOption(QCommandLineOption("measure-no-probe", "Use with --measure-load-times: no probe of the script values"));
+      parser.addOption(QCommandLineOption("verify-playback", "Render a score (or every score in a folder, \"default\": the ones "
+                                          "that come with MuseScore; more may follow as arguments) with the sound library, as an audio export does, and check that the "
+                                          "audio plays its notes: a report in Documents/MuseScore Sound Library Check "
+                                          "(playbackverify.h, VERIFY.md)", "score or folder"));
+      parser.addOption(QCommandLineOption("verify-out", "Use with --verify-playback: the folder for the report", "folder"));
+      parser.addOption(QCommandLineOption("verify-library", "Use with --verify-playback: the sound library (name, as in "
+                                          "share/soundlibraries, or a map file); default: the one Preferences name", "library"));
+      parser.addOption(QCommandLineOption("verify-audio", "Use with --verify-playback: check this audio file (an export of "
+                                          "the score made elsewhere) instead of rendering the library", "file"));
+      parser.addOption(QCommandLineOption("verify-wav", "Use with --verify-playback: also keep the full renders"));
+      parser.addOption(QCommandLineOption("verify-shareable", "Use with --verify-playback: only report.json and summary.txt, no "
+                                          "audio clips and no lists of every note (a report on your own scores to post)"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8810,6 +8920,15 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             checkDynamicsMode = parser.isSet("check-dynamics");
             if (parser.isSet("extract-round"))
                   extractRound = qMax(1, parser.value("extract-round").toInt());
+            }
+      if ((verifyMode = parser.isSet("verify-playback"))) {
+            MScore::noGui = true;
+            verifyInputs = QStringList { parser.value("verify-playback") };
+            verifyOut = parser.value("verify-out");
+            verifyAudio = parser.value("verify-audio");
+            verifyLibrary = parser.value("verify-library");
+            verifyWav = parser.isSet("verify-wav");
+            verifyShareable = parser.isSet("verify-shareable");
             }
       if (parser.isSet("E")) {
             MScore::noGui = true;
@@ -8972,7 +9091,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
 
       QStringList argv = parser.positionalArguments();
 
-      if (app && !converterMode && !pluginMode && !extractMode) {
+      if (app && !converterMode && !pluginMode && !extractMode && !verifyMode) {
             if (!argv.isEmpty()) {
                   int ok = true;
                   for (const QString& message : qAsConst(argv)) {

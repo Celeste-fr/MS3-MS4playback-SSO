@@ -19,7 +19,7 @@
 //    85-89         not in the patch: articulation 1 (a default)
 //    90-127        not in the patch: ignored, the articulation stays
 //  and round robins: each note a little louder or softer than the last, its harmonics a
-//  little different (±8 %). Like Kontakt, it hears no MIDI when its event input is not
+//  little different (±8 %). A note-off fades its note out in 10 ms. Like Kontakt, it hears no MIDI when its event input is not
 //  active, and it is silent when its output is not active.
 //
 //  This program is free software; you can redistribute it and/or modify
@@ -37,6 +37,8 @@
 #include <cstdlib>
 #include <memory>
 #include <thread>
+#include <algorithm>
+#include <iterator>
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ibstream.h"
@@ -71,6 +73,9 @@ struct Voice {
       int roundRobin { 0 };
       long t { 0 };                 // samples played
       bool silent { false };        // started while the "samples" were still loading (MSTESTSYNTH_STREAM_MS)
+      long release { -1 };          // samples left of its release (a note-off fades it out in 10 ms, as a
+                                    // sampler's release: a voice stopped at once clicks, and the click
+                                    // sounds like an attack to --verify-playback); -1: held
       };
 
 // like Kontakt loading a patch, for the tests of MuseScore's loading (only when set in the environment):
@@ -176,6 +181,7 @@ class Processor : public AudioEffect {
                   streaming = false;
                   });
             }
+      long releaseSamples() const { return std::max(1L, long(processSetup.sampleRate * 0.01)); }
 
    public:
       Processor() { setControllerClass(ControllerUID); }
@@ -238,8 +244,11 @@ class Processor : public AudioEffect {
                               v.silent = streaming;
                               voices[e.noteOn.pitch] = v;
                               }
-                        else if (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent)
-                              voices.erase(e.type == Event::kNoteOnEvent ? e.noteOn.pitch : e.noteOff.pitch);
+                        else if (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent) {
+                              auto v = voices.find(e.type == Event::kNoteOnEvent ? e.noteOn.pitch : e.noteOff.pitch);
+                              if (v != voices.end() && v->second.release < 0)
+                                    v->second.release = releaseSamples();
+                              }
                         }
                   }
             if (data.numOutputs < 1 || data.outputs[0].numChannels < 2)
@@ -256,16 +265,24 @@ class Processor : public AudioEffect {
             for (int32 i = 0; i < data.numSamples; ++i)
                   l[i] = r[i] = 0.f;
             for (auto& v : voices) {
+                  const long fade = releaseSamples();
                   const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + v.second.tuning / 100.0 + (bend - 0.5) * 4.0) / 12.0) / processSetup.sampleRate;
                   Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
-                        const float s = vc.silent ? 0.f : timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
+                        float s = vc.silent ? 0.f : timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
+                        if (vc.release >= 0) {
+                              s *= float(std::max(0L, vc.release)) / float(fade);
+                              if (vc.release > 0)
+                                    --vc.release;
+                              }
                         l[i] += s;
                         r[i] += s;
                         vc.phase += inc;
                         ++vc.t;
                         }
                   }
+            for (auto v = voices.begin(); v != voices.end();)
+                  v = v->second.release == 0 ? voices.erase(v) : std::next(v);
             data.outputs[0].silenceFlags = voices.empty() ? 3 : 0;
             return kResultOk;
             }

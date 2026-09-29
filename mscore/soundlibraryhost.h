@@ -206,7 +206,14 @@ class SoundLibraryExport {
 
    public:
       SoundLibraryExport(Score* score, MasterSynthesizer* synth, float sampleRate);
+      // with instances loaded before (loadInstances): the playback verification renders a score
+      // several times (mixed, each part alone) and loads the library's patches once
+      SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own);
       ~SoundLibraryExport() { finish(); }
+      // instances of its own for the score's library parts (no sequencer: a conversion from the
+      // command line); patches: slot -> the patch loaded there
+      static std::shared_ptr<Vst3Synth> loadInstances(Score* score, float sampleRate, QString* error,
+                                                      std::map<int, QString>* patches = nullptr);
       void finish();                            // before the MasterSynthesizer goes
       bool play(const NPlayEvent& event);       // true: a library part's event, played here
       };

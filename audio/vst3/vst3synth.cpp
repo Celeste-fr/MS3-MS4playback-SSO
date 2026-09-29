@@ -11,10 +11,75 @@
 #include "vst3synth.h"
 
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 
 #include "audio/midi/event.h"
 
 namespace Ms {
+
+//---------------------------------------------------------
+//   Fault
+//    MS_VERIFY_FAULT, a test switch for --verify-playback (mscore/playbackverify.h): faults put
+//    into what reaches the plug-ins, so the verification can be shown to catch them without the
+//    real library. Comma-separated:
+//      pedal-drop:<ms>        a note-on less than <ms> before or after the slot's sustain pedal
+//                             goes up (CC64 under 64) is dropped, as SSO's Grand Piano dropped
+//                             chords 1 ms after it (2026-09-28). For "before", every event of the
+//                             plug-ins is held <ms> (a constant delay: the verification's offset)
+//      drop:<n>               every n-th note-on is dropped
+//      truncate:<n>:<ms>      every n-th note-on gets a note-off <ms> after it
+//    Each fault is written to MS_VERIFY_FAULT_LOG (a file) when set: "<kind> <seconds> <slot> <pitch>".
+//---------------------------------------------------------
+
+struct Fault {
+      double pedalDropMs { -1 };
+      int dropEvery { 0 };
+      int truncateEvery { 0 };
+      double truncateMs { 0 };
+      std::string log;
+      bool any() const { return pedalDropMs >= 0 || dropEvery > 0 || truncateEvery > 0; }
+      };
+
+static const Fault& fault()
+      {
+      static const Fault f = []() {
+            Fault r;
+            const char* env = std::getenv("MS_VERIFY_FAULT");
+            if (!env)
+                  return r;
+            const QStringList items = QString::fromUtf8(env).split(',', Qt::SkipEmptyParts);
+            for (const QString& item : items) {
+                  const QStringList p = item.trimmed().split(':');
+                  if (p[0] == "pedal-drop" && p.size() > 1)
+                        r.pedalDropMs = p[1].toDouble();
+                  else if (p[0] == "drop" && p.size() > 1)
+                        r.dropEvery = p[1].toInt();
+                  else if (p[0] == "truncate" && p.size() > 2) {
+                        r.truncateEvery = p[1].toInt();
+                        r.truncateMs = p[2].toDouble();
+                        }
+                  }
+            if (const char* log = std::getenv("MS_VERIFY_FAULT_LOG"))
+                  r.log = log;
+            if (r.any())
+                  fprintf(stderr, "MS_VERIFY_FAULT: faults injected into the hosted plug-ins (%s)\n", env);
+            return r;
+            }();
+      return f;
+      }
+
+static void logFault(const char* kind, double seconds, int slot, int pitch)
+      {
+      const Fault& f = fault();
+      if (f.log.empty())
+            return;
+      if (FILE* out = fopen(f.log.c_str(), "a")) {
+            fprintf(out, "%s %.4f %d %d\n", kind, seconds, slot, pitch);
+            fclose(out);
+            }
+      }
 
 const char* Vst3Synth::NAME = "VST3";
 
@@ -38,6 +103,7 @@ void Vst3Synth::init(float sampleRate)
       {
       Synthesizer::init(sampleRate);
       std::lock_guard<std::mutex> lock(_mutex);
+      _clockRate = sampleRate;
       for (auto& p : _slots)
             if (p)
                   p->setSampleRate(sampleRate);
@@ -90,10 +156,68 @@ void Vst3Synth::setParameterIds(int slot, const std::vector<long>& ids)
       _parameters[size_t(slot)] = ids;
       }
 
+// (with _mutex held) MS_VERIFY_FAULT's drop and truncate: true when the event is to be dropped
+bool Vst3Synth::injectFault(const PlayEvent& event)
+      {
+      const Fault& f = fault();
+      if (f.dropEvery <= 0 && f.truncateEvery <= 0)
+            return false;
+      if (event.type() != ME_NOTEON || event.dataB() == 0)
+            return false;
+      const int slot = event.channel();
+      const double now = double(_clock) / _clockRate;
+      ++_noteOns;
+      if (f.dropEvery > 0 && _noteOns % f.dropEvery == 0) {
+            logFault("drop", now, slot, event.dataA());
+            return true;
+            }
+      if (f.truncateEvery > 0 && _noteOns % f.truncateEvery == 0) {
+            _cutoffs.push_back({ _clock + (long long)(f.truncateMs / 1000.0 * _clockRate), slot, event.dataA() & 0x7f });
+            logFault("truncate", now, slot, event.dataA());
+            }
+      return false;
+      }
+
+// (with _mutex held) MS_VERIFY_FAULT's pedal-drop: the events held until now, a note-on dropped when
+// the pedal went up less than <ms> before or after it came
+void Vst3Synth::releaseDelayed(unsigned frames)
+      {
+      if (_delayed.empty())
+            return;
+      const long long window = (long long)(fault().pedalDropMs / 1000.0 * _clockRate);
+      _releasing = true;
+      size_t done = 0;
+      for (; done < _delayed.size() && _delayed[done].due < _clock + (long long)frames; ++done) {
+            const Delayed& d = _delayed[done];
+            const int slot = d.event.channel();
+            bool drop = false;
+            if (d.event.type() == ME_NOTEON && d.event.dataB() > 0 && size_t(slot) < _pedalUps.size())
+                  for (long long up : _pedalUps[size_t(slot)])
+                        drop = drop || (up >= d.arrival - window && up <= d.arrival + window);
+            if (drop)
+                  logFault("pedal-drop", double(d.arrival) / _clockRate, slot, d.event.dataA());
+            else
+                  deliver(d.event);
+            }
+      _delayed.erase(_delayed.begin(), _delayed.begin() + long(done));
+      _releasing = false;
+      }
+
 void Vst3Synth::deliver(const PlayEvent& event)
       {
       const int slot = event.channel();
       if (slot < 0 || slot >= int(_slots.size()) || !_slots[slot])
+            return;
+      if (fault().pedalDropMs >= 0 && !_releasing) {
+            if (event.type() == ME_CONTROLLER && event.dataA() == 64 && event.dataB() < 64) {
+                  if (_pedalUps.size() <= size_t(slot))
+                        _pedalUps.resize(size_t(slot) + 1);
+                  _pedalUps[size_t(slot)].push_back(_clock);
+                  }
+            _delayed.push_back({ _clock + (long long)(fault().pedalDropMs / 1000.0 * _clockRate), _clock, event });
+            return;
+            }
+      if (injectFault(event))
             return;
       const bool noteOn = event.type() == ME_NOTEON && event.dataB() > 0;
       const bool noteOff = event.type() == ME_NOTEOFF || (event.type() == ME_NOTEON && event.dataB() == 0);
@@ -150,6 +274,19 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       if (!lock.owns_lock())
             return;
       playPending();
+      releaseDelayed(frames);
+      // MS_VERIFY_FAULT's truncated notes: their note-off at the block they fall in
+      if (!_cutoffs.empty()) {
+            for (auto i = _cutoffs.begin(); i != _cutoffs.end();) {
+                  if (i->at < _clock + (long long)frames) {
+                        if (i->slot >= 0 && i->slot < int(_slots.size()) && _slots[size_t(i->slot)])
+                              _slots[size_t(i->slot)]->midi(ME_NOTEOFF, 0, i->key, 0, 0.f);
+                        i = _cutoffs.erase(i);
+                        }
+                  else
+                        ++i;
+                  }
+            }
       // each slot into a buffer of its own, then added with its Mixer gains (gliding to the targets)
       const std::array<Mix, 64>& mix = _exporting ? _exportMix : _mix;
       if (_scratch.size() < size_t(2 * frames))
@@ -191,6 +328,7 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
             if (std::fabs(gr - tr) < 1e-5f)
                   gr = tr;
             }
+      _clock += frames;
       }
 
 //---------------------------------------------------------
@@ -356,6 +494,14 @@ void Vst3Synth::beginExport(float sampleRate)
       _exportThread = std::this_thread::get_id();
       _exporting = true;
       snapGains(_exportMix);
+      _clock = 0;                   // (an export's own time, for MS_VERIFY_FAULT)
+      _clockRate = sampleRate;
+      _cutoffs.clear();
+      _pedalUps.clear();
+      _delayed.clear();
+      _noteOns = 0;
+      if (fault().any())
+            logFault("begin", 0, -1, -1);         // (each export: the log's renders apart)
       for (auto& p : _slots) {
             if (p) {
                   p->allNotesOff();
@@ -377,6 +523,8 @@ void Vst3Synth::endExport()
             }
       snapGains(_mix);
       _exporting = false;
+      _clockRate = _sampleRate;
+      _cutoffs.clear();
       }
 
 } // namespace Ms
