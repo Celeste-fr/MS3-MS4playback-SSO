@@ -65,9 +65,8 @@ struct Note {
       int velocity { 80 };
       int id { -1 };                // the caller's (its index in its own list)
       int group { 0 };              // what plays it (the library slot: a patch has its own level)
-      bool legato { false };        // a legato articulation (joined to the note before, no attack of its
-                                    // own); also taken as legato: a note starting while the group's
-                                    // previous note still sounds and ends within 120 ms (an overlap)
+      bool legato { false };        // played with a legato articulation (joined to the note before, no
+                                    // attack of its own: SSO's Performance "Legato")
       bool sustained { true };      // held for its length (a long, legato, tremolo, trill); false: a
                                     // short or plucked sample that dies away by itself (not checked
                                     // for being cut short or for silence)

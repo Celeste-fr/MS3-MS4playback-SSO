@@ -459,15 +459,11 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             // each note's fundamental and 2nd harmonic (shared or not: a chord's octaves share them)
             // from before its onset to after it, and its level after it
             r.noteChecks.assign(notes.size(), NoteCheck());
-            // legato: its articulation, or starting while the group's note before it still sounds and
-            // ends soon after (an overlap: a legato transition), not under a held accompaniment
-            for (size_t i = 0; i < notes.size(); ++i) {
-                  bool joined = notes[i].legato;
-                  for (size_t j = 0; j < notes.size() && !joined; ++j)
-                        joined = j != i && notes[j].group == notes[i].group && notes[j].on < notes[i].on - 0.005
-                                 && notes[j].off > notes[i].on && notes[j].off <= notes[i].on + 0.12;
-                  r.noteChecks[i].legato = joined;
-                  }
+            // legato: the articulation the library played (Note::legato). (Not taken from overlaps:
+            // on the owner's piano score that made hundreds of decaying piano notes "legato" and judged
+            // them on a held level they don't have)
+            for (size_t i = 0; i < notes.size(); ++i)
+                  r.noteChecks[i].legato = notes[i].legato;
             std::vector<double> diff(notes.size(), 0);
             std::vector<int> kind(notes.size(), 0);       // which harmonics: 3 both, 1 or 2 one, 0 both shared
             for (size_t i = 0; i < notes.size(); ++i) {

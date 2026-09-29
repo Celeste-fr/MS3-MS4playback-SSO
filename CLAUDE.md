@@ -636,6 +636,14 @@ whether Kontakt does is not known. Optional runner: `.github/workflows/verify_pl
 label `sso`; not set up; VERIFY.md has the risk and the steps). The Ableton route was assessed
 (VERIFY.md): it hosts Kontakt outside MuseScore's hosting and export paths, where the bugs were, and
 Live can't run headless.
+**First run with Kontakt (the owner, 2026-09-29, build 1c3d699, 30 s)**: the test scores gave 10 findings;
+9 `missing-note` on the Solo Violin / Solo Cello Performance legato lines were false (the owner heard A4 and
+B4 in the m3 clip): that patch sits 15-20 dB under the solo patch against the built-in synth and its notes
+build up over ~200 ms. Now the note levels' baseline is per patch (slot) and legato or not, and a note
+the library plays with a "Legato" articulation is judged on its held level (40 / 70 % of it), no attack or
+rise needed (test `playbackVerifyLegato`; on the owner's clips those 9 come out -5 … +5 dB, the limit is
+-20). Piano m13 beat 1 (C3 E4 E5, the same keys released 6 ms before, pedal up +40 ms): a missing
+attack not yet confirmed by ear.
 
 ## Tests and known state
 
