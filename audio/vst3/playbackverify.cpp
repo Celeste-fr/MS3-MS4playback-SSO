@@ -371,6 +371,7 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             }
       const double med = median(peaks);
       std::vector<bool> flagged(ks.size(), false);
+      std::vector<size_t> candidates;           // weak, where the reference is not
       for (size_t i = 0; i < ks.size(); ++i) {
             Strike& k = ks[i];
             k.broad = med > 0 ? k.broad / med : 0;
@@ -382,6 +383,23 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             if (rk && rk->weak) {
                   ++r.unclear;
                   continue;
+                  }
+            candidates.push_back(i);
+            }
+      // a weak strike is missing (with a reference: when a note of it is under its level too; a soft
+      // lone note with no attack noise sounds, its notes at their level: MS Test Synth's bass notes)
+      auto flagStrikes = [&]() {
+      for (size_t i : candidates) {
+            Strike& k = ks[i];
+            const Strike* rk = reference && i < reference->strikeList.size() ? &reference->strikeList[i] : nullptr;
+            if (!r.noteChecks.empty()) {
+                  double least = 0;
+                  for (int n : k.notes)
+                        least = std::min(least, r.noteChecks[size_t(n)].deficit);
+                  if (least > -settings.strikeDeficitDb) {
+                        ++r.sounding;
+                        continue;
+                        }
                   }
             flagged[i] = true;
             Finding fd;
@@ -396,14 +414,13 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                       + (rk ? fmt(" (built-in synth: %.2f, %.1f x)", rk->broad, rk->pitchLocal) : std::string());
             r.findings.push_back(fd);
             }
+            };
+      if (!(reference && ref))
+            flagStrikes();
 
       // each note on its own partials (needs the reference: what this note should give)
       if (reference && ref) {
             std::vector<bool> inFlagged(notes.size(), false);
-            for (size_t i = 0; i < ks.size(); ++i)
-                  if (flagged[i])
-                        for (int n : ks[i].notes)
-                              inFlagged[size_t(n)] = true;
             // the note's partials (fine bins) that no other note sounding from `from` to `to` has: its
             // harmonics 1-4, each with a bin either side, none within 2 bins of another's harmonic 1-8
             auto ownBins = [&](const Spectrogram& sp, size_t i, double from, double to) {
@@ -504,6 +521,18 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             for (size_t i = 0; i < notes.size(); ++i) {
                   NoteCheck& c = r.noteChecks[i];
                   c.deficit = diff[i] - base[kind[i]][notes[i].pitch];
+                  // (nothing at all where the reference sounds: missing, whatever its register does,
+                  // e.g. when most notes like it are missing too)
+                  if (c.after <= -100 && c.refAfter > -60)
+                        c.deficit = -99;
+                  }
+            flagStrikes();
+            for (size_t i = 0; i < ks.size(); ++i)
+                  if (flagged[i])
+                        for (int n : ks[i].notes)
+                              inFlagged[size_t(n)] = true;
+            for (size_t i = 0; i < notes.size(); ++i) {
+                  NoteCheck& c = r.noteChecks[i];
                   if (inFlagged[i])
                         continue;
                   // missing: far under the level its register has against the reference, not rising at

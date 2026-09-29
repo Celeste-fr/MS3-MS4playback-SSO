@@ -22,7 +22,7 @@
 //      the spectral flux (positive log-magnitude differences, all bins) stays under 0.4 of the
 //      median strike's AND the flux of its own partials (harmonics 1-6 of each note ±1 bin) under
 //      2.3 times their median flux around it (±1.5 s; at least 0.05 a bin, so a trace in
-//      silence doesn't count);
+//      silence doesn't count), and a note of it 8 dB under its usual level (below);
 //    - missing note (one note, a chord's octaves included): the level of its fundamental and 2nd
 //      harmonic after its onset (those no other note sounding then has, if any) against the
 //      reference's, 20 dB under what the notes of its register (within 3 semitones, the same
@@ -79,6 +79,10 @@ struct Settings {
       // a missing attack: broad under this share of the median strike's AND pitchLocal under this
       double missingBroad { 0.40 };
       double missingPitch { 2.3 };
+      // and (with a reference) one of its notes' level deficit (NoteCheck::deficit) at least this: a
+      // soft lone note with little attack noise is weak but there (the owner's dropped chords: 12 to
+      // 45 dB under)
+      double strikeDeficitDb { 8.0 };
       // a note missing among others (a chord, octaves sharing its partials; the owner's staccato
       // octaves, 2026-09-28): its fundamental and 2nd harmonic (those no other note sounding has, if
       // any) after its onset missingNoteDb under the
@@ -203,6 +207,7 @@ struct Result {
       int strikes { 0 };
       int weakStrikes { 0 };              // under both thresholds (flagged or not)
       int unclear { 0 };                  // weak, but so is the reference: not flagged
+      int sounding { 0 };                 // weak, but its notes are at their level: not flagged
       int longNotes { 0 };                // checked for being cut short
       std::vector<Strike> strikeList;
       std::vector<NoteCheck> noteChecks;  // by note (with a reference)
