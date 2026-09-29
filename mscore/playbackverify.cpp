@@ -577,6 +577,10 @@ static Context context(MasterScore* score, const EventMap& events, const std::ve
 //   Report: what run() collects
 //---------------------------------------------------------
 
+// --verify-shareable: only report.json and summary.txt (the findings' notes and what happens there),
+// no clips, no lists of every note and event: a report that may be posted where anyone reads it
+static bool shareable = false;
+
 struct Report {
       QString folder;
       QJsonArray scores;
@@ -652,7 +656,7 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
       int flaggedStrikes = 0;
       // every strike's measures, for looking again at the thresholds (<part> strikes.tsv)
       QFile tsv(QFileInfo(clipDir).absolutePath() + "/" + clipPrefix + " strikes.tsv");
-      const bool tsvOk = tsv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
+      const bool tsvOk = !shareable && tsv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
       if (tsvOk)
             tsv.write("time\tmeasure\tbeat\tpitches\tlength\tbroad\tpitchLocal\trefBroad\trefPitchLocal\tweak\tflagged\tevents\n");
       for (size_t i = 0; i < r.strikeList.size(); ++i) {
@@ -688,7 +692,7 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
 
       // every note's own-partials checks (notes.tsv)
       QFile ntsv(QFileInfo(clipDir).absolutePath() + "/" + clipPrefix + " notes.tsv");
-      if (!r.noteChecks.empty() && ntsv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+      if (!shareable && !r.noteChecks.empty() && ntsv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
             ntsv.write("time\tlength\tpitch\tarticulation\tsustained\triseDb\trefRiseDb\tafterDb\trefAfterDb\tdeficitDb"
                        "\tcutBins\tdropDb\trefDropDb\tflagged\n");
             for (size_t i = 0; i < notes.size() && i < r.noteChecks.size(); ++i) {
@@ -890,7 +894,7 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       // the library's events as rendered (what the plug-ins get), for looking into a finding
       {
             QFile ev(report->folder + "/" + safeName(QFileInfo(path).completeBaseName()) + " events.tsv");
-            if (ev.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            if (!shareable && ev.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
                   ev.write("time\ttick\tslot\ttype\ta\tb\tswitch\n");
                   for (const auto& te : libEvents) {
                         const NPlayEvent& e = te.second;
@@ -937,7 +941,7 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
             };
 
       const QString clipDir = report->folder + "/clips";
-      int clipsLeft = options.maxClips;
+      int clipsLeft = shareable ? 0 : options.maxClips;
       const QString prefix = safeName(QFileInfo(path).completeBaseName());
       PV::Settings settings;
       if (!fileAudio.empty()) {
@@ -948,7 +952,7 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       QStringList partLines;
 
       // the mix: clipping, and the analysis when one part plays (or a file is checked)
-      QString wavMix = options.wav ? report->folder + "/" + prefix + " library.wav" : QString();
+      QString wavMix = options.wav && !shareable ? report->folder + "/" + prefix + " library.wav" : QString();
       Render mix;
       if (fileAudio.empty()) {
             mix = render(score.get(), libEvents, rate, state, vst, [](const NPlayEvent&) { return true; }, wavMix);
@@ -1078,6 +1082,7 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
       QDir().mkpath(folder);
       Report report;
       report.folder = folder;
+      shareable = options.shareable;
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       log(QString("playback verification of %1 score(s) with %2; report in %3").arg(files.size())
           .arg(library ? library->name : QString("no sound library")).arg(QDir::toNativeSeparators(folder)));
@@ -1097,6 +1102,7 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
       top["build"] = build;
       top["library"] = library ? library->name : QString();
       top["audio"] = options.audio.isEmpty() ? QString() : QFileInfo(options.audio).fileName();
+      top["shareable"] = shareable;
       QJsonObject totals;
       for (const auto& tt : report.totals)
             totals[tt.first] = tt.second;
@@ -1106,8 +1112,10 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
       top["seconds"] = t.elapsed() / 1000.0;
       top["scores"] = report.scores;
       QFile j(folder + "/report.json");
-      if (j.open(QIODevice::WriteOnly | QIODevice::Truncate))
+      if (j.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
             j.write(QJsonDocument(top).toJson());
+            j.close();                    // (before the zip reads it)
+            }
 
       QStringList head;
       head << QString("Playback verification %1: %2").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm"))
@@ -1124,8 +1132,10 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
            << "measured | the events at that moment on the part's slots (pedal, switches, dynamics …) [a clip of it]."
            << "Reading it: tools/playbackverify/read_verify_report.py <zip or folder>; VERIFY.md explains the checks.";
       QFile s(folder + "/summary.txt");
-      if (s.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+      if (s.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
             s.write((head + report.summary).join("\n").toUtf8() + "\n");
+            s.close();
+            }
       const QString z = zipFolder(folder);
       if (zip)
             *zip = z;

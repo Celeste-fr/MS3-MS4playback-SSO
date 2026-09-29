@@ -260,6 +260,7 @@ static QString verifyOut;                  // --verify-out
 static QString verifyAudio;                // --verify-audio
 static QString verifyLibrary;              // --verify-library
 static bool verifyWav = false;             // --verify-wav
+static bool verifyShareable = false;       // --verify-shareable
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -4789,6 +4790,7 @@ static bool verifyInBackground(const QStringList& argv)
       options.out = verifyOut;
       options.audio = verifyAudio;
       options.wav = verifyWav;
+      options.shareable = verifyShareable;
       QString folder;
       {
 #ifdef Q_OS_WIN
@@ -8790,6 +8792,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("verify-audio", "Use with --verify-playback: check this audio file (an export of "
                                           "the score made elsewhere) instead of rendering the library", "file"));
       parser.addOption(QCommandLineOption("verify-wav", "Use with --verify-playback: also keep the full renders"));
+      parser.addOption(QCommandLineOption("verify-shareable", "Use with --verify-playback: only report.json and summary.txt, no "
+                                          "audio clips and no lists of every note (a report on your own scores to post)"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8875,6 +8879,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             verifyAudio = parser.value("verify-audio");
             verifyLibrary = parser.value("verify-library");
             verifyWav = parser.isSet("verify-wav");
+            verifyShareable = parser.isSet("verify-shareable");
             }
       if (parser.isSet("E")) {
             MScore::noGui = true;

@@ -23,6 +23,9 @@
 //  verifyInBackground: its own setups copy, lock, log). tools/playbackverify/read_verify_report.py
 //  reads it; VERIFY.md explains it for the owner and for agents.
 //
+//  --verify-shareable: only report.json and summary.txt (the flagged notes and their context): no
+//  clips, no lists of every note and event, so a report on the owner's own music can be posted.
+//
 //  --verify-audio <file>: no rendering with the library; the file (an export of the score made
 //  elsewhere, e.g. on the owner's PC) is checked instead, against the same score's events.
 //
@@ -48,6 +51,7 @@ class PlaybackVerifier {
             QString out;                  // where the report folder goes (default: Documents/MuseScore Sound Library Check)
             QString audio;                // --verify-audio: an export to check instead of rendering
             bool wav { false };           // also the full renders
+            bool shareable { false };     // only report.json and summary.txt: no clips, no note lists
             int maxClips { 40 };          // per score
             };
       static QStringList scoreFiles(const QStringList& inputs);
