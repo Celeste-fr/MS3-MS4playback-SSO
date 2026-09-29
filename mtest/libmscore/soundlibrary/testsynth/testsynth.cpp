@@ -12,6 +12,7 @@
 //  Each held note plays at velocity * level, with a timbre of the articulation that was
 //  current at its note on (the articulation check listens for it), like a UACC patch:
 //    1-29, 31-89   harmonics of their own; 40-60 short (decaying), 70-80 trills (tremolo)
+//    62            short with a sharp bright attack: a 6 ms click of high harmonics, then as 40-60
 //    25            like a harmonics patch: -66 dB under pitch 72 (no sample there)
 //    26            very soft (-40 dB), like a super sul tasto
 //    30            plays nothing
@@ -93,6 +94,15 @@ static float timbre(const Voice& v, double sampleRate)
             s *= 0.01;
       if (v.articulation >= 40 && v.articulation <= 60)
             s *= std::exp(-t / 0.1);
+      else if (v.articulation == 62) {
+            s *= std::exp(-t / 0.1);
+            if (t < 0.006) {              // the attack's click: harmonics 24-40, loud
+                  double c = 0;
+                  for (int k = 24; k <= 40; ++k)
+                        c += std::sin(k * v.phase + k * 1.3);
+                  s += 8.0 * c / 17 * (1 - t / 0.006);
+                  }
+            }
       else if (v.articulation >= 70 && v.articulation <= 80)
             s *= 0.6 + 0.4 * std::sin(2 * M_PI * 8 * t);
       return float(s * 0.25 * v.gain);

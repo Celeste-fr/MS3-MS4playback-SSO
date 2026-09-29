@@ -11,6 +11,10 @@
 #include <cmath>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <functional>
 #include <QPainter>
 
 #include "audio/midi/event.h"
@@ -58,6 +62,7 @@ class TestSoundLibrary : public QObject, public MTest
       void spitfireMap();
       void automation();
       void perceivedLoudness();
+      void attackSalience();
       void noteSecondsWritten();
       void dynamicsCalibration();
       void heldOnPerformance();
@@ -2271,6 +2276,21 @@ void TestSoundLibrary::dynamicsCheck()
             for (size_t i = 1; i < d.curve.size(); ++i)
                   QVERIFY(d.curve[i].second > d.curve[i - 1].second);
             }
+      for (const AC::DynamicsResult& d : r) {
+            QCOMPARE(int(d.attack.size()), 8);
+            QCOMPARE(int(d.riseMs.size()), 8);
+            }
+      // the attack's salience (attackSalience): 62, a short with a click of high harmonics, stands out
+      // beyond its loudness more than 50, a plain short (both decaying alike)
+      {
+            const std::vector<AC::DynamicsResult> sh = AC::dynamics(p.get(), { 50, 62 }, { 67, 67 }, { false, false }, s);
+            QCOMPARE(int(sh.size()), 2);
+            QCOMPARE(int(sh[0].attack.size()), 8);
+            auto beyond = [](const AC::DynamicsResult& d, size_t k) { return d.attack[k].second - d.perceived[k].second; };
+            for (size_t k = 1; k < 8; ++k)
+                  QVERIFY2(beyond(sh[1], k) > beyond(sh[0], k) + 2.0,
+                           qPrintable(QString("%1 vs %2 at %3").arg(beyond(sh[1], k)).arg(beyond(sh[0], k)).arg(sh[0].attack[k].first)));
+      }
       // 25 plays nothing at 67 (a harmonics patch): measured an octave up; 30 is silent everywhere
       const std::vector<AC::DynamicsResult> r2 = AC::dynamics(p.get(), { 25, 30 }, { 67, 67 }, { false, false }, s);
       QCOMPARE(int(r2.size()), 2);
@@ -2523,6 +2543,84 @@ void TestSoundLibrary::perceivedLoudness()
             noise.push_back(0), noise.push_back(0);
       const double n = AC::perceivedLoudnessDb(noise, sr);
       QVERIFY2(n - a > 5.0, qPrintable(QString::number(n - a)));
+      }
+
+//---------------------------------------------------------
+//   attackSalience
+//    ArticulationCheck::attackSalience: a steady tone comes out about as loud as perceivedLoudnessDb says;
+//    a sharp bright click (then a decaying tone) stands out beyond its loudness far more than a tone
+//    rising softly, at one energy (the loudest 50 ms); their rise times
+//---------------------------------------------------------
+
+void TestSoundLibrary::attackSalience()
+      {
+      using AC = ArticulationCheck;
+      const double sr = 48000;
+      auto clipOf = [sr](std::function<double(double)> f, double seconds) {
+            std::vector<float> c;
+            const int n = int(sr * seconds);
+            for (int i = 0; i < n; ++i) {
+                  const float v = float(f(i / sr));
+                  c.push_back(v);
+                  c.push_back(v);
+                  }
+            for (int i = 0; i < int(sr * 0.3); ++i)
+                  c.push_back(0), c.push_back(0);
+            return c;
+            };
+      auto loudest50 = [sr](const std::vector<float>& c) {       // as the dynamics check (Player::play)
+            const size_t win = size_t(2 * sr * 0.05);
+            double loudest = 0;
+            for (size_t from = 0; from + win <= c.size(); from += win / 2) {
+                  double sum = 0;
+                  for (size_t i = from; i < from + win; ++i)
+                        sum += double(c[i]) * c[i];
+                  loudest = std::max(loudest, sum / win);
+                  }
+            return loudest;
+            };
+      auto scaled = [](std::vector<float> c, double gain) { for (float& v : c) v = float(v * gain); return c; };
+      // steady 1 kHz: all three alike (sharpness weighs nothing under 15.8 Bark but the filters' high skirts)
+      const std::vector<float> steady = clipOf([](double t) { return 0.1 * std::sin(2 * M_PI * 1000 * t); }, 1.0);
+      const double ps = AC::perceivedLoudnessDb(steady, sr);
+      const AC::Attack as = AC::attackSalience(steady, sr);
+      QVERIFY2(std::fabs(as.fastDb - ps) < 2.0, qPrintable(QString("%1 vs %2").arg(as.fastDb).arg(ps)));
+      QVERIFY2(std::fabs(as.salienceDb - as.fastDb) < 1.0, qPrintable(QString::number(as.salienceDb - as.fastDb)));   // (skirts)
+      // two shorts decaying alike (1 kHz, 100 ms), at one energy (the loudest 50 ms): one with a click (3 ms
+      // of 7-12 kHz), one rising softly (30 ms); and a held tone rising softly (80 ms)
+      const std::vector<float> click0 = clipOf([](double t) {
+            double c = 0;
+            if (t < 0.003)
+                  for (int k = 7; k <= 12; ++k)
+                        c += std::sin(2 * M_PI * 1000 * k * t + k);
+            return 0.5 * c / 6 * (1 - t / 0.003) + 0.1 * std::sin(2 * M_PI * 1000 * t) * std::exp(-t / 0.1);
+            }, 0.5);
+      const std::vector<float> softShort = clipOf([](double t) {
+            const double rise = t < 0.03 ? 0.5 - 0.5 * std::cos(M_PI * t / 0.03) : 1.0;
+            return 0.1 * rise * std::sin(2 * M_PI * 1000 * t) * std::exp(-t / 0.1);
+            }, 0.5);
+      const std::vector<float> held = clipOf([](double t) {
+            const double rise = t < 0.08 ? 0.5 - 0.5 * std::cos(M_PI * t / 0.08) : 1.0;
+            return 0.1 * rise * std::sin(2 * M_PI * 1000 * t);
+            }, 1.0);
+      const std::vector<float> click = scaled(click0, std::sqrt(loudest50(softShort) / loudest50(click0)));
+      QVERIFY(std::fabs(10 * std::log10(loudest50(click) / loudest50(softShort))) < 0.01);
+      const AC::Attack ac = AC::attackSalience(click, sr);
+      const AC::Attack as2 = AC::attackSalience(softShort, sr);
+      const AC::Attack ah = AC::attackSalience(held, sr);
+      const double beyondClick = ac.salienceDb - AC::perceivedLoudnessDb(click, sr);
+      const double beyondSoft = as2.salienceDb - AC::perceivedLoudnessDb(softShort, sr);
+      const double beyondHeld = ah.salienceDb - AC::perceivedLoudnessDb(held, sr);
+      // (measured: +23, +3.6, +0.5 dB)
+      QVERIFY2(beyondClick > beyondSoft + 6.0, qPrintable(QString("%1 vs %2").arg(beyondClick).arg(beyondSoft)));
+      QVERIFY2(beyondSoft > beyondHeld + 1.0, qPrintable(QString("%1 vs %2").arg(beyondSoft).arg(beyondHeld)));   // (short: less integrated)
+      QVERIFY2(std::fabs(beyondHeld) < 1.5, qPrintable(QString::number(beyondHeld)));
+      QVERIFY2(ac.salienceDb > as2.salienceDb + 6.0, qPrintable(QString("%1 vs %2").arg(ac.salienceDb).arg(as2.salienceDb)));
+      QVERIFY2(ac.salienceDb - ac.fastDb > 3.0, qPrintable(QString::number(ac.salienceDb - ac.fastDb)));     // (bright: weighed up)
+      QVERIFY2(ac.riseMs >= 0 && ac.riseMs < 10, qPrintable(QString::number(ac.riseMs)));
+      QVERIFY2(as2.riseMs > ac.riseMs + 10, qPrintable(QString::number(as2.riseMs)));
+      QVERIFY2(ah.riseMs > 40, qPrintable(QString::number(ah.riseMs)));
+      QCOMPARE(AC::attackSalience({}, sr).salienceDb, -200.0);
       }
 
 //---------------------------------------------------------
