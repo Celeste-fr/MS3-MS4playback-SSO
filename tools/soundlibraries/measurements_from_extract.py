@@ -130,9 +130,11 @@ def main():
             if not name or "controllers" not in j:
                 continue
             c2c = j.get("controllersToControls")
-            if c2c and any(m.get("control") for m in c2c) and (name not in links or where > links[name][0]):
+            # (only links from window cells: the box-based ones of the owner's run of 2026-09-28 were wrong)
+            cells = "noiseCells" in (j.get("controllers") or {})
+            if cells and c2c and any(m.get("control") for m in c2c) and (name not in links or where > links[name][0]):
                 links[name] = (where, { str(m["cc"]): m.get("control") for m in c2c })
-            if j.get("plan") == "links":
+            if j.get("plan") == "links" and "pitchBend" not in j:
                 continue        # (the rest was measured before; a links run's numbers are of a few controllers only)
             st = status(j)
             if name not in best or (RANK[st], where) > (RANK[best[name][0]], best[name][1]):

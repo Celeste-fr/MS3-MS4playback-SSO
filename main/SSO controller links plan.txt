@@ -8,15 +8,12 @@ Basses	pitch=39	cc=1:104,7:96,10:66,11:125,23:126,111:127	params=Dynamics;Vibrat
 Basses - Decorative techniques	pitch=39	cc=1:100,7:101,10:64,11:127,22:0,23:127,64:32,103:100,111:127	params=Dynamics;Release;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Mic 5 level;Articulation Controller;Mic Mix Distance
 Basses - Performance	pitch=39	cc=1:101,7:127,10:64,11:126,23:127,103:102,111:127	params=Dynamics;Mute;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Mic 5 level;Articulation Controller;Mic Mix Distance
 Bassoon Solo	pitch=60	cc=1:87,7:101,10:64,11:127,22:0,23:127,103:123,111:112	params=Dynamics;Vibrato;Release;Tightness;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
-Brass - Bass Trombone Solo - Fall	all
+Brass - Bass Trombone Solo - Fall	pitch=48	cc=7:100,10:66,11:127,23:66,24:126,111:127	params=Dynamics;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Brass - Bass Trombone Solo - Long	all
 Brass - Bass Trombone Solo - Long Cuivre	pitch=47	cc=1:100,7:101,10:64,11:127,22:47,23:127,64:40,103:56,111:127	params=Dynamics;Release;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
-Brass - Bass Trombone Solo - Multitongue	pitch=53	cc=1:100,7:101,10:64,11:127,22:0,23:127,24:0,25:0,103:99,108:112,111:127	params=Dynamics;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Brass - Bass Trombone Solo - Short Marcato	pitch=47	cc=7:100,10:65,11:124,23:125,111:124	params=Dynamics;Tightness;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Brass - Bass Trombones a2 - FX Gliss	pitch=48	cc=7:101,10:64,11:127,23:127,24:0,111:127	params=Dynamics;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Brass - Bass Trombones a2 - Long	all
-Brass - Cimbassi a2 - Long	all
-Brass - Cimbassi a2 - Long Alt	all
 Brass - Horn Solo - Legato	pitch=50	cc=1:100,7:101,10:64,11:127,22:0,23:127,24:0,25:0,103:100,111:127,129:64	params=Dynamics;Speed;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Brass - Horns a2 - Legato	pitch=54	cc=1:100,7:101,10:64,11:127,22:9,23:127,24:0,103:100,111:127,129:64	params=Dynamics;Speed;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Brass - Tenor Trombone Solo - Long	pitch=49	cc=1:100,7:101,10:60,11:111,103:111,111:100	params=Dynamics;Vibrato;Release;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
@@ -44,8 +41,7 @@ Curated Ensembles - Brass - Slow Super Choir Long	pitch=56	cc=1:100,7:101,10:64,
 Curated Ensembles - Brass - Super Choir Short	pitch=56	cc=7:100,10:62,11:127,23:125,66:48,111:121	params=Dynamics;Tightness;Reverb;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance
 Curated Ensembles - Woodwind - Slow Orchestrator Long	pitch=68	cc=1:100,7:101,10:64,11:127,22:1,23:127,64:53,103:100,111:127	params=Dynamics;Release;Reverb;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance
 Curated String Ensembles	pitch=61	cc=1:100,7:101,10:64,11:127,22:1,23:127,24:9,64:40,66:65,103:100,111:127	params=Dynamics;Vibrato;Release;Tightness;Reverb;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance
-Curated Tutti Ensembles	pitch=58	cc=1:100,7:101,10:64,11:127,22:1,23:127,24:0,64:34,66:64,103:100,111:127	params=Dynamics;Vibrato;Release;Tightness;Reverb;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance
-Curated Woodwind Ensembles	all
+Curated Woodwind Ensembles	pitch=64	cc=1:101,7:101,10:64,11:127,22:0,23:1,24:0,66:127,103:96,111:127	params=Dynamics;Vibrato;Release;Tightness;Reverb;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance
 Drums - High	pitch=60	cc=7:125,10:62,11:127,23:127,111:125	params=Dynamics;Releases;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level
 Ensembles - Core techniques	pitch=61	cc=1:100,7:101,10:64,11:126,23:127,103:100,111:126	params=Dynamics;Vibrato;Release;Tightness;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Ensembles - Decorative techniques	pitch=59	cc=1:100,7:101,10:64,11:127,16:127,22:0,23:127,24:1,25:0,64:24,103:100,104:127,111:127	params=Dynamics;Vibrato;Release;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
@@ -60,11 +56,9 @@ Motif Horns a4	pitch=60	cc=1:100,7:101,10:64,11:127,22:106,23:127,24:0,64:24,103
 Motif Trumpets a3	pitch=60	cc=1:100,7:101,10:64,11:127,22:31,23:126,24:15,25:0,64:45,103:100,111:127	params=Dynamics;Release;Tightness;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Oboes a2	pitch=73	cc=1:100,7:101,10:64,11:127,21:126,22:0,23:127,24:0,25:0,64:16,103:100,104:126,111:127	params=Dynamics;Vibrato;Release;Tightness;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Other - Harp - Bisbigliando	pitch=73	cc=1:100,7:127,10:72,11:127,22:0,23:127,24:0,40:84,41:78,42:67,43:74,44:76,45:66,46:64,64:8,103:100,111:127	params=Dynamics;Releases;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance;Harp Pedal 1;Harp Pedal 2;Harp Pedal 3;Harp Pedal 4;Harp Pedal 5;Harp Pedal 6;Harp Pedal 7
-Other - Harp - Slid	pitch=67	cc=7:123,10:48,11:111,23:127,111:112	params=Dynamics;Releases;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance;Harp Pedal 1;Harp Pedal 2;Harp Pedal 3;Harp Pedal 4;Harp Pedal 5;Harp Pedal 6;Harp Pedal 7
-Other - Harp - Slid CPU-friendly	all
+Other - Harp - Slid CPU-friendly	pitch=67	cc=7:127,10:76,11:127,23:126,111:127	params=Dynamics;Releases;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance;Harp Pedal 1;Harp Pedal 2;Harp Pedal 3;Harp Pedal 4;Harp Pedal 5;Harp Pedal 6;Harp Pedal 7
 Other - Harp glissandi	pitch=67	cc=7:127,10:72,11:127,23:127,111:127	params=Direction;Speed;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Articulation Controller;Mic Mix Distance;Harp Pedal 1;Harp Pedal 2;Harp Pedal 3;Harp Pedal 4;Harp Pedal 5;Harp Pedal 6;Harp Pedal 7
 Percussion - Drums - High - Bongos	pitch=72	cc=7:125,10:62,11:125,23:125,24:112,111:127,129:64	params=Dynamics;Releases;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level
-Percussion - Drums - Low - Field Drum	all
 Percussion - Unpitched - Wood - Woodblocks	pitch=48	cc=1:16,3:96,7:127,10:62,11:125,14:32,18:80,20:32,23:126,24:127,28:112,30:68,35:112,37:64,41:112,43:68,47:112,49:64,53:112,55:68,59:112,61:64,65:112,67:68,71:111,73:64,77:112,79:64,83:112,85:64,89:112,91:68,95:112,97:68,101:111,103:64,107:112,109:68,111:119,113:112,115:68,119:111,129:64	params=Dynamics;Releases;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level
 Piccolo	pitch=89	cc=7:100,10:64,11:125,23:126,111:127	params=Dynamics;Vibrato;Release;Tightness;Variation;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Piccolo Flute - Performance	pitch=87	cc=1:100,7:127,10:64,11:126,21:127,22:3,23:126,24:8,25:3,103:104,104:108,111:124,129:64	params=Dynamics;Vibrato;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
@@ -86,7 +80,6 @@ Strings - Ensembles - Short 0'5	pitch=59	cc=7:98,10:70,11:125,23:121,111:122	par
 Strings - Ensembles - Short Spiccato CS	pitch=59	cc=7:101,10:60,11:121,18:32,23:127,28:8,31:80,35:80,38:70,41:78,44:80,47:80,50:80,53:80,56:80,59:16,62:16,65:8,68:80,71:72,74:80,77:8,80:80,83:16,86:16,89:16,92:8,95:6,98:8,101:8,104:80,107:80,110:8,111:116,112:106,115:42,118:98,129:64	params=Dynamics;Tightness;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Strings - Ensembles - Tremolo	pitch=59	cc=1:100,7:101,10:64,11:127,22:0,23:127,25:0,64:44,103:100,111:127	params=Dynamics;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
 Strings - Ensembles - Trill (minor 2nd)	pitch=60	cc=1:100,7:101,10:64,11:127,22:0,23:127,24:0,64:24,103:100,111:127	params=Dynamics;Release;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Articulation Controller;Mic Mix Distance
-Strings - Violins 1 - Trill (Minor 2nd)	all
 Strings - Violins 2 - Long CS Sul Pont	pitch=76	cc=1:100,7:101,10:64,11:127,22:0,23:127,24:0,64:52,103:100,111:127	params=Dynamics;Vibrato;Release;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Mic 5 level;Articulation Controller;Mic Mix Distance
 Strings - Violins 2 - Short 0'5	pitch=76	cc=7:100,10:64,11:126,23:125,111:124	params=Dynamics;Release;Tightness;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Mic 5 level;Articulation Controller;Mic Mix Distance
 Strings - Violins 2 - Short Spiccato	pitch=76	cc=7:100,10:72,11:127,23:123,111:119	params=Dynamics;Tightness;Expression;Mic 1 level;Mic 2 level;Mic 3 level;Mic 4 level;Mic 5 level;Articulation Controller;Mic Mix Distance

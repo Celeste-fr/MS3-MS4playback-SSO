@@ -44,6 +44,7 @@
 #include <vector>
 
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QRect>
 #include <QString>
@@ -110,6 +111,11 @@ class PluginExtract {
       // for the tests and the sheets
       static int differingPixels(const QImage& a, const QImage& b);
       static QRect changedRect(const QImage& a, const QImage& b);
+      static const int CELL = 16;         // changedCells' cell, pixels
+      static QJsonArray changedCells(const QImage& a, const QImage& b);
+      // which named control each controller moves: [{cc, control (null: none), id, by, cells}] from controllers()'
+      // and parameters()' results (their window cells, without those that change by themselves)
+      static QJsonArray controlsMoved(const QJsonObject& controllers, const QJsonObject& parameters);
       static Level level(const std::vector<float>& interleavedStereo);
 
       // how far the pitch of "shifted" is from "reference" (both interleaved stereo, the same

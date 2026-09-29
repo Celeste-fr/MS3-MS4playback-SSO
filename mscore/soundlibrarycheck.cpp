@@ -960,7 +960,9 @@ QSet<QString> ArticulationCheckDialog::linkedBefore() const
                   if (!in.open(QIODevice::ReadOnly))
                         continue;
                   const QJsonObject j = QJsonDocument::fromJson(in.readAll()).object();
+                  // (with window cells: the box-based links of the owner's run of 2026-09-28 were wrong, measured again)
                   if (j.value("plan").toString() == "links" && j.value("sounds").toBool() && j.contains("controllersToControls")
+                      && j.value("controllers").toObject().contains("noiseCells")
                       && !j.value("controllers").toObject().contains("skippedAfterCrash")
                       && !j.value("parameters").toObject().contains("skippedAfterCrash"))
                         done.insert(j.value("patch").toString());
@@ -2751,51 +2753,10 @@ static int namedControls(const QJsonObject& d, const QJsonObject& empty)
       return n;
       }
 
-// which named control each controller moves: a controller's window region against each
-// parameter's (PluginExtract's effects), the most overlap (intersection over union) over 0.3
+// which named control each controller moves: PluginExtract::controlsMoved
 static QJsonArray controllersToControls(const QJsonObject& controllers, const QJsonObject& parameters)
       {
-      auto rect = [](const QJsonObject& e) {
-            const QJsonArray r = e.value("region").toArray();
-            return r.size() == 4 ? QRect(r[0].toInt(), r[1].toInt(), r[2].toInt(), r[3].toInt()) : QRect();
-            };
-      QJsonArray out;
-      for (const QJsonValue& cv : controllers.value("effects").toArray()) {
-            const QJsonObject c = cv.toObject();
-            const QRect cr = rect(c);
-            QJsonObject m;
-            m["cc"] = c.value("cc");
-            double best = 0;
-            for (const QJsonValue& pv : parameters.value("effects").toArray()) {
-                  const QJsonObject p = pv.toObject();
-                  // (a parameter that the controller's own try changed: that is the answer)
-                  for (const char* key : { "parametersLowToHigh", "parametersBeforeToLow" })
-                        for (const QJsonValue& x : c.value(key).toArray())
-                              if (x.toObject().value("id") == p.value("id")) {
-                                    best = 2;
-                                    m["control"] = p.value("title");
-                                    m["id"] = p.value("id");
-                                    m["by"] = "parameter";
-                                    }
-                  const QRect pr = rect(p);
-                  if (cr.isNull() || pr.isNull())
-                        continue;
-                  const QRect i = cr & pr;
-                  const double inter = double(i.width()) * i.height();
-                  const double uni = double(cr.width()) * cr.height() + double(pr.width()) * pr.height() - inter;
-                  const double iou = uni > 0 ? inter / uni : 0;
-                  if (iou > 0.3 && iou > best) {
-                        best = iou;
-                        m["control"] = p.value("title");
-                        m["id"] = p.value("id");
-                        m["by"] = QString("window %1").arg(std::round(iou * 100) / 100);
-                        }
-                  }
-            if (!m.contains("control"))
-                  m["control"] = QJsonValue();
-            out.append(m);
-            }
-      return out;
+      return PluginExtract::controlsMoved(controllers, parameters);
       }
 
 #endif

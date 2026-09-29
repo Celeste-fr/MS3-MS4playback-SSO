@@ -79,6 +79,115 @@ QRect PluginExtract::changedRect(const QImage& a, const QImage& b)
       return r.isNull() ? r : r.adjusted(-16, -16, 16, 16) & x.rect();
       }
 
+// the cells (CELL x CELL pixels, numbered by row: row * columns + column) where a and b differ: where a change is,
+// pixel by pixel, not one box around all of it (Kontakt's CPU and voice meters at the window's top move with every
+// note, and a box around them and a slider takes in most of the window: the owner's links run of 2026-09-28)
+QJsonArray PluginExtract::changedCells(const QImage& a, const QImage& b)
+      {
+      QJsonArray cells;
+      if (a.isNull() || b.isNull() || a.size() != b.size())
+            return cells;
+      const QImage x = a.convertToFormat(QImage::Format_RGB32);
+      const QImage y = b.convertToFormat(QImage::Format_RGB32);
+      const int columns = (x.width() + CELL - 1) / CELL;
+      std::vector<char> changed(size_t(columns * ((x.height() + CELL - 1) / CELL)), 0);
+      for (int row = 0; row < x.height(); ++row) {
+            const QRgb* p = reinterpret_cast<const QRgb*>(x.constScanLine(row));
+            const QRgb* q = reinterpret_cast<const QRgb*>(y.constScanLine(row));
+            for (int col = 0; col < x.width(); ++col)
+                  if (pixelDiffers(p[col], q[col]))
+                        changed[size_t((row / CELL) * columns + col / CELL)] = 1;
+            }
+      for (size_t i = 0; i < changed.size(); ++i)
+            if (changed[i])
+                  cells.append(int(i));
+      return cells;
+      }
+
+//---------------------------------------------------------
+//   controlsMoved
+//    which named control each controller moves: the window cells a controller's 0 -> 127 changed against those each
+//    parameter's 0 -> 1 changed (PluginExtract::changedCells), without the cells that change by themselves (the
+//    baselines' noiseCells, and any cell more than 40 % of the tries changed: Kontakt's CPU and voice meters move with
+//    every note), the most overlap (intersection over union) over 0.3; or a parameter the controller's own try changed.
+//    (It compared one box around each change until 2026-09-29: the meters made every box most of the window, and the
+//    owner's links run matched nonsense, CC 1 -> Mic 5 level)
+//---------------------------------------------------------
+
+QJsonArray PluginExtract::controlsMoved(const QJsonObject& controllers, const QJsonObject& parameters)
+      {
+      auto cellsOf = [](const QJsonObject& e) {
+            std::set<int> c;
+            for (const QJsonValue& v : e.value("cells").toArray())
+                  c.insert(v.toInt());
+            return c;
+            };
+      const QJsonArray ce = controllers.value("effects").toArray();
+      const QJsonArray pe = parameters.value("effects").toArray();
+      std::set<int> noise;
+      for (const QJsonObject* o : { &controllers, &parameters })
+            for (const QJsonValue& v : o->value("noiseCells").toArray())
+                  noise.insert(v.toInt());
+      std::map<int, int> seen;
+      int tries = 0;
+      for (const QJsonArray* list : { &ce, &pe })
+            for (const QJsonValue& v : *list) {
+                  const std::set<int> c = cellsOf(v.toObject());
+                  tries += !c.empty();
+                  for (int x : c)
+                        ++seen[x];
+                  }
+      if (tries >= 5)
+            for (const auto& s : seen)
+                  if (s.second * 10 > tries * 4)
+                        noise.insert(s.first);
+      auto clean = [&](const QJsonObject& e) {
+            std::set<int> c;
+            for (int x : cellsOf(e))
+                  if (!noise.count(x))
+                        c.insert(x);
+            return c;
+            };
+      QJsonArray out;
+      for (const QJsonValue& cv : ce) {
+            const QJsonObject c = cv.toObject();
+            const std::set<int> cc = clean(c);
+            QJsonObject m;
+            m["cc"] = c.value("cc");
+            double best = 0;
+            for (const QJsonValue& pv : pe) {
+                  const QJsonObject p = pv.toObject();
+                  // (a parameter that the controller's own try changed: that is the answer)
+                  for (const char* key : { "parametersLowToHigh", "parametersBeforeToLow" })
+                        for (const QJsonValue& x : c.value(key).toArray())
+                              if (x.toObject().value("id") == p.value("id")) {
+                                    best = 2;
+                                    m["control"] = p.value("title");
+                                    m["id"] = p.value("id");
+                                    m["by"] = "parameter";
+                                    }
+                  const std::set<int> pc = clean(p);
+                  if (cc.empty() || pc.empty())
+                        continue;
+                  int inter = 0;
+                  for (int x : cc)
+                        inter += pc.count(x);
+                  const double iou = double(inter) / double(cc.size() + pc.size() - inter);
+                  if (iou > 0.3 && iou > best) {
+                        best = iou;
+                        m["control"] = p.value("title");
+                        m["id"] = p.value("id");
+                        m["by"] = QString("window cells %1").arg(std::round(iou * 100) / 100);
+                        }
+                  }
+            if (!m.contains("control"))
+                  m["control"] = QJsonValue();
+            m["cells"] = int(cc.size());
+            out.append(m);
+            }
+      return out;
+      }
+
 //---------------------------------------------------------
 //   level
 //---------------------------------------------------------
@@ -441,6 +550,11 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
       const QImage g2 = grab();
       const int pixelNoise = g1.isNull() ? 0 : differingPixels(g1, g2);
       const int pixelThreshold = std::max(30, 3 * pixelNoise);
+      if (!g1.isNull()) {
+            out["windowSize"] = QJsonArray { g1.width(), g1.height() };
+            out["cellSize"] = CELL;
+            out["noiseCells"] = changedCells(g1, g2);
+            }
       const double soundNoise = levelDistance(a, b);
       const double soundThreshold = std::max(1.5, 3 * soundNoise);
       // a sound averaged over some notes (round robins differ in level): the patch as it is (a
@@ -568,6 +682,8 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             const QRect r = window ? changedRect(gLow, gHigh) : QRect();
             if (!r.isNull())
                   e["region"] = QJsonArray { r.x(), r.y(), r.width(), r.height() };
+            if (window)
+                  e["cells"] = changedCells(gLow, gHigh);
             e["levelDb"] = QJsonArray { round1(l0.db), round1(lLow.db), round1(lHigh.db) };
             e["brightnessDb"] = QJsonArray { round1(l0.brightness), round1(lLow.brightness), round1(lHigh.brightness) };
             e["balanceDb"] = QJsonArray { round1(l0.balance), round1(lLow.balance), round1(lHigh.balance) };
@@ -767,7 +883,10 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
                   }))
             return stop();
       out["selfChangingParameters"] = c.selfChangingList();
-      const int pixelThreshold = std::max(30, 3 * (g1.isNull() ? 0 : differingPixels(g1, grab())));
+      const QImage g2 = g1.isNull() ? QImage() : grab();
+      const int pixelThreshold = std::max(30, 3 * (g1.isNull() ? 0 : differingPixels(g1, g2)));
+      if (!g1.isNull())
+            out["noiseCells"] = changedCells(g1, g2);
       const double soundThreshold = std::max(1.5, 3 * levelDistance(a, b));
 
       QJsonArray effects;
@@ -831,6 +950,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
             const QRect r = window ? changedRect(gLow, gHigh) : QRect();
             if (!r.isNull())
                   e["region"] = QJsonArray { r.x(), r.y(), r.width(), r.height() };
+            if (window)
+                  e["cells"] = changedCells(gLow, gHigh);
             e["levelDb"] = QJsonArray { round1(lLow.db), round1(lHigh.db) };
             e["brightnessDb"] = QJsonArray { round1(lLow.brightness), round1(lHigh.brightness) };
             e["balanceDb"] = QJsonArray { round1(lLow.balance), round1(lHigh.balance) };

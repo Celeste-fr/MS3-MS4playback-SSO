@@ -959,6 +959,17 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   a group's other patches the links its measured ones agree on, for the controllers each changes (`linksFrom`), and
   lists a group whose patches disagree ("links differ": measure it with `--all`). The plan is a file next to the .bat:
   a new one needs no new build. Tried with made-up links JSONs only.
+  **The owner's links run (build 226, 2026-09-28 20:14 - 09-29 01:00, all 700 on the first plan): 2 crashes in 4 hours**
+  (121 in the fifth run, without the window): so Kontakt's window open is what keeps it from crashing, as the minidump
+  suggested. The 11 "all" patches came out complete (now 668 complete, 28 not put back, 4 with cc 23 left out). **Its
+  links were wrong**: 83 % of the changed regions started at the window's top, Kontakt's CPU and voice meters, which move
+  with every note, so every box was most of the window and the matching said CC 1 -> Mic 5 level, CC 23 -> Mic 1 level.
+  Now each change is kept as its 16-pixel cells (`PluginExtract::changedCells`, JSON `cells`, `noiseCells` from the
+  baselines, `cellSize`, `windowSize`), and `PluginExtract::controlsMoved` (was `controllersToControls` in
+  soundlibrarycheck.cpp) leaves out the cells that change by themselves (the baselines', and any cell more than 40 % of
+  a patch's tries changed) and matches by the cells' overlap. `linkedBefore` counts only JSONs with `noiseCells`, and
+  `measurements_from_extract.py` takes links only from them. Test `controlsMoved` (a Kontakt-like window: meters that
+  change every time, five sliders). Untried with Kontakt: the next links run (2 a group) is its first try.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

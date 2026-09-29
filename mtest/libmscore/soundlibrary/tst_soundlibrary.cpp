@@ -78,6 +78,7 @@ class TestSoundLibrary : public QObject, public MTest
       void articulationCheck();
       void scanPictures();
       void drumIcons();
+      void controlsMoved();
       void pluginDescribe();
       void pluginExtract();
       void pitchShift();
@@ -1631,6 +1632,69 @@ void TestSoundLibrary::articulationCheck()
       s.switchCC = 32;
       r = AC::run(p.get(), { 1, 2, 42, 71 }, s, [](int done, int) { return done < 2; });
       QVERIFY(r.cancelled);
+      }
+
+//---------------------------------------------------------
+//   controlsMoved
+//    which named control a controller moves, from the window: a Kontakt-like window whose meters at the top change
+//    with every note and whose five sliders each move with one parameter; the controllers move sliders 1, 3 and 4.
+//    The old box-based matching took the meters in and matched every controller to the same slider (the owner's
+//    links run of 2026-09-28)
+//---------------------------------------------------------
+
+void TestSoundLibrary::controlsMoved()
+      {
+      int frame = 0;
+      auto window = [&](int slider, int value) {
+            QImage img(1024, 656, QImage::Format_RGB32);
+            img.fill(QColor(40, 40, 40));
+            QPainter p(&img);
+            // the meters: another reading each time
+            p.fillRect(QRect(300, 4, 40 + (frame * 37) % 300, 12), QColor(200, 200, 60));
+            ++frame;
+            // the sliders: 5 at y 150 … 550, each 700 px long; the one moved at value, the others at the middle
+            for (int k = 0; k < 5; ++k) {
+                  const int v = k == slider ? value : 64;
+                  p.fillRect(QRect(300, 150 + k * 100, 700, 20), QColor(80, 80, 80));
+                  p.fillRect(QRect(300, 150 + k * 100, 700 * v / 127, 20), QColor(90, 160, 220));
+                  }
+            return img;
+            };
+      QJsonObject controllers, parameters;
+      controllers["noiseCells"] = PluginExtract::changedCells(window(-1, 0), window(-1, 0));
+      parameters["noiseCells"] = PluginExtract::changedCells(window(-1, 0), window(-1, 0));
+      QJsonArray pe;
+      const char* titles[5] = { "Dynamics", "Vibrato", "Release", "Tightness", "Mic 1 level" };
+      for (int k = 0; k < 5; ++k) {
+            const QImage lo = window(k, 0), hi = window(k, 127);
+            QRect box = PluginExtract::changedRect(lo, hi);
+            QVERIFY(box.top() < 20);                  // (the meters are in every box)
+            QJsonObject e;
+            e["id"] = k;
+            e["title"] = titles[k];
+            e["cells"] = PluginExtract::changedCells(lo, hi);
+            e["region"] = QJsonArray { box.x(), box.y(), box.width(), box.height() };
+            pe.append(e);
+            }
+      parameters["effects"] = pe;
+      QJsonArray ce;
+      const int moves[3][2] = { { 1, 0 }, { 21, 1 }, { 23, 4 } };      // cc, slider
+      for (const auto& m : moves) {
+            QJsonObject e;
+            e["cc"] = m[0];
+            e["cells"] = PluginExtract::changedCells(window(m[1], 0), window(m[1], 127));
+            ce.append(e);
+            }
+      QJsonObject noWindow;                     // a controller that changes only the sound
+      noWindow["cc"] = 7;
+      ce.append(noWindow);
+      controllers["effects"] = ce;
+      const QJsonArray links = PluginExtract::controlsMoved(controllers, parameters);
+      QCOMPARE(links.size(), 4);
+      QCOMPARE(links[0].toObject().value("control").toString(), QString("Dynamics"));
+      QCOMPARE(links[1].toObject().value("control").toString(), QString("Vibrato"));
+      QCOMPARE(links[2].toObject().value("control").toString(), QString("Mic 1 level"));
+      QVERIFY(links[3].toObject().value("control").isNull());
       }
 
 //---------------------------------------------------------
