@@ -121,6 +121,18 @@ See `CLAUDE.md` › Even dynamic steps. Next: the owner runs *Measure dynamics i
 then compares the four modes of Advanced Options › *Even dynamic steps* on a score and picks one. Then: make
 the chosen one the default (or keep the switch) and drop the others if the owner wants.
 
+## Attack salience in the Recommended balance (2026-09-28, branch `attack-prominence`)
+
+See `CLAUDE.md` › Attack salience. The owner's ear put strings' shorts at -4 dB where the loudness model said +1.
+The recommendation now adds the shorts' attack salience with one weight fitted to what the owner heard right
+(map: strings -4). Next: the owner runs *Measure dynamics in the background* with a build of this branch
+(~5 min; it fills the "attack" curves), restarts, and reads summary.txt's "# Dynamics balance": per family
+loudness only / with attack salience, and the fitted weight. Strings will show -4 (the reference); the other
+families are the model's prediction: the owner tries them by ear (e.g. brass, woodwinds in a score) and, where
+one sounds right at another value, sets it in Advanced Options › *Heard right* (the fit then uses every
+reference, least squares). If the weight comes out 0 or the report says the attacks stand out no more than
+their loudness, the feature doesn't explain the ear: look at the per-short "attack … beyond that" numbers.
+
 ## Automation (2026-09-28): infrastructure in, no UI; being redone through Ableton Live
 
 The owner (2026-09-28): edit automation in Live 12 instead of an editor of our own; MuseScore keeps playing on
