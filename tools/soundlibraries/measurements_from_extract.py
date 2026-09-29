@@ -94,7 +94,9 @@ def controls_moved(j):
             if q.get("id") in changed:
                 best, control = 2.0, q.get("title")
             pc = clean(q)
-            if cc and pc:
+            # (a control that moves more than the controller does, Mic Mix Distance's several faders against one mic's
+            # fader, isn't what it moves: the patch's own mic parameter showed nothing when it was already at the value)
+            if cc and pc and not cc < pc:
                 iou = len(cc & pc) / len(cc | pc)
                 if iou > 0.3 and iou > best:
                     best, control = iou, q.get("title")

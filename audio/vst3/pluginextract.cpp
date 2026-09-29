@@ -180,6 +180,10 @@ QJsonArray PluginExtract::controlsMoved(const QJsonObject& controllers, const QJ
                   const std::set<int> pc = clean(p);
                   if (cc.empty() || pc.empty())
                         continue;
+                  // (a control that moves more than the controller does, Mic Mix Distance's faders against one mic's, isn't
+                  // what it moves: the patch's own mic parameter shows nothing when it was already at the value tried)
+                  if (pc.size() > cc.size() && std::includes(pc.begin(), pc.end(), cc.begin(), cc.end()))
+                        continue;
                   int inter = 0;
                   for (int x : cc)
                         inter += pc.count(x);

@@ -980,6 +980,15 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   16 Mute, 17 Release, 18 Variation, 21 (and 104 on the Performance patches) Vibrato, 22-25 Mic 1-4 level, 40-46 Harp
   Pedal 1-7; CC 7, 10, 64, 66, 103, 111 and pitch bend change the sound but no named control. Test `controlsMoved`
   has a header meter that follows one mic: wrong without the frame, right with it.
+  **The links run finished** (build 236, 2026-09-29 06:16-07:08, 117 patches in 51 minutes, 1 Kontakt crash, retried):
+  with the earlier runs, **698 of 700 patches have their links** (113 measured, 585 from their group; no group's
+  patches disagree), kept in `sso_patch_measurements.json` (`links`, `linksFrom`): CC 1 Dynamics, 11 Expression, 16 Mute,
+  17 Release, 18 Variation (Tightness on 2 patches that have no Variation), 21 Vibrato (104 too on the Performance
+  patches), 22-25 Mic 1-4 level (fader columns x 416 / 480 / 544 / 608), 40-46 Harp Pedal 1-7. Vibraphone and Curated
+  Ensembles - Tutti - Low Wood String Stab got none. A patch's own "Mic n level" parameter sometimes changed nothing
+  (already at the value tried), and the controller then matched Mic Mix Distance (it moves faders 1 and 3): a control
+  whose cells strictly contain the controller's is no longer a match (`controlsMoved`, `controls_moved`), so the group
+  gives the mic.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
