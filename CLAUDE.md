@@ -988,7 +988,9 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   Ensembles - Tutti - Low Wood String Stab got none. A patch's own "Mic n level" parameter sometimes changed nothing
   (already at the value tried), and the controller then matched Mic Mix Distance (it moves faders 1 and 3): a control
   whose cells strictly contain the controller's is no longer a match (`controlsMoved`, `controls_moved`), so the group
-  gives the mic.
+  gives the mic. The 4 patches with cc 23 left out after crashes (Bass Trombone Solo / Bass Trombones a2 - Long, Celli -
+  Trill (Minor 2nd), Clarinet Solo - Long Flutter) take it from a later run of theirs that measured it though it
+  wasn't put back within its noise (`fromOtherRun`): now **672 complete, 28 not put back**.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
@@ -1268,6 +1270,15 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     Ensembles, the 12 Core / Decorative techniques) or `scan="keys"` (the 6 percussion ensembles, Harp
     glissandi; `keyScan`); *Check articulations* › *Tick the patches to scan* ticks them. The files give the
     names only: which switch value plays which is in Spitfire's script, so Kontakt still scans those 23.
+    **Per articulation, from the same files** (2026-09-29, `tools/soundlibraries/nki_articulation_details.py <library.json>`
+    → `sso_nki_articulation_details.json`, by map name, 700 patches, 1457 articulations): keys its zones cover,
+    recorded notes, variants (Vib, Non Vib, Alt Attack …), round robins, dynamic layers named in its groups (the
+    longs': crossfaded on CC1 by the script), velocity layers in its zones (the shorts' dynamics), release samples,
+    looped, median recorded length and lead-in skipped (`startMs`, ~100 ms). The same names as
+    `sso_nki_articulations.json` but the instrument-name headers (Timpani's "Timpani"), Harp glissandi's sections
+    ("Scale gliss Upwards / Fast") and `noSamples` for Long Sul G / C in the All techniques and Core patches (their
+    groups map nothing: Voices 0, as the owner heard). `sso_nki_groups.json`: each patch's raw group list under the
+    first mic (name, zones, key and velocity range) for the trees this reading doesn't cover. Names and numbers only.
     The owner's scan of 2026-09-27 20:15 (run 165) gave the 4 Curated Ensembles' values: their names in
     alphabetical order, 1 … n (reviewed on https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR; Tutti 5 = Long
     confirmed by the owner in Kontakt). They are in the map as `<Articulation>` children of their `<Patch>`

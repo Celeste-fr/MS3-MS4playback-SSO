@@ -11,6 +11,8 @@ own files:
   "<patch>": {
     "status": "complete" | "stepLeftOut" | "notPutBack" | "silent" | "partial",
     "leftOut": ["cc 23", ...]                  steps left out after crashes (stepLeftOut)
+    "fromOtherRun": ["cc 23", ...]             such steps taken from another run of the patch that measured them (then
+                                               complete when none is left out)
     "pitch": 60,                               the test note
     "pitchBend": [down, up],                   cents at bend 0 and 16383 against 8192
     "controllers": [[cc, patchValue, [dB before, at 0, at 127], [brightness ...], [balance ...]], ...]
@@ -30,6 +32,7 @@ not searched. Levels are the loudest 50 ms in dBFS; brightness and balance in dB
 import argparse
 import io
 import json
+import re
 import os
 import sys
 import zipfile
@@ -162,6 +165,7 @@ def main():
     ap.add_argument("-o", "--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "sso_patch_measurements.json"))
     a = ap.parse_args()
     best = {}
+    every = {}          # patch -> [(where, json)]: every run of it
     links = {}          # patch -> (where, {cc: control}): the newest run with the window's links
     for path in a.paths:
         for where, data in patch_jsons(path):
@@ -176,12 +180,36 @@ def main():
             moved = controls_moved(j)
             if moved and any(moved.values()) and (name not in links or where > links[name][0]):
                 links[name] = (where, moved)
+            every.setdefault(name, []).append((where, j))
             if j.get("plan") == "links" and "pitchBend" not in j:
                 continue        # (the rest was measured before; a links run's numbers are of a few controllers only)
             st = status(j)
             if name not in best or (RANK[st], where) > (RANK[best[name][0]], best[name][1]):
                 best[name] = (st, where, j)
     out = { n: compact(j, st) for n, (st, _, j) in sorted(best.items()) }
+    # a step left out after crashes, measured by another run of the patch (one not put back: its effects are still
+    # each controller's own, tried from the patch's value): taken from the newest such run
+    for n, r in out.items():
+        for step in list(r.get("leftOut", [])):
+            m = re.fullmatch(r"cc (\d+)", step)
+            if not m:
+                continue
+            cc = int(m.group(1))
+            for where, j in sorted(every[n], key=lambda x: x[0], reverse=True):
+                c = j.get("controllers") or {}
+                e = next((e for e in c.get("effects", []) if e.get("cc") == cc), None)
+                if e is None or step in left_out(j):
+                    continue
+                if "sound" in e.get("changes", []):
+                    r.setdefault("controllers", []).append([cc, e.get("patchValue"), e.get("levelDb"), e.get("brightnessDb"),
+                                                            e.get("balanceDb")])
+                    r["controllers"].sort(key=lambda x: (x[0] is None, x[0]))
+                r["leftOut"].remove(step)
+                r.setdefault("fromOtherRun", []).append(step)
+                break
+        if "leftOut" in r and not r["leftOut"]:
+            del r["leftOut"]
+            r["status"] = "complete"
     for n, (_, l) in links.items():
         if n in out:
             out[n]["links"] = l
