@@ -43,6 +43,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTableWidget>
@@ -1611,6 +1612,38 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             recommended->setToolTip(tr("Per family, from the measured dynamics and a loudness model of hearing: short notes as "
                                        "loud as held notes sound (measure the dynamics with this build first)"));
             h->addWidget(recommended);
+            // the owner's ear: a family's setting that sounds right, kept in dynamics.json (heardBalanceDb)
+            // as a reference Recommended fits its weight of the shorts' attacks to (SoundLib::fitSalience)
+            QPushButton* heardRight = new QPushButton(tr("Heard right"), row);
+            heardRight->setToolTip(tr("Tell MuseScore a family's setting sounds right to you: Recommended then weighs how "
+                                      "much short notes' attacks stand out so that it gives what you heard"));
+            QMenu* heardMenu = new QMenu(heardRight);
+            heardRight->setMenu(heardMenu);
+            h->addWidget(heardRight);
+            connect(heardMenu, &QMenu::aboutToShow, this, [this, heardMenu]() {
+                  heardMenu->clear();
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+                  if (!cal || !_library)
+                        return;
+                  const std::map<QString, double> heard = SoundLib::heard(*_library, *cal);
+                  for (auto& b : _balance) {
+                        const QString fam = b.first;
+                        const double v = b.second->value();
+                        auto h = heard.find(fam);
+                        const QString now = h == heard.end() ? QString() : tr(" (now %1 dB)").arg(h->second);
+                        heardMenu->addAction(tr("%1 sounds right at %2 dB%3").arg(fam).arg(v).arg(now), this, [this, fam, v]() {
+                              setHeard(fam, v, false);
+                              });
+                        }
+                  if (!cal->heardBalanceDb.empty()) {
+                        heardMenu->addSeparator();
+                        for (const auto& f : cal->heardBalanceDb) {
+                              const QString fam = f.first;
+                              heardMenu->addAction(tr("Forget %1's %2 dB (back to the library's)").arg(fam).arg(f.second), this,
+                                                   [this, fam]() { setHeard(fam, 0, true); });
+                              }
+                        }
+                  });
             h->addStretch();
             connect(recommended, &QPushButton::clicked, this, [this]() {
                   const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
@@ -1859,6 +1892,26 @@ void SoundLibraryOptions::setBalance(bool libraryDefaults)
       for (const auto& b : _balance)
             values[b.first] = b.second->value();
       setMetaTag(SoundLib::shortBalanceMetaTag, libraryDefaults ? QString() : SoundLib::writeShortBalance(values, *cal));
+      load();
+      }
+
+void SoundLibraryOptions::setHeard(const QString& family, double db, bool forget)
+      {
+      if (!_library)
+            return;
+      const QString file = SoundLibraryHost::calibrationFile(*_library);
+      SoundLib::DynamicsCalibration cal;
+      if (!cal.read(file))
+            return;
+      if (forget)
+            cal.heardBalanceDb.erase(family);
+      else
+            cal.heardBalanceDb[family] = db;
+      if (!cal.write(file)) {
+            QMessageBox::warning(this, windowTitle(), tr("Could not write %1").arg(QDir::toNativeSeparators(file)));
+            return;
+            }
+      SoundLibraryHost::loadCalibration();
       load();
       }
 

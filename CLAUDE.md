@@ -388,6 +388,33 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   per family, shorts matched in energy to the held note (balance 0) at pp / mf / ff, how much louder they
   sound, the median negated to 0.5 dB. Advanced Options › *Recommended* (right of *Library's*); the report
   lists the recommendations. Needs one background dynamics run with this build. Test `perceivedLoudness`.
+  **Attack salience** (the owner, 2026-09-28, "Whence": strings -4 dB "def sounds better", the loudness
+  model said +1: a short's sharp, bright attack stands out more than its loudness, and short-term loudness's
+  22 ms smoothing hides the transient). `ArticulationCheck::attackSalience(clip)`: Glasberg & Moore 2002's
+  instantaneous loudness from the same ERB-spaced filters as 4th-order gammatones in the time domain (Patterson
+  et al. 1992, Hohmann 2002's complex one-pole cascade; power per 1 ms on perceivedLoudnessDb's scale, same
+  compression; short FFT windows, G&M's own multi-resolution way, smeared a steady tone over more filters: +3 dB),
+  smoothed only by a
+  5 ms temporal window (ERD ~8 ms, Plack & Moore 1990): `fastDb`; the same with Zwicker's sharpness weighting
+  g(z) per band (DIN 45692; brightness makes onsets salient: Huang & Elhilali 2017): `salienceDb`; the rise
+  10 -> 90 % (`riseMs`, informative only). The dynamics check stores `DynamicsResult::attack` / `riseMs` per curve
+  point (results.json "attack", "riseMs"), dynamics.json "attack" (`DynamicsCurve::attack`, `attackAt`).
+  Model (`SoundLib::recommendation`, `fitSalience`): per family, over the energy-matched shorts at pp/mf/ff,
+  L = median perceived difference, S = median of (attack diff - perceived diff); recommended = -(L + w S).
+  ONE free parameter, w (weight of attack salience), least squares over the owner's references
+  (`heard()`: map `<Dynamics heard="strings=-4">` = `Library::heardBalance`, overridden/extended by
+  dynamics.json "heardBalanceDb", set in Advanced Options › *Heard right* menu, `SoundLibraryOptions::setHeard`):
+  w = sum S(-L-t) / sum S^2, not under 0; one reference is reproduced exactly. No attack curves (a dynamics.json
+  from before) or no reference with them: loudness only, exactly as before. The report ("# Dynamics balance")
+  lists per family loudness only, with attack salience (L, S, notes), heard right, and w with the families it
+  was fitted on; each short's line: at mf matched, how it sounds and its attack beyond that. The test synth's
+  articulation 62: a short with a 4 ms click of high harmonics. Tests `attackSalience`, `salienceFit`,
+  `dynamicsCheck`. Untried with SSO: needs a re-measurement (the 2026-09-28 12:30 one has no attack curves);
+  S for SSO's families, hence w and the other families' numbers, unknown until then. What S holds (synthetic,
+  at one loudest-50-ms energy, attack minus perceived): steady tones 0-1 dB (mid; +3 at 4 kHz, +13 at 8 kHz:
+  the sharpness weighting), a softly rising decaying short +3.6, the same with a 3 ms 7-12 kHz click +23. So
+  S is mostly "how much short-term loudness's 22 ms integration marks a short down" plus the attack's click
+  and brightness; w between 0 (loudness only) and 1 (no integration beyond the ear's 5 ms window).
   **Even dynamic steps** (the owner, 2026-09-28; "try both", decide by ear): SSO's held notes climb 5–12 dB pp→mf
   and 1–4 dB (sometimes less than 0) mf→ff on CC1 32/80/112. `SoundLib::evenStep(heldCurve, mode, cc)`: the held
   note's own range, ppp (CC 16) to fff (127), split linearly over MS4's CC scale; judged on the energy or the

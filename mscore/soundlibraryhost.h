@@ -221,6 +221,8 @@ class SoundLibraryOptions : public QDialog {
       void load();
       void setLaneSettings(bool libraryDefaults);
       void setBalance(bool libraryDefaults);
+      // the owner's ear: family's short notes setting db sounds right (dynamics.json heardBalanceDb); forget: drop it
+      void setHeard(const QString& family, double db, bool forget);
       void exportEvenSteps();
       void setMetaTag(const char* tag, const QString& value);
       void startBackground(const QStringList& args, const QString& what);
