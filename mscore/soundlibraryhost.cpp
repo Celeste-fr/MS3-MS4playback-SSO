@@ -1407,6 +1407,11 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       if (remaining)
             *remaining += int(_pending.size());
       applyMixer(score);                      // (instances still loading in the background: at their finish, and the idle timer)
+      // the idle timer from the first sync on, a background preload's too: the Mixer's mute and solo
+      // from anywhere (OSC, the old part editor …) and the plug-ins' controllers (Vst3Synth::idle)
+      // follow while the score's patches still load, not only once a play has synced them all
+      if (!_idle.isActive())
+            _idle.start();
       if (remaining && *remaining > 0) {                  // (not all loaded yet: nothing released)
             if (waiting)
                   QApplication::restoreOverrideCursor();
@@ -1444,8 +1449,6 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                     .arg(syncClock.elapsed()).arg(routesMs, 0, 'f', 0));
       if (waiting)
             QApplication::restoreOverrideCursor();
-      if (!_idle.isActive())
-            _idle.start();
       emit changed();
       return ok;
 #else
