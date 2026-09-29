@@ -314,6 +314,7 @@ bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, 
 // - RECORDING: another dynamics CC value, the one whose loudness is the step (the tone moves with it).
 enum class EvenSteps : signed char { OFF, VOLUME_HEARING, VOLUME_ENERGY, RECORDING_HEARING, RECORDING_ENERGY };
 extern const char* evenStepsMetaTag;
+bool evenStepsEnabled();                        // disabled for now (MS_EVEN_DYNAMIC_STEPS turns it on)
 EvenSteps evenSteps(const Score* score);
 QString evenStepsName(EvenSteps mode);                  // as in the metaTag ("" for OFF)
 struct Step {

@@ -822,9 +822,17 @@ QString evenStepsName(EvenSteps mode)
       return EVEN_STEPS_NAMES[int(mode)];
       }
 
+bool evenStepsEnabled()
+      {
+      // (the owner, 2026-09-28: "just disable this option for now" -- Spitfire's own pp -> ff shape may be
+      // meant; the code stays, off unless MS_EVEN_DYNAMIC_STEPS is set)
+      static const bool enabled = qEnvironmentVariableIsSet("MS_EVEN_DYNAMIC_STEPS");
+      return enabled;
+      }
+
 EvenSteps evenSteps(const Score* score)
       {
-      if (!score)
+      if (!score || !evenStepsEnabled())
             return EvenSteps::OFF;
       const QString tag = score->masterScore()->metaTag(evenStepsMetaTag).trimmed();
       for (int i = 1; i < 5; ++i)

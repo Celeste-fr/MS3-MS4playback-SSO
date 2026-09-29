@@ -1568,7 +1568,8 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             if (!SoundLib::dynamicsCalibration())
                   row->setEnabled(false), row->setToolTip(tr("Measure the dynamics first (below)"));
 
-            // even dynamic steps (SoundLib::evenStep)
+            // even dynamic steps (SoundLib::evenStep; disabled for now: SoundLib::evenStepsEnabled)
+            if (SoundLib::evenStepsEnabled()) {
             _evenSteps = new QComboBox(scoreBox);
             _evenSteps->addItem(tr("Off: as the library plays them"), int(SoundLib::EvenSteps::OFF));
             _evenSteps->addItem(tr("Volume, judged by ear"), int(SoundLib::EvenSteps::VOLUME_HEARING));
@@ -1613,6 +1614,7 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                                                                          "with this build (below), then a restart of MuseScore. "
                                                                          "Until then the dynamics play as before."));
                   });
+            }
       }
       layout->addWidget(scoreBox);
 

@@ -51,7 +51,7 @@ class TestSoundLibrary : public QObject, public MTest
       std::shared_ptr<SoundLib::Library> loadMap(const QString& xml);
 
    private slots:
-      void initTestCase() { initMTest(); }
+      void initTestCase() { qputenv("MS_EVEN_DYNAMIC_STEPS", "1"); initMTest(); }     // (even dynamic steps: off for the owner)
       void cleanup() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); SoundLib::setAvailable(nullptr); }
       void textTechniques();
       void choose();
@@ -1973,6 +1973,7 @@ void TestSoundLibrary::shortsFollowDynamics()
 
 void TestSoundLibrary::evenDynamicSteps()
       {
+      // (disabled for the owner, on with MS_EVEN_DYNAMIC_STEPS: set in initTestCase)
       // a held note like SSO's Violas Long: steep to mf, then flat, with a dip at ff
       SoundLib::DynamicsCurve held;
       held.drivenBy = "controller";
