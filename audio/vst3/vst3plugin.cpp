@@ -294,6 +294,7 @@ class Vst3PluginPrivate {
       IPtr<IAudioProcessor> processor;
       IPtr<IEditController> controller;
       ComponentHandler handler;
+      Vst3Plugin::Times times;
 
       double sampleRate { 44100.0 };
       int maxBlock { 4096 };
@@ -460,6 +461,13 @@ std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleR
       p->d->sampleRate = sampleRate;
       p->d->maxBlock = maxBlock;
 
+      QElapsedTimer clock;
+      clock.start();
+      auto lap = [&clock]() {
+            const double ms = clock.nsecsElapsed() / 1e6;
+            clock.restart();
+            return ms;
+            };
       const QString key = QFileInfo(path).absoluteFilePath();
       p->d->module = modules()[key];
       if (!p->d->module) {
@@ -485,6 +493,7 @@ std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleR
             }
       if (!found)
             return fail(QString("%1 has no audio module class").arg(path));
+      p->d->times.module = lap();
       p->d->name = QString::fromStdString(chosen.name());
       p->d->provider = owned(new PlugProvider(factory, chosen, true));
       if (!p->d->provider->initialize())
@@ -496,10 +505,28 @@ std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleR
             return fail(QString("%1 has no audio processor").arg(p->d->name));
       if (p->d->controller)
             p->d->controller->setComponentHandler(&p->d->handler);
+      p->d->times.create = lap();
       if (!p->d->setup())
             return fail(QString("%1: no stereo output").arg(p->d->name));
+      p->d->times.buses = lap();
       p->d->startProcessing();
+      p->d->times.activate = lap();
       return p;
+      }
+
+const Vst3Plugin::Times& Vst3Plugin::times() const
+      {
+      return d->times;
+      }
+
+bool Vst3Plugin::singleComponent() const
+      {
+      if (!d->component || !d->controller)
+            return false;
+      // (the same object: the same FUnknown)
+      FUnknownPtr<FUnknown> a(d->component);
+      FUnknownPtr<FUnknown> b(d->controller);
+      return a && b && a.get() == b.get();
       }
 
 QString Vst3Plugin::name() const
@@ -852,20 +879,33 @@ bool Vst3Plugin::setState(const QByteArray& state)
       ds >> version >> name >> componentState >> controllerState;
       if (ds.status() != QDataStream::Ok || version != 1)
             return false;
+      QElapsedTimer clock;
+      clock.start();
+      auto lap = [&clock]() {
+            const double ms = clock.nsecsElapsed() / 1e6;
+            clock.restart();
+            return ms;
+            };
+      d->times.component = d->times.controllerComponent = d->times.controller = d->times.mapping = 0;
       {
             IPtr<MemoryStream> s = owned(new MemoryStream(componentState.data(), componentState.size()));
-            if (d->component->setState(s) != kResultOk)
+            const tresult r = d->component->setState(s);
+            d->times.component = lap();
+            if (r != kResultOk)
                   return false;
             if (d->controller) {
                   s->seek(0, IBStream::kIBSeekSet, nullptr);
                   d->controller->setComponentState(s);
+                  d->times.controllerComponent = lap();
                   }
       }
       if (d->controller && !controllerState.isEmpty()) {
             IPtr<MemoryStream> s = owned(new MemoryStream(controllerState.data(), controllerState.size()));
             d->controller->setState(s);
+            d->times.controller = lap();
             }
       d->mapControllers();
+      d->times.mapping = lap();
       d->titleIndexValid = false;
       return true;
       }
@@ -1025,14 +1065,50 @@ std::vector<Vst3Plugin::Parameter> Vst3Plugin::parameters() const
 
 // loosely: letters and digits only, lower case, and a slot number in front left out ("Mic 1 level" =
 // "MIC 1 Level" = "07 Mic 1 level"; Kontakt's own titles aren't known here)
-static QString looseTitle(const QString& t)
+// a title as parameterId compares it: lower case, a slot number in front ("3: ", "#12 ", "4) ") left
+// out, then only a-z and 0-9. Written out by hand (it was two regular expressions: 8 ms for Kontakt's
+// 4145 titles, at every load and at every play that looks up a title a patch lacks); the same as
+// ^\s*#?\d+\s*[:.)-]?\s+ removed, then [^a-z0-9] (test vst3LooseTitle)
+QString Vst3Plugin::looseTitle(const QString& t)
       {
-      static const QRegularExpression slot("^\\s*#?\\d+\\s*[:.)-]?\\s+");
-      static const QRegularExpression other("[^a-z0-9]");
-      QString s = t.toLower();
-      s.remove(slot);
-      s.remove(other);
-      return s;
+      const QString s = t.toLower();
+      const int n = s.size();
+      // (as the expressions had them: ASCII white space and digits)
+      auto space = [&s](int k) { const ushort c = s[k].unicode(); return c == ' ' || (c >= 9 && c <= 13); };
+      auto digit = [&s](int k) { const ushort c = s[k].unicode(); return c >= '0' && c <= '9'; };
+      int i = 0;
+      while (i < n && space(i))
+            ++i;
+      if (i < n && s[i] == '#')
+            ++i;
+      int from = 0;                       // where the title starts after a slot number
+      const int digits = i;
+      while (i < n && digit(i))
+            ++i;
+      if (i > digits) {
+            int w1 = i;
+            while (w1 < n && space(w1))
+                  ++w1;
+            if (w1 < n && (s[w1] == ':' || s[w1] == '.' || s[w1] == ')' || s[w1] == '-')) {
+                  int w2 = w1 + 1;
+                  while (w2 < n && space(w2))
+                        ++w2;
+                  if (w2 > w1 + 1)
+                        from = w2;
+                  else if (w1 > i)
+                        from = w1;
+                  }
+            else if (w1 > i)
+                  from = w1;
+            }
+      QString out;
+      out.reserve(n - from);
+      for (int k = from; k < n; ++k) {
+            const QChar c = s[k];
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+                  out += c;
+            }
+      return out;
       }
 
 long Vst3Plugin::parameterId(const QString& title) const

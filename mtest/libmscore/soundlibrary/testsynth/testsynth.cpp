@@ -31,6 +31,11 @@
 #include <cmath>
 #include <map>
 #include <string>
+#include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <memory>
+#include <thread>
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ibstream.h"
@@ -64,7 +69,19 @@ struct Voice {
       double gain { 1 };            // the round robin
       int roundRobin { 0 };
       long t { 0 };                 // samples played
+      bool silent { false };        // started while the "samples" were still loading (MSTESTSYNTH_STREAM_MS)
       };
+
+// like Kontakt loading a patch, for the tests of MuseScore's loading (only when set in the environment):
+// MSTESTSYNTH_SETSTATE_MS  setState takes that long;
+// MSTESTSYNTH_STREAM_MS    then its "samples" load on a thread of its own for that long: notes started
+//                          meanwhile play nothing;
+// MSTESTSYNTH_STREAM_MB    and the process grows by that much meanwhile (freed with the instance)
+static int envInt(const char* name)
+      {
+      const char* v = std::getenv(name);
+      return v ? std::atoi(v) : 0;
+      }
 
 static int articulationValue(ParamValue v)
       {
@@ -117,8 +134,47 @@ class Processor : public AudioEffect {
                   current = value;
             }
 
+      std::thread streamer;
+      std::atomic<bool> streaming { false };
+      std::atomic<bool> stopStreaming { false };
+      std::vector<std::unique_ptr<char[]>> samples;
+
+      void stream()
+            {
+            if (streamer.joinable()) {
+                  stopStreaming = true;
+                  streamer.join();
+                  }
+            samples.clear();
+            const int ms = envInt("MSTESTSYNTH_STREAM_MS");
+            const int mb = envInt("MSTESTSYNTH_STREAM_MB");
+            if (ms <= 0 && mb <= 0)
+                  return;
+            stopStreaming = false;
+            streaming = true;
+            streamer = std::thread([this, ms, mb]() {
+                  const int steps = std::max(1, ms / 50);
+                  for (int i = 0; i < steps && !stopStreaming; ++i) {
+                        const size_t bytes = size_t(mb) * 1024 * 1024 / size_t(steps);
+                        if (bytes) {
+                              std::unique_ptr<char[]> b(new char[bytes]);
+                              std::memset(b.get(), 1 + i % 100, bytes);
+                              samples.push_back(std::move(b));
+                              }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(ms / steps));
+                        }
+                  streaming = false;
+                  });
+            }
+
    public:
       Processor() { setControllerClass(ControllerUID); }
+      ~Processor() override
+            {
+            stopStreaming = true;
+            if (streamer.joinable())
+                  streamer.join();
+            }
       static FUnknown* create(void*) { return (IAudioProcessor*) new Processor; }
 
       tresult PLUGIN_API initialize(FUnknown* context) override
@@ -169,6 +225,7 @@ class Processor : public AudioEffect {
                               v.tuning = e.noteOn.tuning;
                               v.roundRobin = roundRobin % 4;
                               v.gain = 1.0 + 0.06 * ((roundRobin++ % 3) - 1);
+                              v.silent = streaming;
                               voices[e.noteOn.pitch] = v;
                               }
                         else if (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent)
@@ -192,7 +249,7 @@ class Processor : public AudioEffect {
                   const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + v.second.tuning / 100.0 + (bend - 0.5) * 4.0) / 12.0) / processSetup.sampleRate;
                   Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
-                        const float s = timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
+                        const float s = vc.silent ? 0.f : timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
                         l[i] += s;
                         r[i] += s;
                         vc.phase += inc;
@@ -215,8 +272,11 @@ class Processor : public AudioEffect {
             int32 got = 0;
             while (state->read(buf, sizeof(buf), &got) == kResultOk && got > 0)
                   all.insert(all.end(), buf, buf + got);
+            if (const int ms = envInt("MSTESTSYNTH_SETSTATE_MS"))
+                  std::this_thread::sleep_for(std::chrono::milliseconds(ms));
             if (all.size() >= 16 && std::memcmp(all.data() + 12, "hsin", 4) == 0) {
                   kontakt = all;
+                  stream();
                   return kResultOk;
                   }
             kontakt.clear();
@@ -227,6 +287,7 @@ class Processor : public AudioEffect {
             std::memcpy(&lv, all.data() + 8, 8);
             setArticulation(a);
             level = lv;
+            stream();
             return kResultOk;
             }
 

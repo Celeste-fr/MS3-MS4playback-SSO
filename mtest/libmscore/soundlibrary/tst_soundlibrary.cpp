@@ -7,6 +7,8 @@
 //=============================================================================
 
 #include <set>
+#include <chrono>
+#include <future>
 
 #include <cmath>
 #include <QtTest/QtTest>
@@ -56,6 +58,7 @@ class TestSoundLibrary : public QObject, public MTest
       void textTechniques();
       void choose();
       void spitfireMap();
+      void routesTiming();
       void automation();
       void perceivedLoudness();
       void noteSecondsWritten();
@@ -73,8 +76,11 @@ class TestSoundLibrary : public QObject, public MTest
       void controllers();
 #ifdef TESTSYNTH
       void kontaktSetup();
+      void kontaktScriptValues();
       void kontaktSetupReal();
       void vst3Plugin();
+      void vst3LoadTimes();
+      void vst3LooseTitle();
       void vst3Render();
       void articulationCheck();
       void scanPictures();
@@ -202,6 +208,49 @@ void TestSoundLibrary::choose()
 //   spitfireMap
 //    the map that comes with MuseScore loads, and picks sections, solo and a2 instruments
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   routesTiming
+//    how long SoundLib::routes takes on a score (MS_ROUTES_SCORE, skipped when unset) with SSO's
+//    map, every extra available: SoundLibraryHost::syncSome works them out at every play and, at
+//    score open, before each instance it loads (the renderer once per change)
+//---------------------------------------------------------
+
+void TestSoundLibrary::routesTiming()
+      {
+      const QString file = qEnvironmentVariable("MS_ROUTES_SCORE");
+      if (file.isEmpty())
+            QSKIP("MS_ROUTES_SCORE not set");
+      QString error;
+      auto lib = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      MasterScore* score = readCreatedScore(file);
+      QVERIFY(score);
+      SoundLib::setCurrent(lib);                      // (every part plays the library)
+      QElapsedTimer t;
+      t.start();
+      const int runs = 5;
+      size_t n = 0;
+      for (int i = 0; i < runs; ++i)
+            n = SoundLib::routes(score, *lib).size();
+      qDebug("routes: %d parts, %d routes, %.1f ms each", score->parts().size(), int(n), t.nsecsElapsed() / 1e6 / runs);
+      // of which: the extras each part's notation plays, the copies for other tunings
+      double used = 0, lanes = 0;
+      for (const Part* part : score->parts()) {
+            const SoundLib::LibInstrument* li = lib->match(part->instrument(), part);
+            if (!li)
+                  continue;
+            const std::vector<const SoundLib::LibInstrument*> patches = li->patches();
+            t.restart();
+            SoundLib::usedPatches(score, part, patches);
+            used += t.nsecsElapsed() / 1e6;
+            t.restart();
+            SoundLib::lanes(score, part, patches, 0.5, 1.5, 4);
+            lanes += t.nsecsElapsed() / 1e6;
+            }
+      qDebug("usedPatches %.1f ms, lanes %.1f ms", used, lanes);
+      delete score;
+      }
 
 void TestSoundLibrary::spitfireMap()
       {
@@ -994,6 +1043,54 @@ void TestSoundLibrary::kontaktSetup()
       }
 
 //---------------------------------------------------------
+//   kontaktScriptValues
+//    a state's script values set in place (the load times probe: Kontakt's own state stays its own
+//    but for the value), and which sample list a state has (2: made from an .nki, as Kontakt 8
+//    loads slowly; 3: Kontakt's own)
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktScriptValues()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      QString error;
+      const QByteArray made = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings", { { "$iooxo", "3" } }, &error);
+      QVERIFY2(!made.isEmpty(), qPrintable(error));
+      QCOMPARE(sampleListVersion(made), 2);
+      QCOMPARE(sampleListVersion(QByteArray("not a state")), -1);
+
+      int set = 0;
+      const QByteArray changed = withScriptValues(made, { { "$zdiqz", "1" }, { "$stgrp", "1" }, { "$none", "1" } }, &error, &set);
+      QVERIFY2(!changed.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 1);                                       // ($stgrp is 3 long, $none isn't there)
+      const QByteArray program = slotProgram(changed, &error);
+      QCOMPARE(programName(program), QString("Violins 2 - All techniques"));
+      std::map<QString, QByteArray> values = scriptValues(program);
+      QCOMPARE(values.at("$zdiqz"), QByteArray("1"));
+      QCOMPARE(values.at("$iooxo"), QByteArray("3"));
+      QCOMPARE(values.at("$stgrp"), QByteArray("127"));
+      // all else as it was: the sample list, the marker, the program's size
+      QCOMPARE(samplePaths(changed, &error), samplePaths(made, &error));
+      QCOMPARE(presetTail(changed), presetTail(made));
+      QCOMPARE(program.size(), slotProgram(made, nullptr).size());
+      QCOMPARE(sampleListVersion(changed), 2);
+      // set back: the program byte for byte
+      const QByteArray back = withScriptValues(changed, { { "$zdiqz", "0" } }, &error, &set);
+      QCOMPARE(set, 1);
+      QCOMPARE(slotProgram(back, nullptr), slotProgram(made, nullptr));
+      // nothing to set: the very bytes; no program: an error
+      QCOMPARE(withScriptValues(made, { { "$none", "1" } }, &error, &set), made);
+      QCOMPARE(set, 0);
+      QVERIFY(withScriptValues(empty, { { "$zdiqz", "1" } }, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
 //   kontaktSetupReal
 //    with the owner's files (skipped without them): SSO_NKI (Violins 1 - All techniques.nki),
 //    SSO_EMPTY (Kontakt 8.9's state with nothing loaded), SSO_SETUP (the owner's own setup of it,
@@ -1058,6 +1155,94 @@ void TestSoundLibrary::kontaktSetupReal()
 //   vst3Plugin
 //    a VST 3 instrument hosted: notes to sound, CCs to its mapped parameters, state kept
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   vst3LoadTimes
+//    what load() and setState() took, by step (load times.log), a setState on another thread
+//    (SoundLibraryHost's loadThreads), and the test synth standing in for Kontakt's loading
+//    (MSTESTSYNTH_SETSTATE_MS: setState's time; MSTESTSYNTH_STREAM_MS / _MB: samples loaded after it)
+//---------------------------------------------------------
+
+void TestSoundLibrary::vst3LoadTimes()
+      {
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->times().create > 0);
+      QVERIFY(p->times().buses > 0);
+      QVERIFY(!p->singleComponent());                   // (its controller is an object of its own)
+      p->midi(ME_CONTROLLER, 0, 32, 71);
+      std::vector<float> buffer(2 * 1024, 0.f);
+      p->process(512, buffer.data());
+      const QByteArray state = p->state();
+
+      qputenv("MSTESTSYNTH_SETSTATE_MS", "150");
+      qputenv("MSTESTSYNTH_STREAM_MS", "400");
+      qputenv("MSTESTSYNTH_STREAM_MB", "16");
+      std::unique_ptr<Vst3Plugin> q = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(q, qPrintable(error));
+      // on another thread, as SoundLibraryHost does with worker threads
+      QElapsedTimer t;
+      t.start();
+      std::future<bool> done = std::async(std::launch::async, [&q, &state]() { return q->setState(state); });
+      QVERIFY(done.wait_for(std::chrono::milliseconds(50)) == std::future_status::timeout);   // (this thread goes on)
+      QVERIFY(done.get());
+      QVERIFY(t.elapsed() >= 140);
+      QVERIFY(q->times().component >= 140);
+      QVERIFY(q->times().controllerComponent >= 0 && q->times().mapping >= 0);
+      QCOMPARE(testSynthState(q->state()).first, 71 / 127.0);
+      // its "samples" still loading: a note plays nothing; once they are in, it sounds
+      q->midi(ME_NOTEON, 0, 69, 100);
+      std::fill(buffer.begin(), buffer.end(), 0.f);
+      q->process(512, buffer.data());
+      QCOMPARE(peak(buffer), 0.f);
+      q->midi(ME_NOTEON, 0, 69, 0);
+      QThread::msleep(600);
+      q->midi(ME_NOTEON, 0, 69, 100);
+      std::fill(buffer.begin(), buffer.end(), 0.f);
+      q->process(512, buffer.data());
+      QVERIFY(peak(buffer) > 0.01f);
+      qunsetenv("MSTESTSYNTH_SETSTATE_MS");
+      qunsetenv("MSTESTSYNTH_STREAM_MS");
+      qunsetenv("MSTESTSYNTH_STREAM_MB");
+      QVERIFY(p->setState(state));
+      QVERIFY(p->times().component < 100);
+      }
+
+//---------------------------------------------------------
+//   vst3LooseTitle
+//    Vst3Plugin::looseTitle, written out by hand, gives what the two regular expressions it replaces
+//    gave, on titles like Kontakt's and on every combination of the characters that matter
+//---------------------------------------------------------
+
+void TestSoundLibrary::vst3LooseTitle()
+      {
+      auto old = [](const QString& t) {
+            static const QRegularExpression slot("^\\s*#?\\d+\\s*[:.)-]?\\s+");
+            static const QRegularExpression other("[^a-z0-9]");
+            QString s = t.toLower();
+            s.remove(slot);
+            s.remove(other);
+            return s;
+            };
+      QStringList titles { "Mic 1", "3: Vibrato", "#12 Mic Mix Distance", "4) Tightness", "12:x", "12 :x", "12 - Release",
+                           "  7.  Expression", "##", "CC #7 ch 1", "NIKT0018", "Dynamics (CC1)", "", " ", "#", "12", "12 ",
+                           QString::fromUtf8("Ärger 3"), QString::fromUtf8("٣ Mic"), QString::fromUtf8("1 Mic") };
+      const QString alphabet = QString::fromUtf8(" 1#:.)-aZ	٣_");
+      quint32 x = 1;
+      for (int i = 0; i < 20000; ++i) {
+            QString t;
+            for (int k = 0; k < 7; ++k) {
+                  x = x * 1103515245u + 12345u;
+                  if ((x >> 16) % 8 == 0)
+                        break;
+                  t += alphabet[int((x >> 8) % quint32(alphabet.size()))];
+                  }
+            titles << t;
+            }
+      for (const QString& t : titles)
+            QVERIFY2(Vst3Plugin::looseTitle(t) == old(t), qPrintable(QString("\"%1\": \"%2\" not \"%3\"").arg(t, Vst3Plugin::looseTitle(t), old(t))));
+      }
 
 void TestSoundLibrary::vst3Plugin()
       {
