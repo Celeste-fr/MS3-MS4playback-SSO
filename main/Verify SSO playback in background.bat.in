@@ -18,6 +18,8 @@ rem When it is done, that folder opens; hand back the newest "Playback verify <d
 rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
 
 setlocal
+rem (this file's folder, before shift: shift moves %0 too, and %~dp0 would become the first score's folder)
+set "HERE=%~dp0"
 set ARGS=
 :more
 if "%~1"=="" goto run
@@ -27,7 +29,7 @@ goto more
 :run
 if not defined ARGS set ARGS="default"
 
-start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --verify-library "Spitfire Symphony Orchestra" --verify-playback %ARGS%
+start "" "%HERE%@MSCORE_OUTPUT_NAME@.exe" --verify-library "Spitfire Symphony Orchestra" --verify-playback %ARGS%
 
 echo The playback check runs in the background (scores: %ARGS%).
 echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background playback verify.log

@@ -630,6 +630,8 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
             n.pitch = all[size_t(i)].pitch;
             n.velocity = all[size_t(i)].velocity;
             n.sustained = all[size_t(i)].sustained;
+            n.group = all[size_t(i)].key;
+            n.legato = all[size_t(i)].articulation.contains("legato", Qt::CaseInsensitive);
             n.id = i;
             notes.push_back(n);
             }
@@ -694,13 +696,15 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
       // every note's own-partials checks (notes.tsv)
       QFile ntsv(QFileInfo(clipDir).absolutePath() + "/" + clipPrefix + " notes.tsv");
       if (!shareable && !r.noteChecks.empty() && ntsv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-            ntsv.write("time\tlength\tpitch\tarticulation\tsustained\triseDb\trefRiseDb\tafterDb\trefAfterDb\tdeficitDb"
+            ntsv.write("time\tlength\tpitch\tslot\tarticulation\tlegato\tsustained\triseDb\trefRiseDb\tafterDb\trefAfterDb\tdeficitDb"
                        "\tcutBins\tdropDb\trefDropDb\tflagged\n");
             for (size_t i = 0; i < notes.size() && i < r.noteChecks.size(); ++i) {
                   const PV::NoteCheck& c = r.noteChecks[i];
                   const NoteRec& nr = all[size_t(notes[i].id)];
                   QStringList f { QString::number(nr.on, 'f', 3), QString::number(nr.off - nr.on, 'f', 3),
-                                  QString::fromStdString(PV::pitchName(nr.pitch)), nr.articulation, QString::number(int(nr.sustained)),
+                                  QString::fromStdString(PV::pitchName(nr.pitch)),
+                                  QString::number(nr.key >= 1000 ? nr.key - 1000 : -1), nr.articulation, QString::number(int(c.legato)),
+                                  QString::number(int(nr.sustained)),
                                   QString::number(c.rise, 'f', 1), QString::number(c.refRise, 'f', 1), QString::number(c.after, 'f', 1),
                                   QString::number(c.refAfter, 'f', 1), QString::number(c.deficit, 'f', 1), QString::number(c.cutBins),
                                   QString::number(std::max(c.drop, -200.0), 'f', 1), QString::number(std::max(c.refDrop, -200.0), 'f', 1),

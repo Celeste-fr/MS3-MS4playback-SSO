@@ -28,7 +28,10 @@
 //      reference's, 20 dB under what the notes of its register (within 3 semitones, the same
 //      harmonics) have against it (the two instruments' balance differs: SSO's top octave is
 //      quieter), and not rising at the onset (under 6 dB, or 10 dB less than the reference) where
-//      the reference rises 10 dB; or 30 dB under whatever the rises;
+//      the reference rises 10 dB; or 30 dB under whatever the rises. A legato note (joined to the
+//      one before: SSO's Performance legato builds up over ~200 ms, no attack) is judged on its
+//      level held at 40 and 70 % of its length, against its own patch's legato notes, no rise
+//      needed (the owner's first Kontakt run, 2026-09-29: 9 legato notes flagged, heard present);
 //    - cut short (held notes: a long, legato, tremolo or trill articulation, 0.3 s and more): the
 //      partials it shares with no other note, at 70 % of its length, 30 dB under its attack and
 //      24 dB under what the reference keeps (a candidate whose attack was already missing there
@@ -61,6 +64,10 @@ struct Note {
       int pitch { 60 };
       int velocity { 80 };
       int id { -1 };                // the caller's (its index in its own list)
+      int group { 0 };              // what plays it (the library slot: a patch has its own level)
+      bool legato { false };        // a legato articulation (joined to the note before, no attack of its
+                                    // own); also taken as legato: a note starting while the group's
+                                    // previous note still sounds and ends within 120 ms (an overlap)
       bool sustained { true };      // held for its length (a long, legato, tremolo, trill); false: a
                                     // short or plucked sample that dies away by itself (not checked
                                     // for being cut short or for silence)
@@ -192,6 +199,9 @@ struct NoteCheck {
       double after { 0 };                 // their level after the onset (dB, the audio at 0 dB peak)
       double refAfter { 0 };
       double deficit { 0 };               // after - refAfter, against the median of the notes within 3 semitones
+                                          // of the same group (patch), legato or not, on the same harmonics
+      bool legato { false };              // judged as legato: its level held over its length (after = the
+                                          // mean at 40 and 70 % of it), no attack or rise needed
       int cutBins { 0 };                  // its own bins up to 70 % of it (cut short; 0: not checked)
       double drop { 0 };                  // dB from the attack to 70 % of it
       double refDrop { 0 };

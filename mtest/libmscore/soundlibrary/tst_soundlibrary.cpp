@@ -86,6 +86,7 @@ class TestSoundLibrary : public QObject, public MTest
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
+      void playbackVerifyLegato();
 #endif
       };
 
@@ -2677,7 +2678,7 @@ struct SynthNote { double on, off; int pitch; double amp; };
 
 // harmonic tones: decaying (piano-like) or held, harmonics 1-6 at 1/k^tilt, 3 ms attack, 30 ms release
 static void synthesize(std::vector<float>& x, double rate, const std::vector<SynthNote>& notes, double tilt, double decay,
-                       double latency, double stretch = 1.0)
+                       double latency, double stretch = 1.0, double attackTime = 0.003)
       {
       for (const SynthNote& n : notes) {
             const double on = n.on * stretch + latency, off = n.off * stretch + latency;
@@ -2685,7 +2686,7 @@ static void synthesize(std::vector<float>& x, double rate, const std::vector<Syn
             const long a = long(on * rate), b = std::min(long(x.size()), long((off + 0.03) * rate));
             for (long i = std::max(0L, a); i < b; ++i) {
                   const double t = i / rate - on;
-                  double env = n.amp * std::min(1.0, t / 0.003) * (decay > 0 ? std::exp(-t / decay) : 1.0);
+                  double env = n.amp * std::min(1.0, t / attackTime) * (decay > 0 ? std::exp(-t / decay) : 1.0);
                   if (i / rate > off)
                         env *= 1.0 - (i / rate - off) / 0.03;
                   double s = 0;
@@ -2850,6 +2851,83 @@ void TestSoundLibrary::playbackVerifyDrift()
             };
       QVERIFY(!drift(a));
       QVERIFY(drift(b));
+      }
+
+//---------------------------------------------------------
+//   playbackVerifyLegato
+//    the owner's first run with Kontakt (2026-09-29): 9 notes of SSO's Performance legato patches
+//    flagged as missing, heard present. Such a patch is much quieter against the built-in synth than
+//    the part's other patch, and its notes build up over ~200 ms with no attack. Here: a part on two
+//    patches (groups), shorts on one at the reference's level, a legato line on the other 18 dB
+//    under it with 200 ms attacks: nothing is flagged; with one legato note dropped, that note is
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackVerifyLegato()
+      {
+      namespace PV = PlaybackVerify;
+      const double rate = 44100;
+      std::vector<SynthNote> shorts, line;
+      std::vector<PV::Note> pv;
+      auto add = [&](std::vector<SynthNote>& to, const SynthNote& n, int group, bool legato) {
+            to.push_back(n);
+            PV::Note p;
+            p.on = n.on;
+            p.off = n.off;
+            p.pitch = n.pitch;
+            p.group = group;
+            p.legato = legato;
+            p.id = int(pv.size());
+            pv.push_back(p);
+            };
+      const int scale[] = { 67, 69, 71, 72, 74, 72, 71, 69 };
+      for (int k = 0; k < 16; ++k)                            // shorts, then the legato line, then shorts
+            add(shorts, { 0.5 + 0.25 * k, 0.5 + 0.25 * k + 0.12, scale[k % 8], 0.8 }, 0, false);
+      for (int k = 0; k < 16; ++k)
+            add(line, { 5.0 + 0.6 * k, 5.0 + 0.6 * k + 0.63, scale[k % 8], 1.0 }, 1, true);
+      for (int k = 0; k < 16; ++k)
+            add(shorts, { 15.0 + 0.25 * k, 15.0 + 0.25 * k + 0.12, scale[(k + 3) % 8], 0.8 }, 0, false);
+      const size_t frames = size_t(19.5 * rate);
+      std::vector<float> ref(frames, 0.f), lib(frames, 0.f);
+      std::vector<SynthNote> all = shorts;
+      all.insert(all.end(), line.begin(), line.end());
+      synthesize(ref, rate, all, 1.0, 0, 0);
+      synthesize(lib, rate, shorts, 0.8, 0.3, 0.01);
+      std::vector<SynthNote> quiet = line;                  // the legato patch: 18 dB under, slow
+      for (SynthNote& n : quiet)
+            n.amp *= 0.125;
+      std::vector<float> legatoPart(frames, 0.f);
+      synthesize(legatoPart, rate, quiet, 0.8, 0, 0.01, 1.0, 0.2);
+      for (size_t i = 0; i < frames; ++i)
+            lib[i] += legatoPart[i];
+      PV::Spectrogram refSpec(ref, rate), libSpec(lib, rate);
+      PV::Settings settings;
+      const PV::Result refResult = PV::analyse(refSpec, pv, settings);
+      const PV::Result clean = PV::analyse(libSpec, pv, settings, &refResult, &refSpec);
+      QString found;
+      for (const PV::Finding& f : clean.findings)
+            found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+      QVERIFY2(clean.findings.empty(), qPrintable(found));
+
+      // the 6th legato note dropped
+      std::vector<SynthNote> dropped;
+      for (const SynthNote& n : quiet)
+            if (std::fabs(n.on - 8.0) > 1e-6)
+                  dropped.push_back(n);
+      std::vector<float> bad(frames, 0.f), part(frames, 0.f);
+      synthesize(bad, rate, shorts, 0.8, 0.3, 0.01);
+      synthesize(part, rate, dropped, 0.8, 0, 0.01, 1.0, 0.2);
+      for (size_t i = 0; i < frames; ++i)
+            bad[i] += part[i];
+      PV::Spectrogram badSpec(bad, rate);
+      const PV::Result r = PV::analyse(badSpec, pv, settings, &refResult, &refSpec);
+      found.clear();
+      for (const PV::Finding& f : r.findings)
+            found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+      QVERIFY2(std::any_of(r.findings.begin(), r.findings.end(), [](const PV::Finding& f) {
+            return (f.kind == PV::Finding::Kind::MissingNote || f.kind == PV::Finding::Kind::MissingAttack) && std::fabs(f.time - 8.0) < 0.02;
+            }), qPrintable(found));
+      for (const PV::Finding& f : r.findings)
+            QVERIFY2(std::fabs(f.time - 8.0) < 0.7, qPrintable(found));
       }
 
 QTEST_MAIN(TestSoundLibrary)

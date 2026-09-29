@@ -394,9 +394,13 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             const Strike* rk = reference && i < reference->strikeList.size() ? &reference->strikeList[i] : nullptr;
             if (!r.noteChecks.empty()) {
                   double least = 0;
-                  for (int n : k.notes)
+                  bool legato = true;
+                  for (int n : k.notes) {
                         least = std::min(least, r.noteChecks[size_t(n)].deficit);
-                  if (least > -settings.strikeDeficitDb) {
+                        legato = legato && r.noteChecks[size_t(n)].legato;
+                        }
+                  // (a legato transition has no attack: only a note that isn't there counts)
+                  if (least > -(legato ? settings.missingNoteDb : settings.strikeDeficitDb)) {
                         ++r.sounding;
                         continue;
                         }
@@ -455,6 +459,15 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             // each note's fundamental and 2nd harmonic (shared or not: a chord's octaves share them)
             // from before its onset to after it, and its level after it
             r.noteChecks.assign(notes.size(), NoteCheck());
+            // legato: its articulation, or starting while the group's note before it still sounds and
+            // ends soon after (an overlap: a legato transition), not under a held accompaniment
+            for (size_t i = 0; i < notes.size(); ++i) {
+                  bool joined = notes[i].legato;
+                  for (size_t j = 0; j < notes.size() && !joined; ++j)
+                        joined = j != i && notes[j].group == notes[i].group && notes[j].on < notes[i].on - 0.005
+                                 && notes[j].off > notes[i].on && notes[j].off <= notes[i].on + 0.12;
+                  r.noteChecks[i].legato = joined;
+                  }
             std::vector<double> diff(notes.size(), 0);
             std::vector<int> kind(notes.size(), 0);       // which harmonics: 3 both, 1 or 2 one, 0 both shared
             for (size_t i = 0; i < notes.size(); ++i) {
@@ -483,10 +496,19 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   if (bins.empty())
                         bins = s.finePartialBins({ n.pitch }, 2, 1);
                   double la = 0, ra = 0;
+                  const bool legato = r.noteChecks[i].legato;
                   auto rise = [&](const Spectrogram& sp, double offset, double* level) {
                         const double before = sp.finePower(bins, n.on + offset - 0.06);
                         const double after = std::max(sp.finePower(bins, n.on + offset + 0.05), sp.finePower(bins, n.on + offset + 0.1));
-                        *level = db(after);
+                        if (legato) {
+                              // held: the mean at 40 and 70 % of it (not before 0.2 s: a legato builds up)
+                              const double len = n.off - n.on;
+                              const double t1 = std::min(std::max(0.2, 0.4 * len), std::max(0.05, len - 0.02));
+                              const double t2 = std::min(std::max(0.3, 0.7 * len), std::max(0.05, len - 0.02));
+                              *level = db(0.5 * (sp.finePower(bins, n.on + offset + t1) + sp.finePower(bins, n.on + offset + t2)));
+                              }
+                        else
+                              *level = db(after);
                         return db(after) - db(before);
                         };
                   NoteCheck& c = r.noteChecks[i];
@@ -500,9 +522,21 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             // library's and the built-in synth's registers differ: SSO's top octave is quieter)
             // (measured on the same harmonics: the two instruments' balance of fundamental and 2nd
             // harmonic differs too; at least 12 notes: the window widens where the register has fewer)
-            std::map<int, std::map<int, std::vector<double>>> byPitch;    // harmonics -> pitch -> diffs
-            for (size_t i = 0; i < notes.size(); ++i)
-                  byPitch[kind[i]][notes[i].pitch].push_back(diff[i]);
+            // (per group and legato or not: a patch has its own level, SSO's Performance legato is
+            // 15-20 dB under the solo patch's shorts against the built-in synth; a group with fewer
+            // than 6 such notes takes all groups')
+            auto key = [&](size_t i, bool pooled) {
+                  return ((pooled ? 0 : notes[i].group + 1) * 2 + (r.noteChecks[i].legato ? 1 : 0)) * 4 + kind[i];
+                  };
+            std::map<int, std::map<int, std::vector<double>>> byPitch;    // key -> pitch -> diffs
+            for (size_t i = 0; i < notes.size(); ++i) {
+                  byPitch[key(i, false)][notes[i].pitch].push_back(diff[i]);
+                  byPitch[key(i, true)][notes[i].pitch].push_back(diff[i]);
+                  }
+            std::map<int, size_t> count;
+            for (const auto& bk : byPitch)
+                  for (const auto& bp : bk.second)
+                        count[bk.first] += bp.second.size();
             std::map<int, std::map<int, double>> base;
             for (auto& bk : byPitch) {
                   for (const auto& bp : bk.second) {
@@ -520,7 +554,8 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   }
             for (size_t i = 0; i < notes.size(); ++i) {
                   NoteCheck& c = r.noteChecks[i];
-                  c.deficit = diff[i] - base[kind[i]][notes[i].pitch];
+                  const int k = count[key(i, false)] >= 6 ? key(i, false) : key(i, true);
+                  c.deficit = diff[i] - base[k][notes[i].pitch];
                   // (nothing at all where the reference sounds: missing, whatever its register does,
                   // e.g. when most notes like it are missing too)
                   if (c.after <= -100 && c.refAfter > -60)
@@ -541,7 +576,10 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   // (so far under that nothing of it is there: however the reference rises, e.g. the same
                   // note ringing on under its pedal)
                   const bool absent = c.deficit <= -settings.absentDb;
-                  if ((c.deficit <= -settings.missingNoteDb && noRise && c.refRise >= settings.refRiseMin) || absent) {
+                  // (a legato note has no attack of its own to rise: its held level decides)
+                  const bool under = c.deficit <= -settings.missingNoteDb
+                                     && (c.legato || (noRise && c.refRise >= settings.refRiseMin));
+                  if (under || absent) {
                         inFlagged[i] = true;
                         Finding fd;
                         fd.kind = Finding::Kind::MissingNote;
@@ -551,8 +589,11 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                         fd.value = c.deficit;
                         fd.second = c.rise;
                         fd.expected = c.refRise;
-                        fd.text = fmt("note missing: %.0f dB under its register's level (against the built-in synth), rising %.0f dB at "
-                                      "its onset (built-in synth: %.0f dB)", std::min(-c.deficit, 99.0), c.rise, c.refRise);
+                        fd.text = c.legato
+                                  ? fmt("note missing: held %.0f dB under its patch's legato notes' level (against the built-in synth)",
+                                        std::min(-c.deficit, 99.0))
+                                  : fmt("note missing: %.0f dB under its register's level (against the built-in synth), rising %.0f dB at "
+                                        "its onset (built-in synth: %.0f dB)", std::min(-c.deficit, 99.0), c.rise, c.refRise);
                         r.findings.push_back(fd);
                         }
                   }
