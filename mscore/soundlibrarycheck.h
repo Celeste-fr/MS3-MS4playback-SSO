@@ -92,6 +92,11 @@ class ArticulationCheckDialog : public QDialog {
       // and out["dynamics"]; lines for the summary
       void measureDynamics(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
                            QJsonObject& out, QStringList& lines);
+      // the timing of a loaded patch's articulations (those a notation chooses; a legato one's transitions too)
+      // into out["timing"]; lines for the summary
+      void measureTiming(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
+                         QJsonObject& out, QStringList& lines);
+      bool _timingOnly { false };   // runHeadless(…, timing): dynamicsPatch measures the timing instead
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;
@@ -155,7 +160,8 @@ class ArticulationCheckDialog : public QDialog {
       // patch with a setup), "mapped" (the map's own) or a file with one patch name a line; the zip's
       // path in zip. false: nothing to do, or no plug-in
       bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false,   // dynamics: Dynamics only instead of the extract
-                       bool controllers = false);   // controllers: every controller tried too (offline, no window: sound and parameters)
+                       bool controllers = false,   // controllers: every controller tried too (offline, no window: sound and parameters)
+                       bool timing = false);        // timing: each articulation's timing instead (as Dynamics only)
       static void setBackgroundLog(const QString& fileName);      // in Documents/MuseScore Sound Library Check (default "background extract.log")
       // an extract under a supervisor (MuseScore --extract-library without --extract-child starts one per round):
       // at each patch's start, the patch and those after it, one a line, in this file; removed when the run ends

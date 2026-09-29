@@ -973,7 +973,7 @@ QSet<QString> ArticulationCheckDialog::linkedBefore() const
       return done;
       }
 
-bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics, bool controllers)
+bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics, bool controllers, bool timing)
       {
       _headless = true;
       if (!_library) {
@@ -1015,11 +1015,12 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
             say("no patch to extract");
             return false;
             }
-      if (dynamics) {
+      if (dynamics || timing) {
             _dynamics->setChecked(true);
             _dynamicsOnly->setChecked(true);
+            _timingOnly = timing;
             _scan->setChecked(false);
-            say(QString("%1: dynamics of %2 patches").arg(_library->name).arg(ticked));
+            say(QString("%1: %3 of %2 patches").arg(_library->name).arg(ticked).arg(timing ? "timing" : "dynamics"));
             check();
             if (zip)
                   *zip = _zip;
@@ -1271,7 +1272,8 @@ void ArticulationCheckDialog::check()
                   text += "\n(Stopped before the end.)\n";
             if (!final)
                   text += "\n(Still running: written after each patch.)\n";
-            text += balanceReport();
+            if (!_timingOnly)
+                  text += balanceReport();
             text += "\n# Every patch's last check\n";
             for (int i = 0; i < int(_rows.size()); ++i) {
                   const QString patch = _rows[i].instrument->name;
@@ -1439,6 +1441,98 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
       }
 
 //---------------------------------------------------------
+//   measureTiming
+//    (the plug-in offline) each articulation a notation can choose: when it speaks, how long it
+//    sounds and rings (ArticulationCheck::timing); a legato one's transitions
+//---------------------------------------------------------
+
+void ArticulationCheckDialog::measureTiming(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
+                                            QJsonObject& out, QStringList& lines)
+      {
+      std::vector<int> values, pitches;
+      std::vector<bool> legato;
+      std::map<int, QStringList> names;
+      for (const SoundLib::Articulation& a : ins.articulations) {
+            if (a.techniques.isEmpty())
+                  continue;
+            if (!names.count(a.value)) {
+                  values.push_back(a.value);
+                  pitches.push_back(pitch);
+                  legato.push_back(false);
+                  }
+            if (a.techniques.contains("legato"))
+                  legato[size_t(std::find(values.begin(), values.end(), a.value) - values.begin())] = true;
+            names[a.value].append(a.name);
+            }
+      QElapsedTimer events;
+      events.start();
+      const std::vector<ArticulationCheck::TimingResult> tr_ = ArticulationCheck::timing(p, values, pitches, legato, s,
+         [&](int done, int total) {
+            if (events.elapsed() > 50) {
+                  _status->setText(tr("%1: timing %2 of about %3").arg(ins.name).arg(done).arg(total));
+                  QApplication::processEvents();
+                  events.restart();
+                  }
+            return !_cancel;
+            });
+      auto r1 = [](double x) { return std::round(x * 10) / 10; };
+      auto three = [&](const double* v) { return QJsonArray({ r1(v[0]), r1(v[1]), r1(v[2]) }); };
+      QJsonArray timing;
+      for (const auto& t : tr_) {
+            QJsonObject o;
+            const QString label = QString("%1 (%2)").arg(names[t.value].join(" / ")).arg(t.value);
+            o["value"] = t.value;
+            o["names"] = QJsonArray::fromStringList(names[t.value]);
+            o["pitch"] = t.pitch;
+            if (t.pitch < 0) {
+                  o["silent"] = true;
+                  timing.append(o);
+                  lines << QString("%1: silent at every pitch tried").arg(label);
+                  continue;
+                  }
+            o["startMs"] = three(t.startMs);
+            o["fullMs"] = three(t.fullMs);
+            o["peakMs"] = three(t.peakMs);
+            o["peakDb"] = three(t.peakDb);
+            o["lengthMs"] = r1(t.lengthMs);
+            o["sustains"] = t.sustains;
+            if (t.sustains)
+                  o["releaseMs"] = r1(t.releaseMs);
+            o["shortNoteMs"] = r1(t.shortNoteMs);
+            QString line = QString("%1: starts %2 / %3 / %4, full %5 / %6 / %7 at pp / mf / ff; ").arg(label)
+               .arg(t.startMs[0]).arg(t.startMs[1]).arg(t.startMs[2]).arg(t.fullMs[0]).arg(t.fullMs[1]).arg(t.fullMs[2]);
+            line += t.sustains ? QString("sustains, release %1").arg(t.releaseMs < 0 ? QString("over %1 s").arg(ArticulationCheck::TAIL_SECONDS)
+                                                                                  : QString::number(t.releaseMs))
+                               : QString("sounds %1").arg(t.lengthMs);
+            line += QString("; a 0.1 s note sounds %1").arg(t.shortNoteMs);
+            if (t.pitch != pitch)
+                  line += QString(" (pitch %1)").arg(t.pitch);
+            lines << line;
+            if (!t.legato.empty()) {
+                  QJsonArray lg;
+                  for (const auto& l : t.legato) {
+                        QJsonObject x;
+                        x["velocity"] = l.velocity;
+                        x["interval"] = l.interval;
+                        x["leaveMs"] = r1(l.leaveMs);
+                        x["arriveMs"] = r1(l.arriveMs);
+                        x["dipDb"] = r1(l.dipDb);
+                        QJsonArray c;
+                        for (const auto& pt : l.cents)
+                              c.append(QJsonArray({ pt.first, pt.second }));
+                        x["cents"] = c;
+                        lg.append(x);
+                        lines << QString("   legato velocity %1, %2%3: leaves %4, arrives %5, dip %6 dB").arg(l.velocity)
+                           .arg(l.interval > 0 ? "+" : "").arg(l.interval).arg(l.leaveMs).arg(l.arriveMs).arg(r1(l.dipDb));
+                        }
+                  o["legato"] = lg;
+                  }
+            timing.append(o);
+            }
+      out["timing"] = timing;
+      }
+
+//---------------------------------------------------------
 //   dynamicsPatch
 //    Dynamics only: the patch loaded (until a note sounds), offline, measured; nothing else
 //---------------------------------------------------------
@@ -1451,7 +1545,7 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
       QTableWidgetItem* resultItem = _table->item(index, 3);
       QJsonObject out;
       out["patch"] = ins.name;
-      out["dynamicsOnly"] = true;
+      out[_timingOnly ? "timingOnly" : "dynamicsOnly"] = true;
       auto fail = [&](const QString& message) {
             out["error"] = message;
             results.append(out);
@@ -1553,16 +1647,22 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
       QElapsedTimer took;
       took.start();
       QStringList lines;
-      measureDynamics(ins, p.get(), pitch, s, out, lines);
+      if (_timingOnly)
+            measureTiming(ins, p.get(), pitch, s, out, lines);
+      else
+            measureDynamics(ins, p.get(), pitch, s, out, lines);
       p->setOffline(false);
       if (_cancel)
             return false;
       out["seconds"] = int(took.elapsed() / 1000);
       results.append(out);
-      const QString line = tr("dynamics of %1 articulations in %2 s").arg(out["dynamics"].toArray().size()).arg(took.elapsed() / 1000);
+      const QString line = _timingOnly
+         ? tr("timing of %1 articulations in %2 s").arg(out["timing"].toArray().size()).arg(took.elapsed() / 1000)
+         : tr("dynamics of %1 articulations in %2 s").arg(out["dynamics"].toArray().size()).arg(took.elapsed() / 1000);
       resultItem->setText(line);
       say(QString("%1: %2").arg(ins.name, line));
-      summary += QString("## %1 (pitch %2)\n   %3\n   Dynamics (loudest 50 ms):\n").arg(ins.name).arg(pitch).arg(line);
+      summary += QString("## %1 (pitch %2)\n   %3\n   %4:\n").arg(ins.name).arg(pitch).arg(line)
+         .arg(_timingOnly ? "Timing (ms from the note-on; levels against the note's peak)" : "Dynamics (loudest 50 ms)");
       for (const QString& l : lines)
             summary += "   - " + l + "\n";
       summary += "\n";

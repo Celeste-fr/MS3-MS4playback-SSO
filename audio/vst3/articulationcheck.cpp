@@ -15,6 +15,7 @@
 #include <cmath>
 #include <complex>
 
+#include "pluginextract.h"
 #include "vst3plugin.h"
 #include "audio/midi/event.h"
 
@@ -469,9 +470,9 @@ struct Player {
                   }
             }
 
-      Clip play(int prior, int value, int pitch)
+      // the switch to value (after prior, when there is one), the dynamics and expression CCs, 0.1 s
+      void arm(int prior, int value)
             {
-            settle();
             if (prior >= 0 && s.switchCC >= 0) {
                   p->midi(ME_CONTROLLER, s.channel, s.switchCC, prior);
                   render(frames(0.1));
@@ -483,6 +484,12 @@ struct Player {
             if (s.expressionCC >= 0 && s.expressionCC != s.dynamicsCC)
                   p->midi(ME_CONTROLLER, s.channel, s.expressionCC, qBound(0, s.expressionValue, 127));
             render(frames(0.1));
+            }
+
+      Clip play(int prior, int value, int pitch)
+            {
+            settle();
+            arm(prior, value);
             lastPitch = pitch;
             p->midi(ME_NOTEON, s.channel, pitch, s.velocity);
             std::vector<float> clip = render(frames(s.note));
@@ -632,6 +639,270 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
                   p112 = pdb;
                   r.curve = { { 32, d32 }, { 80, d80 }, { 112, d112 }, { 127, cc127 } };
                   r.perceived = { { 32, p32 }, { 80, p80 }, { 112, p112 }, { 127, pcc127 } };
+                  }
+            out.push_back(r);
+            }
+      player.settle();
+      return out;
+      }
+
+//---------------------------------------------------------
+//   timing
+//---------------------------------------------------------
+
+constexpr double ArticulationCheck::HOLD_SECONDS;
+constexpr double ArticulationCheck::TAIL_SECONDS;
+constexpr int ArticulationCheck::LEGATO_OVERLAP_MS;
+constexpr int ArticulationCheck::LEGATO_VELOCITIES[3];
+constexpr int ArticulationCheck::LEGATO_INTERVALS[2];
+
+static constexpr double WINDOW_MS = 5.0;
+
+std::vector<double> ArticulationCheck::envelope(const std::vector<float>& clip, double sampleRate)
+      {
+      std::vector<double> env;
+      const size_t win = size_t(sampleRate * WINDOW_MS / 1000.0);
+      if (win == 0)
+            return env;
+      for (size_t from = 0; 2 * (from + win) <= clip.size(); from += win) {
+            double sum = 0;
+            for (size_t i = 2 * from; i < 2 * (from + win); ++i)
+                  sum += double(clip[i]) * clip[i];
+            env.push_back(db(sum / double(2 * win)));
+            }
+      return env;
+      }
+
+namespace {
+
+// the loudest window, and the windows from the note-on to 30 dB, 6 dB under it and to it
+struct Onset {
+      double peakDb { -200 };
+      int peak { -1 }, start { -1 }, full { -1 };
+      };
+
+Onset onset(const std::vector<double>& env, size_t until)
+      {
+      Onset o;
+      until = std::min(until, env.size());
+      for (size_t i = 0; i < until; ++i)
+            if (env[i] > o.peakDb) {
+                  o.peakDb = env[i];
+                  o.peak = int(i);
+                  }
+      for (size_t i = 0; o.peak >= 0 && i <= size_t(o.peak); ++i) {
+            if (o.start < 0 && env[i] >= o.peakDb - 30)
+                  o.start = int(i);
+            if (o.full < 0 && env[i] >= o.peakDb - 6)
+                  o.full = int(i);
+            }
+      return o;
+      }
+
+// the last window from..to at level or louder (-1: none)
+int lastAbove(const std::vector<double>& env, size_t from, size_t to, double level)
+      {
+      int last = -1;
+      for (size_t i = from; i < std::min(to, env.size()); ++i)
+            if (env[i] >= level)
+                  last = int(i);
+      return last;
+      }
+
+} // namespace
+
+std::vector<ArticulationCheck::TimingResult> ArticulationCheck::timing(Vst3Plugin* plugin, const std::vector<int>& values,
+   const std::vector<int>& pitches, const std::vector<bool>& legato, const Settings& settings, Progress progress)
+      {
+      std::vector<TimingResult> out;
+      const int n = int(values.size());
+      if (!plugin || n == 0 || int(pitches.size()) != n || int(legato.size()) != n)
+            return out;
+      Player player { plugin, settings, {} };
+      player.relativeSettle = true;
+      const double sr = settings.sampleRate;
+      auto ms = [](int windows) { return windows < 0 ? -1.0 : windows * WINDOW_MS; };
+      int done = 0;
+      int total = 0;
+      for (int i = 0; i < n; ++i)
+            total += 4 + (legato[size_t(i)] ? 6 : 0);
+      auto step = [&]() {
+            ++done;
+            return !progress || progress(done, std::max(total, done));
+            };
+      // a note at velocity = dynamics CC = level, held seconds, then its tail: until it is 50 dB under its loudest
+      // (and under the level before the release), at most tailMax seconds. offFrame: where the release is
+      auto note = [&](int value, int pitch, int level, double seconds, double tailMax, size_t* offFrame) {
+            player.settle();
+            player.s.dynamicsValue = level;
+            player.arm(-1, value);
+            player.lastPitch = pitch;
+            plugin->midi(ME_NOTEON, settings.channel, pitch, qBound(1, level, 127));
+            std::vector<float> clip = player.render(player.frames(seconds));
+            plugin->midi(ME_NOTEON, settings.channel, pitch, 0);
+            if (offFrame)
+                  *offFrame = clip.size() / 2;
+            const std::vector<double> held = envelope(clip, sr);
+            double loudest = -200;
+            for (double e : held)
+                  loudest = std::max(loudest, e);
+            const size_t k = held.size() > 20 ? held.size() - 20 : 0;       // (the 100 ms before the release)
+            double before = -200;
+            for (size_t i = k; i < held.size(); ++i)
+                  before = std::max(before, held[i]);
+            const double floorDb = std::max(-95.0, std::min(loudest - 50, before - 40));
+            const int block = player.frames(0.1);
+            for (double t = 0; t < tailMax; t += 0.1) {
+                  const std::vector<float>& b = player.render(block);
+                  clip.insert(clip.end(), b.begin(), b.end());
+                  double peak = 0;
+                  for (float x : b)
+                        peak = std::max(peak, double(std::fabs(x)));
+                  if (db(peak * peak) < floorDb)
+                        break;
+                  }
+            player.lastLoudDb = loudest;
+            return clip;
+            };
+
+      for (int i = 0; i < n; ++i) {
+            TimingResult r;
+            r.value = values[size_t(i)];
+            // mf, held: its start, length and release; at another pitch where the test pitch plays nothing
+            std::vector<double> env;
+            size_t off = 0;
+            for (int shift : { 0, 12, -12, 7, -5, 24 }) {
+                  const int p = pitches[size_t(i)] + shift;
+                  if (shift && (p < settings.minPitch || p > settings.maxPitch))
+                        continue;
+                  const std::vector<float> clip = note(r.value, p, 80, HOLD_SECONDS, TAIL_SECONDS, &off);
+                  if (!step())
+                        return out;
+                  env = envelope(clip, sr);
+                  const Onset o = onset(env, env.size());
+                  if (o.peakDb > SILENT_DB) {
+                        r.pitch = p;
+                        break;
+                        }
+                  }
+            if (r.pitch < 0) {
+                  out.push_back(r);
+                  continue;
+                  }
+            const size_t offWindow = size_t(double(off) / (sr * WINDOW_MS / 1000.0));
+            const Onset mf = onset(env, env.size());
+            r.startMs[1] = ms(mf.start);
+            r.fullMs[1] = ms(mf.full);
+            r.peakMs[1] = ms(mf.peak);
+            r.peakDb[1] = mf.peakDb;
+            const int last = lastAbove(env, 0, offWindow, mf.peakDb - 40);
+            r.sustains = last >= int(offWindow) - 2;
+            if (!r.sustains)
+                  r.lengthMs = ms(last + 1);
+            else {
+                  r.lengthMs = ms(lastAbove(env, 0, env.size(), mf.peakDb - 40) + 1);
+                  double before = -200;
+                  for (size_t k = offWindow > 20 ? offWindow - 20 : 0; k < offWindow; ++k)
+                        before = std::max(before, env[k]);
+                  const int rel = lastAbove(env, offWindow, env.size(), before - 30);
+                  // (still within 30 dB at the tail's end: longer than the tail)
+                  if (rel + 1 < int(env.size()))
+                        r.releaseMs = ms(std::max(0, rel + 1 - int(offWindow)));
+                  }
+            // pp and ff: the start only (1 s, a short tail)
+            for (int k : { 0, 2 }) {
+                  const std::vector<float> clip = note(r.value, r.pitch, k == 0 ? 32 : 112, 1.0, 0.3, nullptr);
+                  if (!step())
+                        return out;
+                  const std::vector<double> e = envelope(clip, sr);
+                  const Onset o = onset(e, e.size());
+                  if (o.peakDb > SILENT_DB) {
+                        r.startMs[k] = ms(o.start);
+                        r.fullMs[k] = ms(o.full);
+                        r.peakMs[k] = ms(o.peak);
+                        r.peakDb[k] = o.peakDb;
+                        }
+                  }
+            // a 0.1 s note
+            {
+                  const std::vector<float> clip = note(r.value, r.pitch, 80, 0.1, 3.0, nullptr);
+                  if (!step())
+                        return out;
+                  const std::vector<double> e = envelope(clip, sr);
+                  const Onset o = onset(e, e.size());
+                  if (o.peakDb > SILENT_DB)
+                        r.shortNoteMs = ms(lastAbove(e, 0, e.size(), o.peakDb - 40) + 1);
+            }
+            // legato: two slurred notes
+            if (legato[size_t(i)]) {
+                  const size_t hop = size_t(sr * 0.010);
+                  const size_t frame = size_t(sr * 0.080);
+                  for (int velocity : LEGATO_VELOCITIES) {
+                        for (int interval : LEGATO_INTERVALS) {
+                              TimingResult::Legato l;
+                              l.velocity = velocity;
+                              l.interval = interval;
+                              const int a = r.pitch, b = r.pitch + interval;
+                              if (b < settings.minPitch || b > settings.maxPitch || b < 0 || b > 127) {
+                                    if (!step())
+                                          return out;
+                                    continue;
+                                    }
+                              player.settle();
+                              player.s.dynamicsValue = 80;
+                              player.arm(-1, r.value);
+                              plugin->midi(ME_NOTEON, settings.channel, a, velocity);
+                              const std::vector<float> first = player.render(player.frames(1.2));
+                              plugin->midi(ME_NOTEON, settings.channel, b, velocity);
+                              std::vector<float> second = player.render(player.frames(LEGATO_OVERLAP_MS / 1000.0));
+                              plugin->midi(ME_NOTEON, settings.channel, a, 0);
+                              const std::vector<float>& rest = player.render(player.frames(1.4));
+                              second.insert(second.end(), rest.begin(), rest.end());
+                              plugin->midi(ME_NOTEON, settings.channel, b, 0);
+                              player.lastPitch = b;
+                              if (!step())
+                                    return out;
+                              // the first note's pitch: 0.6 to 1.1 s of it
+                              const std::vector<float> reference(first.begin() + 2 * player.frames(0.6), first.begin() + 2 * player.frames(1.1));
+                              // frames centred 0 … 800 ms after the second note-on (the first 40 ms from before it)
+                              std::vector<float> joined(first.end() - 2 * std::ptrdiff_t(frame / 2), first.end());
+                              joined.insert(joined.end(), second.begin(), second.end());
+                              int arrivedRun = 0;
+                              for (size_t c = 0; 2 * (c * hop + frame) <= joined.size() && c * 10 <= 800; ++c) {
+                                    const std::vector<float> f(joined.begin() + 2 * std::ptrdiff_t(c * hop),
+                                                               joined.begin() + 2 * std::ptrdiff_t(c * hop + frame));
+                                    double confidence = 0;
+                                    const double cents = PluginExtract::centsShift(reference, f, sr, 1300, &confidence);
+                                    if (confidence < 0.3)
+                                          continue;
+                                    const int t = int(c * 10);
+                                    l.cents.push_back({ t, std::round(cents) });
+                                    if (l.leaveMs < 0 && std::fabs(cents) > 35)
+                                          l.leaveMs = t;
+                                    if (l.arriveMs < 0) {
+                                          if (std::fabs(cents - 100.0 * interval) < 35) {
+                                                if (++arrivedRun == 3)
+                                                      l.arriveMs = t - 20;
+                                                }
+                                          else
+                                                arrivedRun = 0;
+                                          }
+                                    }
+                              // the dip: the quietest 5 ms in the first 600 ms against the second note after 800 ms
+                              const std::vector<double> e = envelope(second, sr);
+                              double dip = 200, own = -200;
+                              for (size_t k = 0; k < e.size(); ++k) {
+                                    const double t = k * WINDOW_MS;
+                                    if (t < 600)
+                                          dip = std::min(dip, e[k]);
+                                    else if (t >= 800 && t < 1200)
+                                          own = std::max(own, e[k]);
+                                    }
+                              if (own > SILENT_DB)
+                                    l.dipDb = std::min(0.0, std::round((dip - own) * 10) / 10);
+                              r.legato.push_back(l);
+                              }
+                        }
                   }
             out.push_back(r);
             }

@@ -1,0 +1,27 @@
+@echo off
+rem Measure the timing of Spitfire Symphony Orchestra's patches, in the background.
+rem
+rem Double-click this file. It starts this MuseScore with no window (MuseScore --extract-library ...
+rem --check-timing): every patch of the map a notation plays, one after the other, offline, at
+rem below-normal priority. For each articulation: when its note starts and is at full level (pp, mf,
+rem ff), how long it sounds, how long it rings after its release, how long a 0.1 s note sounds; for a
+rem legato articulation (the Performance patches), how long the transition between two slurred notes
+rem takes at three velocities. It uses a copy of your setups (Documents\MuseScore Sound Library Check\
+rem background timing check setups) and writes nothing in MuseScore's own folders. Only one runs at a
+rem time. It runs from this folder: install other builds in other folders while it runs.
+rem
+rem Only some patches: put their names, one a line, in a text file and drag it onto this file.
+rem Progress: Documents\MuseScore Sound Library Check\background timing check.log
+rem When it is done, that folder opens; hand back the newest "Spitfire Symphony Orchestra <date>.zip".
+rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
+
+setlocal
+set "PATCHES=mapped"
+if not "%~1"=="" set "PATCHES=%~f1"
+
+start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --check-timing --extract-patches "%PATCHES%"
+
+echo The timing check runs in the background (patches: %PATCHES%).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background timing check.log
+echo That folder opens when it is done. You can close this window and keep working.
+timeout /t 15

@@ -131,6 +131,54 @@ class ArticulationCheck {
       static std::vector<DynamicsResult> dynamics(Vst3Plugin* plugin, const std::vector<int>& values, const std::vector<int>& pitches,
                                                   const std::vector<bool>& full, const Settings& settings, Progress progress = nullptr);
 
+      // timing: when each value's note speaks, how long it sounds and how long it rings after its release,
+      // and for a legato value the transition between two slurred notes (the owner, 2026-09-29). Levels are
+      // 5 ms windows of the note's power, against its own loudest window:
+      //   startMs / fullMs / peakMs   from the note-on to the first window 30 dB under the peak, 6 dB under
+      //                               it, and to the peak; at pp / mf / ff (velocity = dynamics CC = 32 / 80 / 112)
+      //   lengthMs                    mf, held HOLD_SECONDS: until it is last 40 dB under its peak or louder
+      //                               (a short's own length); sustains when that is its release
+      //   releaseMs                   a note that sustains: from its release until it is last within 30 dB of
+      //                               its level before the release (-1: longer than the tail, TAIL_SECONDS)
+      //   shortNoteMs                 a 0.1 s note (mf): until it is last 40 dB under its peak or louder
+      //   legato                      two notes slurred as MuseScore plays them (the second starts, the first
+      //                               ends LEGATO_OVERLAP_MS later) at velocity 20 / 64 / 110 (Spitfire's legato
+      //                               speed) and interval +2 / -5: the pitch, 80 ms frames every 10 ms, against
+      //                               the first note's (PluginExtract::centsShift): from the second note-on to
+      //                               the pitch leaving the first (35 cents off it), to its arriving (within 35
+      //                               cents of the second for 3 frames), and the level's dip in the first 600 ms
+      //                               against the second note's own level after it (dB, 0 or below)
+      static constexpr double HOLD_SECONDS = 2.5;
+      static constexpr double TAIL_SECONDS = 6.0;
+      static constexpr int LEGATO_OVERLAP_MS = 30;
+      static constexpr int LEGATO_VELOCITIES[3] = { 20, 64, 110 };
+      static constexpr int LEGATO_INTERVALS[2] = { 2, -5 };
+      struct TimingResult {
+            struct Legato {
+                  int velocity { 0 };
+                  int interval { 0 };
+                  double leaveMs { -1 };     // -1: the pitch never left the first note's (or silent)
+                  double arriveMs { -1 };    // -1: never arrived within 800 ms
+                  double dipDb { 0 };
+                  std::vector<std::pair<int, double>> cents;    // ms after the second note-on, cents from the first note (confident frames)
+                  };
+            int value { -1 };
+            int pitch { -1 };                   // -1: silent at every pitch tried
+            double startMs[3] { -1, -1, -1 };  // pp, mf, ff
+            double fullMs[3] { -1, -1, -1 };
+            double peakMs[3] { -1, -1, -1 };
+            double peakDb[3] { -200, -200, -200 };
+            double lengthMs { -1 };
+            bool sustains { false };
+            double releaseMs { -1 };
+            double shortNoteMs { -1 };
+            std::vector<Legato> legato;
+            };
+      static std::vector<TimingResult> timing(Vst3Plugin* plugin, const std::vector<int>& values, const std::vector<int>& pitches,
+                                              const std::vector<bool>& legato, const Settings& settings, Progress progress = nullptr);
+      // the note's level, dB, in 5 ms windows of a stereo interleaved clip (for the tests)
+      static std::vector<double> envelope(const std::vector<float>& clip, double sampleRate);
+
       // the drum icons of a Kickstart patch's window (SSO's percussion; MuseScore's editor window, its pixels):
       // their centres, right to left (MuseScore --window-pictures clicks each for its hit list)
       static std::vector<QPoint> drumIcons(const QImage& window);

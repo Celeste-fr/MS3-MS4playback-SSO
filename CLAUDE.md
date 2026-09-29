@@ -446,6 +446,26 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   flag: on velocity but not listed (add it), on the controller only but listed (not needed), neither, or a
   pp -> ff span more than 6 dB off the patch's controller articulations' median. results.json `dynamics`.
   Round robins move a note ±1-2 dB. Test `dynamicsCheck` (test synth: velocity * CC1).
+  **Timing, in the background** (the owner, 2026-09-29: "yes, build", the timing and legato run after the
+  controller links): `Measure SSO timing in background.bat` starts `--extract-library … --check-timing`
+  (`checkTimingMode`, as `--check-dynamics`: no supervisor, its own setups copy, lock and log `background timing
+  check.log`; `runHeadless(…, timing)`, `_timingOnly`: `dynamicsPatch` calls `measureTiming`). Every mapped
+  patch, each articulation a notation chooses, offline (`ArticulationCheck::timing`, 5 ms windows of the note's
+  power against its own peak): start (30 dB under the peak), full (6 dB under) and peak at pp / mf / ff (velocity
+  = CC1 = 32 / 80 / 112); mf held 2.5 s: how long it sounds (a short's own length) or, sustained, its release (to
+  30 dB under its level before the note-off, tail up to 6 s); how long a 0.1 s note sounds; a legato articulation
+  (the Performance patches): two notes slurred as MuseScore plays them (30 ms overlap) at velocity 20 / 64 / 110,
+  +2 and -5 semitones, the pitch every 10 ms in 80 ms frames against the first note's
+  (`PluginExtract::centsShift`): when it leaves the first note (35 cents), when it arrives (within 35 cents for 3
+  frames), the level's dip. results.json `timing`; `tools/soundlibraries/timing_from_check.py <zips>` keeps the
+  derived numbers as `sso_articulation_timing.json` and prints medians. Test `timingCheck` (the test synth's new
+  14, a 200 ms attack and 300 ms ring, and 24, a one-voice legato gliding 300 / 150 / 60 ms by velocity: found
+  250-280 / 130-140 / 50-60 ms; a glide under the 80 ms frame leaves and arrives in one frame). Tried here headless
+  with the test synth (a map with a patch and its Performance extra, the synth's state as setups): 2 patches in 30 s,
+  the unused articulation left out, summary, results.json and zip, read back by `timing_from_check.py`; a legato
+  articulation's pitch analysis takes about 26 s of processor time. Untried with Kontakt; estimated about an hour
+  for the ~160 patches, as the dynamics run. Not yet used by playback (early
+  note starts, shorts by length, legato overlap by speed would use it).
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

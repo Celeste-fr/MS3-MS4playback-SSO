@@ -62,6 +62,7 @@ class TestSoundLibrary : public QObject, public MTest
       void dynamicsCalibration();
       void heldOnPerformance();
       void dynamicsCheck();
+      void timingCheck();
       void shortsFollowDynamics();
       void evenDynamicSteps();
       void checkedAsExpected();
@@ -2371,6 +2372,72 @@ void TestSoundLibrary::dynamicsCheck()
       QCOMPARE(int(r2[0].curve.size()), 8);
       QCOMPARE(r2[1].pitch, -1);
       QVERIFY(r2[1].curve.empty());
+      }
+
+//---------------------------------------------------------
+//   timingCheck
+//    ArticulationCheck::timing on the test synth: 1 starts at once and stops at its release; 14 speaks
+//    over 200 ms and rings -20 dB each 300 ms after it (30 dB: 450 ms); 42 a short, -40 dB after 0.46 s;
+//    24 a legato that glides from the note before, slower at a soft velocity
+//---------------------------------------------------------
+
+void TestSoundLibrary::timingCheck()
+      {
+      using AC = ArticulationCheck;
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->setOffline(true));
+      AC::Settings s;
+      s.pitch = 67;
+      s.minPitch = 40;
+      s.maxPitch = 100;
+      int steps = 0;
+      const std::vector<AC::TimingResult> r = AC::timing(p.get(), { 1, 14, 42, 24, 30 }, { 67, 67, 67, 67, 67 },
+                                                         { false, false, false, true, false }, s,
+                                                         [&](int, int) { ++steps; return true; });
+      QCOMPARE(int(r.size()), 5);
+      auto near = [](double x, double want, double tolerance, const char* what) {
+            if (std::fabs(x - want) > tolerance)
+                  qWarning() << what << x << "expected" << want;
+            return std::fabs(x - want) <= tolerance;
+            };
+      // 1: at once, held, stops at its release
+      QCOMPARE(r[0].pitch, 67);
+      QVERIFY(r[0].startMs[1] <= 5 && r[0].fullMs[1] <= 5);
+      QVERIFY(r[0].sustains);
+      QVERIFY(near(r[0].releaseMs, 0, 10, "1 release"));
+      QVERIFY(near(r[0].shortNoteMs, 100, 10, "1 a 0.1 s note"));
+      // 14: -30 dB at 3 % of 200 ms (6 ms), -6 dB at 50 % (100 ms), full at 200 ms; release 30 dB at 450 ms
+      for (int k = 0; k < 3; ++k) {
+            QVERIFY(near(r[1].startMs[k], 5, 6, "14 start"));
+            QVERIFY(near(r[1].fullMs[k], 100, 10, "14 full"));
+            }
+      QVERIFY(r[1].sustains);
+      QVERIFY(near(r[1].releaseMs, 450, 20, "14 release"));
+      // 42: decays -40 dB in 0.46 s whether held or not
+      QVERIFY(!r[2].sustains);
+      QVERIFY(near(r[2].lengthMs, 460, 20, "42 length"));
+      QVERIFY(near(r[2].shortNoteMs, 100, 10, "42 a 0.1 s note (cut at the note-off)"));
+      // pp / mf / ff: velocity = CC = 32 / 80 / 112, the level velocity * CC
+      QVERIFY(near(r[0].peakDb[2] - r[0].peakDb[0], 40 * std::log10(112.0 / 32.0), 2, "1 pp to ff"));
+      // 24: 6 transitions (3 velocities, +2 and -5), glides of 300 / 150 / 60 ms: the pitch leaves before it arrives,
+      // slower at velocity 20
+      QCOMPARE(int(r[3].legato.size()), 6);
+      // (a glide shorter than the 80 ms frames: it leaves and arrives in the same frame)
+      for (const auto& l : r[3].legato) {
+            qInfo("legato velocity %d, %+d: leaves %g, arrives %g, dip %g dB", l.velocity, l.interval, l.leaveMs, l.arriveMs, l.dipDb);
+            QVERIFY2(l.leaveMs >= 0 && l.arriveMs >= l.leaveMs,
+                     qPrintable(QString("velocity %1, %2: leaves %3, arrives %4").arg(l.velocity).arg(l.interval).arg(l.leaveMs).arg(l.arriveMs)));
+            const double glide = l.velocity < 40 ? 300 : l.velocity < 100 ? 150 : 60;
+            QVERIFY(near(l.arriveMs, glide, 60, "24 arrival"));
+            QVERIFY(l.dipDb > -3);                // (one voice, no gap)
+            QVERIFY(!l.cents.empty());
+            }
+      QVERIFY(r[3].legato[0].arriveMs > r[3].legato[4].arriveMs);
+      // 30: silent everywhere
+      QCOMPARE(r[4].pitch, -1);
+      QVERIFY(steps >= 5 * 4);
       }
 
 //---------------------------------------------------------
