@@ -907,6 +907,31 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   own for `DialogWatch` (`markOwnWindow`), as the pictures run does, and the controllers' window changes are measured
   too (which named control each moves, `controllersToControls`). A guess from one dump; untried with Kontakt. (The
   owner's WER folders are the working MuseScore's ntdll c000000d fail-fasts, builds 6aba63d9 / 6aba99ca, no dumps.)
+  **The fifth run finished** (the owner, 2026-09-28 13:09-18:48, restarted twice on newer builds, d966da4 then
+  7b2623f / 46d8b0d; not run 222's off-screen window, so whether the window helps is still unknown): 121 crashes, all in
+  Kontakt 8.vst3 (+0x84DB9C 53, +0x84AC98 38, +0x8E5873 9, +0x8E5944 8, +0x85729A 6, +0x84ACC8 4, +0x8663BF 1), at cc 23
+  (58), a parameter (43) or cc 22-26; one Kontakt crash notice (15:22, before the supervisor closed them); no hang. With
+  the third run's data, **695 of the 700 patches measured**: 663 complete, 6 with cc 23 left out after two crashes there
+  (Bass Trombone Solo / Bass Trombones a2 - Long, Harp - Slid CPU-friendly, Celli / Violins 1 - Trill (Minor 2nd),
+  Clarinet Solo - Long Flutter), 26 not put back within their noise (decaying percussion round robins, the Fanfares,
+  Multitongue, Flutter, Toys: sounds that differ note to note; the data is there). Missing: Cimbassi a2 - Long (crashed
+  5 times at 3 steps: left out); Curated Woodwind Ensembles, Bass Trombone Solo - Fall, Field Drum and Cimbassi a2 - Long
+  Alt were measured in two rounds a restart cut off, whose folders weren't zipped (so a later run counted them done).
+  The derived numbers are kept as `tools/soundlibraries/sso_patch_measurements.json` (`measurements_from_extract.py
+  <folders or zips>`: per patch status, test pitch, pitch bend down / up, each controller and parameter that changes
+  the sound with its levels, brightness and balance; 0.8 MB). Found:
+  - **Pitch bend, linear** (the cents at bends 4096 … 12288 on a straight line): every Performance patch (43) and Horn
+    Solo / Horns a2 - Legato **±100 cents** (98-105); the Kickstart percussion (tuned, drums, ensembles), Solo Cello
+    (All techniques and Long) and the solo strings' Long Harmonics ±195; the rest none (within their round robins, ±25).
+    So the held and slurred notes, which play the Performance patches, could be tuned by pitch bend within a semitone
+    (the owner's first choice, 2026-09-27) instead of varispeed; not done.
+  - Controllers that change the sound: CC 7, 10, 11, 111 on every patch, 23 on 678, 1 and 103 on about 380, 22 and 24
+    on about 315, 64 on 232, 25 on 196; parameters Expression 687, Articulation Controller 563, Mic 2 level 487, Mic
+    Mix Distance 441, Dynamics 377, Mic 1 level 304, Mic 3 level 275 (a parameter set to 0 and 1 on one held note;
+    "no effect" can mean the mic mix hides it). Which named control each CC moves needs the window (run 222 on).
+  The last round's MuseScore crashed as it closed, after its last patch, and the supervisor logged "ended before its
+  first patch; stopped": the progress file is now emptied at a normal end, not removed, and such a crash is logged as
+  one on closing.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

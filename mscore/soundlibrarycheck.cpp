@@ -2884,8 +2884,12 @@ void ArticulationCheckDialog::extract()
       if (_headless) {
             say(QString("done in %1 min: %2").arg(total.elapsed() / 60000.0, 0, 'f', 1).arg(QDir::toNativeSeparators(zipPath)));
             if (!progressFile().isEmpty()) {
-                  if (_broken.isEmpty())
-                        QFile::remove(progressFile());              // (the supervisor: all done)
+                  if (_broken.isEmpty()) {
+                        // (the supervisor: all done; left empty, not removed, so a crash as Kontakt closes
+                        // isn't read as one before the first patch: the owner's run of 2026-09-28, round 99)
+                        QFile f(progressFile());
+                        f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+                        }
                   return;
                   }
             if (_broken.isEmpty())                                   // (else a new process goes on)

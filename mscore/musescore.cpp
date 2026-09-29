@@ -4764,6 +4764,11 @@ static bool superviseExtract(const QString& root)
             if (left.isEmpty()) {
                   if (!hung && child.exitStatus() == QProcess::NormalExit)
                         break;                                    // (all done)
+                  if (!hung && f.exists()) {                      // (emptied at the end: all done, then a crash)
+                        ArticulationCheckDialog::logBackground(QString("MuseScore crashed as it closed, after its last patch (exit code %1)")
+                                                               .arg(QString::number(uint(child.exitCode()), 16)));
+                        break;
+                        }
                   ArticulationCheckDialog::logBackground(QString("MuseScore ended before its first patch (exit code %1); stopped")
                                                          .arg(QString::number(uint(child.exitCode()), 16)));
                   ok = false;
