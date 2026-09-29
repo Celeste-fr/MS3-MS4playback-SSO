@@ -566,11 +566,56 @@ ninja -j4 mscore                    # a full build takes about 40 minutes on 4 c
 - Linux defines both `USE_ALSA` and `USE_PORTMIDI`. PortMidi wins, so the PortMidi code
   (the owner's Windows path) compiles here too.
 
+## Playback verification (`VERIFY.md`)
+
+The owner, 2026-09-28: every playback bug needed an audio export by hand on Windows, sent over and
+analysed here; "figure out a way to automatically verify that the plugin plays back properly".
+`MuseScore3Evo.exe --verify-playback <score | folder | default> [more …] [--verify-library <lib>]
+[--verify-out <folder>] [--verify-audio <file>] [--verify-wav] [--verify-shareable]`
+(`verifyInBackground` in musescore.cpp; `mscore/playbackverify.*`; the analysis in
+`audio/vst3/playbackverify.*`, whose header lists every check and threshold). A background process
+like the extract: no window, below-normal priority, its own setups copy (`background verify
+setups`; dynamics.json always the working one's), lock and log (`background playback verify.log`),
+DialogWatch; the report folder opens when done unless `--verify-out`. Per score: the events as an
+export renders them (the working MuseScore's synthesizer.xml) and again with the library off (the
+built-in synth: the expectation); the library's patches loaded once (`SoundLibraryExport::
+loadInstances`, shared with the command-line export) and rendered offline as `saveAudio` does, mixed
+and each library part alone. Findings: `missing-attack` (a strike), `missing-note` (one note,
+chords' octaves included), `cut-short` (held articulations), `silence`, `clipping`, `drift`, each with
+measure, beat, part, pitches, times and the events on its slot around it (pedal, switch, CC1/CC11,
+parameters, same key released, an earlier same-key note still on, notes the slot started in the 2 s
+before). Output `Playback verify <date>/` + zip: report.json, summary.txt, per part strikes.tsv and
+notes.tsv, events.tsv, clips/ (2.5 s of the rendering and the built-in synth's per finding);
+`--verify-shareable` keeps only the two reports (no audio, no note lists: the owner's music in a
+public place). `Verify SSO playback in background.bat` (bin) runs it on `share/verifyplayback`
+(two scores from `tools/playbackverify/make_verify_scores.py`) or on scores dropped on it.
+**Reading a report**: `tools/playbackverify/read_verify_report.py <zip|folder> [--near <s>]`.
+**An export the owner sends**: `--verify-audio <wav>` checks it against the score's events here
+(this build's events: say so when the export came from an older one).
+Calibrated on the owner's piano score (files kept outside the repository): the pedal-change export
+(prog44) 88 missing attacks, 85 at pedal changes (the hand analysis' 28 + 1 among them; comparing with
+the fixed export, ~97 of the 220 pedal-change chords were lost, not 28); the next export (new44) 8,
+5 of them where 3a342ce later moved the pedal; the latest (v3) no missing attack, 38 missing notes,
+16 in bars 59-62 where the owner hears staccato notes missing, clustered where the slot started
+20-39 notes in the 2 s before (a voice limit?). Test without Kontakt: `MS_VERIFY_FAULT`
+(`pedal-drop:<ms>`, `drop:<n>`, `truncate:<n>:<ms>`; `MS_VERIFY_FAULT_LOG`) in `Vst3Synth`;
+`tools/playbackverify/try_with_testsynth.sh <build> <install> [work]` runs it headless with the test
+synth clean and with each fault, `check_faults.py` compares (clean: 0 findings; every detectable fault
+found; nothing else). The test synth now releases a note in 10 ms (an abrupt stop's click looked like
+an attack). Found with it: MS4 lengths overlap repeated notes of the same key (164 strikes in the
+owner's piano score), and a one-voice-per-key plug-in then ends the new note with the old note-off;
+whether Kontakt does is not known. Optional runner: `.github/workflows/verify_playback_owner_pc.yml`
+(workflow_dispatch only, environment `owner-pc` with the owner as required reviewer, no checkout,
+label `sso`; not set up; VERIFY.md has the risk and the steps). The Ableton route was assessed
+(VERIFY.md): it hosts Kontakt outside MuseScore's hosting and export paths, where the bugs were, and
+Live can't run headless.
+
 ## Tests and known state
 
 - `mtest/libmscore/soundlibrary` (`tst_soundlibrary`): text techniques, `choose`, the
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
-  routing, sampled ornaments). All tests pass.
+  routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
+  `playbackVerifyDrift`). All pass (31, 2 skipped without the owner's files).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order

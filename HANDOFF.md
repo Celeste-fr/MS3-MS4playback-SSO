@@ -218,3 +218,22 @@ are mapped where notation can ask for them). Still open:
   ask the owner to paste their marks if they're needed.
 - Nothing here can hear Kontakt or SSO. Say whether something was tested with the owner's
   Kontakt, the test synth or sfizz when you report.
+
+## Playback verification (2026-09-28, branch `playback-verify`)
+
+`MuseScore --verify-playback` and `Verify SSO playback in background.bat` (see `VERIFY.md`, `CLAUDE.md` ›
+Playback verification): renders scores through Kontakt offline as an export does, again with the
+built-in synth, and reports missing chords and notes, notes cut short, silences, clipping and drift,
+each with what happens on its slot at that moment. Tried here only: with the MS Test Synth and injected
+faults (all detectable faults found, nothing else flagged) and on the owner's piano exports through
+`--verify-audio`. Next:
+- the owner: a Windows build of this branch (the branch doesn't trigger the build workflow: *Run
+  workflow* on it), then double-click the `.bat` once (the test scores) and once with the piano score
+  dropped on it, and hand back both zips. Check with `read_verify_report.py`: the run time, whether the
+  clean test scores pass with Kontakt (thresholds were set on one piano score: strings and winds
+  through SSO are untried), and the piano score's missing notes in bars 59-62 with their "notes in the
+  2 s before" (a voice limit: then Kontakt's voice settings, or fewer release samples);
+- look at what the report says about repeated notes of the same key (an earlier note still on when
+  the next starts): with the test synth that cuts the new note; with Kontakt unknown;
+- the self-hosted runner workflow is there but optional; the owner is wary of it (2026-09-28).
+
