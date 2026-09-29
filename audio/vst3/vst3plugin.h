@@ -129,7 +129,8 @@ class Vst3Plugin {
       std::vector<Parameter> parameters() const;
       double parameter(unsigned id) const;                        // normalized, the controller's
       QString parameterText(unsigned id, double normalized) const;
-      void setParameter(unsigned id, double normalized);          // processor (next process()) and controller
+      void setParameter(unsigned id, double normalized);          // processor (next process()) and controller;
+                                                                  // GUI thread, also while the audio thread plays
       // the processor only, at the next process(): from the audio thread (automation, Vst3Synth), which
       // mustn't touch the controller (GUI thread)
       void queueParameter(unsigned id, double normalized);

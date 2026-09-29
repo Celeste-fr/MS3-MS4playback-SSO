@@ -67,6 +67,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/kontaktsetup.h"
+#include "audio/vst3/librarycontrollers.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "vst3editor.h"
@@ -773,14 +774,6 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QS
 
 #ifdef USE_VST3
 //---------------------------------------------------------
-//   applyParameters
-//    the route's controllers that are plug-in parameters (SoundLib::Controller::param), at the
-//    part's values; found by title (Vst3Plugin::parameterId). One the part has no value for
-//    plays as the patch has it: patchValues (Slot::patchValues; null: a new instance, which
-//    has nothing to put back) keeps the setup's value of each parameter set, to put it back
-//---------------------------------------------------------
-
-//---------------------------------------------------------
 //   parameterIds
 //    automation: a route's instance's parameter id of each controller of the part's main patch
 //    (the renderer's ME_PARAMETER events are by that index), as titled on this instance
@@ -798,33 +791,6 @@ static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, c
       return ids;
       }
 
-static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values,
-                            std::map<unsigned, double>* patchValues)
-      {
-      for (const SoundLib::Controller& c : r.instrument->allControllers) {
-            if (c.param.isEmpty())
-                  continue;
-            const int value = PartControllers::value(r.part, c, values);
-            if (value < 0 && (!patchValues || patchValues->empty()))
-                  continue;
-            const long id = p->parameterId(c.param);
-            if (value < 0) {                        // another score's value: the patch's own again
-                  if (id >= 0 && patchValues->count(unsigned(id))) {
-                        p->setParameter(unsigned(id), patchValues->at(unsigned(id)));
-                        patchValues->erase(unsigned(id));
-                        }
-                  continue;
-                  }
-            if (id >= 0 && patchValues && !patchValues->count(unsigned(id)))
-                  (*patchValues)[unsigned(id)] = p->parameter(unsigned(id));
-            if (id < 0) {
-                  qWarning("Sound library: %s has no parameter \"%s\" (controller %s)", qPrintable(p->name()),
-                           qPrintable(c.param), qPrintable(c.id));
-                  continue;
-                  }
-            p->setParameter(unsigned(id), value / 127.0);
-            }
-      }
 #endif
 
 //---------------------------------------------------------
@@ -1452,7 +1418,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             for (const SoundLib::Route& r : routes)
                   if (!r.instrument->kit)
                         if (Vst3Plugin* p = vst->plugin(r.port * 16 + r.channel))
-                              applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
+                              LibraryControllers::applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
             // automation: each slot's parameter ids by the part's main patch controller index (the
             // renderer's ME_PARAMETER events), as titled on this slot's instance
             for (const SoundLib::Route& r : routes) {
@@ -1723,7 +1689,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
                 && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e))
                   qWarning("Sound library: %s", qPrintable(e));
-            applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
+            LibraryControllers::applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
             own->setParameterIds(r.port * 16 + r.channel, parameterIds(p.get(), r, routes));
             own->setPlugin(r.port * 16 + r.channel, std::move(p));
             if (patches)
