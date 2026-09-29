@@ -179,6 +179,7 @@ class SoundLibraryHost : public QObject {
       static qint64 processMemory();      // the process's own memory (Task Manager's "Memory"), bytes; -1: unknown
       static void systemMemory(qint64* total, qint64* available);   // the computer's, bytes; -1: unknown
       bool showEditor(int slot, QString* error = nullptr);
+      void keepEditorChanges(int slot, const QString& patch, const QByteArray& opened);   // (its window closed)
       static void routesMayChange();
       // the Mixer (volume, pan, mute, solo) of the score's library parts on their slots
       // (Vst3Synth::setMix): after each sync, at once from the Mixer and Seq::setController, and every
