@@ -1592,61 +1592,6 @@ std::vector<int> SoundLibraryHost::slotsOf(const Part* part) const
       }
 
 //---------------------------------------------------------
-//   keepEditorChanges
-//    the instance's state when its window closes, when changed since it opened: on the owner's yes, the
-//    patch's setup (every score, every instance of the patch from its next load). The values a score
-//    set (its Controllers…) are put back to the patch's own for the saved state, then set again
-//---------------------------------------------------------
-
-void SoundLibraryHost::keepEditorChanges(int slot, const QString& patch, const QByteArray& opened)
-      {
-#ifdef USE_VST3
-      Vst3Synth* vst = synth();
-      Vst3Plugin* p = vst ? vst->plugin(slot) : nullptr;
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-      if (!p || !library || _slots[size_t(slot)].instrument != patch)
-            return;
-      const QByteArray now = p->state();
-      if (now.isEmpty() || now == opened)
-            return;
-      const QString answer = QMessageBox::question(mscore, tr("Kontakt settings"),
-            tr("Keep what you changed in Kontakt for %1 (mic positions, voices, options…)?\n\n"
-               "It becomes this patch's setup, for every score, from the next time the patch loads "
-               "(parts playing it now keep what they have until then).").arg(patch),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) == QMessageBox::Yes ? "yes" : "no";
-      if (answer != "yes")
-            return;
-      // the patch's own values where a score had set its own
-      std::map<unsigned, double>& own = _slots[size_t(slot)].patchValues;
-      std::map<unsigned, double> scoreValues;
-      for (const auto& v : own) {
-            scoreValues[v.first] = p->parameter(v.first);
-            p->setParameter(v.first, v.second);
-            }
-      const QByteArray state = own.empty() ? now : p->state();
-      for (const auto& v : scoreValues)
-            p->setParameter(v.first, v.second);
-      if (state.isEmpty() || !writeFile(setupFile(*library, patch), state)) {
-            QMessageBox::warning(mscore, tr("Kontakt settings"), tr("The setup of %1 could not be written.").arg(patch));
-            return;
-            }
-      QJsonObject all = readMade(*library);
-      QJsonObject rec = all.value(patch).toObject();
-      rec["resaved"] = true;                    // (Kontakt's own state: loads fast, not made again)
-      rec["kept"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-      all[patch] = rec;
-      writeFile(madeFile(*library), QJsonDocument(all).toJson());
-      logTime(*library, QString("%1: the owner's changes in Kontakt's window kept as its setup (%2 KB)").arg(patch).arg(state.size() / 1024));
-      if (mscore)
-            mscore->showMessage(tr("%1: your Kontakt settings are kept as its setup").arg(patch), 6000);
-#else
-      Q_UNUSED(slot);
-      Q_UNUSED(patch);
-      Q_UNUSED(opened);
-#endif
-      }
-
-//---------------------------------------------------------
 //   showEditor
 //---------------------------------------------------------
 
@@ -1673,15 +1618,8 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
                   *error = tr("%1 has no editor.").arg(p->name());
             return false;
             }
-      // a change made in the window: kept as the patch's setup when the window closes, if the owner wants it
-      // (the owner, 2026-09-29: all 5 mic positions on for the Grand Piano; the running instance had them,
-      // the setup file not, so every reload, and the playback check, played the patch as it was made)
+      // (to look at: MuseScore makes the setups; a change lasts until the patch loads again)
       s.editor = new Vst3EditorWindow(view, QString("%1 – %2 (%3)").arg(s.instrument, p->name(), s.part), mscore);
-      const QByteArray opened = p->state();
-      const QString patch = s.instrument;
-      connect(s.editor.data(), &Vst3EditorWindow::closed, this, [this, slot, opened, patch]() {
-            keepEditorChanges(slot, patch, opened);
-            });
       s.editor->show();
       return true;
 #else
