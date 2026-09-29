@@ -130,6 +130,23 @@ controllers), a dynamics lane on top of the notation's, the map's controller ent
 controls (`gen_spitfire_sso.py` from sso_patch_controls.json), and one try with Kontakt that a parameter
 set by automation is heard (e.g. Vibrato on Violins 1).
 
+## The Mixer on library parts (2026-09-28, branch `mixer-sso`): in, waiting for the owner's Windows check
+
+The owner: "the mixer panning tool doesn't work … make all buttons in the Mixer work with SSO". See `CLAUDE.md`
+› Plugin hosting › The Mixer on library parts (audit table, design). Volume and pan act in MuseScore on each
+Kontakt instance's output (not CC7 / CC10), mute and solo silence the part's instances, reverb and chorus are
+disabled for hosted parts (SSO's own room), the patch and port / channel show the library's. Tested here with
+the test synth only. The owner, on a Windows build of this branch, with an SSO score:
+- pan a string part hard left and right while it plays (it should move smoothly, no clicks), and a part with
+  extra patches (a Performance legato plus shorts) and one with copies for other tunings: every note follows;
+- volume down and up while playing; volume 100 / pan centre sounds exactly as before;
+- mute and solo while long notes ring: they stop at once, nothing hangs, unmute brings the next notes back;
+- export audio with a part panned, quieter and muted: the file matches (solo is ignored in an export, as for
+  MuseScore's own sounds);
+- the Mixer's details panel for an SSO part: reverb / chorus greyed with the tooltip, the patch reads the SSO
+  patch, port / channel greyed; switch the part to "MuseScore 4" in "This part plays:": all back as before;
+- if Kontakt was relied on for pan (its own Pan knob): it stays where the setup put it; the Mixer adds to it.
+
 ## Merging with claude/intelligent-cray-6pd4o1 (prepared 2026-09-28; done 2026-09-28 on that branch, as planned)
 
 The owner decides what goes to main; this is the plan. Both branches start at main 16e6933. That
