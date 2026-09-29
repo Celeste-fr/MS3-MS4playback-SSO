@@ -43,6 +43,7 @@
 #ifndef __SOUNDLIBRARYCHECK_H__
 #define __SOUNDLIBRARYCHECK_H__
 
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -163,6 +164,21 @@ class ArticulationCheckDialog : public QDialog {
       static void setProgressFile(const QString& path);
       static QString runFile(const QString& root, const QString& what);   // superviseExtract's files: step, skip, finished, crash
       static QString zip(const QString& folder);
+      // a plan (MuseScore --extract-plan <file>): per patch what is still to measure, one a line,
+      // "<patch>\tall" (everything) or "<patch>\tpitch=60\tcc=1:98,7:102\tparams=Dynamics;Vibrato" (which
+      // named control each listed controller moves: only those tried, each put back at its value from an
+      // earlier run, only those parameters; no pitch bend, no switches). tools/soundlibraries/links_plan.py
+      struct PlanEntry {
+            bool all { true };
+            int pitch { -1 };
+            std::vector<int> controllers;
+            std::map<int, int> values;
+            QStringList parameters;
+            };
+      static void setPlanFile(const QString& path);
+      static const PlanEntry* planFor(const QString& patch);        // null: no plan, or not in it
+      static bool hasPlan();
+      QSet<QString> linkedBefore() const;                           // patches an earlier links run did
       QSet<QString> measuredBefore(bool pitchBend) const;         // patches an earlier controller extract measured completely
       int librarySwitchCC() const;                                 // the CC the library switches articulations on (-1: none)                  // the folder zipped next to it (its path; empty: failed)
       // Check articulations without the dialog (MuseScore --scan-keys) on the patches to scan

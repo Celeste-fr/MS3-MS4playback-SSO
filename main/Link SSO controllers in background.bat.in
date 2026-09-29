@@ -1,0 +1,29 @@
+@echo off
+rem What the controller runs still left out, for Spitfire Symphony Orchestra, in the background.
+rem
+rem Double-click this file. It starts a MuseScore of its own with no window, like
+rem "Measure SSO controllers in background.bat", but it only does what is still needed
+rem ("SSO controller links plan.txt" next to this file; MuseScore --extract-plan):
+rem  - on 689 patches: which named control (Vibrato, Release, Mic 2 level ...) each controller moves.
+rem    Only the controllers the earlier run found changing the sound are tried (about 12 a patch,
+rem    not 122), each put back at the value that run found; Kontakt's window is open off the screen
+rem    (nothing shows on yours) and a picture shows which control moved. No pitch bend, no switches.
+rem  - on 11 patches the earlier runs left incomplete: everything, as before.
+rem It plays offline, as fast as Kontakt renders, at below-normal priority, and leaves the MuseScore
+rem you work in alone (its setups are the extract's copy, it opens no audio or MIDI device).
+rem Patches a links run already did are left out, so you can stop it and start it again.
+rem
+rem Progress: Documents\MuseScore Sound Library Check\background extract.log
+rem If Kontakt crashes or hangs, a new MuseScore goes on (the log says where); each round writes
+rem its own zip. When it is done, that folder opens.
+rem Hand back: every "... extract <date>" FOLDER of this run and "background extract.log"
+rem (select them, right-click, compress to one zip).
+rem To stop it: Task Manager, end both @MSCORE_OUTPUT_NAME@.exe without a window (the one that
+rem started first, then the other).
+
+start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --extract-plan "%~dp0SSO controller links plan.txt" --extract-pitch-bend
+
+echo The links run is going in the background (Spitfire Symphony Orchestra).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background extract.log
+echo That folder opens when it is done. You can close this window and keep working.
+timeout /t 15

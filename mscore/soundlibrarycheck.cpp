@@ -77,6 +77,7 @@ namespace Ms {
 extern Seq* seq;
 
 static const int GRAB_WAIT_MS = 400;      // after a switch, for the window to show it
+static const int REAL_GRAB_MS = 250;      // offline: real time for the plug-in's window to show a change
 
 // the check's version: raise it when a change makes earlier results stale (all patches are then
 // checked again)
@@ -677,6 +678,66 @@ void ArticulationCheckDialog::setProgressFile(const QString& path)
       progressFile() = path;
       }
 
+//---------------------------------------------------------
+//   the plan of a links run (--extract-plan)
+//---------------------------------------------------------
+
+static std::map<QString, ArticulationCheckDialog::PlanEntry>& plan()
+      {
+      static std::map<QString, ArticulationCheckDialog::PlanEntry> entries;
+      return entries;
+      }
+
+void ArticulationCheckDialog::setPlanFile(const QString& path)
+      {
+      plan().clear();
+      QFile f(path);
+      if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            return;
+      for (const QString& line : QString::fromUtf8(f.readAll()).split('\n')) {
+            const QStringList fields = line.split('\t');
+            const QString name = fields.value(0).trimmed();
+            if (name.isEmpty() || name.startsWith('#'))
+                  continue;
+            PlanEntry e;
+            for (int i = 1; i < fields.size(); ++i) {
+                  const QString field = fields[i].trimmed();
+                  const QString key = field.section('=', 0, 0);
+                  const QString value = field.section('=', 1);
+                  if (key == "pitch") {
+                        e.all = false;
+                        e.pitch = value.toInt();
+                        }
+                  else if (key == "cc") {
+                        e.all = false;
+                        for (const QString& c : value.split(',', Qt::SkipEmptyParts)) {
+                              const int cc = c.section(':', 0, 0).toInt();
+                              e.controllers.push_back(cc);
+                              if (c.contains(':'))
+                                    e.values[cc] = c.section(':', 1).toInt();
+                              }
+                        }
+                  else if (key == "params") {
+                        e.all = false;
+                        for (const QString& t : value.split(';', Qt::SkipEmptyParts))
+                              e.parameters << t.trimmed();
+                        }
+                  }
+            plan()[name] = e;
+            }
+      }
+
+const ArticulationCheckDialog::PlanEntry* ArticulationCheckDialog::planFor(const QString& patch)
+      {
+      auto it = plan().find(patch);
+      return it == plan().end() ? nullptr : &it->second;
+      }
+
+bool ArticulationCheckDialog::hasPlan()
+      {
+      return !plan().empty();
+      }
+
 static void writeProgress(const QStringList& patches)
       {
       if (progressFile().isEmpty())
@@ -885,6 +946,29 @@ QSet<QString> ArticulationCheckDialog::measuredBefore(bool pitchBend) const
       return done;
       }
 
+// the patches an earlier links run did: an extract JSON of a links run ("plan": "links") that sounded and has which
+// control each controller moves
+QSet<QString> ArticulationCheckDialog::linkedBefore() const
+      {
+      QSet<QString> done;
+      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      for (const QFileInfo& d : QDir(root).entryInfoList({ safeFileName(_library->name) + " extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+            for (const QFileInfo& f : QDir(d.absoluteFilePath()).entryInfoList({ "*.json" }, QDir::Files)) {
+                  if (f.fileName() == "plugin.json")
+                        continue;
+                  QFile in(f.absoluteFilePath());
+                  if (!in.open(QIODevice::ReadOnly))
+                        continue;
+                  const QJsonObject j = QJsonDocument::fromJson(in.readAll()).object();
+                  if (j.value("plan").toString() == "links" && j.value("sounds").toBool() && j.contains("controllersToControls")
+                      && !j.value("controllers").toObject().contains("skippedAfterCrash")
+                      && !j.value("parameters").toObject().contains("skippedAfterCrash"))
+                        done.insert(j.value("patch").toString());
+                  }
+            }
+      return done;
+      }
+
 bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics, bool controllers)
       {
       _headless = true;
@@ -900,7 +984,7 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
                   return false;
                   }
             for (const QString& l : QString::fromUtf8(f.readAll()).split('\n')) {
-                  const QString n = l.trimmed();
+                  const QString n = l.section('\t', 0, 0).trimmed();      // (a plan's line: the name, then what to measure)
                   if (!n.isEmpty() && !n.startsWith('#'))
                         wanted << n;
                   }
@@ -942,7 +1026,19 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
       // which sounded, has every controller put back (the patch at the end as at the start), pitch bend when it is
       // asked for, and the parameters. MS_EXTRACT_REDO=1 measures them again
       if (controllers && !qEnvironmentVariableIsSet("MS_EXTRACT_REDO")) {
-            const QSet<QString> done = measuredBefore(pitchBend);
+            // (a links run: a patch planned "all" as before, the others done once a links run did them)
+            QSet<QString> done = measuredBefore(pitchBend);
+            if (hasPlan()) {
+                  const QSet<QString> linked = linkedBefore();
+                  QSet<QString> planned;
+                  for (int row = 0; row < _table->rowCount(); ++row) {
+                        const QString& name = _rows[row].instrument->name;
+                        const PlanEntry* e = planFor(name);
+                        if (e && (e->all ? done.contains(name) : linked.contains(name)))
+                              planned.insert(name);
+                        }
+                  done = planned;
+                  }
             int left = 0;
             for (int row = 0; row < _table->rowCount(); ++row)
                   if (_table->item(row, 0)->checkState() == Qt::Checked && done.contains(_rows[row].instrument->name)) {
@@ -962,7 +1058,8 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
       _quick->setChecked(true);
       _pitchBend->setChecked(pitchBend);
       say(QString("%1: %2 patches%3%4").arg(_library->name).arg(ticked).arg(pitchBend ? ", with pitch bend" : "")
-          .arg(controllers ? ", every controller (sound and parameters)" : ""));
+          .arg(hasPlan() ? ", as planned (which control each controller moves; everything on patches planned \"all\")"
+               : controllers ? ", every controller (sound and parameters)" : ""));
       extract();
       if (zip)
             *zip = _zip;
@@ -2980,7 +3077,13 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             if (_library->dynamicsCC != 11)
                   p->midi(ME_CONTROLLER, 0, 11, _library->expressionValue);
             };
-      int pitch = testPitch(ins);
+      // a links run's patch (--extract-plan): which named control each controller moves, the rest measured
+      // before (the owner, 2026-09-29: "only extract data we still need")
+      const PlanEntry* planned = _headless ? planFor(ins.name) : nullptr;
+      const bool linksOnly = planned && !planned->all;
+      if (linksOnly)
+            out["plan"] = "links";
+      int pitch = linksOnly && planned->pitch >= 0 ? planned->pitch : testPitch(ins);    // (the one that sounded then)
       const int mapPitch = pitch;
       out["pitch"] = pitch;
 
@@ -3087,7 +3190,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             }
       else
             step("pitch bend");
-      if (sounds && !_cancel && _pitchBend->isChecked() && !bendSkipped) {
+      if (sounds && !_cancel && _pitchBend->isChecked() && !bendSkipped && !linksOnly) {
             PluginExtract::Settings s;
             s.pitch = pitch;
             s.sampleRate = MScore::sampleRate;
@@ -3111,7 +3214,7 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             if (pb.contains("rangeUp"))
                   summary += QString("   pitch bend range: about %1 semitones up\n").arg(pb.value("rangeUp").toDouble() / 100.0, 0, 'f', 2);
             }
-      if (_pitchBend->isChecked())
+      if (_pitchBend->isChecked() && !linksOnly)
             lap("pitch bend");
 
       // a patch that never sounded: every controller measured on silence says nothing and, not offline, takes minutes
@@ -3160,6 +3263,11 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
             s.switchCC = switching ? ins.switchNumber : librarySwitchCC();
             s.switchValues = switching ? switchValues : std::vector<int>();
             s.grabWait = GRAB_WAIT_MS;
+            if (linksOnly) {
+                  s.onlyControllers = planned->controllers;
+                  s.patchValues = planned->values;
+                  s.onlyParameters = planned->parameters;
+                  }
             if (_headless) {
                   s.step = step;
                   s.skip = [&](const QString& key) { return skipSteps.contains(key); };
@@ -3186,16 +3294,28 @@ bool ArticulationCheckDialog::extractPatch(int index, const QString& pluginPath,
                         *level = PluginExtract::level(captured);
                   return !_cancel;
                   };
-            PluginExtract::Grab grab = [&]() { return w ? grabPlugin(w) : QImage(); };
+            // offline and as fast as Kontakt renders, its window is drawn by its own timers: before each picture it gets
+            // real time to show the change (else the picture is of before it; the owner's runs of 2026-09-28 had no window)
+            PluginExtract::Grab grab = [&]() {
+                  if (!w)
+                        return QImage();
+                  if (pump.fast) {
+                        pump.fast = false;
+                        pump.run(REAL_GRAB_MS);
+                        pump.fast = true;
+                        }
+                  return grabPlugin(w);
+                  };
             std::vector<PluginExtract::Found> found;
             bool stopped = false;
             prepare();
             if (_headless)
-                  say(QString("   %1: every controller").arg(ins.name));
+                  say(linksOnly ? QString("   %1: which control %2 controllers move").arg(ins.name).arg(planned->controllers.size())
+                                : QString("   %1: every controller").arg(ins.name));
             out["controllers"] = PluginExtract::controllers(p, s, run, grab, status, &found, &stopped);
             if (!stopped)
                   out["parameters"] = PluginExtract::parameters(p, s, run, grab, status, &found, &stopped);
-            if (!stopped && switching)
+            if (!stopped && switching && !linksOnly)
                   out["switches"] = PluginExtract::switches(p, s, run, status, &stopped);
             if (!stopped)
                   out["controllersToControls"] = controllersToControls(out.value("controllers").toObject(), out.value("parameters").toObject());

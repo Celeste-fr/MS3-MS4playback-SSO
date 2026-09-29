@@ -251,6 +251,7 @@ static QString extractLibrary;
 static QString extractPatches = "all";
 static bool extractPitchBend = false;
 static bool extractControllers = false;     // --extract-controllers: every controller tried too (offline, no window)
+static QString extractPlan;                 // --extract-plan: what each patch still needs (a links run; ArticulationCheckDialog::setPlanFile)
 static bool extractChild = false;           // --extract-child: a round of an extract, started by its supervisor (superviseExtract)
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
@@ -4512,6 +4513,7 @@ static bool doProcessJob(QString jsonFile)
 //---------------------------------------------------------
 //   extractInBackground
 //    MuseScore --extract-library <library> [--extract-patches all|mapped|<file>] [--extract-pitch-bend] [--extract-controllers]
+//      [--extract-plan <file>] (what each patch still needs: soundlibrarycheck.h PlanEntry)
 //    MuseScore --scan-keys <library> [--extract-patches <file>]: Check articulations' key scan of the
 //    patches whose keys aren't known yet (SSO's 42 one-drum patches, about 4 hours), the same way
 //    MuseScore --window-pictures <library> [--extract-patches <file>]: the percussion patches' windows,
@@ -4714,6 +4716,8 @@ static bool superviseExtract(const QString& root)
                   args << "--extract-pitch-bend";
             if (extractControllers)
                   args << "--extract-controllers";
+            if (!extractPlan.isEmpty())
+                  args << "--extract-plan" << extractPlan;
             const QDateTime started = QDateTime::currentDateTime().addSecs(-60);
             QProcess child;
             child.setProcessChannelMode(QProcess::ForwardedChannels);
@@ -4815,9 +4819,9 @@ static bool superviseExtract(const QString& root)
                                  : QString("Kontakt stopped running patch scripts");
             const QString at = step.isEmpty() ? QString() : QString(" at %1").arg(step);
             const QString then = !again ? QString(" (left out), its data not written")
-                                 : leaveOut ? QString(": once more without %1, its second crash there (try %2 of 4)").arg(step).arg(tried + 1)
-                                 : skippable ? QString(": once more as it was (try %1 of 4)").arg(tried + 1)
-                                 : QString(": once more (try %1 of 2)").arg(tried + 1);
+                                 : leaveOut ? QString(": once more without %1, its second crash there (try %2 of 5)").arg(step).arg(tried + 1)
+                                 : skippable ? QString(": once more as it was (try %1 of 5)").arg(tried + 1)
+                                 : QString(": once more (try %1 of 3)").arg(tried + 1);
             ArticulationCheckDialog::logBackground(QString("%1 on %2%3%4; %5 patches left")
                                                    .arg(what, where, at, crashed || hung ? then : QString(" (left out)"))
                                                    .arg(left.size() + (again ? 1 : 0)));
@@ -4979,6 +4983,8 @@ static bool extractInBackground()
                   args << "--extract-pitch-bend";
             if (extractControllers)
                   args << "--extract-controllers";
+            if (!extractPlan.isEmpty())
+                  args << "--extract-plan" << extractPlan;
             lock.unlock();                              // (the new one takes it)
             if (QProcess::startDetached(QCoreApplication::applicationFilePath(), args))
                   ArticulationCheckDialog::logBackground(QString("going on in a new MuseScore with %1 patches (round %2)")
@@ -8961,6 +8967,9 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("extract-pitch-bend", "Use with --extract-library: also measure pitch bend (about 25 s a patch)"));
       parser.addOption(QCommandLineOption("extract-controllers", "Use with --extract-library: also try every MIDI controller and parameter "
                                           "on each patch, offline (sound and parameters; no window)"));
+      parser.addOption(QCommandLineOption("extract-plan", "Use with --extract-library: a file of what each patch still needs (a patch "
+                                          "a line; tools/soundlibraries/links_plan.py): its patches only, and on each only that; "
+                                          "implies --extract-controllers", "file"));
       parser.addOption(QCommandLineOption("extract-child", "Use with --extract-library: set by the extract's supervisor for each "
                                           "process it starts"));
       parser.addOption(QCommandLineOption("extract-round", "Use with --extract-library: set by the extract itself when it goes on in a new "
@@ -9051,6 +9060,13 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                   extractPatches = parser.value("extract-patches");
             extractPitchBend = parser.isSet("extract-pitch-bend");
             extractControllers = parser.isSet("extract-controllers");
+            if (parser.isSet("extract-plan")) {
+                  extractPlan = QFileInfo(parser.value("extract-plan")).absoluteFilePath();
+                  extractControllers = true;
+                  if (!parser.isSet("extract-patches"))
+                        extractPatches = extractPlan;
+                  ArticulationCheckDialog::setPlanFile(extractPlan);
+                  }
             extractChild = parser.isSet("extract-child");
             checkDynamicsMode = parser.isSet("check-dynamics");
             if (parser.isSet("extract-round"))

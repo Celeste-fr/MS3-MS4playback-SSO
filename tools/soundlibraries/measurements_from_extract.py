@@ -15,6 +15,9 @@ own files:
     "pitchBend": [down, up],                   cents at bend 0 and 16383 against 8192
     "controllers": [[cc, patchValue, [dB before, at 0, at 127], [brightness ...], [balance ...]], ...]
     "parameters": [[id, title, [dB at 0, at 1], [brightness ...], [balance ...]], ...]
+    "links": {"<cc>": "<named control>" | null, ...}   which named control each controller moves (from Kontakt's
+                                               window: a links run, --extract-plan, or a run with the window
+                                               open); null: none it could tell
   }
 
 cc 128 is channel pressure, 129 pitch bend (as pluginextract.cpp names them); patchValue null when
@@ -110,6 +113,7 @@ def main():
     ap.add_argument("-o", "--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "sso_patch_measurements.json"))
     a = ap.parse_args()
     best = {}
+    links = {}          # patch -> (where, {cc: control}): the newest run with the window's links
     for path in a.paths:
         for where, data in patch_jsons(path):
             try:
@@ -119,10 +123,18 @@ def main():
             name = j.get("patch")
             if not name or "controllers" not in j:
                 continue
+            c2c = j.get("controllersToControls")
+            if c2c and any(m.get("control") for m in c2c) and (name not in links or where > links[name][0]):
+                links[name] = (where, { str(m["cc"]): m.get("control") for m in c2c })
+            if j.get("plan") == "links":
+                continue        # (the rest was measured before; a links run's numbers are of a few controllers only)
             st = status(j)
             if name not in best or (RANK[st], where) > (RANK[best[name][0]], best[name][1]):
                 best[name] = (st, where, j)
     out = { n: compact(j, st) for n, (st, _, j) in sorted(best.items()) }
+    for n, (_, l) in links.items():
+        if n in out:
+            out[n]["links"] = l
     with open(a.out, "w", encoding="utf-8") as f:
         f.write("{\n" + ",\n".join(json.dumps(n) + ": " + json.dumps(v, separators=(",", ":")) for n, v in out.items()) + "\n}\n")
     counts = {}

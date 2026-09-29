@@ -472,11 +472,19 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             out["warning"] = "the held note made no sound: the sound column means nothing";
 
       std::vector<int> ccs;
-      for (int cc = 0; cc < 120; ++cc)
-            if (cc != s.switchCC)
-                  ccs.push_back(cc);
-      ccs.push_back(AFTERTOUCH);
-      ccs.push_back(PITCHBEND);
+      if (!s.onlyControllers.empty()) {
+            for (int cc : s.onlyControllers)
+                  if (cc != s.switchCC)
+                        ccs.push_back(cc);
+            out["onlyControllers"] = int(ccs.size());
+            }
+      else {
+            for (int cc = 0; cc < 120; ++cc)
+                  if (cc != s.switchCC)
+                        ccs.push_back(cc);
+            ccs.push_back(AFTERTOUCH);
+            ccs.push_back(PITCHBEND);
+            }
 
       QJsonArray effects;
       QJsonArray none;
@@ -503,7 +511,9 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             Level l0, lLow, lHigh;
             if (!run(s.listen, &l0))
                   return stop();
-            const QImage g0 = grab();
+            // (its own value known from an earlier run: no search, so no picture of it as it was)
+            const auto known = s.patchValues.find(cc);
+            const QImage g0 = known == s.patchValues.end() ? grab() : QImage();
 
             // each value on a new note, measured as long after its start as l0 (a decaying
             // sample would otherwise sound softer at every try)
@@ -594,7 +604,11 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             // back to the patch's own value: the one that looks (else sounds) most like before
             int best = -1;
             double bestDistance = 0;
-            if (cc == PITCHBEND)
+            if (known != s.patchValues.end()) {
+                  best = known->second;
+                  e["patchValueMatch"] = "an earlier run's";
+                  }
+            else if (cc == PITCHBEND)
                   best = 64;
             else if (window || sound) {
                   std::map<int, double> tried;
@@ -724,6 +738,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
       QJsonArray skipped;
       for (const Vst3Plugin::Parameter& par : all) {
             if (c.controllerParams.count(par.id) || families[family(par.title)] > 8)
+                  continue;
+            if (!s.onlyParameters.isEmpty() && !s.onlyParameters.contains(par.title.trimmed(), Qt::CaseInsensitive))
                   continue;
             if (par.flags & (READ_ONLY | PROGRAM_CHANGE | BYPASS)) {
                   skipped.append(QString("%1 %2 (%3)").arg(par.id).arg(par.title)

@@ -932,6 +932,25 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   The last round's MuseScore crashed as it closed, after its last patch, and the supervisor logged "ended before its
   first patch; stopped": the progress file is now emptied at a normal end, not removed, and such a crash is logged as
   one on closing.
+  **Links run: only what is still needed** (the owner, 2026-09-29: "make a version that only extracts data we still
+  need"). `Link SSO controllers in background.bat` starts `--extract-library … --extract-plan "SSO controller links
+  plan.txt" --extract-pitch-bend` (the plan installed next to it from `main/`, made by `tools/soundlibraries/links_plan.py`
+  from `sso_patch_measurements.json` and `sso_patch_controls.json`; `ArticulationCheckDialog::setPlanFile` /
+  `PlanEntry`; `--extract-plan` implies `--extract-controllers`, is the patch list unless `--extract-patches` is given,
+  and is passed on to every round). A line `<patch>\tall`: everything, as before (the 11 patches left incomplete). A
+  line `<patch>\tpitch=…\tcc=1:98,7:102…\tparams=Dynamics;…` (689 patches): the window open off the screen, only the
+  controllers that changed the sound (about 12, not 122; `Settings::onlyControllers`), each put back at the value the
+  earlier run found (`patchValues`, no search), only the patch's named parameters (`onlyParameters`), at the pitch that
+  sounded; no pitch bend, no switches; the JSON says `"plan": "links"` and has `controllersToControls`. Offline, the
+  window is drawn by Kontakt's own timers, so each picture first gets 250 ms of real time (`REAL_GRAB_MS`; the fast
+  pump's pictures were of before the change). Patches a links run did (`linkedBefore`) or, for "all", measured
+  completely are left out, so a stopped run can start again. `measurements_from_extract.py` adds each patch's `links`
+  (cc -> named control) to the measurements. Tried here with the test synth (a links patch tried its 3 listed
+  controllers, CC 1 put back at the plan's value, no pitch bend; an "all" patch as before; a restart left both out; a
+  crash test went on in 4 rounds with the plan); the test synth has no window, so the links themselves, the real-time
+  pictures and the time (estimated 3-5 hours for 700) are untried with Kontakt. `sso_patch_controls.json`'s 58 trill and
+  measured-tremolo keys were cut at the bracket ("… Trill (Major 2nd) (… Trill"): fixed (the map didn't use them).
+  The supervisor's "try n of m" said 4 / 2 where 5 / 3 tries are made: fixed.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty

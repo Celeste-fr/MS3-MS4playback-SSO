@@ -40,12 +40,14 @@
 #define __PLUGINEXTRACT_H__
 
 #include <functional>
+#include <map>
 #include <vector>
 
 #include <QImage>
 #include <QJsonObject>
 #include <QRect>
 #include <QString>
+#include <QStringList>
 
 namespace Ms {
 
@@ -84,6 +86,13 @@ class PluginExtract {
             // "skippedAfterCrash")
             std::function<void(const QString&)> step;
             std::function<bool(const QString&)> skip;
+            // a links run (--extract-plan: which named control each controller moves, the rest measured
+            // before): only these controllers are tried (empty: every one), each put back at its own
+            // value from the earlier run (patchValues; no search), and of the parameters only those
+            // titled in onlyParameters (empty: every one)
+            std::vector<int> onlyControllers;
+            std::map<int, int> patchValues;
+            QStringList onlyParameters;
             };
 
       // something that changed the window: its pictures at the low and the high value (the
