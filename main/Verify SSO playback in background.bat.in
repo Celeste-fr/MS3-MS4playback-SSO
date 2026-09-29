@@ -1,0 +1,35 @@
+@echo off
+rem Check that this MuseScore plays scores right through Spitfire Symphony Orchestra, in the background.
+rem
+rem Double-click this file. It starts this MuseScore with no window (MuseScore --verify-playback ...):
+rem each score is rendered offline through Kontakt as File, Export audio renders it, and again with
+rem MuseScore's built-in synth, and the audio is checked against the notes MuseScore sent: chords or
+rem notes that don't sound, notes cut short, silences, clipping, timing drift. It runs at below-normal
+rem priority with a copy of your setups (Documents\MuseScore Sound Library Check\background verify
+rem setups) and writes nothing in MuseScore's own folders. Only one runs at a time.
+rem
+rem Which scores: with nothing dropped on it, the test scores that come with this MuseScore
+rem (verifyplayback folder). Drag scores, or a folder of scores, onto this file to check those. Your
+rem scores stay on your computer: the report names measures, notes and times, and has short clips
+rem of the audio around each problem (VERIFY.md in the repository says what is in it).
+rem
+rem Progress: Documents\MuseScore Sound Library Check\background playback verify.log
+rem When it is done, that folder opens; hand back the newest "Playback verify <date>.zip".
+rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
+
+setlocal
+set ARGS=
+:more
+if "%~1"=="" goto run
+set ARGS=%ARGS% "%~f1"
+shift
+goto more
+:run
+if not defined ARGS set ARGS="default"
+
+start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --verify-library "Spitfire Symphony Orchestra" --verify-playback %ARGS%
+
+echo The playback check runs in the background (scores: %ARGS%).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background playback verify.log
+echo That folder opens when it is done. You can close this window and keep working.
+timeout /t 15
