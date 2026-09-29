@@ -23,6 +23,7 @@
 #include "playbackverify.h"
 
 #include <cmath>
+#include <cstring>
 #include <deque>
 #include <map>
 #include <memory>
