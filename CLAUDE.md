@@ -702,6 +702,44 @@ macOS.
   the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;
   Kontakt's *Options › Memory › Override instrument's preload size* at 30 kB fixed it. Suggest that
   first when the owner reports crackles or a slow load.
+- **Load times** (the owner, 2026-09-28: "optimize load times of the SSO plugin"; branch `sso-load-times`).
+  Where the time goes: (a) Kontakt's setState, 0.06-0.8 s a patch from its own state, 2-43 s from a setup
+  made from the `.nki` (its first load); (b) Kontakt's samples, loaded after setState returns (the extract:
+  "until it sounds" 3-5 s; ~0.7 GB a patch at the 60 kB preload); (c) MuseScore's own: `syncSome` ran
+  `SoundLib::routes` (the whole notation twice: extras, tuning lanes; 0.3-0.5 s on a 21-part, 300-measure
+  score, tst `routesTiming`) before every instance it loaded at score open and at every play, and paused
+  100 ms between loads. Done: `routesFor` (soundlibraryhost.cpp) keeps the routes until the undo stack's
+  state, the library, `routesGeneration` or the playback-mode / copies metaTags change; the gap is 0
+  (`PRELOAD_GAP_MS`); `Vst3Plugin::looseTitle` by hand (the title index: 8.3 → 0.9 ms for 4145 titles).
+  Test synth, GUI under Xvfb, 33 instances with setState at 100 ms: main had 30 loaded after 30 s, this
+  build 33 in 5.0 s. **Kontakt's own states shared** (`importResaved`): a setup not resaved here is
+  taken from another setups folder (the working one, the background runs' copies) where the same `.nki`
+  and values were resaved, if its sample list is version 3 (`KontaktSetup::sampleListVersion`; a made
+  one, version 2, is refused); a resaved setup no longer depends on Kontakt's empty state (a Kontakt
+  update made every patch slow again). **`load times.log`** now has each new instance by step
+  (`Vst3Plugin::times`: module, create, buses, activate; "one object" when the component is its own
+  controller), each load's setup size and read time and setState by step (component, controller, MIDI
+  mapping), a summary per batch ("At score open", "At play") and when the process's memory settled after
+  it (the real wait). **Worker threads** (`io/soundLibraryLoadThreads`, Advanced preferences, default 0;
+  `MS_SOUNDLIBRARY_LOAD_THREADS`): setState of up to n instances on worker threads (`Pending`,
+  `beginLoad` / `finishLoad` / `harvest`), the window free meanwhile; off until the owner's measurement
+  shows Kontakt takes it (VST 3 wants setState on the UI thread). **Measurement**: `Measure SSO load
+  times in background.bat` (bin) → `MuseScore --measure-load-times <library> [scores…]
+  [--extract-patches <file>] [--measure-probe <patch>] [--measure-threads 2,4] [--measure-no-probe]`
+  (`mscore/soundlibraryloadtimes.*`, `extractInBackground`; normal priority): report `<library> load
+  times <date>.txt` in Documents/MuseScore Sound Library Check, phases 1 each patch alone (steps, until it
+  sounds, memory and when it settles, freeing), 2 the score as at score open, 3 on 2 and 4 threads, 4 an
+  instance reused, 5 the probe (Mic 1-5 at 0; each saved script value of 0s and 1s turned over in
+  Kontakt's own state, `KontaktSetup::withScriptValues`: memory, value kept, articulations silent; the
+  best one element by element). The test synth stands in with `MSTESTSYNTH_SETSTATE_MS`,
+  `MSTESTSYNTH_STREAM_MS`, `MSTESTSYNTH_STREAM_MB` (tst `vst3LoadTimes`). Headless runs here need
+  `HOME` isolated, `~/.vst3/mstestsynth.vst3` linked, `application/startup/firstStart=false` and the
+  splash / start center off in `MuseScore3Evo.ini`, a score as `.mscz` (MusicXML asks about Edwin), no
+  `session` file; GUI runs with sound: a PulseAudio null sink (`pulseaudio -n --load=module-null-sink
+  --load=module-native-protocol-unix`, `XDG_RUNTIME_DIR` of its own). SSO itself: the owner's screenshot
+  shows a switch under each technique (most likely it unloads that technique's samples): which saved
+  script value holds them is what the probe looks for; if found, a setup per score with only the techniques
+  it plays (a new `setup=` value per part) would cut memory and load time the most. Not tried with Kontakt.
 - `mscore/vst3editor.*`: the plug-in's editor window (HWND, NSView or X11 plus IRunLoop).
 - `Seq::putEvent`: in plugin mode, external events go to `Vst3Synth` with the slot as the
   channel.

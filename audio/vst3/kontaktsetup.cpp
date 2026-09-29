@@ -1058,6 +1058,84 @@ QByteArray presetTail(const QByteArray& data)
       return preset.tail();
       }
 
+int sampleListVersion(const QByteArray& component)
+      {
+      QString error;
+      Item root;
+      Preset preset;
+      std::vector<PChunk> top;
+      if (!readRoot(component, root, preset, &error, "Kontakt's state") || !chunks(preset.data, top))
+            return -1;
+      for (const PChunk& t : top)
+            if (t.id == FILENAME_LIST_EX && t.body.size() >= 2)
+                  return qFromLittleEndian<quint16>(reinterpret_cast<const uchar*>(t.body.constData()));
+      return -1;
+      }
+
+QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& set, QString* error,
+                            int* valuesSet)
+      {
+      QString dummy;
+      if (!error)
+            error = &dummy;
+      if (valuesSet)
+            *valuesSet = 0;
+      Item root;
+      Preset preset;
+      std::vector<PChunk> top;
+      if (!readRoot(component, root, preset, error, "Kontakt's state") || !chunks(preset.data, top)) {
+            if (error->isEmpty())
+                  *error = "Kontakt's state: its preset data could not be read";
+            return QByteArray();
+            }
+      int count = 0;
+      bool found = false;
+      for (PChunk& t : top) {
+            if (t.id != BANK)
+                  continue;
+            Struct bank;
+            std::vector<PChunk> kids;
+            if (!bank.read(t.body) || !chunks(bank.kids, kids))
+                  break;
+            for (PChunk& k : kids) {
+                  if (k.id != SLOT_LIST || k.body.size() < 8)
+                        continue;
+                  std::vector<PChunk> slotChunks;
+                  if (!chunks(k.body.mid(8), slotChunks) || slotChunks.empty())
+                        break;
+                  Struct container;
+                  std::vector<PChunk> ckids;
+                  if (!container.read(slotChunks[0].body) || !chunks(container.kids, ckids))
+                        break;
+                  for (PChunk& c : ckids) {
+                        if (c.id != PROGRAM_LIST || c.body.size() <= 4)
+                              continue;
+                        c.body = c.body.left(4) + applyValues(c.body.mid(4), set, &count);
+                        found = true;
+                        break;
+                        }
+                  container.kids = join(ckids);
+                  slotChunks[0].body = container.body();
+                  k.body = k.body.left(8) + join(slotChunks);
+                  break;
+                  }
+            bank.kids = join(kids);
+            t.body = bank.body();
+            break;
+            }
+      if (!found) {
+            *error = "no program in the first slot";
+            return QByteArray();
+            }
+      if (valuesSet)
+            *valuesSet = count;
+      if (!count)
+            return component;             // (nothing set: the very bytes)
+      preset.set(join(top));
+      rebuild(root);
+      return root.toBytes();
+      }
+
 QStringList samplePaths(const QByteArray& component, QString* error)
       {
       QString dummy;

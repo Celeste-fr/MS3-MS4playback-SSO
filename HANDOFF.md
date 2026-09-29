@@ -173,6 +173,31 @@ branch was still being pushed to (a38eeba, 00:47 UTC): merge once its session pa
   Timpani bends ±2 semitones. Everything else merges cleanly.
 - After merging: build, `tst_soundlibrary`, `tst_tuning`; check the NIKT rule and 4d1d657 are in.
 
+## SSO load times (2026-09-28, branch `sso-load-times`): in, waiting for the owner's measurement
+
+The owner: "have a sub agent try to optimize load times of the SSO plugin". See `CLAUDE.md` › Plugin
+hosting › Load times. In: the routes worked out once (not before every instance at score open and at every
+play), no 100 ms pause between loads, a faster title index, Kontakt's own states shared between the
+working setups and the background runs' copies (no slow first load for a patch any run has loaded), a
+resaved setup kept over a Kontakt update, `load times.log` by step and per batch with when the memory
+settled. Off until measured: setState on worker threads (`io/soundLibraryLoadThreads`).
+
+The owner, once, with a build of this branch: close MuseScore, drag the score to speed up onto `Measure SSO
+load times in background.bat` (bin), wait (20-60 min), hand back `Documents\MuseScore Sound Library
+Check\Spitfire Symphony Orchestra load times <date>.txt`. Then, optionally, open that score in the new build
+and hand back `load times.log` (setups folder) too: the real score open with the new code. From the report:
+- phase 1: where a patch's time goes (new instance vs setState's component / controller; "one object" and a
+  controller part as long as the component would mean Kontakt parses its state twice), how long until it
+  sounds and how much memory;
+- phases 2 and 3: whether Kontakt takes setState on worker threads, and how much faster the score is ready.
+  Faster and no failure: make `io/soundLibraryLoadThreads` 2 or 4 by default. A hang (the run's last line
+  says so) or failures: leave it off;
+- phase 4: whether a spare taking a new patch frees the old one's samples and is faster than a new instance;
+- phase 5: whether the Mic levels at 0 free memory (then mics a score doesn't use could be set to 0), and
+  which saved script value, turned to 0, frees memory and silences which articulations. If one holds the
+  technique switches: a setup per part with only the techniques its notation plays (`usedPatches` already
+  knows them per patch), made with `KontaktSetup::withScriptValues` from Kontakt's own state.
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2

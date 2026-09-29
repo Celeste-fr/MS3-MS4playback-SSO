@@ -80,7 +80,25 @@ class Vst3Plugin {
       bool setOffline(bool offline);      // process mode: offline for audio export
       bool setSampleRate(double sampleRate);
       QByteArray state() const;
+      // (the one call that may run on another thread than the one that loaded the instance, when
+      // SoundLibraryHost loads on worker threads: soundlibraryhost.h, loadThreads; the instance is
+      // then in no Vst3Synth slot and nothing else touches it meanwhile)
       bool setState(const QByteArray& state);
+
+      // how long the last load() and setState() took, by step, in ms (load times.log, the load
+      // times measurement: where a Kontakt instance's time goes)
+      struct Times {
+            double module { 0 };          // load(): the plug-in's module (its file), the first time only
+            double create { 0 };          //   the component and controller made, initialized, connected
+            double buses { 0 };           //   buses, arrangements, setupProcessing, the MIDI mapping
+            double activate { 0 };        //   setActive, setProcessing
+            double component { 0 };       // setState(): IComponent::setState (Kontakt loads the patch)
+            double controllerComponent { 0 }; //  IEditController::setComponentState
+            double controller { 0 };      //   IEditController::setState
+            double mapping { 0 };         //   the MIDI mapping read again (16 × 130 questions)
+            };
+      const Times& times() const;
+      bool singleComponent() const;       // its component is its controller too (one object)
       Steinberg::IPlugView* createEditor();     // nullptr: no editor; the caller releases it
       // what the plug-in says its keys play, as DAWs show it (drum maps, keyswitch lanes): the
       // program's pitch names (IUnitInfo) and the keyswitches (IKeyswitchController, "KS "
@@ -117,6 +135,7 @@ class Vst3Plugin {
       void queueParameter(unsigned id, double normalized);
       long parameterId(const QString& title) const;               // by title (loosely: case, spacing, a slot
                                                                   // number in front don't count), -1: none
+      static QString looseTitle(const QString& title);            // a title as parameterId compares it
       long controllerParameter(int channel, int cc) const;        // a MIDI controller's (0-129) parameter, -1: none
       // what the plug-in changed by itself since the last call: its processor's output
       // parameter changes and its controller's edits (performEdit)
