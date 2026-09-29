@@ -2037,6 +2037,38 @@ void SoundLibraryDialog::rebuild()
                         if (!host->showEditor(slot, &error))
                               QMessageBox::warning(this, windowTitle(), error);
                         });
+                  // (for finding where Kontakt keeps a setting, e.g. Max voices, 2026-09-29: the running instance's
+                  // state as a file to hand back; the setups stay the library's, never written from it)
+                  show->setContextMenuPolicy(Qt::CustomContextMenu);
+                  const QString patchName = r.instrument->name;
+                  connect(show, &QWidget::customContextMenuRequested, this, [this, host, slot, show, patchName](const QPoint& at) {
+                        QMenu menu;
+                        QAction* save = menu.addAction(tr("Save Kontakt's state for diagnosis"));
+                        if (menu.exec(show->mapToGlobal(at)) != save)
+                              return;
+#ifdef USE_VST3
+                        Vst3Synth* vst = host->synth();
+                        Vst3Plugin* p = vst ? vst->plugin(slot) : nullptr;
+                        if (!p) {
+                              QMessageBox::warning(this, windowTitle(), tr("%1 is not loaded.").arg(patchName));
+                              return;
+                              }
+                        const QString folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                               + "/MuseScore Sound Library Check";
+                        QDir().mkpath(folder);
+                        const QString file = QString("%1/%2 state %3.vst3state").arg(folder, patchName,
+                                                    QDateTime::currentDateTime().toString("yyyy-MM-dd HHmmss"));
+                        QFile f(file);
+                        if (!f.open(QIODevice::WriteOnly) || f.write(p->state()) <= 0) {
+                              QMessageBox::warning(this, windowTitle(), tr("Could not write %1.").arg(QDir::toNativeSeparators(file)));
+                              return;
+                              }
+                        QMessageBox::information(this, windowTitle(), tr("Saved to %1 (only this file: the patch's setup is unchanged).")
+                                                 .arg(QDir::toNativeSeparators(file)));
+#else
+                        Q_UNUSED(slot);
+#endif
+                        });
                   }
             if (!partItem) {
                   partItem = new QTreeWidgetItem(_tree);
