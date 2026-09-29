@@ -8,6 +8,11 @@
 //  own (one library instrument, played on MIDI channel 1). It is "dry": mixed in after the
 //  master effects, as the library brings its own room.
 //
+//  The Mixer (volume, pan, mute, solo of the part a slot plays) is applied here, in the host, to
+//  each slot's stereo output before the slots are summed: setMix(), smoothed, so it works for any
+//  plug-in (one may ignore MIDI CC7 / CC10: Spitfire's scripts), live and in an audio export alike.
+//  CC7 / CC10 are not sent to the plug-ins (a plug-in that follows them would apply them twice).
+//
 //  Audio export uses the same instances (their instruments are loaded already): between
 //  beginExport() and endExport() they play for the exporting thread only, in offline mode.
 //
@@ -37,6 +42,18 @@ class Vst3Synth : public Synthesizer {
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
                                                     // controller index (ME_PARAMETER events), -1: none
       std::atomic<bool> _varispeed { false };
+      // the Mixer, per slot: the target gains of the left and right output (volume × pan, 0 muted),
+      // live and for an export (its own: an export plays mute but not solo, as MuseScore's), and
+      // the gains now (the audio or exporting thread: they glide to the targets, MIX_SMOOTHING)
+      struct Mix {
+            std::atomic<float> left { 1.f };
+            std::atomic<float> right { 1.f };
+            };
+      std::array<Mix, 64> _mix;
+      std::array<Mix, 64> _exportMix;
+      std::vector<std::array<float, 2>> _gain;
+      std::vector<float> _scratch;
+      void snapGains(const std::array<Mix, 64>& mix);
       // what the audio thread couldn't play while the GUI thread had the slots: played with the next
       // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
       std::mutex _pendingMutex;
@@ -81,6 +98,17 @@ class Vst3Synth : public Synthesizer {
       // seconds: a slurred note of another tuning on its previous note's lane (the owner, 2026-09-28: a
       // slurred 16th quarter-tone sharp at 110 bpm spent most of 80 ms gliding and sounded off)
       static constexpr double LEGATO_GLIDE = 0.03;
+
+      // the Mixer (any thread): a slot's volume and pan as MuseScore's channels keep them (0-127,
+      // volume 100 and pan 64 play the plug-in as it is), muted: silent (mute or solo). Volume:
+      // (volume / 100)^2, the General MIDI curve (40 log10) FluidSynth gives CC7, relative to the
+      // default 100 (0 dB; 127 +4.2 dB, 50 -12 dB). Pan: constant power, as FluidSynth's CC10, with
+      // the middle at 0 dB (a balance: at the left end the left side +3 dB and the right silent)
+      void setMix(int slot, int volume, int pan, bool muted);
+      void setExportMix(int slot, int volume, int pan, bool muted);
+      static float volumeGain(int volume);
+      static void panGains(int pan, float* left, float* right);
+      static constexpr double MIX_SMOOTHING = 0.005;   // seconds: the gains' time constant (no clicks)
 
       // GUI thread
       Vst3Plugin* plugin(int slot) const;

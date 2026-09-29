@@ -29,6 +29,7 @@
 #include "audiodrivers/driver.h"
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -153,6 +154,14 @@ class Seq : public QObject, public Sequencer {
       RangeMap renderEventsStatus;
       MidiRenderer midi;
       QFuture<void> midiRenderFuture;
+      // the Mixer for sound library parts (soundlibrary.h: PartMix): their routes (MIDI out; the
+      // hosted plug-ins' slots are the host's), found again at each start or when stale, and the
+      // CC7 / CC10 / CC91 / CC93 values last sent on each route over MIDI out (only changes are sent)
+      std::vector<std::pair<const Part*, std::pair<int, int>>> _libOuts;
+      const MasterScore* _libOutsScore { nullptr };
+      int _libOutsGeneration { -1 };
+      bool _libOutsStale { true };
+      std::map<int, int> _libSent;        // (port * 16 + channel) * 128 + cc -> value
       bool allowBackgroundRendering = false; // should be set to true only when playing, so no
                                              // score changes are possible.
       EventMap countInEvents;             // playlist of any metronome countin clicks
@@ -358,6 +367,12 @@ class Seq : public QObject, public Sequencer {
       void sendMessage(SeqMsg&) const;
 
       void setController(int, int, int);
+      // the Mixer changed a library part's values (null: any part): hosted, its slots' gains and
+      // pans (SoundLibraryHost::applyMixer); over MIDI out, the CCs on its routes
+      void libraryMixerChanged(const Part* part = nullptr);
+      // a sound library part's routes (port, channel): its hosted slots (slot = port * 16 + channel) or
+      // its MIDI out routes; none for a part the library doesn't play
+      std::vector<std::pair<int, int>> libraryOuts(const Part* part);
       virtual void sendEvent(const NPlayEvent&) override;
       void setScoreView(ScoreView*);
       MasterScore* score() const   { return cs; }

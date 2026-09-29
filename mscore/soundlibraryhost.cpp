@@ -88,6 +88,7 @@ SoundLibraryHost::SoundLibraryHost()
       connect(&_idle, &QTimer::timeout, this, [this]() {
             if (Vst3Synth* s = synth())
                   s->idle();
+            applyMixer();
             });
 #endif
       }
@@ -811,10 +812,13 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       std::array<bool, 64> used {};
       std::vector<Need> needs;
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      _slotParts.fill(nullptr);
+      _slotScore = score->masterScore();
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
                   continue;
             const int k = r.port * 16 + r.channel;
+            _slotParts[size_t(k)] = r.part;
             used[k] = true;
             _slots[k].part = r.part->partName();
             needs.push_back({ k, r.instrument->name, hasSetup(*library, r.instrument->name) });
@@ -950,6 +954,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   emit changed();
                   });
             }
+      applyMixer(score);
       if (remaining && *remaining > 0) {                  // (not all loaded yet: nothing released)
             if (waiting)
                   QApplication::restoreOverrideCursor();
@@ -1005,6 +1010,8 @@ void SoundLibraryHost::release()
                   vst->setPlugin(k, nullptr);
             _slots[k] = Slot();
             }
+      _slotParts.fill(nullptr);
+      _slotScore = nullptr;
       _spares.clear();
       _idle.stop();
       emit changed();
@@ -1034,6 +1041,57 @@ void SoundLibraryHost::routesMayChange()
       if (mscore)
             for (MasterScore* s : mscore->scores())
                   s->setPlaylistDirty();
+      }
+
+//---------------------------------------------------------
+//   applyMixer
+//    the Mixer's values of each part to its slots; score: the one synced (null: the synced
+//    score, if it is still open). A part is matched by pointer against the score's parts only
+//---------------------------------------------------------
+
+void SoundLibraryHost::applyMixer(const Score* score)
+      {
+#ifdef USE_VST3
+      Vst3Synth* vst = synth();
+      if (!vst || !_slotScore)
+            return;
+      if (score && score->masterScore() != _slotScore)
+            return;
+      if (!score) {
+            if (!mscore)
+                  return;
+            bool open = false;
+            for (MasterScore* s : mscore->scores())
+                  open = open || s == _slotScore;
+            if (!open)
+                  return;
+            }
+      MasterScore* ms = const_cast<MasterScore*>(_slotScore);
+      for (const Part* part : ms->parts()) {
+            SoundLib::PartMix m;
+            bool computed = false;
+            for (int k = 0; k < 64; ++k) {
+                  if (_slotParts[size_t(k)] != part)
+                        continue;
+                  if (!computed) {
+                        m = SoundLib::partMix(part, true);
+                        computed = true;
+                        }
+                  vst->setMix(k, m.volume, m.pan, m.muted);
+                  }
+            }
+#else
+      Q_UNUSED(score);
+#endif
+      }
+
+std::vector<int> SoundLibraryHost::slotsOf(const Part* part) const
+      {
+      std::vector<int> found;             // ("slots" is Qt's macro)
+      for (int k = 0; k < 64; ++k)
+            if (part && _slotParts[size_t(k)] == part)
+                  found.push_back(k);
+      return found;
       }
 
 //---------------------------------------------------------
@@ -1120,6 +1178,19 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
                   }
             _vst = _own.get();
             }
+      // the Mixer: volume, pan and mute of each library part (an export plays mute but not solo,
+      // as MuseScore's own sounds in it: exportaudio.cpp)
+      {
+            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+            if (library) {
+                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+                        _vst->setExportMix(k, 100, 64, false);
+                  for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+                        const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
+                        _vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, m.muted);
+                        }
+                  }
+      }
       _synth = synth;
       _synth->addGuest(_vst);
       _vst->beginExport(sampleRate);

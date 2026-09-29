@@ -678,6 +678,54 @@ macOS.
 - `mscore/vst3editor.*`: the plug-in's editor window (HWND, NSView or X11 plus IRunLoop).
 - `Seq::putEvent`: in plugin mode, external events go to `Vst3Synth` with the slot as the
   channel.
+- **The Mixer on library parts** (the owner, 2026-09-28: "the mixer panning tool doesn't work … make all
+  buttons in the Mixer work with SSO"; branch `mixer-sso`). Before, a library part's volume, pan, reverb and
+  chorus went as CC7 / CC10 / CC91 / CC93 to its *built-in* channel only, which plays nothing of it; mute
+  and solo held back its new notes but left sounding ones on (their note-offs were held back too). Now:
+  - hosted (Output::PLUGIN): `Vst3Synth::setMix(slot, volume, pan, muted)` applies them in the host to each
+    slot's stereo output before the slots are summed (any plug-in, whatever its script does with CC7 / CC10;
+    live and in audio export alike). Volume (v/100)² (FluidSynth's CC7 curve, 40 log10, relative to the
+    default 100 = 0 dB: a part at volume 100 / pan 64 plays bit-identical to before; MusicXML imports centre
+    at pan 63, 0.1 dB to the left, as for the built-in sounds); pan constant power with
+    0 dB in the middle (a balance: hard left = left +3 dB, right silent; as Live pans a stereo track); mute /
+    solo = gain 0. Gains glide (one-pole, 5 ms) so moves and mutes don't click. The plug-ins get no CC7 /
+    CC10 (Kontakt follows them by default: applied twice). `SoundLib::partMix(part, withSolo)`: the part's
+    first instrument's first channel's values (the renderer plays the part there; the Mixer's part row sets
+    all its channels), muted when every channel of the part is muted (a single channel row muted still
+    silences only its own notes, `NPlayEvent::isMuted`). `SoundLibraryHost::applyMixer` sets every slot of the
+    part (patch, extras, copies for other tunings: `_slotParts` from the last sync) after each sync (score
+    open, play), at once from `Seq::setController` / the Mixer's mute and solo, and every 50 ms (the idle
+    timer: OSC, the old part editor, the "play part only" box). Export: `SoundLibraryExport` sets
+    `setExportMix` from the routes with mute but not solo, as MuseScore's export treats its own sounds.
+  - MIDI out (Output::MIDI): `Seq::libraryMixerChanged` sends CC7 / CC10 / CC91 / CC93 on each of the part's
+    routes (only changed values; all again at each play), so a DAW or Kontakt there can follow.
+  - Mute / solo: `Seq::stopNotes(channel)` also sends sustain off and all notes off on the part's routes, and
+    `Vst3Synth` ends every key still on at CC123 (note-offs), for a plug-in that maps no CC123.
+  - Reverb / chorus, hosted: disabled with a tooltip. The library brings its own room (SSO's mic positions,
+    *Controllers…*), and MuseScore's reverb here is a master insert on the built-in sounds, not a send: its
+    Mixer knobs do nothing for built-in parts either (FluidSynth's own effects are off, as in MS4; unchanged).
+  - Patch drop-down: a library part shows its library patch, disabled (the General MIDI patch comes back with
+    "This part plays:" MuseScore 3 / 4); a kit keeps it (its sounds the library lacks play the GM kit). MIDI
+    port / channel: disabled; over MIDI out they show the library's route. Details panel: `updateLibrary`.
+  Audit (✓ worked before; → now):
+
+  | Control | Built-in part | Library, hosted | Library, MIDI out |
+  |---|---|---|---|
+  | Volume | CC7 ✓ | nothing → slot gain, all its slots | nothing → CC7 on its routes |
+  | Pan | CC10 ✓ | nothing → constant-power balance | nothing → CC10 |
+  | Mute / solo | notes held, stopNotes ✓ | new notes held, sounding ones hung → slots silenced + notes off | same → CC64 0 + CC123 on routes |
+  | Reverb / chorus | CC91/93, no effect (FluidSynth effects off) | nothing → disabled, tooltip | nothing → CC91 / CC93 |
+  | Patch | program ✓ | GM list, no effect → library patch shown | same |
+  | Port / channel | MuseScore's mapping ✓ | no effect → disabled | showed MuseScore's → the library's route |
+  | Master volume, voice mutes, drumset, playback-mode row | ✓ | ✓ (mode row now refreshes the panel) | ✓ |
+  | Audio export | mute ✓, solo not | muted parts played, volume/pan ignored → export mix | (no audio) |
+
+  Tests: `tst_soundlibrary::partMix`, `mixerSlot` (test synth: defaults bit-identical, 50 → -12.04 dB, 127 →
+  +4.15 dB, hard left right = 0 and left +3.01 dB, a quarter left keeps the power, mute silent with a glide,
+  export values of their own, CC123 ends notes), `mixerScore` (a part's 4 patch instances panned hard left:
+  right 0; two tuning copies at volume 50: -12.04 dB; mute: silent; the piano soloed: exactly the piano's
+  sound, and an export ignores the solo). tst_soundlibrary 32 passed, 2 skipped (29 before). A built-in
+  audio export (Dawn) is bit-identical to main's. Not tried in the GUI with a hosted plug-in.
 - Plug-in modules (`vst3plugin.cpp`, `modules()`) stay loaded until exit, as in DAWs.
   Unloading sfizz and loading it again hung MuseScore (pango types registered in GLib twice).
 

@@ -947,6 +947,40 @@ bool active()
       }
 
 //---------------------------------------------------------
+//   partMix
+//---------------------------------------------------------
+
+PartMix partMix(const Part* part, bool withSolo)
+      {
+      PartMix m;
+      if (!part || part->instruments()->empty())
+            return m;
+      MasterScore* ms = const_cast<Part*>(part)->masterScore();
+      const Instrument* first = part->instruments()->begin()->second;
+      auto playback = [ms](const Channel* c) -> const Channel* {
+            return (ms && c->channel() >= 0 && c->channel() < int(ms->midiMapping().size())) ? ms->playbackChannel(c) : c;
+            };
+      if (!first->channel().empty()) {
+            const Channel* c = playback(first->channel(0));
+            m.volume = c->volume();
+            m.pan = c->pan();
+            m.reverb = c->reverb();
+            m.chorus = c->chorus();
+            }
+      bool any = false;
+      bool all = true;
+      for (const auto& ip : *part->instruments()) {
+            for (const Channel* ch : ip.second->channel()) {
+                  const Channel* c = playback(ch);
+                  any = true;
+                  all = all && (c->mute() || (withSolo && c->soloMute()));
+                  }
+            }
+      m.muted = any && all;
+      return m;
+      }
+
+//---------------------------------------------------------
 //   routes
 //---------------------------------------------------------
 

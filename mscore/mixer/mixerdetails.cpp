@@ -33,6 +33,8 @@
 #include "preferences.h"
 #include "playbackmode.h"
 #include "libmscore/partplayback.h"
+#include "libmscore/soundlibrary.h"
+#include "soundlibraryhost.h"
 
 namespace Ms {
 
@@ -71,6 +73,10 @@ MixerDetails::MixerDetails(QWidget *parent) :
       connect(portSpinBox,         SIGNAL(valueChanged(int)),              SLOT(midiChannelChanged(int)));
       connect(channelSpinBox,      SIGNAL(valueChanged(int)),              SLOT(midiChannelChanged(int)));
       connect(drumkitCheck,        SIGNAL(toggled(bool)),                  SLOT(drumkitToggled(bool)));
+
+      for (QWidget* w : std::initializer_list<QWidget*> { patchCombo, volumeSlider, volumeSpinBox, panSlider, panSpinBox, reverbSlider,
+                                                         reverbSpinBox, chorusSlider, chorusSpinBox, portSpinBox, channelSpinBox })
+            _tips[w] = w->toolTip();
 
       updateFromTrack();
       }
@@ -300,6 +306,96 @@ void MixerDetails::updateFromTrack()
                   connect(tb, SIGNAL(toggled(bool)), handler, SLOT(setVoiceMute(bool)));
                   }
             }
+
+      updateLibrary();
+      }
+
+//---------------------------------------------------------
+//   updateLibrary
+//    a part the sound library plays: volume and pan act on its sound (hosted: in MuseScore, on its
+//    plug-ins' output; over MIDI out: CC7 / CC10 on its routes), from its first channel (the part's
+//    row sets all its channels); reverb and chorus: hosted, the library has its own room (SSO's mics:
+//    View › Sound Library… › Controllers…), MuseScore's reverb is not on it; over MIDI out, CC91 / CC93.
+//    The patch and MIDI port / channel are the library's (a kit's sounds the library lacks keep the
+//    General MIDI patch and channel)
+//---------------------------------------------------------
+
+void MixerDetails::updateLibrary()
+      {
+      for (auto i = _tips.begin(); i != _tips.end(); ++i)
+            i.key()->setToolTip(i.value());
+      if (!_mti)
+            return;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      Part* part = _mti->part();
+      if (!library || !SoundLib::active() || !part)
+            return;
+      const Part* master = PartPlaybackModes::masterPart(part);
+      if (!master || master->instruments()->empty()
+          || !PartPlaybackModes::playsLibrary(master, PartPlaybackModes::read(part->masterScore())))
+            return;
+      const SoundLib::LibInstrument* li = library->match(master->instruments()->begin()->second, master);
+      if (!li)
+            return;
+      const bool hosted = SoundLib::output() == SoundLib::Output::PLUGIN;
+      const QString where = hosted ? tr("its instance of the library's plug-in, in MuseScore")
+                                   : tr("its MIDI route (port and channel set by the library)");
+      Channel* chan = _mti->focusedChan();
+      const Instrument* first = master->instruments()->begin()->second;
+      const bool firstChannel = !first->channel().empty()
+                                && part->masterScore()->playbackChannel(first->channel(0)) == chan;
+      const QString note = firstChannel ? QString()
+            : QString("\n") + tr("A sound library part plays all its notes with its first channel's volume and pan (the part's row sets all its channels).");
+      volumeSlider->setToolTip(tr("Volume of %1 on %2").arg(li->name, where) + note);
+      volumeSpinBox->setToolTip(volumeSlider->toolTip());
+      panSlider->setToolTip(tr("Pan of %1 on %2").arg(li->name, where) + note);
+      panSpinBox->setToolTip(panSlider->toolTip());
+      if (hosted) {
+            const QString room = tr("%1 plays in its own room (its microphones: View › Sound Library… › Controllers…); "
+                                    "MuseScore's reverb and chorus don't apply to it.").arg(library->name);
+            for (QWidget* w : std::initializer_list<QWidget*> { reverbSlider, reverbSpinBox, chorusSlider, chorusSpinBox }) {
+                  w->setEnabled(false);
+                  w->setToolTip(room);
+                  }
+            labelReverb->setEnabled(false);
+            labelChorus->setEnabled(false);
+            }
+      else {
+            reverbSlider->setToolTip(tr("Sent as CC91 on %1").arg(where));
+            reverbSpinBox->setToolTip(reverbSlider->toolTip());
+            chorusSlider->setToolTip(tr("Sent as CC93 on %1").arg(where));
+            chorusSpinBox->setToolTip(chorusSlider->toolTip());
+            }
+      if (li->kit) {
+            const QString kit = tr("A drum sound %1 has no key for plays this General MIDI patch.").arg(library->name);
+            patchCombo->setToolTip(kit);
+            return;
+            }
+      // the library's patch (and its extras), not the General MIDI sounds
+      patchCombo->blockSignals(true);
+      patchCombo->clear();
+      patchCombo->addItem(tr("%1 (%2)").arg(li->name, library->name));
+      patchCombo->setCurrentIndex(0);
+      patchCombo->blockSignals(false);
+      patchCombo->setEnabled(false);
+      patchCombo->setToolTip(tr("The sound library plays this part: its patch is chosen from the instrument (View › Sound Library…). "
+                                "The General MIDI patch comes back with \"This part plays:\" set to MuseScore 3 or 4."));
+      // the route: MuseScore's port and channel don't apply
+      const std::vector<std::pair<int, int>> outs = seq ? seq->libraryOuts(master) : std::vector<std::pair<int, int>>();
+      portSpinBox->setEnabled(false);
+      channelSpinBox->setEnabled(false);
+      labelPort->setEnabled(false);
+      labelChannel_2->setEnabled(false);
+      QString route = hosted ? tr("Plays on its own instance of the library's plug-in: MIDI port and channel don't apply.")
+                             : tr("The sound library sends this part on its own port and channel (in score order).");
+      if (!hosted && !outs.empty()) {
+            const QSignalBlocker b1(portSpinBox);
+            const QSignalBlocker b2(channelSpinBox);
+            portSpinBox->setValue(outs.front().first + 1);
+            channelSpinBox->setValue(outs.front().second + 1);
+            }
+      portSpinBox->setToolTip(route);
+      channelSpinBox->setToolTip(route);
       }
 
 //---------------------------------------------------------
@@ -374,6 +470,7 @@ void MixerDetails::playbackChanged(int index)
       score->undo(new ChangeMetaTags(ms, tags));
       score->endCmd();
       ms->setPlaylistDirty();
+      updateFromTrack();                  // (what applies to a sound library part)
       }
 
 //---------------------------------------------------------
