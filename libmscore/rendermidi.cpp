@@ -16,6 +16,7 @@
 */
 
 #include <set>
+#include <tuple>
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -1955,6 +1956,47 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       if (libRoutes.empty())
             return;
       const int utick2 = chunk.utick2();
+
+      // a key struck again on the same patch while its last note still sounds (a legato overlap, a note
+      // lasting into the next of its pitch): that note ends just before, as a finger lifts before it strikes
+      // again. A sampler ends a key's note at the first note off of that key, so the late one ended the new
+      // note (the owner, 2026-09-29: Piano v3.7 bars 68-69, the bass's A2 struck again 27 ticks before the
+      // last one's note off, cut at once; 164 such keys in the piece). From a little before the chunk: a note
+      // of the chunk before may still sound into it
+      {
+            std::map<std::tuple<int, int, int>, int> sounding;      // channel, patch, key -> notes on
+            for (auto i = events->lower_bound(std::max(0, chunk.utick1() - 8 * DIVISION)); i != events->end(); ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (ev.type() != ME_NOTEON || ev.librarySwitch() || !libRoutes.count(ev.channel()) || ev.libraryPatch() < 0)
+                        continue;
+                  const auto key = std::make_tuple(ev.channel(), ev.libraryPatch(), ev.pitch());
+                  if (ev.velo() == 0) {
+                        auto s = sounding.find(key);
+                        if (s != sounding.end() && s->second > 0)
+                              --s->second;
+                        continue;
+                        }
+                  int& on = sounding[key];
+                  if (on > 0 && i->first >= chunk.utick1()) {
+                        // the sounding note's note off: the next one of that key
+                        for (auto j = std::next(i); j != events->end(); ++j) {
+                              const NPlayEvent& o = j->second;
+                              if (o.type() == ME_NOTEON && o.velo() == 0 && !o.librarySwitch() && o.channel() == ev.channel()
+                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch()) {
+                                    // (the earliest note off of the key after it: the overlapping note's, or of a
+                                    // shorter note inside a held one, whose key then stays down until the held
+                                    // one's note off; right before the strike, after a unison at the same tick)
+                                    NPlayEvent off(o);
+                                    events->erase(j);
+                                    events->insert(i, std::make_pair(i->first, off));
+                                    --on;
+                                    break;
+                                    }
+                              }
+                        }
+                  ++on;
+                  }
+      }
       std::map<int, int> selected;              // channel and patch -> the switch in force
       std::map<int, int> dropOff;               // channel and patch -> the keyswitch whose note off goes too
       std::vector<std::pair<int, NPlayEvent>> copies;

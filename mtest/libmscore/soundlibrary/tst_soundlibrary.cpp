@@ -75,6 +75,7 @@ class TestSoundLibrary : public QObject, public MTest
       void shortsFollowDynamics();
       void evenDynamicSteps();
       void pedalChangeAfterChord();
+      void sameKeyStruckAgain();
       void checkedAsExpected();
       void render();
       void renderPatches();
@@ -2425,6 +2426,57 @@ void TestSoundLibrary::pedalChangeAfterChord()
             QVERIFY2(withLibrary ? pedal[1].first == 1920 + 19 : pedal[1].first <= 1920, qPrintable(QString::number(pedal[1].first)));
             delete score;
             }
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   sameKeyStruckAgain
+//    a sampler ends a key's note at the first note off of that key: a key struck again while its last note
+//    still sounds gets that note's note off just before (the owner, 2026-09-29: Piano v3.7 bars 68-69, the
+//    bass's A2 re-struck 27 ticks before the last one's note off, cut at once; notes' tails cut). same-key.musicxml:
+//    bar 1 A4 A4 under a slur (the legato overlap), C5 half with a unison C5 quarter in voice 2 at beat 3;
+//    bar 2 E5 whole with an E5 quarter in voice 2 at the same tick. Never a key struck while sounding, never
+//    a note off of a key not sounding, and the held E5's key down to its end
+//---------------------------------------------------------
+
+void TestSoundLibrary::sameKeyStruckAgain()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Grand Piano' ids='piano'>"
+         "<Articulation name='Direct' value='1' techniques='long legato short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "same-key.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<int, int> on;
+      int lastE5Off = -1;
+      int strikes = 0;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.channel() != ch || ev.type() != ME_NOTEON || ev.librarySwitch())
+                  continue;
+            if (ev.velo() > 0) {
+                  QVERIFY2(on[ev.pitch()] == 0, qPrintable(QString("key %1 struck at %2 while sounding").arg(ev.pitch()).arg(te.first)));
+                  ++on[ev.pitch()];
+                  ++strikes;
+                  }
+            else {
+                  QVERIFY2(on[ev.pitch()] > 0, qPrintable(QString("note off of key %1 at %2, not sounding").arg(ev.pitch()).arg(te.first)));
+                  --on[ev.pitch()];
+                  if (ev.pitch() == 76)
+                        lastE5Off = te.first;
+                  }
+            }
+      QVERIFY2(strikes >= 6, qPrintable(QString::number(strikes)));     // (a unison at one tick may play once)
+      QVERIFY2(lastE5Off > 1920 + 3 * 480, qPrintable(QString::number(lastE5Off)));        // the held E5 to its end
+      delete score;
       SoundLib::setCurrent(nullptr);
       }
 
