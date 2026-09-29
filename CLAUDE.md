@@ -505,7 +505,7 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   audio thread's; the old path raced at sync too). Limits: a staff text's value equal to an old part value
   is corrected too until playback restarts; a CC with no default, unticked, keeps its last value in the
   plug-in (MuseScore never knew the patch's own). Tests `liveControllers`, `liveParameters` (all slots,
-  heard on sounding notes, Cancel, untick, a lane, 3000 settings while another thread plays),
+  heard on sounding notes, Cancel, untick, a lane, 1000 settings while another thread plays),
   `liveMidiControllers`. Not tried with Kontakt. From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
   suggested `CONTROLLERS` / `PATCH_CONTROLLERS` lines for `gen_spitfire_sso.py`. Test:
   `tst_soundlibrary::controllers`. SSO's map has them since 2026-09-27 (the owner: "build the
