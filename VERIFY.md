@@ -46,7 +46,7 @@ Per library part (a score with several parts: each part rendered alone too, so a
 | Finding | Meaning |
 |---|---|
 | `missing-attack` | a chord (the notes starting together) has no attack where the built-in synth has one, and one of its notes is under its usual level (SSO's Grand Piano dropping chords at pedal changes) |
-| `missing-note` | one note didn't sound although the other notes of its chord did (the staccato octaves of bars 59-62) |
+| `missing-note` | one note didn't sound although the other notes of its chord did (the staccato octaves of bars 59-62); a note the library played with a legato articulation (SSO's Performance "Legato": no attack, slow build-up) is judged on its level held at 40 and 70 % of it, against that patch's other legato notes |
 | `cut-short` | a held note (long, legato, tremolo, trill articulation) fell silent before 70 % of its length where the built-in synth still sounds |
 | `silence` | nothing (under -70 dB) for 0.25 s or more while held notes should sound |
 | `clipping` | samples over full scale in the mixed rendering |
@@ -63,7 +63,9 @@ It can't tell: whether the right articulation or sample was chosen (a wrong but 
 passes), balance and dynamics by ear, or anything the built-in synth doesn't sound either (a note
 struck again while it rings under the pedal is not flagged: `unclear` in the counts). A missing note
 whose partials another note of its chord fills (C6 over C5) is often not found; the chord's other
-checks may still flag the moment. The thresholds were set on one score, the owner's piano piece (four
+checks may still flag the moment. Levels are compared per patch (a part's Performance legato patch
+is 15-20 dB quieter against the built-in synth than its solo patch: the first Kontakt run, 2026-09-29,
+flagged 9 legato notes the owner heard). The thresholds were set on one score, the owner's piano piece (four
 exports, known bugs); strings, winds and brass through Kontakt are untried.
 
 ## For agents: reading a report
