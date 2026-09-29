@@ -483,7 +483,30 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `finishLibraryEvents` copies them to the part's extra patches. Parameters are set on the hosted
   instances by `SoundLibraryHost::sync` (and the command-line export), `applyParameters`, via
   `Vst3Plugin::parameterId(title)`. UI: *View › Sound Library…* › *Controllers…* per part
-  (undoable). From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
+  (undoable).
+  **Live (2026-09-29, branch `live-controls`; the owner: "make what I do in the mixer or sound library
+  controller reflect in the live playback")**: the Controllers window (`ControllersWindow` in
+  soundlibraryhost.cpp) is not modal and no longer stops playback; one per part (raised when open).
+  Each move / tick is heard at once: plug-in parameters on every loaded slot of the part at once
+  (`SoundLibraryHost::applyPartControllers` -> `LibraryControllers::applyPart`, audio/vst3/librarycontrollers.*:
+  patch, extras, copies for other tunings; unticked: `Slot::patchValues` puts the patch's own back); MIDI
+  controllers by `Seq::libraryControllersChanged` -> `PartControllers::liveChanges` (the main patch's CCs on
+  every route of the part, as the renderer sends them; not sent where a staff text is in force at the play
+  position; left out where an automation lane plays the controller) sent through the sequencer (the audio
+  thread, `Seq::putEvent`, hosted or MIDI out). The events rendered ahead before the change (~10 measures,
+  a CC at each chunk's start) would put the old value back: `PartControllers::LiveOverrides` in the audio
+  thread (SeqMsgId::LIBRARY_CC_LIVE) plays a route's CC whose value is one the part had before as the live
+  value (-1: dropped), until the score is rendered again (`collectEvents` sets `_libLiveClear`). The metaTag
+  follows 200 ms after a change without undo (`Seq::waitForRendering` first: the background renderer reads
+  metaTags) and emits `playlistChanged`, so a restart renders what is heard; OK turns it into one undoable
+  `ChangeMetaTags` from the values at open; Cancel / closing puts them back live. `Vst3Plugin::setParameter`
+  is now safe from the GUI thread while the audio thread plays: the processor's change goes through the
+  component handler's `edits` (mutex, taken at the next `process()`), not straight into `inChanges` (the
+  audio thread's; the old path raced at sync too). Limits: a staff text's value equal to an old part value
+  is corrected too until playback restarts; a CC with no default, unticked, keeps its last value in the
+  plug-in (MuseScore never knew the patch's own). Tests `liveControllers`, `liveParameters` (all slots,
+  heard on sounding notes, Cancel, untick, a lane, 3000 settings while another thread plays),
+  `liveMidiControllers`. Not tried with Kontakt. From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
   suggested `CONTROLLERS` / `PATCH_CONTROLLERS` lines for `gen_spitfire_sso.py`. Test:
   `tst_soundlibrary::controllers`. SSO's map has them since 2026-09-27 (the owner: "build the
   controls"), all as Kontakt parameters by title. **Each patch's own list since 2026-09-28**: the owner's
@@ -650,7 +673,8 @@ attack not yet confirmed by ear.
 - `mtest/libmscore/soundlibrary` (`tst_soundlibrary`): text techniques, `choose`, the
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
-  `playbackVerifyDrift`). All pass (31, 2 skipped without the owner's files).
+  `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
+  `liveMidiControllers`). All pass (43, 3 skipped without the owner's files).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order
@@ -813,7 +837,8 @@ macOS.
     silences only its own notes, `NPlayEvent::isMuted`). `SoundLibraryHost::applyMixer` sets every slot of the
     part (patch, extras, copies for other tunings: `_slotParts` from the last sync) after each sync (score
     open, play), at once from `Seq::setController` / the Mixer's mute and solo, and every 50 ms (the idle
-    timer: OSC, the old part editor, the "play part only" box). Export: `SoundLibraryExport` sets
+    timer: OSC, the old part editor, the "play part only" box; since `live-controls` it runs from the first
+    sync, a score-open preload's too, not only after a complete one). Export: `SoundLibraryExport` sets
     `setExportMix` from the routes with mute but not solo, as MuseScore's export treats its own sounds.
   - MIDI out (Output::MIDI): `Seq::libraryMixerChanged` sends CC7 / CC10 / CC91 / CC93 on each of the part's
     routes (only changed values; all again at each play), so a DAW or Kontakt there can follow.
@@ -838,6 +863,10 @@ macOS.
   | Master volume, voice mutes, drumset, playback-mode row | ✓ | ✓ (mode row now refreshes the panel) | ✓ |
   | Audio export | mute ✓, solo not | muted parts played, volume/pan ignored → export mix | (no audio) |
 
+  - Live while playing (checked 2026-09-29, branch `live-controls`): volume, pan, mute and solo reach the slots
+    at once, playing or not, also slots still loading in the background (the mix is per slot) and right after a
+    play starts. "This part plays:" and the "Playback, all parts" drop-down still stop playback (the part's
+    notes move to other synthesizers: a new rendering and maybe patches to load); so do the Advanced Options.
   Tests: `tst_soundlibrary::partMix`, `mixerSlot` (test synth: defaults bit-identical, 50 → -12.04 dB, 127 →
   +4.15 dB, hard left right = 0 and left +3.01 dB, a quarter left keeps the power, mute silent with a glide,
   export values of their own, CC123 ends notes), `mixerScore` (a part's 4 patch instances panned hard left:
