@@ -523,7 +523,7 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                         fd.second = c.rise;
                         fd.expected = c.refRise;
                         fd.text = fmt("note missing: %.0f dB under its register's level (against the built-in synth), rising %.0f dB at "
-                                      "its onset (built-in synth: %.0f dB)", -c.deficit, c.rise, c.refRise);
+                                      "its onset (built-in synth: %.0f dB)", std::min(-c.deficit, 99.0), c.rise, c.refRise);
                         r.findings.push_back(fd);
                         }
                   }
