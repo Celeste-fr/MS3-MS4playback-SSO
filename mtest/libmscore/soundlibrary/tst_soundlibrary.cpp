@@ -1091,6 +1091,7 @@ void TestSoundLibrary::vst3Plugin()
       QCOMPARE(params.second, 64 / 127.0);
 
       p->midi(ME_NOTEON, 0, 69, 0);
+      p->process(1024, buffer.data());                  // (its 10 ms release)
       std::fill(buffer.begin(), buffer.end(), 0.f);
       p->process(1024, buffer.data());
       QCOMPARE(peak(buffer), 0.f);                   // note off

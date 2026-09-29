@@ -25,6 +25,7 @@
 #include <thread>
 #include <vector>
 
+#include "audio/midi/event.h"
 #include "audio/midi/synthesizer.h"
 #include "vst3plugin.h"
 
@@ -45,6 +46,20 @@ class Vst3Synth : public Synthesizer {
       std::atomic<bool> _exporting { false };
       std::thread::id _exportThread;
       QList<MidiPatch*> _patches;
+
+      // fault injection for testing --verify-playback (MS_VERIFY_FAULT, see vst3synth.cpp): the
+      // frames played so far, each slot's last pedal-up, the note-ons seen, the note-offs to come
+      long long _clock { 0 };
+      double _clockRate { 44100 };
+      std::vector<std::vector<long long>> _pedalUps;  // per slot: when the sustain pedal went up
+      long _noteOns { 0 };
+      struct Cutoff { long long at; int slot; int key; };
+      std::vector<Cutoff> _cutoffs;
+      struct Delayed { long long due; long long arrival; PlayEvent event; };
+      std::vector<Delayed> _delayed;
+      bool _releasing { false };
+      bool injectFault(const PlayEvent&);     // true: the event is dropped
+      void releaseDelayed(unsigned frames);
 
       bool mine() const;
       void playPending();                 // (with _mutex held)
