@@ -20,7 +20,7 @@ rem This window stays open (minimised) until both are done; closing it stops wha
 setlocal
 if not "%~1"=="run" (
   start "Measuring what is left of SSO (leave open)" /min cmd /c ""%~f0" run"
-  echo Measuring what is left of SSO in the background: dynamics first, then timing (what is done is skipped).
+  echo Measuring what is left of SSO in the background: dynamics first, then timing; what is done is skipped.
   echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background dynamics check.log
   timeout /t 15
   exit /b
