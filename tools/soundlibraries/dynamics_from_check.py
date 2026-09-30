@@ -18,6 +18,9 @@ runs over the others) and writes only derived numbers (ArticulationCheck::dynami
       "perceived": [[x, dB], ...],            the same, perceived loudness
       "velocityDb": [at 32, at 127], "controllerDb": [at 32, at 127],
       "expression": [[x, dB], ...]            the held note's CC11 (when measured)
+      "attack": [[x, dB], ...],               how much its attack stands out (ArticulationCheck::attackSalience,
+                                              builds with main's attack salience, 2026-09-30 on)
+      "riseMs": [[x, ms], ...],               its rise, 10 to 90 %
       "silent": true                          played nothing at any pitch tried
     }
   }
@@ -41,7 +44,7 @@ def compact(p):
         if d.get("silent"):
             e["silent"] = True
         else:
-            for k in ("drivenBy", "curve", "perceived", "velocityDb", "controllerDb", "expression"):
+            for k in ("drivenBy", "curve", "perceived", "velocityDb", "controllerDb", "expression", "attack", "riseMs"):
                 if k in d:
                     e[k] = d[k]
             if d.get("pitch") != p.get("pitch"):

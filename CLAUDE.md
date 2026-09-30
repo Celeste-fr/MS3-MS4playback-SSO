@@ -543,6 +543,10 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   monotonic (Alto Flute Marcato 48 under 32: velocity layers and round robins). 492 curves went into the working
   `dynamics.json` (the notated ones). Timing, the second half, was stopped by the owner after 87 patches (it looked stuck:
   a Performance patch takes 12-14 s); `results.json` is rewritten after each patch, so a restart goes on from there.
+  **Again with the merged build (run 267, 2026-09-30 15:27-16:05, 37 minutes)**: the Documents folder had been emptied,
+  so every patch was measured again; the same 1804 sounds, every curve point the same to 0.0 dB (Kontakt offline, each
+  patch freshly loaded, is exactly repeatable), now with each note's attack salience and rise (`attack`, `riseMs`, kept
+  in `sso_sound_dynamics.json`). A resume needs the earlier runs' folders in Documents/MuseScore Sound Library Check.
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,
