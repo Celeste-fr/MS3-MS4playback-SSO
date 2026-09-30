@@ -786,6 +786,61 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library
       return false;
       }
 
+//---------------------------------------------------------
+//   routeParameterControllers / stateWithControllers
+//---------------------------------------------------------
+
+std::vector<QString> SoundLibraryHost::routeParameterControllers(const SoundLib::Route& r,
+                                                                 const std::map<const Part*, PartControllers::Values>& values)
+      {
+      std::vector<QString> ids;
+      if (!r.instrument || r.instrument->kit)
+            return ids;
+      for (const SoundLib::Controller& c : r.instrument->allControllers)
+            if (!c.param.isEmpty() && PartControllers::value(r.part, c, values) >= 0)
+                  ids.push_back(c.id);
+      return ids;
+      }
+
+QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library& library, const SoundLib::Route& r,
+                                                  const std::map<const Part*, PartControllers::Values>& values,
+                                                  const QString& pluginPath, std::vector<AppliedParameter>* applied,
+                                                  QString* error)
+      {
+      if (!r.instrument)
+            return QByteArray();
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
+      if (!p)
+            return QByteArray();
+      if (!loadSetup(p.get(), library, r.instrument->name, pluginPath, error))       // (its script settled)
+            return QByteArray();
+      LibraryControllers::applyParameters(p.get(), r, values, nullptr);
+      // (the processor takes a change at its next process(), a script then sets its control: as in playback,
+      // where the audio goes on)
+      p->settle(p->secondsSinceState() + 0.25);
+      if (applied) {
+            std::map<long, QString> titles;
+            for (const Vst3Plugin::Parameter& pp : p->parameters())
+                  titles[long(pp.id)] = pp.title;
+            for (const SoundLib::Controller& c : r.instrument->allControllers) {
+                  const int v = c.param.isEmpty() ? -1 : PartControllers::value(r.part, c, values);
+                  if (v < 0)
+                        continue;
+                  AppliedParameter a;
+                  a.controller = c.id;
+                  a.id = p->parameterId(c.param);
+                  a.title = a.id >= 0 ? titles[a.id] : c.param;
+                  a.value = v;
+                  a.readBack = a.id >= 0 ? p->parameter(unsigned(a.id)) : -1;
+                  applied->push_back(a);
+                  }
+            }
+      const QByteArray state = p->state();
+      if (state.isEmpty() && error)
+            *error = tr("The plug-in gave no state for %1.").arg(r.instrument->name);
+      return state;
+      }
+
 static QString ms(double v)
       {
       return QString::number(v, 'f', v < 10 ? 1 : 0);
@@ -819,6 +874,20 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QS
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
       return false;
+      }
+
+std::vector<QString> SoundLibraryHost::routeParameterControllers(const SoundLib::Route&, const std::map<const Part*, PartControllers::Values>&)
+      {
+      return std::vector<QString>();
+      }
+
+QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library&, const SoundLib::Route&,
+                                                  const std::map<const Part*, PartControllers::Values>&, const QString&,
+                                                  std::vector<AppliedParameter>*, QString* error)
+      {
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return QByteArray();
       }
 #endif
 

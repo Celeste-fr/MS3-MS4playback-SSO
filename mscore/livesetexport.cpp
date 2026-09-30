@@ -11,6 +11,7 @@
 #include "livesetexport.h"
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <QApplication>
@@ -26,6 +27,8 @@
 #include <QStandardPaths>
 
 #include "libmscore/liveset.h"
+#include "libmscore/part.h"
+#include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "liveclips.h"
@@ -226,6 +229,10 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
                                                                                                           "was not found") : pluginError);
       std::map<QString, LiveSetWriter::Plugin> made;     // by patch (copies for other tunings share it)
       std::map<QString, QString> failed;
+      // a part's plug-in parameters (Controllers…): its routes' states with them set, as MuseScore plays them
+      const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score);
+      std::map<std::pair<const Part*, QString>, LiveSetWriter::Plugin> withControllers;      // by part and patch
+      std::map<std::pair<const Part*, QString>, QString> controllerNotes;
       int slow = 0;
       for (LiveSetWriter::Track& t : tracks) {
             if (!plugin)
@@ -265,7 +272,53 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
                   }
             t.hasPlugin = true;
             t.plugin = made[patch];
+
+            SoundLib::Route r;
+            r.part = t.partRef;
+            r.instrument = t.instrument;
+            r.port = t.port;
+            r.channel = t.channel - 1;
+            r.patch = t.routePatch;
+            r.lane = t.lane;
+            if (SoundLibraryHost::routeParameterControllers(r, values).empty())
+                  continue;
+            const std::pair<const Part*, QString> key { t.partRef, patch };
+            if (!withControllers.count(key) && !controllerNotes.count(key)) {
+                  QString err;
+                  std::vector<SoundLibraryHost::AppliedParameter> applied;
+                  const QByteArray state = SoundLibraryHost::stateWithControllers(library, r, values, pluginPath, &applied, &err);
+                  LiveSetWriter::Plugin p = made[patch];
+                  QString stateName;
+                  if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
+                        err = QObject::tr("the plug-in's state could not be read");
+                  QStringList set;
+                  for (const SoundLibraryHost::AppliedParameter& a : applied) {
+                        if (a.id < 0) {
+                              set << QObject::tr("%1: not in this patch").arg(a.title);
+                              continue;
+                              }
+                        const bool held = std::fabs(a.readBack - a.value / 127.0) < 0.5 / 127.0;
+                        set << QString("%1 %2%3").arg(a.title).arg(a.value)
+                               .arg(held ? QString() : QObject::tr(" (the plug-in holds %1)").arg(std::lround(a.readBack * 127.0)));
+                        LiveSetWriter::Plugin::Parameter lp;
+                        lp.id = a.id;
+                        lp.name = a.title;
+                        lp.value = a.value / 127.0;
+                        p.parameters.push_back(lp);
+                        }
+                  if (!err.isEmpty())
+                        controllerNotes[key] = QObject::tr("%1 – %2: its Controllers could not be set (%3): the patch's own values")
+                                               .arg(t.part, patch, err);
+                  else {
+                        withControllers[key] = p;
+                        controllerNotes[key] = QObject::tr("%1 – %2: Controllers set in the plug-in's state: %3").arg(t.part, patch, set.join(", "));
+                        }
+                  }
+            if (withControllers.count(key))
+                  t.plugin = withControllers[key];
             }
+      for (const auto& n : controllerNotes)
+            plan->controllers << n.second;
       if (slow)
             plan->notes << QObject::tr("%n patch(es) were never loaded in MuseScore: their setup is made from the .nki, which Kontakt "
                                        "loads slowly the first time (play the score once in MuseScore first to have Kontakt's own "
@@ -275,6 +328,20 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
 #endif
       plan->spec.tracks = tracks;
       return true;
+      }
+
+// a track's mixer as written: Live's volume in dB, pan, the Track Activator
+static QString mixerText(const LiveSetWriter::Track& t)
+      {
+      QString pan;
+      if (std::fabs(t.pan) < 1e-9)
+            pan = QObject::tr("pan C");
+      else
+            pan = QObject::tr("pan %1%2").arg(std::lround(std::fabs(t.pan) * 50)).arg(t.pan < 0 ? "L" : "R");
+      QString text = QObject::tr("volume %1 dB, %2").arg(20 * std::log10(t.volume), 0, 'f', 1).arg(pan);
+      if (!t.active)
+            text += ", " + QObject::tr("muted (Track Activator off)");
+      return text;
       }
 
 QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissing)
@@ -295,8 +362,11 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
                   devices << QString("%1 (%2)").arg(t.plugin.name, t.patch);
             line += " — " + (devices.isEmpty() ? QObject::tr("no devices") : devices.join(" → "));
             line += " — " + (t.portName.isEmpty() ? QObject::tr("All Ins") : QString("%1, Ch. %2").arg(t.portName).arg(t.channel));
+            line += " — " + mixerText(t);
             text += line + "\n";
             }
+      text += "\n" + QObject::tr("Controllers (plug-in parameters) in each patch's state, as MuseScore plays them:") + "\n  "
+              + (plan.controllers.isEmpty() ? QObject::tr("none set: every patch at its own values") : plan.controllers.join("\n  ")) + "\n";
       if (!plan.left.isEmpty())
             text += "\n" + QObject::tr("Left out:") + "\n  " + plan.left.join("\n  ") + "\n";
       if (!plan.notes.isEmpty())

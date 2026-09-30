@@ -68,6 +68,8 @@ class Vst3Plugin {
       // a state() (MuseScore's setup file: "MSV3", version, the plug-in's name, the component's and the
       // controller's state) taken apart
       static bool splitState(const QByteArray& state, QString* name, QByteArray* component, QByteArray* controller);
+      // and put together (a Live Set's ProcessorState and ControllerState as a state setState takes)
+      static QByteArray joinState(const QString& name, const QByteArray& component, const QByteArray& controller);
 
       // audio thread
       // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament

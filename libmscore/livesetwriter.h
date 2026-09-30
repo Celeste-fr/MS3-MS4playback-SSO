@@ -49,6 +49,7 @@
 #include <QStringList>
 
 namespace Ms {
+class Part;
 class Score;
 namespace LiveSet {
 struct Set;
@@ -67,6 +68,14 @@ struct Plugin {
       int audioOutputs { 2 };             // channels (Kontakt 8: 16)
       QByteArray component;               // IComponent's state: the patch (ProcessorState)
       QByteArray controller;              // IEditController's (ControllerState; Kontakt's: empty)
+      // parameters shown in Live's panel (Configure), each with its value: the part's Controllers set on the plug-in
+      // (the same values are in the component state)
+      struct Parameter {
+            long id { -1 };               // the plug-in's parameter id
+            QString name;                 // its title
+            double value { 0 };           // normalized 0-1
+            };
+      std::vector<Parameter> parameters;
       };
 
 // the MuseScore Link device (tools/live/): its .amxd, referenced by path as Live does
@@ -88,12 +97,20 @@ struct Track {
       bool link { true };                 // the MuseScore Link device on it
       bool hasPlugin { false };
       Plugin plugin;
+      // Live's mixer (the part's Mixer values as MuseScore's host plays them: SoundLib::partMix, mixGain / mixPan)
+      double volume { 1 };                // a linear gain (1 = 0 dB), Live's range 0.000316 (-70 dB) … 1.995 (+6 dB)
+      double pan { 0 };                   // -1 (left) … 1 (right)
+      bool active { true };               // the Track Activator: off for a muted part
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name
       QString patch;                      // the patch's
       bool mainPatch { true };            // the part's main patch (its first copy): found by the part's name
       const SoundLib::LibInstrument* instrument { nullptr };  // the patch
+      const Part* partRef { nullptr };    // the route (SoundLib::Route)
+      int port { 0 };
+      int routePatch { 0 };
+      int lane { 0 };
       };
 
 struct Spec {
@@ -122,6 +139,14 @@ QByteArray xml(const Spec& spec, int* nextPointeeId = nullptr);
 QString validate(const QByteArray& xml);
 QByteArray gzip(const QByteArray& data);
 bool write(const QString& path, const Spec& spec, QString* error);
+
+// the Mixer's volume (0-127) as Live's track Volume: MuseScore's host gain (v / 100)² (Vst3Synth::volumeGain), within
+// Live's range (0 → -70 dB, Live's lowest; 127 → +4.15 dB)
+double mixGain(int volume);
+// the Mixer's pan (0-127, 64 centre) as Live's Pan (-1 … 1): Vst3Synth::panGains' position. Both are constant-power
+// sine/cosine laws, 0 dB at the centre and +3 dB fully panned (Live 12 manual, Audio Fact Sheet › Panning), so the
+// same position gives the same gains
+double mixPan(int pan);
 
 // Live's time signature number; -1: one Live can't have (numerator 1-99, denominator 1, 2, 4, 8, 16)
 int timeSignatureId(int numerator, int denominator);

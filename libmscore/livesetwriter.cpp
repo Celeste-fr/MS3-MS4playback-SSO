@@ -318,14 +318,15 @@ class Writer {
             close("ClipEnvelopeChooserViewState");
             }
       // a track's mixer, up to its SendsListWrapper (the main track's goes on with the song's tempo …)
-      void mixerStart(double volume, int trackWidth)
+      // (speaker: the Track Activator, off = the track muted; pan -1 … 1, volume a linear gain, 1 = 0 dB)
+      void mixerStart(double volume, int trackWidth, double pan = 0, bool speaker = true)
             {
             deviceHeader(true, false);
             empty("Sends");                         // (no return tracks)
-            onOff("Speaker");
+            onOff("Speaker", speaker);
             value("SoloSink", false);
             value("PanMode", 0);
-            param("Pan", "0", "-1", "1");
+            param("Pan", num(pan), "-1", "1");
             param("SplitStereoPanL", "-1", "-1", "1");
             param("SplitStereoPanR", "1", "-1", "1");
             param("Volume", num(volume), "0.0003162277571", "1.99526238");
@@ -447,17 +448,27 @@ void pluginDevice(Writer& w, const Plugin& p, int listId)
       w.close("PluginDesc");
       w.value("MpeEnabled", false);
       w.mpeSettings();
+      // Live's panel of the plug-in's parameters (Configure): the ones the score sets (Plugin::parameters), with
+      // their values, as Live saves a configured parameter (the owner's set: Vibrato, Release), so whether Live
+      // sets them again after the state or not, both agree; then Live's empty slots
       w.open("ParameterList");
       for (int i = 0; i < PLUGIN_PARAMETER_SLOTS; ++i) {
+            const bool used = i < int(p.parameters.size());
             w.open("PluginFloatParameter", "Id=\"" + QByteArray::number(i) + "\"");
-            w.value("ParameterName", "");
-            w.value("ParameterId", -1);
+            w.value("ParameterName", used ? p.parameters[size_t(i)].name : QString());
+            w.value("ParameterId", used ? int(p.parameters[size_t(i)].id) : -1);
             w.value("ParameterIdFlankBool", false);
-            w.value("VisualIndex", 1073741823);
-            w.param("ParameterValue", "0.1234567687", "0", "1");
+            w.value("VisualIndex", used ? i : 1073741823);
+            w.param("ParameterValue", used ? Writer::num(float(p.parameters[size_t(i)].value)) : QString("0.1234567687"), "0", "1");
             w.open("LastUserRange");
-            w.value("First", "Invalid");
-            w.value("Last", "Invalid");
+            if (used) {
+                  w.value("First", 0);
+                  w.value("Last", 1);
+                  }
+            else {
+                  w.value("First", "Invalid");
+                  w.value("Last", "Invalid");
+                  }
             w.close("LastUserRange");
             w.open("LastInternalRange");
             w.value("First", 0);
@@ -510,7 +521,7 @@ void midiTrack(Writer& w, const Track& t, int trackId, const LinkDevice& link)
       w.routing("AudioOutputRouting", "AudioOut/Main", "Master", "");
       w.routing("MidiOutputRouting", "MidiOut/None", "None", "");
       w.open("Mixer");
-      w.mixerStart(1, 93);
+      w.mixerStart(t.volume, 93, t.pan, t.active);
       w.close("Mixer");
 
       w.open("MainSequencer");
@@ -1242,6 +1253,15 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
                   partColor[r.part] = colors[n % int(sizeof(colors) / sizeof(colors[0]))];
                   }
             t.color = partColor[r.part];
+            t.partRef = r.part;
+            t.port = r.port;
+            t.routePatch = r.patch;
+            t.lane = r.lane;
+            // the Mixer as MuseScore's host plays the part (mute, not solo: as MuseScore's export)
+            const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
+            t.volume = mixGain(m.volume);
+            t.pan = mixPan(m.pan);
+            t.active = !m.muted;
             out.push_back(t);
             }
       return out;
@@ -1262,6 +1282,18 @@ void setSong(const Score* score, Spec* spec)
 //---------------------------------------------------------
 //   helpers
 //---------------------------------------------------------
+
+double mixGain(int volume)
+      {
+      const double v = std::max(0, std::min(127, volume)) / 100.0;
+      return std::max(v * v, 0.0003162277571);
+      }
+
+double mixPan(int pan)
+      {
+      pan = std::max(0, std::min(127, pan));
+      return pan < 64 ? (pan - 64) / 64.0 : (pan - 64) / 63.0;
+      }
 
 int timeSignatureId(int numerator, int denominator)
       {

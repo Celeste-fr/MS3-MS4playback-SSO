@@ -926,6 +926,15 @@ QByteArray Vst3Plugin::state() const
       return result;
       }
 
+QByteArray Vst3Plugin::joinState(const QString& name, const QByteArray& component, const QByteArray& controller)
+      {
+      QByteArray result;
+      QDataStream ds(&result, QIODevice::WriteOnly);
+      ds.writeRawData(STATE_MAGIC, 4);
+      ds << quint32(1) << name << component << controller;
+      return result;
+      }
+
 bool Vst3Plugin::splitState(const QByteArray& state, QString* name, QByteArray* component, QByteArray* controller)
       {
       QDataStream ds(state);

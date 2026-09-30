@@ -168,6 +168,26 @@ class SoundLibraryHost : public QObject {
                                         QString* error);
       static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
                             const QString& pluginPath, QString* error = nullptr);
+      // a part's plug-in parameters (Controllers…) as MuseScore's playback sets them on a route's instance
+      struct AppliedParameter {
+            QString controller;           // the map's controller id ("mic1")
+            QString title;                // the plug-in's parameter ("Mic 1 level", as the plug-in names it)
+            long id { -1 };
+            int value { 0 };              // 0-127, the part's (or the map's default)
+            double readBack { -1 };       // normalized, what the plug-in holds after it took it
+            };
+      // the parameters the part sets on this route's patch (none: the setup plays as it is)
+      static std::vector<QString> routeParameterControllers(const SoundLib::Route& r,
+                                                            const std::map<const Part*, PartControllers::Values>& values);
+      // the route's setup (setupState) as MuseScore plays it: loaded into a new instance of the plug-in, its script
+      // settled (loadSetup), the part's parameters set exactly as playback sets them
+      // (LibraryControllers::applyParameters), a moment of audio for the plug-in to take them, then its state (the
+      // form of a setup: Vst3Plugin::state). Create Live Set embeds it (LIVE.md › Create Live Set). Empty and *error
+      // when it failed
+      static QByteArray stateWithControllers(const SoundLib::Library& library, const SoundLib::Route& r,
+                                             const std::map<const Part*, PartControllers::Values>& values,
+                                             const QString& pluginPath, std::vector<AppliedParameter>* applied,
+                                             QString* error = nullptr);
       // after a setup was set on p (loadSetup does both): load times.log, and a setup made from the
       // .nki replaced by Kontakt's own state (resave). setupMs: reading or making the setup
       static void setupLoaded(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QByteArray& state,

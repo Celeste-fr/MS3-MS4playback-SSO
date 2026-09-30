@@ -2532,9 +2532,9 @@ void TestSoundLibrary::pluginDescribe()
       QCOMPARE(ks[0].toObject().value("title").toString(), QString("Legato"));
       QCOMPARE(ks[0].toObject().value("keyMin").toInt(), 24);
 
-      // state (the test synth's: two doubles)
-      QCOMPARE(p->componentState().size(), 16);
-      QCOMPARE(d.value("component").toObject().value("state").toObject().value("bytes").toInt(), 16);
+      // state (the test synth's: three doubles: articulation, level, "Tone")
+      QCOMPARE(p->componentState().size(), 24);
+      QCOMPARE(d.value("component").toObject().value("state").toObject().value("bytes").toInt(), 24);
       QVERIFY(d.value("editor").isNull());
 
       // what it asked of MuseScore

@@ -6,7 +6,7 @@
 //  mtests (tst_soundlibrary). Like Kontakt, it maps MIDI CCs to parameters (IMidiMapping):
 //  CC32 -> "articulation" (what UACC switches), CC1 -> "level" (the dynamics). Both are in its
 //  state. No editor. Like Kontakt's host automation, parameters no CC is mapped to: "Tone"
-//  (the output's level: 0 is 20 %; not in its state) and twelve placeholders "Macro 1" …
+//  (the output's level: 0 is 20 %; in its state since 2026-09-30, as Kontakt keeps a script's controls) and twelve placeholders "Macro 1" …
 //  "Macro 12" that do nothing (Extract: tst_soundlibrary::pluginExtract).
 //
 //  Each held note plays at velocity * level, with a timbre of the articulation that was
@@ -137,6 +137,7 @@ class Processor : public AudioEffect {
       ParamValue articulation { 0.0 };
       ParamValue level { 1.0 };
       ParamValue tone { 1.0 };
+      ParamValue savedTone { 1.0 };  // the state's "Tone" (as Kontakt's state keeps a script's persistent controls)
       ParamValue bend { 0.5 };      // MIDI pitch bend: ±2 semitones, as most samplers
       int current { 1 };            // the articulation notes start with
       long initLeft { -1 };         // MSTESTSYNTH_INIT_MS: samples until its "script" initialises
@@ -234,7 +235,7 @@ class Processor : public AudioEffect {
             if (initLeft >= 0) {
                   initLeft -= data.numSamples;
                   if (initLeft < 0)
-                        tone = 1.0;           // (the patch's own)
+                        tone = savedTone;     // (the patch's own: what its state holds)
                   }
             const bool eventsOn = getEventInput(0) && getEventInput(0)->isActive();
             if (IEventList* events = eventsOn ? data.inputEvents : nullptr) {
@@ -325,6 +326,11 @@ class Processor : public AudioEffect {
             std::memcpy(&lv, all.data() + 8, 8);
             setArticulation(a);
             level = lv;
+            // (a state of 24 bytes and more also has "Tone"; older ones, 16 bytes, the default)
+            savedTone = 1.0;
+            if (all.size() >= 24)
+                  std::memcpy(&savedTone, all.data() + 16, 8);
+            tone = savedTone;
             stream();
             return kResultOk;
             }
@@ -338,6 +344,7 @@ class Processor : public AudioEffect {
             IBStreamer s(state, kLittleEndian);
             s.writeDouble(articulation);
             s.writeDouble(level);
+            s.writeDouble(tone);
             return kResultOk;
             }
       };
@@ -389,6 +396,8 @@ class Controller : public EditController, public IMidiMapping, public IUnitInfo,
                   return kResultFalse;
             setParamNormalized(kArticulation, a);
             setParamNormalized(kLevel, lv);
+            double t = 1.0;
+            setParamNormalized(kTone, s.readDouble(t) ? t : 1.0);
             return kResultOk;
             }
 

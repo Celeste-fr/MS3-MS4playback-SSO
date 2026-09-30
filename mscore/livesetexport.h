@@ -45,6 +45,7 @@ struct LiveSetPlan {
       LiveSetWriter::Spec spec;
       QStringList notes;            // how it was made (where the device is, MIDI From, slow first loads …)
       QStringList left;             // what was left out ("Violin: no setup")
+      QStringList controllers;      // per part and patch: the Controllers set in its state ("Piano – Grand Piano: Mic 1 level 20 …")
       QString source;               // onlyMissing: how the tracks already in Live were found
       int routes { 0 };             // the score's routes (onlyMissing: the rest have a track)
       };
