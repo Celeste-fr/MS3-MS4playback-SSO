@@ -85,6 +85,14 @@ if (MINGW OR MSVC)
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Scan SSO drum keys in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Scan SSO drum keys in background.bat" @ONLY NEWLINE_STYLE CRLF)
       install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Scan SSO drum keys in background.bat" DESTINATION bin)
+      # (MuseScore --measure-load-times; the owner, 2026-09-28: "optimize load times of the SSO plugin")
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Measure SSO load times in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO load times in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO load times in background.bat" DESTINATION bin)
+      # (MuseScore --verify-playback; the owner, 2026-09-28: verify playback without exporting by hand)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Verify SSO playback in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Verify SSO playback in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Verify SSO playback in background.bat" DESTINATION bin)
 endif (MINGW OR MSVC)
 
 target_include_directories(mscore PRIVATE
