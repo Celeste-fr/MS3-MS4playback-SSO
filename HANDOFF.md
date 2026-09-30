@@ -42,13 +42,12 @@ All numbers are in `tools/soundlibraries/` (see CLAUDE.md for how each was measu
 - **Named controls** of all 700 patches; **controllers and parameters** measured on all 700 (672 put back within their
   noise, 28 measured but not put back: round-robin percussion, Fanfares, Flutter); **links** on 698 (Vibraphone and Curated
   Tutti - Low Wood String Stab have none); **pitch bend** on all 700. Done, apart from those 2 links.
-- **Dynamics curves**: the 159 mapped patches' articulations a notation plays (417 curves). Not measured: percussion (kits,
-  one-drum, tuned: skipped as "keyswitched"), the ~540 unmapped patches, articulations no notation plays.
-- **Timing and legato**: 96 patches (the mapped ones a notation plays). Not measured: the same gaps as dynamics.
+- **Dynamics curves**: every sound of all 700 patches (1804: articulations, 504 drum hits, one-sound patches;
+  `sso_sound_dynamics.json`, build 261's run, 2026-09-30). Done.
+- **Timing and legato**: 96 patches (the mapped ones a notation plays); the every-sound timing run was stopped after 87 of
+  700 (the owner, 2026-09-30). To do: `Measure every SSO sound in background.bat` again (it skips the dynamics, done, and
+  the 87), then `timing_from_check.py` on the zips.
 - **Parameters** measured at 0 and 1 only, not the curve between.
-- **Built 2026-09-30 to close the dynamics and timing gaps**: `Measure every SSO sound in background.bat` (CLAUDE.md ›
-  Every sound). The owner to run it on the next Windows build and hand back every zip; then `dynamics_from_check.py`
-  and `timing_from_check.py` on them.
 
 ## Where things are
 

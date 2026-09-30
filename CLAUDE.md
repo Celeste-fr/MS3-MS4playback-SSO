@@ -504,8 +504,16 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   Readers: `timing_from_check.py` (now with `key`) and `dynamics_from_check.py` → `sso_sound_dynamics.json`. Tried
   here with the test synth (a patch with an unplayed articulation, a keyswitched one, a drum patch with two hits and one
   off, a one-sound `<Patch>`): every sound measured, drums at their keys, 4 curves into the calibration (the notated
-  ones), a second start leaving all out. Untried with Kontakt; several hours each (first loads of the 541 unmapped
-  patches, 2-43 s each; not timed).
+  ones), a second start leaving all out.
+  **The owner's dynamics run (build 261, 2026-09-30 10:42-11:34, 52 minutes, no crash or hang)**: all 700 patches, 1804
+  sounds (782 articulations, 504 drum hits: every keyed `<Drum>` of the map's 53 drum patches, 518 one-sound patches), kept
+  as `tools/soundlibraries/sso_sound_dynamics.json` (`dynamics_from_check.py`). Driven by velocity 887, the controller 717,
+  both 120, neither 75 (swells, falls, rips, FX, rolls: recorded at one dynamic). Silent at every pitch: Violins 2 Long
+  Sul G, the Core patches' Long Sul G / C, Tenor Trombones a2 Fx Glissandi; Violins 1 Long Sul G and Celli Long Sul C
+  "sound" only at CC 32 (-66 / -78 dB, then -100: the previous note's tail), so silent too. Some velocity curves aren't
+  monotonic (Alto Flute Marcato 48 under 32: velocity layers and round robins). 492 curves went into the working
+  `dynamics.json` (the notated ones). Timing, the second half, was stopped by the owner after 87 patches (it looked stuck:
+  a Performance patch takes 12-14 s); `results.json` is rewritten after each patch, so a restart goes on from there.
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,
