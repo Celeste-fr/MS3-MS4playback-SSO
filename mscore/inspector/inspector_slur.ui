@@ -189,6 +189,32 @@
         </property>
        </widget>
       </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QCheckBox" name="phraseMark">
+        <property name="toolTip">
+         <string>A phrase mark: drawn as a slur, played without legato</string>
+        </property>
+        <property name="accessibleName">
+         <string>Phrase mark (no legato)</string>
+        </property>
+        <property name="text">
+         <string>Phrase mark (no legato)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="Ms::ResetButton" name="resetPhraseMark" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="accessibleName">
+         <string>Reset 'Phrase mark' value</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -206,6 +232,7 @@
   <tabstop>title</tabstop>
   <tabstop>lineType</tabstop>
   <tabstop>slurDirection</tabstop>
+  <tabstop>phraseMark</tabstop>
  </tabstops>
  <resources/>
  <connections/>

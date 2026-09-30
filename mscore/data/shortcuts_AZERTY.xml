@@ -472,6 +472,10 @@
     <seq>S</seq>
     </SC>
   <SC>
+    <key>add-phrase-mark</key>
+    <seq>Alt+S</seq>
+    </SC>
+  <SC>
     <key>add-hairpin</key>
     <seq>&lt;</seq>
     </SC>

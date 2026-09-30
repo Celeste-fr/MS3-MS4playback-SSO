@@ -42,6 +42,7 @@
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "libmscore/segment.h"
+#include "libmscore/slur.h"
 #include "libmscore/automation.h"
 #include "libmscore/chord.h"
 #include "libmscore/tempo.h"
@@ -83,6 +84,7 @@ class TestSoundLibrary : public QObject, public MTest
       void checkedAsExpected();
       void render();
       void renderPatches();
+      void renderPhraseMark();
       void renderKit();
       void renderKitRoll();
       void controllers();
@@ -671,6 +673,87 @@ void TestSoundLibrary::renderPatches()
             if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && te.second.pitch() == 62)
                   sulG = te.second.extChannel();
       QCOMPARE(sulG, 0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   renderPhraseMark
+//    a slur marked as a phrase mark (libmscore/slur.h) is not a slur for the library: its notes
+//    play the main patch, not the Performance legato, and don't overlap; an ordinary slur inside
+//    it still plays legato (phrasemark.musicxml: C5 D5 E5 F5 | G5 F5 E5 D5, the phrase mark over
+//    all eight, the slur over E5 F5 G5)
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderPhraseMark()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore("libmscore/phrasemark/phrasemark.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+
+      struct N { int on; int off; int pitch; int channel; };
+      auto render = [score]() {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
+                        continue;
+                  if (ev.velo() > 0)
+                        notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel() });
+                  else {
+                        for (N& n : notes)
+                              if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
+                                    n.off = te.first;
+                        }
+                  }
+            return notes;
+            };
+      // on the legato patch ('L', channel 1) or not; overlapping the next note ('>') or not
+      auto describe = [](const std::vector<N>& notes) {
+            QString s;
+            for (size_t i = 0; i < notes.size(); ++i) {
+                  s += notes[i].channel == 1 ? 'L' : '-';
+                  s += (i + 1 < notes.size() && notes[i].off > notes[i + 1].on) ? '>' : ' ';
+                  }
+            return s;
+            };
+
+      Slur* outer = nullptr;
+      for (const auto& i : score->spannerMap().map())
+            if (i.second->isSlur() && i.second->tick().isZero())
+                  outer = toSlur(i.second);
+      QVERIFY(outer);
+      QCOMPARE(outer->ticks().ticks(), 7 * DIVISION);
+
+      // as a slur: legato until the inner slur starts (MS4 cuts the outer one off there), the inner
+      // one's notes legato, each overlapping into the next (the slur's last one too: as before,
+      // a separate question)
+      std::vector<N> notes = render();
+      QCOMPARE(int(notes.size()), 8);
+      QCOMPARE(describe(notes), QString("L>L>L>L>L>- - - "));
+
+      // as a phrase mark: only the inner slur
+      score->startCmd();
+      outer->undoChangeProperty(Pid::PHRASE_MARK, true);
+      score->endCmd();
+      notes = render();
+      QCOMPARE(int(notes.size()), 8);
+      QCOMPARE(describe(notes), QString("- - L>L>L>- - - "));
+      for (const N& n : notes)
+            QVERIFY(n.off > n.on);
       delete score;
       }
 

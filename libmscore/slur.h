@@ -53,6 +53,8 @@ class SlurSegment final : public SlurTieSegment {
 
 class Slur final : public SlurTie {
 
+      bool _phraseMark { false };   // a phrase mark, not a slur for playback (see PhraseMark below)
+
       void slurPosChord(SlurPos*);
 
    public:
@@ -77,7 +79,46 @@ class Slur final : public SlurTie {
       const SlurSegment* segmentAt(int n) const { return toSlurSegment(Spanner::segmentAt(n));   }
 
       SlurTieSegment* newSlurTieSegment() override { return new SlurSegment(score()); }
+
+      bool phraseMark() const             { return _phraseMark; }
+      void setPhraseMark(bool v)          { _phraseMark = v; }
+      bool isLegatoSlur() const           { return !_phraseMark; }     // a slur for playback
+
+      QVariant getProperty(Pid propertyId) const override;
+      bool setProperty(Pid propertyId, const QVariant&) override;
+      QVariant propertyDefault(Pid id) const override;
       };
+
+//---------------------------------------------------------
+//   Phrase marks
+//
+//   MuseScore has no phrase-mark element: phrase marks are drawn as slurs, and playback (MuseScore 4's
+//   rule, Ms4::chordArticulations) plays every slur legato. A slur marked as a phrase mark (the owner,
+//   2026-09-30: right-click › "Phrase mark (no legato)", Inspector, Add › Lines › Phrase mark, Alt+S)
+//   is not a slur for playback at all (no legato in any playback mode; an ordinary slur inside it still
+//   is) nor for the playability checker's bow strokes. It is drawn in the playability checker's
+//   open-string grey on screen only (Playability::openStringColor, a preference, default slate grey
+//   #7d8791): selected it takes the selection colour, printed and exported (PDF / PNG / SVG) it is
+//   black; a colour the user set on the slur wins.
+//
+//   Pid::PHRASE_MARK is not written in the slur's XML (MuseScore 3.6 reads the file unchanged): the
+//   score's metaTag "phraseMarks" (kept by 3.6 through a round trip) holds JSON
+//   [{"tick", "tick2", "track", "track2"}], written on save from the slurs' current positions (each
+//   score of the file its own: the master score and each part), read after loading and applied to
+//   the matching slurs. Copy / paste keeps it (written in the clipboard's XML only).
+//---------------------------------------------------------
+
+namespace PhraseMark {
+
+extern const char* const metaTag;
+
+// the colour on screen of a phrase mark whose colour is the default one
+QColor color();
+// the metaTag: to the slurs after loading (and out of the tags), from them on saving; empty: none
+void read(Score* score);
+QString write(const Score* score);
+
+}     // namespace PhraseMark
 
 }     // namespace Ms
 #endif

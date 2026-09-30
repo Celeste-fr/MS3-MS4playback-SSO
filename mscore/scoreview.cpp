@@ -2365,6 +2365,9 @@ void ScoreView::cmd(const char* s)
             {{"add-slur"}, [](ScoreView* cv, const QByteArray&) {
                   cv->cmdAddSlur();
                   }},
+            {{"add-phrase-mark"}, [](ScoreView* cv, const QByteArray&) {
+                  cv->cmdAddPhraseMark();
+                  }},
             {{"add-hairpin"}, [](ScoreView* cv, const QByteArray&) {
                   cv->cmdAddHairpin(HairpinType::CRESC_HAIRPIN);
                   }},
@@ -4325,6 +4328,48 @@ void ScoreView::cmdAddSlur(const Slur* slurTemplate)
             if (cr1)
                   addSlur(cr1, cr2, slurTemplate);
             }
+      _score->endCmd();
+      }
+
+//---------------------------------------------------------
+//   cmdAddPhraseMark
+//    Alt+S: with slurs selected, toggle them between slur and phrase mark (all become phrase
+//    marks unless all are already); else add a slur as S does, marked as a phrase mark
+//    (libmscore/slur.h)
+//---------------------------------------------------------
+
+void ScoreView::cmdAddPhraseMark()
+      {
+      std::vector<Slur*> slurs;
+      if (!(noteEntryMode() && _score->inputState().slur())) {
+            for (Element* e : _score->selection().elements()) {
+                  Slur* s = e->isSlurSegment() ? toSlurSegment(e)->slur() : (e->isSlur() ? toSlur(e) : nullptr);
+                  if (s && std::find(slurs.begin(), slurs.end(), s) == slurs.end())
+                        slurs.push_back(s);
+                  }
+            }
+      if (!slurs.empty()) {
+            setPhraseMarks(slurs);
+            return;
+            }
+      Slur phraseMark(_score);
+      phraseMark.setPhraseMark(true);
+      cmdAddSlur(&phraseMark);
+      }
+
+//---------------------------------------------------------
+//   setPhraseMarks
+//    toggle: all become phrase marks unless all are already, then all become slurs; one command
+//---------------------------------------------------------
+
+void ScoreView::setPhraseMarks(const std::vector<Slur*>& slurs)
+      {
+      bool all = true;
+      for (const Slur* s : slurs)
+            all = all && s->phraseMark();
+      _score->startCmd();
+      for (Slur* s : slurs)
+            s->undoChangeProperty(Pid::PHRASE_MARK, !all);
       _score->endCmd();
       }
 

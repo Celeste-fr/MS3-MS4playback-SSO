@@ -27,6 +27,7 @@
 #include "part.h"
 #include "rest.h"
 #include "score.h"
+#include "slur.h"
 #include "tempochange.h"
 #include "scoreOrder.h"
 #include "segment.h"
@@ -170,6 +171,8 @@ void Score::writeMovement(XmlWriter& xml, bool selectionOnly)
       QMapIterator<QString, QString> i(_metaTags);
       while (i.hasNext()) {
             i.next();
+            if (i.key() == PhraseMark::metaTag)
+                  continue;         // written from the slurs below
             // do not output "platform" and "creationDate" in test and save template mode
             if ((!MScore::testMode && !MScore::saveTemplateMode) || (i.key() != "platform" && i.key() != "creationDate"))
                   xml.tag(QString("metaTag name=\"%1\"").arg(i.key().toHtmlEscaped()), i.value());
@@ -179,6 +182,12 @@ void Score::writeMovement(XmlWriter& xml, bool selectionOnly)
             const QString tempoChanges = TempoChange::write(this);
             if (!tempoChanges.isEmpty() && !_metaTags.contains(TempoChange::metaTag))
                   xml.tag(QString("metaTag name=\"%1\"").arg(TempoChange::metaTag), tempoChanges);
+            }
+      // the slurs that are phrase marks, where they are now (slur.h); every score its own (parts too)
+      if (!selectionOnly) {
+            const QString phraseMarks = PhraseMark::write(this);
+            if (!phraseMarks.isEmpty())
+                  xml.tag(QString("metaTag name=\"%1\"").arg(PhraseMark::metaTag), phraseMarks);
             }
 
       if (_scoreOrder && !_scoreOrder->isCustom()) {

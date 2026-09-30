@@ -180,6 +180,7 @@ subdirs (
         libmscore/tuning
         libmscore/playability
         libmscore/tempochange
+        libmscore/phrasemark
         libmscore/selectionfilter
         libmscore/selectionrangedelete
         libmscore/unrollrepeats

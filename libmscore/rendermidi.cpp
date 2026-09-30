@@ -3519,6 +3519,9 @@ void Score::createPlayEvents(Chord* chord)
       for (auto sp : _spanner.map()) {
             if (!sp.second->isSlur() || sp.second->staffIdx() != chord->staffIdx())
                   continue;
+            if (toSlur(sp.second)->phraseMark())
+                  continue;         // not a slur for playback (slur.h): the instrument's gate time
+
             Slur* s = toSlur(sp.second);
             if (tick >= s->tick() && tick < s->tick2()) {
                   slur = s;

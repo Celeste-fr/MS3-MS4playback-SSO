@@ -366,6 +366,8 @@ enum class Pid : short {
       TEMPO_CHANGE_FACTOR,    // a rit. / accel. line (tempochange.h); not written in the element
       TEMPO_CHANGE_METHOD,
 
+      PHRASE_MARK,            // a slur drawn as a phrase mark: no legato (slur.h); not written in the element
+
       END
       };
 

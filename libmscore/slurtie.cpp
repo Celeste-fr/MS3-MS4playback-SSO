@@ -215,6 +215,7 @@ QVariant SlurTieSegment::getProperty(Pid propertyId) const
       switch (propertyId) {
             case Pid::LINE_TYPE:
             case Pid::SLUR_DIRECTION:
+            case Pid::PHRASE_MARK:
                   return slurTie()->getProperty(propertyId);
             case Pid::SLUR_UOFF1:
                   return ups(Grip::START).off;
@@ -238,6 +239,7 @@ bool SlurTieSegment::setProperty(Pid propertyId, const QVariant& v)
       switch(propertyId) {
             case Pid::LINE_TYPE:
             case Pid::SLUR_DIRECTION:
+            case Pid::PHRASE_MARK:
                   return slurTie()->setProperty(propertyId, v);
             case Pid::SLUR_UOFF1:
                   ups(Grip::START).off = v.toPointF();
@@ -267,6 +269,7 @@ QVariant SlurTieSegment::propertyDefault(Pid id) const
       switch (id) {
             case Pid::LINE_TYPE:
             case Pid::SLUR_DIRECTION:
+            case Pid::PHRASE_MARK:
                   return slurTie()->propertyDefault(id);
             case Pid::SLUR_UOFF1:
             case Pid::SLUR_UOFF2:
@@ -298,6 +301,11 @@ void SlurTieSegment::reset()
 
 void SlurTieSegment::undoChangeProperty(Pid pid, const QVariant& val, PropertyFlags ps)
       {
+      if (pid == Pid::PHRASE_MARK) {
+            // on the slur, so that its linked copies (parts, linked staves) change with it
+            slurTie()->undoChangeProperty(pid, val, ps);
+            return;
+            }
       if (pid == Pid::AUTOPLACE && (val.toBool() == true && !autoplace())) {
             // Switching autoplacement on. Save user-defined
             // placement properties to undo stack.

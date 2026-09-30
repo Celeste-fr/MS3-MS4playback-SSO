@@ -42,6 +42,7 @@
 #include "libmscore/rest.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
+#include "libmscore/slur.h"
 #include "libmscore/staff.h"
 #include "libmscore/staffstate.h"
 #include "libmscore/stafftextbase.h"
@@ -217,6 +218,11 @@ void ScoreView::createElementPropertyMenu(Element* e, QMenu* popup)
             }
       else if (e->isSlurSegment()) {
             genPropertyMenu1(e, popup);
+            // a phrase mark plays no legato (libmscore/slur.h); Alt+S does the same
+            QAction* a = popup->addAction(tr("Phrase mark (no legato)"));
+            a->setCheckable(true);
+            a->setChecked(toSlurSegment(e)->slur()->phraseMark());
+            a->setData("phrase-mark");
             }
       else if (e->isRest()) {
             QAction* b = popup->actions().at(0);
@@ -361,6 +367,21 @@ void ScoreView::elementPropertyAction(const QString& cmd, Element* e)
             }
       else if (cmd == "smallNote")
             e->undoChangeProperty(Pid::SMALL, !toNote(e)->isSmall());
+      else if (cmd == "phrase-mark") {
+            // the clicked slur, and the other selected slurs with it (as a toggle: see setPhraseMarks)
+            Slur* clicked = toSlurSegment(e)->slur();
+            std::vector<Slur*> slurs { clicked };
+            if (clicked->selected()) {
+                  for (Element* el : score()->selection().elements()) {
+                        Slur* s = el->isSlurSegment() ? toSlurSegment(el)->slur() : nullptr;
+                        if (s && std::find(slurs.begin(), slurs.end(), s) == slurs.end())
+                              slurs.push_back(s);
+                        }
+                  }
+            const bool mark = !clicked->phraseMark();
+            for (Slur* s : slurs)
+                  s->undoChangeProperty(Pid::PHRASE_MARK, mark);
+            }
       else if (cmd == "clef-courtesy") {
             Clef* clef = toClef(e);
             bool show = !clef->showCourtesy();

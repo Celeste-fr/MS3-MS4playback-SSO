@@ -17,6 +17,7 @@
 #include "part.h"
 #include "revisions.h"
 #include "score.h"
+#include "slur.h"
 #include "tempochange.h"
 #include "scoreOrder.h"
 #include "sig.h"
@@ -366,6 +367,10 @@ bool MasterScore::read(XmlReader& e)
       if (!Score::read(e))
             return false;
       TempoChange::read(this);      // the rit. / accel. lines' settings (tempochange.h)
+      PhraseMark::read(this);       // the slurs that are phrase marks (slur.h), with their parts' copies
+      for (Excerpt* ex : excerpts())      // and each part's own list (a part saved on its own has only that)
+            if (ex->partScore())
+                  PhraseMark::read(ex->partScore());
       for (Staff*& s : staves())
             s->updateOttava();
       setCreated(false);

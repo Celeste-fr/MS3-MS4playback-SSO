@@ -165,6 +165,27 @@ in the element: the metaTag `tempoChanges` (JSON tick, tick2, track, factor, met
 save from the lines' positions and read after loading (`MasterScore::read`). Test
 `tst_tempochange` (4/4). MuseScore 3.6 plays such a line at a steady tempo.
 
+Phrase marks (`libmscore/slur.h`, "Phrase marks"; the owner, 2026-09-30): MuseScore has no phrase-mark
+element, phrase marks are drawn as slurs, and playback (MS4's rule, `Ms4::chordArticulations`) plays every
+slur legato (the library then picks the Performance legato patch and overlaps the notes). A slur can be
+marked as a phrase mark: right-click › *Phrase mark (no legato)* (checkable; the selected slurs with it),
+the Inspector's Slur section, *Add › Lines › Phrase mark* / **Alt+S** (`add-phrase-mark`; shortcuts.xml,
+-Mac (Option+S), _AZERTY): like S it adds a slur (note entry too), marked; with slurs selected it toggles
+them (all become phrase marks unless all are, one undo step). A phrase mark is not a slur for playback in
+any mode: no Art::Legato (MS4 model and the library), not cutting off another slur (`Dynamics::build`'s
+collision-free intervals), not 100 % gate time in the MS3 model (`createPlayEvents`), not a bow stroke for
+the playability checker; an ordinary slur inside it plays legato as before. Drawn on screen in
+`Playability::openStringColor` (the preference, default slate grey #7d8791; `SlurSegment::draw`), selected
+in the selection colour, printed / PDF / PNG / SVG in black; a colour the user set on the slur wins.
+`Slur` has Pid::PHRASE_MARK (linked: parts follow; a segment passes it to its slur), not written in the
+slur's XML (only in the clipboard's, so copy / paste keeps it): the metaTag `phraseMarks` (JSON tick,
+tick2, track, track2), written on save by every score of the file (master and parts) from its slurs,
+read after loading (`MasterScore::read`: the master's onto its slurs and their linked copies, each part's
+onto its own), matched by start, end and track (a slur 3.6 moved or deleted loses it; nothing else gains
+it). Absent when there are none, so such files are unchanged. Test `tst_phrasemark` (playback in MS4 and
+MS3 models, file, undo, copy / paste, parts) and `tst_soundlibrary::renderPhraseMark`. No automatic phrase
+detection (the owner asked for the manual toggle only).
+
 Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3.6 plugins:
 
 - `libmscore/tuning.{h,cpp}`: a note's pitch in playback, in cents from equal temperament, is the
@@ -674,7 +695,8 @@ attack not yet confirmed by ear.
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
-  `liveMidiControllers`). All pass (43, 3 skipped without the owner's files).
+  `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (45 counting initTestCase and cleanup, 3 skipped without the
+  owner's files).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order
