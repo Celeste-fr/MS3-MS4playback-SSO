@@ -188,7 +188,8 @@ switch value of each articulation. For example:
     the note before (fast runs) and at the chunk's or the repeat's start; its note-off, the
     controllers and the switches stay where they were. The first note of a slur, the note after
     it and a repeated key are not moved.
-  - `<Legato early="75"/>` (top level): that percent. A score can set its own in
+  - `<Legato early="100"/>` (top level): that percent (SSO: 100, measured: the new pitch then fully arrives a
+    median 40 ms after the beat). A score can set its own in
     *Mixer › Advanced Options…* ("Legato transitions early by", metaTag `soundLibraryLegatoEarly`);
     0 plays transitions on the beat.
   - `release` on an `Articulation` (ms): how long a sustained note rings after its note-off. A
@@ -197,7 +198,7 @@ switch value of each articulation. For example:
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
 
   ```xml
-  <Legato early="75"/>
+  <Legato early="100"/>
   <Instrument name="Violins 1 - Performance" with="Violins 1" bend="99.1">
     <Articulation name="Legato" value="20" techniques="legato long" release="885" legatoDelay="210"/>
   </Instrument>
@@ -207,7 +208,7 @@ switch value of each articulation. For example:
   one tuning each. Where the patch has `bend`, a lane's tuning within the range is played by the
   patch's own pitch bend (sent on the lane's channel before each note, gliding 30 ms for a slurred
   note), otherwise by playing the copy faster or slower (varispeed, hosted only), which also
-  speeds up its vibrato and attacks a little (3 % for a quarter tone). Over MIDI out the bends go to
+  plays the plug-in's own timing (envelopes, scripts, effects) a little faster or slower (3 % for a quarter tone). Over MIDI out the bends go to
   the host with the notes. `tolerance` (cents): a note this close to a lane's tuning shares it;
   `tail` (seconds): how long a lane rings before it can be retuned (or the note's `release`, if
   longer); `maxLanes`: copies per patch at most. A score can set its own in *View › Sound Library…*.

@@ -335,9 +335,21 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   controllers stay; the previous note still overlaps it. A chunk doesn't end where a library part's slur goes on
   (`libSlurAcross`), so a transition is never a chunk's first note. The glide of its tuning lane moves with the note-on.
   Built-in playback untouched. The playback verify tool reads the notes from the same events (the reference too),
-  so a shifted note is judged at its new time. Test `legatoEarly` (legato-early.musicxml). The default percent is
-  from the VM measurement (see the commit / HANDOFF). Interval: +2 and -5 differ by up to 250 ms on some patches,
-  either way round (Oboes a2 90 / 340, Bass Flute 220 / 100): with two intervals measured, one number per patch.
+  so a shifted note is judged at its new time; its drift check now leaves out strikes that are all legato (a
+  transition's onset is where the slide puts it, no timing mark: a legato window against a detached one read as
+  drift, on the owner's Violins before this change too; test `playbackVerifyDrift`). Test `legatoEarly`
+  (legato-early.musicxml). Interval: +2 and -5 differ by up to 250 ms on some patches, either way round (Oboes a2
+  90 / 340, Bass Flute 220 / 100): with two intervals measured, one number per patch.
+  **Measured on the VM with SSO (2026-09-30, build a1b1e74 against df273c3)**: Solo Violin, Violins 1 and Flute Solo
+  Performance, slurred D5 E5 F5 A5 D6 C6 G5 D5 at 60 and 120 bpm (42 transitions) plus an eighth run at 120; when the
+  new pitch is within 35 cents (YIN every 5 ms) after its beat: median 230 ms before (85-465), at 50 % 128, at 75 % 80,
+  at 100 % 40 (20 of 42 within ±40 ms, one 59 ms early); per part at 100 %: Solo Violin 26 / 25, Violins 130 / 102,
+  Flute 36 / 31 ms (60 / 120 bpm). Leaps of a fourth or fifth stay 100-280 ms late (slower than the +2 / -5 the delay
+  is from; Violins' A5>D6, C6>G5, Flute's C6>G5, G5>D5). The eighth runs are capped (half an eighth, 125 ms): median
+  +58 ms. Fresh first notes: 3-45 ms, unchanged. **Default `<Legato early="100"/>`**: the full arrival median lands
+  40 ms late, where the ear already hears the new note (the owner expected the full delay might feel early: on the
+  fully-arrived measure it doesn't; 75 % left transitions 80 ms late). Test score and analysis: the job's
+  tmp/legato (legato-timing.musicxml, analyze.py).
   Dynamics go on the library's CC (CC1 for Spitfire).
   Shorts (the owner, 2026-09-28: at pp the staccatos stood out; their velocity was MS4's soundfont one, 56 at
   pp and 65 at mf, while CC1 went 32 → 80, and Spitfire's shorts take their dynamics from velocity only):
@@ -612,8 +624,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     temperament (meantone, JI) can need several per part, hence maxLanes. The Sound Library dialog lists
     lanes as "~ <part> (other tuning n)".
   - **Pitch bend instead of varispeed where the patch bends** (the owner, 2026-09-30; branch `legato-timing`):
-    varispeed also plays the plug-in's time faster (3 % for a quarter tone: vibrato rate, attacks); SSO's own bend
-    doesn't. The owner's extracts (`sso_patch_measurements.json` `pitchBend`: cents at bend 0 / 16383; the cents at
+    varispeed also plays the plug-in's own time faster (3 % for a quarter tone: its script's envelopes, legato
+    timing, effects); SSO's bend is Kontakt's per-voice resampling of the sample, so the sample's recorded vibrato
+    moves 3 % either way (measured on the VM: Solo Violin Performance held D5 5.58 Hz, D5+ 5.76 Hz with varispeed
+    and 5.76 Hz with bend, E5- 5.43 both). Pitch is as exact both ways (held D5+ / E5-: +0.5 / -0.1 cents
+    varispeed, -0.5 / +0.2 bend; a slurred E5- +3.5 / +2.5), which also confirms the linear bend at ±50 cents on a
+    Performance patch within 3 cents. The real gain: over MIDI out (a DAW) varispeed doesn't exist, the bends do. The owner's extracts (`sso_patch_measurements.json` `pitchBend`: cents at bend 0 / 16383; the cents at
     4096 … 12288 on a straight line) give `<Instrument bend>` (cents at full deflection) to a patch that bends
     cleanly: both ways ≥ 50 cents and within 3 % of each other: the 43 Performance patches ±99-105, Solo Cello and
     the tuned percussion ±195 (not the kits' patches: a kit plays no tunings; not the All techniques patches: they

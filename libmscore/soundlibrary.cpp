@@ -206,7 +206,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Legato") {
-                  // <Legato early="75"/>
+                  // <Legato early="100"/>
                   lib->legatoEarly = qBound(0, a.value("early").toInt(), 200);
                   r.skipCurrentElement();
                   }

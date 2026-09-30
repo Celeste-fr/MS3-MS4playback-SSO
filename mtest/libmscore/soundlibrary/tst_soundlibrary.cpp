@@ -4451,6 +4451,25 @@ void TestSoundLibrary::playbackVerifyDrift()
             };
       QVERIFY(!drift(a));
       QVERIFY(drift(b));
+
+      // legato transitions heard 80 ms after their note-on (SSO's slide, within the drift search's ±100 ms)
+      // from 20 to 40 s, every fourth
+      // note there attacked on time: no drift (their onsets are no timing marks); the same notes not
+      // marked legato: drift
+      {
+            std::vector<SynthNote> late = notes;
+            std::vector<PV::Note> pvLegato = pv;
+            for (size_t k = 0; k < late.size(); ++k) {
+                  if (late[k].on >= 20 && late[k].on < 40 && k % 4 != 0) {
+                        late[k].on += 0.08;
+                        pvLegato[k].legato = true;
+                        }
+                  }
+            std::vector<float> slide(frames, 0.f);
+            synthesize(slide, rate, late, 1.0, 0.5, 0.0);
+            QVERIFY(!drift(PV::analyse(PV::Spectrogram(slide, rate), pvLegato, settings)));
+            QVERIFY(drift(PV::analyse(PV::Spectrogram(slide, rate), pv, settings)));
+      }
       }
 
 //---------------------------------------------------------

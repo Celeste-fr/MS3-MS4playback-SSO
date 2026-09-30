@@ -132,9 +132,12 @@ I=[
  (None,'Desk Bells','hand-bells',None),
 ]
 # Legato transitions start early (libmscore/rendermidi.cpp: libLegatoEarly): by this share of the
-# patch's measured delay (legatoDelay=). The ear places the new note partway through SSO's slide, so the
-# full delay would sound early; the percent is from measuring the result with SSO (CLAUDE.md, Legato timing)
-LEGATO_EARLY = 75
+# patch's measured delay (legatoDelay=). Measured with SSO on the test VM (2026-09-30, Solo Violin, Violins 1,
+# Flute Solo Performance, slurred steps and leaps at 60 and 120 bpm, 42 transitions; the new pitch within
+# 35 cents, YIN every 5 ms): after the beat by a median of 230 ms before, 128 at 50 %, 80 at 75 %, 40 at 100 %
+# (20 of 42 within 40 ms, one 59 ms early); leaps of a fourth or fifth stay 100-280 ms late. 100 %: the
+# full arrival lands a little late, where the ear already hears the new note (CLAUDE.md, Legato transitions)
+LEGATO_EARLY = 100
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
 '  Spitfire Symphony Orchestra (Kontakt), articulations switched by UACC (CC32).',

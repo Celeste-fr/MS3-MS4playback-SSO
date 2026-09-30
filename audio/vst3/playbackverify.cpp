@@ -694,9 +694,21 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   }
       }
 
-      // drift: the best offset per window (half overlapping), around the whole one
+      // drift: the best offset per window (half overlapping), around the whole one, from the strikes
+      // with an attack: a legato transition's onset is where the library's slide makes it (SSO: 70-430
+      // ms after its note-on, and started early by the renderer since 2026-09-30), not a timing mark;
+      // a window of legato lines against one of detached notes read as drift (the owner's Violins)
       {
-            const double end = ks.back().time;
+            std::vector<Strike> attacked;
+            for (const Strike& k : ks) {
+                  bool legato = !k.notes.empty();
+                  for (int n : k.notes)
+                        legato = legato && notes[size_t(n)].legato;
+                  if (!legato)
+                        attacked.push_back(k);
+                  }
+            const std::vector<Strike>& ks = attacked;
+            const double end = ks.empty() ? 0.0 : ks.back().time;
             for (double w = 0; w < end; w += settings.driftWindow / 2) {
                   size_t a = 0, b = 0;
                   while (a < ks.size() && ks[a].time < w)

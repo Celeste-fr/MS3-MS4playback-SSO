@@ -36,7 +36,7 @@
   <Tuning method="varispeed" tolerance="0.5" tail="1.5"/>
   <!-- a slurred note on a Performance patch (a legato transition) reaches its pitch legatoDelay ms after
        its note-on (measured, sso_articulation_timing.json): it starts early by that times early percent -->
-  <Legato early="75"/>
+  <Legato early="100"/>
   <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>
   <Files registry="Spitfire Symphony Orchestra"/>
   <Instrument name="Violins 1" ids="violins" nki="Instruments/Symphonic Strings/Violins 1 - All techniques.nki" setup="$iooxo=3" pitch="76">
