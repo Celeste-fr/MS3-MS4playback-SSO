@@ -25,7 +25,9 @@
 //   - the notes, velocities, and keyswitch notes of libraries that switch by key;
 //   - the controllers (UACC CC32 switches, CC1 dynamics, CC11, CC64 pedal …) as *carrier notes*
 //     at the top of the key range (CARRIER_LOW … 127: one pitch per controller, velocity = value
-//     + 1, 127 played as 126). The MuseScore Link device (tools/live/), placed before the
+//     + 1, 127 played as 126) and pitch bend (the microtones of a patch that bends, legato-timing's
+//     libraryPitchBends: 14 bit on keys 115 (upper 7 bits) and 114 (lower 7), each written when it changes; a glide's
+//     3 ms steps each one carrier). The MuseScore Link device (tools/live/), placed before the
 //     library's plug-in on the track, turns each carrier's note-on into its controller and drops
 //     its note-off. The Live Object Model can write notes but not a clip's MIDI controller
 //     envelopes; carrier notes keep the controllers in the clip, played by Live's own clock:
@@ -37,7 +39,7 @@
 //     in the renderer's order. At the very start, where nothing can come earlier, the notes wait
 //     instead.
 //   - Left out: plug-in parameter events (Track::parameters: Live's own automation lanes play
-//     those), other controllers and pitch bend (Track::dropped), program and bank changes.
+//     those), other controllers (Track::dropped), program and bank changes.
 //
 //   Timeline. Live can't be given the score's tempo map (the Live Object Model can't write the
 //   song tempo automation), so Live plays at one tempo, the score's first (Timeline::bpm), and
@@ -91,11 +93,18 @@ constexpr int EPSILON            = 2;         // units: ~0.26 ms at 120 bpm
 constexpr int NOTES_PER_PACKET   = 48;        // 5 int32 + 5 type tags each: about 1.3 kB a datagram
 constexpr int CUES_PER_PACKET    = 40;
 constexpr int DEFAULT_PORT       = 9001;
-constexpr int CARRIER_LOW        = 116;
 constexpr int CARRIER_COUNT      = 12;
 // the controller each carrier pitch stands for: pitch 127 - i -> CARRIER_CCS[i] (the device has the same table)
 extern const int CARRIER_CCS[CARRIER_COUNT];
 int carrierPitch(int cc);                     // -1: none
+// pitch bend (14 bit, 0-16383, centre 8192) as two carriers below the controllers': its upper 7 bits on BEND_MSB,
+// its lower 7 on BEND_LSB, each velocity = value + 1 (127 plays as 126: a bend of at most 126 × 128 + 126 =
+// 16254, +98.4 % of the range). The device keeps the last of each and sends the whole bend at either, so the pair
+// is right in any order (a chase at a mid-song start). Only the half that changed is written
+constexpr int BEND_MSB           = 115;
+constexpr int BEND_LSB           = 114;
+constexpr int BEND_MAX           = 126 * 128 + 126;
+constexpr int CARRIER_LOW        = 114;       // keys CARRIER_LOW … 127 are carriers, never played as notes
 
 //---------------------------------------------------------
 //   Timeline
@@ -131,7 +140,8 @@ struct Note {
 
 struct RouteNotes {
       std::vector<Note> notes;      // notes and carriers, by start
-      int dropped { 0 };            // controllers without a carrier, pitch bend
+      int dropped { 0 };            // controllers without a carrier
+      int bends { 0 };              // pitch bend values carried (one like the value before isn't written again)
       int parameters { 0 };         // plug-in parameter events (MuseScore's lanes and Controllers: Live's own there)
       int highNotes { 0 };          // notes at a carrier's pitch (not played as notes by the device)
       };
@@ -150,6 +160,7 @@ struct Track {
       int length { 0 };             // units: the played score
       std::vector<Note> notes;
       int dropped { 0 };
+      int bends { 0 };
       int parameters { 0 };
       int highNotes { 0 };
       quint32 hash { 0 };           // of all that is drawn

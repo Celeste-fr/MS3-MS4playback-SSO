@@ -106,6 +106,10 @@ struct Control {
       bool keyswitch;
       int start;        // units
       };
+int bendOf(const NPlayEvent& e)
+      {
+      return std::min(BEND_MAX, (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f));
+      }
 }
 
 std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, int endUtick)
@@ -123,6 +127,7 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
             std::vector<Control> controls;
             std::map<int, std::deque<Note>> open;         // pitch -> notes on (keyswitches too)
             std::map<int, int> lastAt;                    // carrier pitch -> its last start (kept in order)
+            int lastBend = -1;                            // the last bend carried (-1: none yet)
             size_t i = 0;
             while (i < items.size()) {
                   const int tick = items[i].tick;
@@ -132,6 +137,7 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                   const int at = tl.units(tick);
                   auto isControl = [](const NPlayEvent& e) {
                         return (e.type() == ME_CONTROLLER && carrierPitch(e.controller()) >= 0)
+                               || e.type() == ME_PITCHBEND
                                || (e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0);
                         };
                   auto isNoteOn = [](const NPlayEvent& e) {
@@ -147,7 +153,7 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                         else if (isControl(e))
                               (noteSeen ? after : before).push_back(&e);
                         }
-                  // a controller set twice at a tick: the last value (keyswitches all kept)
+                  // a controller (or the bend) set twice at a tick: the last value (keyswitches all kept)
                   auto dedupe = [](std::vector<const NPlayEvent*>& v) {
                         std::vector<const NPlayEvent*> o;
                         for (size_t k = 0; k < v.size(); ++k) {
@@ -155,6 +161,9 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                               if (v[k]->type() == ME_CONTROLLER)
                                     for (size_t m = k + 1; m < v.size(); ++m)
                                           later = later || (v[m]->type() == ME_CONTROLLER && v[m]->controller() == v[k]->controller());
+                              else if (v[k]->type() == ME_PITCHBEND)
+                                    for (size_t m = k + 1; m < v.size(); ++m)
+                                          later = later || v[m]->type() == ME_PITCHBEND;
                               if (!later)
                                     o.push_back(v[k]);
                               }
@@ -162,16 +171,52 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                         };
                   dedupe(before);
                   dedupe(after);
+                  // a bend: its halves that changed (none: left out)
+                  auto bendHalves = [&](const NPlayEvent* e) {
+                        std::vector<std::pair<int, int>> h;       // (carrier pitch, value)
+                        const int b = bendOf(*e);
+                        if (lastBend < 0 || (b & 0x7f) != (lastBend & 0x7f))
+                              h.push_back({ BEND_LSB, b & 0x7f });
+                        if (lastBend < 0 || (b >> 7) != (lastBend >> 7))
+                              h.push_back({ BEND_MSB, b >> 7 });
+                        lastBend = b;
+                        return h;
+                        };
+                  // (each carrier one slot of EPSILON: a bend's two halves take two)
+                  auto expand = [&](const std::vector<const NPlayEvent*>& v) {
+                        std::vector<std::pair<const NPlayEvent*, std::pair<int, int>>> o;
+                        for (const NPlayEvent* e : v) {
+                              if (e->type() == ME_PITCHBEND) {
+                                    const auto halves = bendHalves(e);
+                                    for (const auto& h : halves)
+                                          o.push_back({ e, h });
+                                    if (!halves.empty())
+                                          ++rn.bends;
+                                    }
+                              else
+                                    o.push_back({ e, { -1, -1 } });
+                              }
+                        return o;
+                        };
+                  const auto beforeX = expand(before);
+                  const auto afterX = expand(after);
                   // places: before the note, as far as the clip's start allows; the note after them
-                  int first = at - int(before.size()) * EPSILON;
+                  int first = at - int(beforeX.size()) * EPSILON;
                   if (first < 0)
                         first = 0;
-                  int noteAt = std::max(at, first + int(before.size()) * EPSILON);
-                  auto place = [&](const NPlayEvent* e, int start) {
+                  int noteAt = std::max(at, first + int(beforeX.size()) * EPSILON);
+                  auto place = [&](const std::pair<const NPlayEvent*, std::pair<int, int>>& x, int start) {
+                        const NPlayEvent* e = x.first;
                         Control c;
                         c.keyswitch = e->type() == ME_NOTEON;
-                        c.pitch = c.keyswitch ? e->pitch() : carrierPitch(e->controller());
-                        c.value = c.keyswitch ? e->velo() : e->value();
+                        if (e->type() == ME_PITCHBEND) {
+                              c.pitch = x.second.first;
+                              c.value = x.second.second;
+                              }
+                        else {
+                              c.pitch = c.keyswitch ? e->pitch() : carrierPitch(e->controller());
+                              c.value = c.keyswitch ? e->velo() : e->value();
+                              }
                         if (!c.keyswitch) {
                               auto l = lastAt.find(c.pitch);
                               if (l != lastAt.end() && start <= l->second)
@@ -193,10 +238,10 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                               open[c.pitch].push_back(n);
                               }
                         };
-                  for (size_t k = 0; k < before.size(); ++k)
-                        place(before[k], first + int(k) * EPSILON);
-                  for (size_t k = 0; k < after.size(); ++k)
-                        place(after[k], noteAt + int(k + 1) * EPSILON);
+                  for (size_t k = 0; k < beforeX.size(); ++k)
+                        place(beforeX[k], first + int(k) * EPSILON);
+                  for (size_t k = 0; k < afterX.size(); ++k)
+                        place(afterX[k], noteAt + int(k + 1) * EPSILON);
                   // the notes and note-offs, in order
                   for (size_t k = i; k < j; ++k) {
                         const NPlayEvent& e = *items[k].e;
@@ -225,9 +270,9 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                               }
                         else if (e.type() == ME_PARAMETER)
                               ++rn.parameters;  // (Live's own automation lanes)
-                        else if ((e.type() == ME_CONTROLLER && !isControl(e) && e.controller() != CTRL_HBANK
-                                  && e.controller() < 0x78) || e.type() == ME_PITCHBEND)
-                              ++rn.dropped;     // other controllers, pitch bend (programs, banks, all-off: no matter)
+                        else if (e.type() == ME_CONTROLLER && !isControl(e) && e.controller() != CTRL_HBANK
+                                 && e.controller() < 0x78)
+                              ++rn.dropped;     // other controllers (programs, banks, all-off: no matter)
                         }
                   i = j;
                   }
@@ -332,6 +377,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             if (n != byRoute.end()) {
                   t.notes = n->second.notes;
                   t.dropped = n->second.dropped;
+                  t.bends = n->second.bends;
                   t.parameters = n->second.parameters;
                   t.highNotes = n->second.highNotes;
                   }

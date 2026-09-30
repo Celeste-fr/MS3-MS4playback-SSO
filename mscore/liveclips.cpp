@@ -586,10 +586,10 @@ QString LiveClipsLink::statusText() const
       if (!problems.isEmpty())
             text += "\n" + tr("Not in Live: %1").arg(problems.join("; "));
       if (dropped)
-            text += "\n" + tr("%n event(s) a clip can't hold were left out (plug-in parameters, other controllers, "
-                              "pitch bend).", "", dropped);
+            text += "\n" + tr("%n event(s) a clip can't hold were left out (plug-in parameters, other controllers).",
+                              "", dropped);
       if (high)
-            text += "\n" + tr("%n note(s) at G#8 or above were left out (those keys carry the controllers).", "", high);
+            text += "\n" + tr("%n note(s) at F#8 or above were left out (those keys carry the controllers and the pitch bend).", "", high);
       return text;
       }
 

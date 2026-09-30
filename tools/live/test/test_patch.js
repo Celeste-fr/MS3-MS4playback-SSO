@@ -89,6 +89,22 @@ function receive(id, inlet, v) {
             case "prepend":
                   emit(id, 0, args.concat(list));
                   return;
+            case "t": {                        // (trigger: right to left)
+                  for (let k = args.length - 1; k >= 0; --k)
+                        emit(id, k, args[k] === "b" ? "bang" : list[0]);
+                  return;
+                  }
+            case "pack": {
+                  s.v = s.v || args.slice();
+                  if (inlet > 0) {
+                        s.v[inlet] = list[0];
+                        return;
+                        }
+                  if (list[0] !== "bang")
+                        s.v[0] = list[0];
+                  emit(id, 0, s.v.slice());
+                  return;
+                  }
             case "iter":
                   for (const x of list)
                         emit(id, 0, x);
@@ -143,7 +159,7 @@ function test(name, fn) {
 test("notes pass unchanged", () => {
       assert.deepStrictEqual(play([0x90, 60, 90]), [0x90, 60, 90]);
       assert.deepStrictEqual(play([0x80, 60, 0]), [0x90, 60, 0]);            // (a note-off as note-on 0)
-      assert.deepStrictEqual(play([0x90, 115, 20]), [0x90, 115, 20]);        // just below the carriers
+      assert.deepStrictEqual(play([0x90, 113, 20]), [0x90, 113, 20]);        // just below the carriers
       });
 
 test("each carrier key's note-on becomes its controller (value = velocity - 1); its note-off goes", () => {
@@ -155,6 +171,31 @@ test("each carrier key's note-on becomes its controller (value = velocity - 1); 
             assert.deepStrictEqual(play([0x80, key, 64]), []);
             assert.deepStrictEqual(play([0x90, key, 0]), []);
             });
+      });
+
+test("the pitch bend carriers (115 upper, 114 lower 7 bits; value = velocity - 1) become one pitch bend", () => {
+      // the centre: upper 64, lower 0 (both written: the first bend)
+      assert.deepStrictEqual(play([0x90, 114, 1]), [0xe0, 0, 0]);                 // (the lower half alone: upper still 0)
+      assert.deepStrictEqual(play([0x90, 115, 65]), [0xe0, 0, 64]);               // 8192
+      // +50 cents of ±100: 8192 + 4096 = 12288 = upper 96, lower 0: only the upper half written
+      assert.deepStrictEqual(play([0x90, 115, 97]), [0xe0, 0, 96]);
+      assert.deepStrictEqual(play([0x80, 115, 0]), []);                           // its note-off dropped
+      // 12345 = upper 96, lower 57: the lower half alone, then the pair in the other order (a chase)
+      assert.deepStrictEqual(play([0x90, 114, 58]), [0xe0, 57, 96]);
+      assert.deepStrictEqual(play([0x90, 115, 33]), [0xe0, 57, 32]);              // (upper 32 with the lower kept)
+      assert.deepStrictEqual(play([0x90, 114, 1]), [0xe0, 0, 32]);                // 4096: -50 cents
+      assert.deepStrictEqual(play([0x80, 114, 0]), []);
+      assert.deepStrictEqual(play([0x90, 114, 0]), []);                           // (a note-on 0 is a note-off)
+      // the highest: 126 / 126 = 16254
+      assert.deepStrictEqual(play([0x90, 114, 127]).concat(play([0x90, 115, 127])), [0xe0, 126, 32, 0xe0, 126, 126]);
+      });
+
+test("MuseScore's pitch bend carriers: the same keys (libmscore/liveclips.h)", () => {
+      const h = fs.readFileSync(path.join(dir, "..", "..", "libmscore", "liveclips.h"), "utf8");
+      assert.ok(/BEND_MSB\s*= 115;/.test(h));
+      assert.ok(/BEND_LSB\s*= 114;/.test(h));
+      assert.ok(/CARRIER_LOW\s*= 114;/.test(h));
+      assert.ok(patcher.boxes.some((b) => b.box.text === "route 127 126 125 124 123 122 121 120 119 118 117 116 115 114"));
       });
 
 test("other messages pass: controllers, program, pressure, bend, on their channel", () => {
@@ -201,8 +242,6 @@ test("the carrier table is MuseScore's (libmscore/liveclips.cpp)", () => {
       assert.deepStrictEqual(m[1].split(",").map((x) => Number(x.trim())), CARRIER_CCS);
       const pre = patcher.boxes.filter((b) => /^prepend 176 /.test(b.box.text || "")).map((b) => Number(b.box.text.split(" ")[2]));
       assert.deepStrictEqual(pre, CARRIER_CCS);
-      const h = fs.readFileSync(path.join(dir, "..", "..", "libmscore", "liveclips.h"), "utf8");
-      assert.ok(h.includes("CARRIER_LOW        = " + (128 - CARRIER_CCS.length)));
       });
 
 if (failures) {

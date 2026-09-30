@@ -2,7 +2,7 @@
 // libmscore/liveclips.h, mscore/liveclips.h).
 //
 // One copy goes on each MIDI track that plays a library part, BEFORE the instrument (Kontakt). In
-// every copy the patcher (not this script) turns the carrier notes of MuseScore's clips (keys 116-127)
+// every copy the patcher (not this script) turns the carrier notes of MuseScore's clips (keys 114-127: controllers, pitch bend)
 // into their MIDI controllers, in Max's scheduler, sample-timed with the notes; this script is not in
 // that path. One copy (the first loaded; another takes over when it goes) is the hub:
 //   - it listens to MuseScore (OSC over UDP on localhost, port 9001 by default; answers on port + 1);

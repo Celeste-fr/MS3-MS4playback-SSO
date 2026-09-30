@@ -660,7 +660,19 @@ void TestLiveIntegration::clipsControllers()
       QCOMPARE(notes[3].start, 2 * U);
       QCOMPARE(notes[3].start + notes[3].length, 1200 * U / 480);
       QCOMPARE(rn.highNotes, 1);
-      QCOMPARE(rn.dropped, 2);                                // pitch bend, CC7
+      QCOMPARE(rn.dropped, 1);                                // CC7
+      // the pitch bend (the centre, 8192): its two halves on 114 (lower 7 bits, 0) and 115 (upper, 64), velocity =
+      // value + 1, before the tick
+      QCOMPARE(rn.bends, 1);
+      const std::vector<LiveClips::Note> lsb = carriers(n, LiveClips::BEND_LSB);
+      const std::vector<LiveClips::Note> msb = carriers(n, LiveClips::BEND_MSB);
+      QCOMPARE(int(lsb.size()), 1);
+      QCOMPARE(int(msb.size()), 1);
+      QCOMPARE(lsb[0].velocity, 1);
+      QCOMPARE(msb[0].velocity, 65);
+      QCOMPARE(lsb[0].start, 1200 * U / 480 - 2 * E);
+      QCOMPARE(msb[0].start, 1200 * U / 480 - E);
+      QCOMPARE(msb[0].start + msb[0].length, 4 * U);           // (until the next value: chased anywhere)
       QCOMPARE(rn.parameters, 1);
       for (size_t i = 1; i < n.size(); ++i)
             QVERIFY(n[i - 1].start <= n[i].start);
@@ -916,7 +928,8 @@ void TestLiveIntegration::clipsOsc()
       QCOMPARE(LiveClips::carrierPitch(32), 127);
       QCOMPARE(LiveClips::carrierPitch(1), 126);
       QCOMPARE(LiveClips::carrierPitch(64), 124);
-      QCOMPARE(LiveClips::carrierPitch(68), LiveClips::CARRIER_LOW);
+      QCOMPARE(LiveClips::carrierPitch(68), 116);
+      QCOMPARE(LiveClips::CARRIER_LOW, LiveClips::BEND_LSB);      // (below the controllers: the pitch bend's two)
       QCOMPARE(LiveClips::carrierPitch(7), -1);
       }
 
