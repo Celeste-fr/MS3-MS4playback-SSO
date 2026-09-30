@@ -85,6 +85,7 @@ class TestSoundLibrary : public QObject, public MTest
       void render();
       void renderPatches();
       void renderPhraseMark();
+      void legatoEarly();
       void renderKit();
       void renderKitRoll();
       void controllers();
@@ -108,6 +109,7 @@ class TestSoundLibrary : public QObject, public MTest
       void pluginExtract();
       void pitchShift();
       void tuningLanes();
+      void tuningBend();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -754,6 +756,104 @@ void TestSoundLibrary::renderPhraseMark()
       QCOMPARE(describe(notes), QString("- - L>L>L - - - "));
       for (const N& n : notes)
             QVERIFY(n.off > n.on);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   legatoEarly
+//    a legato transition (a slurred note after a slurred note on the legato patch) starts early by
+//    its articulation's legatoDelay times <Legato early> percent, at the tempo there, not before half
+//    way into the note before; a slur's first note, the note after a slur and a key struck again stay
+//    on the beat; the note-offs stay; the score's own percent (metaTag soundLibraryLegatoEarly)
+//    (legato-early.musicxml: C5 D5 E5 F5 slurred at 60 | G5, A4 A4 B4 slurred | 120 bpm: C5 E5 G5 C6
+//    slurred | eight slurred sixteenths C5 … C6)
+//---------------------------------------------------------
+
+void TestSoundLibrary::legatoEarly()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='75'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' release='900'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(lib->legatoEarly, 75);
+      QCOMPARE(lib->instruments[1].articulations[0].legatoDelayMs, 200.0);
+      QCOMPARE(lib->instruments[1].articulations[0].releaseMs, 900.0);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(SoundLib::legatoEarly(score, *lib), 75);
+
+      struct N { int on; int off; int pitch; int channel; };
+      auto render = [score]() {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
+                        continue;
+                  if (ev.velo() > 0)
+                        notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel() });
+                  else {
+                        for (N& n : notes)
+                              if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
+                                    n.off = te.first;
+                        }
+                  }
+            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
+            return notes;
+            };
+      const int Q = DIVISION, S = DIVISION / 4;
+      // the written starts, and how early each plays at 75 % of 200 ms: 150 ms is 72 ticks at 60 bpm,
+      // 144 at 120; a sixteenth at 120 (125 ms) only half way into the one before (60 ticks)
+      const std::vector<std::pair<int, int>> written = {
+            { 0, 0 }, { Q, 72 }, { 2 * Q, 72 }, { 3 * Q, 72 },                       // m1: the slur's first on the beat
+            { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 72 },                 // m2: after the slur, its first, A4 again, B4
+            { 8 * Q, 0 }, { 9 * Q, 144 }, { 10 * Q, 144 }, { 11 * Q, 144 },          // m3 at 120
+            };
+      std::vector<N> notes = render();
+      QCOMPARE(int(notes.size()), 12 + 8);
+      for (size_t i = 0; i < written.size(); ++i)
+            QVERIFY2(notes[i].on == written[i].first - written[i].second,
+                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(notes[i].pitch)
+                                .arg(notes[i].on).arg(written[i].first - written[i].second)));
+      QCOMPARE(notes[12].on, 12 * Q);                           // the run: its first on the beat
+      for (int i = 1; i < 8; ++i)
+            QCOMPARE(notes[size_t(12 + i)].on, 12 * Q + i * S - S / 2);
+      // the legato patch plays the slurred notes; each (but a slur's last) still overlaps the next, whose
+      // note-off is where it was
+      QCOMPARE(notes[1].channel, 1);
+      QVERIFY(notes[1].off > notes[2].on);
+      QVERIFY(notes[0].off > notes[1].on);
+      QCOMPARE(notes[4].channel, 0);                            // (G5: unslurred, the main patch)
+      std::vector<N> onBeat;
+      {
+            score->setMetaTag(SoundLib::legatoEarlyMetaTag, "0");
+            QCOMPARE(SoundLib::legatoEarly(score, *lib), 0);
+            onBeat = render();
+            QCOMPARE(int(onBeat.size()), 20);
+            for (size_t i = 0; i < written.size(); ++i)
+                  QCOMPARE(onBeat[i].on, written[i].first);
+            for (size_t i = 0; i < notes.size(); ++i)
+                  QCOMPARE(notes[i].off, onBeat[i].off);        // (the note-offs don't move)
+      }
+      // the score's own percent: 50 % of 200 ms at 60 bpm is 48 ticks, at 120 96
+      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "50");
+      notes = render();
+      QCOMPARE(notes[1].on, Q - 48);
+      QCOMPARE(notes[7].on, 7 * Q - 48);
+      QCOMPARE(notes[9].on, 9 * Q - 96);
+      QCOMPARE(notes[0].on, 0);
+      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
+      QCOMPARE(SoundLib::legatoEarly(score, *lib), 75);
       delete score;
       }
 
@@ -1720,6 +1820,24 @@ void TestSoundLibrary::tuningLanes()
       // m5 C5 and E5- together (the +50 lane silent by then: retuned); m7 a slur C5, D5+, E5 on one lane
       const SoundLib::Lanes l = SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, 0.5);
       QCOMPARE(l.count[0], 2);
+      // a release longer than the tail keeps a lane busy (SSO's Flautando rings 2.9 s): with a tail of 1.5 s
+      // and a release of 3.9 s, the +50 lane (D5+ ends at 4.5 s) still rings at m5 (8 s), so E5- takes a
+      // third lane; the same with no release, or the tail alone, retunes it
+      {
+            auto rel = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='1.5'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long legato' release='3900'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY(rel);
+            QCOMPARE(rel->instruments[0].articulations[0].releaseMs, 3900.0);
+            QCOMPARE(SoundLib::lanes(score, score->parts()[0], { &rel->instruments[0] }, 3, 1.5).count[0], 3);
+            QCOMPARE(SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, 1.5).count[0], 2);
+            // (a tail longer than the release: the tail)
+            QCOMPARE(SoundLib::lanes(score, score->parts()[0], { &rel->instruments[0] }, 3, 0.5).count[0], 3);
+            QCOMPARE(SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, 4.0).count[0], 3);
+      }
       // at most one lane (memory): all on it
       const SoundLib::Lanes one = SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, 0.5, 1);
       QCOMPARE(one.count[0], 1);
@@ -1860,6 +1978,188 @@ void TestSoundLibrary::tuningLanes()
       QVERIFY(std::fabs(PluginExtract::centsShift(reference, play(50), 48000) - 50) < 6);
       const double back = PluginExtract::centsShift(reference, play(0), 48000);    // untuned again
       QVERIFY2(std::fabs(back) < 6, qPrintable(QString("back to %1 cents").arg(back)));
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   tuningBend
+//    microtones by the patch's own pitch bend (<Instrument bend>, SoundLib::bendValue): each note-on on
+//    a lane of a bending patch gets its tuning's bend right before it and plays untuned (no varispeed);
+//    a slurred note's lane glides from the note before's bend over 30 ms; a tuning beyond the range
+//    plays by varispeed with the bend at the centre. Played on the test synth (it bends ±200 cents):
+//    ±50 cents heard within a few cents, and no varispeed engaged (quartertones.musicxml, ♩ = 120)
+//---------------------------------------------------------
+
+void TestSoundLibrary::tuningBend()
+      {
+      QCOMPARE(SoundLib::bendValue(0, 200), 8192);
+      QCOMPARE(SoundLib::bendValue(50, 200), 10240);
+      QCOMPARE(SoundLib::bendValue(-50, 200), 6144);
+      QCOMPARE(SoundLib::bendValue(200, 200), 16383);
+      QCOMPARE(SoundLib::bendValue(-200, 200), 0);
+      QCOMPARE(SoundLib::bendValue(60, 50), -1);
+      QCOMPARE(SoundLib::bendValue(10, 0), -1);
+      auto mapWith = [&](const QString& bend) {
+            return loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+               "<Instrument name='Violin' ids='violin'" + bend + ">"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "</Instrument></SoundLibrary>");
+            };
+      auto lib = mapWith(" bend='200'");
+      QVERIFY(lib);
+      QCOMPARE(lib->instruments[0].bendCents, 200.0);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      SynthesizerState ss;
+      struct On { int tick; int pitch; int channel; double tuning; };
+      struct Bend { int tick; int channel; int value; };
+      auto render = [&](EventMap& events, std::vector<On>& ons, std::vector<Bend>& bends) {
+            score->renderMidi(&events, false, true, ss);
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal())
+                        continue;
+                  if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch())
+                        ons.push_back({ te.first, ev.pitch(), ev.extChannel(), ev.tuning() });
+                  else if (ev.type() == ME_PITCHBEND)
+                        bends.push_back({ te.first, ev.extChannel(), ev.dataA() | (ev.dataB() << 7) });
+                  }
+            };
+      EventMap events;
+      std::vector<On> ons;
+      std::vector<Bend> bends;
+      render(events, ons, bends);
+      // the lanes as with varispeed (tuningLanes); the tunings now in the bends: +50 10240, -50 6144
+      const std::vector<std::pair<int, int>> expected = { { 72, 0 }, { 72, 1 }, { 74, 1 }, { 72, 0 }, { 76, 1 }, { 72, 0 }, { 74, 0 }, { 76, 0 } };
+      const std::vector<int> value = { 8192, 10240, 10240, 8192, 6144, 8192, 10240, 8192 };
+      QCOMPARE(int(ons.size()), int(expected.size()));
+      for (size_t i = 0; i < ons.size(); ++i) {
+            QCOMPARE(ons[i].pitch, expected[i].first);
+            QCOMPARE(ons[i].channel, expected[i].second);
+            QCOMPARE(ons[i].tuning, 0.0);                     // (no varispeed)
+            // the bend in force on its lane at its note-on (the last one at or before it, in event order)
+            int last = -1;
+            for (const auto& te : events) {
+                  if (te.first > ons[i].tick)
+                        break;
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal() && ev.extChannel() == ons[i].channel && ev.type() == ME_PITCHBEND)
+                        last = ev.dataA() | (ev.dataB() << 7);
+                  if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0 && te.first == ons[i].tick && ev.pitch() == ons[i].pitch)
+                        break;
+                  }
+            QVERIFY2(last >= 0, qPrintable(QString("note %1: no bend before it").arg(i)));
+            // a glide's note (m7's D5+, E5: slurred) starts from the note before's bend
+            if (i == 6)
+                  QCOMPARE(last, 8192);
+            else if (i == 7)
+                  QCOMPARE(last, 10240);
+            else
+                  QCOMPARE(last, value[i]);
+            }
+      // m7's glides: from the note-on, steps over 30 ms (29 ticks at 120) to the note's bend, rising
+      for (int g : { 6, 7 }) {
+            std::vector<Bend> steps;
+            for (const Bend& b : bends)
+                  if (b.channel == ons[size_t(g)].channel && b.tick >= ons[size_t(g)].tick && b.tick <= ons[size_t(g)].tick + 40)
+                        steps.push_back(b);
+            QVERIFY2(steps.size() >= 8, qPrintable(QString("glide %1: %2 steps").arg(g).arg(steps.size())));
+            QCOMPARE(steps.back().value, value[size_t(g)]);
+            QVERIFY(steps.back().tick - ons[size_t(g)].tick <= 30);
+            for (size_t k = 1; k < steps.size(); ++k)
+                  QVERIFY(g == 6 ? steps[k].value >= steps[k - 1].value : steps[k].value <= steps[k - 1].value);
+            }
+
+      // a range under the tuning (bend 40, the quarter tones 50): varispeed plays them, the bend at the centre
+      {
+            auto narrow = mapWith(" bend='40'");
+            SoundLib::setCurrent(narrow);
+            EventMap ev2;
+            std::vector<On> ons2;
+            std::vector<Bend> bends2;
+            render(ev2, ons2, bends2);
+            const std::vector<double> cents = { 0, 50, 50, 0, -50, 0, 50, 0 };
+            QCOMPARE(int(ons2.size()), 8);
+            for (size_t i = 0; i < ons2.size(); ++i)
+                  QVERIFY(std::fabs(ons2[i].tuning - cents[i]) < 0.5);
+            for (const Bend& b : bends2)
+                  QCOMPARE(b.value, 8192);
+            // no bend: none sent at all (as before)
+            auto none = mapWith("");
+            SoundLib::setCurrent(none);
+            EventMap ev3;
+            std::vector<On> ons3;
+            std::vector<Bend> bends3;
+            render(ev3, ons3, bends3);
+            QVERIFY(bends3.empty());
+            QVERIFY(std::fabs(ons3[1].tuning - 50) < 0.5);
+            SoundLib::setCurrent(lib);
+      }
+
+      // played on the test synth (it bends ±200 cents): the events of both lanes to their slots, as the
+      // audio export plays them; D5+ (m3, lane 1 alone, 4.0-4.5 s) and m7's slurred D5+ (12.5-13.0 s) at
+      // +50 cents against D5 played plainly, and no slot's varispeed engaged
+      const int rate = 48000;
+      QString error;
+      std::unique_ptr<Vst3Plugin> ref = Vst3Plugin::load(TESTSYNTH, rate, 512, &error);
+      QVERIFY2(ref, qPrintable(error));
+      std::vector<float> reference;
+      {
+            ref->midi(ME_CONTROLLER, 0, 1, 100);
+            ref->midi(ME_NOTEON, 0, 74, 100);
+            std::vector<float> b(2 * 512, 0.f);
+            for (int i = 0; i < 10; ++i)
+                  ref->process(512, b.data());
+            reference.assign(2 * 512 * 30, 0.f);
+            for (int i = 0; i < 30; ++i)
+                  ref->process(512, reference.data() + 2 * 512 * i);
+      }
+      Vst3Synth vst;
+      vst.init(rate);
+      vst.setVarispeed(true);
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      QCOMPARE(int(routes.size()), 2);
+      for (const SoundLib::Route& r : routes) {
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 512, &error);
+            QVERIFY2(p, qPrintable(error));
+            vst.setPlugin(r.port * 16 + r.channel, std::move(p));
+            }
+      std::vector<float> buffer;
+      int frame = 0;
+      for (const auto& te : events) {
+            const int f = int(score->utick2utime(te.first) * rate);
+            if (f > frame) {
+                  const size_t at = buffer.size();
+                  buffer.resize(at + 2 * size_t(f - frame), 0.f);
+                  for (int done = 0; done < f - frame; done += 512)
+                        vst.process(unsigned(std::min(512, f - frame - done)), buffer.data() + at + 2 * size_t(done), nullptr, nullptr);
+                  frame = f;
+                  }
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            PlayEvent e(ev);
+            e.setChannel(ev.extPort() * 16 + ev.extChannel());
+            vst.play(e);
+            }
+      auto window = [&](double from, double to) {
+            return std::vector<float>(buffer.begin() + 2 * std::ptrdiff_t(from * rate), buffer.begin() + 2 * std::ptrdiff_t(to * rate));
+            };
+      QVERIFY(buffer.size() > size_t(2 * 13.0 * rate));
+      for (double at : { 4.1, 12.6 }) {
+            double confidence = 0;
+            const double cents = PluginExtract::centsShift(reference, window(at, at + 0.35), rate, 1300, &confidence);
+            QVERIFY2(std::fabs(cents - 50) < 4, qPrintable(QString("D5+ at %1 s: %2 cents (confidence %3)").arg(at).arg(cents).arg(confidence)));
+            }
+      for (const SoundLib::Route& r : routes)
+            QCOMPARE(vst.plugin(r.port * 16 + r.channel)->pitch(), 0.0);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
       SoundLib::setCurrent(nullptr);
       delete score;
       }

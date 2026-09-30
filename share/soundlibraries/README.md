@@ -178,6 +178,39 @@ switch value of each articulation. For example:
     <Articulation name="Legato" value="20" techniques="legato"/>   <!-- slurred notes -->
   </Instrument>
   ```
+- **Measured timing.** Three optional attributes come from measuring the library (SSO's come from
+  the owner's background timing run and plug-in extract, `tools/soundlibraries/sso_articulation_timing.json`
+  and `sso_patch_measurements.json`, written by `gen_spitfire_sso.py`):
+  - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long
+    after its note-on (SSO's Performance patches: 70–430 ms, median 180). A slurred note that is a
+    transition (its note before, on the same patch, is slurred into it) starts early by this times
+    `<Legato early>` percent, so the new pitch lands near the beat. It is capped at half way into
+    the note before (fast runs) and at the chunk's or the repeat's start; its note-off, the
+    controllers and the switches stay where they were. The first note of a slur, the note after
+    it and a repeated key are not moved.
+  - `<Legato early="75"/>` (top level): that percent. A score can set its own in
+    *Mixer › Advanced Options…* ("Legato transitions early by", metaTag `soundLibraryLegatoEarly`);
+    0 plays transitions on the beat.
+  - `release` on an `Articulation` (ms): how long a sustained note rings after its note-off. A
+    tuning copy (below) is retuned only after its notes' end plus the longer of `tail` and this.
+  - `bend` on an `Instrument` (cents): the patch bends its pitch this far either way at full pitch
+    bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
+
+  ```xml
+  <Legato early="75"/>
+  <Instrument name="Violins 1 - Performance" with="Violins 1" bend="99.1">
+    <Articulation name="Legato" value="20" techniques="legato long" release="885" legatoDelay="210"/>
+  </Instrument>
+  ```
+- **Microtones.** `<Tuning method="varispeed" tolerance="0.5" tail="1.5" maxLanes="4"/>`: a plug-in
+  that ignores a note's tuning (Kontakt) plays a part's notes on copies of the patch ("lanes"),
+  one tuning each. Where the patch has `bend`, a lane's tuning within the range is played by the
+  patch's own pitch bend (sent on the lane's channel before each note, gliding 30 ms for a slurred
+  note), otherwise by playing the copy faster or slower (varispeed, hosted only), which also
+  speeds up its vibrato and attacks a little (3 % for a quarter tone). Over MIDI out the bends go to
+  the host with the notes. `tolerance` (cents): a note this close to a lane's tuning shares it;
+  `tail` (seconds): how long a lane rings before it can be retuned (or the note's `release`, if
+  longer); `maxLanes`: copies per patch at most. A score can set its own in *View › Sound Library…*.
 - **Percussion kits.** An `Instrument` with `kit="1"` serves MuseScore's unpitched percussion
   and has no patch of its own. Its extra patches say which key plays each MuseScore drum sound
   (the note's pitch in the drumset): `<Drum pitch="38" key="62" name="Snare hit"/>`, with

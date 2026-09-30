@@ -112,6 +112,11 @@ class MidiRenderer {
       std::map<int, std::vector<std::vector<std::pair<int, int>>>> libRoutes;
       std::map<const Note*, int> libLanes;                        // a note's lane, when not 0
       std::map<const Note*, double> libLaneCents;                 // a note's tuning as its lane plays it (varispeed)
+      // channel -> per patch: its pitch bend range in cents (SoundLib::LibInstrument::bendCents; 0: none)
+      std::map<int, std::vector<double>> libBend;
+      std::map<const Note*, const Note*> libGlideFrom;            // a legato transition's note before (its lane glides)
+      int libChunkStart = 0;                                      // the chunk being rendered: its first utick
+      int libLegatoEarly = 0;                                     // SoundLib::legatoEarly, percent (this chunk)
       int minChunkSize = 0;
 
    public:
@@ -151,6 +156,7 @@ class MidiRenderer {
 
       void updateChunksPartition();
       static bool canBreakChunk(const Measure* last);
+      bool libSlurAcross(const Measure* last) const;
       void updateState();
 
       void renderStaffChunk(const Chunk&, EventMap* events, const StaffContext& sctx);
@@ -168,6 +174,7 @@ class MidiRenderer {
       static void putLibrarySwitch(EventMap* events, const SoundLib::LibInstrument& li, int channel,
                                    const SoundLib::Choice& choice, int utick, int staffIdx);
       void finishLibraryEvents(const Chunk&, EventMap* events);
+      void libraryPitchBends(const Chunk&, EventMap* events);
 
    public:
       explicit MidiRenderer(Score* s) : score(s) {}

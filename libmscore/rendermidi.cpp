@@ -98,6 +98,8 @@ struct SndConfig {
       bool ms4Once = false;       // the note once, as written, whatever MuseScore 3's play events are
       int libPatch = 0;           // a sound library part: the patch that plays the note
       int libOverlap = 0;         // ticks the note lasts into the next (a library's legato)
+      double libEarly = 0;        // seconds a legato transition starts early (a library's legato delay)
+      int libEarliest = 0;        // … but not before this utick
       int libKey = -1;            // a library kit: the patch's key that plays the drum sound
                                   // (a sound library plays the trill / tremolo: SoundLib)
 
@@ -524,6 +526,12 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                         off = sc->utime2utick(sc->utick2utime(on) + span * config.ms4Dur / Ms4::HUNDRED);
             }
             off += config.libOverlap;
+            if (config.libEarly > 0) {
+                  // a legato transition: early by the patch's delay in time, at the tempo there (the note-off stays)
+                  Score* sc = note->score();
+                  const int early = sc->utime2utick(sc->utick2utime(on) - config.libEarly);
+                  on = qMin(on, qMax(config.libEarliest, early));
+                  }
             playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx, config.ms4Layer >= 0 ? config.ms4Layer : note->voice(), config.libPatch);
             nels = 0;                             // done; bends below still apply
             }
@@ -1285,6 +1293,44 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   auto libOverlap = [&](const SoundLib::Choice& c, const Note* note) {
                         return c && c.base == "legato" && slurGoesOn(note) ? DIVISION / 16 : 0;
                         };
+                  // a legato transition: a note whose note before on its track (the chord just before, ending
+                  // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
+                  // patch). Returns that note (nullptr: not a transition: a slur's first note, the note after its
+                  // end, the same key struck again) and the earliest utick the note may start: half way into
+                  // it, not before the chunk or the pass
+                  auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest) -> const Note* {
+                        if (!c || c.base != "legato")
+                              return nullptr;
+                        Chord* ch = note->chord();
+                        if (note->tieBack() || ch->isGrace() || !ch->graceNotesBefore().empty())
+                              return nullptr;
+                        ChordRest* pcr = prevChordRest(ch, true);
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick())
+                              return nullptr;
+                        const Chord* pch = toChord(pcr);
+                        const int utick = ch->tick().ticks() + tickOffset;
+                        const RepeatList& repeats = score->repeatList();
+                        auto rs = repeats.findRepeatSegmentFromUTick(utick);
+                        if (rs == repeats.end() || pch->tick().ticks() < (*rs)->tick)
+                              return nullptr;
+                        for (const Note* pn : pch->notes())
+                              if (pn->pitch() == note->pitch())
+                                    return nullptr;     // (struck again: its note ends first, no transition)
+                        for (const Note* pn : pch->notes()) {
+                              if (!pn->play() || !slurGoesOn(pn))
+                                    continue;
+                              const Note* first = pn->firstTiedNote();
+                              const Chord* fc = first->chord();
+                              const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
+                              if (!pc || pc.base != "legato" || pc.patch != c.patch)
+                                    continue;
+                              const int start = fc->tick().ticks() + tickOffset;
+                              *earliest = std::max({ start + (utick - start) / 2, libChunkStart, (*rs)->utick });
+                              return first;
+                              }
+                        return nullptr;
+                        };
 
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0, bool once = false) {
@@ -1394,6 +1440,20 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Once = once;
                         config.libPatch = libChoice.patch;
                         config.libOverlap = libOverlap(libChoice, note);
+                        if (li && !libNote.builtIn && !li->kit) {
+                              // a legato transition (SSO's Performance patches reach the new pitch 70-430 ms after the
+                              // note-on, median 180: the timing check) starts early by the patch's delay, times the
+                              // score's percent; its tuning lane glides from the note before (pitch bend)
+                              int earliest = 0;
+                              const Note* from = legatoTransition(note, libChoice, &earliest);
+                              if (from) {
+                                    libGlideFrom[note] = from;
+                                    if (offset == 0 && libLegatoEarly > 0 && libChoice.articulation->legatoDelayMs > 0) {
+                                          config.libEarly = libChoice.articulation->legatoDelayMs * libLegatoEarly / 100.0 / 1000.0;
+                                          config.libEarliest = earliest;
+                                          }
+                                    }
+                              }
                         config.libKey = libNote.key;
                         if (libNote.velocity > 0)
                               config.ms4Velocity = libNote.velocity;
@@ -2099,6 +2159,96 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             }
       for (const auto& c : copies)
             events->insert(c);
+      libraryPitchBends(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryPitchBends
+//    microtones by the patch's own pitch bend (SoundLib::LibInstrument::bendCents: SSO's Performance
+//    patches bend ±100 cents, linear) instead of varispeed, which also plays the plug-in's time faster or
+//    slower (vibrato, attacks: 3 % for a quarter tone): each note-on on a lane (route) of a bending patch
+//    gets the bend of its tuning right before it (absolute: playback may start anywhere), and plays
+//    untuned (tuning 0: Vst3Synth engages no varispeed). A legato transition's lane glides from the
+//    note before's bend over Vst3Synth::LEGATO_GLIDE (as varispeed glides), a step every 3 ms, cut
+//    at the lane's next note-on. A tuning beyond the range: bend at the centre and varispeed plays it
+//    all (one way for a whole note; the lanes keep what sounds from moving either way). Works hosted
+//    and over MIDI out alike (the bends are events on the lane's route)
+//---------------------------------------------------------
+
+void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
+      {
+      if (libBend.empty() || libLaneCents.empty())
+            return;
+      const int utick1 = chunk.utick1();
+      const int utick2 = chunk.utick2();
+      const double STEP = 0.003;
+      const int GLIDE_STEPS = std::max(1, int(std::lround(0.03 / STEP)));       // Vst3Synth::LEGATO_GLIDE
+      struct Bend { int tick; int value; int glideStart; };          // glideStart -1: not a glide's step
+      std::map<std::pair<int, int>, std::vector<Bend>> byRoute;                  // (port, channel) -> bends
+      std::map<std::pair<int, int>, std::vector<int>> noteOns;                   // (port, channel) -> note-on ticks
+      std::map<std::pair<int, int>, std::pair<int, int>> source;                 // (port, channel) -> its notes' channel and staff
+      std::map<std::pair<int, int>, int> patchOf;                                // (port, channel) -> its patch
+      auto bendOf = [&](double cents, double range) {
+            const int v = SoundLib::bendValue(cents, range);
+            return v < 0 ? 8192 : v;
+            };
+      auto centsOf = [&](const Note* n) {
+            auto c = libLaneCents.find(n);
+            return c == libLaneCents.end() ? 0.0 : c->second;
+            };
+      auto laneOf = [&](const Note* n) {
+            auto l = libLanes.find(n);
+            return l == libLanes.end() ? 0 : l->second;
+            };
+      for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
+            NPlayEvent& ev = i->second;
+            if (ev.type() != ME_NOTEON || ev.velo() == 0 || ev.librarySwitch() || !ev.isExternal() || !ev.note()
+                || ev.libraryPatch() < 0)
+                  continue;
+            auto b = libBend.find(ev.channel());
+            if (b == libBend.end() || size_t(ev.libraryPatch()) >= b->second.size())
+                  continue;
+            const double range = b->second[size_t(ev.libraryPatch())];
+            if (range <= 0)
+                  continue;
+            const double cents = centsOf(ev.note());
+            const int value = SoundLib::bendValue(cents, range);
+            if (value >= 0)
+                  ev.setTuning(0.f);            // (the bend plays it: no varispeed)
+            const int target = value >= 0 ? value : 8192;
+            const std::pair<int, int> route { ev.extPort(), ev.extChannel() };
+            noteOns[route].push_back(i->first);
+            source[route] = { ev.channel(), ev.getOriginatingStaff() };
+            patchOf[route] = ev.libraryPatch();
+            std::vector<Bend>& bends = byRoute[route];
+            auto g = libGlideFrom.find(ev.note());
+            int from = target;
+            if (g != libGlideFrom.end() && laneOf(g->second) == laneOf(ev.note()))
+                  from = bendOf(centsOf(g->second), range);
+            bends.push_back({ i->first, from, -1 });
+            if (from != target) {
+                  const qreal t0 = score->utick2utime(i->first);
+                  for (int k = 1; k <= GLIDE_STEPS; ++k) {
+                        const int v = from + int(std::lround((target - from) * double(k) / GLIDE_STEPS));
+                        bends.push_back({ std::max(i->first, score->utime2utick(t0 + k * STEP)), v, i->first });
+                        }
+                  }
+            }
+      for (auto& rb : byRoute) {
+            const std::vector<int>& ons = noteOns[rb.first];
+            for (const Bend& bend : rb.second) {
+                  // (a glide's step at or after the lane's next note-on: that note sets its own)
+                  if (bend.glideStart >= 0 && std::upper_bound(ons.begin(), ons.end(), bend.glideStart) != ons.end()
+                      && *std::upper_bound(ons.begin(), ons.end(), bend.glideStart) <= bend.tick)
+                        continue;
+                  NPlayEvent ev(ME_PITCHBEND, source[rb.first].first, bend.value & 0x7f, (bend.value >> 7) & 0x7f);
+                  ev.setOriginatingStaff(source[rb.first].second);
+                  ev.setLibraryPatch(patchOf[rb.first]);
+                  ev.setExternal(rb.first.first, rb.first.second);
+                  // (before the note-on at its tick: the hint puts it ahead of the events there)
+                  events->insert(events->lower_bound(bend.tick), std::make_pair(bend.tick, ev));
+                  }
+            }
       }
 
 //---------------------------------------------------------
@@ -3767,6 +3917,9 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             if (methodOf(part) == DynamicsRenderMethod::MS4)
                   ms4Active.insert(part);
 
+      libChunkStart = chunk.utick1();
+      libLegatoEarly = library ? SoundLib::legatoEarly(score, *library) : 0;
+
       // create note & other events
       for (Staff*& st : score->staves()) {
             StaffContext sctx;
@@ -3844,6 +3997,8 @@ void MidiRenderer::updateState()
             libRoutes.clear();
             libLanes.clear();
             libLaneCents.clear();
+            libBend.clear();
+            libGlideFrom.clear();
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {
@@ -3903,14 +4058,17 @@ void MidiRenderer::updateState()
                               }
                         // varispeed: a note plays at its lane's tuning (within the tolerance of its own),
                         // so a note joining a lane never retunes what still sounds on it
+                        bool tuned = false;           // (a part with no microtones: no bends either)
                         if (library->varispeed && !r.instrument->kit) {
                               const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *library);
                               const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes);
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
-                              for (const auto& nc : l.cents)
+                              for (const auto& nc : l.cents) {
                                     libLaneCents[nc.first] = nc.second;
+                                    tuned = tuned || std::fabs(nc.second) > 1e-6;
+                                    }
                               }
                         for (const auto& ip : *part->instruments()) {
                               const SoundLib::LibInstrument* li = library->match(ip.second, part);
@@ -3918,6 +4076,13 @@ void MidiRenderer::updateState()
                               if (li)
                                     libRoutes[ip.second->channel(0)->channel()] = li == r.instrument ? outs
                                        : std::vector<std::vector<std::pair<int, int>>> { { outs.front().front() } };
+                              // pitch bend instead of varispeed where the patch bends (libraryPitchBends)
+                              if (li == r.instrument && tuned) {
+                                    std::vector<double> bends;
+                                    for (const SoundLib::LibInstrument* p : lp.patches)
+                                          bends.push_back(p->bendCents);
+                                    libBend[ip.second->channel(0)->channel()] = bends;
+                                    }
                               }
                         }
                   }
@@ -3984,6 +4149,29 @@ bool MidiRenderer::canBreakChunk(const Measure* last)
       }
 
 //---------------------------------------------------------
+//   MidiRenderer::libSlurAcross
+//    a slur (not a phrase mark) of a sound library part goes on over the measure's end: a chunk
+//    doesn't end there, so a legato transition never falls on a chunk's first tick, where it
+//    couldn't start early (the chunk before may be played already)
+//---------------------------------------------------------
+
+bool MidiRenderer::libSlurAcross(const Measure* last) const
+      {
+      if (libParts.empty())
+            return false;
+      const int endTick = last->endTick().ticks();
+      for (const auto& interval : score->spannerMap().findOverlapping(endTick - 1, endTick)) {
+            const Spanner* sp = interval.value;
+            if (!sp->isSlur() || toSlur(sp)->phraseMark() || sp->tick2().ticks() < endTick || sp->tick().ticks() >= endTick)
+                  continue;
+            const Staff* st = score->staff(sp->staffIdx());
+            if (st && libParts.count(st->part()))
+                  return true;
+            }
+      return false;
+      }
+
+//---------------------------------------------------------
 //   MidiRenderer::updateChunksPartition
 //---------------------------------------------------------
 
@@ -4011,7 +4199,7 @@ void MidiRenderer::updateChunksPartition()
                         chunkStart = m;
                   if ((++count) >= minChunkSize)
                         needBreak = true;
-                  if (needBreak && canBreakChunk(m)) {
+                  if (needBreak && canBreakChunk(m) && !libSlurAcross(m)) {
                         chunks.emplace_back(tickOffset, chunkStart, m);
                         chunkStart = nullptr;
                         needBreak = false;
