@@ -233,6 +233,7 @@ void MixerTrackItem::setMute(bool value)
                   seq->stopNotes(_chan->channel());
             _chan->setMute(value);
             }
+      seq->libraryMixerChanged(_part);          // (a sound library part's hosted plug-ins: silenced there)
       }
 
 //---------------------------------------------------------
@@ -288,6 +289,7 @@ void MixerTrackItem::setSolo(bool value)
                         }
                   }
             }
+      seq->libraryMixerChanged();               // (the sound library parts' hosted plug-ins)
       }
 
 }

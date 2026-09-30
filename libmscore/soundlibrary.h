@@ -169,6 +169,11 @@ class Library {
       // (<Dynamics velocity="short spiccato …">; Spitfire's shorts): those notes' velocity is their
       // level on the dynamics CC's scale (pp 32, mf 80) instead of MS4's soundfont velocity
       QStringList velocityDynamics;
+      // the short notes' balance per family that sounded right to the owner's ear (<Dynamics
+      // heard="strings=-4">; the owner, 2026-09-28, "Whence": strings -4 dB): the references the
+      // recommendation's attack salience weight is fitted to (recommendedBalance); dynamics.json's
+      // heardBalanceDb adds to them or replaces them
+      std::map<QString, double> heardBalance;
       // microtones (<Tuning method="varispeed" tolerance tail>): the plug-in ignores a note's tuning
       // (Kontakt), so a part's notes are spread over copies of its patch ("lanes", Lanes below),
       // each played faster or slower by its tuning (Vst3Plugin::setPitch). A lane changes its
@@ -261,12 +266,16 @@ struct DynamicsCurve {
       QString drivenBy;
       std::vector<std::pair<int, double>> points;       // x (1 … 127, rising), dB
       std::vector<std::pair<int, double>> perceived;    // x, how loud it sounds (ArticulationCheck::perceivedLoudnessDb); may be empty
+      // x, how much its onset stands out (ArticulationCheck::attackSalience's salienceDb); may be empty
+      // (measured before 2026-09-28's attack-salience build: the recommendation falls back to loudness)
+      std::vector<std::pair<int, double>> attack;
       // the part's held note only: the expression controller (CC11, the plug-in's volume) at x, with the
       // dynamics CC at 80, in dB and by ear (127: the level playback leaves it at); may be empty
       std::vector<std::pair<int, double>> expression;
       std::vector<std::pair<int, double>> expressionPerceived;
       double at(int x) const;                           // interpolated; clamped at the ends
       double perceivedAt(int x) const;                  // (-200 without perceived)
+      double attackAt(int x) const;                     // (-200 without attack)
       int inverse(double db) const;                     // the x that plays db (1 … 127)
       };
 
@@ -277,6 +286,9 @@ class DynamicsCalibration {
       // per family (family(): the owner, 2026-09-28: "why not just do this regardless"): strings,
       // solo strings, woodwinds, brass, other
       std::map<QString, double> familyBalanceDb;
+      // the owner's ear per family (a setting that sounded right: Advanced Options › Heard right),
+      // over the map's <Dynamics heard>: the references recommendedBalance fits its weight to
+      std::map<QString, double> heardBalanceDb;
       double balanceFor(const QString& family) const;
       const DynamicsCurve* curve(const QString& patch, int value) const;
       void setCurve(const QString& patch, int value, const DynamicsCurve& c) { _patches[patch][value] = c; }
@@ -299,19 +311,54 @@ extern const char* shortBalanceMetaTag;
 double shortNotesBalance(const Score* score, const DynamicsCalibration& cal, const QString& family);
 QString writeShortBalance(const std::map<QString, double>& byFamily, const DynamicsCalibration& cal);
 // the recommended short notes' balance for a family (Advanced Options › Recommended): with the shorts
-// matched in energy to the held note, how much louder they sound (the perceived curves), at pp, mf
-// and ff, over the family's measured shorts: the median, negated, to 0.5 dB. false: nothing to go by
+// matched in energy to the held note (balance 0) at pp, mf and ff, over the family's measured shorts,
+// - L: how much louder they sound (the perceived curves: short-term loudness), the median;
+// - S: how much more their attack stands out than their loudness says (the attack curves,
+//   ArticulationCheck::attackSalience: (attack - held's attack) - (perceived - held's perceived)), the median;
+// prominence = L + w S, recommended = -(L + w S) (loudness only: -L, as before the attack curves).
+// One free parameter, w, the weight of attack salience, fitted by least squares to the owner's ear
+// (heard(): each family's setting that sounded right, t): w = sum S (-L - t) / sum S^2 over the heard
+// families with attack curves, not under 0 (one reference: reproduced exactly)
+struct Recommendation {
+      bool loudness { false };            // L known (perceived curves)
+      double loudnessDb { 0 };            // -L (not rounded)
+      bool salience { false };            // S known (attack curves) and w fitted
+      double salienceDb { 0 };            // -(L + w S) (not rounded)
+      double medianLouder { 0 };          // L
+      double medianSalience { 0 };        // S
+      int notes { 0 };                    // matched notes L is from
+      int attackNotes { 0 };              // and S
+      double best() const { return salience ? salienceDb : loudnessDb; }
+      };
+struct SalienceFit {
+      bool ok { false };
+      double weight { 0 };                // w
+      std::map<QString, double> heard;    // the references (family -> dB)
+      QStringList used;                   // the families w was fitted on (heard, with attack curves)
+      };
+// the owner's references: the map's <Dynamics heard>, then dynamics.json's heardBalanceDb
+std::map<QString, double> heard(const Library& library, const DynamicsCalibration& cal);
+SalienceFit fitSalience(const Library& library, const DynamicsCalibration& cal);
+Recommendation recommendation(const Library& library, const DynamicsCalibration& cal, const QString& family,
+                              const SalienceFit& fit);
+// best() of the above, to 0.5 dB. false: nothing to go by
 bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& family, double* db);
+// the balance report's lines (summary.txt "# Dynamics balance"): per family loudness only and with attack
+// salience, what was heard right, the weight and what it was fitted on; empty: nothing measured
+QString recommendationReport(const Library& library, const DynamicsCalibration& cal);
 
 // Even dynamic steps (the owner, 2026-09-28: SSO's held notes climb 5 to 12 dB from pp to mf and 1 to 4 from
 // mf to ff). Per score (Mixer › Advanced Options…, metaTag "soundLibraryEvenSteps"): the held note's own
 // range, ppp (CC 16) to fff (127), split evenly over the dynamics CC's scale (so every marking is a
-// step of the same size), judged by its perceived or its energy curve, reached
+// step of the same size), judged by its perceived or its energy curve (made never to fall: one note a
+// point, round robins), reached
 // - VOLUME: the dynamics CC as before (each marking keeps the recording, the tone, Spitfire gave it)
-//   and the expression CC (CC11, a plain volume) turning down where the curve is above the step;
+//   and the expression CC (CC11, a plain volume) turning down where the curve is above the step (a patch
+//   that barely follows CC11: unchanged);
 // - RECORDING: another dynamics CC value, the one whose loudness is the step (the tone moves with it).
 enum class EvenSteps : signed char { OFF, VOLUME_HEARING, VOLUME_ENERGY, RECORDING_HEARING, RECORDING_ENERGY };
 extern const char* evenStepsMetaTag;
+bool evenStepsEnabled();                        // disabled for now (MS_EVEN_DYNAMIC_STEPS turns it on)
 EvenSteps evenSteps(const Score* score);
 QString evenStepsName(EvenSteps mode);                  // as in the metaTag ("" for OFF)
 struct Step {
@@ -352,6 +399,27 @@ struct Route {
       };
 
 std::vector<Route> routes(const Score* score, const Library& library);
+
+//---------------------------------------------------------
+//   PartMix
+//    the Mixer's values for a library part, for all its routes (its patch, extras, copies for
+//    other tunings): the volume, pan, reverb and chorus of the channel its notes play on (the
+//    renderer's: its first instrument's first channel; the part's row in the Mixer sets all its
+//    channels alike). muted: every channel of the part is muted (withSolo: or silenced by another
+//    part's solo; an audio export plays mute but not solo, as MuseScore's own). A channel of it
+//    muted alone silences its own notes only (NPlayEvent::isMuted), as for the built-in sounds.
+//    Hosted: Vst3Synth::setMix; over MIDI out: CC7 / CC10 / CC91 / CC93 on each route
+//---------------------------------------------------------
+
+struct PartMix {
+      int volume { 100 };
+      int pan { 64 };
+      int reverb { 0 };
+      int chorus { 0 };
+      bool muted { false };
+      };
+
+PartMix partMix(const Part* part, bool withSolo);
 
 // which of the patches (patches() of the part's main patch) the part's notation plays
 std::vector<bool> usedPatches(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches);

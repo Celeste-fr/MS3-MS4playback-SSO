@@ -48,8 +48,11 @@ class MixerDetails : public QWidget, public Ui::MixerDetails, public ChannelList
       QLabel* labelPlayback;
       QComboBox* playbackCombo;           // the part's own playback mode (libmscore/partplayback.h)
 
+      QMap<QWidget*, QString> _tips;      // the controls' own tooltips (updateLibrary changes some)
+
       void updateFromTrack();
       void updatePlayback();
+      void updateLibrary();               // a sound library part: what applies to it (tooltips, patch, route)
 
 public slots:
       void partNameChanged();

@@ -235,6 +235,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         lib->expressionValue = a.value("expression").toInt();
                   if (a.hasAttribute("velocity"))
                         lib->velocityDynamics = a.value("velocity").toString().split(' ', QString::SkipEmptyParts);
+                  // heard="strings=-4 solo_strings=-2" (a family's spaces as _)
+                  for (const QString& item : a.value("heard").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const double v = item.section('=', 1).toDouble(&ok);
+                        if (ok)
+                              lib->heardBalance[item.section('=', 0, 0).replace('_', ' ')] = v;
+                        }
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Controller") {
@@ -594,6 +601,11 @@ double DynamicsCurve::perceivedAt(int x) const
       return interpolate(perceived, x);
       }
 
+double DynamicsCurve::attackAt(int x) const
+      {
+      return interpolate(attack, x);
+      }
+
 // the lowest x that reaches db (a curve with a dip from round robins: the first crossing);
 // under the first point, the first segment's slope goes on (ppp under a curve measured from 32)
 static int inverseOf(const std::vector<std::pair<int, double>>& points, double db)
@@ -642,6 +654,10 @@ bool DynamicsCalibration::read(const QString& file)
       const QJsonObject fam = o.value("familyBalanceDb").toObject();
       for (auto f = fam.begin(); f != fam.end(); ++f)
             familyBalanceDb[f.key()] = f.value().toDouble(0);
+      heardBalanceDb.clear();
+      const QJsonObject heard = o.value("heardBalanceDb").toObject();
+      for (auto f = heard.begin(); f != heard.end(); ++f)
+            heardBalanceDb[f.key()] = f.value().toDouble(0);
       _patches.clear();
       const QJsonObject patches = o.value("patches").toObject();
       for (auto p = patches.begin(); p != patches.end(); ++p) {
@@ -658,6 +674,7 @@ bool DynamicsCalibration::read(const QString& file)
                         std::sort(out->begin(), out->end());
                         };
                   readPoints("perceived", &curve.perceived);
+                  readPoints("attack", &curve.attack);
                   readPoints("expression", &curve.expression);
                   readPoints("expressionPerceived", &curve.expressionPerceived);
                   std::sort(curve.points.begin(), curve.points.end());
@@ -686,6 +703,7 @@ bool DynamicsCalibration::write(const QString& file) const
                         o[key] = per;
                         };
                   writePoints("perceived", a.second.perceived);
+                  writePoints("attack", a.second.attack);
                   writePoints("expression", a.second.expression);
                   writePoints("expressionPerceived", a.second.expressionPerceived);
                   arts[QString::number(a.first)] = o;
@@ -699,6 +717,11 @@ bool DynamicsCalibration::write(const QString& file) const
             fam[f.first] = f.second;
       if (!fam.isEmpty())
             o["familyBalanceDb"] = fam;
+      QJsonObject heard;
+      for (const auto& f : heardBalanceDb)
+            heard[f.first] = f.second;
+      if (!heard.isEmpty())
+            o["heardBalanceDb"] = heard;
       o["patches"] = patches;
       QFile f(file);
       if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -782,9 +805,19 @@ QString writeShortBalance(const std::map<QString, double>& byFamily, const Dynam
       return items.join(' ');
       }
 
-bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& fam, double* db)
+std::map<QString, double> heard(const Library& library, const DynamicsCalibration& cal)
       {
-      std::vector<double> louder;
+      std::map<QString, double> h = library.heardBalance;
+      for (const auto& f : cal.heardBalanceDb)
+            h[f.first] = f.second;
+      return h;
+      }
+
+// a family's L and S (see soundlibrary.h), w not applied
+static Recommendation measure(const Library& library, const DynamicsCalibration& cal, const QString& fam)
+      {
+      Recommendation r;
+      std::vector<double> louder, salient;
       for (const LibInstrument& main : library.instruments) {
             if (main.extra() || main.kit || family(main) != fam)
                   continue;
@@ -803,18 +836,114 @@ bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, 
                               continue;
                         for (int cc : { 32, 80, 112 }) {
                               const int v = c->inverse(ref->at(cc));          // matched in energy (balance 0)
-                              if (v > 1 && v < 127)                           // (out of its range: says nothing)
-                                    louder.push_back(c->perceivedAt(v) - ref->perceivedAt(cc));
+                              if (v <= 1 || v >= 127)                         // (out of its range: says nothing)
+                                    continue;
+                              const double l = c->perceivedAt(v) - ref->perceivedAt(cc);
+                              louder.push_back(l);
+                              if (!c->attack.empty() && !ref->attack.empty())
+                                    salient.push_back(c->attackAt(v) - ref->attackAt(cc) - l);
                               }
                         }
                   }
             }
-      if (louder.empty())
+      auto median = [](std::vector<double>& v) {
+            std::sort(v.begin(), v.end());
+            return v[v.size() / 2];
+            };
+      r.notes = int(louder.size());
+      r.attackNotes = int(salient.size());
+      if (!louder.empty()) {
+            r.loudness = true;
+            r.medianLouder = median(louder);
+            r.loudnessDb = -r.medianLouder;
+            }
+      if (!salient.empty())
+            r.medianSalience = median(salient);
+      return r;
+      }
+
+SalienceFit fitSalience(const Library& library, const DynamicsCalibration& cal)
+      {
+      SalienceFit fit;
+      fit.heard = heard(library, cal);
+      double num = 0, den = 0;
+      for (const auto& h : fit.heard) {
+            const Recommendation m = measure(library, cal, h.first);
+            if (!m.loudness || m.attackNotes == 0)
+                  continue;
+            num += m.medianSalience * (-m.medianLouder - h.second);
+            den += m.medianSalience * m.medianSalience;
+            fit.used << h.first;
+            }
+      // (S about 0 in every heard family: attack salience can't explain the ear, no weight)
+      if (den < 0.01)
+            return fit;
+      fit.ok = true;
+      fit.weight = std::max(0.0, num / den);
+      return fit;
+      }
+
+Recommendation recommendation(const Library& library, const DynamicsCalibration& cal, const QString& fam, const SalienceFit& fit)
+      {
+      Recommendation r = measure(library, cal, fam);
+      if (r.loudness && r.attackNotes > 0 && fit.ok) {
+            r.salience = true;
+            r.salienceDb = -(r.medianLouder + fit.weight * r.medianSalience);
+            }
+      return r;
+      }
+
+bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& fam, double* db)
+      {
+      const Recommendation r = recommendation(library, cal, fam, fitSalience(library, cal));
+      if (!r.loudness)
             return false;
-      std::sort(louder.begin(), louder.end());
-      const double median = louder[louder.size() / 2];
-      *db = std::round(-median * 2) / 2;
+      *db = std::round(r.best() * 2) / 2;
       return true;
+      }
+
+//---------------------------------------------------------
+//   recommendationReport
+//    the balance report's recommendations (recommendation): per family, loudness only and
+//    with attack salience, what the owner heard, and the weight fitted to it
+//---------------------------------------------------------
+
+QString recommendationReport(const Library& library, const DynamicsCalibration& cal)
+      {
+      auto f1 = [](double x) { return QString::number(std::round(x * 10) / 10); };
+      auto half = [](double x) { const double r = std::round(x * 2) / 2; return (r > 0 ? "+" : "") + QString::number(r); };
+      const SalienceFit fit = fitSalience(library, cal);
+      QStringList rec, lines;
+      for (const char* f : FAMILIES) {
+            const Recommendation r = recommendation(library, cal, f, fit);
+            auto h = fit.heard.find(f);
+            const QString heard = h == fit.heard.end() ? QString() : QString("; heard right: %1 dB").arg(half(h->second));
+            if (!r.loudness) {
+                  if (!heard.isEmpty())
+                        lines << "   " + QString("%1: nothing measured%2").arg(f, heard);
+                  continue;
+                  }
+            rec << QString("%1 %2 dB").arg(f, half(r.best()));
+            QString line = "   " + QString("%1: loudness only %2 dB").arg(f, half(r.loudnessDb));
+            if (r.salience)
+                  line += QString(", with attack salience %1 dB (matched shorts sound %2 dB against the held note, their attacks "
+                             "%3 dB beyond that; %4 notes)").arg(half(r.salienceDb), f1(r.medianLouder), f1(r.medianSalience)).arg(r.attackNotes);
+            else
+                  line += QString(" (%1 notes; no attack measured: measure the dynamics with this build)").arg(r.notes);
+            lines << line + heard;
+            }
+      if (rec.isEmpty())
+            return QString();
+      QString weight;
+      if (fit.ok)
+            weight = QString("attack salience weight %1, fitted to what was heard right (%2)").arg(QString::number(fit.weight, 'f', 2), fit.used.join(", "));
+      else if (fit.heard.empty())
+            weight = QString("attack salience not used: nothing heard right to fit it to (Advanced Options › Heard right)");
+      else if (fit.used.isEmpty())
+            weight = QString("attack salience not used: no attack measured in a family heard right yet (measure the dynamics with this build)");
+      else
+            weight = QString("attack salience not used: the heard families' attacks stand out no more than their loudness says");
+      return "\n" + QString("Recommended short notes settings: %1").arg(rec.join(", ")) + "\n" + lines.join("\n") + "\n   " + weight;
       }
 
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
@@ -840,9 +969,17 @@ QString evenStepsName(EvenSteps mode)
       return EVEN_STEPS_NAMES[int(mode)];
       }
 
+bool evenStepsEnabled()
+      {
+      // (the owner, 2026-09-28: "just disable this option for now" -- Spitfire's own pp -> ff shape may be
+      // meant; the code stays, off unless MS_EVEN_DYNAMIC_STEPS is set)
+      static const bool enabled = qEnvironmentVariableIsSet("MS_EVEN_DYNAMIC_STEPS");
+      return enabled;
+      }
+
 EvenSteps evenSteps(const Score* score)
       {
-      if (!score)
+      if (!score || !evenStepsEnabled())
             return EvenSteps::OFF;
       const QString tag = score->masterScore()->metaTag(evenStepsMetaTag).trimmed();
       for (int i = 1; i < 5; ++i)
@@ -855,6 +992,33 @@ const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector
       {
       const Choice held = choose(patches, Want { { "long" }, {} });
       return held ? cal.curve(patches[size_t(held.patch)]->name, held.articulation->value) : nullptr;
+      }
+
+// a curve made never to fall (pool adjacent violators): each point of the measurement is one note, and a
+// patch's round robins differ by 1 to 2 dB (the owner's run of 2026-09-28 12:30: steps of -4 dB between
+// markings on held notes that climb), which even steps would otherwise follow
+static std::vector<std::pair<int, double>> rising(const std::vector<std::pair<int, double>>& points)
+      {
+      struct Block { double sum; int n; };
+      std::vector<Block> blocks;
+      for (const auto& p : points) {
+            blocks.push_back({ p.second, 1 });
+            while (blocks.size() >= 2) {
+                  Block& b = blocks.back();
+                  Block& a = blocks[blocks.size() - 2];
+                  if (a.sum / a.n <= b.sum / b.n)
+                        break;
+                  a.sum += b.sum;
+                  a.n += b.n;
+                  blocks.pop_back();
+                  }
+            }
+      std::vector<std::pair<int, double>> out;
+      size_t i = 0;
+      for (const Block& b : blocks)
+            for (int k = 0; k < b.n; ++k, ++i)
+                  out.push_back({ points[i].first, b.sum / b.n });
+      return out;
       }
 
 Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
@@ -870,7 +1034,7 @@ Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
             return s;
             }
       const bool hearing = mode == EvenSteps::VOLUME_HEARING || mode == EvenSteps::RECORDING_HEARING;
-      const std::vector<std::pair<int, double>>& curve = hearing ? held->perceived : held->points;
+      const std::vector<std::pair<int, double>> curve = rising(hearing ? held->perceived : held->points);
       if (curve.size() < 2)
             return s;
       const int x = std::min(cc, 127);
@@ -880,13 +1044,27 @@ Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc)
             return s;
       const double target = lo + (hi - lo) * (x - 16) / 111.0;
       if (mode == EvenSteps::RECORDING_HEARING || mode == EvenSteps::RECORDING_ENERGY) {
-            s.dynamics = qBound(1, inverseOf(curve, target), 127);
+            // where the curve is flat at the step (a stretch pooled by rising(), or a patch that stops
+            // getting louder), the CC nearest the one sent without even steps: the step is as loud
+            // anywhere there, and the tone stays nearest the marking's (the owner's run of 2026-09-28
+            // 12:30, Clarinets a2 - Performance by energy: flat from 48 up, fff would have been 48)
+            int first = -1, last = -1;
+            for (int v = 1; v <= 127; ++v) {
+                  if (std::fabs(interpolate(curve, v) - target) < 0.05) {
+                        if (first < 0)
+                              first = v;
+                        last = v;
+                        }
+                  }
+            s.dynamics = first >= 0 ? qBound(first, x, last) : qBound(1, inverseOf(curve, target), 127);
             return s;
             }
       // the volume: down by what the curve is above the step (it can't go up: the expression CC is at
       // its top without even steps)
       const std::vector<std::pair<int, double>>& volume = hearing ? held->expressionPerceived : held->expression;
-      if (volume.size() < 2)
+      // (a patch that barely follows the expression CC: as before; the owner's run of 2026-09-28 12:30,
+      // Tuba Solo - Performance: 0.6 dB from 127 to 32)
+      if (volume.size() < 2 || interpolate(volume, 127) - interpolate(volume, 16) < 6)
             return s;
       const double down = std::min(0.0, target - interpolate(curve, x));
       s.expression = down > -0.05 ? 127 : qBound(1, inverseOf(volume, interpolate(volume, 127) + down), 127);
@@ -913,6 +1091,40 @@ std::shared_ptr<const Library> current()
 bool active()
       {
       return currentActive;
+      }
+
+//---------------------------------------------------------
+//   partMix
+//---------------------------------------------------------
+
+PartMix partMix(const Part* part, bool withSolo)
+      {
+      PartMix m;
+      if (!part || part->instruments()->empty())
+            return m;
+      MasterScore* ms = const_cast<Part*>(part)->masterScore();
+      const Instrument* first = part->instruments()->begin()->second;
+      auto playback = [ms](const Channel* c) -> const Channel* {
+            return (ms && c->channel() >= 0 && c->channel() < int(ms->midiMapping().size())) ? ms->playbackChannel(c) : c;
+            };
+      if (!first->channel().empty()) {
+            const Channel* c = playback(first->channel(0));
+            m.volume = c->volume();
+            m.pan = c->pan();
+            m.reverb = c->reverb();
+            m.chorus = c->chorus();
+            }
+      bool any = false;
+      bool all = true;
+      for (const auto& ip : *part->instruments()) {
+            for (const Channel* ch : ip.second->channel()) {
+                  const Channel* c = playback(ch);
+                  any = true;
+                  all = all && (c->mute() || (withSolo && c->soloMute()));
+                  }
+            }
+      m.muted = any && all;
+      return m;
       }
 
 //---------------------------------------------------------

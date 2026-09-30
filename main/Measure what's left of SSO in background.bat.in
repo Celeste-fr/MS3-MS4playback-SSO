@@ -1,5 +1,7 @@
 @echo off
-rem Measure every sound of Spitfire Symphony Orchestra, in the background: the dynamics, then the timing.
+rem Measure what is left of Spitfire Symphony Orchestra, in the background: the dynamics, then the timing, of
+rem every sound, each leaving out the patches earlier runs measured (their folders in Documents\MuseScore Sound
+rem Library Check). What is done ends at once; set MS_EXTRACT_REDO=1 to measure everything again.
 rem
 rem Double-click this file. It runs this MuseScore with no window, twice, one after the other:
 rem   MuseScore --extract-library ... --check-dynamics --all-sounds --extract-patches all
@@ -7,7 +9,7 @@ rem   MuseScore --extract-library ... --check-timing --all-sounds --extract-patc
 rem Every patch of the library (the 700, not only the ones MuseScore plays), every articulation (also the
 rem ones no notation plays), each percussion hit on its own key, and a one-sound patch's sound. A crash or a
 rem hang is caught and the run goes on in a new MuseScore; a patch that fails twice is left out. Start it
-rem again after a stop and it carries on where it was. It uses copies of your setups and writes nothing in
+rem again after a stop (or closing it) and it carries on where it was. It uses copies of your setups and writes nothing in
 rem MuseScore's own folders, except the dynamics curves of what a notation plays (as the dynamics check).
 rem
 rem Progress: Documents\MuseScore Sound Library Check\background dynamics check.log, then
@@ -17,8 +19,8 @@ rem This window stays open (minimised) until both are done; closing it stops wha
 
 setlocal
 if not "%~1"=="run" (
-  start "Measuring every SSO sound (leave open)" /min cmd /c ""%~f0" run"
-  echo Measuring every SSO sound in the background: dynamics first, then timing.
+  start "Measuring what is left of SSO (leave open)" /min cmd /c ""%~f0" run"
+  echo Measuring what is left of SSO in the background: dynamics first, then timing (what is done is skipped).
   echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background dynamics check.log
   timeout /t 15
   exit /b

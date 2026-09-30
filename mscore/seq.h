@@ -20,6 +20,7 @@
 #ifndef __SEQ_H__
 #define __SEQ_H__
 
+#include "libmscore/partcontrollers.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/sequencer.h"
 #include "libmscore/fraction.h"
@@ -29,6 +30,7 @@
 #include "audiodrivers/driver.h"
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -67,7 +69,8 @@ enum class SeqMsgId : char {
       INDEPENDENT_METRONOME_TIME_SIGNATURE,
       INDEPENDENT_METRONOME_FOLLOW,
       INDEPENDENT_METRONOME_ACCENTS,
-      METRONOME_GAIN
+      METRONOME_GAIN,
+      LIBRARY_CC_LIVE               // a library part's controller changed live: intVal from, intVal2 to, event its route and CC
       };
 
 struct SeqMsg {
@@ -153,6 +156,19 @@ class Seq : public QObject, public Sequencer {
       RangeMap renderEventsStatus;
       MidiRenderer midi;
       QFuture<void> midiRenderFuture;
+      // the Mixer for sound library parts (soundlibrary.h: PartMix): their routes (MIDI out; the
+      // hosted plug-ins' slots are the host's), found again at each start or when stale, and the
+      // CC7 / CC10 / CC91 / CC93 values last sent on each route over MIDI out (only changes are sent)
+      std::vector<std::pair<const Part*, std::pair<int, int>>> _libOuts;
+      const MasterScore* _libOutsScore { nullptr };
+      int _libOutsGeneration { -1 };
+      bool _libOutsStale { true };
+      std::map<int, int> _libSent;        // (port * 16 + channel) * 128 + cc -> value
+      // the Controllers window's live changes of a library part's MIDI controllers: the events rendered
+      // before them are corrected as they play (audio thread only; PartControllers::LiveOverrides),
+      // until the score is rendered again (_libLiveClear, set by collectEvents)
+      PartControllers::LiveOverrides _libLive;
+      std::atomic<bool> _libLiveClear { false };
       bool allowBackgroundRendering = false; // should be set to true only when playing, so no
                                              // score changes are possible.
       EventMap countInEvents;             // playlist of any metronome countin clicks
@@ -358,6 +374,20 @@ class Seq : public QObject, public Sequencer {
       void sendMessage(SeqMsg&) const;
 
       void setController(int, int, int);
+      // the Mixer changed a library part's values (null: any part): hosted, its slots' gains and
+      // pans (SoundLibraryHost::applyMixer); over MIDI out, the CCs on its routes
+      void libraryMixerChanged(const Part* part = nullptr);
+      // a sound library part's routes (port, channel): its hosted slots (slot = port * 16 + channel) or
+      // its MIDI out routes; none for a part the library doesn't play
+      std::vector<std::pair<int, int>> libraryOuts(const Part* part);
+      // (GUI thread) the Controllers window changed a library part's values from before to after: each
+      // MIDI controller changed is sent now on the part's routes (unless a staff text is in force at
+      // the play position), and the events rendered with an older value play the new one
+      void libraryControllersChanged(MasterScore* score, const Part* part, const PartControllers::Values& before,
+                                     const PartControllers::Values& after);
+      // (GUI thread) wait for a chunk being rendered in the background, before the score's metaTags change
+      // during playback (the renderer reads them); no other one starts before the GUI thread's next heartbeat
+      void waitForRendering();
       virtual void sendEvent(const NPlayEvent&) override;
       void setScoreView(ScoreView*);
       MasterScore* score() const   { return cs; }

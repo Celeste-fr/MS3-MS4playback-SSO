@@ -12,6 +12,8 @@
 #include "soundlibrarycheck.h"
 
 #include <algorithm>
+#include <chrono>
+#include <future>
 #include <set>
 
 #include <QApplication>
@@ -25,6 +27,7 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
@@ -43,6 +46,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTableWidget>
@@ -53,6 +57,7 @@
 #include "preferences.h"
 #include "audio/midi/event.h"
 #include "audio/midi/msynthesizer.h"
+#include "libmscore/automation.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/partplayback.h"
@@ -63,6 +68,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/kontaktsetup.h"
+#include "audio/vst3/librarycontrollers.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "vst3editor.h"
@@ -88,7 +94,10 @@ SoundLibraryHost::SoundLibraryHost()
       connect(&_idle, &QTimer::timeout, this, [this]() {
             if (Vst3Synth* s = synth())
                   s->idle();
+            applyMixer();
             });
+      _settleTimer.setInterval(250);
+      connect(&_settleTimer, &QTimer::timeout, this, &SoundLibraryHost::settleStep);
 #endif
       }
 
@@ -355,7 +364,6 @@ QByteArray SoundLibraryHost::setupId(const SoundLib::Library& library, const QSt
       return QCryptographicHash::hash(f.readAll(), QCryptographicHash::Sha1).toHex();
       }
 
-#ifdef USE_VST3
 static QString madeFile(const SoundLib::Library& library)
       {
       return setupFolder(library) + "/made setups.json";
@@ -382,6 +390,57 @@ static void logTime(const SoundLib::Library& library, const QString& line)
       if (f.open(QIODevice::Append | QIODevice::Text))
             f.write((QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss ") + line + "\n").toUtf8());
       }
+
+void SoundLibraryHost::logLoadTime(const SoundLib::Library& library, const QString& line)
+      {
+      logTime(library, line);
+      }
+
+int SoundLibraryHost::loadThreads()
+      {
+      bool ok = false;
+      const int env = qEnvironmentVariableIntValue("MS_SOUNDLIBRARY_LOAD_THREADS", &ok);
+      const int n = ok ? env : preferences.getInt("io/soundLibraryLoadThreads");
+      return qBound(0, n, 16);
+      }
+
+// a made setup's record (made setups.json) against what it would be made from now: the same when
+// made from the same .nki, values, maker and Kontakt's empty state; once resaved (Kontakt's own
+// state) the empty state doesn't count: it was only the template of the made one, and a Kontakt
+// update (a new empty state) needn't make every patch from its .nki again, each first load slow
+static bool sameMade(QJsonObject have, QJsonObject from, bool* resaved = nullptr)
+      {
+      const bool own = have.value("resaved").toBool();
+      if (resaved)
+            *resaved = own;
+      have.remove("resaved");
+      if (own) {
+            have.remove("empty");
+            from.remove("empty");
+            }
+      return have == from;
+      }
+
+// the other setups folders of this library: the working MuseScore's and the background runs' copies
+// (Documents/MuseScore Sound Library Check/<…> setups), each with its own made and resaved setups
+static QStringList otherSetupFolders(const SoundLib::Library& library)
+      {
+      QStringList folders;
+      const QString mine = QDir(setupFolder(library)).absolutePath();
+      auto add = [&](const QString& f) {
+            const QString a = QDir(f).absolutePath();
+            if (a != mine && !folders.contains(a) && QFileInfo::exists(a + "/made setups.json"))
+                  folders << a;
+            };
+      add(dataPath + "/soundlibraries/" + fileName(library.name));
+      const QString check = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      for (const QFileInfo& fi : QDir(check).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot))
+            if (fi.fileName().endsWith(" setups"))
+                  add(fi.absoluteFilePath() + "/" + fileName(library.name));
+      return folders;
+      }
+
+#ifdef USE_VST3
 
 // once per library and session: setups not made by MuseScore (by hand, or by make_setups.py)
 // are moved to "old setups (not used)"
@@ -458,6 +517,56 @@ static QByteArray writeState(const QString& name, const QByteArray& component, c
       return result;
       }
 
+//---------------------------------------------------------
+//   importResaved
+//    Kontakt's own state of a patch (resaved) from another setups folder, when it was made there from
+//    the same .nki and values (sameMade): copied here with its record, so the patch's first load here
+//    is as fast as its later ones (a setup made from the .nki loads about 20 times slower: run 119;
+//    the owner's full orchestra, 2-43 s a patch). The background runs (dynamics, extract, key scan,
+//    load times) load hundreds of patches in their own copies; the working MuseScore made each of
+//    those again from its .nki at its first load, and the other way round. Only a state that is
+//    Kontakt's own (its sample list version 3; an early build marked setups Kontakt gave back
+//    unchanged as resaved, run 139) and has the patch's program
+//---------------------------------------------------------
+
+static QByteArray importResaved(const SoundLib::Library& library, const SoundLib::LibInstrument& li, const QJsonObject& from,
+                                QJsonObject& made)
+      {
+      QElapsedTimer t;
+      t.start();
+      const QString name = fileName(li.name) + ".vst3state";
+      for (const QString& folder : otherSetupFolders(library)) {
+            QFile mf(folder + "/made setups.json");
+            if (!mf.open(QIODevice::ReadOnly))
+                  continue;
+            const QJsonObject rec = QJsonDocument::fromJson(mf.readAll()).object().value(li.name).toObject();
+            bool resaved = false;
+            if (!sameMade(rec, from, &resaved) || !resaved)
+                  continue;
+            QFile sf(folder + "/" + name);
+            if (!sf.open(QIODevice::ReadOnly))
+                  continue;
+            const QByteArray state = sf.readAll();
+            QString n;
+            QByteArray component, controller;
+            if (!readState(state, &n, &component, &controller) || KontaktSetup::sampleListVersion(component) < 3)
+                  continue;
+            const QString program = KontaktSetup::programName(KontaktSetup::slotProgram(component, nullptr));
+            if (program.isEmpty())
+                  continue;
+            if (!writeFile(SoundLibraryHost::setupFile(library, li.name), state))
+                  return QByteArray();
+            QJsonObject r = from;
+            r["resaved"] = true;
+            made[li.name] = r;
+            writeFile(madeFile(library), QJsonDocument(made).toJson());
+            logTime(library, QString("%1: Kontakt's own state taken from %2 (\"%3\", %4 KB) in %5 ms")
+                    .arg(li.name, QDir::toNativeSeparators(folder), program).arg(state.size() / 1024).arg(t.elapsed()));
+            return state;
+            }
+      return QByteArray();
+      }
+
 QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                         QString* error)
       {
@@ -486,16 +595,26 @@ QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const 
             }
       QJsonObject made = readMade(library);
       setAsideOldSetups(library, made);
+      QFile f(file);
+      // Kontakt's own state (resaved since it was made: loadSetup), made from the same .nki and values:
+      // no need for Kontakt's empty state (reading it and its SHA-1 at each load)
+      bool resaved = false;
+      if (sameMade(made.value(patch).toObject(), madeFrom(library, *li), &resaved) && resaved && f.open(QIODevice::ReadOnly))
+            return f.readAll();
       const QByteArray empty = emptyState(library, pluginPath, made, error);
       if (empty.isEmpty())
             return QByteArray();
       QJsonObject from = madeFrom(library, *li);
       from["empty"] = QString(QCryptographicHash::hash(empty, QCryptographicHash::Sha1).toHex());
-      QFile f(file);
-      QJsonObject have = made.value(patch).toObject();
-      have.remove("resaved");                     // (Kontakt's own state since: loadSetup)
-      if (have == from && f.open(QIODevice::ReadOnly))
+      if (sameMade(made.value(patch).toObject(), from) && f.open(QIODevice::ReadOnly))
             return f.readAll();
+      // Kontakt's own state of it from another setups folder (a background run's copy, or the working
+      // MuseScore's for a background run): a patch loaded there once needn't load slowly here
+      if (makesSetups(library)) {
+            const QByteArray own = importResaved(library, *li, from, made);
+            if (!own.isEmpty())
+                  return own;
+            }
 
       QString name;
       QByteArray component, controller;
@@ -602,24 +721,41 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
 bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                  QString* error)
       {
-      const QByteArray state = setupState(library, patch, pluginPath, error);
-      if (state.isEmpty())
-            return false;
       QElapsedTimer t;
       t.start();
+      const QByteArray state = setupState(library, patch, pluginPath, error);
+      const double setupMs = t.nsecsElapsed() / 1e6;
+      if (state.isEmpty())
+            return false;
       if (p->setState(state)) {
-            const SoundLib::LibInstrument* li = findPatch(library, patch);
-            const bool resaved = readMade(library).value(patch).toObject().value("resaved").toBool();
-            logTime(library, QString("%1: loaded into the plug-in in %2 ms (%3)").arg(patch).arg(t.elapsed())
-                    .arg(!makesSetups(library) ? "a setup file" : resaved ? "Kontakt's own state" : "made from the .nki"));
-            if (makesSetups(library) && li && !li->nki.isEmpty() && !resaved)
-                  resave(p, library, *li, state);
+            setupLoaded(p, library, patch, state, setupMs);
             return true;
             }
       if (error)
             *error = tr("The setup of %1 could not be loaded into the plug-in.").arg(patch);
       qWarning("Sound library: the setup of %s could not be loaded", qPrintable(patch));
       return false;
+      }
+
+static QString ms(double v)
+      {
+      return QString::number(v, 'f', v < 10 ? 1 : 0);
+      }
+
+void SoundLibraryHost::setupLoaded(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QByteArray& state,
+                                   double setupMs)
+      {
+      const SoundLib::LibInstrument* li = findPatch(library, patch);
+      const bool resaved = readMade(library).value(patch).toObject().value("resaved").toBool();
+      const Vst3Plugin::Times& tm = p->times();
+      const double set = tm.component + tm.controllerComponent + tm.controller + tm.mapping;
+      logTime(library, QString("%1: loaded into the plug-in in %2 ms (%3; setup of %4 KB read in %5 ms; setState: component %6, "
+                               "controller %7%8, MIDI mapping %9 ms)")
+              .arg(patch, ms(set), !makesSetups(library) ? "a setup file" : resaved ? "Kontakt's own state" : "made from the .nki")
+              .arg(state.size() / 1024).arg(ms(setupMs)).arg(ms(tm.component)).arg(ms(tm.controllerComponent))
+              .arg(tm.controller > 0 ? " + " + ms(tm.controller) : QString()).arg(ms(tm.mapping)));
+      if (makesSetups(library) && li && !li->nki.isEmpty() && !resaved)
+            resave(p, library, *li, state);
       }
 #else
 QByteArray SoundLibraryHost::setupState(const SoundLib::Library&, const QString&, const QString&, QString* error)
@@ -639,14 +775,6 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QS
 
 #ifdef USE_VST3
 //---------------------------------------------------------
-//   applyParameters
-//    the route's controllers that are plug-in parameters (SoundLib::Controller::param), at the
-//    part's values; found by title (Vst3Plugin::parameterId). One the part has no value for
-//    plays as the patch has it: patchValues (Slot::patchValues; null: a new instance, which
-//    has nothing to put back) keeps the setup's value of each parameter set, to put it back
-//---------------------------------------------------------
-
-//---------------------------------------------------------
 //   parameterIds
 //    automation: a route's instance's parameter id of each controller of the part's main patch
 //    (the renderer's ME_PARAMETER events are by that index), as titled on this instance
@@ -664,33 +792,6 @@ static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, c
       return ids;
       }
 
-static void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values,
-                            std::map<unsigned, double>* patchValues)
-      {
-      for (const SoundLib::Controller& c : r.instrument->allControllers) {
-            if (c.param.isEmpty())
-                  continue;
-            const int value = PartControllers::value(r.part, c, values);
-            if (value < 0 && (!patchValues || patchValues->empty()))
-                  continue;
-            const long id = p->parameterId(c.param);
-            if (value < 0) {                        // another score's value: the patch's own again
-                  if (id >= 0 && patchValues->count(unsigned(id))) {
-                        p->setParameter(unsigned(id), patchValues->at(unsigned(id)));
-                        patchValues->erase(unsigned(id));
-                        }
-                  continue;
-                  }
-            if (id >= 0 && patchValues && !patchValues->count(unsigned(id)))
-                  (*patchValues)[unsigned(id)] = p->parameter(unsigned(id));
-            if (id < 0) {
-                  qWarning("Sound library: %s has no parameter \"%s\" (controller %s)", qPrintable(p->name()),
-                           qPrintable(c.param), qPrintable(c.id));
-                  continue;
-                  }
-            p->setParameter(unsigned(id), value / 127.0);
-            }
-      }
 #endif
 
 //---------------------------------------------------------
@@ -709,8 +810,9 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
 //   preloadSoon
 //    the score's instances loaded when it is opened (or shown), every part's, with or without
 //    notes (the owner, 2026-09-27: "just load everything at score open", no loading as parts get
-//    notes), one per event-loop turn so the window repaints and shows what loads. A play before
-//    it's done loads the rest (sync)
+//    notes), one per event-loop turn so the window repaints and shows what loads (with worker
+//    threads, loadThreads(): that many at once, while the window goes on). A play before it's done
+//    loads the rest (sync)
 //---------------------------------------------------------
 
 void SoundLibraryHost::preloadSoon(Score* score)
@@ -720,6 +822,10 @@ void SoundLibraryHost::preloadSoon(Score* score)
       _preloadTimer.stop();
       _preloadFrom = _loads;
       _preloadLogged = false;
+      if (!_pending.empty()) {
+            _preloadTimer.start(20);                        // (loads still set on worker threads: preloadStep takes them)
+            return;
+            }
       if (!_preloadScore || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
             return;
       _preloadTimer.start(0);
@@ -752,8 +858,17 @@ bool SoundLibraryHost::eventFilter(QObject* o, QEvent* e)
 void SoundLibraryHost::preloadStep()
       {
 #ifdef USE_VST3
-      if (!_preloadScore || !mscore || !mscore->currentScore() || mscore->currentScore()->masterScore() != _preloadScore)
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (_syncing)
+            return;
+      if (library)
+            harvest(*library, -1);                          // (loads done on worker threads: into their slots)
+      if (!_preloadScore || !mscore || !mscore->currentScore() || mscore->currentScore()->masterScore() != _preloadScore
+          || !library) {
+            if (!_pending.empty())
+                  _preloadTimer.start(20);
             return;                                         // (another score is shown now)
+            }
       if (seq && seq->isPlaying())
             return;                                         // (play has loaded what it needs)
       // an instance blocks MuseScore while it loads (0.2-0.8 s for SSO, the first time of a patch
@@ -763,27 +878,387 @@ void SoundLibraryHost::preloadStep()
             _preloadTimer.start(INPUT_PAUSE_MS - int(_lastInput.elapsed()) + 50);
             return;
             }
-      int remaining = 0;
-      QString error;
-      if (!syncSome(_preloadScore, &error, 1, &remaining)) {
-            if (!error.isEmpty() && mscore)
-                  mscore->showMessage(error, 10000);
-            if (SoundLib::current())
-                  logTime(*SoundLib::current(), QString("Loading at score open stopped: %1").arg(error));
+      const int threads = loadThreads();
+      const int maxLoads = threads > 0 ? threads - int(_pending.size()) : 1;
+      if (maxLoads <= 0) {
+            _preloadTimer.start(20);
             return;
             }
-      qDebug("Sound library: preloaded one instance, %d to go", remaining);
+      int remaining = 0;
+      QString error;
+      if (!syncSome(_preloadScore, &error, maxLoads, &remaining)) {
+            if (!error.isEmpty() && mscore)
+                  mscore->showMessage(error, 10000);
+            logTime(*library, QString("Loading at score open stopped: %1").arg(error));
+            if (!_pending.empty())
+                  _preloadTimer.start(20);
+            return;
+            }
+      qDebug("Sound library: preloaded, %d to go", remaining);
       if (remaining > 0)
-            _preloadTimer.start(100);                     // (the event loop runs in between)
+            _preloadTimer.start(_pending.empty() ? PRELOAD_GAP_MS : 20);   // (the event loop runs in between)
       else if (mscore && _loads > _preloadFrom)       // (an edit that needed nothing new says nothing)
-            mscore->showMessage(tr("%1 is loaded.").arg(SoundLib::current() ? SoundLib::current()->name : QString()), 3000);
+            mscore->showMessage(tr("%1 is loaded.").arg(library->name), 3000);
 #endif
+      }
+
+#ifdef USE_VST3
+//---------------------------------------------------------
+//   Pending
+//    one instance being loaded: made (or a spare reused) and its setup read on the GUI thread, the
+//    setup set on a worker thread when loadThreads() > 0, finished on the GUI thread (finishLoad)
+//---------------------------------------------------------
+
+struct SoundLibraryHost::Pending {
+      int slot { -1 };
+      QString name;
+      bool setup { false };               // it has a setup to load
+      std::unique_ptr<Vst3Plugin> plugin;
+      QByteArray state;                   // its setup (empty: none, or it could not be made: error)
+      QString error;
+      std::future<bool> done;             // valid: set on a worker thread
+      QElapsedTimer clock;                // since its setState started
+      qint64 memoryBefore { -1 };
+      double createMs { -1 };             // a new instance (-1: a spare reused)
+      double setupMs { 0 };               // reading or making the setup
+      };
+
+struct SoundLibraryHost::Batch {
+      QString kind;                       // "At play", "At score open"
+      QElapsedTimer clock;                // since the first load
+      bool ended { false };               // all loaded: memory settling (settleStep)
+      int loads { 0 };
+      int created { 0 };
+      int failed { 0 };
+      int threads { 0 };
+      double createMs { 0 };
+      double setupMs { 0 };
+      double componentMs { 0 };
+      double controllerMs { 0 };
+      double mappingMs { 0 };
+      double setStateWallMs { 0 };        // (worker threads: from start to done, overlapping)
+      double finishMs { 0 };              // resaves, putting it in its slot
+      double routesMs { 0 };              // working out the score's routes (routesFor)
+      double loadedMs { 0 };              // clock when all were loaded
+      qint64 memoryStart { -1 };
+      qint64 memoryLast { -1 };
+      QElapsedTimer sinceGrowth;
+      };
+
+bool SoundLibraryHost::pendingOn(int slot) const
+      {
+      return std::any_of(_pending.begin(), _pending.end(), [slot](const std::unique_ptr<Pending>& p) { return p->slot == slot; });
+      }
+
+//---------------------------------------------------------
+//   beginLoad
+//    an instance for a slot: a spare of a patch the score doesn't need when the setup replaces all
+//    it had, else a new one; its setup read (or made); with worker threads, its setState started
+//---------------------------------------------------------
+
+std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot, const QString& name, bool setup,
+                                                                       const SoundLib::Library& library, const QString& path,
+                                                                       QString* error)
+      {
+      std::unique_ptr<Pending> pl(new Pending);
+      pl->slot = slot;
+      pl->name = name;
+      pl->setup = setup;
+      // its memory: what the process grew by, as it loaded and 3 s later (Kontakt goes on
+      // loading samples) when no other load started meanwhile
+      pl->memoryBefore = processMemory();
+      QElapsedTimer t;
+      t.start();
+      if (setup) {
+            auto i = std::find_if(_spares.begin(), _spares.end(), [&path](const Spare& sp) {
+                  return sp.plugin && sp.plugin->path() == path;
+                  });
+            if (i != _spares.end()) {
+                  qDebug("Sound library: the instance of %s loads %s", qPrintable(i->slot.instrument), qPrintable(name));
+                  pl->plugin = std::move(i->plugin);
+                  _spares.erase(i);
+                  }
+            }
+      if (!pl->plugin) {
+            QString err;
+            pl->plugin = Vst3Plugin::load(path, MScore::sampleRate, 4096, &err);
+            if (!pl->plugin) {
+                  if (error)
+                        *error = err;
+                  return nullptr;
+                  }
+            pl->createMs = t.nsecsElapsed() / 1e6;
+            const Vst3Plugin::Times& tm = pl->plugin->times();
+            logTime(library, QString("%1: a new instance of the plug-in in %2 ms (module %3, create %4, buses %5, activate %6 ms%7)")
+                    .arg(name, ms(pl->createMs), ms(tm.module), ms(tm.create), ms(tm.buses), ms(tm.activate))
+                    .arg(pl->plugin->singleComponent() ? "; component and controller one object" : ""));
+            }
+      if (setup) {
+            t.restart();
+            pl->state = setupState(library, name, path, &pl->error);
+            pl->setupMs = t.nsecsElapsed() / 1e6;
+            if (!pl->state.isEmpty() && loadThreads() > 0) {
+                  Vst3Plugin* p = pl->plugin.get();
+                  const QByteArray state = pl->state;
+                  pl->clock.start();
+                  pl->done = std::async(std::launch::async, [p, state]() {
+                        workerThread(true);
+                        const bool ok = p->setState(state);
+                        workerThread(false);
+                        return ok;
+                        });
+                  }
+            }
+      return pl;
+      }
+
+//---------------------------------------------------------
+//   finishLoad
+//    its setup set (here, or waited for), logged and resaved; into its slot when that is free, else a
+//    spare (another score is shown since it started)
+//---------------------------------------------------------
+
+void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::Library& library)
+      {
+      bool loaded = false;
+      const bool threaded = pl->done.valid();
+      double wall = 0;
+      if (pl->setup && !pl->state.isEmpty()) {
+            if (threaded)
+                  loaded = pl->done.get();
+            else {
+                  pl->clock.start();
+                  loaded = pl->plugin->setState(pl->state);
+                  }
+            wall = pl->clock.nsecsElapsed() / 1e6;
+            if (!loaded) {
+                  pl->error = tr("The setup of %1 could not be loaded into the plug-in.").arg(pl->name);
+                  qWarning("Sound library: the setup of %s could not be loaded", qPrintable(pl->name));
+                  }
+            }
+      const Vst3Plugin::Times tm = pl->plugin->times();
+      QElapsedTimer t;
+      t.start();
+      if (loaded) {
+            setupLoaded(pl->plugin.get(), library, pl->name, pl->state, pl->setupMs);
+            if (threaded)
+                  logTime(library, QString("%1: set on a worker thread, %2 ms from its start to done").arg(pl->name, ms(wall)));
+            }
+      const bool failed = pl->setup && !loaded;
+      if (failed) {
+            logTime(library, QString("%1: %2").arg(pl->name, pl->error));
+            if (mscore)
+                  mscore->showMessage(pl->error, 10000);
+            }
+      Slot info;
+      info.instrument = pl->name;
+      info.hasSetup = pl->setup && loaded;
+      info.setupFailed = failed;
+      Vst3Synth* vst = synth();
+      const int k = pl->slot;
+      if (!vst || vst->plugin(k)) {
+            if (vst)
+                  _spares.push_back(Spare { std::move(pl->plugin), info });
+            }
+      else {
+            Slot& s = _slots[size_t(k)];
+            const QString part = s.part;
+            s = info;
+            s.part = part;
+            vst->setPlugin(k, std::move(pl->plugin));
+            const qint64 memoryBefore = pl->memoryBefore;
+            const qint64 memoryAfter = processMemory();
+            s.memory = memoryBefore >= 0 && memoryAfter >= 0 ? std::max<qint64>(0, memoryAfter - memoryBefore) : -1;
+            const int loadNumber = _loads;
+            const QString name = pl->name;
+            QTimer::singleShot(3000, this, [this, k, name, memoryBefore, loadNumber]() {
+                  const qint64 now = processMemory();
+                  if (_loads != loadNumber || _slots[size_t(k)].instrument != name || memoryBefore < 0 || now < 0)
+                        return;
+                  _slots[size_t(k)].memory = std::max(_slots[size_t(k)].memory, now - memoryBefore);
+                  emit changed();
+                  });
+            }
+      if (_batch) {
+            Batch& b = *_batch;
+            ++b.loads;
+            if (pl->createMs >= 0) {
+                  ++b.created;
+                  b.createMs += pl->createMs;
+                  }
+            b.failed += failed;
+            b.setupMs += pl->setupMs;
+            if (loaded) {
+                  b.componentMs += tm.component;
+                  b.controllerMs += tm.controllerComponent + tm.controller;
+                  b.mappingMs += tm.mapping;
+                  b.setStateWallMs += wall;
+                  }
+            b.threads = std::max(b.threads, threaded ? loadThreads() : 0);
+            b.finishMs += t.nsecsElapsed() / 1e6;
+            }
+      }
+
+//---------------------------------------------------------
+//   harvest
+//    the pending loads that are done, finished; keep >= 0: waits (the event loop running: a plug-in
+//    may need the GUI thread while it loads on another) until no more than keep are left
+//---------------------------------------------------------
+
+bool SoundLibraryHost::harvest(const SoundLib::Library& library, int keep)
+      {
+      bool any = false;
+      while (!_pending.empty()) {
+            auto i = std::find_if(_pending.begin(), _pending.end(), [](const std::unique_ptr<Pending>& p) {
+                  return !p->done.valid() || p->done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+                  });
+            if (i == _pending.end()) {
+                  if (keep < 0 || int(_pending.size()) <= keep)
+                        break;
+                  QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
+                  _pending.front()->done.wait_for(std::chrono::milliseconds(5));
+                  continue;
+                  }
+            std::unique_ptr<Pending> pl = std::move(*i);
+            _pending.erase(i);
+            finishLoad(std::move(pl), library);
+            any = true;
+            }
+      if (any)
+            emit changed();
+      return any;
+      }
+
+//---------------------------------------------------------
+//   batchStart / batchEnd / settleStep
+//    load times.log: what a batch of loads (at play, at score open) took in all, by step, and when
+//    the process's memory stopped growing after it (Kontakt loads the samples after setState)
+//---------------------------------------------------------
+
+void SoundLibraryHost::batchStart(const QString& kind)
+      {
+      if (_batch && !_batch->ended) {                     // (going on: a play during the loading at score open)
+            if (!_batch->kind.contains(kind.mid(3).toLower()))
+                  _batch->kind += ", then " + kind.mid(3).toLower();
+            return;
+            }
+      if (_batch && _batch->ended && SoundLib::current())
+            logTime(*SoundLib::current(), QString("%1: more loads started before the memory settled (+%2 MB %3 s after the first load)")
+                    .arg(_batch->kind).arg((processMemory() - _batch->memoryStart) >> 20).arg(_batch->clock.elapsed() / 1000.0, 0, 'f', 1));
+      _settleTimer.stop();
+      _batch.reset(new Batch);
+      _batch->kind = kind;
+      _batch->clock.start();
+      _batch->memoryStart = processMemory();
+      }
+
+void SoundLibraryHost::batchEnd(const SoundLib::Library& library)
+      {
+      if (!_batch || _batch->ended)
+            return;
+      Batch& b = *_batch;
+      b.ended = true;
+      b.loadedMs = b.clock.nsecsElapsed() / 1e6;
+      const double setState = b.componentMs + b.controllerMs + b.mappingMs;
+      const double own = b.loadedMs - b.createMs - b.setupMs - (b.threads ? 0 : setState) - b.finishMs - b.routesMs;
+      const qint64 now = processMemory();
+      logTime(library, QString("%1: %2 instances loaded in %3 s (%4 new: %5 s; setups read or made %6 s; setState %7 s: component %8, "
+                               "controller %9, MIDI mapping %10%11; resaves and slots %12 s; the score's routes %16 s; %13 s)%14%15")
+              .arg(b.kind).arg(b.loads).arg(b.loadedMs / 1000.0, 0, 'f', 1).arg(b.created).arg(b.createMs / 1000.0, 0, 'f', 1)
+              .arg(b.setupMs / 1000.0, 0, 'f', 1).arg(setState / 1000.0, 0, 'f', 1).arg(b.componentMs / 1000.0, 0, 'f', 1)
+              .arg(b.controllerMs / 1000.0, 0, 'f', 1).arg(b.mappingMs / 1000.0, 0, 'f', 1)
+              .arg(b.threads ? QString(", on %1 worker threads, %2 s from start to done summed").arg(b.threads).arg(b.setStateWallMs / 1000.0, 0, 'f', 1)
+                             : QString())
+              .arg(b.finishMs / 1000.0, 0, 'f', 1)
+              .arg((b.threads ? QString("the window free meanwhile ") : QString("MuseScore between loads "))
+                   + QString::number(std::max(0.0, own) / 1000.0, 'f', 1))
+              .arg(b.failed ? QString("; %1 failed").arg(b.failed) : QString())
+              .arg(now >= 0 && b.memoryStart >= 0 ? QString("; memory +%1 MB so far").arg((now - b.memoryStart) >> 20) : QString())
+              .arg(b.routesMs / 1000.0, 0, 'f', 1));
+      if (now < 0 || b.memoryStart < 0) {
+            _batch.reset();
+            return;
+            }
+      b.memoryLast = now;
+      b.sinceGrowth.start();
+      _settleTimer.start();
+      }
+
+void SoundLibraryHost::settleStep()
+      {
+      if (!_batch || !_batch->ended) {
+            _settleTimer.stop();
+            return;
+            }
+      Batch& b = *_batch;
+      const qint64 now = processMemory();
+      if (now > b.memoryLast + (8 << 20)) {
+            b.memoryLast = now;
+            b.sinceGrowth.restart();
+            }
+      const bool settled = b.sinceGrowth.elapsed() >= 3000;
+      if (!settled && b.clock.elapsed() < 300000)
+            return;
+      _settleTimer.stop();
+      const double at = (b.clock.elapsed() - b.sinceGrowth.elapsed()) / 1000.0;
+      if (SoundLib::current())
+            logTime(*SoundLib::current(), QString("%1: memory %2 %3 s after the first load, %4 s after the last (+%5 MB in all: "
+                                                  "the samples the plug-in loads after setState)")
+                    .arg(b.kind, settled ? "settled" : "still growing").arg(at, 0, 'f', 1).arg(at - b.loadedMs / 1000.0, 0, 'f', 1)
+                    .arg((b.memoryLast - b.memoryStart) >> 20));
+      _batch.reset();
+      }
+#endif
+
+//---------------------------------------------------------
+//   routesFor
+//    SoundLib::routes of a score, worked out again only when it may have changed: an edit (the
+//    undo stack's state: each change, undo and redo has its own), the library, its routes'
+//    generation (a setup made, the library's folder), the parts' playback modes or the copies'
+//    settings. It runs the whole notation of every part twice (the extras it plays, the copies for
+//    other tunings): 0.3-0.5 s for a 21-part, 300-measure score here, and syncSome ran it at every
+//    play and before each instance it loaded at score open (41 instances: 13-20 s)
+//---------------------------------------------------------
+
+static const std::vector<SoundLib::Route>& routesFor(MasterScore* score, const std::shared_ptr<const SoundLib::Library>& library,
+                                                     double* ms)
+      {
+      struct Cache {
+            QPointer<MasterScore> score;
+            std::shared_ptr<const SoundLib::Library> library;
+            int state { -1 };
+            int generation { -1 };
+            QString modes;
+            QString lanes;
+            std::vector<SoundLib::Route> routes;
+            };
+      static Cache cache;
+      const UndoStack* undo = score->undoStack();
+      const int state = undo && !undo->active() ? undo->state() : -1;
+      const QString modes = score->metaTag(PartPlaybackModes::metaTag);
+      const QString lanes = score->metaTag(SoundLib::laneSettingsMetaTag);
+      if (cache.score != score || cache.library != library || state < 0 || cache.state != state
+          || cache.generation != SoundLib::routesGeneration() || cache.modes != modes || cache.lanes != lanes) {
+            QElapsedTimer t;
+            t.start();
+            cache.routes = SoundLib::routes(score, *library);
+            cache.score = score;
+            cache.library = library;
+            cache.state = state;
+            cache.generation = SoundLib::routesGeneration();
+            cache.modes = modes;
+            cache.lanes = lanes;
+            if (ms)
+                  *ms += t.nsecsElapsed() / 1e6;
+            }
+      return cache.routes;
       }
 
 //---------------------------------------------------------
 //   syncSome
 //    sync, loading no more than maxLoads instances (-1: all); remaining (optional): how many are
-//    still to load. The others are released and the parameters set once all are loaded
+//    still to load (being loaded on worker threads included). The others are released and the
+//    parameters set once all are loaded
 //---------------------------------------------------------
 
 bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int* remaining)
@@ -797,10 +1272,20 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             release();
             return true;
             }
+      if (_syncing)                                   // (the event loop while waiting for a worker thread)
+            return true;
+      struct Syncing {
+            bool& b;
+            Syncing(bool& x) : b(x) { b = true; }
+            ~Syncing() { b = false; }
+            } syncing(_syncing);
       const QString path = pluginPath(*library, error);
       if (path.isEmpty())
             return false;
       vst->setVarispeed(library->varispeed);
+      // at play: what worker threads are loading, first
+      if (maxLoads < 0)
+            harvest(*library, 0);
 
       // what the score needs, by slot
       struct Need {
@@ -810,11 +1295,17 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             };
       std::array<bool, 64> used {};
       std::vector<Need> needs;
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      QElapsedTimer syncClock;
+      syncClock.start();
+      double routesMs = 0;
+      const std::vector<SoundLib::Route> routes = routesFor(score->masterScore(), library, &routesMs);
+      _slotParts.fill(nullptr);
+      _slotScore = score->masterScore();
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
                   continue;
             const int k = r.port * 16 + r.channel;
+            _slotParts[size_t(k)] = r.part;
             used[k] = true;
             _slots[k].part = r.part->partName();
             needs.push_back({ k, r.instrument->name, hasSetup(*library, r.instrument->name) });
@@ -848,7 +1339,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       // the patches a spare already plays: moved in, nothing to load
       std::vector<const Need*> toLoad;
       for (const Need& n : needs) {
-            if (vst->plugin(n.slot))
+            if (vst->plugin(n.slot) || pendingOn(n.slot))
                   continue;
             auto i = std::find_if(_spares.begin(), _spares.end(), [&](const Spare& sp) { return fits(sp.plugin.get(), sp.slot, n); });
             if (i == _spares.end()) {
@@ -878,11 +1369,12 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       bool ok = true;
       bool waiting = false;
       int loads = 0;
+      const int threads = loadThreads();
+      if (!toLoad.empty() && (maxLoads < 0 || loads < maxLoads)) {
+            batchStart(maxLoads < 0 ? "At play" : "At score open");
+            _batch->routesMs += routesMs;
+            }
       for (const Need* n : toLoad) {
-            const int k = n->slot;
-            Slot& s = _slots[k];
-            const QString& name = n->name;
-            const bool setup = n->setup;
             if (maxLoads >= 0 && loads >= maxLoads) {       // (later: preloadStep)
                   if (remaining)
                         ++*remaining;
@@ -895,61 +1387,31 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   waiting = true;
                   }
             if (mscore)
-                  mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, name)
-                                                   : tr("Loading %1 in the background: %2…").arg(library->name, name), 8000);
-
-            // its memory: what the process grew by, as it loaded and 3 s later (Kontakt goes on
-            // loading samples) when no other load started meanwhile
-            const qint64 memoryBefore = processMemory();
-
-            // an instance to reuse when the setup replaces all it had (a spare of a patch the
-            // score doesn't need), else a new one
-            std::unique_ptr<Vst3Plugin> p;
-            if (setup) {
-                  auto i = std::find_if(_spares.begin(), _spares.end(), [&path](const Spare& sp) {
-                        return sp.plugin && sp.plugin->path() == path;
-                        });
-                  if (i != _spares.end()) {
-                        qDebug("Sound library: the instance of %s loads %s", qPrintable(i->slot.instrument), qPrintable(name));
-                        p = std::move(i->plugin);
-                        _spares.erase(i);
-                        }
+                  mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, n->name)
+                                                   : tr("Loading %1 in the background: %2…").arg(library->name, n->name), 8000);
+            std::unique_ptr<Pending> pl = beginLoad(n->slot, n->name, n->setup, *library, path, error);
+            if (!pl) {
+                  ok = false;
+                  break;
                   }
-            if (!p) {
-                  QString err;
-                  QElapsedTimer t;
-                  t.start();
-                  p = Vst3Plugin::load(path, MScore::sampleRate, 4096, &err);
-                  if (!p) {
-                        if (error)
-                              *error = err;
-                        ok = false;
-                        break;
-                        }
-                  logTime(*library, QString("%1: a new instance of the plug-in in %2 ms").arg(name).arg(t.elapsed()));
+            if (pl->done.valid()) {
+                  _pending.push_back(std::move(pl));
+                  if (maxLoads < 0)                         // (at play: no more than threads at once)
+                        harvest(*library, threads - 1);
                   }
-            s.instrument = name;
-            QString err;
-            s.hasSetup = setup && loadSetup(p.get(), *library, name, path, &err);
-            s.setupFailed = setup && !s.hasSetup;
-            if (s.setupFailed) {
-                  logTime(*library, QString("%1: %2").arg(name, err));
-                  if (mscore)
-                        mscore->showMessage(err, 10000);
-                  }
-            s.patchValues.clear();
-            vst->setPlugin(k, std::move(p));
-            const qint64 memoryAfter = processMemory();
-            s.memory = memoryBefore >= 0 && memoryAfter >= 0 ? std::max<qint64>(0, memoryAfter - memoryBefore) : -1;
-            const int loadNumber = _loads;
-            QTimer::singleShot(3000, this, [this, k, name, memoryBefore, loadNumber]() {
-                  const qint64 now = processMemory();
-                  if (_loads != loadNumber || _slots[size_t(k)].instrument != name || memoryBefore < 0 || now < 0)
-                        return;
-                  _slots[size_t(k)].memory = std::max(_slots[size_t(k)].memory, now - memoryBefore);
-                  emit changed();
-                  });
+            else
+                  finishLoad(std::move(pl), *library);
             }
+      if (maxLoads < 0)
+            harvest(*library, 0);
+      if (remaining)
+            *remaining += int(_pending.size());
+      applyMixer(score);                      // (instances still loading in the background: at their finish, and the idle timer)
+      // the idle timer from the first sync on, a background preload's too: the Mixer's mute and solo
+      // from anywhere (OSC, the old part editor …) and the plug-ins' controllers (Vst3Synth::idle)
+      // follow while the score's patches still load, not only once a play has synced them all
+      if (!_idle.isActive())
+            _idle.start();
       if (remaining && *remaining > 0) {                  // (not all loaded yet: nothing released)
             if (waiting)
                   QApplication::restoreOverrideCursor();
@@ -962,7 +1424,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             for (const SoundLib::Route& r : routes)
                   if (!r.instrument->kit)
                         if (Vst3Plugin* p = vst->plugin(r.port * 16 + r.channel))
-                              applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
+                              LibraryControllers::applyParameters(p, r, values, &_slots[r.port * 16 + r.channel].patchValues);
             // automation: each slot's parameter ids by the part's main patch controller index (the
             // renderer's ME_PARAMETER events), as titled on this slot's instance
             for (const SoundLib::Route& r : routes) {
@@ -980,14 +1442,18 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   }
             }
       _spares.clear();
+      if (_batch && !_batch->ended)
+            batchEnd(*library);
+      else if (maxLoads < 0 && syncClock.elapsed() >= 50)
+            logTime(*library, QString("At play: nothing to load, ready in %1 ms (the routes worked out %2 ms, the parameters set)")
+                    .arg(syncClock.elapsed()).arg(routesMs, 0, 'f', 0));
       if (waiting)
             QApplication::restoreOverrideCursor();
-      if (!_idle.isActive())
-            _idle.start();
       emit changed();
       return ok;
 #else
       Q_UNUSED(score);
+      Q_UNUSED(maxLoads);
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
       return !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN;
@@ -997,6 +1463,12 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
 void SoundLibraryHost::release()
       {
 #ifdef USE_VST3
+      // (an instance still loading on a worker thread goes once it is done)
+      while (!_pending.empty()) {
+            if (_pending.front()->done.valid())
+                  _pending.front()->done.wait();
+            _pending.erase(_pending.begin());
+            }
       Vst3Synth* vst = synth();
       for (int k = 0; k < 64; ++k) {
             if (_slots[k].editor)
@@ -1005,6 +1477,8 @@ void SoundLibraryHost::release()
                   vst->setPlugin(k, nullptr);
             _slots[k] = Slot();
             }
+      _slotParts.fill(nullptr);
+      _slotScore = nullptr;
       _spares.clear();
       _idle.stop();
       emit changed();
@@ -1034,6 +1508,91 @@ void SoundLibraryHost::routesMayChange()
       if (mscore)
             for (MasterScore* s : mscore->scores())
                   s->setPlaylistDirty();
+      }
+
+//---------------------------------------------------------
+//   applyMixer
+//    the Mixer's values of each part to its slots; score: the one synced (null: the synced
+//    score, if it is still open). A part is matched by pointer against the score's parts only
+//---------------------------------------------------------
+
+void SoundLibraryHost::applyMixer(const Score* score)
+      {
+#ifdef USE_VST3
+      Vst3Synth* vst = synth();
+      if (!vst || !_slotScore)
+            return;
+      if (score && score->masterScore() != _slotScore)
+            return;
+      if (!score) {
+            if (!mscore)
+                  return;
+            bool open = false;
+            for (MasterScore* s : mscore->scores())
+                  open = open || s == _slotScore;
+            if (!open)
+                  return;
+            }
+      MasterScore* ms = const_cast<MasterScore*>(_slotScore);
+      for (const Part* part : ms->parts()) {
+            SoundLib::PartMix m;
+            bool computed = false;
+            for (int k = 0; k < 64; ++k) {
+                  if (_slotParts[size_t(k)] != part)
+                        continue;
+                  if (!computed) {
+                        m = SoundLib::partMix(part, true);
+                        computed = true;
+                        }
+                  vst->setMix(k, m.volume, m.pan, m.muted);
+                  }
+            }
+#else
+      Q_UNUSED(score);
+#endif
+      }
+
+//---------------------------------------------------------
+//   applyPartControllers
+//    live (the Controllers window, also during playback): the part's controllers that are plug-in
+//    parameters at values (its own, as the window has them now) on every loaded slot of the part at
+//    once: its patch, extras, copies for other tunings. Unticked (no value): the patch's own again
+//    (Slot::patchValues). A controller an automation lane plays is left to the lane
+//---------------------------------------------------------
+
+std::vector<int> SoundLibraryHost::applyPartControllers(MasterScore* ms, const Part* part, const PartControllers::Values& values)
+      {
+#ifdef USE_VST3
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      Vst3Synth* vst = synth();
+      const Part* master = PartPlaybackModes::masterPart(part);
+      if (!library || SoundLib::output() != SoundLib::Output::PLUGIN || !vst || !ms || !master || ms != _slotScore)
+            return {};
+      std::map<const Part*, PartControllers::Values> all = PartControllers::read(ms);
+      if (values.empty())
+            all.erase(master);
+      else
+            all[master] = values;
+      std::vector<QString> skip;
+      for (const Automation::Lane& lane : Automation::lanes(master, Automation::read(ms)))
+            skip.push_back(lane.target);
+      return LibraryControllers::applyPart(vst, SoundLib::routes(ms, *library), master, all,
+                                           [this](int slot) { return &_slots[size_t(slot)].patchValues; }, skip);
+#else
+      Q_UNUSED(ms);
+      Q_UNUSED(part);
+      Q_UNUSED(values);
+      return {};
+#endif
+      }
+
+std::vector<int> SoundLibraryHost::slotsOf(const Part* part) const
+      {
+      std::vector<int> found;             // ("slots" is Qt's macro)
+      for (int k = 0; k < 64; ++k)
+            if (part && _slotParts[size_t(k)] == part)
+                  found.push_back(k);
+      return found;
       }
 
 //---------------------------------------------------------
@@ -1079,6 +1638,50 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
 //   SoundLibraryExport
 //---------------------------------------------------------
 
+#ifdef USE_VST3
+std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float sampleRate, QString* error,
+                                                             std::map<int, QString>* patches)
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!library) {
+            if (error)
+                  *error = QObject::tr("No sound library");
+            return nullptr;
+            }
+      const QString path = SoundLibraryHost::pluginPath(*library, error);
+      if (path.isEmpty())
+            return nullptr;
+      std::shared_ptr<Vst3Synth> own(new Vst3Synth);
+      own->init(sampleRate);
+      own->setVarispeed(library->varispeed);
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      for (const SoundLib::Route& r : routes) {
+            if (r.instrument->kit)
+                  continue;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
+            if (!p)
+                  return nullptr;
+            QString e;
+            if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
+                && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e))
+                  qWarning("Sound library: %s", qPrintable(e));
+            LibraryControllers::applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
+            own->setParameterIds(r.port * 16 + r.channel, parameterIds(p.get(), r, routes));
+            own->setPlugin(r.port * 16 + r.channel, std::move(p));
+            if (patches)
+                  (*patches)[r.port * 16 + r.channel] = r.instrument->name;
+            }
+      return own;
+      }
+#else
+std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score*, float, QString* error, std::map<int, QString>*)
+      {
+      if (error)
+            *error = QObject::tr("This MuseScore was built without plug-in hosting.");
+      return nullptr;
+      }
+#endif
+
 SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, float sampleRate)
       {
 #ifdef USE_VST3
@@ -1093,33 +1696,26 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
             }
       else {
             // no sequencer (a conversion from the command line): instances of its own
-            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-            const QString path = SoundLibraryHost::pluginPath(*library, &error);
-            if (path.isEmpty()) {
+            _own = loadInstances(score, sampleRate, &error);
+            if (!_own) {
                   qWarning("Sound library: %s", qPrintable(error));
                   return;
                   }
-            _own.reset(new Vst3Synth);
-            _own->init(sampleRate);
-            _own->setVarispeed(SoundLib::current() && SoundLib::current()->varispeed);
-            const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
-            for (const SoundLib::Route& r : routes) {
-                  if (r.instrument->kit)
-                        continue;
-                  std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, &error);
-                  if (!p) {
-                        qWarning("Sound library: %s", qPrintable(error));
-                        return;
-                        }
-                  if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
-                      && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &error))
-                        qWarning("Sound library: %s", qPrintable(error));
-                  applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
-                  _own->setParameterIds(r.port * 16 + r.channel, parameterIds(p.get(), r, routes));
-                  _own->setPlugin(r.port * 16 + r.channel, std::move(p));
-                  }
             _vst = _own.get();
             }
+      // the Mixer: volume, pan and mute of each library part (an export plays mute but not solo,
+      // as MuseScore's own sounds in it: exportaudio.cpp)
+      {
+            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+            if (library) {
+                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+                        _vst->setExportMix(k, 100, 64, false);
+                  for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+                        const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
+                        _vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, m.muted);
+                        }
+                  }
+      }
       _synth = synth;
       _synth->addGuest(_vst);
       _vst->beginExport(sampleRate);
@@ -1127,6 +1723,23 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
       Q_UNUSED(score);
       Q_UNUSED(synth);
       Q_UNUSED(sampleRate);
+#endif
+      }
+
+SoundLibraryExport::SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own)
+      {
+#ifdef USE_VST3
+      if (!own)
+            return;
+      _own = own;
+      _vst = _own.get();
+      _synth = synth;
+      _synth->addGuest(_vst);
+      _vst->beginExport(sampleRate);
+#else
+      Q_UNUSED(synth);
+      Q_UNUSED(sampleRate);
+      Q_UNUSED(own);
 #endif
       }
 
@@ -1160,24 +1773,146 @@ bool SoundLibraryExport::play(const NPlayEvent& event)
 //   SoundLibraryDialog
 //---------------------------------------------------------
 
-//---------------------------------------------------------
-//   editControllers
-//    the part's values for its patch's controllers (SoundLib::Controller), kept in the score
-//    (partcontrollers.h, undoable); unticked: the map's default (or the patch's own value)
-//---------------------------------------------------------
-
 // the part's patches: each with its slot in Vst3Synth, -1: none (MIDI output, a kit)
 using PartPatches = std::vector<std::pair<const SoundLib::LibInstrument*, int>>;
 
-static void editControllers(QWidget* parent, MasterScore* ms, const Part* part, const PartPatches& patches)
+//---------------------------------------------------------
+//   ControllersWindow
+//    the part's values for its patches' controllers (SoundLib::Controller), heard at once, also
+//    during playback (the owner, 2026-09-29: "make what I do in the mixer or sound library controller
+//    reflect in the live playback"): a plug-in parameter on every loaded slot of the part
+//    (SoundLibraryHost::applyPartControllers), a MIDI controller sent on the part's routes and the
+//    events rendered before corrected (Seq::libraryControllersChanged). Not modal: playback goes on,
+//    and can be started and stopped while it is open. The score's metaTag follows the window (without
+//    undo, a moment after a change: a restart renders the values heard); OK makes it one undoable
+//    change, Cancel (or closing it) puts back, live, what the part had when it opened
+//---------------------------------------------------------
+
+class ControllersWindow : public QDialog {
+      QPointer<MasterScore> _ms;
+      const Part* _part;                        // (the master score's)
+      std::vector<SoundLib::Controller> _controllers;
+      struct Row { QCheckBox* on; QSpinBox* value; };
+      std::vector<Row> _rows;
+      PartControllers::Values _opened;          // the part's values when the window opened
+      PartControllers::Values _live;            // heard now
+      QTimer _write;                            // the metaTag, a moment after the last change
+      bool _finished { false };
+
+      bool valid() const
+            {
+            return _ms && _ms->parts().contains(const_cast<Part*>(_part));
+            }
+      PartControllers::Values fromRows() const
+            {
+            // (the values of other controllers, another library's, stay)
+            PartControllers::Values values = _opened;
+            for (size_t i = 0; i < _rows.size(); ++i) {
+                  if (_rows[i].on->isChecked())
+                        values[_controllers[i].id] = _rows[i].value->value();
+                  else
+                        values.erase(_controllers[i].id);
+                  }
+            return values;
+            }
+      QMap<QString, QString> tagsWith(const PartControllers::Values& values) const
+            {
+            std::map<const Part*, PartControllers::Values> all = PartControllers::read(_ms);
+            if (values.empty())
+                  all.erase(_part);
+            else
+                  all[_part] = values;
+            QMap<QString, QString> tags = _ms->metaTags();
+            const QString value = PartControllers::write(_ms, all);
+            if (value.isEmpty())
+                  tags.remove(PartControllers::metaTag);
+            else
+                  tags.insert(PartControllers::metaTag, value);
+            return tags;
+            }
+      // the metaTag, without undo (the renderer reads it: not while a chunk renders in the background)
+      void setTags(const QMap<QString, QString>& tags, bool rerender)
+            {
+            if (seq)
+                  seq->waitForRendering();
+            _ms->setMetaTags(tags);
+            if (rerender)
+                  emit _ms->playlistChanged();      // (the next start renders the score again)
+            }
+      void writeQuietly()
+            {
+            if (!valid())
+                  return;
+            const QMap<QString, QString> tags = tagsWith(_live);
+            if (tags != _ms->metaTags())
+                  setTags(tags, true);
+            }
+      void goLive(const PartControllers::Values& values)
+            {
+            if (!valid()) {
+                  _finished = true;
+                  close();
+                  return;
+                  }
+            if (values == _live)
+                  return;
+            if (SoundLib::output() == SoundLib::Output::PLUGIN && SoundLibraryHost::available())
+                  SoundLibraryHost::instance()->applyPartControllers(_ms, _part, values);
+            if (seq)
+                  seq->libraryControllersChanged(_ms, _part, _live, values);
+            _live = values;
+            _write.start();
+            }
+
+   public:
+      ControllersWindow(QWidget* parent, MasterScore* ms, const Part* part, const PartPatches& patches);
+      const Part* part() const            { return _part; }
+      const MasterScore* score() const    { return _ms; }
+
+      void accept() override
+            {
+            _write.stop();
+            if (!_finished && valid()) {
+                  _finished = true;
+                  goLive(fromRows());
+                  _write.stop();
+                  // one undoable change, from what the part had when the window opened
+                  const QMap<QString, QString> after = tagsWith(_live);
+                  setTags(tagsWith(_opened), false);
+                  if (after != _ms->metaTags()) {
+                        _ms->startCmd();
+                        _ms->undo(new ChangeMetaTags(_ms, after));
+                        _ms->endCmd();
+                        }
+                  emit _ms->playlistChanged();
+                  }
+            _finished = true;
+            QDialog::accept();
+            }
+      void reject() override
+            {
+            _write.stop();
+            if (!_finished && valid()) {
+                  _finished = true;
+                  goLive(_opened);
+                  _write.stop();
+                  writeQuietly();
+                  }
+            _finished = true;
+            QDialog::reject();
+            }
+      };
+
+ControllersWindow::ControllersWindow(QWidget* parent, MasterScore* ms, const Part* part, const PartPatches& patches)
+   : QDialog(parent), _ms(ms), _part(PartPlaybackModes::masterPart(part))
       {
+      setModal(false);
       const SoundLib::LibInstrument* li = patches.front().first;
       // the controllers of all its patches, by id (a value is the part's, for every patch that has it)
-      std::vector<SoundLib::Controller> controllers;
       for (const auto& pp : patches)
             for (const SoundLib::Controller& c : pp.first->allControllers)
-                  if (std::none_of(controllers.begin(), controllers.end(), [&c](const SoundLib::Controller& x) { return x.id == c.id; }))
-                        controllers.push_back(c);
+                  if (std::none_of(_controllers.begin(), _controllers.end(), [&c](const SoundLib::Controller& x) { return x.id == c.id; }))
+                        _controllers.push_back(c);
       // a plug-in parameter a loaded patch doesn't have (its title as the map guesses it)
       auto missing = [&patches](const SoundLib::Controller& c) {
             QStringList names;
@@ -1196,86 +1931,96 @@ static void editControllers(QWidget* parent, MasterScore* ms, const Part* part, 
 #endif
             return names;
             };
-      QDialog d(parent);
-      d.setWindowTitle(QObject::tr("Controllers: %1").arg(part->partName()));
-      QVBoxLayout* layout = new QVBoxLayout(&d);
-      QLabel* info = new QLabel(QObject::tr("What %1 plays these at. Unticked: the library map's default, else the "
-                                             "patch's own setting. Staff text can change a MIDI controller from its note on. "
-                                             "A plug-in parameter is set when playback starts; \"not in\" names a loaded "
-                                             "patch that has no parameter of that title.")
-                                   .arg(li->name), &d);
+      QSet<QString> automated;
+      for (const Automation::Lane& lane : Automation::lanes(_part, Automation::read(ms)))
+            automated.insert(lane.target);
+      setWindowTitle(QObject::tr("Controllers: %1").arg(part->partName()));
+      QVBoxLayout* layout = new QVBoxLayout(this);
+      QLabel* info = new QLabel(QObject::tr("What %1 plays these at. A change is heard at once, also during playback: a "
+                                             "plug-in parameter on all the part's patches, a MIDI controller from now on "
+                                             "(where a staff text has set it, from its next note on). OK keeps the values in "
+                                             "the score (undoable); Cancel puts back what the part had. Unticked: the "
+                                             "library map's default, else the patch's own setting (a MIDI controller "
+                                             "without a default keeps the value it last had until the patch loads again). "
+                                             "\"not in\" names a loaded patch that has no parameter of that title.")
+                                   .arg(li->name), this);
       info->setWordWrap(true);
       layout->addWidget(info);
       QGridLayout* grid = new QGridLayout;
       layout->addLayout(grid);
       std::map<const Part*, PartControllers::Values> all = PartControllers::read(ms);
-      const Part* mp = PartPlaybackModes::masterPart(part);
-      const PartControllers::Values own = all.count(mp) ? all[mp] : PartControllers::Values();
-      struct Row { QCheckBox* on; QSpinBox* value; };
-      std::vector<Row> rows;
+      _opened = all.count(_part) ? all[_part] : PartControllers::Values();
+      _live = _opened;
       int r = 0;
-      for (const SoundLib::Controller& c : controllers) {
-            QCheckBox* on = new QCheckBox(c.name, &d);
-            QSlider* slider = new QSlider(Qt::Horizontal, &d);
+      for (const SoundLib::Controller& c : _controllers) {
+            QCheckBox* on = new QCheckBox(c.name, this);
+            QSlider* slider = new QSlider(Qt::Horizontal, this);
             slider->setRange(0, 127);
-            QSpinBox* spin = new QSpinBox(&d);
+            QSpinBox* spin = new QSpinBox(this);
             spin->setRange(0, 127);
             const QStringList lacking = missing(c);
-            QLabel* where = new QLabel(c.cc >= 0 ? QObject::tr("CC %1").arg(c.cc)
-                                     : lacking.isEmpty() ? QObject::tr("parameter \"%1\"").arg(c.param)
-                                     : QObject::tr("parameter \"%1\": not in %2").arg(c.param, lacking.join(", ")), &d);
+            QString text = c.cc >= 0 ? QObject::tr("CC %1").arg(c.cc)
+                         : lacking.isEmpty() ? QObject::tr("parameter \"%1\"").arg(c.param)
+                         : QObject::tr("parameter \"%1\": not in %2").arg(c.param, lacking.join(", "));
+            if (automated.contains(c.id) || (c.cc >= 0 && automated.contains(QString("cc%1").arg(c.cc))))
+                  text += " " + QObject::tr("(an automation lane plays it)");
+            QLabel* where = new QLabel(text, this);
             where->setWordWrap(true);
+            auto it = _opened.find(c.id);
+            spin->setValue(it != _opened.end() ? it->second : qMax(0, c.defaultValue));
+            slider->setValue(spin->value());
+            on->setChecked(it != _opened.end());
+            slider->setEnabled(on->isChecked());
+            spin->setEnabled(on->isChecked());
             QObject::connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue);
             QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), slider, &QSlider::setValue);
             QObject::connect(on, &QCheckBox::toggled, slider, &QWidget::setEnabled);
             QObject::connect(on, &QCheckBox::toggled, spin, &QWidget::setEnabled);
-            auto it = own.find(c.id);
-            spin->setValue(it != own.end() ? it->second : qMax(0, c.defaultValue));
-            on->setChecked(it != own.end());
-            slider->setEnabled(on->isChecked());
-            spin->setEnabled(on->isChecked());
+            // live: each move of the slider, each value typed, each tick
+            QObject::connect(spin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { goLive(fromRows()); });
+            QObject::connect(on, &QCheckBox::toggled, this, [this]() { goLive(fromRows()); });
             grid->addWidget(on, r, 0);
             grid->addWidget(slider, r, 1);
             grid->addWidget(spin, r, 2);
             grid->addWidget(where, r, 3);
-            rows.push_back({ on, spin });
+            _rows.push_back({ on, spin });
             ++r;
             }
-      QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
-      QObject::connect(buttons, &QDialogButtonBox::accepted, &d, &QDialog::accept);
-      QObject::connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+      QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+      QObject::connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+      QObject::connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
       layout->addWidget(buttons);
-      d.resize(560, d.sizeHint().height());
-      if (d.exec() != QDialog::Accepted)
-            return;
+      resize(560, sizeHint().height());
+      _write.setSingleShot(true);
+      _write.setInterval(200);
+      QObject::connect(&_write, &QTimer::timeout, this, [this]() { writeQuietly(); });
+      QObject::connect(this, &QDialog::finished, this, &QObject::deleteLater);
+      // (the score closed: nothing to put back)
+      QObject::connect(ms, &QObject::destroyed, this, [this]() { _finished = true; deleteLater(); });
+      }
 
-      // the part's values: those of other controllers (another library's) stay
-      PartControllers::Values values = own;
-      for (size_t i = 0; i < rows.size(); ++i) {
-            const QString& id = controllers[i].id;
-            if (rows[i].on->isChecked())
-                  values[id] = rows[i].value->value();
-            else
-                  values.erase(id);
+//---------------------------------------------------------
+//   editControllers
+//    the part's Controllers window: one per part, raised when it is open already
+//---------------------------------------------------------
+
+static void editControllers(MasterScore* ms, const Part* part, const PartPatches& patches)
+      {
+      static std::vector<QPointer<ControllersWindow>> open;
+      open.erase(std::remove_if(open.begin(), open.end(), [](const QPointer<ControllersWindow>& w) { return !w; }), open.end());
+      for (const QPointer<ControllersWindow>& w : open) {
+            if (w->score() == ms && w->part() == PartPlaybackModes::masterPart(part)) {
+                  w->show();
+                  w->raise();
+                  w->activateWindow();
+                  return;
+                  }
             }
-      all[mp] = values;
-      QMap<QString, QString> tags = ms->metaTags();
-      const QString value = PartControllers::write(ms, all);
-      if (value.isEmpty())
-            tags.remove(PartControllers::metaTag);
-      else
-            tags.insert(PartControllers::metaTag, value);
-      if (tags == ms->metaTags())
-            return;
-      if (seq && seq->isPlaying())
-            seq->stopWait();
-      ms->startCmd();
-      ms->undo(new ChangeMetaTags(ms, tags));
-      ms->endCmd();
-      ms->setPlaylistDirty();
-      // (the plug-in parameters: on the instances now, when they are loaded)
-      if (SoundLib::output() == SoundLib::Output::PLUGIN && SoundLibraryHost::available())
-            SoundLibraryHost::instance()->sync(ms);
+      // (the main window its parent: it stays when the Sound Library window closes)
+      ControllersWindow* w = new ControllersWindow(mscore, ms, part, patches);
+      open.push_back(w);
+      w->show();
+      w->raise();
       }
 
 SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> library, SoundLib::Output output, QWidget* parent)
@@ -1393,7 +2138,7 @@ void SoundLibraryDialog::rebuild()
                               QPushButton* ctrl = new QPushButton(tr("Controllers…"));
                               _tree->setItemWidget(item, CONTROLLERS, ctrl);
                               MasterScore* ms = score->masterScore();
-                              connect(ctrl, &QPushButton::clicked, this, [this, ms, part, patches]() { editControllers(this, ms, part, patches); });
+                              connect(ctrl, &QPushButton::clicked, this, [ms, part, patches]() { editControllers(ms, part, patches); });
                               }
                         }
                   if (r.instrument->kit) {
@@ -1427,6 +2172,38 @@ void SoundLibraryDialog::rebuild()
                               }
                         if (!host->showEditor(slot, &error))
                               QMessageBox::warning(this, windowTitle(), error);
+                        });
+                  // (for finding where Kontakt keeps a setting, e.g. Max voices, 2026-09-29: the running instance's
+                  // state as a file to hand back; the setups stay the library's, never written from it)
+                  show->setContextMenuPolicy(Qt::CustomContextMenu);
+                  const QString patchName = r.instrument->name;
+                  connect(show, &QWidget::customContextMenuRequested, this, [this, host, slot, show, patchName](const QPoint& at) {
+                        QMenu menu;
+                        QAction* save = menu.addAction(tr("Save Kontakt's state for diagnosis"));
+                        if (menu.exec(show->mapToGlobal(at)) != save)
+                              return;
+#ifdef USE_VST3
+                        Vst3Synth* vst = host->synth();
+                        Vst3Plugin* p = vst ? vst->plugin(slot) : nullptr;
+                        if (!p) {
+                              QMessageBox::warning(this, windowTitle(), tr("%1 is not loaded.").arg(patchName));
+                              return;
+                              }
+                        const QString folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                               + "/MuseScore Sound Library Check";
+                        QDir().mkpath(folder);
+                        const QString file = QString("%1/%2 state %3.vst3state").arg(folder, patchName,
+                                                    QDateTime::currentDateTime().toString("yyyy-MM-dd HHmmss"));
+                        QFile f(file);
+                        if (!f.open(QIODevice::WriteOnly) || f.write(p->state()) <= 0) {
+                              QMessageBox::warning(this, windowTitle(), tr("Could not write %1.").arg(QDir::toNativeSeparators(file)));
+                              return;
+                              }
+                        QMessageBox::information(this, windowTitle(), tr("Saved to %1 (only this file: the patch's setup is unchanged).")
+                                                 .arg(QDir::toNativeSeparators(file)));
+#else
+                        Q_UNUSED(slot);
+#endif
                         });
                   }
             if (!partItem) {
@@ -1540,6 +2317,38 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             recommended->setToolTip(tr("Per family, from the measured dynamics and a loudness model of hearing: short notes as "
                                        "loud as held notes sound (measure the dynamics with this build first)"));
             h->addWidget(recommended);
+            // the owner's ear: a family's setting that sounds right, kept in dynamics.json (heardBalanceDb)
+            // as a reference Recommended fits its weight of the shorts' attacks to (SoundLib::fitSalience)
+            QPushButton* heardRight = new QPushButton(tr("Heard right"), row);
+            heardRight->setToolTip(tr("Tell MuseScore a family's setting sounds right to you: Recommended then weighs how "
+                                      "much short notes' attacks stand out so that it gives what you heard"));
+            QMenu* heardMenu = new QMenu(heardRight);
+            heardRight->setMenu(heardMenu);
+            h->addWidget(heardRight);
+            connect(heardMenu, &QMenu::aboutToShow, this, [this, heardMenu]() {
+                  heardMenu->clear();
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+                  if (!cal || !_library)
+                        return;
+                  const std::map<QString, double> heard = SoundLib::heard(*_library, *cal);
+                  for (auto& b : _balance) {
+                        const QString fam = b.first;
+                        const double v = b.second->value();
+                        auto h = heard.find(fam);
+                        const QString now = h == heard.end() ? QString() : tr(" (now %1 dB)").arg(h->second);
+                        heardMenu->addAction(tr("%1 sounds right at %2 dB%3").arg(fam).arg(v).arg(now), this, [this, fam, v]() {
+                              setHeard(fam, v, false);
+                              });
+                        }
+                  if (!cal->heardBalanceDb.empty()) {
+                        heardMenu->addSeparator();
+                        for (const auto& f : cal->heardBalanceDb) {
+                              const QString fam = f.first;
+                              heardMenu->addAction(tr("Forget %1's %2 dB (back to the library's)").arg(fam).arg(f.second), this,
+                                                   [this, fam]() { setHeard(fam, 0, true); });
+                              }
+                        }
+                  });
             h->addStretch();
             connect(recommended, &QPushButton::clicked, this, [this]() {
                   const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
@@ -1568,7 +2377,8 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             if (!SoundLib::dynamicsCalibration())
                   row->setEnabled(false), row->setToolTip(tr("Measure the dynamics first (below)"));
 
-            // even dynamic steps (SoundLib::evenStep)
+            // even dynamic steps (SoundLib::evenStep; disabled for now: SoundLib::evenStepsEnabled)
+            if (SoundLib::evenStepsEnabled()) {
             _evenSteps = new QComboBox(scoreBox);
             _evenSteps->addItem(tr("Off: as the library plays them"), int(SoundLib::EvenSteps::OFF));
             _evenSteps->addItem(tr("Volume, judged by ear"), int(SoundLib::EvenSteps::VOLUME_HEARING));
@@ -1584,7 +2394,18 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                                       "Needs the dynamics measured (below); Volume needs a measurement made with this build."));
             QLabel* el = new QLabel(tr("Even dynamic steps:"), scoreBox);
             el->setToolTip(_evenSteps->toolTip());
-            form->addRow(el, _evenSteps);
+            // (the owner, 2026-09-28: switching while listening, the settings were hard to tell apart; one
+            // audio file per setting to compare)
+            QWidget* evenRow = new QWidget(scoreBox);
+            QHBoxLayout* eh = new QHBoxLayout(evenRow);
+            eh->setContentsMargins(0, 0, 0, 0);
+            eh->addWidget(_evenSteps);
+            QPushButton* compare = new QPushButton(tr("Export each to audio…"), evenRow);
+            compare->setToolTip(tr("This score as a WAV file with each setting (Off and the four), to compare them"));
+            eh->addWidget(compare);
+            eh->addStretch();
+            connect(compare, &QPushButton::clicked, this, &SoundLibraryOptions::exportEvenSteps);
+            form->addRow(el, evenRow);
             if (!SoundLib::dynamicsCalibration())
                   _evenSteps->setEnabled(false);
             connect(_evenSteps, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
@@ -1602,6 +2423,7 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                                                                          "with this build (below), then a restart of MuseScore. "
                                                                          "Until then the dynamics play as before."));
                   });
+            }
       }
       layout->addWidget(scoreBox);
 
@@ -1688,6 +2510,51 @@ void SoundLibraryOptions::load()
             }
       }
 
+// the score exported once per even steps setting (SoundLib::EvenSteps), "<score> - 1 Off.wav" …, the
+// score's own setting put back (not an edit: nothing to undo or save)
+void SoundLibraryOptions::exportEvenSteps()
+      {
+      if (!_score || !mscore)
+            return;
+      const QFileInfo* fi = _score->fileInfo();
+      const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder for the audio files"), fi->absolutePath());
+      if (dir.isEmpty())
+            return;
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      const QString base = fi->completeBaseName().isEmpty() ? QString("Score") : fi->completeBaseName();
+      const QMap<QString, QString> keep = _score->metaTags();
+      const std::pair<SoundLib::EvenSteps, QString> modes[5] = {
+            { SoundLib::EvenSteps::OFF, "1 Off" },
+            { SoundLib::EvenSteps::VOLUME_HEARING, "2 Volume by ear" },
+            { SoundLib::EvenSteps::VOLUME_ENERGY, "3 Volume by energy" },
+            { SoundLib::EvenSteps::RECORDING_HEARING, "4 Recording by ear" },
+            { SoundLib::EvenSteps::RECORDING_ENERGY, "5 Recording by energy" } };
+      QStringList written;
+      bool ok = true;
+      for (const auto& m : modes) {
+            QMap<QString, QString> tags = keep;
+            if (m.first == SoundLib::EvenSteps::OFF)
+                  tags.remove(SoundLib::evenStepsMetaTag);
+            else
+                  tags.insert(SoundLib::evenStepsMetaTag, SoundLib::evenStepsName(m.first));
+            _score->setMetaTags(tags);
+            _score->setPlaylistDirty();
+            const QString path = dir + "/" + base + " - " + m.second + ".wav";
+            if (!mscore->saveAudio(_score, path)) {
+                  ok = false;
+                  break;
+                  }
+            written << QFileInfo(path).fileName();
+            }
+      _score->setMetaTags(keep);
+      _score->setPlaylistDirty();
+      if (ok)
+            QMessageBox::information(this, windowTitle(), tr("Written in %1:\n%2").arg(QDir::toNativeSeparators(dir), written.join("\n")));
+      else
+            QMessageBox::warning(this, windowTitle(), tr("The audio export failed after %1 file(s).").arg(written.size()));
+      }
+
 // a score metaTag as an undoable change, then played again
 void SoundLibraryOptions::setMetaTag(const char* tag, const QString& value)
       {
@@ -1730,6 +2597,26 @@ void SoundLibraryOptions::setBalance(bool libraryDefaults)
       for (const auto& b : _balance)
             values[b.first] = b.second->value();
       setMetaTag(SoundLib::shortBalanceMetaTag, libraryDefaults ? QString() : SoundLib::writeShortBalance(values, *cal));
+      load();
+      }
+
+void SoundLibraryOptions::setHeard(const QString& family, double db, bool forget)
+      {
+      if (!_library)
+            return;
+      const QString file = SoundLibraryHost::calibrationFile(*_library);
+      SoundLib::DynamicsCalibration cal;
+      if (!cal.read(file))
+            return;
+      if (forget)
+            cal.heardBalanceDb.erase(family);
+      else
+            cal.heardBalanceDb[family] = db;
+      if (!cal.write(file)) {
+            QMessageBox::warning(this, windowTitle(), tr("Could not write %1").arg(QDir::toNativeSeparators(file)));
+            return;
+            }
+      SoundLibraryHost::loadCalibration();
       load();
       }
 

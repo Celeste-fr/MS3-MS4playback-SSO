@@ -388,6 +388,33 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   per family, shorts matched in energy to the held note (balance 0) at pp / mf / ff, how much louder they
   sound, the median negated to 0.5 dB. Advanced Options › *Recommended* (right of *Library's*); the report
   lists the recommendations. Needs one background dynamics run with this build. Test `perceivedLoudness`.
+  **Attack salience** (the owner, 2026-09-28, "Whence": strings -4 dB "def sounds better", the loudness
+  model said +1: a short's sharp, bright attack stands out more than its loudness, and short-term loudness's
+  22 ms smoothing hides the transient). `ArticulationCheck::attackSalience(clip)`: Glasberg & Moore 2002's
+  instantaneous loudness from the same ERB-spaced filters as 4th-order gammatones in the time domain (Patterson
+  et al. 1992, Hohmann 2002's complex one-pole cascade; power per 1 ms on perceivedLoudnessDb's scale, same
+  compression; short FFT windows, G&M's own multi-resolution way, smeared a steady tone over more filters: +3 dB),
+  smoothed only by a
+  5 ms temporal window (ERD ~8 ms, Plack & Moore 1990): `fastDb`; the same with Zwicker's sharpness weighting
+  g(z) per band (DIN 45692; brightness makes onsets salient: Huang & Elhilali 2017): `salienceDb`; the rise
+  10 -> 90 % (`riseMs`, informative only). The dynamics check stores `DynamicsResult::attack` / `riseMs` per curve
+  point (results.json "attack", "riseMs"), dynamics.json "attack" (`DynamicsCurve::attack`, `attackAt`).
+  Model (`SoundLib::recommendation`, `fitSalience`): per family, over the energy-matched shorts at pp/mf/ff,
+  L = median perceived difference, S = median of (attack diff - perceived diff); recommended = -(L + w S).
+  ONE free parameter, w (weight of attack salience), least squares over the owner's references
+  (`heard()`: map `<Dynamics heard="strings=-4">` = `Library::heardBalance`, overridden/extended by
+  dynamics.json "heardBalanceDb", set in Advanced Options › *Heard right* menu, `SoundLibraryOptions::setHeard`):
+  w = sum S(-L-t) / sum S^2, not under 0; one reference is reproduced exactly. No attack curves (a dynamics.json
+  from before) or no reference with them: loudness only, exactly as before. The report ("# Dynamics balance")
+  lists per family loudness only, with attack salience (L, S, notes), heard right, and w with the families it
+  was fitted on; each short's line: at mf matched, how it sounds and its attack beyond that. The test synth's
+  articulation 62: a short with a 4 ms click of high harmonics. Tests `attackSalience`, `salienceFit`,
+  `dynamicsCheck`. Untried with SSO: needs a re-measurement (the 2026-09-28 12:30 one has no attack curves);
+  S for SSO's families, hence w and the other families' numbers, unknown until then. What S holds (synthetic,
+  at one loudest-50-ms energy, attack minus perceived): steady tones 0-1 dB (mid; +3 at 4 kHz, +13 at 8 kHz:
+  the sharpness weighting), a softly rising decaying short +3.6, the same with a 3 ms 7-12 kHz click +23. So
+  S is mostly "how much short-term loudness's 22 ms integration marks a short down" plus the attack's click
+  and brightness; w between 0 (loudness only) and 1 (no integration beyond the ear's 5 ms window).
   **Even dynamic steps** (the owner, 2026-09-28; "try both", decide by ear): SSO's held notes climb 5–12 dB pp→mf
   and 1–4 dB (sometimes less than 0) mf→ff on CC1 32/80/112. `SoundLib::evenStep(heldCurve, mode, cc)`: the held
   note's own range, ppp (CC 16) to fff (127), split linearly over MS4's CC scale; judged on the energy or the
@@ -492,7 +519,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   not done. MuseScore crashed as it closed (c000000d, after the zip; the supervisor logs it and goes on).
   **Every sound** (the owner, 2026-09-30, "yes", after the list of what dynamics and timing hadn't covered; no other
   branch had it: main's dynamics check, with attack salience, still skips kits and keyswitched patches):
-  `Measure every SSO sound in background.bat` runs `--check-dynamics --all-sounds --extract-patches all`, then
+  `Measure what's left of SSO in background.bat` (was "Measure every SSO sound …" until 2026-09-30: each step leaves out
+  the patches earlier runs did, so the same .bat measures only what is left) runs `--check-dynamics --all-sounds
+  --extract-patches all`, then
   `--check-timing --all-sounds …` (`allSoundsMode`; `runHeadless(…, everything)`, `_everything`). Every patch of the
   library (the 541 `<Patch>` too), every articulation (also those no notation plays), each drum hit with a key on its
   own key (no switch, no other key tried: `soundsToMeasure`, `drumSettings`; results `drum`, `key`, value -1), a
@@ -524,7 +553,30 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `finishLibraryEvents` copies them to the part's extra patches. Parameters are set on the hosted
   instances by `SoundLibraryHost::sync` (and the command-line export), `applyParameters`, via
   `Vst3Plugin::parameterId(title)`. UI: *View › Sound Library…* › *Controllers…* per part
-  (undoable). From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
+  (undoable).
+  **Live (2026-09-29, branch `live-controls`; the owner: "make what I do in the mixer or sound library
+  controller reflect in the live playback")**: the Controllers window (`ControllersWindow` in
+  soundlibraryhost.cpp) is not modal and no longer stops playback; one per part (raised when open).
+  Each move / tick is heard at once: plug-in parameters on every loaded slot of the part at once
+  (`SoundLibraryHost::applyPartControllers` -> `LibraryControllers::applyPart`, audio/vst3/librarycontrollers.*:
+  patch, extras, copies for other tunings; unticked: `Slot::patchValues` puts the patch's own back); MIDI
+  controllers by `Seq::libraryControllersChanged` -> `PartControllers::liveChanges` (the main patch's CCs on
+  every route of the part, as the renderer sends them; not sent where a staff text is in force at the play
+  position; left out where an automation lane plays the controller) sent through the sequencer (the audio
+  thread, `Seq::putEvent`, hosted or MIDI out). The events rendered ahead before the change (~10 measures,
+  a CC at each chunk's start) would put the old value back: `PartControllers::LiveOverrides` in the audio
+  thread (SeqMsgId::LIBRARY_CC_LIVE) plays a route's CC whose value is one the part had before as the live
+  value (-1: dropped), until the score is rendered again (`collectEvents` sets `_libLiveClear`). The metaTag
+  follows 200 ms after a change without undo (`Seq::waitForRendering` first: the background renderer reads
+  metaTags) and emits `playlistChanged`, so a restart renders what is heard; OK turns it into one undoable
+  `ChangeMetaTags` from the values at open; Cancel / closing puts them back live. `Vst3Plugin::setParameter`
+  is now safe from the GUI thread while the audio thread plays: the processor's change goes through the
+  component handler's `edits` (mutex, taken at the next `process()`), not straight into `inChanges` (the
+  audio thread's; the old path raced at sync too). Limits: a staff text's value equal to an old part value
+  is corrected too until playback restarts; a CC with no default, unticked, keeps its last value in the
+  plug-in (MuseScore never knew the patch's own). Tests `liveControllers`, `liveParameters` (all slots,
+  heard on sounding notes, Cancel, untick, a lane, 1000 settings while another thread plays),
+  `liveMidiControllers`. Not tried with Kontakt. From an extract: `tools/soundlibraries/controllers_from_extract.py <folder>` prints
   suggested `CONTROLLERS` / `PATCH_CONTROLLERS` lines for `gen_spitfire_sso.py`. Test:
   `tst_soundlibrary::controllers`. SSO's map has them since 2026-09-27 (the owner: "build the
   controls"), all as Kontakt parameters by title. **Each patch's own list since 2026-09-28**: the owner's
@@ -634,11 +686,65 @@ ninja -j4 mscore                    # a full build takes about 40 minutes on 4 c
 - Linux defines both `USE_ALSA` and `USE_PORTMIDI`. PortMidi wins, so the PortMidi code
   (the owner's Windows path) compiles here too.
 
+## Playback verification (`VERIFY.md`)
+
+The owner, 2026-09-28: every playback bug needed an audio export by hand on Windows, sent over and
+analysed here; "figure out a way to automatically verify that the plugin plays back properly".
+`MuseScore3Evo.exe --verify-playback <score | folder | default> [more …] [--verify-library <lib>]
+[--verify-out <folder>] [--verify-audio <file>] [--verify-wav] [--verify-shareable]`
+(`verifyInBackground` in musescore.cpp; `mscore/playbackverify.*`; the analysis in
+`audio/vst3/playbackverify.*`, whose header lists every check and threshold). A background process
+like the extract: no window, below-normal priority, its own setups copy (`background verify
+setups`; dynamics.json always the working one's), lock and log (`background playback verify.log`),
+DialogWatch; the report folder opens when done unless `--verify-out`. Per score: the events as an
+export renders them (the working MuseScore's synthesizer.xml) and again with the library off (the
+built-in synth: the expectation); the library's patches loaded once (`SoundLibraryExport::
+loadInstances`, shared with the command-line export) and rendered offline as `saveAudio` does, mixed
+and each library part alone. Findings: `missing-attack` (a strike), `missing-note` (one note,
+chords' octaves included), `cut-short` (held articulations), `silence`, `clipping`, `drift`, each with
+measure, beat, part, pitches, times and the events on its slot around it (pedal, switch, CC1/CC11,
+parameters, same key released, an earlier same-key note still on, notes the slot started in the 2 s
+before). Output `Playback verify <date>/` + zip: report.json, summary.txt, per part strikes.tsv and
+notes.tsv, events.tsv, clips/ (2.5 s of the rendering and the built-in synth's per finding);
+`--verify-shareable` keeps only the two reports (no audio, no note lists: the owner's music in a
+public place). `Verify SSO playback in background.bat` (bin) runs it on `share/verifyplayback`
+(two scores from `tools/playbackverify/make_verify_scores.py`) or on scores dropped on it.
+**Reading a report**: `tools/playbackverify/read_verify_report.py <zip|folder> [--near <s>]`.
+**An export the owner sends**: `--verify-audio <wav>` checks it against the score's events here
+(this build's events: say so when the export came from an older one).
+Calibrated on the owner's piano score (files kept outside the repository): the pedal-change export
+(prog44) 88 missing attacks, 85 at pedal changes (the hand analysis' 28 + 1 among them; comparing with
+the fixed export, ~97 of the 220 pedal-change chords were lost, not 28); the next export (new44) 8,
+5 of them where 3a342ce later moved the pedal; the latest (v3) no missing attack, 38 missing notes,
+16 in bars 59-62 where the owner hears staccato notes missing, clustered where the slot started
+20-39 notes in the 2 s before (a voice limit?). Test without Kontakt: `MS_VERIFY_FAULT`
+(`pedal-drop:<ms>`, `drop:<n>`, `truncate:<n>:<ms>`; `MS_VERIFY_FAULT_LOG`) in `Vst3Synth`;
+`tools/playbackverify/try_with_testsynth.sh <build> <install> [work]` runs it headless with the test
+synth clean and with each fault, `check_faults.py` compares (clean: 0 findings; every detectable fault
+found; nothing else). The test synth now releases a note in 10 ms (an abrupt stop's click looked like
+an attack). Found with it: MS4 lengths overlap repeated notes of the same key (164 strikes in the
+owner's piano score), and a one-voice-per-key plug-in then ends the new note with the old note-off;
+whether Kontakt does is not known. Optional runner: `.github/workflows/verify_playback_owner_pc.yml`
+(workflow_dispatch only, environment `owner-pc` with the owner as required reviewer, no checkout,
+label `sso`; not set up; VERIFY.md has the risk and the steps). The Ableton route was assessed
+(VERIFY.md): it hosts Kontakt outside MuseScore's hosting and export paths, where the bugs were, and
+Live can't run headless.
+**First run with Kontakt (the owner, 2026-09-29, build 1c3d699, 30 s)**: the test scores gave 10 findings;
+9 `missing-note` on the Solo Violin / Solo Cello Performance legato lines were false (the owner heard A4 and
+B4 in the m3 clip): that patch sits 15-20 dB under the solo patch against the built-in synth and its notes
+build up over ~200 ms. Now the note levels' baseline is per patch (slot) and legato or not, and a note
+the library plays with a "Legato" articulation is judged on its held level (40 / 70 % of it), no attack or
+rise needed (test `playbackVerifyLegato`; on the owner's clips those 9 come out -5 … +5 dB, the limit is
+-20). Piano m13 beat 1 (C3 E4 E5, the same keys released 6 ms before, pedal up +40 ms): a missing
+attack not yet confirmed by ear.
+
 ## Tests and known state
 
 - `mtest/libmscore/soundlibrary` (`tst_soundlibrary`): text techniques, `choose`, the
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
-  routing, sampled ornaments). All tests pass.
+  routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
+  `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
+  `liveMidiControllers`). All pass (43, 3 skipped without the owner's files).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order
@@ -743,9 +849,100 @@ macOS.
   the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;
   Kontakt's *Options › Memory › Override instrument's preload size* at 30 kB fixed it. Suggest that
   first when the owner reports crackles or a slow load.
+- **Load times** (the owner, 2026-09-28: "optimize load times of the SSO plugin"; branch `sso-load-times`).
+  Where the time goes: (a) Kontakt's setState, 0.06-0.8 s a patch from its own state, 2-43 s from a setup
+  made from the `.nki` (its first load); (b) Kontakt's samples, loaded after setState returns (the extract:
+  "until it sounds" 3-5 s; ~0.7 GB a patch at the 60 kB preload); (c) MuseScore's own: `syncSome` ran
+  `SoundLib::routes` (the whole notation twice: extras, tuning lanes; 0.3-0.5 s on a 21-part, 300-measure
+  score, tst `routesTiming`) before every instance it loaded at score open and at every play, and paused
+  100 ms between loads. Done: `routesFor` (soundlibraryhost.cpp) keeps the routes until the undo stack's
+  state, the library, `routesGeneration` or the playback-mode / copies metaTags change; the gap is 0
+  (`PRELOAD_GAP_MS`); `Vst3Plugin::looseTitle` by hand (the title index: 8.3 → 0.9 ms for 4145 titles).
+  Test synth, GUI under Xvfb, 33 instances with setState at 100 ms: main had 30 loaded after 30 s, this
+  build 33 in 5.0 s. **Kontakt's own states shared** (`importResaved`): a setup not resaved here is
+  taken from another setups folder (the working one, the background runs' copies) where the same `.nki`
+  and values were resaved, if its sample list is version 3 (`KontaktSetup::sampleListVersion`; a made
+  one, version 2, is refused); a resaved setup no longer depends on Kontakt's empty state (a Kontakt
+  update made every patch slow again). **`load times.log`** now has each new instance by step
+  (`Vst3Plugin::times`: module, create, buses, activate; "one object" when the component is its own
+  controller), each load's setup size and read time and setState by step (component, controller, MIDI
+  mapping), a summary per batch ("At score open", "At play") and when the process's memory settled after
+  it (the real wait). **Worker threads** (`io/soundLibraryLoadThreads`, Advanced preferences, default 0;
+  `MS_SOUNDLIBRARY_LOAD_THREADS`): setState of up to n instances on worker threads (`Pending`,
+  `beginLoad` / `finishLoad` / `harvest`), the window free meanwhile; off until the owner's measurement
+  shows Kontakt takes it (VST 3 wants setState on the UI thread). **Measurement**: `Measure SSO load
+  times in background.bat` (bin) → `MuseScore --measure-load-times <library> [scores…]
+  [--extract-patches <file>] [--measure-probe <patch>] [--measure-threads 2,4] [--measure-no-probe]`
+  (`mscore/soundlibraryloadtimes.*`, `extractInBackground`; normal priority): report `<library> load
+  times <date>.txt` in Documents/MuseScore Sound Library Check, phases 1 each patch alone (steps, until it
+  sounds, memory and when it settles, freeing), 2 the score as at score open, 3 on 2 and 4 threads, 4 an
+  instance reused, 5 the probe (Mic 1-5 at 0; each saved script value of 0s and 1s turned over in
+  Kontakt's own state, `KontaktSetup::withScriptValues`: memory, value kept, articulations silent; the
+  best one element by element). The test synth stands in with `MSTESTSYNTH_SETSTATE_MS`,
+  `MSTESTSYNTH_STREAM_MS`, `MSTESTSYNTH_STREAM_MB` (tst `vst3LoadTimes`). Headless runs here need
+  `HOME` isolated, `~/.vst3/mstestsynth.vst3` linked, `application/startup/firstStart=false` and the
+  splash / start center off in `MuseScore3Evo.ini`, a score as `.mscz` (MusicXML asks about Edwin), no
+  `session` file; GUI runs with sound: a PulseAudio null sink (`pulseaudio -n --load=module-null-sink
+  --load=module-native-protocol-unix`, `XDG_RUNTIME_DIR` of its own). SSO itself: the owner's screenshot
+  shows a switch under each technique (most likely it unloads that technique's samples): which saved
+  script value holds them is what the probe looks for; if found, a setup per score with only the techniques
+  it plays (a new `setup=` value per part) would cut memory and load time the most. Not tried with Kontakt.
 - `mscore/vst3editor.*`: the plug-in's editor window (HWND, NSView or X11 plus IRunLoop).
 - `Seq::putEvent`: in plugin mode, external events go to `Vst3Synth` with the slot as the
   channel.
+- **The Mixer on library parts** (the owner, 2026-09-28: "the mixer panning tool doesn't work … make all
+  buttons in the Mixer work with SSO"; branch `mixer-sso`). Before, a library part's volume, pan, reverb and
+  chorus went as CC7 / CC10 / CC91 / CC93 to its *built-in* channel only, which plays nothing of it; mute
+  and solo held back its new notes but left sounding ones on (their note-offs were held back too). Now:
+  - hosted (Output::PLUGIN): `Vst3Synth::setMix(slot, volume, pan, muted)` applies them in the host to each
+    slot's stereo output before the slots are summed (any plug-in, whatever its script does with CC7 / CC10;
+    live and in audio export alike). Volume (v/100)² (FluidSynth's CC7 curve, 40 log10, relative to the
+    default 100 = 0 dB: a part at volume 100 / pan 64 plays bit-identical to before; MusicXML imports centre
+    at pan 63, 0.1 dB to the left, as for the built-in sounds); pan constant power with
+    0 dB in the middle (a balance: hard left = left +3 dB, right silent; as Live pans a stereo track); mute /
+    solo = gain 0. Gains glide (one-pole, 5 ms) so moves and mutes don't click. The plug-ins get no CC7 /
+    CC10 (Kontakt follows them by default: applied twice). `SoundLib::partMix(part, withSolo)`: the part's
+    first instrument's first channel's values (the renderer plays the part there; the Mixer's part row sets
+    all its channels), muted when every channel of the part is muted (a single channel row muted still
+    silences only its own notes, `NPlayEvent::isMuted`). `SoundLibraryHost::applyMixer` sets every slot of the
+    part (patch, extras, copies for other tunings: `_slotParts` from the last sync) after each sync (score
+    open, play), at once from `Seq::setController` / the Mixer's mute and solo, and every 50 ms (the idle
+    timer: OSC, the old part editor, the "play part only" box; since `live-controls` it runs from the first
+    sync, a score-open preload's too, not only after a complete one). Export: `SoundLibraryExport` sets
+    `setExportMix` from the routes with mute but not solo, as MuseScore's export treats its own sounds.
+  - MIDI out (Output::MIDI): `Seq::libraryMixerChanged` sends CC7 / CC10 / CC91 / CC93 on each of the part's
+    routes (only changed values; all again at each play), so a DAW or Kontakt there can follow.
+  - Mute / solo: `Seq::stopNotes(channel)` also sends sustain off and all notes off on the part's routes, and
+    `Vst3Synth` ends every key still on at CC123 (note-offs), for a plug-in that maps no CC123.
+  - Reverb / chorus, hosted: disabled with a tooltip. The library brings its own room (SSO's mic positions,
+    *Controllers…*), and MuseScore's reverb here is a master insert on the built-in sounds, not a send: its
+    Mixer knobs do nothing for built-in parts either (FluidSynth's own effects are off, as in MS4; unchanged).
+  - Patch drop-down: a library part shows its library patch, disabled (the General MIDI patch comes back with
+    "This part plays:" MuseScore 3 / 4); a kit keeps it (its sounds the library lacks play the GM kit). MIDI
+    port / channel: disabled; over MIDI out they show the library's route. Details panel: `updateLibrary`.
+  Audit (✓ worked before; → now):
+
+  | Control | Built-in part | Library, hosted | Library, MIDI out |
+  |---|---|---|---|
+  | Volume | CC7 ✓ | nothing → slot gain, all its slots | nothing → CC7 on its routes |
+  | Pan | CC10 ✓ | nothing → constant-power balance | nothing → CC10 |
+  | Mute / solo | notes held, stopNotes ✓ | new notes held, sounding ones hung → slots silenced + notes off | same → CC64 0 + CC123 on routes |
+  | Reverb / chorus | CC91/93, no effect (FluidSynth effects off) | nothing → disabled, tooltip | nothing → CC91 / CC93 |
+  | Patch | program ✓ | GM list, no effect → library patch shown | same |
+  | Port / channel | MuseScore's mapping ✓ | no effect → disabled | showed MuseScore's → the library's route |
+  | Master volume, voice mutes, drumset, playback-mode row | ✓ | ✓ (mode row now refreshes the panel) | ✓ |
+  | Audio export | mute ✓, solo not | muted parts played, volume/pan ignored → export mix | (no audio) |
+
+  - Live while playing (checked 2026-09-29, branch `live-controls`): volume, pan, mute and solo reach the slots
+    at once, playing or not, also slots still loading in the background (the mix is per slot) and right after a
+    play starts. "This part plays:" and the "Playback, all parts" drop-down still stop playback (the part's
+    notes move to other synthesizers: a new rendering and maybe patches to load); so do the Advanced Options.
+  Tests: `tst_soundlibrary::partMix`, `mixerSlot` (test synth: defaults bit-identical, 50 → -12.04 dB, 127 →
+  +4.15 dB, hard left right = 0 and left +3.01 dB, a quarter left keeps the power, mute silent with a glide,
+  export values of their own, CC123 ends notes), `mixerScore` (a part's 4 patch instances panned hard left:
+  right 0; two tuning copies at volume 50: -12.04 dB; mute: silent; the piano soloed: exactly the piano's
+  sound, and an export ignores the solo). tst_soundlibrary 32 passed, 2 skipped (29 before). A built-in
+  audio export (Dawn) is bit-identical to main's. Not tried in the GUI with a hosted plug-in.
 - Plug-in modules (`vst3plugin.cpp`, `modules()`) stay loaded until exit, as in DAWs.
   Unloading sfizz and loading it again hung MuseScore (pango types registered in GLib twice).
 

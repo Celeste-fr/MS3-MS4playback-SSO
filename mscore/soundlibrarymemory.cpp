@@ -52,4 +52,62 @@ qint64 SoundLibraryHost::processMemory()
 #endif
       }
 
+//---------------------------------------------------------
+//   systemMemory
+//---------------------------------------------------------
+
+void SoundLibraryHost::systemMemory(qint64* total, qint64* available)
+      {
+      *total = *available = -1;
+#if defined(Q_OS_WIN)
+      MEMORYSTATUSEX m;
+      m.dwLength = sizeof(m);
+      if (GlobalMemoryStatusEx(&m)) {
+            *total = qint64(m.ullTotalPhys);
+            *available = qint64(m.ullAvailPhys);
+            }
+#elif defined(Q_OS_LINUX)
+      QFile f("/proc/meminfo");
+      if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            return;
+      for (const QByteArray& line : f.readAll().split('\n')) {
+            const QList<QByteArray> w = line.simplified().split(' ');
+            if (w.size() >= 2 && w[0] == "MemTotal:")
+                  *total = w[1].toLongLong() * 1024;
+            else if (w.size() >= 2 && w[0] == "MemAvailable:")
+                  *available = w[1].toLongLong() * 1024;
+            }
+#endif
+      }
+
+//---------------------------------------------------------
+//   workerThread
+//    a thread that sets a plug-in's state (SoundLibraryHost::loadThreads): COM as on the GUI thread
+//    (a single-threaded apartment), in case the plug-in uses it while it loads. Looked up in ole32,
+//    which every Qt GUI process has loaded, so nothing more is linked
+//---------------------------------------------------------
+
+void SoundLibraryHost::workerThread(bool start)
+      {
+#if defined(Q_OS_WIN)
+      static thread_local bool initialized = false;
+      HMODULE ole = GetModuleHandleW(L"ole32.dll");
+      if (!ole)
+            return;
+      if (start) {
+            using Init = long (WINAPI*)(void*, unsigned long);
+            if (Init init = reinterpret_cast<Init>(reinterpret_cast<void*>(GetProcAddress(ole, "CoInitializeEx"))))
+                  initialized = init(nullptr, 0x2 /* COINIT_APARTMENTTHREADED */) >= 0;
+            }
+      else if (initialized) {
+            using Uninit = void (WINAPI*)();
+            if (Uninit uninit = reinterpret_cast<Uninit>(reinterpret_cast<void*>(GetProcAddress(ole, "CoUninitialize"))))
+                  uninit();
+            initialized = false;
+            }
+#else
+      Q_UNUSED(start);
+#endif
+      }
+
 } // namespace Ms

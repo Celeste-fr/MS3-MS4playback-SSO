@@ -17,6 +17,7 @@
 //  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 //=============================================================================
 
+#include <algorithm>
 #include <cmath>
 
 #include "click.h"
@@ -430,6 +431,11 @@ void Seq::start()
       QString libraryError;
       if (!SoundLibraryHost::instance()->sync(cs, &libraryError))
             mscore->showMessage(libraryError, 10000);
+      // the Mixer's values on the library parts' MIDI routes, all of them again (a DAW or synth
+      // may have been reset since)
+      _libOutsStale = true;
+      _libSent.clear();
+      libraryMixerChanged();
 
       allowBackgroundRendering = true;
       collectEvents(getPlayStartUtick());
@@ -687,6 +693,8 @@ void Seq::recomputeMaxMidiOutPort()
 
 void Seq::processMessages()
       {
+      if (_libLiveClear.exchange(false))
+            _libLive.clear();
       for (;;) {
             if (toSeq.empty())
                   break;
@@ -712,6 +720,9 @@ void Seq::processMessages()
                         break;
                   case SeqMsgId::PLAY:
                         putEvent(msg.event);
+                        break;
+                  case SeqMsgId::LIBRARY_CC_LIVE:
+                        _libLive.set(msg.event.extPort() * 16 + msg.event.extChannel(), msg.event.controller(), msg.intVal, msg.intVal2);
                         break;
                   case SeqMsgId::SEEK:
                         setPos(msg.intVal);
@@ -1485,6 +1496,7 @@ void Seq::collectEvents(int utick)
 
       if (playlistChanged) {
             midi.setScoreChanged();
+            _libLiveClear = true;         // (rendered from the score's values again: nothing to correct)
             events.clear();
             renderEvents.clear();
             renderEventsStatus.clear();
@@ -2309,6 +2321,18 @@ void Seq::stopNotes(int channel, bool realTime)
             send(NPlayEvent(ME_CONTROLLER, channel, CTRL_ALL_NOTES_OFF, 0));
             if (cs->midiChannel(channel) != 9)
                   send(NPlayEvent(ME_PITCHBEND,  channel, 0, 64));
+            // a sound library part (the Mixer's mute or solo): its routes too, its plug-ins' or MIDI
+            // out's (Vst3Synth also ends each key still on at CC123), so nothing rings on
+            if (cs && channel >= 0 && channel < int(cs->midiMapping().size()) && SoundLib::active()) {
+                  const Part* part = cs->midiMapping(channel)->part();
+                  for (const std::pair<int, int>& out : libraryOuts(part)) {
+                        for (int ctrl : { CTRL_SUSTAIN, CTRL_ALL_NOTES_OFF }) {
+                              NPlayEvent ev(ME_CONTROLLER, channel, ctrl, 0);
+                              ev.setExternal(out.first, out.second);
+                              send(ev);
+                              }
+                        }
+                  }
             }
       // the sound library's hosted plug-ins, or its MIDI outs: sustain and all notes off on
       // every channel
@@ -2338,6 +2362,131 @@ void Seq::setController(int channel, int ctrl, int data)
       {
       NPlayEvent event(ME_CONTROLLER, channel, ctrl, data);
       sendEvent(event);
+      // (the built-in synthesizer's channel had it; a library part's plug-ins or MIDI routes too)
+      if ((ctrl == CTRL_VOLUME || ctrl == CTRL_PANPOT || ctrl == CTRL_REVERB_SEND || ctrl == CTRL_CHORUS_SEND)
+          && cs && channel >= 0 && channel < int(cs->midiMapping().size()) && SoundLib::active())
+            libraryMixerChanged(cs->midiMapping(channel)->part());
+      }
+
+//---------------------------------------------------------
+//   libraryOuts
+//    a sound library part's routes (port, channel): its hosted plug-ins' slots (the host's, from its
+//    last sync), or its MIDI out routes (SoundLib::routes, found again at a start or when the
+//    score, its parts' playback or the library's routes changed)
+//---------------------------------------------------------
+
+std::vector<std::pair<int, int>> Seq::libraryOuts(const Part* part)
+      {
+      std::vector<std::pair<int, int>> outs;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!cs || !part || !library || !SoundLib::active())
+            return outs;
+      if (SoundLib::output() == SoundLib::Output::PLUGIN) {
+            for (int slot : SoundLibraryHost::instance()->slotsOf(part))
+                  outs.push_back({ slot / 16, slot % 16 });
+            return outs;
+            }
+      if (_libOutsStale || _libOutsScore != cs || _libOutsGeneration != SoundLib::routesGeneration()) {
+            _libOuts.clear();
+            for (const SoundLib::Route& r : SoundLib::routes(cs, *library))
+                  _libOuts.push_back({ r.part, { r.port, r.channel } });
+            _libOutsScore = cs;
+            _libOutsGeneration = SoundLib::routesGeneration();
+            _libOutsStale = false;
+            }
+      for (const auto& o : _libOuts)
+            if (o.first == part)
+                  outs.push_back(o.second);
+      return outs;
+      }
+
+//---------------------------------------------------------
+//   libraryMixerChanged
+//    (GUI thread) the Mixer's values of a library part (null: all) where it plays: hosted, on its
+//    slots' output (Vst3Synth::setMix: volume, pan, mute and solo; the plug-ins get no CC7 / CC10,
+//    which a plug-in following them would apply a second time); over MIDI out, as CC7 / CC10 / CC91 /
+//    CC93 on each of its routes, so a DAW or a synthesizer there can follow (mute and solo: its
+//    notes are held back, NPlayEvent::isMuted, and stopNotes ends what sounds)
+//---------------------------------------------------------
+
+void Seq::libraryMixerChanged(const Part* part)
+      {
+      if (!cs || !SoundLib::active())
+            return;
+      if (SoundLib::output() == SoundLib::Output::PLUGIN) {
+            SoundLibraryHost::instance()->applyMixer(cs);
+            return;
+            }
+      if (!_driver || !_driver->canOutputMidi())
+            return;
+      for (const Part* p : cs->parts()) {
+            if (part && p != part)
+                  continue;
+            const std::vector<std::pair<int, int>> outs = libraryOuts(p);
+            if (outs.empty() || p->instruments()->empty() || p->instruments()->begin()->second->channel().empty())
+                  continue;
+            const int channel = p->instruments()->begin()->second->channel(0)->channel();
+            if (channel < 0 || channel >= int(cs->midiMapping().size()))
+                  continue;
+            const SoundLib::PartMix m = SoundLib::partMix(p, true);
+            for (const std::pair<int, int>& out : outs) {
+                  for (const std::pair<int, int>& cv : { std::make_pair(int(CTRL_VOLUME), m.volume), std::make_pair(int(CTRL_PANPOT), m.pan),
+                                                          std::make_pair(int(CTRL_REVERB_SEND), m.reverb),
+                                                          std::make_pair(int(CTRL_CHORUS_SEND), m.chorus) }) {
+                        const int key = (out.first * 16 + out.second) * 128 + cv.first;
+                        auto sent = _libSent.find(key);
+                        if (sent != _libSent.end() && sent->second == cv.second)
+                              continue;
+                        _libSent[key] = cv.second;
+                        NPlayEvent ev(ME_CONTROLLER, channel, cv.first, cv.second);
+                        ev.setExternal(out.first, out.second);
+                        sendEvent(ev);
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryControllersChanged
+//---------------------------------------------------------
+
+void Seq::libraryControllersChanged(MasterScore* score, const Part* part, const PartControllers::Values& before,
+                                    const PartControllers::Values& after)
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!cs || score != cs || !part || !library || !SoundLib::active())
+            return;
+      const bool hosted = SoundLib::output() == SoundLib::Output::PLUGIN;
+      if (!hosted && (!_driver || !_driver->canOutputMidi()))
+            return;
+      // (an event's channel must be one of the score's: the part's first, as libraryMixerChanged)
+      const Part* master = PartPlaybackModes::masterPart(part);
+      if (!master || master->instruments()->empty() || master->instruments()->begin()->second->channel().empty())
+            return;
+      const int channel = master->instruments()->begin()->second->channel(0)->channel();
+      if (channel < 0 || channel >= int(cs->midiMapping().size()))
+            return;
+      const int tick = state == Transport::PLAY ? cs->repeatList().utick2tick(getCurTick()) : cs->playPos().ticks();
+      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(cs, SoundLib::routes(cs, *library), master,
+                                                                          before, after, tick)) {
+            NPlayEvent ev(ME_CONTROLLER, channel, c.cc, c.to < 0 ? 0 : c.to);
+            ev.setExternal(c.port, c.channel);
+            SeqMsg msg(SeqMsgId::LIBRARY_CC_LIVE, c.from, c.to);
+            msg.event = ev;
+            guiToSeq(msg);
+            if (c.send)
+                  sendEvent(ev);
+            }
+      }
+
+//---------------------------------------------------------
+//   waitForRendering
+//---------------------------------------------------------
+
+void Seq::waitForRendering()
+      {
+      if (midiRenderFuture.isRunning())
+            midiRenderFuture.waitForFinished();
       }
 
 //---------------------------------------------------------
@@ -2542,6 +2691,18 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
       // a sound library part (soundlibrary.h): to its hosted plug-in (Vst3Synth, the route as
       // the channel), or to MIDI out only, or without its articulation switches to the
       // synthesizer while there is neither
+      // (a controller the Controllers window changed live: the value rendered before plays the new one)
+      if (event.isExternal() && event.type() == ME_CONTROLLER && !_libLive.empty()) {
+            const int value = _libLive.apply(event.extPort() * 16 + event.extChannel(), event.controller(), event.value());
+            if (value < 0)
+                  return;
+            if (value != event.value()) {
+                  NPlayEvent e(event);
+                  e.setValue(value);
+                  putEvent(e, framePos);
+                  return;
+                  }
+            }
       if (event.isExternal() && SoundLib::output() == SoundLib::Output::PLUGIN) {
             const int vst = _synti->findIndex("VST3");
             if (vst >= 0) {

@@ -16,6 +16,7 @@
 */
 
 #include <set>
+#include <tuple>
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -1955,6 +1956,47 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       if (libRoutes.empty())
             return;
       const int utick2 = chunk.utick2();
+
+      // a key struck again on the same patch while its last note still sounds (a legato overlap, a note
+      // lasting into the next of its pitch): that note ends just before, as a finger lifts before it strikes
+      // again. A sampler ends a key's note at the first note off of that key, so the late one ended the new
+      // note (the owner, 2026-09-29: Piano v3.7 bars 68-69, the bass's A2 struck again 27 ticks before the
+      // last one's note off, cut at once; 164 such keys in the piece). From a little before the chunk: a note
+      // of the chunk before may still sound into it
+      {
+            std::map<std::tuple<int, int, int>, int> sounding;      // channel, patch, key -> notes on
+            for (auto i = events->lower_bound(std::max(0, chunk.utick1() - 8 * DIVISION)); i != events->end(); ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (ev.type() != ME_NOTEON || ev.librarySwitch() || !libRoutes.count(ev.channel()) || ev.libraryPatch() < 0)
+                        continue;
+                  const auto key = std::make_tuple(ev.channel(), ev.libraryPatch(), ev.pitch());
+                  if (ev.velo() == 0) {
+                        auto s = sounding.find(key);
+                        if (s != sounding.end() && s->second > 0)
+                              --s->second;
+                        continue;
+                        }
+                  int& on = sounding[key];
+                  if (on > 0 && i->first >= chunk.utick1()) {
+                        // the sounding note's note off: the next one of that key
+                        for (auto j = std::next(i); j != events->end(); ++j) {
+                              const NPlayEvent& o = j->second;
+                              if (o.type() == ME_NOTEON && o.velo() == 0 && !o.librarySwitch() && o.channel() == ev.channel()
+                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch()) {
+                                    // (the earliest note off of the key after it: the overlapping note's, or of a
+                                    // shorter note inside a held one, whose key then stays down until the held
+                                    // one's note off; right before the strike, after a unison at the same tick)
+                                    NPlayEvent off(o);
+                                    events->erase(j);
+                                    events->insert(i, std::make_pair(i->first, off));
+                                    --on;
+                                    break;
+                                    }
+                              }
+                        }
+                  ++on;
+                  }
+      }
       std::map<int, int> selected;              // channel and patch -> the switch in force
       std::map<int, int> dropOff;               // channel and patch -> the keyswitch whose note off goes too
       std::vector<std::pair<int, NPlayEvent>> copies;
@@ -2286,6 +2328,55 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                   const int to = pc->second.dynamics.spannerStop(s);
                   if (to <= from)
                         continue;
+                  // a sound library part: a pedal change after the chord it comes with, as a pianist
+                  // changes it (legato pedalling: up 40 ms after the chord, down again at 90 ms). The
+                  // owner, 2026-09-28: SSO's Grand Piano dropped about 1 chord in 8 at a pedal change
+                  // (28 of 220, 1 of 2442 elsewhere, in a piano piece's export), the pedal lifted a tick
+                  // before the chord and put down with it
+                  int down = from;
+                  int up = to;
+                  if (libParts.count(s->part())) {
+                        auto isPedal = [&](const Spanner* o) {
+                              return o != s && o->part() == s->part() && (o->isPedal() || o->isLetRing())
+                                     && (!o->staff() || o->staff()->primaryStaff());
+                              };
+                        auto after = [&](int tick, double ms) {
+                              const double beatsPerSecond = score->tempomap()->tempo(tick);
+                              return std::max(1, int(std::lround(ms / 1000.0 * beatsPerSecond * DIVISION)));
+                              };
+                        const Spanner* prev = nullptr;
+                        const Spanner* next = nullptr;
+                        for (const auto& o : score->spannerMap().map()) {
+                              if (!isPedal(o.second))
+                                    continue;
+                              const int oFrom = o.second->tick().ticks();
+                              const int oTo = pc->second.dynamics.spannerStop(o.second);
+                              if (oFrom < from && (oTo == from - 1 || oTo == from))
+                                    prev = o.second;
+                              if (oFrom > from && (oFrom == to + 1 || oFrom == to))
+                                    next = o.second;
+                              }
+                        if (prev)
+                              down = from + std::min(after(from, 90), std::max(1, (to - from) / 2));
+                        // the chord it goes up with: the next pedal's, else one of the part's starting where
+                        // this one ends (up to 5 ticks on; the owner, 2026-09-28: a chord where a pedal ended,
+                        // not a change, was missing too, the pedal up at its tick)
+                        int chordTick = next ? next->tick().ticks() : -1;
+                        for (int k = 0; chordTick < 0 && k <= 5; ++k) {
+                              if (Segment* seg = score->tick2segment(Fraction::fromTicks(to + k), true, SegmentType::ChordRest)) {
+                                    for (int track = s->part()->startTrack(); track < s->part()->endTrack(); ++track) {
+                                          if (seg->element(track) && seg->element(track)->isChord()) {
+                                                chordTick = to + k;
+                                                break;
+                                                }
+                                          }
+                                    }
+                              }
+                        if (chordTick >= 0) {
+                              const int nextLength = next ? pc->second.dynamics.spannerStop(next) - chordTick : 1 << 30;
+                              up = chordTick + std::min(after(chordTick, 40), std::max(0, nextLength / 4));
+                              }
+                        }
                   auto put = [&](int tick, int value) {
                         NPlayEvent ev(ME_CONTROLLER, channel, CTRL_SUSTAIN, value);
                         ev.setOriginatingStaff(staff);
@@ -2298,11 +2389,20 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               ev.setLayer(0);
                         events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
                         };
-                  if (from >= tick1 && from < tick2)
-                        put(from, 127);
+                  // (put in the chunk the pedal's own tick is in. Moved past its end, where playback may
+                  // jump (a repeat): the down at its tick, the up 40 ms before the chord instead of after
+                  // it, still well clear of it)
                   const bool lastChunk = score->lastMeasure() && tick2 >= score->lastMeasure()->endTick().ticks();
-                  if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2))
-                        put(to, 0);
+                  if (from >= tick1 && from < tick2)
+                        put(down < tick2 ? down : from, 127);
+                  if ((to >= tick1 && to < tick2) || (lastChunk && to == tick2)) {
+                        int at = up;
+                        if (!(up < tick2 || (lastChunk && up == tick2))) {
+                              const double beatsPerSecond = score->tempomap()->tempo(to);
+                              at = std::max(std::max(from + 1, tick1), to - int(std::lround(0.040 * beatsPerSecond * DIVISION)));
+                              }
+                        put(at, 0);
+                        }
                   continue;
                   }
             if (s->isPedal() || s->isLetRing()) {

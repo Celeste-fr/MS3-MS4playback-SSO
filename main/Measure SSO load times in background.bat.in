@@ -1,0 +1,26 @@
+@echo off
+rem Measure how long Spitfire Symphony Orchestra takes to load in MuseScore, and what could make it faster.
+rem
+rem 1. Close MuseScore (it would hold the orchestra's samples in memory too, and the times would be off).
+rem 2. Drag the score (or scores) you want faster onto this file. Double-clicked with no score, it
+rem    measures a few patches of each family (Violins 1, Violas, Celli, Violins 1 - Performance,
+rem    Flutes a2, Horns a2, Trumpet Solo, Timpani).
+rem
+rem It starts a MuseScore of its own with no window (MuseScore --measure-load-times, see
+rem mscore/soundlibraryloadtimes.h): each patch alone, the score as MuseScore loads it, the same with
+rem 2 and 4 threads, an instance reused, then a probe of one patch's saved settings (which ones unload
+rem samples). It uses a copy of your setups (Documents\MuseScore Sound Library Check\background load
+rem times setups) and writes nothing in MuseScore's own folders. About 20 to 60 minutes. If Kontakt
+rem shows a message, it is closed after 30 s and written in the report.
+rem
+rem When it is done, the folder Documents\MuseScore Sound Library Check opens: hand back the newest
+rem "Spitfire Symphony Orchestra load times <date>.txt" (one text file; also written as it goes, so
+rem send it even if the run stopped half way).
+rem To stop it: Task Manager, end @MSCORE_OUTPUT_NAME@.exe (the one without a window).
+
+start "" "%~dp0@MSCORE_OUTPUT_NAME@.exe" --measure-load-times "Spitfire Symphony Orchestra" %*
+
+echo The load times are being measured in the background (scores: %*).
+echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background load times.log
+echo That folder opens when it is done. Keep MuseScore closed until then.
+timeout /t 15

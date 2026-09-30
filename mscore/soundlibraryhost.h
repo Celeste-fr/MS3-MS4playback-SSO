@@ -44,6 +44,7 @@
 #include <QPointer>
 #include <QTimer>
 
+#include "libmscore/partcontrollers.h"
 #include "libmscore/soundlibrary.h"
 
 class QTableWidget;
@@ -81,6 +82,11 @@ class SoundLibraryHost : public QObject {
             qint64 memory { -1 };         // bytes the process grew by as it loaded (-1: not measured)
             };
       std::array<Slot, 64> _slots;
+      // the part each slot plays (its patch, an extra, a copy for another tuning) and the score, from
+      // the last sync: the Mixer's values go to the slots (applyMixer). Only compared with the score's
+      // parts before use (a part deleted since isn't read)
+      std::array<const Part*, 64> _slotParts {};
+      const MasterScore* _slotScore { nullptr };
       // instances set aside by syncSome: a patch the score being loaded doesn't play in their slot
 #ifdef USE_VST3
       struct Spare {
@@ -88,6 +94,23 @@ class SoundLibraryHost : public QObject {
             Slot slot;
             };
       std::vector<Spare> _spares;
+      // loads whose setup is being set on a worker thread (loadThreads() > 0), finished (resaved,
+      // put in their slot) on the GUI thread
+      struct Pending;
+      std::vector<std::unique_ptr<Pending>> _pending;
+      std::unique_ptr<Pending> beginLoad(int slot, const QString& name, bool setup, const SoundLib::Library& library,
+                                         const QString& path, QString* error);
+      void finishLoad(std::unique_ptr<Pending> pl, const SoundLib::Library& library);
+      bool harvest(const SoundLib::Library& library, int keep);   // finished pending loads (keep >= 0: waits till no more are left)
+      bool pendingOn(int slot) const;
+      // a batch of loads (at play, at score open) for load times.log: what each step took, then how
+      // long until the process's memory stops growing (Kontakt goes on loading samples after setState)
+      struct Batch;
+      std::unique_ptr<Batch> _batch;
+      QTimer _settleTimer;
+      void batchStart(const QString& kind);
+      void batchEnd(const SoundLib::Library& library);
+      void settleStep();
 #endif
       QTimer _idle;
       QTimer _preloadTimer;
@@ -95,8 +118,12 @@ class SoundLibraryHost : public QObject {
       int _loads { 0 };                   // instances loaded so far
       int _preloadFrom { 0 };             // _loads when the preload started
       bool _preloadLogged { false };      // its list of what to load is in load times.log
+      bool _syncing { false };            // in syncSome (the event loop runs while it waits for a worker thread)
       QElapsedTimer _lastInput;           // since the user's last key, click or wheel
       static constexpr int INPUT_PAUSE_MS = 0;     // a background load waits for this long a pause (the owner, 2026-09-27: 0, no wait)
+      // the pause between two loads at score open, for the window to repaint and take input: 0 (a
+      // zero timer runs once the events waiting are done; it was 100 ms, 2.5 s of a full orchestra's 11)
+      static constexpr int PRELOAD_GAP_MS = 0;
       void preloadStep();
       bool syncSome(Score* score, QString* error, int maxLoads, int* remaining);
 
@@ -132,6 +159,17 @@ class SoundLibraryHost : public QObject {
                                    QString* error = nullptr);            // made first when needed
       static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
                             const QString& pluginPath, QString* error = nullptr);
+      // after a setup was set on p (loadSetup does both): load times.log, and a setup made from the
+      // .nki replaced by Kontakt's own state (resave). setupMs: reading or making the setup
+      static void setupLoaded(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QByteArray& state,
+                              double setupMs);
+      // worker threads that set the setups (Vst3Plugin::setState) while MuseScore goes on: 0 (default)
+      // on the GUI thread, one at a time, as VST 3 asks; n: up to n at once. Advanced preference
+      // io/soundLibraryLoadThreads, or MS_SOUNDLIBRARY_LOAD_THREADS in the environment. Untried with
+      // Kontakt: the load times measurement (--measure-load-times) tries it
+      static int loadThreads();
+      static void workerThread(bool start);       // on a worker thread before and after (COM on Windows)
+      static void logLoadTime(const SoundLib::Library& library, const QString& line);   // load times.log
 
       Vst3Synth* synth() const;
       bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
@@ -140,8 +178,17 @@ class SoundLibraryHost : public QObject {
       bool loaded(int slot) const;
       qint64 memory(int slot) const       { return slot >= 0 && slot < int(_slots.size()) ? _slots[size_t(slot)].memory : -1; }
       static qint64 processMemory();      // the process's own memory (Task Manager's "Memory"), bytes; -1: unknown
+      static void systemMemory(qint64* total, qint64* available);   // the computer's, bytes; -1: unknown
       bool showEditor(int slot, QString* error = nullptr);
       static void routesMayChange();
+      // the Mixer (volume, pan, mute, solo) of the score's library parts on their slots
+      // (Vst3Synth::setMix): after each sync, at once from the Mixer and Seq::setController, and every
+      // 50 ms (so mute and solo from anywhere reach them: the Mixer, the old part editor, OSC)
+      void applyMixer(const Score* score = nullptr);
+      std::vector<int> slotsOf(const Part* part) const;   // the part's slots (last sync)
+      // live (the Controllers window): the part's plug-in parameter controllers at values (its own
+      // now) on all its loaded slots at once; the slots set
+      std::vector<int> applyPartControllers(MasterScore* ms, const Part* part, const PartControllers::Values& values);
 
    protected:
       bool eventFilter(QObject* o, QEvent* e) override;
@@ -163,7 +210,14 @@ class SoundLibraryExport {
 
    public:
       SoundLibraryExport(Score* score, MasterSynthesizer* synth, float sampleRate);
+      // with instances loaded before (loadInstances): the playback verification renders a score
+      // several times (mixed, each part alone) and loads the library's patches once
+      SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own);
       ~SoundLibraryExport() { finish(); }
+      // instances of its own for the score's library parts (no sequencer: a conversion from the
+      // command line); patches: slot -> the patch loaded there
+      static std::shared_ptr<Vst3Synth> loadInstances(Score* score, float sampleRate, QString* error,
+                                                      std::map<int, QString>* patches = nullptr);
       void finish();                            // before the MasterSynthesizer goes
       bool play(const NPlayEvent& event);       // true: a library part's event, played here
       };
@@ -211,6 +265,9 @@ class SoundLibraryOptions : public QDialog {
       void load();
       void setLaneSettings(bool libraryDefaults);
       void setBalance(bool libraryDefaults);
+      // the owner's ear: family's short notes setting db sounds right (dynamics.json heardBalanceDb); forget: drop it
+      void setHeard(const QString& family, double db, bool forget);
+      void exportEvenSteps();
       void setMetaTag(const char* tag, const QString& value);
       void startBackground(const QStringList& args, const QString& what);
 

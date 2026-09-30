@@ -1,0 +1,76 @@
+name: 'Optional: Verify playback on the owner''s PC (self-hosted, approved per run)'
+
+# OPTIONAL, and off until the owner sets up a runner (VERIFY.md, "Optional: a GitHub runner on your
+# PC"). It runs MuseScore --verify-playback with Kontakt and Spitfire Symphony Orchestra, which exist
+# only on the owner's PC, and uploads the report for an agent to read (gh run download).
+#
+# A self-hosted runner lets whoever can push to this repository run code on the PC, under the
+# runner's Windows account. The safeguards here:
+#   - started by hand only (workflow_dispatch): never on push or pull_request, so nothing from a fork
+#     or a pull request reaches the PC;
+#   - every run waits for the owner's approval: the job uses the environment "owner-pc", which the
+#     owner creates with themselves as required reviewer (Settings > Environments);
+#   - the repository is not checked out on the PC: the job only downloads the MuseScore that a run of
+#     "Test: Sound library on Windows" built on GitHub's own machines, and runs it;
+#   - one run at a time; a report on the owner's own scores is uploaded without audio clips or note
+#     lists (--verify-shareable): artifacts of a public repository can be downloaded by anyone.
+# The simpler way needs none of this: "Verify SSO playback in background.bat", double-clicked.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: 'The run (its number in the URL, e.g. 18012345678) of "Test: Sound library on Windows" whose MuseScore to check'
+        required: true
+      scores:
+        description: '"default": the test scores that come with MuseScore; or a folder on the PC (its report goes up without audio or note lists)'
+        required: true
+        default: 'default'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: verify-playback-owner-pc
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'Celeste-fr/MS3-MS4playback-SSO'
+    runs-on: [self-hosted, Windows, sso]
+    environment: owner-pc
+    timeout-minutes: 360
+    steps:
+    - name: Download that MuseScore
+      uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ inputs.build_run_id }}
+        github-token: ${{ github.token }}
+        pattern: MuseScore-soundlibrary-win64-*
+        path: ${{ runner.temp }}\verify-musescore
+    - name: Verify playback (Kontakt, offline, below-normal priority)
+      shell: pwsh
+      env:
+        SCORES: ${{ inputs.scores }}
+        OUT: ${{ runner.temp }}\verify-report
+      run: |
+        $exe = Get-ChildItem -Recurse "$env:RUNNER_TEMP\verify-musescore" -Filter MuseScore3Evo.exe | Select-Object -First 1
+        if (-not $exe) { Write-Error "MuseScore3Evo.exe not in the artifact"; exit 1 }
+        Get-Content (Join-Path $exe.DirectoryName BUILD.txt) -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force $env:OUT | Out-Null
+        $list = @('--verify-playback', "`"$env:SCORES`"", '--verify-library', '"Spitfire Symphony Orchestra"', '--verify-out', "`"$env:OUT`"")
+        if ($env:SCORES -ne 'default') { $list += '--verify-shareable' }
+        $p = Start-Process -FilePath $exe.FullName -ArgumentList $list -Wait -PassThru
+        Write-Host "MuseScore exited with $($p.ExitCode)"
+        $log = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'MuseScore Sound Library Check\background playback verify.log'
+        if (Test-Path $log) { Get-Content $log -Tail 40 }
+        $zip = Get-ChildItem $env:OUT -Filter 'Playback verify *.zip' | Sort-Object LastWriteTime | Select-Object -Last 1
+        if (-not $zip) { Write-Error "no report"; exit 1 }
+        Get-Content (Join-Path $env:OUT ($zip.BaseName + '\summary.txt')) -TotalCount 60
+    - name: Upload the report
+      uses: actions/upload-artifact@v4
+      with:
+        name: playback-verify-${{ inputs.build_run_id }}
+        path: ${{ runner.temp }}\verify-report\Playback verify *.zip
+        retention-days: 14

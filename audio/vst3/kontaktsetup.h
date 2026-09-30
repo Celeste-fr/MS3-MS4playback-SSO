@@ -57,6 +57,16 @@ QString programName(const QByteArray& program);
 std::map<QString, QByteArray> scriptValues(const QByteArray& program); // all its scripts' values
 QStringList samplePaths(const QByteArray& component, QString* error);   // a state's sample list
 QByteArray presetTail(const QByteArray& data);  // what follows a state's or an .nki's preset data (its marker)
+// the version of a state's sample list (FILENAME_LIST_EX): 2 as in an .nki (a setup made from one), 3
+// as Kontakt 8 writes it (its own state, which it loads about 20 times faster); -1: none, unreadable
+int sampleListVersion(const QByteArray& component);
+
+// a state with its first slot's script values set (as fromEmpty sets them in an .nki's program: only
+// where the patch's script has that name with a value of the same length), everything else kept (so
+// Kontakt's own state stays its own: its sample list, its program as it saved it). For the load
+// times measurement's probe of the patch's saved script values (which ones unload samples)
+QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& values, QString* error,
+                            int* valuesSet = nullptr);
 
 } // namespace KontaktSetup
 } // namespace Ms

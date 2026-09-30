@@ -30,3 +30,11 @@ install (DIRECTORY
       PATTERN ".*" EXCLUDE
       )
 
+
+# scores MuseScore --verify-playback checks when given none (mscore/playbackverify.h,
+# tools/playbackverify/make_verify_scores.py)
+install (DIRECTORY
+      verifyplayback
+      DESTINATION ${Mscore_SHARE_NAME}${Mscore_INSTALL_NAME}
+      PATTERN ".*" EXCLUDE
+      )

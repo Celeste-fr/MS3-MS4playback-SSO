@@ -45,8 +45,9 @@ All numbers are in `tools/soundlibraries/` (see CLAUDE.md for how each was measu
 - **Dynamics curves**: every sound of all 700 patches (1804: articulations, 504 drum hits, one-sound patches;
   `sso_sound_dynamics.json`, build 261's run, 2026-09-30). Done.
 - **Timing and legato**: 96 patches (the mapped ones a notation plays); the every-sound timing run was stopped after 87 of
-  700 (the owner, 2026-09-30). To do: `Measure every SSO sound in background.bat` again (it skips the dynamics, done, and
-  the 87), then `timing_from_check.py` on the zips.
+  700 (the owner, 2026-09-30). To do: `Measure what's left of SSO in background.bat` (the dynamics step ends at once, the
+  timing skips the 87), then `timing_from_check.py` on the zips and on the stopped run's folder (`… 2026-09-30 1134`,
+  not zipped).
 - **Parameters** measured at 0 and 1 only, not the curve between.
 
 ## Where things are
@@ -167,6 +168,18 @@ See `CLAUDE.md` › Even dynamic steps. Next: the owner runs *Measure dynamics i
 then compares the four modes of Advanced Options › *Even dynamic steps* on a score and picks one. Then: make
 the chosen one the default (or keep the switch) and drop the others if the owner wants.
 
+## Attack salience in the Recommended balance (2026-09-28, branch `attack-prominence`)
+
+See `CLAUDE.md` › Attack salience. The owner's ear put strings' shorts at -4 dB where the loudness model said +1.
+The recommendation now adds the shorts' attack salience with one weight fitted to what the owner heard right
+(map: strings -4). Next: the owner runs *Measure dynamics in the background* with a build of this branch
+(~5 min; it fills the "attack" curves), restarts, and reads summary.txt's "# Dynamics balance": per family
+loudness only / with attack salience, and the fitted weight. Strings will show -4 (the reference); the other
+families are the model's prediction: the owner tries them by ear (e.g. brass, woodwinds in a score) and, where
+one sounds right at another value, sets it in Advanced Options › *Heard right* (the fit then uses every
+reference, least squares). If the weight comes out 0 or the report says the attacks stand out no more than
+their loudness, the feature doesn't explain the ear: look at the per-short "attack … beyond that" numbers.
+
 ## Automation (2026-09-28): infrastructure in, no UI; being redone through Ableton Live
 
 The owner (2026-09-28): edit automation in Live 12 instead of an editor of our own; MuseScore keeps playing on
@@ -175,6 +188,44 @@ See `CLAUDE.md` › Automation. Earlier next steps: the UI (lanes to draw per pa
 controllers), a dynamics lane on top of the notation's, the map's controller entries for SSO's named
 controls (`gen_spitfire_sso.py` from sso_patch_controls.json), and one try with Kontakt that a parameter
 set by automation is heard (e.g. Vibrato on Violins 1).
+
+## The Mixer on library parts (2026-09-28, branch `mixer-sso`): in, waiting for the owner's Windows check
+
+The owner: "the mixer panning tool doesn't work … make all buttons in the Mixer work with SSO". See `CLAUDE.md`
+› Plugin hosting › The Mixer on library parts (audit table, design). Volume and pan act in MuseScore on each
+Kontakt instance's output (not CC7 / CC10), mute and solo silence the part's instances, reverb and chorus are
+disabled for hosted parts (SSO's own room), the patch and port / channel show the library's. Tested here with
+the test synth only. The owner, on a Windows build of this branch, with an SSO score:
+- pan a string part hard left and right while it plays (it should move smoothly, no clicks), and a part with
+  extra patches (a Performance legato plus shorts) and one with copies for other tunings: every note follows;
+- volume down and up while playing; volume 100 / pan centre sounds exactly as before;
+- mute and solo while long notes ring: they stop at once, nothing hangs, unmute brings the next notes back;
+- export audio with a part panned, quieter and muted: the file matches (solo is ignored in an export, as for
+  MuseScore's own sounds);
+- the Mixer's details panel for an SSO part: reverb / chorus greyed with the tooltip, the patch reads the SSO
+  patch, port / channel greyed; switch the part to "MuseScore 4" in "This part plays:": all back as before;
+- if Kontakt was relied on for pan (its own Pan knob): it stays where the setup put it; the Mixer adds to it.
+
+## Controllers and the Mixer live while playing (2026-09-29, branch `live-controls`): in, waiting for the owner's Windows check
+
+The owner: "make what I do in the mixer or sound library controller reflect in the live playback". The
+Controllers window (*View › Sound Library…* › *Controllers…*) was modal and stopped playback on OK; plug-in
+parameters were only set at the next play. Now it is a window of its own that playback goes on behind: each
+move is heard at once (Kontakt parameters on all the part's patches, extras and tuning copies; MIDI controllers
+sent now and the ~10 measures rendered ahead corrected), OK keeps the values (undoable), Cancel puts back what
+the part had. The Mixer was already live (volume, pan, mute, solo); the idle timer now also runs while the
+patches load at score open. See `CLAUDE.md` › Controllers › Live. Tested with the test synth only (unit tests;
+the window itself not run here). The owner, on a Windows build of this branch, with an SSO score playing:
+- open *Controllers…* for a string part and drag Mic 1-5 levels / Mic Mix Distance / Release while it plays:
+  the sound should change at once, without clicks or dropouts; the same on a part with extra patches (the
+  Performance legato plus shorts): every patch follows;
+- untick a control while playing: the patch's own setting comes back; Cancel: everything back as it was
+  when the window opened; OK: playback goes on, Ctrl+Z undoes the change (heard from the next play);
+- stop and start playback with the window open: the values stay as set in the window;
+- does Kontakt keep a value set this way (a Spitfire script could reset a mic fader on the next note)? If a
+  change is heard and then jumps back, say which control;
+- the Mixer while playing, right after pressing play and just after opening a score (patches still loading):
+  volume, pan, mute, solo act at once.
 
 ## Merging with claude/intelligent-cray-6pd4o1 (prepared 2026-09-28; done 2026-09-28 on that branch, as planned)
 
@@ -189,6 +240,31 @@ branch was still being pushed to (a38eeba, 00:47 UTC): merge once its session pa
   `CLAUDE.md` → this branch's text, adding from the other: Kontakt receives the pitch bend (run 134),
   Timpani bends ±2 semitones. Everything else merges cleanly.
 - After merging: build, `tst_soundlibrary`, `tst_tuning`; check the NIKT rule and 4d1d657 are in.
+
+## SSO load times (2026-09-28, branch `sso-load-times`): in, waiting for the owner's measurement
+
+The owner: "have a sub agent try to optimize load times of the SSO plugin". See `CLAUDE.md` › Plugin
+hosting › Load times. In: the routes worked out once (not before every instance at score open and at every
+play), no 100 ms pause between loads, a faster title index, Kontakt's own states shared between the
+working setups and the background runs' copies (no slow first load for a patch any run has loaded), a
+resaved setup kept over a Kontakt update, `load times.log` by step and per batch with when the memory
+settled. Off until measured: setState on worker threads (`io/soundLibraryLoadThreads`).
+
+The owner, once, with a build of this branch: close MuseScore, drag the score to speed up onto `Measure SSO
+load times in background.bat` (bin), wait (20-60 min), hand back `Documents\MuseScore Sound Library
+Check\Spitfire Symphony Orchestra load times <date>.txt`. Then, optionally, open that score in the new build
+and hand back `load times.log` (setups folder) too: the real score open with the new code. From the report:
+- phase 1: where a patch's time goes (new instance vs setState's component / controller; "one object" and a
+  controller part as long as the component would mean Kontakt parses its state twice), how long until it
+  sounds and how much memory;
+- phases 2 and 3: whether Kontakt takes setState on worker threads, and how much faster the score is ready.
+  Faster and no failure: make `io/soundLibraryLoadThreads` 2 or 4 by default. A hang (the run's last line
+  says so) or failures: leave it off;
+- phase 4: whether a spare taking a new patch frees the old one's samples and is faster than a new instance;
+- phase 5: whether the Mic levels at 0 free memory (then mics a score doesn't use could be set to 0), and
+  which saved script value, turned to 0, frees memory and silences which articulations. If one holds the
+  technique switches: a setup per part with only the techniques its notation plays (`usedPatches` already
+  knows them per patch), made with `KontaktSetup::withScriptValues` from Kontakt's own state.
 
 ## What the owner is doing now
 
@@ -264,4 +340,23 @@ are mapped where notation can ask for them). Still open:
   ask the owner to paste their marks if they're needed.
 - Nothing here can hear Kontakt or SSO. Say whether something was tested with the owner's
   Kontakt, the test synth or sfizz when you report.
-- Every controller and pitch bend on all 700 patches: `Measure SSO controllers in background.bat` (offline, no window; the owner to run it and hand back the extract zips; read with `read_plugin_data.py`). The first run (build b903d9a) crashed in Kontakt 16 s into Violins 1: it went offline while the patch still loaded; now only after the patch sounds in real time. The second (build fe5d050) crashed on Violas and put CC 7 back to 0 (silence, so later controllers read nothing); now each controller's own value is searched and a supervisor process restarts the run after a crash or hang, leaving that patch out (see CLAUDE.md). **Done (2026-09-28 18:48): 695 of 700 measured**, kept as `tools/soundlibraries/sso_patch_measurements.json`; missing Cimbassi a2 - Long (crashes), Curated Woodwind Ensembles, Bass Trombone Solo - Fall, Field Drum, Cimbassi a2 - Long Alt (their folders weren't zipped: ask the owner for the unzipped `… extract 2026-09-28 1346` and `… 1522` folders, or re-run those 5 with a patch list). Done (2026-09-29): 698 of 700 patches' controller links in `sso_patch_measurements.json` (see CLAUDE.md › The links run finished); the 4 with cc 23 left out now take it from a later run (672 complete, 28 not put back); per-articulation key ranges, round robins, dynamic / velocity layers, releases and lengths from the `.nki` files in `sso_nki_articulation_details.json` (CLAUDE.md › Articulations from the files). Timing per articulation and legato transitions: built (2026-09-29), `Measure SSO timing in background.bat` (CLAUDE.md › Timing, in the background); done (build 254, 2026-09-30: 96 patches in 17 minutes; the first run on build 249 had hung, now supervised and resumable); kept as `sso_articulation_timing.json`. Not yet used by playback: slurred notes on the Performance patches sound their pitch 70-430 ms after the note-on (median 185; velocity barely changes it), so starting them earlier per patch would put them in time; attacks of 100-1000 ms likewise (ask the owner first). Optional, not built: parameters between 0 and 1, loudness curves beyond the ~160 patches. Before that (run 226's links were wrong, box-based): the owner ran `Link SSO controllers in background.bat` again on the build with window cells (which named control each controller moves on 2 patches of each of 64 groups, 113, everything on the 11 left incomplete; see CLAUDE.md › Links run, › Two patches a group) and hands back the extract folders and the log; then `measurements_from_extract.py` on them and the earlier ones. Open: the Performance patches bend ±100 cents linearly, so their microtones could use pitch bend instead of varispeed (the owner's first choice); ask before building it.
+- Every controller and pitch bend on all 700 patches: `Measure SSO controllers in background.bat` (offline, no window; the owner to run it and hand back the extract zips; read with `read_plugin_data.py`). The first run (build b903d9a) crashed in Kontakt 16 s into Violins 1: it went offline while the patch still loaded; now only after the patch sounds in real time. The second (build fe5d050) crashed on Violas and put CC 7 back to 0 (silence, so later controllers read nothing); now each controller's own value is searched and a supervisor process restarts the run after a crash or hang, leaving that patch out (see CLAUDE.md). **Done (2026-09-28 18:48): 695 of 700 measured**, kept as `tools/soundlibraries/sso_patch_measurements.json`; the 5 then missing (Cimbassi a2 - Long, Curated Woodwind Ensembles, Bass Trombone Solo - Fall, Field Drum, Cimbassi a2 - Long Alt) came in later runs: all 700 are in `sso_patch_measurements.json` (672 complete, 28 not put back). Done (2026-09-29): 698 of 700 patches' controller links in `sso_patch_measurements.json` (see CLAUDE.md › The links run finished); the 4 with cc 23 left out now take it from a later run (672 complete, 28 not put back); per-articulation key ranges, round robins, dynamic / velocity layers, releases and lengths from the `.nki` files in `sso_nki_articulation_details.json` (CLAUDE.md › Articulations from the files). Timing per articulation and legato transitions: built (2026-09-29), `Measure SSO timing in background.bat` (CLAUDE.md › Timing, in the background); done (build 254, 2026-09-30: 96 patches in 17 minutes; the first run on build 249 had hung, now supervised and resumable); kept as `sso_articulation_timing.json`. Not yet used by playback: slurred notes on the Performance patches sound their pitch 70-430 ms after the note-on (median 185; velocity barely changes it), so starting them earlier per patch would put them in time; attacks of 100-1000 ms likewise (ask the owner first). Optional, not built: parameters between 0 and 1, loudness curves beyond the ~160 patches. Before that (run 226's links were wrong, box-based): the owner ran `Link SSO controllers in background.bat` again on the build with window cells (which named control each controller moves on 2 patches of each of 64 groups, 113, everything on the 11 left incomplete; see CLAUDE.md › Links run, › Two patches a group) and hands back the extract folders and the log; then `measurements_from_extract.py` on them and the earlier ones. Open: the Performance patches bend ±100 cents linearly, so their microtones could use pitch bend instead of varispeed (the owner's first choice); ask before building it.
+
+## Playback verification (2026-09-28, branch `playback-verify`)
+
+`MuseScore --verify-playback` and `Verify SSO playback in background.bat` (see `VERIFY.md`, `CLAUDE.md` ›
+Playback verification): renders scores through Kontakt offline as an export does, again with the
+built-in synth, and reports missing chords and notes, notes cut short, silences, clipping and drift,
+each with what happens on its slot at that moment. Tried here only: with the MS Test Synth and injected
+faults (all detectable faults found, nothing else flagged) and on the owner's piano exports through
+`--verify-audio`. Next:
+- the owner: a Windows build of this branch (the branch doesn't trigger the build workflow: *Run
+  workflow* on it), then double-click the `.bat` once (the test scores) and once with the piano score
+  dropped on it, and hand back both zips. Check with `read_verify_report.py`: the run time, whether the
+  clean test scores pass with Kontakt (thresholds were set on one piano score: strings and winds
+  through SSO are untried), and the piano score's missing notes in bars 59-62 with their "notes in the
+  2 s before" (a voice limit: then Kontakt's voice settings, or fewer release samples);
+- look at what the report says about repeated notes of the same key (an earlier note still on when
+  the next starts): with the test synth that cuts the new note; with Kontakt unknown;
+- the self-hosted runner workflow is there but optional; the owner is wary of it (2026-09-28).
+

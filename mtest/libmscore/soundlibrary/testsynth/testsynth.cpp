@@ -12,6 +12,7 @@
 //  Each held note plays at velocity * level, with a timbre of the articulation that was
 //  current at its note on (the articulation check listens for it), like a UACC patch:
 //    1-29, 31-89   harmonics of their own; 40-60 short (decaying), 70-80 trills (tremolo)
+//    62            short with a sharp bright attack: a 6 ms click of high harmonics, then as 40-60
 //    25            like a harmonics patch: -66 dB under pitch 72 (no sample there)
 //    26            very soft (-40 dB), like a super sul tasto
 //    14            a slow long: 200 ms linear attack, a release ringing 300 ms (exponential) after the note-off
@@ -21,7 +22,7 @@
 //    85-89         not in the patch: articulation 1 (a default)
 //    90-127        not in the patch: ignored, the articulation stays
 //  and round robins: each note a little louder or softer than the last, its harmonics a
-//  little different (±8 %). Like Kontakt, it hears no MIDI when its event input is not
+//  little different (±8 %). A note-off fades its note out in 10 ms. Like Kontakt, it hears no MIDI when its event input is not
 //  active, and it is silent when its output is not active.
 //
 //  This program is free software; you can redistribute it and/or modify
@@ -34,6 +35,13 @@
 #include <cmath>
 #include <map>
 #include <string>
+#include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <memory>
+#include <thread>
+#include <algorithm>
+#include <iterator>
 
 #include "base/source/fstreamer.h"
 #include "pluginterfaces/base/ibstream.h"
@@ -70,7 +78,22 @@ struct Voice {
       long released { -1 };         // 14: t at the note-off (it rings), else -1
       double glide { 0 };           // 24: semitones from the note it slurred from, at its start
       double glideSeconds { 0 };
+      bool silent { false };        // started while the "samples" were still loading (MSTESTSYNTH_STREAM_MS)
+      long release { -1 };          // samples left of its release (a note-off fades it out in 10 ms, as a
+                                    // sampler's release: a voice stopped at once clicks, and the click
+                                    // sounds like an attack to --verify-playback); -1: held
       };
+
+// like Kontakt loading a patch, for the tests of MuseScore's loading (only when set in the environment):
+// MSTESTSYNTH_SETSTATE_MS  setState takes that long;
+// MSTESTSYNTH_STREAM_MS    then its "samples" load on a thread of its own for that long: notes started
+//                          meanwhile play nothing;
+// MSTESTSYNTH_STREAM_MB    and the process grows by that much meanwhile (freed with the instance)
+static int envInt(const char* name)
+      {
+      const char* v = std::getenv(name);
+      return v ? std::atoi(v) : 0;
+      }
 
 static int articulationValue(ParamValue v)
       {
@@ -104,6 +127,15 @@ static float timbre(const Voice& v, double sampleRate)
             }
       if (v.articulation >= 40 && v.articulation <= 60)
             s *= std::exp(-t / 0.1);
+      else if (v.articulation == 62) {
+            s *= std::exp(-t / 0.1);
+            if (t < 0.006) {              // the attack's click: harmonics 24-40, loud
+                  double c = 0;
+                  for (int k = 24; k <= 40; ++k)
+                        c += std::sin(k * v.phase + k * 1.3);
+                  s += 8.0 * c / 17 * (1 - t / 0.006);
+                  }
+            }
       else if (v.articulation >= 70 && v.articulation <= 80)
             s *= 0.6 + 0.4 * std::sin(2 * M_PI * 8 * t);
       return float(s * 0.25 * v.gain);
@@ -128,8 +160,48 @@ class Processor : public AudioEffect {
                   current = value;
             }
 
+      std::thread streamer;
+      std::atomic<bool> streaming { false };
+      std::atomic<bool> stopStreaming { false };
+      std::vector<std::unique_ptr<char[]>> samples;
+
+      void stream()
+            {
+            if (streamer.joinable()) {
+                  stopStreaming = true;
+                  streamer.join();
+                  }
+            samples.clear();
+            const int ms = envInt("MSTESTSYNTH_STREAM_MS");
+            const int mb = envInt("MSTESTSYNTH_STREAM_MB");
+            if (ms <= 0 && mb <= 0)
+                  return;
+            stopStreaming = false;
+            streaming = true;
+            streamer = std::thread([this, ms, mb]() {
+                  const int steps = std::max(1, ms / 50);
+                  for (int i = 0; i < steps && !stopStreaming; ++i) {
+                        const size_t bytes = size_t(mb) * 1024 * 1024 / size_t(steps);
+                        if (bytes) {
+                              std::unique_ptr<char[]> b(new char[bytes]);
+                              std::memset(b.get(), 1 + i % 100, bytes);
+                              samples.push_back(std::move(b));
+                              }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(ms / steps));
+                        }
+                  streaming = false;
+                  });
+            }
+      long releaseSamples() const { return std::max(1L, long(processSetup.sampleRate * 0.01)); }
+
    public:
       Processor() { setControllerClass(ControllerUID); }
+      ~Processor() override
+            {
+            stopStreaming = true;
+            if (streamer.joinable())
+                  streamer.join();
+            }
       static FUnknown* create(void*) { return (IAudioProcessor*) new Processor; }
 
       tresult PLUGIN_API initialize(FUnknown* context) override
@@ -194,6 +266,7 @@ class Processor : public AudioEffect {
                                                 ++it;
                                           }
                                     }
+                              v.silent = streaming;
                               voices[e.noteOn.pitch] = v;
                               }
                         else if (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent) {
@@ -201,8 +274,8 @@ class Processor : public AudioEffect {
                               auto it = voices.find(pitch);
                               if (it != voices.end() && it->second.articulation == 14 && it->second.released < 0)
                                     it->second.released = it->second.t;
-                              else if (it != voices.end() && it->second.released < 0)
-                                    voices.erase(it);
+                              else if (it != voices.end() && it->second.released < 0 && it->second.release < 0)
+                                    it->second.release = releaseSamples();
                               }
                         }
                   }
@@ -220,22 +293,29 @@ class Processor : public AudioEffect {
             for (int32 i = 0; i < data.numSamples; ++i)
                   l[i] = r[i] = 0.f;
             for (auto& v : voices) {
+                  const long fade = releaseSamples();
                   Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
                         double glide = 0;
                         if (vc.glideSeconds > 0)
                               glide = vc.glide * std::max(0.0, 1 - vc.t / processSetup.sampleRate / vc.glideSeconds);
                         const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + glide + vc.tuning / 100.0 + (bend - 0.5) * 4.0) / 12.0) / processSetup.sampleRate;
-                        const float s = timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
+                        float s = vc.silent ? 0.f : timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
+                        if (vc.release >= 0) {
+                              s *= float(std::max(0L, vc.release)) / float(fade);
+                              if (vc.release > 0)
+                                    --vc.release;
+                              }
                         l[i] += s;
                         r[i] += s;
                         vc.phase += inc;
                         ++vc.t;
                         }
                   }
-            // (14's releases, once 60 dB down)
+            // (a note's release faded out; 14's ring once 60 dB down)
             for (auto it = voices.begin(); it != voices.end(); )
-                  if (it->second.released >= 0 && it->second.t - it->second.released > long(0.9 * processSetup.sampleRate))
+                  if (it->second.release == 0
+                      || (it->second.released >= 0 && it->second.t - it->second.released > long(0.9 * processSetup.sampleRate)))
                         it = voices.erase(it);
                   else
                         ++it;
@@ -255,8 +335,11 @@ class Processor : public AudioEffect {
             int32 got = 0;
             while (state->read(buf, sizeof(buf), &got) == kResultOk && got > 0)
                   all.insert(all.end(), buf, buf + got);
+            if (const int ms = envInt("MSTESTSYNTH_SETSTATE_MS"))
+                  std::this_thread::sleep_for(std::chrono::milliseconds(ms));
             if (all.size() >= 16 && std::memcmp(all.data() + 12, "hsin", 4) == 0) {
                   kontakt = all;
+                  stream();
                   return kResultOk;
                   }
             kontakt.clear();
@@ -267,6 +350,7 @@ class Processor : public AudioEffect {
             std::memcpy(&lv, all.data() + 8, 8);
             setArticulation(a);
             level = lv;
+            stream();
             return kResultOk;
             }
 

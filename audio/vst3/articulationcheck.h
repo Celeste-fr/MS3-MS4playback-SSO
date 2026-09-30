@@ -122,6 +122,9 @@ class ArticulationCheck {
             int pitch { -1 };                        // -1: silent at every pitch tried
             std::vector<std::pair<int, double>> curve;    // x, dB
             std::vector<std::pair<int, double>> perceived;   // x, perceived dB (perceivedLoudnessDb), as curve
+            // x, the attack's salience (attackSalience: salienceDb) and its rise (ms), as curve
+            std::vector<std::pair<int, double>> attack;
+            std::vector<std::pair<int, double>> riseMs;
             // asked for in full and on the controller (the part's held note): the expression CC at x
             // (EXPRESSION_POINTS, and 127) with the dynamics CC and velocity at 80, in dB and perceived dB
             std::vector<std::pair<int, double>> expression;
@@ -210,6 +213,20 @@ class ArticulationCheck {
       // (10 dB = twice as loud) summed, smoothed in time (attack 22 ms, release 50 ms); its peak, as
       // phon-like dB (33.2 log10 of the sum). Only differences mean anything
       static double perceivedLoudnessDb(const std::vector<float>& clip, double sampleRate);
+      // how much a clip's onset stands out (the owner, 2026-09-28: at one loudness a short's bright bow
+      // attack stands out more than the held note it matches): its loudness as the ear resolves it in
+      // time (Glasberg & Moore 2002's instantaneous loudness from a gammatone filterbank, every 1 ms,
+      // smoothed by a 5 ms temporal window, not short-term loudness's 22 ms), fastDb; the same with each
+      // band weighted by Zwicker's sharpness weighting (DIN 45692: the bands over ~3 kHz count more), the
+      // salience, salienceDb; and the rise of the fast loudness from 10 to 90 % of its peak (ms; a step
+      // of loudness: ~11 ms, the 5 ms window; a loud click: less, it overshoots). Peaks, on perceivedLoudnessDb's scale: a steady mid tone comes out
+      // about as loud in all three. Only differences mean anything
+      struct Attack {
+            double fastDb { -200 };
+            double salienceDb { -200 };
+            double riseMs { -1 };
+            };
+      static Attack attackSalience(const std::vector<float>& clip, double sampleRate);
       static double distance(const std::vector<double>& a, const std::vector<double>& b);
       };
 

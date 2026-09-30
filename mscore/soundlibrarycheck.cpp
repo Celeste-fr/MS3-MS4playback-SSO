@@ -1544,6 +1544,7 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             c.drivenBy = d.drivenBy();
             c.points = d.curve;
             c.perceived = d.perceived;
+            c.attack = d.attack;
             c.expression = d.expression;
             c.expressionPerceived = d.expressionPerceived;
             if (!drum && played.count(d.value))
@@ -1556,6 +1557,13 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             for (const auto& pt : d.perceived)
                   per.append(QJsonArray({ pt.first, r1(pt.second) }));
             o["perceived"] = per;
+            QJsonArray atk, rise;
+            for (const auto& pt : d.attack)
+                  atk.append(QJsonArray({ pt.first, r1(pt.second) }));
+            for (const auto& pt : d.riseMs)
+                  rise.append(QJsonArray({ pt.first, r1(pt.second) }));
+            o["attack"] = atk;
+            o["riseMs"] = rise;
             if (!d.expression.empty()) {
                   QJsonArray ex, exp;
                   for (const auto& pt : d.expression)
@@ -1931,6 +1939,16 @@ QString ArticulationCheckDialog::balanceReport() const
                         QString line = QString("   %1 %2%3 (%4), on %5: %6 dB against the held note at pp / mf / ff (was %7)")
                            .arg(flag ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
                            .arg(now.join(" / "), was.join(" / "));
+                        // matched in energy at mf, how much more its attack stands out than its loudness
+                        // says (the recommendation's S, SoundLib::recommendation)
+                        if (onVelocity && !c->attack.empty() && !ref->attack.empty() && !c->perceived.empty() && !ref->perceived.empty()) {
+                              const int cc = Ms4::expressionLevel(LEVELS[1]);
+                              const int v = c->inverse(ref->at(cc));
+                              const double l = c->perceivedAt(v) - ref->perceivedAt(cc);
+                              const double sal = c->attackAt(v) - ref->attackAt(cc) - l;
+                              line += tr("; at mf matched: sounds %1 dB, its attack %2 dB beyond that")
+                                 .arg(f1(l)).arg((sal >= 0 ? "+" : "") + f1(sal));
+                              }
                         if (flag)
                               line += tr(" — beyond its velocity range");
                         else if (!onVelocity)
@@ -1941,17 +1959,12 @@ QString ArticulationCheckDialog::balanceReport() const
             }
       if (text.isEmpty())
             return QString();
-      // the recommended short notes' settings (how much louder the matched shorts sound)
-      QStringList rec;
-      for (const char* f : SoundLib::FAMILIES) {
-            double db;
-            if (SoundLib::recommendedBalance(*_library, *cal, f, &db))
-                  rec << QString("%1 %2 dB").arg(f).arg(f1(db));
-            }
+      // the recommended short notes' settings: loudness only (how much louder the matched shorts sound)
+      // and with their attacks' salience (weighted to fit the owner's ear), per family
       return "\n# " + tr("Dynamics balance (loudest 50 ms; against the held note plus each family's short notes setting)")
-             + (rec.isEmpty() ? QString() : "\n" + tr("Recommended short notes settings (by a loudness model): %1").arg(rec.join(", ")))
-             + "\n" + text;
+             + SoundLib::recommendationReport(*_library, *cal) + "\n" + text;
       }
+
 
 //---------------------------------------------------------
 //   checkPatch
