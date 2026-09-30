@@ -93,6 +93,8 @@ if (MINGW OR MSVC)
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Verify SSO playback in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Verify SSO playback in background.bat" @ONLY NEWLINE_STYLE CRLF)
       install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Verify SSO playback in background.bat" DESTINATION bin)
+      # the Max for Live device for "Live plays the score" (LIVE.md; tools/live/make_device.py writes it)
+      install(FILES "${PROJECT_SOURCE_DIR}/tools/live/MuseScore Link.amxd" DESTINATION bin)
 endif (MINGW OR MSVC)
 
 target_include_directories(mscore PRIVATE

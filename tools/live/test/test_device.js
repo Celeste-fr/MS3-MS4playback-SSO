@@ -125,7 +125,7 @@ test("the same clip again: notes replaced; a new length: made again; never over 
       assert.ok(s.hub.sent("/live/applied").pop()[2].startsWith("other clips"));
       });
 
-test("a part found by name; an extra patch not; the device after Kontakt said", () => {
+test("a part found by name; an extra patch by \"<part> – <patch>\" or its patch alone; the device after Kontakt said", () => {
       const s = setUp();
       sendClip(s.hub, 1, "0:2", "MuseScore A", 2, "Flute", "MuseScore: Flute", true, 10, [[72, 0, 3840, 90]], 9);
       s.hub.work();
@@ -133,8 +133,26 @@ test("a part found by name; an extra patch not; the device after Kontakt said", 
       assert.ok(s.hub.sent("/live/applied").pop()[2].includes("after the instrument"));
       sendClip(s.hub, 2, "0:4", "MuseScore A", 4, "Flute", "MuseScore: Flute – Flute Legato", false, 10, [[72, 0, 3840, 90]], 10);
       s.hub.work();
+      // an extra patch is not found by its part's name (that track plays the main patch) …
       assert.ok(s.hub.sent("/live/applied").pop()[2].startsWith("no track"));
       assert.strictEqual(s.fl.clips.length, 1);
+      // … but by "<part> – <patch>" (any dash or spacing), or by the patch alone when one track has that name
+      const legato = s.live.track("Flute - Flute Legato", { inputType: "All Ins", inputChannel: "All Channels" });
+      sendClip(s.hub, 3, "0:4", "MuseScore A", 4, "Flute", "MuseScore: Flute – Flute Legato", false, 10, [[72, 0, 3840, 90]], 11);
+      s.hub.work();
+      assert.strictEqual(legato.clips.length, 1);
+      assert.strictEqual(s.live.objects[legato.clips[0]].name, "MuseScore: Flute – Flute Legato");
+      const perf = s.live.track("Solo Violin - Performance", { inputType: "All Ins", inputChannel: "All Channels" });
+      sendClip(s.hub, 4, "0:5", "MuseScore A", 5, "Violin", "MuseScore: Violin – Solo Violin - Performance", false, 10, [[72, 0, 3840, 90]], 12);
+      s.hub.work();
+      assert.strictEqual(perf.clips.length, 1);
+      // two tracks of that patch's name: neither is guessed
+      s.live.track("Solo Cello - Performance", { inputType: "All Ins", inputChannel: "All Channels" });
+      s.live.track("Solo Cello - Performance", { inputType: "All Ins", inputChannel: "All Channels" });
+      sendClip(s.hub, 5, "0:6", "MuseScore A", 6, "Cello", "MuseScore: Cello – Solo Cello - Performance", false, 10, [[48, 0, 3840, 90]], 13);
+      s.hub.work();
+      const last = s.hub.sent("/live/applied").pop();
+      assert.ok(last[2].startsWith("no track") && last[2].includes("Cello – Solo Cello - Performance"), last[2]);
       });
 
 test("a track without the device: the clip is written, and the missing device said", () => {

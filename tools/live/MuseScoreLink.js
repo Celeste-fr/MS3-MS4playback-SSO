@@ -358,10 +358,33 @@ function findTrack(t) {
             if (lt && lp && (lt === lp || lt.indexOf(lp) === 0) && loose(ch) === loose("Ch. " + t.channel))
                   return { api: tr, how: "MIDI input" };
             }
+      // by name: a main patch's track is named after the part; another patch's (an extra, such as the
+      // Performance legato, or a copy for another tuning) after its clip, "<part> – <patch>", or after the
+      // patch alone when only one track has that name
+      var names = [];
       if (t.main)
-            for (i = 0; i < all.length; ++i)
-                  if (num(all[i].get("has_midi_input")) === 1 && loose(all[i].get("name")) === loose(t.part))
-                        return { api: all[i], how: "name" };
+            names.push(loose(t.part));
+      else {
+            var full = str(t.clip).replace(/^MuseScore:\s*/, "");
+            names.push(loose(full));
+            }
+      var midi = [];
+      for (i = 0; i < all.length; ++i)
+            if (num(all[i].get("has_midi_input")) === 1)
+                  midi.push(all[i]);
+      for (i = 0; i < midi.length; ++i)
+            if (names.indexOf(loose(midi[i].get("name"))) >= 0)
+                  return { api: midi[i], how: "name" };
+      if (!t.main) {
+            var dash = str(t.clip).indexOf(" – ");
+            var patch = dash >= 0 ? loose(str(t.clip).substring(dash + 3)) : "";
+            var hits = [];
+            for (i = 0; patch && i < midi.length; ++i)
+                  if (loose(midi[i].get("name")) === patch)
+                        hits.push(midi[i]);
+            if (hits.length === 1)
+                  return { api: hits[0], how: "patch name" };
+            }
       return null;
       }
 
@@ -408,7 +431,7 @@ function writeClip(t) {
       var found = findTrack(t);
       if (!found) {
             send("/live/applied", t.key, t.hash, "no track (MIDI From " + t.port + " / Ch. " + t.channel
-                 + (t.main ? ", or named " + t.part : "") + ")", "");
+                 + ", or a track named " + (t.main ? t.part : str(t.clip).replace(/^MuseScore:\s*/, "")) + ")", "");
             return;
             }
       var tr = found.api;

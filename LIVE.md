@@ -131,33 +131,113 @@ Install loopMIDI (Tobias Erichsen) and create these ports:
 - With *Play through Live* off, MuseScore's hosted Kontakt plays them as plug-in parameter
   events, the same way as in Live.
 
-## What still needs the owner's Live set
+## Live plays the score
+
+The owner, 2026-09-29: "is it possible to have entered notes in the score live update in ableton?",
+then "what if it's the other way, when ableton is playing sound MuseScore switches off".
+
+Each sound-library route of the score (a part's patch; its extra patches such as the Performance
+legato and its copies for other tunings are routes of their own) becomes **one clip in Live's
+arrangement**, on the track that plays it, from beat 1 over the whole score. The clip is rewritten a
+moment after every edit in MuseScore (typing, undo, redo), only for the routes that changed. **Live
+plays** the clips; MuseScore sends the library nothing and follows Live's transport.
+
+### How it works
+
+- **What a clip holds:** what MuseScore's playback renders for that route, repeats written out: the
+  notes and their velocities, and the controllers as **carrier notes** on the top keys 116-127, one
+  key per controller (UACC CC32, CC1, CC11, CC64 pedal … the table is `LiveClips::CARRIER_CCS`,
+  velocity = value + 1, so 127 plays as 126). The Live Object Model can write a clip's notes but not
+  its MIDI controller envelopes, so the controllers travel as notes, and the **MuseScore Link**
+  device, placed before Kontakt on the track, turns each carrier into its controller (and drops its
+  note-off). So everything is in the clip and played by Live's own clock: sample-exact with the notes,
+  also in an export or a freeze, and chased when playback starts in the middle (Live's *Chase MIDI
+  Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
+  placed just before it (0.26 ms at 120 bpm), switches before dynamics, as the renderer orders them.
+  Plug-in parameter events (MuseScore's own lanes and *Controllers…*) are left out: Live's automation
+  lanes play those.
+- **Time:** the Live Object Model can't write the song's tempo automation, so Live plays at one tempo,
+  the score's first, and the clips hold the notes at their real times (seconds as MuseScore plays them:
+  tempo changes, rit./accel. lines, fermatas, repeats). With one tempo throughout, Live's bars are the
+  score's bars. Otherwise Live's grid drifts from the bars; the device puts a locator at each played bar
+  ("MS 12"; with a rehearsal mark "MS 17 B") so they can be found. Automation drawn in Live lines up
+  with the notes either way; the import reads such a set's beats at its tempo back into score time.
+- **Transport:** Live is the clock. Live's Play: MuseScore starts at Live's position (the score's cursor
+  follows, MuseScore's own built-in parts play along); a difference of more than 0.15 s moves it; Live's
+  Stop stops it; stopped, the cursor follows Live's position. MuseScore's Play starts Live at the play
+  position instead, its Stop stops Live. MuseScore sends no MIDI clock in this mode.
+- **The clips belong to MuseScore.** Notes edited in them in Live are overwritten at the next change of
+  the score. Draw automation in the track's lanes, not in the clips. The device never touches a clip it
+  didn't make (another name) and makes none over a track's other clips.
+- **The link:** OSC over UDP on this computer only (127.0.0.1): MuseScore sends to port 9001
+  (Preferences › Advanced `io/live/clipsPort`), the device answers on 9002. The device says hello every 2 s;
+  a new device (the set opened again) gets everything again; each clip is confirmed and sent again if
+  not. One device (the first loaded) does the work for all tracks; any other copy takes over when it goes.
+- **Status:** Mixer › Advanced Options… › Ableton Live shows whether the device answers, when the last
+  update was confirmed, and each route that found no track.
+
+### Setting it up
+
+1. **Install the device.** Copy `tools/live/MuseScore Link.amxd` (in the Windows build's folder:
+   `MuseScore Link.amxd` next to MuseScore3Evo.exe) into Live's User Library, e.g.
+   `Documents\Ableton\User Library\Presets\MIDI Effects\Max MIDI Effect`. It needs Max for Live
+   (Suite) and Max 9 (Live 12.2 comes with 9.0.7): its script runs in Max's `v8` object.
+2. **Live's settings:** EXT (external sync) **off**: Live is the clock here. *Options › Chase MIDI
+   Notes* on (the default).
+3. **One MIDI track per route** (*View › Sound Library…* lists them: each part, and under it (+) its
+   extra patches such as "Solo Violin - Performance"):
+   - Kontakt 8 with that patch, articulation switching "UACC & UI only", as in section 3 above;
+   - **MuseScore Link before Kontakt** on the track (drag it to the left of Kontakt);
+   - the track found either by *MIDI From* = the route's port and channel (as for playing through
+     Live), or by **name**: the part's name for its main patch ("Violin"), "<part> – <patch>" for another
+     patch ("Violin – Solo Violin - Performance"; any dash) or the patch's name alone when only one track
+     has it.
+   The device sets each track's *Monitor* to Auto, so the clips play (it sets In when you go back to
+   *Play through Live*, where MuseScore's stream plays).
+4. **In MuseScore:** Mixer › Advanced Options… › Ableton Live › **Live plays the score** (it also
+   turns on *Play through Live*: the library goes to MIDI output, MuseScore's Kontakt instances are
+   released). The status line should say the device answers and list no route without a track.
+5. Play from Live or from MuseScore.
+
+### What is tested, and what only Live can show
+
+Tested here: the clips' contents (`tst_liveintegration` clipsTimeline, clipsControllers, clipsScore,
+clipsChanges, clipsOsc, clipsImport); the device's script against a stand-in for Live
+(`tools/live/test/test_device.js`: hub, tracks by port / name, clips replaced, the owner's clips left,
+locators, tempo, transport, Monitor) and its patcher and `.amxd` (`test_patch.js`: carrier notes to
+controllers); and the whole chain with a real MuseScore build (GUI under Xvfb) talking to the stand-in
+over UDP (`tools/live/test/fake_live_server.js`): a two-part score with a repeat and a tempo change
+gave four clips on four tracks found by name, locators at the right beats (60 then 120 bpm at bar 3),
+and a note moved up in MuseScore reached its clip about a second later, only that clip sent again;
+Live's Play from beat 4 started MuseScore at bar 2, its Stop stopped it.
+
+Only real Live can show (to check first):
+- the device loads (the `.amxd` container is written by `make_device.py`; Max may want it opened
+  and saved once) and its `v8` script runs;
+- `Track.create_midi_clip` and `add_new_notes` behave as documented, and a few thousand notes write
+  quickly enough;
+- the carriers become controllers before the notes at the same time (SSO's articulation right on the
+  first note after a switch), in playback and in *Export Audio/Video*;
+- chasing at a mid-song start sends the controllers in force;
+- MuseScore following Live stays in step over a long piece.
+
+## What the owner's Live set confirmed, and what it didn't
 
 The .als reader follows the element names that open-source readers use: DawVert, dawtool, and
-abletoolz's Live 12 fixtures. The test sets were written by hand
-(`mtest/libmscore/liveintegration/liveset.xml`). Not yet checked against a real set:
+abletoolz's Live 12 fixtures; the test sets are written by hand
+(`mtest/libmscore/liveintegration/liveset.xml`). The owner's own Live 12.2 set (2026-09-29, one
+Kontakt 8 track with an SSO patch, Vibrato and Release automated, one segment curved, a clip with a
+CC 21 envelope, a second track at "All Ins"; kept outside the repository) was then read:
 
-- **A track's MIDI input for one port and channel.** Only Live's default is documented
-  (`MidiIn/External.All/-1`, "Ext: All Ins"). The reader tries the display strings first
-  ("MuseScore A" / "Ext: MuseScore A", "Ch. 3"), then the target's string. The name match is
-  the fallback.
-- **Curved automation** (`CurveControl1X/1Y/2X/2Y`). No open-source reader evaluates it. It is
-  read as a cubic Bézier in the segment's box (a guess) and turned into 16 straight pieces.
-- Whether Live stores Kontakt's parameter values normalized 0-1, as the fixtures suggest.
-- Whether `ParameterId` is Kontakt's VST 3 parameter id. It is kept in each lane as `paramId`,
-  but not used yet.
-
-The sample needed: a small Live 12 set, **saved with no samples collected** (the `.als` alone),
-containing:
-
-- one MIDI track with Kontakt 8 and one SSO patch, *MIDI From* `MuseScore A`, Ch. 2;
-- two automated controls, for example Vibrato and Release, one of them with a curve (Alt-drag a
-  segment);
-- a MIDI clip with a CC envelope, for example CC 21;
-- a second track left at "All Ins".
-
-A screenshot of Live's automation lanes would make the check exact. As with every file the owner
-sends, it stays out of the repository.
+- **Confirmed:** Kontakt's parameters by their SSO names (Vibrato, Release), values normalized 0-1,
+  the curved segment read without error, the clip's CC 21 envelope. Release was missed at first and
+  matches since then.
+- **Not confirmed:** how Live stores *MIDI From* = one port and channel. The owner's track took its
+  input from the computer keyboard, so it was matched by its name. The reader tries the display
+  strings ("MuseScore A" / "Ext: MuseScore A", "Ch. 3"), then the target's string, then the name.
+- **Not compared:** the curve's exact shape against Live's drawing (read as a cubic Bézier in the
+  segment's box, 16 straight pieces).
+- `ParameterId` is kept in each lane as `paramId`, not used.
 
 ## Kontakt's state from the set (not done)
 

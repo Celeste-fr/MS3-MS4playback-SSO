@@ -590,6 +590,15 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   them). Through MIDI output they send nothing (Live plays them); with the hosted plug-in they play.
   MIDI sync out: `libmscore/midisync.h`, `Seq::process` / `setPos`, preference
   `io/portMidi/syncOutputDevice`.
+  **Live plays the score** (2026-09-29; LIVE.md › Live plays the score): each library route as a playable
+  arrangement clip in Live, rewritten after every edit, Live the clock and MuseScore following it.
+  `libmscore/liveclips.*` (the clips from the rendering: controllers as carrier notes on keys 116-127, real
+  times at the score's first tempo, bar locators, the OSC protocol), `mscore/liveclips.*` (`LiveClipsLink`:
+  debounced rendering, per-route hashes, confirmations, Live's transport followed; `Seq::setLiveClips`: no
+  library events, no MIDI clock), `tools/live/` (the MuseScore Link Max for Live device: `MuseScoreLink.js`,
+  `make_device.py` writes the patcher and `MuseScore Link.amxd`; Node tests against a stand-in Live, and
+  `fake_live_server.js` to run a real MuseScore against it: GUI under Xvfb and a PulseAudio null sink; with
+  `QT_QPA_PLATFORM=offscreen` the link never bound its port, cause not looked into). Tests `tst_liveintegration` clips*. Not tried in real Live.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).
