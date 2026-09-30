@@ -243,17 +243,17 @@
 				"box": {
 					"id": "obj-11",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						90,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -298,17 +298,17 @@
 				"box": {
 					"id": "obj-14",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						150,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -353,17 +353,17 @@
 				"box": {
 					"id": "obj-17",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						210,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -408,17 +408,17 @@
 				"box": {
 					"id": "obj-20",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						270,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -463,17 +463,17 @@
 				"box": {
 					"id": "obj-23",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						330,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -518,17 +518,17 @@
 				"box": {
 					"id": "obj-26",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						390,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -573,17 +573,17 @@
 				"box": {
 					"id": "obj-29",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						450,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -628,17 +628,17 @@
 				"box": {
 					"id": "obj-32",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						510,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -683,17 +683,17 @@
 				"box": {
 					"id": "obj-35",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						570,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -738,17 +738,17 @@
 				"box": {
 					"id": "obj-38",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						630,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -793,17 +793,17 @@
 				"box": {
 					"id": "obj-41",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						690,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -837,7 +837,7 @@
 						90,
 						22
 					],
-					"text": "pack 224 0 0",
+					"text": "pack 224 0 64",
 					"outlettype": [
 						""
 					]
@@ -866,17 +866,17 @@
 				"box": {
 					"id": "obj-45",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						750,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},
@@ -922,17 +922,17 @@
 				"box": {
 					"id": "obj-48",
 					"maxclass": "newobj",
-					"numinlets": 2,
+					"numinlets": 1,
 					"numoutlets": 1,
 					"patching_rect": [
 						870,
 						200,
-						40,
+						110,
 						22
 					],
-					"text": "- 1",
+					"text": "expr $i1*($i1>1)",
 					"outlettype": [
-						"int"
+						""
 					]
 				}
 			},

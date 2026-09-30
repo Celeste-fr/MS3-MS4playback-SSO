@@ -56,7 +56,7 @@ std::vector<DeviceEvent> deviceMidi(const std::vector<LiveClips::Note>& notes, d
             return qint64(std::llround(double(units) / LiveClips::UNITS_PER_BEAT * 60.0 / bpm * rate));
             };
       int order = 0;
-      int lsb = 0, msb = 0;               // (the device's pack 224 0 0)
+      int lsb = 0, msb = 64;              // (the device's pack 224 0 64: the centre)
       std::vector<LiveClips::Note> sorted = notes;
       std::stable_sort(sorted.begin(), sorted.end());
       for (const LiveClips::Note& n : sorted) {
@@ -65,7 +65,7 @@ std::vector<DeviceEvent> deviceMidi(const std::vector<LiveClips::Note>& notes, d
             if (n.pitch >= LiveClips::CARRIER_LOW) {
                   if (n.velocity <= 0)
                         continue;
-                  const int v = n.velocity - 1;
+                  const int v = LiveClips::carrierValue(n.pitch, n.velocity);
                   if (n.pitch == LiveClips::BEND_MSB || n.pitch == LiveClips::BEND_LSB) {
                         (n.pitch == LiveClips::BEND_MSB ? msb : lsb) = v;
                         e.type = ME_PITCHBEND;
@@ -455,7 +455,9 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                   n.lagMs = envelopeLagMs(ta, tb, o.frame, rate);
                   dbs[n.track].push_back(std::fabs(n.liveDb - n.museScoreDb));
                   if (n.atStart) {
-                        if (n.lagMs < -1 || n.lagMs > waitMs + 1)
+                        // (the notes that start at the very start wait; a later one in their span, overlapping
+                        // one of them, is reported only: its envelope carries the first one's shift)
+                        if (o.frame < rate / 100 && (n.lagMs < -1 || n.lagMs > waitMs + 1))
                               r.failures << QString("%1: a note at the start %2 ms off (a wait of up to %3 ms expected)")
                                             .arg(n.track).arg(n.lagMs, 0, 'f', 0).arg(waitMs, 0, 'f', 1);
                         }

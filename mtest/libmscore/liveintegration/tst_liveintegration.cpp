@@ -634,15 +634,15 @@ void TestLiveIntegration::clipsControllers()
       const std::vector<LiveClips::Note> dyn = carriers(n, 126);
       QCOMPARE(int(dyn.size()), 2);
       QCOMPARE(dyn[0].start, E);                              // after the switch, in order
-      QCOMPARE(dyn[0].velocity, 65);
-      QCOMPARE(dyn[0].length, b - 3 * E);                     // until the next value
-      QCOMPARE(dyn[1].start, b - 2 * E);                      // before the keyswitch and the note
-      QCOMPARE(dyn[1].velocity, 51);                          // the last of 40, 50
+      QCOMPARE(dyn[0].velocity, 64);                          // (the value: carrierVelocity)
+      QCOMPARE(dyn[0].length, b - 2 * E);                     // until the next value
+      QCOMPARE(dyn[1].start, b - E);                          // after the keyswitch (switches first), before the note
+      QCOMPARE(dyn[1].velocity, 50);                          // the last of 40, 50
       QCOMPARE(dyn[1].start + dyn[1].length, 4 * U);
       const std::vector<LiveClips::Note> pedal = carriers(n, 124);
       QCOMPARE(int(pedal.size()), 1);
       QCOMPARE(pedal[0].start, b + E);                        // after the note, as rendered
-      QCOMPARE(pedal[0].velocity, 127);                       // 127 as 126 + 1
+      QCOMPARE(pedal[0].velocity, 127);                       // 127 exact (UACC alone is value + 1)
 
       const std::vector<LiveClips::Note> notes = realNotes(n);
       QVERIFY2(notes.size() == 4, qPrintable(describe(n)));
@@ -650,8 +650,8 @@ void TestLiveIntegration::clipsControllers()
       QCOMPARE(notes[0].start, 2 * E);                        // the note waits for its two controllers
       QCOMPARE(notes[0].start + notes[0].length, b);
       QCOMPARE(notes[0].velocity, 90);
-      QCOMPARE(notes[1].pitch, 24);                           // the keyswitch, before the note
-      QCOMPARE(notes[1].start, b - E);
+      QCOMPARE(notes[1].pitch, 24);                           // the keyswitch, first before the note
+      QCOMPARE(notes[1].start, b - 2 * E);
       QCOMPARE(notes[1].start + notes[1].length, 500 * U / 480);
       QCOMPARE(notes[2].pitch, 62);
       QCOMPARE(notes[2].start, b);
@@ -661,17 +661,17 @@ void TestLiveIntegration::clipsControllers()
       QCOMPARE(notes[3].start + notes[3].length, 1200 * U / 480);
       QCOMPARE(rn.highNotes, 1);
       QCOMPARE(rn.dropped, 1);                                // CC7
-      // the pitch bend (the centre, 8192): its two halves on 114 (lower 7 bits, 0) and 115 (upper, 64), velocity =
-      // value + 1, before the tick
+      // the pitch bend (the centre, 8192): its two halves on 115 (upper, 64) and then 114 (lower 7 bits, 0 as 1);
+      // no note at that tick: the last of them at the tick itself
       QCOMPARE(rn.bends, 1);
       const std::vector<LiveClips::Note> lsb = carriers(n, LiveClips::BEND_LSB);
       const std::vector<LiveClips::Note> msb = carriers(n, LiveClips::BEND_MSB);
       QCOMPARE(int(lsb.size()), 1);
       QCOMPARE(int(msb.size()), 1);
       QCOMPARE(lsb[0].velocity, 1);
-      QCOMPARE(msb[0].velocity, 65);
-      QCOMPARE(lsb[0].start, 1200 * U / 480 - 2 * E);
+      QCOMPARE(msb[0].velocity, 64);
       QCOMPARE(msb[0].start, 1200 * U / 480 - E);
+      QCOMPARE(lsb[0].start, 1200 * U / 480);
       QCOMPARE(msb[0].start + msb[0].length, 4 * U);           // (until the next value: chased anywhere)
       QCOMPARE(rn.parameters, 1);
       for (size_t i = 1; i < n.size(); ++i)

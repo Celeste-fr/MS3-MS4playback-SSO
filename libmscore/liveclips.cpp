@@ -33,6 +33,21 @@ namespace LiveClips {
 // expression, pedal, breath, foot, a library's own (21), portamento, sostenuto, soft pedal, legato, hold 2
 const int CARRIER_CCS[CARRIER_COUNT] = { 32, 1, 11, 64, 2, 4, 21, 5, 65, 66, 67, 68 };
 
+int carrierVelocity(int pitch, int value)
+      {
+      value = std::max(0, std::min(127, value));
+      if (pitch == 127)                   // (UACC)
+            return std::min(value, 126) + 1;
+      return std::max(1, value);
+      }
+
+int carrierValue(int pitch, int velocity)
+      {
+      if (pitch == 127)
+            return velocity - 1;
+      return velocity <= 1 ? 0 : velocity;
+      }
+
 int carrierPitch(int cc)
       {
       for (int i = 0; i < CARRIER_COUNT; ++i)
@@ -108,7 +123,7 @@ struct Control {
       };
 int bendOf(const NPlayEvent& e)
       {
-      return std::min(BEND_MAX, (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f));
+      return (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f);
       }
 }
 
@@ -171,13 +186,32 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                         };
                   dedupe(before);
                   dedupe(after);
+                  // before the note: the switches first, then the controllers, the pitch bend last (MuseScore's host
+                  // takes them all at the note's sample; here they are spread EPSILON apart before it, and the bend
+                  // and the controllers also move what still rings, so they go nearest the note)
+                  std::stable_sort(before.begin(), before.end(), [](const NPlayEvent* a, const NPlayEvent* b) {
+                        auto rank = [](const NPlayEvent* e) { return e->librarySwitch() ? 0 : e->type() == ME_PITCHBEND ? 2 : 1; };
+                        return rank(a) < rank(b);
+                        });
                   // a bend: its halves that changed (none: left out)
                   auto bendHalves = [&](const NPlayEvent* e) {
                         std::vector<std::pair<int, int>> h;       // (carrier pitch, value)
                         const int b = bendOf(*e);
-                        if (lastBend < 0 || (b & 0x7f) != (lastBend & 0x7f))
+                        const bool msb = lastBend < 0 || (b >> 7) != (lastBend >> 7);
+                        const bool lsb = lastBend < 0 || (b & 0x7f) != (lastBend & 0x7f);
+                        // both: the order whose value between the two (the device sends the bend at each) is
+                        // nearer the new one (the first: the upper half, the device starting at the centre)
+                        bool msbFirst = true;
+                        if (msb && lsb && lastBend >= 0) {
+                              const int viaMsb = (b & ~0x7f) | (lastBend & 0x7f);
+                              const int viaLsb = (lastBend & ~0x7f) | (b & 0x7f);
+                              msbFirst = std::abs(viaMsb - b) <= std::abs(viaLsb - b);
+                              }
+                        if (msb && msbFirst)
+                              h.push_back({ BEND_MSB, b >> 7 });
+                        if (lsb)
                               h.push_back({ BEND_LSB, b & 0x7f });
-                        if (lastBend < 0 || (b >> 7) != (lastBend >> 7))
+                        if (msb && !msbFirst)
                               h.push_back({ BEND_MSB, b >> 7 });
                         lastBend = b;
                         return h;
@@ -201,7 +235,9 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                   const auto beforeX = expand(before);
                   const auto afterX = expand(after);
                   // places: before the note, as far as the clip's start allows; the note after them
-                  int first = at - int(beforeX.size()) * EPSILON;
+                  // (with no note at the tick, the last of them at the tick itself: a glide's step, a dynamics change
+                  // under a sounding note, as near MuseScore's time as the order allows)
+                  int first = at - int(beforeX.size() - (noteSeen || beforeX.empty() ? 0 : 1)) * EPSILON;
                   if (first < 0)
                         first = 0;
                   int noteAt = std::max(at, first + int(beforeX.size()) * EPSILON);
@@ -294,7 +330,7 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                         n.start = c.start;
                         const int end = k + 1 < p.second.size() ? p.second[k + 1]->start : std::max(endUnits, c.start + 1);
                         n.length = std::max(1, end - c.start);
-                        n.velocity = std::min(c.value, 126) + 1;
+                        n.velocity = carrierVelocity(c.pitch, c.value);
                         rn.notes.push_back(n);
                         }
                   }

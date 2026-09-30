@@ -24,8 +24,8 @@
 //   unrolled as the Play Panel plays them), so Live sounds as MuseScore did:
 //   - the notes, velocities, and keyswitch notes of libraries that switch by key;
 //   - the controllers (UACC CC32 switches, CC1 dynamics, CC11, CC64 pedal …) as *carrier notes*
-//     at the top of the key range (CARRIER_LOW … 127: one pitch per controller, velocity = value
-//     + 1, 127 played as 126) and pitch bend (the microtones of a patch that bends, legato-timing's
+//     at the top of the key range (CARRIER_LOW … 127: one pitch per controller, the value as the
+//     velocity: carrierVelocity) and pitch bend (the microtones of a patch that bends, legato-timing's
 //     libraryPitchBends: 14 bit on keys 115 (upper 7 bits) and 114 (lower 7), each written when it changes; a glide's
 //     3 ms steps each one carrier). The MuseScore Link device (tools/live/), placed before the
 //     library's plug-in on the track, turns each carrier's note-on into its controller and drops
@@ -35,9 +35,11 @@
 //     playback starts mid-way (Live's "Chase MIDI Notes", on by default: each carrier lasts
 //     until that controller's next value, so the value in force is sent again at the start).
 //   - A controller at the same tick as a note comes EPSILON units (and one EPSILON more for each
-//     earlier one at that tick) before it, so the switch and the dynamics are in before the note,
-//     in the renderer's order. At the very start, where nothing can come earlier, the notes wait
-//     instead.
+//     earlier one at that tick) before it, so the switch and the dynamics are in before the note:
+//     switches first, then the controllers in the renderer's order, the pitch bend last (nearest the
+//     note: the bend and the controllers also move what still rings). At a tick without a note (a
+//     glide's step, a change under a held note) the last of them is at the tick itself. At the very
+//     start, where nothing can come earlier, the notes wait instead.
 //   - Left out: plug-in parameter events (Track::parameters: Live's own automation lanes play
 //     those), other controllers (Track::dropped), program and bank changes.
 //
@@ -98,13 +100,20 @@ constexpr int CARRIER_COUNT      = 12;
 extern const int CARRIER_CCS[CARRIER_COUNT];
 int carrierPitch(int cc);                     // -1: none
 // pitch bend (14 bit, 0-16383, centre 8192) as two carriers below the controllers': its upper 7 bits on BEND_MSB,
-// its lower 7 on BEND_LSB, each velocity = value + 1 (127 plays as 126: a bend of at most 126 × 128 + 126 =
-// 16254, +98.4 % of the range). The device keeps the last of each and sends the whole bend at either, so the pair
-// is right in any order (a chase at a mid-song start). Only the half that changed is written
+// its lower 7 on BEND_LSB, each as carrierVelocity has it. The device keeps the last of each and sends the whole
+// bend at either, so the pair is right in any order (a chase at a mid-song start). Only the half that changed is
+// written; both: in the order whose value in between is nearer the new bend (the first bend: the upper half first,
+// the device starting at the centre)
 constexpr int BEND_MSB           = 115;
 constexpr int BEND_LSB           = 114;
-constexpr int BEND_MAX           = 126 * 128 + 126;
 constexpr int CARRIER_LOW        = 114;       // keys CARRIER_LOW … 127 are carriers, never played as notes
+// a carrier's velocity (1-127: 0 is a note-off) for a value 0-127, and the value the device makes of it. 128
+// values in 127 velocities: the UACC switch (key 127) is value + 1 (UACC 1 … 126 exact; 127 is no articulation);
+// the other controllers and the bend halves are the value, 0 as 1 (so 127, CC11's and a pedal's usual value, is
+// exact; a value of 1 plays as 0: CC1 / CC11 1 is as silent as 0, the bend 1/16384 lower). Until 2026-09-30 every
+// carrier was value + 1, and CC11 127 played as 126 on every Live track
+int carrierVelocity(int pitch, int value);
+int carrierValue(int pitch, int velocity);
 
 //---------------------------------------------------------
 //   Timeline

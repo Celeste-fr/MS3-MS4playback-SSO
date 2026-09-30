@@ -82,6 +82,10 @@ function receive(id, inlet, v) {
                   else
                         emit(id, 1, list[0]);
                   return;
+            case "expr":                        // (the one expression the patcher has)
+                  assert.strictEqual(b.text, "expr $i1*($i1>1)");
+                  emit(id, 0, list[0] * (list[0] > 1 ? 1 : 0));
+                  return;
             case "-":
                   if (inlet === 0)
                         emit(id, 0, list[0] - args[0]);
@@ -162,32 +166,35 @@ test("notes pass unchanged", () => {
       assert.deepStrictEqual(play([0x90, 113, 20]), [0x90, 113, 20]);        // just below the carriers
       });
 
-test("each carrier key's note-on becomes its controller (value = velocity - 1); its note-off goes", () => {
+test("each carrier key's note-on becomes its controller (UACC: velocity - 1; the others: the velocity, 1 as 0); its note-off goes", () => {
       CARRIER_CCS.forEach((cc, i) => {
             const key = 127 - i;
+            const uacc = cc === 32;
             assert.deepStrictEqual(play([0x90, key, 1]), [0xb0, cc, 0]);
-            assert.deepStrictEqual(play([0x90, key, 127]), [0xb0, cc, 126]);
-            assert.deepStrictEqual(play([0x90, key, 65]), [0xb0, cc, 64]);
+            assert.deepStrictEqual(play([0x90, key, 127]), [0xb0, cc, uacc ? 126 : 127]);
+            assert.deepStrictEqual(play([0x90, key, 65]), [0xb0, cc, uacc ? 64 : 65]);
+            assert.deepStrictEqual(play([0x90, key, 2]), [0xb0, cc, uacc ? 1 : 2]);
             assert.deepStrictEqual(play([0x80, key, 64]), []);
             assert.deepStrictEqual(play([0x90, key, 0]), []);
             });
       });
 
-test("the pitch bend carriers (115 upper, 114 lower 7 bits; value = velocity - 1) become one pitch bend", () => {
-      // the centre: upper 64, lower 0 (both written: the first bend)
-      assert.deepStrictEqual(play([0x90, 114, 1]), [0xe0, 0, 0]);                 // (the lower half alone: upper still 0)
-      assert.deepStrictEqual(play([0x90, 115, 65]), [0xe0, 0, 64]);               // 8192
+test("the pitch bend carriers (115 upper, 114 lower 7 bits; the velocity, 1 as 0) become one pitch bend", () => {
+      // the first: the centre until then (pack 224 0 64); upper 64 then lower 0 (velocity 1)
+      assert.deepStrictEqual(play([0x90, 115, 64]), [0xe0, 0, 64]);               // 8192
+      assert.deepStrictEqual(play([0x90, 114, 1]), [0xe0, 0, 64]);
       // +50 cents of ±100: 8192 + 4096 = 12288 = upper 96, lower 0: only the upper half written
-      assert.deepStrictEqual(play([0x90, 115, 97]), [0xe0, 0, 96]);
+      assert.deepStrictEqual(play([0x90, 115, 96]), [0xe0, 0, 96]);
       assert.deepStrictEqual(play([0x80, 115, 0]), []);                           // its note-off dropped
-      // 12345 = upper 96, lower 57: the lower half alone, then the pair in the other order (a chase)
-      assert.deepStrictEqual(play([0x90, 114, 58]), [0xe0, 57, 96]);
-      assert.deepStrictEqual(play([0x90, 115, 33]), [0xe0, 57, 32]);              // (upper 32 with the lower kept)
+      // 12345 = upper 96, lower 57: the lower half alone, then a pair in the other order (a chase)
+      assert.deepStrictEqual(play([0x90, 114, 57]), [0xe0, 57, 96]);
+      assert.deepStrictEqual(play([0x90, 115, 32]), [0xe0, 57, 32]);              // (upper 32 with the lower kept)
       assert.deepStrictEqual(play([0x90, 114, 1]), [0xe0, 0, 32]);                // 4096: -50 cents
       assert.deepStrictEqual(play([0x80, 114, 0]), []);
       assert.deepStrictEqual(play([0x90, 114, 0]), []);                           // (a note-on 0 is a note-off)
-      // the highest: 126 / 126 = 16254
-      assert.deepStrictEqual(play([0x90, 114, 127]).concat(play([0x90, 115, 127])), [0xe0, 126, 32, 0xe0, 126, 126]);
+      // the extremes: 16383 (127 / 127) and 0 (1 / 1)
+      assert.deepStrictEqual(play([0x90, 115, 127]).concat(play([0x90, 114, 127])), [0xe0, 57 - 57, 127, 0xe0, 127, 127]);
+      assert.deepStrictEqual(play([0x90, 115, 1]).concat(play([0x90, 114, 1])), [0xe0, 127, 0, 0xe0, 0, 0]);
       });
 
 test("MuseScore's pitch bend carriers: the same keys (libmscore/liveclips.h)", () => {

@@ -71,6 +71,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveClipsLegatoEarly();
       void liveEquivalence();
       void liveEquivalenceLegato();
+      void dumpEvents();
       };
 
 static double rms(const std::vector<float>& b, int side)
@@ -304,7 +305,7 @@ void TestLiveEquivalence::liveSetControllersAndMix()
       QVERIFY2(std::fabs(dB(level(q.get()), level(plain.get())) - dB(0.2 + 0.8 * 26 / 127.0, 1.0)) < 0.2,
                qPrintable(QString("%1 dB").arg(dB(level(q.get()), level(plain.get())))));
 
-      // the MIDI-CC Controller (vibrato on CC21, 90) is in the clips: its carrier (key 127 - 6 = 121), velocity 91, on
+      // the MIDI-CC Controller (vibrato on CC21, 90) is in the clips: its carrier (key 127 - 6 = 121), velocity 90, on
       // every route of the part, from the start
       {
             EventMap events;
@@ -322,7 +323,7 @@ void TestLiveEquivalence::liveSetControllersAndMix()
                               if (first < 0)
                                     first = n.velocity;
                               }
-                  QVERIFY2(first == 91, qPrintable(c.key + seen));
+                  QVERIFY2(first == 90, qPrintable(c.key + seen));
                   }
       }
 
@@ -349,7 +350,8 @@ void TestLiveEquivalence::liveSetControllersAndMix()
 //---------------------------------------------------------
 //   liveClipsBend
 //    the renderer's pitch bends (a patch with bend=, tuningBend) reach the clips as carriers on keys 115 (upper 7
-//    bits) and 114 (lower 7), velocity = value + 1, each half written when it changes, before the note at its tick;
+//    bits) and 114 (lower 7), the value as the velocity (LiveClips::carrierVelocity), each half written when it
+//    changes, before the note at its tick;
 //    a legato glide's steps as successive carriers. Played back as the device plays them (LiveEquivalence::
 //    deviceMidi), the bend in force at every note-on is the renderer's, and the sequence of bends the same
 //---------------------------------------------------------
@@ -394,7 +396,9 @@ void TestLiveEquivalence::liveClipsBend()
                   if (!e.isExternal() || e.extPort() != port || e.extChannel() != channel)
                         continue;
                   if (e.type() == ME_PITCHBEND) {
-                        const int v = std::min(LiveClips::BEND_MAX, e.dataA() | (e.dataB() << 7));
+                        // (a half of 1 plays as 0: LiveClips::carrierValue)
+                        int lo = e.dataA() & 0x7f, hi = e.dataB() & 0x7f;
+                        const int v = (hi == 1 ? 0 : hi) << 7 | (lo == 1 ? 0 : lo);
                         if (!any || v != last)
                               bends.push_back(v);
                         last = v;
@@ -452,11 +456,18 @@ void TestLiveEquivalence::liveClipsBend()
             }
       // every change of the bend carried (the glides' steps included: m7's two slurred notes): more than one a note
       QVERIFY2(carried == expectedChanges && carried > 8 + 10, qPrintable(QString("%1 of %2").arg(carried).arg(expectedChanges)));
-      // the device's upper half on the highest: 16383 is played as 16254
-      std::vector<LiveClips::Note> top = { { LiveClips::BEND_LSB, 0, 10, 127, false }, { LiveClips::BEND_MSB, 2, 10, 127, false } };
+      // the extremes: 16383 exact (both halves 127), the centre before any bend, a half of 1 as 0
+      std::vector<LiveClips::Note> top = { { LiveClips::BEND_MSB, 0, 10, 127, false }, { LiveClips::BEND_LSB, 2, 10, 127, false } };
       const std::vector<LiveEquivalence::DeviceEvent> tm = LiveEquivalence::deviceMidi(top, 120, 48000);
       QCOMPARE(int(tm.size()), 2);
-      QCOMPARE((tm[1].b << 7) | tm[1].a, LiveClips::BEND_MAX);
+      QCOMPARE((tm[0].b << 7) | tm[0].a, 127 << 7);                 // (the lower half still 0)
+      QCOMPARE((tm[1].b << 7) | tm[1].a, 16383);
+      QCOMPARE(LiveClips::carrierVelocity(LiveClips::BEND_MSB, 0), 1);
+      QCOMPARE(LiveClips::carrierValue(LiveClips::BEND_MSB, 1), 0);
+      QCOMPARE(LiveClips::carrierVelocity(127, 1), 2);               // (UACC: value + 1)
+      QCOMPARE(LiveClips::carrierValue(127, 2), 1);
+      QCOMPARE(LiveClips::carrierVelocity(126, 127), 127);           // (CC1 127 exact)
+      QCOMPARE(LiveClips::carrierValue(126, 127), 127);
       delete score;
       }
 
@@ -492,10 +503,12 @@ void TestLiveEquivalence::liveClipsLegatoEarly()
             if (e.isExternal() && e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch())
                   fromEvents.insert({ QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1), e.pitch(), tl.units(te.first) });
             }
+      // (a note at the very start waits for its carriers: counted at 0)
+      const int wait = 14 * LiveClips::EPSILON;
       for (const LiveClips::Track& c : clips)
             for (const LiveClips::Note& n : c.notes)
                   if (n.pitch < LiveClips::CARRIER_LOW)
-                        fromClips.insert({ c.key, n.pitch, n.start });
+                        fromClips.insert({ c.key, n.pitch, n.start <= wait ? 0 : n.start });
       QCOMPARE(int(fromClips.size()), 20);
       QVERIFY(fromClips == fromEvents);
       // m1's second note (written on beat 2, at 60 bpm = beat 1 in Live) 150 ms early: 72 ticks = 0.15 beat
@@ -581,11 +594,83 @@ void TestLiveEquivalence::liveEquivalenceLegato()
       o.thresholds.roundRobins = false;
       const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);
       const QString report = LiveEquivalence::reportText(r, o.thresholds);
+      if (qEnvironmentVariableIsSet("MS_LIVE_EQUIVALENCE_OUT")) {
+            QString e;
+            LiveEquivalence::write(r, o.thresholds, qEnvironmentVariable("MS_LIVE_EQUIVALENCE_OUT") + "-legato", true, &e);
+            }
       QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
       QCOMPARE(int(r.tracks.size()), 2);
       QVERIFY2(r.passed, qPrintable(report));
       QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(report));
       qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   dumpEvents
+//    a tool, skipped unless MS_DUMP_SCORE, MS_DUMP_MAP and MS_DUMP_OUT are set: per route, MuseScore's events
+//    (<route> museScore.txt) and the MIDI the device makes of the clip (<route> live.txt) as lines "seconds type a b"
+//    (on, off, cc <n> <value>, pb <14-bit> 0), for replaying both through one plug-in instance elsewhere (the kthost
+//    on the Windows VM: LIVE.md › Measured with SSO)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::dumpEvents()
+      {
+      if (!qEnvironmentVariableIsSet("MS_DUMP_SCORE"))
+            QSKIP("MS_DUMP_SCORE, MS_DUMP_MAP, MS_DUMP_OUT not set");
+      QString error;
+      std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(qEnvironmentVariable("MS_DUMP_MAP"), &error);
+      QVERIFY2(lib, qPrintable(error));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readCreatedScore(qEnvironmentVariable("MS_DUMP_SCORE"));
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const QString out = qEnvironmentVariable("MS_DUMP_OUT");
+      QDir().mkpath(out);
+      std::map<QString, QStringList> ms;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal())
+                  continue;
+            const QString key = QString("%1-%2").arg(e.extPort()).arg(e.extChannel() + 1);
+            const double t = score->utick2utime(te.first);
+            if (e.type() == ME_NOTEON)
+                  ms[key] << QString("%1 %2 %3 %4").arg(t, 0, 'f', 6).arg(e.velo() > 0 ? "on" : "off").arg(e.pitch()).arg(e.velo());
+            else if (e.type() == ME_NOTEOFF)
+                  ms[key] << QString("%1 off %2 0").arg(t, 0, 'f', 6).arg(e.pitch());
+            else if (e.type() == ME_CONTROLLER)
+                  ms[key] << QString("%1 cc %2 %3").arg(t, 0, 'f', 6).arg(e.controller()).arg(e.value());
+            else if (e.type() == ME_PITCHBEND)
+                  ms[key] << QString("%1 pb %2 0").arg(t, 0, 'f', 6).arg(e.dataA() | (e.dataB() << 7));
+            else
+                  ms[key] << QString("# %1 type %2 %3 %4").arg(t, 0, 'f', 6).arg(e.type()).arg(e.dataA()).arg(e.dataB());
+            }
+      for (const auto& m : ms) {
+            QFile f(out + "/" + m.first + " museScore.txt");
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+            f.write((m.second.join("\n") + "\n").toUtf8());
+            }
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const int rate = 1000000;           // (microseconds: the times as exact as the frames allow)
+      for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl)) {
+            QStringList lines;
+            for (const LiveEquivalence::DeviceEvent& e : LiveEquivalence::deviceMidi(c.notes, tl.bpm, rate)) {
+                  const double t = double(e.frame) / rate;
+                  if (e.type == ME_NOTEON)
+                        lines << QString("%1 %2 %3 %4").arg(t, 0, 'f', 6).arg(e.b > 0 ? "on" : "off").arg(e.a).arg(e.b);
+                  else if (e.type == ME_CONTROLLER)
+                        lines << QString("%1 cc %2 %3").arg(t, 0, 'f', 6).arg(e.a).arg(e.b);
+                  else if (e.type == ME_PITCHBEND)
+                        lines << QString("%1 pb %2 0").arg(t, 0, 'f', 6).arg((e.b << 7) | e.a);
+                  }
+            QFile f(out + "/" + QString(c.key).replace(':', '-') + " live.txt");
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+            f.write((lines.join("\n") + "\n").toUtf8());
+            qDebug("%s: %s, %d notes", qPrintable(c.key), qPrintable(c.clip), int(c.notes.size()));
+            }
       delete score;
       }
 

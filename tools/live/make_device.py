@@ -17,10 +17,12 @@ sz32 <JSON size + 2>, of32 16, vers 0, flag 0x11, mdat 0), each length counting 
 
 The MIDI path is plain Max objects in the scheduler thread (the script is never in it):
   midiin -> midiparse; notes -> route 127 … 116 (the carrier keys, liveclips.h's table):
-    a carrier's note-on (velocity v > 0) -> sel 0 -> "- 1" -> prepend 176 <cc> -> iter -> midiout
-    (a control change on channel 1, value v - 1), its note-off dropped;
+    a carrier's note-on (velocity v > 0) -> sel 0 -> the value -> prepend 176 <cc> -> iter -> midiout
+    (a control change on channel 1), its note-off dropped. The value (liveclips.h carrierValue): UACC (key 127)
+    "- 1" (v - 1); the others "expr $i1*($i1>1)" (v, and 1 as 0: 127 exact);
   route 115 / 114 (the pitch bend's upper / lower 7 bits, liveclips.h BEND_MSB / BEND_LSB): note-on -> sel 0 ->
-    "- 1" -> t b i -> the value into pack 224 0 0 (inlet 2: upper, inlet 1: lower), then a bang to its left inlet:
+    the value (as the controllers') -> t b i -> into pack 224 0 64 (the centre until the first; inlet 2: upper,
+    inlet 1: lower), then a bang to its left inlet:
     the whole bend (status 224 = pitch bend on channel 1, lower, upper) -> iter -> midiout. Either half sends it
     with the other's last value, so a pair chased in any order ends right; note-offs dropped;
     any other note -> midiformat (with the rest of midiparse's messages and its channel) -> midiout.
@@ -92,23 +94,26 @@ def build(script):
     fmt = p.obj("midiformat", 7, 2, 30, 330, outlettype=["int", ""])
     it = p.obj("iter", 1, 1, 420, 330, outlettype=[""])
     midiout = p.obj("midiout", 1, 0, 30, 370)
+
+    def value(x):                          # a continuous controller's or a bend half's value: v, 1 as 0
+        return p.obj("expr $i1*($i1>1)", 1, 1, x, 200, w=110, outlettype=[""])
     p.connect(midiin, 0, parse, 0)
     p.connect(parse, 0, route, 0)
     for i, cc in enumerate(CARRIER_CCS):
         x = 30 + i * 60
         sel = p.obj("sel 0", 2, 2, x, 160, outlettype=["bang", ""])
-        minus = p.obj("- 1", 2, 1, x, 200, outlettype=["int"])
+        minus = p.obj("- 1", 2, 1, x, 200, outlettype=["int"]) if cc == 32 else value(x)
         pre = p.obj(f"prepend 176 {cc}", 1, 1, x, 240, w=100)
         p.connect(route, i, sel, 0)
         p.connect(sel, 1, minus, 0)
         p.connect(minus, 0, pre, 0)
         p.connect(pre, 0, it, 0)
     # the pitch bend: upper half into pack's inlet 2, lower into 1, each then bangs it out
-    bend = p.obj("pack 224 0 0", 3, 1, 30 + (n + 1) * 60, 280, w=90, outlettype=[""])
+    bend = p.obj("pack 224 0 64", 3, 1, 30 + (n + 1) * 60, 280, w=90, outlettype=[""])
     for k, inlet in ((n, 2), (n + 1, 1)):
         x = 30 + (k + (0 if inlet == 2 else 1)) * 60
         sel = p.obj("sel 0", 2, 2, x, 160, outlettype=["bang", ""])
-        minus = p.obj("- 1", 2, 1, x, 200, outlettype=["int"])
+        minus = value(x)
         trig = p.obj("t b i", 1, 2, x, 240, outlettype=["bang", "int"])
         p.connect(route, k, sel, 0)
         p.connect(sel, 1, minus, 0)
