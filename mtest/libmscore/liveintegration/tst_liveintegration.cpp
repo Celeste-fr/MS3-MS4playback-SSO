@@ -33,6 +33,11 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/tempo.h"
+#include "libmscore/measure.h"
+#include "libmscore/rest.h"
+#include "libmscore/tie.h"
+#include "libmscore/staff.h"
+#include "mscore/liveclipmodel.h"
 #include "mtest/testutils.h"
 
 #define DIR QString("libmscore/liveintegration/")
@@ -60,6 +65,18 @@ class TestLiveIntegration : public QObject, public MTest
       void clipsChanges();
       void clipsOsc();
       void clipsImport();
+      void clipEditImport();
+      void clipEditPitch();
+      void clipEditVelocityAndMute();
+      void clipEditDeleteAndAdd();
+      void clipEditLengthAndMove();
+      void clipEditTieChain();
+      void clipEditChord();
+      void clipEditUndoAndIds();
+      void clipEditDrums();
+      void clipEditInstrument();
+      void clipEditOutside();
+      void clipEditPackets();
       };
 
 //---------------------------------------------------------
@@ -950,6 +967,457 @@ void TestLiveIntegration::clipsImport()
       QCOMPARE(q8, 3840);
       SoundLib::setCurrent(nullptr);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   Editing Live clips in MuseScore (mscore/liveclipmodel.h)
+//---------------------------------------------------------
+
+using namespace Ms::LiveClipEdit;
+
+static LiveNote ln(int id, int pitch, double start, double duration, double velocity)
+      {
+      LiveNote n;
+      n.id = id;
+      n.pitch = pitch;
+      n.start = start;
+      n.duration = duration;
+      n.velocity = velocity;
+      n.probability = 0.75;               // (fields MuseScore never shows: kept by Live)
+      n.velocityDeviation = 3.5;
+      n.releaseVelocity = 40;
+      return n;
+      }
+
+// a humanized melody: every note a little off the grid, velocities with fractions
+static Clip melody(const QString& track = "Violin")
+      {
+      Clip c;
+      c.key = "c7";
+      c.track = track;
+      c.name = "Idea";
+      c.bpm = 96;
+      c.num = 4;
+      c.den = 4;
+      c.end = 12;                         // (a third bar, empty)
+      c.notes = { ln(101, 67, 0.013, 0.95, 87.3), ln(102, 69, 1.02, 0.97, 80.6), ln(103, 71, 1.991, 1.03, 91.2),
+                  ln(104, 72, 3.004, 0.49, 70.0), ln(105, 74, 3.51, 0.48, 75.9), ln(106, 76, 4.0, 3.96, 99.4) };
+      return c;
+      }
+
+static const LiveNote* liveOf(const Baseline& b, int id)
+      {
+      for (const Entry& e : b.entries)
+            for (const LiveNote& n : e.live)
+                  if (n.id == id)
+                        return &n;
+      return nullptr;
+      }
+
+static Note* noteAt(Score* score, int tick, int pitch)
+      {
+      std::vector<Note*> notes;
+      const std::vector<Sig> sigs = signatures(score, &notes);
+      for (size_t i = 0; i < sigs.size(); ++i)
+            if (sigs[i].tick == tick && sigs[i].pitch == pitch)
+                  return notes[i];
+      return nullptr;
+      }
+
+void TestLiveIntegration::clipEditImport()
+      {
+      const Clip clip = melody();
+      QString error;
+      MasterScore* score = importClip(clip, &error);
+      QVERIFY2(score, qPrintable(error));
+      // Continuous View from the start, one part named after the track, a violin, the clip's time
+      QCOMPARE(int(score->layoutMode()), int(LayoutMode::LINE));
+      QCOMPARE(score->pages().size(), 1);                 // laid out as one line: one page, one system
+      QCOMPARE(score->systems().size(), 1);
+      QCOMPARE(score->parts().size(), 1);
+      QCOMPARE(score->parts()[0]->partName(), QString("Violin"));
+      QCOMPARE(score->parts()[0]->instrument()->getId(), QString("violin"));
+      QCOMPARE(score->nstaves(), 1);
+      QCOMPARE(score->fileInfo()->completeBaseName(), QString("Violin › Idea"));
+      QCOMPARE(score->lastMeasure()->endTick().ticks(), 12 * 480);     // up to the clip's end
+      QCOMPARE(score->firstMeasure()->timesig(), Fraction(4, 4));
+      QCOMPARE(qRound(score->tempomap()->tempo(0) * 60), 96);
+      // quantized in the notation, each note found with its Live note
+      const std::vector<Sig> sigs = signatures(score);
+      QCOMPARE(int(sigs.size()), 6);
+      QCOMPARE(sigs[0].tick, 0);
+      QCOMPARE(sigs[2].tick, 960);
+      QCOMPARE(sigs[5].tick, 1920);
+      QCOMPARE(sigs[5].ticks, 1920);
+      const Baseline b = match(clip, score);
+      QCOMPARE(b.unmatched, 0);
+      QCOMPARE(b.outside, 0);
+      for (const Entry& e : b.entries)
+            QCOMPARE(int(e.live.size()), 1);
+      QCOMPARE(liveOf(b, 103)->start, 1.991);
+      // nothing edited: nothing to send
+      QVERIFY(diff(b, signatures(score)).empty());
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditPitch()
+      {
+      const Clip clip = melody();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      Note* n = noteAt(score, 960, 71);
+      QVERIFY(n);
+      score->startCmd();
+      score->undoChangePitch(n, 70, n->tpc1() - 7, n->tpc2() - 7);
+      score->endCmd();
+      const Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(int(d.ops[0].kind), int(Op::MODIFY));
+      QCOMPARE(d.ops[0].id, 103);
+      QCOMPARE(d.ops[0].mask, int(PITCH));
+      QCOMPARE(d.ops[0].pitch, 70);
+      // Live's copy: the new pitch, its own humanized start, length, velocity and the rest unchanged
+      const LiveNote* x = liveOf(d.next, 103);
+      QCOMPARE(x->pitch, 70);
+      QCOMPARE(x->start, 1.991);
+      QCOMPARE(x->duration, 1.03);
+      QCOMPARE(x->velocity, 91.2);
+      QCOMPARE(x->probability, 0.75);
+      // the untouched notes keep Live's data exactly
+      QCOMPARE(liveOf(d.next, 101)->start, 0.013);
+      QCOMPARE(liveOf(d.next, 102)->velocity, 80.6);
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditVelocityAndMute()
+      {
+      const Clip clip = melody();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      Note* n = noteAt(score, 0, 67);
+      Note* m = noteAt(score, 480, 69);
+      QVERIFY(n && m);
+      QCOMPARE(n->veloOffset(), 87);
+      score->startCmd();
+      n->undoChangeProperty(Pid::VELO_OFFSET, 110);
+      m->undoChangeProperty(Pid::PLAY, false);
+      score->endCmd();
+      Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 2);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
+      QCOMPARE(d.ops[0].id, 101);
+      QCOMPARE(d.ops[0].mask, int(VELOCITY));
+      QCOMPARE(d.ops[0].velocity, 110);
+      QCOMPARE(d.ops[1].id, 102);
+      QCOMPARE(d.ops[1].mask, int(MUTE));
+      QVERIFY(d.ops[1].mute);
+      QCOMPARE(liveOf(d.next, 101)->start, 0.013);
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditDeleteAndAdd()
+      {
+      const Clip clip = melody();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      Note* n = noteAt(score, 480, 69);
+      QVERIFY(n);
+      score->startCmd();
+      score->select(n);
+      score->cmdDeleteSelection();
+      score->endCmd();
+      Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(int(d.ops[0].kind), int(Op::REMOVE));
+      QCOMPARE(d.ops[0].id, 102);
+      // a note written where the deleted one was (its rest)
+      Segment* seg = score->tick2segment(Fraction(480, 480 * 4), true, SegmentType::ChordRest);
+      QVERIFY(seg && seg->element(0) && seg->element(0)->isRest());
+      score->startCmd();
+      score->setNoteRest(seg, 0, NoteVal(62), Fraction(1, 4));
+      score->endCmd();
+      d = diff(b, signatures(score));
+      // pitch 69 -> 62 at the same place and length: one modification of the same Live note
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(int(d.ops[0].kind), int(Op::MODIFY));
+      QCOMPARE(d.ops[0].id, 102);
+      QCOMPARE(d.ops[0].mask & PITCH, int(PITCH));
+      delete score;
+
+      // a new note in the empty last bar: an addition, velocity 100 (none set)
+
+      MasterScore* s = importClip(clip, nullptr);
+      const Baseline b2 = match(clip, s);
+      Measure* last = s->lastMeasure();
+      Segment* rs = last->first(SegmentType::ChordRest);
+      QVERIFY(rs->element(0)->isRest());
+      s->startCmd();
+      s->setNoteRest(rs, 0, NoteVal(60), Fraction(1, 4));
+      s->endCmd();
+      d = diff(b2, signatures(s));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(int(d.ops[0].kind), int(Op::ADD));
+      QCOMPARE(d.ops[0].pitch, 60);
+      QCOMPARE(d.ops[0].start, last->tick().ticks());
+      QCOMPARE(d.ops[0].duration, 480);
+      QCOMPARE(d.ops[0].velocity, 100);
+      QCOMPARE(int(d.added.size()), 1);
+      delete s;
+      }
+
+void TestLiveIntegration::clipEditLengthAndMove()
+      {
+      const Clip clip = melody();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      // shorter: the eighth C (3.004) half as long
+      Note* n = noteAt(score, 1440, 72);
+      QVERIFY(n);
+      score->startCmd();
+      score->select(n);
+      score->changeCRlen(n->chord(), TDuration(TDuration::DurationType::V_16TH));
+      score->endCmd();
+      const Diff d = diff(b, signatures(score));
+      QVERIFY(!d.empty());
+      bool found = false;
+      for (const Op& o : d.ops) {
+            if (o.id == 104) {
+                  QCOMPARE(int(o.kind), int(Op::MODIFY));
+                  QCOMPARE(o.mask, int(DURATION));
+                  QCOMPARE(o.duration, 120);
+                  found = true;
+                  }
+            else                    // (the others untouched)
+                  QVERIFY2(false, qPrintable(QString("op on %1").arg(o.id)));
+            }
+      QVERIFY(found);
+      QCOMPARE(liveOf(d.next, 104)->start, 3.004);
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditTieChain()
+      {
+      // a note over the bar line (2.5 … 5.5): one tie chain, one Live note
+      Clip clip;
+      clip.key = "c9";
+      clip.track = "Flute";
+      clip.name = "Tied";
+      clip.end = 8;
+      clip.notes = { ln(1, 72, 0, 2.5, 90), ln(2, 74, 2.5, 3.0, 90) };
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const std::vector<Sig> sigs = signatures(score);
+      QCOMPARE(int(sigs.size()), 2);
+      QCOMPARE(sigs[1].tick, 1200);
+      QVERIFY(sigs[1].ticks >= 1440);                     // (the import may round its end to the beat)
+      QVERIFY(noteAt(score, 1200, 74)->tieFor());        // over the bar line: a tie chain
+      const Baseline b = match(clip, score);
+      QCOMPARE(int(b.entries[1].live.size()), 1);
+      QCOMPARE(b.entries[1].live[0].id, 2);
+      // a pitch change of the tie chain (its first note; the tie follows): one modification
+      Note* n = noteAt(score, 1200, 74);
+      score->startCmd();
+      score->undoChangePitch(n, 76, n->tpc1() + 2, n->tpc2() + 2);
+      if (n->tieFor()) {
+            Note* e = n->tieFor()->endNote();
+            score->undoChangePitch(e, 76, e->tpc1() + 2, e->tpc2() + 2);
+            }
+      score->endCmd();
+      const Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(d.ops[0].id, 2);
+      QCOMPARE(d.ops[0].mask, int(PITCH));
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditChord()
+      {
+      Clip clip;
+      clip.key = "c3";
+      clip.track = "Organ Pad";           // (no such instrument: a piano)
+      clip.name = "Chords";
+      clip.end = 4;
+      clip.notes = { ln(11, 60, 0.01, 1.98, 70), ln(12, 64, 0.0, 2.02, 71), ln(13, 67, 0.02, 1.99, 72),
+                     ln(14, 62, 2.0, 2.0, 60), ln(15, 65, 2.0, 2.0, 60) };
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QCOMPARE(score->parts()[0]->instrument()->getId(), QString("piano"));
+      QCOMPARE(score->nstaves(), 1);          // the range fits one clef
+      const Baseline b = match(clip, score);
+      QCOMPARE(b.unmatched, 0);
+      QCOMPARE(int(b.entries.size()), 5);
+      // the chord's middle note up: only its own Live note
+      Note* n = noteAt(score, 0, 64);
+      QVERIFY(n);
+      score->startCmd();
+      score->undoChangePitch(n, 63, n->tpc1() - 7, n->tpc2() - 7);
+      score->endCmd();
+      const Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(d.ops[0].id, 12);
+      QCOMPARE(liveOf(d.next, 12)->start, 0.0);
+      QCOMPARE(liveOf(d.next, 12)->duration, 2.02);
+      QCOMPARE(liveOf(d.next, 11)->start, 0.01);
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditUndoAndIds()
+      {
+      const Clip clip = melody();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      Baseline b = match(clip, score);
+      Measure* last = score->lastMeasure();
+      Segment* rs = last->first(SegmentType::ChordRest);
+      score->startCmd();
+      score->setNoteRest(rs, 0, NoteVal(60), Fraction(1, 4));
+      score->endCmd();
+      Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.added.size()), 1);
+      QVERIFY(!setAddedIds(d, { 1, 2 }));
+      QVERIFY(setAddedIds(d, { 555 }));
+      b = d.next;                                     // (Live confirmed)
+      QVERIFY(liveOf(b, 555));
+      QVERIFY(diff(b, signatures(score)).empty());    // in sync
+      // undo: the added note goes, by its id
+      score->undoRedo(true, nullptr);
+      d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(int(d.ops[0].kind), int(Op::REMOVE));
+      QCOMPARE(d.ops[0].id, 555);
+      b = d.next;
+      // a pitch edit, then undone: back to Live's pitch, the note's timing untouched all along
+      Note* n = noteAt(score, 480, 69);
+      score->startCmd();
+      score->undoChangePitch(n, 68, n->tpc1() - 7, n->tpc2() - 7);
+      score->endCmd();
+      d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      b = d.next;
+      score->undoRedo(true, nullptr);
+      d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(d.ops[0].id, 102);
+      QCOMPARE(d.ops[0].pitch, 69);
+      QCOMPARE(d.ops[0].mask, int(PITCH));
+      QCOMPARE(liveOf(d.next, 102)->start, 1.02);
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditDrums()
+      {
+      Clip clip;
+      clip.key = "c5";
+      clip.track = "808 Kit";
+      clip.name = "Beat";
+      clip.drums = true;
+      clip.end = 4;
+      for (int i = 0; i < 4; ++i) {
+            clip.notes.push_back(ln(200 + i, 36, i + 0.004 * i, 0.25, 110 - i));       // kick on the beats
+            clip.notes.push_back(ln(210 + i, 42, i + 0.5, 0.25, 64));                  // closed hat off the beats
+            }
+      clip.notes.push_back(ln(220, 38, 1.0, 0.25, 100));                                // snare on 2
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QVERIFY(score->staff(0)->isDrumStaff(Fraction(0, 1)));
+      QVERIFY(score->parts()[0]->instrument()->drumset());
+      const Baseline b = match(clip, score);
+      QCOMPARE(b.unmatched, 0);
+      QCOMPARE(int(b.entries.size()), 9);
+      QVERIFY(diff(b, signatures(score)).empty());
+      // the snare up to a hand clap (39)
+      Note* n = noteAt(score, 480, 38);
+      QVERIFY(n);
+      score->startCmd();
+      score->undoChangePitch(n, 39, n->tpc1(), n->tpc2());
+      score->endCmd();
+      const Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(d.ops[0].id, 220);
+      QCOMPARE(d.ops[0].pitch, 39);
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditInstrument()
+      {
+      QCOMPARE(instrumentForTrack("Violin"), QString("violin"));
+      QCOMPARE(instrumentForTrack("2-Violin"), QString("violin"));
+      QCOMPARE(instrumentForTrack("flute"), QString("flute"));
+      QCOMPARE(instrumentForTrack("Cello 2"), QString("violoncello"));
+      QCOMPARE(instrumentForTrack("1-MIDI"), QString());
+      QCOMPARE(instrumentForTrack("Lead Synth Thing"), QString());
+      // a piano over a wide range: a grand staff
+      Clip clip;
+      clip.key = "c4";
+      clip.track = "1-MIDI";
+      clip.name = "Wide";
+      clip.end = 4;
+      clip.notes = { ln(1, 36, 0, 1, 80), ln(2, 84, 0, 1, 80), ln(3, 43, 1, 1, 80), ln(4, 79, 1, 1, 80) };
+      QVERIFY(needsGrandStaff(clip));
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QCOMPARE(score->parts()[0]->instrument()->getId(), QString("piano"));
+      QCOMPARE(score->nstaves(), 2);
+      const Baseline b = match(clip, score);
+      QCOMPARE(b.unmatched, 0);
+      QVERIFY(diff(b, signatures(score)).empty());
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditOutside()
+      {
+      // notes before the clip's start or after its end: not shown, never touched
+      Clip clip = melody();
+      clip.notes.push_back(ln(900, 60, -1.0, 0.5, 80));
+      clip.notes.push_back(ln(901, 60, 13.0, 0.5, 80));
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      QCOMPARE(b.outside, 2);
+      QVERIFY(!liveOf(b, 900) && !liveOf(b, 901));
+      // everything deleted in the notation: only the six notes it shows are removed
+      score->startCmd();
+      score->cmdSelectAll();
+      score->cmdDeleteSelection();
+      score->endCmd();
+      const Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 6);
+      for (const Op& o : d.ops) {
+            QCOMPARE(int(o.kind), int(Op::REMOVE));
+            QVERIFY(o.id != 900 && o.id != 901);
+            }
+      // the MIDI file leaves them out too
+      const QByteArray mid = midiFile(clip);
+      QVERIFY(mid.startsWith("MThd"));
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditPackets()
+      {
+      std::vector<Op> ops;
+      for (int i = 0; i < 40; ++i) {
+            Op o;
+            o.kind = i % 3 == 0 ? Op::REMOVE : Op::MODIFY;
+            o.id = 1000 + i;
+            o.mask = PITCH;
+            o.pitch = 60 + i % 12;
+            ops.push_back(o);
+            }
+      const std::vector<QByteArray> p = writePackets("c7", 3, ops);
+      QCOMPARE(int(p.size()), 3);
+      QString address;
+      QVariantList args;
+      QVERIFY(LiveClips::parseOsc(p[0], &address, &args));
+      QCOMPARE(address, QString("/ms/clip/write"));
+      QCOMPARE(args, QVariantList({ "c7", 3, 40, 2 }));
+      QVERIFY(LiveClips::parseOsc(p[2], &address, &args));
+      QCOMPARE(address, QString("/ms/clip/ops"));
+      QCOMPARE(args.size(), 3 + 8 * 8);
+      QCOMPARE(args[3 + 1].toInt(), 1032);
       }
 
 QTEST_MAIN(TestLiveIntegration)

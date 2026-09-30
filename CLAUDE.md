@@ -599,6 +599,19 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `make_device.py` writes the patcher and `MuseScore Link.amxd`; Node tests against a stand-in Live, and
   `fake_live_server.js` to run a real MuseScore against it: GUI under Xvfb and a PulseAudio null sink; with
   `QT_QPA_PLATFORM=offscreen` the link never bound its port, cause not looked into). Tests `tst_liveintegration` clips*. Not tried in real Live.
+  **Editing Live clips in MuseScore** (branch `live-clip-edit`, 2026-09-29; LIVE.md › Editing Live clips in
+  MuseScore; the owner: "just edit any midi clip in MuseScore", in Continuous View): the device's *Edit in
+  MuseScore* button sends the Detail View's clip (`get_all_notes_extended`, every field, note ids); MuseScore
+  opens it as a new tab through the MIDI import (`mscore/liveclipmodel.*`: `importClip`, layout mode LINE set
+  before the import, instrument from the track name else piano, drums by a Drum Rack; `match`/`diff`: notation
+  notes by signature against a baseline of Live notes, content not object identity; only edited fields sent),
+  `mscore/liveclipedit.*` (`LiveClipEditor`: sessions, debounced writes, resend, conflict → *Reload from Live*,
+  status bar widget; a clip score is marked only in memory and plays with MuseScore 4 sounds). The UDP socket
+  is `LiveClipsLink`'s, bound while "Live plays the score" or the clip-edit setting (`liveIntegration/editClips`,
+  default on) is on; `/live/clip/*` goes to the editor; protocol 2. The importer has
+  `FileData::forcedInstrument`. Tests `tst_liveintegration` clipEdit*, `tools/live/test/test_clipedit.js`;
+  `fake_live_server.js --edit-clip <track> --edit-at <s> [--live-change-at <s>]` for a GUI run. Not tried in
+  real Live.
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).

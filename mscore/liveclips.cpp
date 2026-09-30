@@ -23,6 +23,7 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/undo.h"
+#include "liveclipedit.h"
 #include "liveintegration.h"
 #include "musescore.h"
 #include "preferences.h"
@@ -56,6 +57,8 @@ LiveClipsLink* LiveClipsLink::instance()
             g = new LiveClipsLink;
             if (enabledSetting())
                   g->setOn(true);
+            else
+                  g->updateSocket();      // (editing Live clips: listening for the device all the same)
             }
       return g;
       }
@@ -87,6 +90,25 @@ LiveClipsLink::~LiveClipsLink()
       {
       }
 
+void LiveClipsLink::updateSocket()
+      {
+      const bool want = _on || LiveClipEditor::enabledSetting();
+      if (want && !_socket)
+            bindSocket();
+      else if (!want && _socket) {
+            _socket->close();
+            delete _socket;
+            _socket = nullptr;
+            _session.clear();
+            _lastHello = 0;
+            }
+      }
+
+bool LiveClipsLink::deviceAnswers() const
+      {
+      return _socket && !_session.isEmpty() && QDateTime::currentMSecsSinceEpoch() - _lastHello < HELLO_TIMEOUT_MS;
+      }
+
 bool LiveClipsLink::active() const
       {
       return _on && playingThroughMidi();
@@ -101,7 +123,8 @@ void LiveClipsLink::setOn(bool on)
             seq->stopWait();
       _on = on;
       if (on) {
-            bindSocket();
+            if (!_socket)
+                  bindSocket();
             _poll->start();
             _sent.clear();
             _song = LiveClips::Song();
@@ -119,14 +142,10 @@ void LiveClipsLink::setOn(bool on)
             _poll->stop();
             _queue.clear();
             _sent.clear();
-            if (_socket) {
-                  _socket->close();
-                  delete _socket;
-                  _socket = nullptr;
-                  }
-            _session.clear();
+                  _session.clear();
             _lastHello = 0;
             _following = false;
+            updateSocket();               // (kept for editing Live clips)
             }
       applySeqMode();
       emit statusChanged();
@@ -162,6 +181,8 @@ void LiveClipsLink::bindSocket()
 
 void LiveClipsLink::setScore(MasterScore* score)
       {
+      if (score && LiveClipEditor::instance()->isClipScore(score))
+            score = nullptr;              // (a Live clip edited here: not the score Live plays)
       if (score == _score)
             return;
       if (_score)
@@ -199,17 +220,24 @@ void LiveClipsLink::read()
 void LiveClipsLink::received(const QString& address, const QVariantList& args)
       {
       const qint64 now = QDateTime::currentMSecsSinceEpoch();
+      if (address.startsWith("/live/clip/")) {     // editing a Live clip (liveclipedit.h)
+            _lastHello = now;
+            LiveClipEditor::instance()->received(address, args);
+            return;
+            }
       if (address == "/live/hello") {
             const QString session = args.value(0).toString();
             _lastHello = now;
             if (session != _session) {          // the device (re)loaded: it knows nothing yet
                   _session = session;
-                  resync();
+                  if (_on)
+                        resync();
                   }
             }
       else if (address == "/live/resync") {
             _lastHello = now;
-            resync();
+            if (_on)
+                  resync();
             }
       else if (address == "/live/applied") {
             _lastHello = now;

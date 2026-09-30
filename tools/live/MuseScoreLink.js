@@ -17,6 +17,12 @@
 //     stops Live when MuseScore's Play or Stop is pressed;
 //   - "/ms/mode stream": MuseScore plays through Live (the tracks' Monitor on In, which silences
 //     clips); "clips": Live plays the clips (Monitor on Auto).
+//   - "Edit in MuseScore" (the button, on any copy): the clip in Live's Detail View (any MIDI clip, not
+//     only MuseScore's) is read with every field and sent to MuseScore, which opens it as a score; the
+//     hub then applies MuseScore's edits to it by note id (remove_notes_by_id, apply_note_modifications
+//     with Live's own note data and only the edited fields changed, add_new_notes), checks the clip once
+//     a second and reports a change made in Live as a conflict (nothing more is written until MuseScore
+//     reads it again). LIVE.md › Editing Live clips in MuseScore; mscore/liveclipmodel.h.
 // The Live Object Model is used from Max's low-priority thread only (messages from udpreceive go
 // through deferlow; the Tasks run there).
 //
@@ -26,7 +32,7 @@ autowatch = 0;
 inlets = 1;
 outlets = 3;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text
 
-var PROTOCOL = 1;
+var PROTOCOL = 2;                       // 2: editing Live clips
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 var HUB_STALE_MS = 5000;
@@ -52,6 +58,9 @@ var pendingSong = null;
 var work = [];                // clips and the song to write, in order
 var placed = {};              // key -> { track: id, clip: name } where the hub put it
 var lastTransport = { playing: -1, beat: -1, sent: 0 };
+var edits = {};               // key -> a clip edited in MuseScore
+var editSerial = 0;
+var lastEditRequest = "";
 var heartbeat = null;
 var worker = null;
 var reporter = null;
@@ -147,6 +156,7 @@ function beat() {
             g.hubBeat = now();
             if (Math.floor(now() / 1000) % 2 === 0)
                   send("/live/hello", session, PROTOCOL);
+            checkEdits();
             }
       else
             elect();
@@ -224,10 +234,22 @@ function notifydeleted() {
 //   MuseScore's messages
 //---------------------------------------------------------
 
+// the "Edit in MuseScore" button (any copy: the hub does the work)
+function edit() {
+      if (isHub)
+            work.push({ kind: "edit" });
+      else {
+            g.editRequest = me.key + ":" + now();
+            status("MuseScore Link: asked the hub to send the clip to MuseScore");
+            }
+      }
+
 function anything() {
       var a = arrayfromargs(arguments);
       if (messagename === "port")
             return setPort(a[0]);
+      if (messagename === "edit")
+            return edit();
       if (!isHub)
             return;
       handle(messagename, a);
@@ -281,6 +303,43 @@ function handle(address, a) {
             }
       else if (address === "/ms/stop")
             new LiveAPI("live_set").call("stop_playing");
+      else if (address === "/ms/clip/edit")
+            work.push({ kind: "edit" });
+      else if (address === "/ms/clip/write") {
+            var e = edits[str(a[0])];
+            if (!e)
+                  return send("/live/clip/written", str(a[0]), num(a[1]), "gone", 0);
+            if (num(a[1]) === e.lastWrite && e.reply) {           // sent again: applied once, answered again
+                  send.apply(this, e.reply);
+                  return;
+                  }
+            e.incoming = { write: num(a[1]), count: num(a[2]), chunks: num(a[3]), got: 0, ops: [] };
+            if (e.incoming.chunks === 0)
+                  queueWrite(e);
+            }
+      else if (address === "/ms/clip/ops") {
+            var ed = edits[str(a[0])];
+            if (!ed || !ed.incoming || ed.incoming.write !== num(a[1]))
+                  return;
+            for (var j = 3; j + 7 < a.length; j += 8)
+                  ed.incoming.ops.push({ op: num(a[j]), id: num(a[j + 1]), mask: num(a[j + 2]), pitch: num(a[j + 3]),
+                                         start: num(a[j + 4]), duration: num(a[j + 5]), velocity: num(a[j + 6]),
+                                         mute: num(a[j + 7]) });
+            if (++ed.incoming.got === ed.incoming.chunks)
+                  queueWrite(ed);
+            }
+      else if (address === "/ms/clip/reload") {
+            if (edits[str(a[0])])
+                  work.push({ kind: "reload", key: str(a[0]) });
+            }
+      else if (address === "/ms/clip/close")
+            delete edits[str(a[0])];
+      }
+
+function queueWrite(e) {
+      var w = e.incoming;
+      e.incoming = null;
+      work.push({ kind: "write", key: e.key, write: w });
       }
 
 function queueClip(t) {
@@ -307,6 +366,11 @@ function queueSong() {
 
 // one piece of work a turn (the Live API is slow: UDP keeps flowing between)
 function workStep() {
+      if (g.editRequest && g.editRequest !== lastEditRequest) {     // (a button on another copy)
+            lastEditRequest = g.editRequest;
+            if (isHub)
+                  work.push({ kind: "edit" });
+            }
       if (!work.length)
             return;
       var w = work.shift();
@@ -321,10 +385,18 @@ function workStep() {
                   }
             else if (w.kind === "mode")
                   applyMode();
+            else if (w.kind === "edit")
+                  startEdit();
+            else if (w.kind === "reload")
+                  sendClip(edits[w.key]);
+            else if (w.kind === "write")
+                  applyWrite(edits[w.key], w.write);
             }
       catch (e) {
             if (w.kind === "clip")
                   send("/live/applied", w.clip.key, w.clip.hash, "error: " + e, "");
+            else if (w.kind === "write")
+                  send("/live/clip/written", w.key, w.write.write, "error: " + e, 0);
             post("MuseScore Link: " + e + "\n");
             }
       }
@@ -567,9 +639,258 @@ function report() {
             }
       }
 
+//---------------------------------------------------------
+//   editing a clip in MuseScore
+//---------------------------------------------------------
+
+var FIELDS = ["note_id", "pitch", "start_time", "duration", "velocity", "mute", "probability", "velocity_deviation",
+              "release_velocity"];
+var TICKS = 480;                        // MuseScore's ticks a beat (the edits' times)
+var CLIP_NOTES_PER_PACKET = 24;         // LiveClipEdit::NOTES_PER_PACKET
+
+// a LOM call's dictionary: a JSON string, maybe in an array, or already an object
+function dict(v) {
+      if (v && typeof v === "object" && !Array.isArray(v))
+            return v;
+      var s = Array.isArray(v) ? v.join(" ") : str(v);
+      try { return JSON.parse(s); } catch (e) { return null; }
+      }
+
+function readNotes(clip) {
+      var d = dict(clip.call("get_all_notes_extended"));
+      return d && Array.isArray(d.notes) ? d.notes : [];
+      }
+
+// the clip's notes, whatever their order (FNV-1a over every field, by id)
+function hashNotes(notes) {
+      var l = notes.slice().sort(function(a, b) { return a.note_id - b.note_id; });
+      var h = 0x811c9dc5;
+      for (var i = 0; i < l.length; ++i) {
+            var s = "";
+            for (var k = 0; k < FIELDS.length; ++k)
+                  s += String(l[i][FIELDS[k]]) + ",";
+            for (var c = 0; c < s.length; ++c) {
+                  h ^= s.charCodeAt(c);
+                  h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+                  }
+            }
+      return h | 0;
+      }
+
+// the clip shown in the Detail View (an arrangement or a session clip), else the highlighted session slot's
+function selectedClip() {
+      var c = new LiveAPI("live_set view detail_clip");
+      if (num(c.id) > 0)
+            return c;
+      var slot = new LiveAPI("live_set view highlighted_clip_slot");
+      if (num(slot.id) > 0 && num(slot.get("has_clip"))) {
+            var l = ids(slot.get("clip"));
+            if (l.length)
+                  return new LiveAPI("id " + l[0]);
+            }
+      return null;
+      }
+
+// the clip's track (an arrangement clip's parent; a session clip's slot's parent)
+function trackOf(clip) {
+      var p = ids(clip.get("canonical_parent"));
+      if (!p.length)
+            return null;
+      var o = new LiveAPI("id " + p[0]);
+      if (str(o.type) === "ClipSlot") {
+            p = ids(o.get("canonical_parent"));
+            o = p.length ? new LiveAPI("id " + p[0]) : null;
+            }
+      return o;
+      }
+
+// a drum clip: a Drum Rack on its track, or a drum-like track name
+function isDrums(track, name) {
+      if (track) {
+            var devs = ids(track.get("devices"));
+            for (var i = 0; i < devs.length; ++i)
+                  if (str(new LiveAPI("id " + devs[i]).get("class_name")) === "DrumGroupDevice")
+                        return true;
+            }
+      return /drum|kit|perc|beat/i.test(name);
+      }
+
+function startEdit() {
+      var clip = selectedClip();
+      if (!clip) {
+            status("MuseScore Link: select a MIDI clip first (its notes shown in the Clip View), then Edit in MuseScore");
+            return;
+            }
+      if (!num(clip.get("is_midi_clip"))) {
+            status("MuseScore Link: that is an audio clip; only MIDI clips can be edited in MuseScore");
+            return;
+            }
+      var key = "c" + num(clip.id);
+      var e = edits[key];
+      if (!e) {
+            e = edits[key] = { key: key, clipId: num(clip.id), notes: [], hash: 0, conflict: false, lastWrite: 0, reply: null,
+                               incoming: null };
+            }
+      sendClip(e);
+      }
+
+// the clip to MuseScore (a new edit, the button again, or a reload after a conflict)
+function sendClip(e) {
+      if (!e)
+            return;
+      var clip = new LiveAPI("id " + e.clipId);
+      if (!(num(clip.id) > 0)) {
+            send("/live/clip/gone", e.key);
+            delete edits[e.key];
+            return;
+            }
+      var tr = trackOf(clip);
+      var trackName = tr ? str(tr.get("name")) : "";
+      var clipName = str(clip.get("name"));
+      var song = new LiveAPI("live_set");
+      var notes = readNotes(clip);
+      e.notes = notes;
+      e.hash = hashNotes(notes);
+      e.conflict = false;
+      e.gen = ++editSerial;
+      var num_ = num(clip.get("signature_numerator")) || num(song.get("signature_numerator")) || 4;
+      var den = num(clip.get("signature_denominator")) || num(song.get("signature_denominator")) || 4;
+      var end = Math.max(num(clip.get("end_marker")), num(clip.get("loop_end")));
+      var chunks = Math.ceil(notes.length / CLIP_NOTES_PER_PACKET);
+      send("/live/clip/begin", e.key, e.gen, trackName, clipName, isDrums(tr, trackName) ? 1 : 0, num(song.get("tempo")),
+           num_, den, end, num(clip.get("loop_start")), num(clip.get("loop_end")), num(clip.get("looping")) ? 1 : 0,
+           notes.length, chunks, e.hash);
+      for (var c = 0; c < chunks; ++c) {
+            var args = ["/live/clip/notes", e.key, e.gen, c];
+            var part = notes.slice(c * CLIP_NOTES_PER_PACKET, (c + 1) * CLIP_NOTES_PER_PACKET);
+            for (var i = 0; i < part.length; ++i) {
+                  var n = part[i];
+                  args.push(num(n.note_id), num(n.pitch), num(n.start_time), num(n.duration), num(n.velocity),
+                            num(n.mute) ? 1 : 0, n.probability === undefined ? 1 : num(n.probability),
+                            num(n.velocity_deviation || 0), n.release_velocity === undefined ? 64 : num(n.release_velocity));
+                  }
+            send.apply(this, args);
+            }
+      status("MuseScore Link: " + clipName + " (" + trackName + ") sent to MuseScore");
+      }
+
+function reply(e, args) {
+      e.reply = ["/live/clip/written"].concat(args);
+      send.apply(this, e.reply);
+      }
+
+function applyWrite(e, w) {
+      if (!e || !w)
+            return;
+      e.lastWrite = w.write;
+      var clip = new LiveAPI("id " + e.clipId);
+      if (!(num(clip.id) > 0)) {
+            reply(e, [e.key, w.write, "gone", 0]);
+            delete edits[e.key];
+            return;
+            }
+      var before = readNotes(clip);
+      if (e.conflict || hashNotes(before) !== e.hash) {
+            e.conflict = true;
+            reply(e, [e.key, w.write, "conflict", hashNotes(before)]);
+            return;
+            }
+      var byId = {};
+      for (var i = 0; i < before.length; ++i)
+            byId[before[i].note_id] = before[i];
+      var removes = [], mods = [], adds = [];
+      for (i = 0; i < w.ops.length; ++i) {
+            var o = w.ops[i];
+            if (o.op === 1) {
+                  if (byId[o.id])
+                        removes.push(o.id);
+                  }
+            else if (o.op === 0) {
+                  var b = byId[o.id];
+                  if (!b)
+                        continue;
+                  var n = {};
+                  for (var k in b)                // Live's own note: only what was edited changes
+                        n[k] = b[k];
+                  if (o.mask & 1) n.pitch = o.pitch;
+                  if (o.mask & 2) n.start_time = o.start / TICKS;
+                  if (o.mask & 4) n.duration = o.duration / TICKS;
+                  if (o.mask & 8) n.velocity = o.velocity;
+                  if (o.mask & 16) n.mute = o.mute ? 1 : 0;
+                  mods.push(n);
+                  }
+            else if (o.op === 2)
+                  adds.push({ pitch: o.pitch, start_time: o.start / TICKS, duration: o.duration / TICKS, velocity: o.velocity,
+                              mute: o.mute ? 1 : 0 });
+            }
+      if (removes.length)
+            clip.call.apply(clip, ["remove_notes_by_id"].concat(removes));
+      if (mods.length)
+            clip.call("apply_note_modifications", { notes: mods });
+      var added = [];
+      if (adds.length) {
+            var r = clip.call("add_new_notes", { notes: adds });
+            var l = Array.isArray(r) ? r : (dict(r) && dict(r).note_ids) || str(r).replace(/[\[\],]/g, " ").split(/\s+/);
+            for (i = 0; i < l.length; ++i)
+                  if (str(l[i]) !== "" && !isNaN(Number(l[i])))
+                        added.push(Number(l[i]));
+            }
+      var after = readNotes(clip);
+      if (added.length !== adds.length) {         // (no ids returned: the new notes, matched to what was added)
+            added = [];
+            var had = {};
+            for (i = 0; i < before.length; ++i)
+                  had[before[i].note_id] = true;
+            var fresh = after.filter(function(x) { return !had[x.note_id]; });
+            for (i = 0; i < adds.length; ++i) {
+                  var best = -1, bd = 1e9;
+                  for (var j = 0; j < fresh.length; ++j) {
+                        if (fresh[j].pitch !== adds[i].pitch)
+                              continue;
+                        var dd = Math.abs(fresh[j].start_time - adds[i].start_time) + Math.abs(fresh[j].duration - adds[i].duration);
+                        if (dd < bd) {
+                              bd = dd;
+                              best = j;
+                              }
+                        }
+                  if (best >= 0) {
+                        added.push(fresh[best].note_id);
+                        fresh.splice(best, 1);
+                        }
+                  }
+            }
+      e.notes = after;
+      e.hash = hashNotes(after);
+      reply(e, [e.key, w.write, "ok", e.hash].concat(added));
+      status("MuseScore Link: " + (removes.length + mods.length + adds.length) + " note change(s) from MuseScore written");
+      }
+
+// once a second: a clip edited in MuseScore changed in Live (or went)?
+function checkEdits() {
+      for (var key in edits) {
+            var e = edits[key];
+            if (e.conflict)
+                  continue;
+            var clip = new LiveAPI("id " + e.clipId);
+            if (!(num(clip.id) > 0)) {
+                  send("/live/clip/gone", key);
+                  delete edits[key];
+                  continue;
+                  }
+            var h = hashNotes(readNotes(clip));
+            if (h !== e.hash) {
+                  e.conflict = true;
+                  send("/live/clip/conflict", key, h);
+                  status("MuseScore Link: " + str(clip.get("name")) + " changed in Live: MuseScore stops writing to it");
+                  }
+            }
+      }
+
 // (Node tests)
 if (typeof module !== "undefined")
       module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,
-                         findTrack: findTrack, writeSong: writeSong, report: report, state: function() {
-                               return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me };
+                         findTrack: findTrack, writeSong: writeSong, report: report, hashNotes: hashNotes,
+                         checkEdits: checkEdits, edit: edit, state: function() {
+                               return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
+                                        edits: edits };
                                } };

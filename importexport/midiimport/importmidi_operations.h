@@ -209,6 +209,9 @@ struct FileData
       QList<std::multimap<ReducedFraction, std::string>> lyricTracks;
       std::multimap<ReducedFraction, QString> chordNames;
       HumanBeatData humanBeatData;
+                  // a Live clip edited in MuseScore (mscore/liveclipmodel.h): the instrument
+                  // named after its Live track, for every non-drum track (nullptr: by program)
+      const InstrumentTemplate* forcedInstrument = nullptr;
       };
 
 class Data

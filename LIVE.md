@@ -6,7 +6,8 @@ through Ableton Live 12 instead. In that mode Live hosts SSO and all automation 
 automation is then read back into the score, so MuseScore alone plays it the same way. In
 MuseScore it is read-only: it is edited only in Live.
 
-There are two ways to play through Live:
+There are two ways to play through Live (and, besides them, [editing any Live MIDI clip in
+MuseScore](#editing-live-clips-in-musescore)):
 
 1. **MuseScore plays through Live** (*Mixer › Play through Live*, 2026-09-28). MuseScore is the
    clock: it sends each part's notes, switches and controllers live to Live, plus MIDI clock and
@@ -221,6 +222,124 @@ Only real Live can show (to check first):
 - chasing at a mid-song start sends the controllers in force;
 - MuseScore following Live stays in step over a long piece.
 
+## Editing Live clips in MuseScore
+
+The owner, 2026-09-29: "eventually I want to be able to just edit any midi clip in MuseScore", then
+"MuseScore shouldn't try to render a page when editing MIDI, it should just render the midi in the
+Ctrl+Shift+V view" (Continuous View, `LayoutMode::LINE`).
+
+Any MIDI clip in Live (not only MuseScore's "MuseScore: …" clips) opens in MuseScore as notation; each edit
+there goes back into that clip, note by note. Notes you don't touch keep Live's exact data.
+
+### How to use it
+
+1. The **MuseScore Link** device (the same `.amxd`, regenerated) on any track of the set; MuseScore running
+   (with the setting on: *Mixer › Advanced Options… › Ableton Live › Edit Live clips in MuseScore*, on by
+   default; it only listens on 127.0.0.1). "Live plays the score" and "Play through Live" don't need to be on.
+2. In Live, click the MIDI clip so its notes show in the Clip View (arrangement or session clip).
+3. Press **Edit in MuseScore** on the device (any copy of it). A tab "<track> › <clip>" opens in Continuous View.
+4. Edit as usual. The status bar says "Editing Live clip <track> › <clip>: in sync (n note change(s) sent)".
+   Each edit reaches the clip about 0.3 s later.
+5. Close the tab to stop. An unsaved clip score closes without asking (its edits are in Live already); *Save
+   As* makes an ordinary score of it.
+
+### How it works
+
+- **Reading** (device): the clip shown in the Detail View (`Song.View.detail_clip`), else the highlighted
+  session slot's clip (`Song.View.highlighted_clip_slot`); `Clip.get_all_notes_extended` (Live 11.1+): every
+  note with `note_id`, pitch, start, duration, velocity, mute, probability, velocity deviation, release
+  velocity (MPE is not read and stays in the clip); the clip's `signature_numerator/denominator`,
+  `loop_start/loop_end`, `end_marker`, `looping`; its track's name (`canonical_parent`, through the
+  `ClipSlot` for a session clip) and devices; the song's `tempo`. Sent as `/live/clip/begin` + `/live/clip/notes`
+  (protocol 2, chunked like `/ms/notes`; `mscore/liveclipmodel.h` has the messages).
+- **The score** (`LiveClipEdit::importClip`): the clip as a Standard MIDI File through MuseScore's MIDI import
+  (quantization, voices, tuplets, ties; beat tracking for "human performance" and pickup detection off, so bar
+  lines stay on Live's beats). Clip time = score time: clip beat *b* is tick *b* × 480, from the clip's time 0,
+  bars up to the clip's end (the later of end marker and loop end). The layout mode is set to Continuous View
+  before the import, so no page layout ever runs (the importer doesn't set one; tested: one page, one system).
+  Tempo: Live's song tempo (a tempo marking). Time signature: the clip's own.
+- **Instrument**: from the track's name (MuseScore's instrument ids, track and long names, compared without
+  case, digits and punctuation, plus a few short names: cello, bass, keys …), else piano; a piano gets a
+  grand staff (the import's left / right hand split) only when the notes don't fit one clef (treble A3-C6 or
+  bass E2-G4). Change it in the Instruments dialog as usual. **Drums**: a Drum Rack (`DrumGroupDevice`) on
+  the track, or a track named like drum / kit / perc / beat: channel 10 in the file, so the import uses
+  MuseScore's drumset (GM pitches: a Drum Rack's C1 = 36 is the kick).
+- **Playback** while editing: MuseScore's own sounds (every part "This part plays: MuseScore 4"): no Kontakt
+  instance loaded for a quick edit, nothing sent to Live's tracks. Change it in the Mixer if wanted. The clip
+  score is never "the score Live plays" (`LiveClipsLink::setScore` skips it).
+- **Marked as a clip editor** in `LiveClipEditor` only (a runtime property): nothing is written into the file.
+- **The round trip** (`LiveClipEdit::match`, `diff`): after the import each notation note (a tie chain, by its
+  first note; grace notes left out) gets the Live note(s) it came from (same pitch, nearest start within a
+  beat; two Live notes the import merged share one notation note). Its signature: pitch as played
+  (`ppitch`: an 8va line counts), start tick, played length (`playTicks`), velocity (the note's absolute
+  velocity, which the import sets), played or not (the Inspector's *Play* = Live's mute). After each edit
+  (the score's `playlistChanged`, 300 ms after the last, not inside a command) the signatures now are compared
+  with the baseline **by content**, not by object (MuseScore replaces notes on a duration change; undo brings
+  old ones back):
+  - the same signature: its Live notes stay as they are, nothing is sent;
+  - paired by what stayed the same (velocity / play only; pitch only; length only; moved): a **modification**
+    of only the fields edited: e.g. a pitch edit keeps the note's humanized start, length, velocity,
+    probability …; an edited field is written from the notation exactly (a moved note lands on the grid);
+  - a baseline note left over: **removed by id**; a notation note left over: **added** (velocity 100 unless
+    the note has one).
+  - Live notes outside the clip's time (before 0, after its end) or that no notation note stands for are never
+    touched (the status line counts them).
+- **Writing** (device): `remove_notes_by_id`, `apply_note_modifications` with Live's own note dictionaries and
+  only the edited fields changed (the device keeps Live's doubles; MuseScore sends the edited fields in ticks,
+  so nothing is rounded through float32), `add_new_notes` (its ids, else the new notes found by pitch and
+  time). All Live 11.0+. Nothing else is called: no replace-all, no envelopes, no clip properties. One write at
+  a time, numbered; the device answers `/live/clip/written` with the ids of the added notes and the clip's new
+  hash; unanswered after 3 s MuseScore sends it again with the same number, which the device applies once.
+- **Conflicts**: the device hashes the clip's notes (every field, FNV-1a) after each read and write and checks
+  it once a second (and again before each write). A change made in Live (or Live's undo of a write): 
+  `/live/clip/conflict`; nothing more is written. The status line says "conflict" with **Reload from Live**:
+  the clip is read again into a new tab that replaces the old one (edits made in MuseScore since the conflict
+  are dropped: the owner decides by pressing it). The clip deleted in Live: "the clip is gone".
+- **Starting again**: *Edit in MuseScore* on a clip already open brings its tab to the front, or reads it again
+  if it changed in Live. `/ms/clip/edit` (from MuseScore) does what the button does (used by tests only).
+
+### What is tested, and what only Live can show
+
+Tested here:
+- `tst_liveintegration` clipEdit*: the import (Continuous View, one system, part and instrument from the track
+  name, bars to the clip's end, tempo, time signature), each Live note matched; no edit → nothing sent; a pitch
+  edit → one modification of that id, its humanized start, length, velocity, probability kept; velocity and
+  mute; delete (removal by id) and a note written in its place (a modification of the same Live note); an added
+  note (its tick, length, velocity 100); a shorter note (length only); a tie chain over the bar line (one Live
+  note); a chord (only the edited note's id); added ids and undo (the added note removed by its id, a pitch edit
+  undone goes back to Live's pitch); a drum clip (drumset, a snare changed to a clap); names → instruments and
+  the grand staff rule; notes outside the clip never touched; the write packets.
+- `tools/live/test/test_clipedit.js` (stand-in Live, `fakelive.js` with note ids, `get_all_notes_extended`,
+  `apply_note_modifications`, `remove_notes_by_id`, Song.View): the Detail View's clip with every field; the
+  button on a copy that isn't the hub; a session clip in 7/8 on a Drum Rack track; no clip selected; a write by
+  id (untouched notes identical, a modified note keeps Live's other fields, the calls used); a write sent twice
+  applied once; `add_new_notes` without ids; a change in Live → conflict, writes refused, reload, writes again;
+  a change caught at the moment of a write; the clip deleted; the "Live plays the score" work left alone.
+- End to end: a real MuseScore GUI build under Xvfb against `fake_live_server.js --edit-clip Violin --edit-at 8`:
+  the tab opened in Continuous View ("Violin › Idea", status "in sync"); the first note clicked and raised with
+  Up: 7 ms later only that note's pitch had changed in the stand-in's clip (67 → 68), its start 0.013, length,
+  velocity 87.3, probability 0.75, velocity deviation and release velocity untouched, the other five notes
+  identical. With `--live-change-at 22`: the conflict shown with *Reload from Live*, an edit made meanwhile not
+  written, the reload replaced the tab without a question (Live's changed velocity kept), and the next edit was
+  written. With "Live plays the score" on as well: the clip score was never sent as a "MuseScore:" clip.
+
+Only real Live can show (to check first):
+- `Song.View.detail_clip` for an arrangement clip selected in the arrangement (the LOM says "the clip currently
+  displayed in the Detail View"), and `canonical_parent` of a session clip being its `ClipSlot`;
+- how Max hands `get_all_notes_extended`'s dictionary to the `v8` script (read as JSON text, an array of it, or
+  an object) and `add_new_notes`' list of ids (read as an array, JSON or text; else found by matching);
+- that `apply_note_modifications` with a complete note dictionary leaves the note's MPE alone;
+- the device's new *Edit in MuseScore* button (`live.text`) sends once per click;
+- the hash staying the same between Live's own reads (no float noise), so no false conflicts.
+
+### Open questions for the owner
+
+- A moved note lands exactly on the notation's grid. The alternative: keep its humanized offset (move by the
+  difference).
+- The instrument from the track's name, else piano; a drum clip by a Drum Rack or the track's name. Other rules?
+- Playback of the clip score with MuseScore's own sounds. Should it play through the Live track instead?
+- Notes added in MuseScore get velocity 100 when the note has none set.
+
 ## What the owner's Live set confirmed, and what it didn't
 
 The .als reader follows the element names that open-source readers use: DawVert, dawtool, and
@@ -304,5 +423,9 @@ do.
 - `libmscore/liveset.{h,cpp}`: the .als reader, and matching to parts and controllers.
 - `libmscore/automation.{h,cpp}`: `Lane::extra`, `source()`, `readOnly()`, `replaceSource`.
 - `mscore/liveintegration.{h,cpp}`: the Mixer switch, the import, the link, the watcher.
+- `mscore/liveclips.{h,cpp}`: Live plays the score (`LiveClipsLink`, which owns the UDP socket for both).
+- `mscore/liveclipmodel.{h,cpp}`: editing Live clips: the import, the baseline, the diff, the messages;
+  `mscore/liveclipedit.{h,cpp}`: the sessions, tabs and status line.
+- `tools/live/`: the device (`MuseScoreLink.js`, `make_device.py`) and its tests (`test/`).
 - Tests: `mtest/libmscore/liveintegration`. Fixtures: `liveset.xml` (written by hand, gzipped by
   the test) and `violin-flute.musicxml`.

@@ -135,6 +135,7 @@
 #include "soundlibraryhost.h"
 #include "liveintegration.h"
 #include "liveclips.h"
+#include "liveclipedit.h"
 #include "soundlibrarycheck.h"
 #include "soundlibraryloadtimes.h"
 #include "playbackverify.h"
@@ -3384,6 +3385,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
       SoundLibraryHost::instance()->preloadSoon(cs);    // the sound library's instances, ahead of play
       LiveIntegration::Watcher::instance()->update();   // a linked Live Set, re-imported when Live saves it
       LiveIntegration::LiveClipsLink::instance()->setScore(cs ? cs->masterScore() : nullptr);  // Live plays the score
+      LiveIntegration::LiveClipEditor::instance()->setCurrentScore(cs ? cs->masterScore() : nullptr);  // a Live clip edited here
       if (playPanel)
             playPanel->setScore(cs);
       if (synthControl)
@@ -4050,6 +4052,7 @@ void MuseScore::removeTab(int i)
             QFile f(tmpName);
             f.remove();
             }
+      LiveIntegration::LiveClipEditor::instance()->scoreClosed(score);   // editing a Live clip ends with its tab
       delete score;
       // Shouldn't be necessary... but fix #21841
       update();

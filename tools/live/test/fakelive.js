@@ -3,6 +3,8 @@
 // (https://docs.cycling74.com/apiref/lom/): values come back from get() as arrays, a list of
 // children as ["id", n, "id", m], a dictionary property as a JSON string; arrangement clips can't
 // overlap on a track (making one over another is recorded as an error here, so a test fails).
+// Notes (Live 11+): each has a note_id and every field get_all_notes_extended returns; Song.View has
+// detail_clip (the clip in the Detail View) and highlighted_clip_slot (session slots: clipSlot()).
 
 "use strict";
 const fs = require("fs");
@@ -15,7 +17,21 @@ class FakeLive {
             this.objects = {};
             this.errors = [];
             this.calls = [];
-            this.song = this.add({ kind: "song", tempo: 120, is_playing: 0, current_song_time: 0, cues: [], tracks: [] });
+            this.nextNoteId = 1;
+            this.song = this.add({ kind: "song", tempo: 120, is_playing: 0, current_song_time: 0, cues: [], tracks: [],
+                                   signature_numerator: 4, signature_denominator: 4 });
+            this.view = this.add({ kind: "view", detail_clip: 0, highlighted_clip_slot: 0 });
+            }
+      // a note as Live keeps it (the defaults add_new_notes gives)
+      note(n) {
+            return Object.assign({ note_id: this.nextNoteId++, velocity: 100, mute: 0, probability: 1, velocity_deviation: 0,
+                                   release_velocity: 64 }, n);
+            }
+      // a session clip in a slot of the track
+      clipSlot(track) {
+            const slot = this.add({ kind: "clipslot", track: track.id, clip: 0 });
+            (track.slots = track.slots || []).push(slot.id);
+            return slot;
             }
       add(o) {
             o.id = this.nextId++;
@@ -35,7 +51,9 @@ class FakeLive {
             return d;
             }
       clip(track, name, start, end) {
-            const c = this.add({ kind: "clip", name: name, start_time: start, end_time: end, muted: 0, notes: [], track: track.id });
+            const c = this.add({ kind: "clip", name: name, start_time: start, end_time: end, muted: 0, notes: [], track: track.id,
+                                 parent: track.id, is_midi_clip: 1, signature_numerator: 4, signature_denominator: 4,
+                                 loop_start: 0, loop_end: end - start, start_marker: 0, end_marker: end - start, looping: 0 });
             track.clips.push(c.id);
             return c;
             }
@@ -44,6 +62,12 @@ class FakeLive {
             let m;
             if (p === "live_set")
                   return this.song;
+            if (p === "live_set view")
+                  return this.view;
+            if (p === "live_set view detail_clip")
+                  return this.objects[this.view.detail_clip];
+            if (p === "live_set view highlighted_clip_slot")
+                  return this.objects[this.view.highlighted_clip_slot];
             if ((m = /^live_set tracks (\d+)$/.exec(p)))
                   return this.objects[this.song.tracks[Number(m[1])]];
             if ((m = /^id (\d+)$/.exec(p)))
@@ -70,6 +94,8 @@ function liveApiFor(live, deviceId) {
             const o = live.resolve(p);
             this.id = o ? o.id : 0;
             this.path = p;
+            this.type = o ? { song: "Song", track: "Track", clip: "Clip", clipslot: "ClipSlot", device: "Device", cue: "CuePoint",
+                              view: "Song.View" }[o.kind] : "";
             const self = this;
             this.getcount = function(what) {
                   if (o.kind === "song" && what === "tracks")
@@ -96,6 +122,14 @@ function liveApiFor(live, deviceId) {
                               return [JSON.stringify({ input_routing_channel: { display_name: o.inputChannel, identifier: 3 } })];
                         return [o[prop]];
                         }
+                  if (o.kind === "clip" && prop === "canonical_parent")
+                        return ["id", o.parent];
+                  if (o.kind === "clipslot" && prop === "canonical_parent")
+                        return ["id", o.track];
+                  if (o.kind === "clipslot" && prop === "clip")
+                        return ["id", o.clip];
+                  if (o.kind === "clipslot" && prop === "has_clip")
+                        return [o.clip ? 1 : 0];
                   return [o[prop]];
                   };
             this.set = function(prop, v) {
@@ -133,8 +167,32 @@ function liveApiFor(live, deviceId) {
                         const d = args[0];
                         if (!d || !Array.isArray(d.notes))
                               live.errors.push("add_new_notes without a notes list");
-                        for (const n of d.notes)
-                              o.notes.push(Object.assign({}, n));
+                        const added = [];
+                        for (const n of d.notes) {
+                              const x = live.note(Object.assign({}, n));
+                              o.notes.push(x);
+                              added.push(x.note_id);
+                              }
+                        return live.addReturnsIds === false ? undefined : added;
+                        }
+                  if (o.kind === "clip" && fn === "get_all_notes_extended")
+                        return JSON.stringify({ notes: o.notes });           // (Max hands a dictionary to JS as JSON)
+                  if (o.kind === "clip" && fn === "remove_notes_by_id") {
+                        const ids = args.map(Number);
+                        o.notes = o.notes.filter((n) => ids.indexOf(n.note_id) < 0);
+                        return;
+                        }
+                  if (o.kind === "clip" && fn === "apply_note_modifications") {
+                        const d = args[0];
+                        if (!d || !Array.isArray(d.notes))
+                              live.errors.push("apply_note_modifications without a notes list");
+                        for (const m of d.notes) {
+                              const i = o.notes.findIndex((n) => n.note_id === m.note_id);
+                              if (i < 0)
+                                    live.errors.push("apply_note_modifications: no note " + m.note_id);
+                              else
+                                    o.notes[i] = Object.assign({}, o.notes[i], m);
+                              }
                         return;
                         }
                   if (o.kind === "song" && fn === "set_or_delete_cue") {

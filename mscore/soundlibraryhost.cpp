@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "soundlibraryhost.h"
+#include "liveclipedit.h"
 #include "liveclips.h"
 #include "liveintegration.h"
 #include "libmscore/automation.h"
@@ -2463,6 +2464,18 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             _liveClipsStatus->setWordWrap(true);
             v->addWidget(_liveClips);
             v->addWidget(_liveClipsStatus);
+            // editing Live clips (liveclipedit.h): the device's "Edit in MuseScore" button
+            QCheckBox* editClips = new QCheckBox(tr("Edit Live clips in MuseScore (the MuseScore Link device's "
+                                                    "\"Edit in MuseScore\" button)"), liveBox);
+            editClips->setToolTip(tr("MuseScore listens for the MuseScore Link device in Live (UDP on this computer only). "
+                                     "Its \"Edit in MuseScore\" button opens the MIDI clip shown in Live's Clip View as a "
+                                     "score here, in Continuous View; each edit goes back to that clip, note by note, "
+                                     "and the notes you don't touch keep Live's exact timing and velocity."));
+            editClips->setChecked(LiveIntegration::LiveClipEditor::enabledSetting());
+            connect(editClips, &QCheckBox::toggled, this, [](bool on) {
+                  LiveIntegration::LiveClipEditor::setEnabledSetting(on);
+                  });
+            v->addWidget(editClips);
             layout->addWidget(liveBox);
             LiveIntegration::LiveClipsLink* link = LiveIntegration::LiveClipsLink::instance();
             connect(_liveClips, &QCheckBox::toggled, this, [this, link](bool on) {

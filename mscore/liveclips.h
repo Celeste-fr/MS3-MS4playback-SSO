@@ -30,6 +30,9 @@
 //     parts play along, as a slave, and the score's cursor follows.
 //   - MuseScore's Play starts Live instead (/ms/play at the play position), and MuseScore follows;
 //     its Stop stops Live.
+//   - The UDP socket also carries the editing of Live clips (liveclipedit.h): it is bound while this
+//     is on or that setting is (liveIntegration/editClips, on by default); /live/clip/… goes there, and
+//     without "Live plays the score" a hello only records the device (no resync, no /ms/mode).
 //   All on the GUI thread, never the audio thread.
 //---------------------------------------------------------
 
@@ -139,6 +142,10 @@ class LiveClipsLink : public QObject {
       void stopRequested();
       // the library's output changed (Mixer › Play through Live)
       void outputChanged();
+      // the socket is shared with the clip editor (liveclipedit.h): bound while either is on
+      void updateSocket();
+      void sendDatagram(const QByteArray& packet) { send(packet); }
+      bool deviceAnswers() const;                   // a hello within 6 s (either feature)
       };
 
 }     // namespace LiveIntegration

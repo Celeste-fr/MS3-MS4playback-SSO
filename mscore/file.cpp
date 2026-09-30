@@ -90,6 +90,7 @@
 #include "scorecmp/scorecmp.h"
 
 #include "thirdparty/qzip/qzipreader_p.h"
+#include "liveclipedit.h"
 
 namespace Ms {
 
@@ -248,6 +249,8 @@ static bool readScoreError(const QString& name, Score::FileError error, bool ask
 
 bool MuseScore::checkDirty(MasterScore* s)
       {
+      if (LiveIntegration::LiveClipEditor::instance()->unsavedClipScore(s))
+            return false;           // a Live clip edited here, never saved: its edits are in Live already
       if (s->dirty() || (s->created() && !s->startedEmpty())) {
             QMessageBox::StandardButton n = QMessageBox::warning(this, tr("MuseScore"),
                tr("Save changes to the score \"%1\"\n"

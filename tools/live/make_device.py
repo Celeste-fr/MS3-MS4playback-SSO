@@ -139,9 +139,23 @@ def build(script):
     status = p.box("comment", "MuseScore Link: loading", 1, 0, (650, 200, 320, 40), presentation=1,
                    presentation_rect=[6, 26, 320, 40], linecount=3)
     p.connect(js, 2, status, 0)             # (the script sends "set <text>")
-    p.box("comment", "MuseScore owns its clips: edits to them here are overwritten. Keep this device before the "
-          "instrument.", 1, 0, (650, 250, 320, 30), presentation=1, presentation_rect=[6, 68, 320, 28],
+    p.box("comment", "MuseScore owns its \"MuseScore:\" clips: edits to them here are overwritten. Keep this device "
+          "before the instrument.", 1, 0, (650, 250, 320, 30), presentation=1, presentation_rect=[6, 68, 320, 28],
           linecount=2, fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
+    # --- Edit in MuseScore: the clip in Live's Clip View opens as a score in MuseScore (LIVE.md › Editing Live clips)
+    edit = p.box("live.text", "Edit in MuseScore", 1, 2, (650, 290, 110, 18), outlettype=["", ""],
+                 presentation=1, presentation_rect=[6, 100, 110, 18], mode=0, texton="Edit in MuseScore",
+                 varname="Edit in MuseScore", parameter_enable=1,
+                 saved_attribute_attributes={"valueof": {
+                     "parameter_longname": "Edit in MuseScore", "parameter_shortname": "Edit",
+                     "parameter_type": 2, "parameter_enum": ["off", "on"], "parameter_mmax": 1,
+                     "parameter_invisible": 2}})
+    tedit = p.obj("t edit", 1, 1, 650, 320)
+    p.connect(edit, 0, tedit, 0)
+    p.connect(tedit, 0, js, 0)
+    p.box("comment", "the MIDI clip shown in Live's Clip View, as notation; edits go back to it", 1, 0,
+          (770, 290, 200, 30), presentation=1, presentation_rect=[120, 99, 205, 28], linecount=2, fontsize=9.0,
+          textcolor=[0.6, 0.6, 0.6, 1.0])
     return p.patcher()
 
 

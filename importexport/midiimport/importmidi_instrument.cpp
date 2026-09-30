@@ -368,6 +368,14 @@ void findInstrumentsForAllTracks(const QList<MTrack> &tracks, bool forceReload)
                         opers.data()->trackOpers.msInstrIndex.setDefaultValue(defaultInstrIndex);
                         }
                   }
+            if (const InstrumentTemplate* forced = opers.data()->forcedInstrument) {
+                  for (const auto &track: tracks) {
+                        if (track.mtrack->drumTrack())
+                              continue;
+                        instrListOption.setValue(track.indexOfOperation, { forced });
+                        opers.data()->trackOpers.msInstrIndex.setValue(track.indexOfOperation, 0);
+                        }
+                  }
             }
       }
 

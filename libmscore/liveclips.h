@@ -85,7 +85,7 @@ class Library;
 
 namespace LiveClips {
 
-constexpr int PROTOCOL           = 1;
+constexpr int PROTOCOL           = 2;         // 2: editing Live clips (mscore/liveclipmodel.h)
 constexpr int UNITS_PER_BEAT     = 3840;
 constexpr int EPSILON            = 2;         // units: ~0.26 ms at 120 bpm
 constexpr int NOTES_PER_PACKET   = 48;        // 5 int32 + 5 type tags each: about 1.3 kB a datagram
