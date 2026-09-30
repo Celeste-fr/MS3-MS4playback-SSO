@@ -84,6 +84,8 @@ static const int KONTAKT_FRAME_LEFT = 352;  // its instrument rack (a slot meter
 // the check's version: raise it when a change makes earlier results stale (all patches are then
 // checked again)
 static const int CHECK_VERSION = 4;       // 4: patches without switching (listened to, no switch sent)
+// a timing run's results; earlier ones are timed again (timedBefore). 2: body lengths (20 dB), legato on legato patches only
+static const int TIMING_VERSION = 2;
 
 //---------------------------------------------------------
 //   testPitch
@@ -755,9 +757,20 @@ static void writeProgress(const QStringList& patches)
 // ("<patch>\t<step>", written before each: a crash names it), the steps not to try again ("<patch>\t<step>"
 // per line: they crashed the plug-in), the patches finished in the run (one per line: the estimate of
 // the time left over every round)
+static QString& runPrefix()
+      {
+      static QString prefix("background extract");
+      return prefix;
+      }
+
+void ArticulationCheckDialog::setRunPrefix(const QString& prefix)
+      {
+      runPrefix() = prefix;
+      }
+
 QString ArticulationCheckDialog::runFile(const QString& root, const QString& what)
       {
-      return root + "/background extract " + what + ".txt";
+      return root + "/" + runPrefix() + " " + what + ".txt";
       }
 
 static QString runFileHere(const QString& what)
@@ -948,6 +961,24 @@ QSet<QString> ArticulationCheckDialog::measuredBefore(bool pitchBend) const
       return done;
       }
 
+// the patches an earlier timing run (of TIMING_VERSION or later) timed: a check folder's results.json
+QSet<QString> ArticulationCheckDialog::timedBefore() const
+      {
+      QSet<QString> done;
+      const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
+      for (const QFileInfo& d : QDir(root).entryInfoList({ safeFileName(_library->name) + " 2*" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+            QFile in(d.absoluteFilePath() + "/results.json");
+            if (!in.open(QIODevice::ReadOnly))
+                  continue;
+            for (const QJsonValue& v : QJsonDocument::fromJson(in.readAll()).object().value("patches").toArray()) {
+                  const QJsonObject p = v.toObject();
+                  if (p.value("timingOnly").toBool() && p.contains("timing") && p.value("timingVersion").toInt() >= TIMING_VERSION)
+                        done.insert(p.value("patch").toString());
+                  }
+            }
+      return done;
+      }
+
 // the patches an earlier links run did: an extract JSON of a links run ("plan": "links") that sounded and has which
 // control each controller moves
 QSet<QString> ArticulationCheckDialog::linkedBefore() const
@@ -1014,6 +1045,24 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
       if (!ticked) {
             say("no patch to extract");
             return false;
+            }
+      // a timing run leaves out the patches an earlier one of this version timed (a restart goes on; the
+      // owner's first run, 2026-09-29, stopped after 19 of 159). MS_EXTRACT_REDO=1 times them again
+      if (timing && !qEnvironmentVariableIsSet("MS_EXTRACT_REDO")) {
+            const QSet<QString> done = timedBefore();
+            int left = 0;
+            for (int row = 0; row < _table->rowCount(); ++row)
+                  if (_table->item(row, 0)->checkState() == Qt::Checked && done.contains(_rows[row].instrument->name)) {
+                        _table->item(row, 0)->setCheckState(Qt::Unchecked);
+                        --ticked;
+                        ++left;
+                        }
+            if (left)
+                  say(QString("%1 patches timed in earlier runs: left out (MS_EXTRACT_REDO=1 times them again)").arg(left));
+            if (!ticked) {
+                  say("every patch was timed already");
+                  return false;
+                  }
             }
       if (dynamics || timing) {
             _dynamics->setChecked(true);
@@ -1297,6 +1346,19 @@ void ArticulationCheckDialog::check()
                   say(QString("%1 of %2: %3 (%4 min so far%5)").arg(k + 1).arg(chosen.size()).arg(_rows[chosen[k]].instrument->name)
                       .arg(elapsed).arg(k ? QString(", about %1 min left").arg(elapsed * (int(chosen.size()) - k) / k) : QString()));
                   }
+            if (_headless) {                // (a supervisor: where a crash was, and what is left)
+                  QStringList rest;
+                  for (int j = k; j < int(chosen.size()); ++j)
+                        rest << _rows[chosen[j]].instrument->name;
+                  writeProgress(rest);
+                  // (test switches: the child crashes, or hangs, on that patch)
+                  const QString name = _rows[chosen[k]].instrument->name;
+                  if (name == qEnvironmentVariable("MS_EXTRACT_TEST_CRASH"))
+                        std::abort();
+                  if (name == qEnvironmentVariable("MS_EXTRACT_TEST_HANG"))
+                        for (;;)
+                              QThread::sleep(10);
+                  }
             if (_dynamics->isChecked() && _dynamicsOnly->isChecked())
                   dynamicsPatch(chosen[k], path, folder, results, summary);
             else
@@ -1321,6 +1383,10 @@ void ArticulationCheckDialog::check()
       // all of it in one zip, to hand back
       const QString zipPath = zipFolder(folder);
       _zip = zipPath;
+      if (_headless && !progressFile().isEmpty() && !_cancel) {     // (the supervisor: all done)
+            QFile f(progressFile());
+            f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+            }
 
       done();
       rebuild();
@@ -1460,7 +1526,10 @@ void ArticulationCheckDialog::measureTiming(const SoundLib::LibInstrument& ins, 
                   pitches.push_back(pitch);
                   legato.push_back(false);
                   }
-            if (a.techniques.contains("legato"))
+            // (a legato patch's own: "legato" first, the Performance patches; the All techniques patches' Long
+            // is "long legato", a note that stands for a slur there but has no legato transitions: the owner's
+            // first run, 2026-09-29, measured retriggers on it)
+            if (a.techniques.value(0) == "legato")
                   legato[size_t(std::find(values.begin(), values.end(), a.value) - values.begin())] = true;
             names[a.value].append(a.name);
             }
@@ -1494,17 +1563,19 @@ void ArticulationCheckDialog::measureTiming(const SoundLib::LibInstrument& ins, 
             o["fullMs"] = three(t.fullMs);
             o["peakMs"] = three(t.peakMs);
             o["peakDb"] = three(t.peakDb);
+            o["bodyMs"] = r1(t.bodyMs);
             o["lengthMs"] = r1(t.lengthMs);
             o["sustains"] = t.sustains;
             if (t.sustains)
                   o["releaseMs"] = r1(t.releaseMs);
+            o["shortNoteBodyMs"] = r1(t.shortNoteBodyMs);
             o["shortNoteMs"] = r1(t.shortNoteMs);
             QString line = QString("%1: starts %2 / %3 / %4, full %5 / %6 / %7 at pp / mf / ff; ").arg(label)
                .arg(t.startMs[0]).arg(t.startMs[1]).arg(t.startMs[2]).arg(t.fullMs[0]).arg(t.fullMs[1]).arg(t.fullMs[2]);
             line += t.sustains ? QString("sustains, release %1").arg(t.releaseMs < 0 ? QString("over %1 s").arg(ArticulationCheck::TAIL_SECONDS)
                                                                                   : QString::number(t.releaseMs))
-                               : QString("sounds %1").arg(t.lengthMs);
-            line += QString("; a 0.1 s note sounds %1").arg(t.shortNoteMs);
+                               : QString("sounds %1 (rings %2)").arg(t.bodyMs).arg(t.lengthMs);
+            line += QString("; a 0.1 s note sounds %1 (rings %2)").arg(t.shortNoteBodyMs).arg(t.shortNoteMs);
             if (t.pitch != pitch)
                   line += QString(" (pitch %1)").arg(t.pitch);
             lines << line;
@@ -1530,6 +1601,7 @@ void ArticulationCheckDialog::measureTiming(const SoundLib::LibInstrument& ins, 
             timing.append(o);
             }
       out["timing"] = timing;
+      out["timingVersion"] = TIMING_VERSION;
       }
 
 //---------------------------------------------------------
@@ -1546,6 +1618,8 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
       QJsonObject out;
       out["patch"] = ins.name;
       out[_timingOnly ? "timingOnly" : "dynamicsOnly"] = true;
+      if (_timingOnly)
+            out["timingVersion"] = TIMING_VERSION;
       auto fail = [&](const QString& message) {
             out["error"] = message;
             results.append(out);

@@ -466,6 +466,19 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   articulation's pitch analysis takes about 26 s of processor time. Untried with Kontakt; estimated about an hour
   for the ~160 patches, as the dynamics run. Not yet used by playback (early
   note starts, shorts by length, legato overlap by speed would use it).
+  **The owner's first run (build 249, 2026-09-29 18:17) hung** on its 20th patch (the log's last line "Clarinets a2:
+  loading"; MuseScore still in Task Manager). Its 19 patches: longs at full level after 100-1000 ms (Flautando and
+  Sul Tasto slowest), shorts 35-155 ms, releases 0.6-2.9 s; but a short's "length" to 40 dB was the room's ring (Spiccato
+  2 s) and the All techniques' Long (`techniques="long legato"`) was measured as a legato (retriggers, the same at
+  every velocity). Now (`TIMING_VERSION` 2): `bodyMs` / `shortNoteBodyMs` (to 20 dB under the peak: the note) beside
+  the 40 dB lengths; sustains = within 20 dB of its peak just before the release; legato only on an articulation whose
+  first technique is "legato" (the Performance patches). The run is supervised like the extract (`superviseExtract(root,
+  "background timing check")`: rounds, `background timing check current.txt / round n.txt / crash.txt`, a hang after 15
+  minutes without a log line tried once more, then left out; a crash twice), and a start leaves out the patches an
+  earlier run of this version timed (`timedBefore`), so the owner's 19 are timed again once. Test switches
+  `MS_EXTRACT_TEST_CRASH` / `MS_EXTRACT_TEST_HANG=<patch>` now in `check()` too. Tried here with the test synth: a patch
+  hanging every time (`MS_EXTRACT_HANG_MINUTES=1`) stopped twice and left out, the rest done, a second start timing only
+  it.
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

@@ -14,10 +14,11 @@ newest timing and writes only derived numbers (ArticulationCheck::timing, articu
       "startMs": [pp, mf, ff],                  from the note-on to 30 dB under the note's peak
       "fullMs": [pp, mf, ff],                   to 6 dB under it
       "peakMs": [pp, mf, ff],                   to the peak
-      "lengthMs": 480,                          mf, held 2.5 s: how long it sounds (a short's own length)
-      "sustains": true,                         still sounding at the release: then
+      "bodyMs": 230,                            mf, held 2.5 s: until it is last within 20 dB of its peak (the note)
+      "lengthMs": 480,                          ... within 40 dB (with the room's ring)
+      "sustains": true,                         within 20 dB of its peak just before the release: then
       "releaseMs": 900,                         from the release to 30 dB under its level (-1: over 6 s)
-      "shortNoteMs": 350,                       a 0.1 s note: how long it sounds
+      "shortNoteBodyMs": 150, "shortNoteMs": 350,   a 0.1 s note: how long it sounds (20 dB / 40 dB)
       "legato": [[velocity, interval, leaveMs, arriveMs, dipDb], ...]
                                                 two slurred notes (30 ms overlap): from the second note-on
                                                 to the pitch leaving the first, to its arriving, the dip
@@ -67,7 +68,7 @@ def compact(p):
             out[name] = {"value": t.get("value"), "silent": True}
             continue
         e = {"value": t["value"]}
-        for k in ("startMs", "fullMs", "peakMs", "lengthMs", "sustains", "releaseMs", "shortNoteMs"):
+        for k in ("startMs", "fullMs", "peakMs", "bodyMs", "lengthMs", "sustains", "releaseMs", "shortNoteBodyMs", "shortNoteMs"):
             if k in t:
                 e[k] = t[k]
         if t.get("pitch") != p.get("pitch"):
@@ -98,9 +99,11 @@ def main():
             for p in r.get("patches", []):
                 if not p.get("timingOnly") or "timing" not in p:
                     continue
+                # (version 2: body lengths, legato on legato patches only; a version 1 result only where no newer one)
+                date_key = (p.get("timingVersion", 1), date)
                 name = p["patch"]
-                if name not in newest or date > newest[name][0]:
-                    newest[name] = (date, compact(p))
+                if name not in newest or date_key > newest[name][0]:
+                    newest[name] = (date_key, compact(p))
     out = {n: v for n, (_, v) in sorted(newest.items())}
     with open(a.out, "w", encoding="utf-8") as f:
         f.write("{\n" + ",\n".join(json.dumps(n) + ": " + json.dumps(v, separators=(",", ":"), ensure_ascii=False)
@@ -115,8 +118,9 @@ def main():
             max(v["fullMs"][1] for v in held),
             statistics.median([v["releaseMs"] for v in held if v.get("releaseMs", -1) >= 0] or [-1])))
     if shorts:
-        print("shorts, mf: sound %d ms (median; %d-%d)" % (statistics.median(v["lengthMs"] for v in shorts),
-                                                            min(v["lengthMs"] for v in shorts), max(v["lengthMs"] for v in shorts)))
+        key = "bodyMs" if all("bodyMs" in v for v in shorts) else "lengthMs"
+        print("shorts, mf: sound %d ms (median, %s; %d-%d)" % (statistics.median(v[key] for v in shorts), key,
+                                                                min(v[key] for v in shorts), max(v[key] for v in shorts)))
     by = {}
     for n, k, v in arts:
         if not v.get("silent"):

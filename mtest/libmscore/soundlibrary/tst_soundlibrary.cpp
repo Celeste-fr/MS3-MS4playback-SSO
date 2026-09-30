@@ -2409,6 +2409,10 @@ void TestSoundLibrary::timingCheck()
       QVERIFY(r[0].sustains);
       QVERIFY(within(r[0].releaseMs, 0, 10, "1 release"));
       QVERIFY(within(r[0].shortNoteMs, 100, 10, "1 a 0.1 s note"));
+      QVERIFY(within(r[0].shortNoteBodyMs, 100, 10, "1 a 0.1 s note, body"));
+      QVERIFY(within(r[0].bodyMs, 2500, 10, "1 body: to its release"));
+      QVERIFY(within(r[0].shortNoteBodyMs, 100, 10, "1 a 0.1 s note, body"));
+      QVERIFY(within(r[0].bodyMs, 2500, 10, "1 body: to its release"));
       // 14: -30 dB at 3 % of 200 ms (6 ms), -6 dB at 50 % (100 ms), full at 200 ms; release 30 dB at 450 ms
       for (int k = 0; k < 3; ++k) {
             QVERIFY(within(r[1].startMs[k], 5, 6, "14 start"));
@@ -2419,6 +2423,8 @@ void TestSoundLibrary::timingCheck()
       // 42: decays -40 dB in 0.46 s whether held or not
       QVERIFY(!r[2].sustains);
       QVERIFY(within(r[2].lengthMs, 460, 20, "42 length"));
+      QVERIFY(within(r[2].bodyMs, 230, 15, "42 body (20 dB)"));
+      QVERIFY(within(r[2].bodyMs, 230, 15, "42 body (20 dB)"));
       QVERIFY(within(r[2].shortNoteMs, 100, 10, "42 a 0.1 s note (cut at the note-off)"));
       // pp / mf / ff: velocity = CC = 32 / 80 / 112, the level velocity * CC
       QVERIFY(within(r[0].peakDb[2] - r[0].peakDb[0], 40 * std::log10(112.0 / 32.0), 2, "1 pp to ff"));

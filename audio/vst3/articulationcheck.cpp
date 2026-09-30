@@ -795,15 +795,15 @@ std::vector<ArticulationCheck::TimingResult> ArticulationCheck::timing(Vst3Plugi
             r.fullMs[1] = ms(mf.full);
             r.peakMs[1] = ms(mf.peak);
             r.peakDb[1] = mf.peakDb;
-            const int last = lastAbove(env, 0, offWindow, mf.peakDb - 40);
-            r.sustains = last >= int(offWindow) - 2;
-            if (!r.sustains)
-                  r.lengthMs = ms(last + 1);
-            else {
-                  r.lengthMs = ms(lastAbove(env, 0, env.size(), mf.peakDb - 40) + 1);
-                  double before = -200;
-                  for (size_t k = offWindow > 20 ? offWindow - 20 : 0; k < offWindow; ++k)
-                        before = std::max(before, env[k]);
+            // (a short rings on in the room 40 dB down for seconds, the owner's first run of 2026-09-29: Spiccato 2 s;
+            // within 20 dB is the note itself, and a note still that loud at its release sustains)
+            double before = -200;
+            for (size_t k = offWindow > 20 ? offWindow - 20 : 0; k < offWindow && k < env.size(); ++k)
+                  before = std::max(before, env[k]);
+            r.sustains = before >= mf.peakDb - 20;
+            r.bodyMs = ms(lastAbove(env, 0, env.size(), mf.peakDb - 20) + 1);
+            r.lengthMs = ms(lastAbove(env, 0, env.size(), mf.peakDb - 40) + 1);
+            if (r.sustains) {
                   const int rel = lastAbove(env, offWindow, env.size(), before - 30);
                   // (still within 30 dB at the tail's end: longer than the tail)
                   if (rel + 1 < int(env.size()))
@@ -830,8 +830,10 @@ std::vector<ArticulationCheck::TimingResult> ArticulationCheck::timing(Vst3Plugi
                         return out;
                   const std::vector<double> e = envelope(clip, sr);
                   const Onset o = onset(e, e.size());
-                  if (o.peakDb > SILENT_DB)
+                  if (o.peakDb > SILENT_DB) {
+                        r.shortNoteBodyMs = ms(lastAbove(e, 0, e.size(), o.peakDb - 20) + 1);
                         r.shortNoteMs = ms(lastAbove(e, 0, e.size(), o.peakDb - 40) + 1);
+                        }
             }
             // legato: two slurred notes
             if (legato[size_t(i)]) {

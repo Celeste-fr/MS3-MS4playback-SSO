@@ -136,11 +136,12 @@ class ArticulationCheck {
       // 5 ms windows of the note's power, against its own loudest window:
       //   startMs / fullMs / peakMs   from the note-on to the first window 30 dB under the peak, 6 dB under
       //                               it, and to the peak; at pp / mf / ff (velocity = dynamics CC = 32 / 80 / 112)
-      //   lengthMs                    mf, held HOLD_SECONDS: until it is last 40 dB under its peak or louder
-      //                               (a short's own length); sustains when that is its release
+      //   bodyMs / lengthMs           mf, held HOLD_SECONDS: until it is last within 20 dB of its peak (the note
+      //                               itself) / 40 dB (with the room's ring); sustains: within 20 dB of its peak
+      //                               in the 100 ms before the release (a long; a short has died away by then)
       //   releaseMs                   a note that sustains: from its release until it is last within 30 dB of
       //                               its level before the release (-1: longer than the tail, TAIL_SECONDS)
-      //   shortNoteMs                 a 0.1 s note (mf): until it is last 40 dB under its peak or louder
+      //   shortNoteBodyMs / shortNoteMs  a 0.1 s note (mf): until it is last within 20 / 40 dB of its peak
       //   legato                      two notes slurred as MuseScore plays them (the second starts, the first
       //                               ends LEGATO_OVERLAP_MS later) at velocity 20 / 64 / 110 (Spitfire's legato
       //                               speed) and interval +2 / -5: the pitch, 80 ms frames every 10 ms, against
@@ -168,9 +169,11 @@ class ArticulationCheck {
             double fullMs[3] { -1, -1, -1 };
             double peakMs[3] { -1, -1, -1 };
             double peakDb[3] { -200, -200, -200 };
+            double bodyMs { -1 };
             double lengthMs { -1 };
             bool sustains { false };
             double releaseMs { -1 };
+            double shortNoteBodyMs { -1 };
             double shortNoteMs { -1 };
             std::vector<Legato> legato;
             };

@@ -4682,16 +4682,19 @@ static bool childHasCrashNotice(DWORD pid)
       }
 #endif
 
-static bool superviseExtract(const QString& root)
+// what: "background extract" or "background timing check" (--check-timing: the same rounds, the owner's first
+// timing run of 2026-09-29 stopped at its 20th patch of 159 with nothing to go on)
+static bool superviseExtract(const QString& root, const QString& runName)
       {
+      const QString& what = runName;
       QDir().mkpath(root);
-      QLockFile lock(root + "/background extract supervisor.lock");
+      QLockFile lock(root + "/" + what + " supervisor.lock");
       if (!lock.tryLock(0)) {
-            ArticulationCheckDialog::logBackground("a background extract is already running; this one stops");
+            ArticulationCheckDialog::logBackground(QString("a %1 is already running; this one stops").arg(what));
             return false;
             }
-      const QString progress = root + "/background extract current.txt";
-      const QString log = root + "/background extract.log";
+      const QString progress = root + "/" + what + " current.txt";
+      const QString log = root + "/" + what + ".log";
       const int hangMinutes = qEnvironmentVariableIsSet("MS_EXTRACT_HANG_MINUTES") ? qEnvironmentVariableIntValue("MS_EXTRACT_HANG_MINUTES") : 15;
       QString patches = extractPatches;
       QStringList skipped;
@@ -4719,6 +4722,8 @@ static bool superviseExtract(const QString& root)
                   args << "--extract-controllers";
             if (!extractPlan.isEmpty())
                   args << "--extract-plan" << extractPlan;
+            if (checkTimingMode)
+                  args << "--check-timing";
             const QDateTime started = QDateTime::currentDateTime().addSecs(-60);
             QProcess child;
             child.setProcessChannelMode(QProcess::ForwardedChannels);
@@ -4788,7 +4793,8 @@ static bool superviseExtract(const QString& root)
             const bool skippable = step.startsWith("cc ") || step.startsWith("parameter ") || step.startsWith("switch ")
                                    || step == "pitch bend";
             const int tried = ++tries[where];
-            const bool again = (crashed || hung) && (skippable ? tried <= 4 : tried <= 2);
+            // (a hang costs HANG_MINUTES each time: tried once more only)
+            const bool again = (crashed || hung) && (skippable ? tried <= 4 : tried <= (hung ? 1 : 2));
             // a step is left out only when the patch crashed at it twice: Kontakt's crashes come and go (the
             // owner's run of 2026-09-28 13:09: Contrabass Trombone at cc 23, then without it at parameter 2048;
             // Violas, which crashed in two earlier runs, went through; the same two offsets in Kontakt 8.vst3
@@ -4805,8 +4811,10 @@ static bool superviseExtract(const QString& root)
                   skipped << where;
             // what that round did before: its extract folder, zipped here (it ended before zipping it)
             // (not "background extract setups", the setups' folder, which the pattern also matches)
-            for (const QFileInfo& fi : QDir(root).entryInfoList({ "* extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
-                  if (fi.fileName().startsWith("background extract"))
+            // (a timing check's folder: "<library> <date>")
+            for (const QFileInfo& fi : QDir(root).entryInfoList({ checkTimingMode ? "* 2*" : "* extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+                  if (fi.fileName().startsWith("background ") || (checkTimingMode && (fi.fileName().contains(" extract ")
+                      || fi.fileName().contains(" files ") || fi.fileName().contains(" windows "))))
                         continue;
                   if (fi.lastModified() >= started && !QFileInfo::exists(fi.absoluteFilePath() + ".zip")) {
                         const QString z = ArticulationCheckDialog::zip(fi.absoluteFilePath());
@@ -4822,7 +4830,7 @@ static bool superviseExtract(const QString& root)
             const QString then = !again ? QString(" (left out), its data not written")
                                  : leaveOut ? QString(": once more without %1, its second crash there (try %2 of 5)").arg(step).arg(tried + 1)
                                  : skippable ? QString(": once more as it was (try %1 of 5)").arg(tried + 1)
-                                 : QString(": once more (try %1 of 3)").arg(tried + 1);
+                                 : QString(": once more (try %1 of %2)").arg(tried + 1).arg(hung ? 2 : 3);
             ArticulationCheckDialog::logBackground(QString("%1 on %2%3%4; %5 patches left")
                                                    .arg(what, where, at, crashed || hung ? then : QString(" (left out)"))
                                                    .arg(left.size() + (again ? 1 : 0)));
@@ -4835,7 +4843,7 @@ static bool superviseExtract(const QString& root)
                   ok = false;
                   break;
                   }
-            patches = root + QString("/background extract round %1.txt").arg(round + 1);
+            patches = root + QString("/%1 round %2.txt").arg(runName).arg(round + 1);
             QFile next(patches);
             if (!next.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
                   ArticulationCheckDialog::logBackground(QString("cannot write %1").arg(QDir::toNativeSeparators(patches)));
@@ -4848,8 +4856,9 @@ static bool superviseExtract(const QString& root)
       QFile::remove(progress);
       QFile::remove(stepFile);
       QFile::remove(crashFile);
-      ArticulationCheckDialog::logBackground(skipped.isEmpty() ? QString("the extract is done")
-                                             : QString("the extract is done; left out: %1").arg(skipped.join(", ")));
+      const QString run = checkTimingMode ? QString("the timing check") : QString("the extract");
+      ArticulationCheckDialog::logBackground(skipped.isEmpty() ? QString("%1 is done").arg(run)
+                                             : QString("%1 is done; left out: %2").arg(run, skipped.join(", ")));
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
       return ok;
       }
@@ -4866,11 +4875,15 @@ static bool extractInBackground()
       SetErrorMode(GetErrorMode() | SEM_NOGPFAULTERRORBOX | SEM_FAILCRITICALERRORS);
 #endif
       const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
-      // the extract itself (not a key scan, pictures or the dynamics check): under a supervisor
-      if (!extractChild && !scanKeysMode && !picturesMode && !checkDynamicsMode && !checkTimingMode)
-            return superviseExtract(root);
+      // the extract and the timing check (not a key scan, pictures or the dynamics check): under a supervisor
+      const QString what = checkTimingMode ? "background timing check" : checkDynamicsMode ? "background dynamics check" : "background extract";
+      if (checkDynamicsMode || checkTimingMode)
+            ArticulationCheckDialog::setBackgroundLog(what + ".log");
+      ArticulationCheckDialog::setRunPrefix(checkTimingMode ? what : QString("background extract"));
+      if (!extractChild && (checkTimingMode || (!scanKeysMode && !picturesMode && !checkDynamicsMode)))
+            return superviseExtract(root, checkTimingMode ? what : QString("background extract"));
       if (extractChild) {
-            ArticulationCheckDialog::setProgressFile(root + "/background extract current.txt");
+            ArticulationCheckDialog::setProgressFile(root + "/" + (checkTimingMode ? what : QString("background extract")) + " current.txt");
 #ifdef Q_OS_WIN
             const std::wstring crash = QDir::toNativeSeparators(ArticulationCheckDialog::runFile(root, "crash")).toStdWString();
             wcsncpy_s(extractCrashFile, crash.c_str(), _TRUNCATE);
@@ -4898,9 +4911,6 @@ static bool extractInBackground()
       const QString mine = SoundLibraryHost::setupsFolder(*library);
       // the dynamics check: a folder, lock and log of its own (it may run beside an extract, and
       // beside the MuseScore the owner tests other builds in; the owner, 2026-09-28)
-      const QString what = checkTimingMode ? "background timing check" : checkDynamicsMode ? "background dynamics check" : "background extract";
-      if (checkDynamicsMode || checkTimingMode)
-            ArticulationCheckDialog::setBackgroundLog(what + ".log");
       // (outside MuseScore's data folder altogether, next to the extract's output; the owner, 2026-09-27)
       SoundLibraryHost::setDataFolder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
                                       + "/MuseScore Sound Library Check/" + what + " setups");
@@ -4935,7 +4945,8 @@ static bool extractInBackground()
       if (scanKeysMode || picturesMode)
             return ok;          // (a key scan, the pictures: one process; its zip and log as the extract's)
       if (checkTimingMode) {
-            QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+            if (!extractChild)            // (the supervisor opens it)
+                  QDesktopServices::openUrl(QUrl::fromLocalFile(root));
             return ok;
             }
       if (checkDynamicsMode) {

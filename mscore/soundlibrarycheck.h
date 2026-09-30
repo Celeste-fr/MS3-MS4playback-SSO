@@ -168,7 +168,8 @@ class ArticulationCheckDialog : public QDialog {
       // normally. Left behind, it tells the supervisor where a crash or a hang was (the first line, skipped) and
       // what is left. Set: the extract doesn't open its folder at the end (the supervisor does)
       static void setProgressFile(const QString& path);
-      static QString runFile(const QString& root, const QString& what);   // superviseExtract's files: step, skip, finished, crash
+      static QString runFile(const QString& root, const QString& what);
+      static void setRunPrefix(const QString& prefix);          // runFile's names: "<prefix> <what>.txt" (default "background extract")   // superviseExtract's files: step, skip, finished, crash
       static QString zip(const QString& folder);
       // a plan (MuseScore --extract-plan <file>): per patch what is still to measure, one a line,
       // "<patch>\tall" (everything) or "<patch>\tpitch=60\tcc=1:98,7:102\tparams=Dynamics;Vibrato" (which
@@ -184,6 +185,7 @@ class ArticulationCheckDialog : public QDialog {
       static void setPlanFile(const QString& path);
       static const PlanEntry* planFor(const QString& patch);        // null: no plan, or not in it
       static bool hasPlan();
+      QSet<QString> timedBefore() const;                            // patches an earlier timing run timed
       QSet<QString> linkedBefore() const;                           // patches an earlier links run did
       QSet<QString> measuredBefore(bool pitchBend) const;         // patches an earlier controller extract measured completely
       int librarySwitchCC() const;                                 // the CC the library switches articulations on (-1: none)                  // the folder zipped next to it (its path; empty: failed)
