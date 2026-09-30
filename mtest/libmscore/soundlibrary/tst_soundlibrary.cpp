@@ -739,11 +739,11 @@ void TestSoundLibrary::renderPhraseMark()
       QCOMPARE(outer->ticks().ticks(), 7 * DIVISION);
 
       // as a slur: legato until the inner slur starts (MS4 cuts the outer one off there), the inner
-      // one's notes legato, each overlapping into the next (the slur's last one too: as before,
-      // a separate question)
+      // one's notes legato, each overlapping into the next but the slur's last (G5): the unslurred
+      // F5 after it starts with an attack of its own, not as a legato transition
       std::vector<N> notes = render();
       QCOMPARE(int(notes.size()), 8);
-      QCOMPARE(describe(notes), QString("L>L>L>L>L>- - - "));
+      QCOMPARE(describe(notes), QString("L>L>L>L>L - - - "));
 
       // as a phrase mark: only the inner slur
       score->startCmd();
@@ -751,7 +751,7 @@ void TestSoundLibrary::renderPhraseMark()
       score->endCmd();
       notes = render();
       QCOMPARE(int(notes.size()), 8);
-      QCOMPARE(describe(notes), QString("- - L>L>L>- - - "));
+      QCOMPARE(describe(notes), QString("- - L>L>L - - - "));
       for (const N& n : notes)
             QVERIFY(n.off > n.on);
       delete score;

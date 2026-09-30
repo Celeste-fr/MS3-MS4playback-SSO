@@ -1257,7 +1257,34 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return n;
                         };
                   // a legato articulation needs the next note to start before this one ends
-                  auto libOverlap = [](const SoundLib::Choice& c) { return c && c.base == "legato" ? DIVISION / 16 : 0; };
+                  // a legato articulation needs the next note to start before this one ends: only
+                  // within a slur. MS4 counts a slur's last chord as legato too (its sound and length
+                  // stay so), but held into the next note it would make that note, unslurred, a legato
+                  // transition on the same Performance patch instead of a new attack (the owner,
+                  // 2026-09-30). So a note (the end of its tie chain) overlaps only when a slur, not a
+                  // phrase mark, goes on past it on its staff.
+                  auto slurGoesOn = [&](const Note* note) {
+                        const Note* last = note;
+                        for (int guard = 0; last->tieFor() && last->tieFor()->endNote() && guard < 1000; ++guard) {
+                              const Note* next = last->tieFor()->endNote();
+                              if (next == last)
+                                    break;
+                              last = next;
+                              }
+                        const Chord* c = last->chord();
+                        const int t = c->tick().ticks();
+                        for (const auto& iv : score->spannerMap().findOverlapping(t, t)) {
+                              const Spanner* sp = iv.value;
+                              if (!sp->isSlur() || toSlur(sp)->phraseMark() || sp->staffIdx() != c->staffIdx())
+                                    continue;
+                              if (sp->tick().ticks() <= t && ctx.dynamics.spannerStop(sp) > t)
+                                    return true;
+                              }
+                        return false;
+                        };
+                  auto libOverlap = [&](const SoundLib::Choice& c, const Note* note) {
+                        return c && c.base == "legato" && slurGoesOn(note) ? DIVISION / 16 : 0;
+                        };
 
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0, bool once = false) {
@@ -1366,7 +1393,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4TiedTicks = tiedTicks;
                         config.ms4Once = once;
                         config.libPatch = libChoice.patch;
-                        config.libOverlap = libOverlap(libChoice);
+                        config.libOverlap = libOverlap(libChoice, note);
                         config.libKey = libNote.key;
                         if (libNote.velocity > 0)
                               config.ms4Velocity = libNote.velocity;
@@ -1413,7 +1440,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         events->registerChannel(noteChannel);
                         const int on = start + tickOffset + (length * r.ts) / Ms4::HUNDRED;
-                        const int off = on + (length * r.dur) / Ms4::HUNDRED + (length > 0 ? libOverlap(libChoice) : 0);
+                        const int off = on + (length * r.dur) / Ms4::HUNDRED + (length > 0 ? libOverlap(libChoice, note) : 0);
                         if (length <= 0) {
                               // no length (an ornament's body squeezed out by its prefix and suffix): MS4
                               // sends no note-on but still the note-off, at its start plus the (negative)

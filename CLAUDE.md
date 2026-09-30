@@ -319,7 +319,8 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   (`NPlayEvent::librarySwitch`) goes before each note. Events carry the route
   (`NPlayEvent::setExternal(port, channel)`); the old duplicate-controller pass compares routes,
   not channels. A legato articulation's note lasts DIVISION/16 into the next (Spitfire legato
-  needs the overlap). A sampled trill or tremolo plays the note once (`SndConfig::ms4Once`).
+  needs the overlap), only while a slur goes on past it: a slur's last note ends on time, so the
+  unslurred note after it gets its own attack, not a legato transition (the owner, 2026-09-30). A sampled trill or tremolo plays the note once (`SndConfig::ms4Once`).
   Dynamics go on the library's CC (CC1 for Spitfire).
   Shorts (the owner, 2026-09-28: at pp the staccatos stood out; their velocity was MS4's soundfont one, 56 at
   pp and 65 at mf, while CC1 went 32 → 80, and Spitfire's shorts take their dynamics from velocity only):
