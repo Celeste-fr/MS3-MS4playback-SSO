@@ -5,6 +5,48 @@ agent (Claude Code on the owner's local machine) where things stand. Read `CLAUD
 describes the architecture, the build, the articulation check and every run the owner has
 made. The commit messages on this branch explain each step in detail.
 
+## For the next agent: playback problems the extraction found (2026-09-30; not fixed, the owner: "your job is only to collect data")
+
+All numbers are in `tools/soundlibraries/` (see CLAUDE.md for how each was measured). Ask the owner before building any.
+1. **Slurred notes sound late.** On the 42 Performance patches the second note of a slur reaches its pitch 70-430 ms
+   after its note-on (median 185; `sso_articulation_timing.json`, `legato`), in one step, with a 4-22 dB dip. Starting
+   slurred notes earlier by the patch's own delay would put them in time.
+2. **Velocity barely changes SSO's legato speed** (20 / 64 / 110 give the same transition on most patches). The renderer
+   keeps MS4's velocity for legato "because Spitfire's legato speed is on velocity" (CLAUDE.md, Shorts): that reason
+   doesn't hold for SSO; velocity can be used for something else or left.
+3. **Slow attacks.** Held notes reach full level 175 ms after the note-on (median), Violas ~300 ms, Flautando / Sul Tasto
+   / Harmonics up to 1 s; brass and woodwinds 60-120 ms (`fullMs`). Same remedy as 1, per articulation.
+4. **Shorts ring on.** A short's body (to 20 dB under its peak) is 265-2670 ms, median ~1 s, the hall in the recording;
+   a 0.1 s note sounds 370-1000 ms (`bodyMs`, `shortNoteBodyMs`). Matters for choosing Short 0.5 / 1.0 by length
+   (`<Articulation length>` uses Spitfire's nominal 0.5 / 1.0 s).
+5. **Releases** ring 0.6-2.9 s after the note-off (`releaseMs`, median 855 ms); a lane (tuning copy) is reused after
+   `tail` 1.5 s, shorter than some releases (Flautando 2.9 s, Sul Tasto 2 s, Super Sul Tasto 2.4 s).
+6. **Microtones by pitch bend**: the Performance patches and Horn Solo / Horns a2 - Legato bend ±100 cents linearly,
+   Kickstart percussion and some solo strings ±195 (`sso_patch_measurements.json`, `pitchBend`). The owner's first choice
+   (2026-09-27) was pitch bend; varispeed was built because the All techniques patches don't bend.
+7. **Controller links** (`sso_patch_measurements.json`, `links`): CC 16 Mute, 17 Release, 18 Variation (Tightness on 2),
+   21 (and 104 on Performance) Vibrato, 22-25 Mic 1-4 level, 40-46 Harp Pedal 1-7, besides CC 1 / 11. The map drives
+   these as Kontakt parameters by title; CCs would also work.
+8. **Patches that play nothing where the map might send notes**: Long Sul G / Sul C in Violins 1 / 2 and Celli All
+   techniques and Core (`noSamples` in `sso_nki_articulation_details.json`); Rain Sheet Swell mp; Low Ensemble's Toms 3-5
+   and Field Drum Rim / X Stick share keys (the owner: a real conflict).
+9. **Kit techniques that are off** at the kits' defaults (rolls, swells …) are only in the one-drum patches; the owner's
+   plan: switch one on in the kit when a score needs it (CLAUDE.md, Kits).
+
+## How complete the extraction is (2026-09-30)
+
+- **From the files (all 700 `.nki`)**: every patch's groups, zones, key and velocity ranges, articulation names, round
+  robins, dynamic / velocity layers, release groups, loops, lengths; the 279 archives' 432,829 sample names. Done.
+- **Switching**: every map value checked by picture and ear; the 12 Core / Decorative and 4 Curated patches scanned;
+  Harp glissandi keyswitches; every percussion hit list (82 lists, 519 hits). Done.
+- **Named controls** of all 700 patches; **controllers and parameters** measured on all 700 (672 put back within their
+  noise, 28 measured but not put back: round-robin percussion, Fanfares, Flutter); **links** on 698 (Vibraphone and Curated
+  Tutti - Low Wood String Stab have none); **pitch bend** on all 700. Done, apart from those 2 links.
+- **Dynamics curves**: the 159 mapped patches' articulations a notation plays (417 curves). Not measured: percussion (kits,
+  one-drum, tuned: skipped as "keyswitched"), the ~540 unmapped patches, articulations no notation plays.
+- **Timing and legato**: 96 patches (the mapped ones a notation plays). Not measured: the same gaps as dynamics.
+- **Parameters** measured at 0 and 1 only, not the curve between.
+
 ## Where things are
 
 - Branch: `main` (called `ms4-playback` until 2026-09-27), the default branch (the
