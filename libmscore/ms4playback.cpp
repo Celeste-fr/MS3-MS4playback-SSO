@@ -917,6 +917,8 @@ void Dynamics::build(Score* score, Part* part)
             Spanner* sp = p.second;
             if (sp->part() != part)
                   continue;
+            if (sp->isSlur() && toSlur(sp)->phraseMark())
+                  continue;         // not a slur for playback (slur.h): cuts off no slur
             const int start = sp->tick().ticks();
             auto it = lastOfType.find(sp->type());
             if (it != lastOfType.end()) {
@@ -1071,7 +1073,8 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
             if (from >= chordEnd)
                   continue;
             if (sp->isSlur()) {
-                  if (!legato && tick <= to) {
+                  // a phrase mark is not a slur for playback (slur.h): no legato; a slur inside it is
+                  if (!legato && tick <= to && toSlur(sp)->isLegatoSlur()) {
                         arts.push_back({ Art::Legato, false });
                         legato = true;
                         }

@@ -426,6 +426,8 @@ class ScoreView : public QWidget, public MuseScoreView {
       bool testElementDragTransition(QMouseEvent* ev);
       bool fotoEditElementDragTransition(QMouseEvent* ev);
       void cmdAddSlur(const Slur* slurTemplate = nullptr);
+      void cmdAddPhraseMark();
+      void setPhraseMarks(const std::vector<Slur*>& slurs);
       void addSlur(ChordRest*, ChordRest*, const Slur*) override;
       virtual void cmdAddHairpin(HairpinType);
       void cmdAddNoteLine();

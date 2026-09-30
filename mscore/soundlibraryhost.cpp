@@ -2345,6 +2345,38 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             connect(_maxLanes, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
             connect(defaults, &QPushButton::clicked, this, [this]() { setLaneSettings(true); });
             }
+      // legato transitions early (SoundLib::legatoEarly): where the library measured its legato delays
+      bool legatoDelays = false;
+      for (const SoundLib::LibInstrument& li : _library->instruments)
+            for (const SoundLib::Articulation& a : li.articulations)
+                  legatoDelays = legatoDelays || a.legatoDelayMs > 0;
+      if (legatoDelays) {
+            QWidget* row = new QWidget(scoreBox);
+            QHBoxLayout* h = new QHBoxLayout(row);
+            h->setContentsMargins(0, 0, 0, 0);
+            _legatoEarly = new QSpinBox(row);
+            _legatoEarly->setRange(0, 200);
+            _legatoEarly->setSingleStep(5);
+            _legatoEarly->setSuffix(tr(" %"));
+            _legatoEarly->setKeyboardTracking(false);
+            _legatoEarly->setToolTip(tr("A slurred note's slide into its pitch takes time (Spitfire's Performance legato: "
+                                        "70-430 ms, measured per patch): it starts this share of that before the beat.\n"
+                                        "0 %: on the beat, as written; 100 %: the new pitch is reached on the beat"));
+            QPushButton* defaults = new QPushButton(tr("Library's"), row);
+            h->addWidget(_legatoEarly);
+            h->addWidget(defaults);
+            h->addStretch();
+            QLabel* l = new QLabel(tr("Legato transitions early by:"), scoreBox);
+            l->setToolTip(_legatoEarly->toolTip());
+            form->addRow(l, row);
+            connect(_legatoEarly, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v) {
+                  setMetaTag(SoundLib::legatoEarlyMetaTag, v == _library->legatoEarly ? QString() : QString::number(v));
+                  });
+            connect(defaults, &QPushButton::clicked, this, [this]() {
+                  setMetaTag(SoundLib::legatoEarlyMetaTag, QString());
+                  load();
+                  });
+            }
       {
             QWidget* row = new QWidget(scoreBox);
             QHBoxLayout* h = new QHBoxLayout(row);
@@ -2641,6 +2673,10 @@ void SoundLibraryOptions::load()
             _tolerance->setValue(ls.tolerance);
             _tail->setValue(ls.tail);
             _maxLanes->setValue(ls.maxLanes);
+            }
+      if (_legatoEarly) {
+            const QSignalBlocker blocker(_legatoEarly);
+            _legatoEarly->setValue(SoundLib::legatoEarly(_score, *_library));
             }
       const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
       for (auto& b : _balance) {

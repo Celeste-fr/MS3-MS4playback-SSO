@@ -2312,6 +2312,7 @@ MuseScore::MuseScore()
 
       menuAddLines = new QMenu();
       menuAddLines->addAction(getAction("add-slur"));
+      menuAddLines->addAction(getAction("add-phrase-mark"));
       menuAddLines->addAction(getAction("add-hairpin"));
       menuAddLines->addAction(getAction("add-hairpin-reverse"));
       menuAddLines->addAction(getAction("add-8va"));

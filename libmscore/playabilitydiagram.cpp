@@ -493,7 +493,7 @@ WindModel windModel(Score* score, bool museScoreRange)
       // slurs per track, in order
       std::map<int, std::vector<std::pair<int, int>>> slurs;
       for (const auto& sp : score->spanner())
-            if (sp.second->isSlur())
+            if (sp.second->isSlur() && !toSlur(sp.second)->phraseMark())      // not phrase marks (slur.h)
                   slurs[sp.second->track()].push_back({ sp.second->tick().ticks(), sp.second->tick2().ticks() });
       for (auto& t : slurs)
             std::stable_sort(t.second.begin(), t.second.end());

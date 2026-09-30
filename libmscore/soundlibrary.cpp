@@ -74,7 +74,8 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
       return number >= 0 && number < 128;
       }
 
-// <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]/>;
+// <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
+//               [prefer="…"] [length="0.5"] [release="885"] [legatoDelay="210"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       {
@@ -85,6 +86,8 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.expect = a.value("expect").toString();
       art.prefer = words(a.value("prefer").toString());
       art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
+      art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
+      art.legatoDelayMs = a.hasAttribute("legatoDelay") ? a.value("legatoDelay").toDouble() : -1;
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -202,6 +205,11 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         lib->maxLanes = std::max(1, a.value("maxLanes").toInt());
                   r.skipCurrentElement();
                   }
+            else if (r.name() == "Legato") {
+                  // <Legato early="100"/>
+                  lib->legatoEarly = qBound(0, a.value("early").toInt(), 200);
+                  r.skipCurrentElement();
+                  }
             else if (r.name() == "Dynamics") {
                   if (a.hasAttribute("cc"))
                         lib->dynamicsCC = a.value("cc").toInt();
@@ -260,6 +268,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.with = a.value("with").toString();
                   li.kit = a.value("kit").toString() == "1";
                   li.keyScan = a.value("keyScan").toString() == "1";
+                  li.bendCents = std::max(0.0, a.value("bend").toDouble());
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -1201,6 +1210,26 @@ LaneSettings laneSettings(const Score* score, const Library& library)
       return s;
       }
 
+const char* legatoEarlyMetaTag = "soundLibraryLegatoEarly";
+
+int legatoEarly(const Score* score, const Library& library)
+      {
+      if (score) {
+            bool ok = false;
+            const int v = score->masterScore()->metaTag(legatoEarlyMetaTag).trimmed().toInt(&ok);
+            if (ok && v >= 0)
+                  return std::min(v, 200);
+            }
+      return library.legatoEarly;
+      }
+
+int bendValue(double cents, double bendCents)
+      {
+      if (bendCents <= 0 || std::fabs(cents) > bendCents + 1e-6)
+            return -1;
+      return qBound(0, int(std::lround(8192.0 + cents / bendCents * (cents < 0 ? 8192.0 : 8191.0))), 16383);
+      }
+
 QString writeLaneSettings(const LaneSettings& s, const Library& library)
       {
       const LaneSettings d = libraryLaneSettings(library);
@@ -1287,6 +1316,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             const Note* note;
             int patch;
             double on, off;               // seconds
+            double release;               // its articulation's ring after the end (seconds, 0: unknown)
             double cents;
             bool slurred;                 // under a slur: legato from the note before on its track
             int track;
@@ -1322,7 +1352,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                                     slurred = true;
                               }
                         const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill));
-                        items.push_back({ note, c ? c.patch : 0, on, off, playbackTuning(note), slurred, track });
+                        const double release = c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
+                        items.push_back({ note, c ? c.patch : 0, on, off, release, playbackTuning(note), slurred, track });
                         };
                   for (const Chord* g : chord->graceNotes())
                         for (const Note* n : g->notes())
@@ -1336,7 +1367,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
       struct Lane {
             double cents { 0 };
             bool tuned { false };         // (a new lane takes any tuning)
-            double busyUntil { -1 };      // its notes' end plus the tail
+            double busyUntil { -1 };      // its notes' end plus the tail (or their release, if longer)
             double lastOn { -1 };         // its last note's start and end
             double lastEnd { -1 };
             int lastTrack { -1 };
@@ -1374,7 +1405,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             Lane& lane = lanes[size_t(chosen)];
             lane.cents = cents;
             lane.tuned = true;
-            lane.busyUntil = std::max(lane.busyUntil, it.off + tailSeconds);
+            // (a release rings up to 2.9 s, SSO's Flautando: retuning the lane before would move its pitch)
+            lane.busyUntil = std::max(lane.busyUntil, it.off + std::max(tailSeconds, it.release));
             lane.lastOn = it.on;
             lane.lastEnd = it.off;
             lane.lastTrack = it.track;

@@ -15,11 +15,17 @@
 #include "measure.h"
 #include "navigate.h"
 #include "part.h"
+#include "playability.h"
 #include "score.h"
 #include "slur.h"
 #include "stem.h"
 #include "system.h"
 #include "undo.h"
+#include "xml.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 namespace Ms {
 
@@ -29,7 +35,11 @@ namespace Ms {
 
 void SlurSegment::draw(QPainter* painter) const
       {
-      QPen pen(curColor(getProperty(Pid::VISIBLE).toBool(), getProperty(Pid::COLOR).value<QColor>()));
+      QColor color = getProperty(Pid::COLOR).value<QColor>();
+      // a phrase mark: grey on screen (not printed), unless the user coloured it (slur.h)
+      if (slur()->phraseMark() && color == MScore::defaultColor && !score()->printing())
+            color = PhraseMark::color();
+      QPen pen(curColor(getProperty(Pid::VISIBLE).toBool(), color));
       qreal mag = staff() ? staff()->mag(slur()->tick()) : 1.0;
 
       //Replace generic Qt dash patterns with improved equivalents to show true dots (keep in sync with tie.cpp)
@@ -469,6 +479,7 @@ bool SlurSegment::isEdited() const
 Slur::Slur(const Slur& s)
    : SlurTie(s)
       {
+      _phraseMark = s._phraseMark;
       }
 
 //---------------------------------------------------------
@@ -965,6 +976,9 @@ void Slur::write(XmlWriter& xml) const
             return;
       xml.stag(this);
       SlurTie::writeProperties(xml);
+      // a phrase mark: in the clipboard only; a file keeps it in the metaTag (PhraseMark)
+      if (_phraseMark && xml.clipboardmode())
+            xml.tag("phraseMark", true);
       xml.etag();
       }
 
@@ -974,7 +988,48 @@ void Slur::write(XmlWriter& xml) const
 
 bool Slur::readProperties(XmlReader& e)
       {
+      if (e.name() == "phraseMark") {
+            _phraseMark = e.readBool();
+            return true;
+            }
       return SlurTie::readProperties(e);
+      }
+
+//---------------------------------------------------------
+//   getProperty
+//---------------------------------------------------------
+
+QVariant Slur::getProperty(Pid propertyId) const
+      {
+      if (propertyId == Pid::PHRASE_MARK)
+            return _phraseMark;
+      return SlurTie::getProperty(propertyId);
+      }
+
+//---------------------------------------------------------
+//   setProperty
+//---------------------------------------------------------
+
+bool Slur::setProperty(Pid propertyId, const QVariant& v)
+      {
+      if (propertyId == Pid::PHRASE_MARK) {
+            _phraseMark = v.toBool();
+            triggerLayout();              // redrawn in its colour
+            score()->setPlaylistDirty();  // no legato any more, or legato again
+            return true;
+            }
+      return SlurTie::setProperty(propertyId, v);
+      }
+
+//---------------------------------------------------------
+//   propertyDefault
+//---------------------------------------------------------
+
+QVariant Slur::propertyDefault(Pid id) const
+      {
+      if (id == Pid::PHRASE_MARK)
+            return false;
+      return SlurTie::propertyDefault(id);
       }
 
 //---------------------------------------------------------
@@ -1300,5 +1355,81 @@ void Slur::setTrack(int n)
       for (SpannerSegment* ss : spannerSegments())
             ss->setTrack(n);
       }
-}
+//---------------------------------------------------------
+//   PhraseMark
+//---------------------------------------------------------
 
+namespace PhraseMark {
+
+const char* const metaTag = "phraseMarks";
+
+QColor color()
+      {
+      return Playability::openStringColor;      // the checker's open strings, the owner's choice
+      }
+
+//---------------------------------------------------------
+//   read
+//    the score's slurs that the metaTag lists are phrase marks, and their linked copies (parts);
+//    a slur is found by its start and end ticks and its start track (a slur MuseScore 3.6 moved
+//    or deleted is not a phrase mark any more; another slur at the same place does not become one)
+//---------------------------------------------------------
+
+void read(Score* score)
+      {
+      const QString tag = score->metaTag(metaTag);
+      if (tag.isEmpty())
+            return;
+      score->metaTags().remove(metaTag);        // written again from the slurs on saving
+      const QJsonArray list = QJsonDocument::fromJson(tag.toUtf8()).array();
+      for (const QJsonValue& v : list) {
+            const QJsonObject o = v.toObject();
+            const int tick = o.value("tick").toInt(-1);
+            const int tick2 = o.value("tick2").toInt(-1);
+            const int track = o.value("track").toInt(-1);
+            const int track2 = o.value("track2").toInt(track);
+            Slur* found = nullptr;
+            int foundScore = -1;
+            for (auto it = score->spannerMap().map().lower_bound(tick); it != score->spannerMap().map().end() && it->first == tick; ++it) {
+                  Spanner* s = it->second;
+                  if (!s->isSlur() || s->track() != track || s->tick2().ticks() != tick2)
+                        continue;
+                  // two phrase marks from one note to one note: each its own slur
+                  const int match = (s->track2() == track2 ? 2 : 0) + (toSlur(s)->phraseMark() ? 0 : 1);
+                  if (match > foundScore) {
+                        found = toSlur(s);
+                        foundScore = match;
+                        }
+                  }
+            if (!found)
+                  continue;
+            for (ScoreElement* e : found->linkList())
+                  if (e->isSlur())
+                        toSlur(e)->setPhraseMark(true);
+            }
+      }
+
+//---------------------------------------------------------
+//   write
+//---------------------------------------------------------
+
+QString write(const Score* score)
+      {
+      QJsonArray list;
+      for (const auto& i : score->spannerMap().map()) {
+            const Spanner* s = i.second;
+            if (!s->isSlur() || !toSlur(s)->phraseMark())
+                  continue;
+            QJsonObject o;
+            o["tick"] = s->tick().ticks();
+            o["tick2"] = s->tick2().ticks();
+            o["track"] = s->track();
+            o["track2"] = s->track2();
+            list.append(o);
+            }
+      return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
+      }
+
+}     // namespace PhraseMark
+
+}

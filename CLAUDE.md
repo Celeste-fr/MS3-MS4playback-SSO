@@ -169,6 +169,27 @@ in the element: the metaTag `tempoChanges` (JSON tick, tick2, track, factor, met
 save from the lines' positions and read after loading (`MasterScore::read`). Test
 `tst_tempochange` (4/4). MuseScore 3.6 plays such a line at a steady tempo.
 
+Phrase marks (`libmscore/slur.h`, "Phrase marks"; the owner, 2026-09-30): MuseScore has no phrase-mark
+element, phrase marks are drawn as slurs, and playback (MS4's rule, `Ms4::chordArticulations`) plays every
+slur legato (the library then picks the Performance legato patch and overlaps the notes). A slur can be
+marked as a phrase mark: right-click › *Phrase mark (no legato)* (checkable; the selected slurs with it),
+the Inspector's Slur section, *Add › Lines › Phrase mark* / **Alt+S** (`add-phrase-mark`; shortcuts.xml,
+-Mac (Option+S), _AZERTY): like S it adds a slur (note entry too), marked; with slurs selected it toggles
+them (all become phrase marks unless all are, one undo step). A phrase mark is not a slur for playback in
+any mode: no Art::Legato (MS4 model and the library), not cutting off another slur (`Dynamics::build`'s
+collision-free intervals), not 100 % gate time in the MS3 model (`createPlayEvents`), not a bow stroke for
+the playability checker; an ordinary slur inside it plays legato as before. Drawn on screen in
+`Playability::openStringColor` (the preference, default slate grey #7d8791; `SlurSegment::draw`), selected
+in the selection colour, printed / PDF / PNG / SVG in black; a colour the user set on the slur wins.
+`Slur` has Pid::PHRASE_MARK (linked: parts follow; a segment passes it to its slur), not written in the
+slur's XML (only in the clipboard's, so copy / paste keeps it): the metaTag `phraseMarks` (JSON tick,
+tick2, track, track2), written on save by every score of the file (master and parts) from its slurs,
+read after loading (`MasterScore::read`: the master's onto its slurs and their linked copies, each part's
+onto its own), matched by start, end and track (a slur 3.6 moved or deleted loses it; nothing else gains
+it). Absent when there are none, so such files are unchanged. Test `tst_phrasemark` (playback in MS4 and
+MS3 models, file, undo, copy / paste, parts) and `tst_soundlibrary::renderPhraseMark`. No automatic phrase
+detection (the owner asked for the manual toggle only).
+
 Tuning (`libmscore/tuning.h` explains the design), built in from two MuseScore 3.6 plugins:
 
 - `libmscore/tuning.{h,cpp}`: a note's pitch in playback, in cents from equal temperament, is the
@@ -302,15 +323,47 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   (`NPlayEvent::librarySwitch`) goes before each note. Events carry the route
   (`NPlayEvent::setExternal(port, channel)`); the old duplicate-controller pass compares routes,
   not channels. A legato articulation's note lasts DIVISION/16 into the next (Spitfire legato
-  needs the overlap). A sampled trill or tremolo plays the note once (`SndConfig::ms4Once`).
+  needs the overlap), only while a slur goes on past it: a slur's last note ends on time, so the
+  unslurred note after it gets its own attack, not a legato transition (the owner, 2026-09-30). A sampled trill or tremolo plays the note once (`SndConfig::ms4Once`).
+  **Legato transitions start early** (the owner, 2026-09-30, "go ahead"; branch `legato-timing`): SSO's 42
+  Performance patches reach a slurred note's new pitch 70-430 ms after its note-on (median 180 over 252
+  transitions, a 4-22 dB dip; the timing check, `sso_articulation_timing.json` `legato`), so slurred notes sounded
+  late. `<Articulation legatoDelay>` (ms, per patch the median of its six transitions; `gen_spitfire_sso.py`) and
+  `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
+  transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
+  `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
+  its track slurred into it (`slurGoesOn`) and legato on the same patch, in the same pass, no key struck again, no
+  grace notes or arpeggio before) starts `delay × percent` earlier in time (`SndConfig::libEarly`, converted at the
+  tempo there with `utick2utime` / `utime2utick` in `collectNote`), not before half way into the note before
+  (`libEarliest`: fast runs), the chunk (`libChunkStart`) or the pass's start. Its note-off, the switches and the
+  controllers stay; the previous note still overlaps it. A chunk doesn't end where a library part's slur goes on
+  (`libSlurAcross`), so a transition is never a chunk's first note. The glide of its tuning lane moves with the note-on.
+  Built-in playback untouched. The playback verify tool reads the notes from the same events (the reference too),
+  so a shifted note is judged at its new time; its drift check now leaves out strikes that are all legato (a
+  transition's onset is where the slide puts it, no timing mark: a legato window against a detached one read as
+  drift, on the owner's Violins before this change too; test `playbackVerifyDrift`). Test `legatoEarly`
+  (legato-early.musicxml). Interval: +2 and -5 differ by up to 250 ms on some patches, either way round (Oboes a2
+  90 / 340, Bass Flute 220 / 100): with two intervals measured, one number per patch.
+  **Measured on the VM with SSO (2026-09-30, build a1b1e74 against df273c3)**: Solo Violin, Violins 1 and Flute Solo
+  Performance, slurred D5 E5 F5 A5 D6 C6 G5 D5 at 60 and 120 bpm (42 transitions) plus an eighth run at 120; when the
+  new pitch is within 35 cents (YIN every 5 ms) after its beat: median 230 ms before (85-465), at 50 % 128, at 75 % 80,
+  at 100 % 40 (20 of 42 within ±40 ms, one 59 ms early); per part at 100 %: Solo Violin 26 / 25, Violins 130 / 102,
+  Flute 36 / 31 ms (60 / 120 bpm). Leaps of a fourth or fifth stay 100-280 ms late (slower than the +2 / -5 the delay
+  is from; Violins' A5>D6, C6>G5, Flute's C6>G5, G5>D5). The eighth runs are capped (half an eighth, 125 ms): median
+  +58 ms. Fresh first notes: 3-45 ms, unchanged. **Default `<Legato early="100"/>`**: the full arrival median lands
+  40 ms late, where the ear already hears the new note (the owner expected the full delay might feel early: on the
+  fully-arrived measure it doesn't; 75 % left transitions 80 ms late). Test score and analysis: the job's
+  tmp/legato (legato-timing.musicxml, analyze.py).
   Dynamics go on the library's CC (CC1 for Spitfire).
   Shorts (the owner, 2026-09-28: at pp the staccatos stood out; their velocity was MS4's soundfont one, 56 at
   pp and 65 at mf, while CC1 went 32 → 80, and Spitfire's shorts take their dynamics from velocity only):
   a base listed in `<Dynamics velocity="short staccatissimo spiccato marcato tenuto pizzicato bartok collegno">`
   (`Library::velocityDynamics`) gets `NoteResult::levelVelocity`: the dynamic level on CC1's scale
   (`expressionLevel`), times MS4's velocity over a plain note's (an accent: pp 32 → 48, mf 80 → 108; the
-  curve's peak would make an accented pp short 113). Longs and legato keep MS4's velocity (Spitfire's legato
-  speed is on velocity). The library's dynamics CC now goes ahead of the notes at its tick (a long starting on
+  curve's peak would make an accented pp short 113). Longs and legato keep MS4's velocity (it doesn't
+  set SSO's legato speed: the timing check's two-note transitions at velocity 20 / 64 / 110 took the same time on
+  most Performance patches, median spread 0 ms over 84 patch-interval pairs, 46 identical, the widest 270 ms with no
+  common direction; `sso_articulation_timing.json`). The library's dynamics CC now goes ahead of the notes at its tick (a long starting on
   a new dynamic started at the old one); MS4's CC11 for the built-in sounds keeps MS4's order.
   Test `shortsFollowDynamics` (shorts-dynamics.musicxml).
   **The owner's Dynamics check, Violas (2026-09-27 21:57 local):** Long and every long / tremolo / trill is on
@@ -562,7 +615,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     note stays on its previous note's lane (the legato transition needs one instrument; it glides), else a
     lane at its tuning (within the tolerance, cents; the note then plays at the lane's tuning, `Lanes::cents`,
     `libLaneCents`, so nothing sounding on it moves; 0.5 merges rounding only, not HEJI's 1.95-cent schisma), else a lane silent by then (its notes' end plus the
-    tail, seconds), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
+    tail, seconds, or the note's articulation's measured release if longer: `<Articulation release>` ms, SSO's
+    releases 0.4-2.9 s, median 855, Flautando 2.9 s; retuning a lane while a release rings moved its pitch;
+    `legato-timing`), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
     Tied notes follow their first note, grace notes their chord. `routes()` gives each patch one route
     per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer
     (`libLanes`, `finishLibraryEvents`) sends a note's events to its lane and the part's switches and
@@ -572,6 +627,27 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     the note goes to the plug-in with no tuning. 12-tone equal scores need no lane (every tuning 0); a
     temperament (meantone, JI) can need several per part, hence maxLanes. The Sound Library dialog lists
     lanes as "~ <part> (other tuning n)".
+  - **Pitch bend instead of varispeed where the patch bends** (the owner, 2026-09-30; branch `legato-timing`):
+    varispeed also plays the plug-in's own time faster (3 % for a quarter tone: its script's envelopes, legato
+    timing, effects); SSO's bend is Kontakt's per-voice resampling of the sample, so the sample's recorded vibrato
+    moves 3 % either way (measured on the VM: Solo Violin Performance held D5 5.58 Hz, D5+ 5.76 Hz with varispeed
+    and 5.76 Hz with bend, E5- 5.43 both). Pitch is as exact both ways (held D5+ / E5-: +0.5 / -0.1 cents
+    varispeed, -0.5 / +0.2 bend; a slurred E5- +3.5 / +2.5), which also confirms the linear bend at ±50 cents on a
+    Performance patch within 3 cents. The real gain: over MIDI out (a DAW) varispeed doesn't exist, the bends do. The owner's extracts (`sso_patch_measurements.json` `pitchBend`: cents at bend 0 / 16383; the cents at
+    4096 … 12288 on a straight line) give `<Instrument bend>` (cents at full deflection) to a patch that bends
+    cleanly: both ways ≥ 50 cents and within 3 % of each other: the 43 Performance patches ±99-105, Solo Cello and
+    the tuned percussion ±195 (not the kits' patches: a kit plays no tunings; not the All techniques patches: they
+    don't bend). Memory: the same (a bend moves the whole instance; the lanes stay as they are). Renderer
+    (`libraryPitchBends`, the end of `finishLibraryEvents`; `libBend` per channel and patch): each note-on on a
+    bending patch's lane gets its tuning's bend (`SoundLib::bendValue`, 14 bit, linear, centre 8192) right before
+    it (absolute: playback may start anywhere; only in a part with microtones) and plays with tuning 0, so `Vst3Synth` engages no varispeed; a
+    legato transition (`libGlideFrom`: the note before on the same lane) glides from that note's bend in 3 ms steps
+    over 30 ms (`LEGATO_GLIDE`), steps cut at the lane's next note-on; a tuning beyond the range keeps varispeed for
+    all of it, the bend at the centre. The bends are ME_PITCHBEND events on the lane's route: hosted
+    (`Vst3Plugin::midi` → kPitchBend) and over MIDI out alike. Live clips (the `live-*` branches' liveclips.h)
+    drop pitch bend (`Track::dropped`): there such notes stay untuned, as varispeed never reached Live either
+    (open: a carrier for the bend). Test `tuningBend` (bend 200 on the test synth: bends, glides, a narrower range
+    falls back to varispeed, ±50 heard within 4 cents, no slot's varispeed engaged).
   - Test `tuningLanes` (quartertones.musicxml: 8 notes' lanes, their routing and tuning, CC1 and switches
     on both lanes, maxLanes 1, and Vst3Synth playing ±50 cents on the test synth by speed); `pitchShift`
     (setPitch +50, −100, +700, a glide to +200). Not heard with Kontakt yet.
@@ -719,8 +795,8 @@ attack not yet confirmed by ear.
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
-  `liveMidiControllers`). All pass (47, 3 skipped without the owner's files; `vst3Settle`, `kontaktMaxVoices` 2026-09-29;
-  `liveSetTestSynth` 2026-09-30).
+  `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (50 counting initTestCase and cleanup, 3 skipped without the owner's files;
+  `vst3Settle`, `kontaktMaxVoices` 2026-09-29; `liveSetTestSynth` 2026-09-30).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order

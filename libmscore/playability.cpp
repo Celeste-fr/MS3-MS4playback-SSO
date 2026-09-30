@@ -245,12 +245,12 @@ StaffTexts Pass::staffTexts(int staffIdx) const
       return tx;
       }
 
-// Slurs per track and hairpins per staff, from the score's spanners.
+// Slurs per track (not phrase marks) and hairpins per staff, from the score's spanners.
 void Pass::collectSpanners()
       {
       for (const auto& sp : _score->spanner()) {
             Spanner* s = sp.second;
-            if (s->isSlur())
+            if (s->isSlur() && !toSlur(s)->phraseMark())     // a phrase mark is not a bow stroke (slur.h)
                   _slurs[s->track()].push_back({ s->tick().ticks(), s->tick2().ticks() });
             else if (s->isHairpin()) {
                   Hairpin* h = toHairpin(s);

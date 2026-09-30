@@ -1321,6 +1321,13 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::SCORE_TAB,
          STATE_NORMAL | STATE_NOTE_ENTRY,
+         "add-phrase-mark",
+         QT_TRANSLATE_NOOP("action","Phrase mark"),
+         QT_TRANSLATE_NOOP("action","Add phrase mark (a slur that plays no legato), or toggle the selected slurs")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY,
          "add-hairpin",
          QT_TRANSLATE_NOOP("action","Crescendo"),
          QT_TRANSLATE_NOOP("action","Add crescendo"),

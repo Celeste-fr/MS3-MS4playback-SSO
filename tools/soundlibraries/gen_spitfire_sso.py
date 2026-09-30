@@ -131,6 +131,13 @@ I=[
  (None,'Tubular Bells','tubular-bells',None),
  (None,'Desk Bells','hand-bells',None),
 ]
+# Legato transitions start early (libmscore/rendermidi.cpp: libLegatoEarly): by this share of the
+# patch's measured delay (legatoDelay=). Measured with SSO on the test VM (2026-09-30, Solo Violin, Violins 1,
+# Flute Solo Performance, slurred steps and leaps at 60 and 120 bpm, 42 transitions; the new pitch within
+# 35 cents, YIN every 5 ms): after the beat by a median of 230 ms before, 128 at 50 %, 80 at 75 %, 40 at 100 %
+# (20 of 42 within 40 ms, one 59 ms early); leaps of a fourth or fifth stay 100-280 ms late. 100 %: the
+# full arrival lands a little late, where the ear already hears the new note (CLAUDE.md, Legato transitions)
+LEGATO_EARLY = 100
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
 '  Spitfire Symphony Orchestra (Kontakt), articulations switched by UACC (CC32).',
@@ -161,10 +168,15 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '       follows the dynamics on CC1\'s scale (the owner, 2026-09-28: staccatos stood out at pp); heard: the short notes\' balance',
 '       that sounded right (the owner, 2026-09-28, "Whence": strings -4 dB), what Recommended fits to -->',
 '  <Dynamics cc="1" expression="127" velocity="short staccatissimo spiccato marcato tenuto pizzicato bartok collegno" heard="strings=-4"/>',
-'  <!-- microtones: Kontakt ignores a note\'s tuning and SSO\'s pitch bend bends nothing (the owner\'s',
-'       extracts of 2026-09-27), so notes of other tunings play on copies of the patch played',
-'       faster or slower (libmscore/soundlibrary.h: Lanes) -->',
+'  <!-- microtones: Kontakt ignores a note\'s tuning, so notes of other tunings play on copies of the',
+'       patch (libmscore/soundlibrary.h: Lanes), each tuned by SSO\'s own pitch bend where the patch',
+'       bends cleanly (bend= on the Instrument: the Performance patches ±100 cents, from the owner\'s',
+'       extracts, sso_patch_measurements.json), else played faster or slower (varispeed); a lane is',
+'       retuned once its notes\' release (release= on the Articulation, measured) or tail has rung out -->',
 '  <Tuning method="varispeed" tolerance="0.5" tail="1.5"/>',
+'  <!-- a slurred note on a Performance patch (a legato transition) reaches its pitch legatoDelay ms after',
+'       its note-on (measured, sso_articulation_timing.json): it starts early by that times early percent -->',
+f'  <Legato early="{LEGATO_EARLY}"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
 '  <Files registry="Spitfire Symphony Orchestra"/>']
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
@@ -807,4 +819,72 @@ assert scannedUsed == set(SCANNED), set(SCANNED) - scannedUsed
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed
 assert not measuredMissing, measuredMissing         # (every map patch was in the extract)
+
+# Measured timing (the owner's background timing run with SSO, 2026-09-29/30; tools/soundlibraries/
+# sso_articulation_timing.json, timing_from_check.py; patch -> articulation name -> {value, releaseMs,
+# legato: [[velocity, interval, leaveMs, arriveMs, dipDb], ...]}):
+# - release= (ms): a sustained articulation's ring after the note-off (to 30 dB under its level). A tuning
+#   lane stays busy until a note's end plus the longer of the tail and this (SoundLib::lanes): a lane
+#   retuned while a release rings would move the ringing pitch (Flautando 2.9 s, tail 1.5 s).
+# - legatoDelay= (ms): a legato articulation (the Performance patches): when the second of two slurred
+#   notes reaches its pitch after its note-on, the median of the six measured transitions (velocity 20 /
+#   64 / 110, +2 and -5 semitones). Velocity makes no difference on most patches (median spread 0 ms);
+#   up (+2) and down (-5) differ on some patches either way round (Oboes a2 90 / 340, Bassoons a2 90 / 260,
+#   Bass Flute 220 / 100), with two intervals only, so one number per patch.
+TIMING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_articulation_timing.json'),
+                        encoding='utf-8'))
+# Pitch bend (the owner's extracts, sso_patch_measurements.json "pitchBend": cents at bend 0 and 16383
+# against 8192; the extract found the cents at 4096 … 12288 on a straight line): bend= (cents at full
+# deflection) where the patch bends cleanly: both ways at least 50 cents and the two within 3 % of each
+# other (symmetric, so one number): every Performance patch ±100 (Trumpets a3 ±105), Solo Cello and the tuned
+# percussion ±195 (the drum kits' patches bend too, but a kit plays no tunings). Not: the All techniques patches (they don't bend), Desk Bells (-2220 / +195),
+# Sleighbells (-200 / +184), Unpitched - Wood (-204 / +195).
+PATCH_MEASUREMENTS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_patch_measurements.json'),
+                                    encoding='utf-8'))
+def bendRange(name):
+    m = PATCH_MEASUREMENTS.get(name)
+    if not m or not m.get('pitchBend'):
+        return None
+    down, up = m['pitchBend']
+    if -down < 50 or up < 50:
+        return None
+    mean = (up - down) / 2
+    if abs(up + down) > 0.03 * mean:
+        return None
+    return round(mean, 1)
+import statistics
+current = None
+timedValues = set()
+for i, line in enumerate(out):
+    m = re.match(r'  <(Instrument|Patch) name="([^"]*)"', line)
+    if m:
+        current = m.group(2).replace('&amp;', '&') if m.group(1) == 'Instrument' else None
+        # (a kit and its patches play no tunings: no lanes)
+        if current and ' kit="1"' not in line and 'with="Percussion"' not in line:
+            b = bendRange(current)
+            if b:
+                end = '/>' if line.endswith('/>') else '>'
+                out[i] = line[:-len(end)] + f' bend="{b:g}"' + end
+        continue
+    m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
+    if not m or current not in TIMING:
+        continue
+    value = int(m.group(1))
+    t = [a for k, a in TIMING[current].items() if isinstance(a, dict) and a.get('value') == value]
+    if not t:
+        continue
+    t = t[0]
+    extra = ''
+    if t.get('sustains') and t.get('releaseMs'):
+        extra += f' release="{int(t["releaseMs"])}"'
+    arrive = [l[3] for l in t.get('legato', []) if l[3] >= 0]
+    if arrive:
+        extra += f' legatoDelay="{int(round(statistics.median(arrive)))}"'
+    if extra:
+        assert line.endswith('/>'), line
+        out[i] = line[:-2] + extra + '/>'
+        timedValues.add(current)
+# (every timed patch with a sustained or legato articulation found in the map)
+assert {p for p, v in TIMING.items() if any(isinstance(a, dict) and (a.get('sustains') or a.get('legato'))
+                                            for a in v.values())} <= timedValues
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

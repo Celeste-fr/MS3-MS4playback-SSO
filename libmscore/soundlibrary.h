@@ -81,6 +81,11 @@ struct Articulation {
                                           // prefer>: SSO's Performance legato for held notes)
       double length { -1 };               // seconds its sample lasts (<Articulation length>: SSO's Short 0'5,
                                           // Short 1'0): not chosen for a note under 90 % of it
+      // measured with the library (<Articulation release legatoDelay>, ms; the timing check):
+      double releaseMs { -1 };            // a sustained note rings this long after its note-off (a tuning lane
+                                          // stays busy until then: Lanes); -1: unknown (the tail only)
+      double legatoDelayMs { -1 };        // a legato transition reaches the new pitch this long after its note-on:
+                                          // it starts early (the renderer, legatoEarly()); -1: not a legato / unknown
       };
 
 struct DrumKey {
@@ -129,6 +134,9 @@ struct LibInstrument {
       bool kit { false };                 // percussion served by its extras' keys; no patch of its own
       bool keyScan { false };             // a percussion patch: the articulation check scans its keys
       int testPitch { -1 };               // a <Patch>'s note for the articulation check (from its files), -1: none
+      // microtones by the patch's own pitch bend (<Instrument bend>: cents at full deflection, either way, the
+      // bend linear; measured): a lane's tuning within it is played by pitch bend, not varispeed. 0: it doesn't bend
+      double bendCents { 0 };
       QString scan;                       // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;
@@ -184,6 +192,9 @@ class Library {
       double laneTolerance { 0.5 };       // cents
       double laneTail { 1.5 };            // seconds
       int maxLanes { 4 };                 // per patch: past it, the lane quiet longest is retuned (its tail with it)
+      // a legato transition starts early by this share of its articulation's legatoDelayMs (<Legato early>,
+      // percent; the score's own: legatoEarly())
+      int legatoEarly { 0 };
       std::vector<Controller> controllers;          // for all its instruments
       std::vector<LibInstrument> instruments;
       // the library's other patches (<Patch>): none of the map's, but set up and checked (Check
@@ -440,6 +451,8 @@ struct Lanes {
       std::map<const Note*, int> lane;
       std::map<const Note*, double> cents;          // the tuning each note plays at (its lane's)
       };
+// (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
+// releaseMs)
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
             double toleranceCents, double tailSeconds, int maxLanes = 4);
 
@@ -459,6 +472,25 @@ extern const char* laneSettingsMetaTag;
 LaneSettings libraryLaneSettings(const Library&);
 LaneSettings laneSettings(const Score*, const Library&);
 QString writeLaneSettings(const LaneSettings& s, const Library&);      // "" when the library's
+
+//---------------------------------------------------------
+//   legatoEarly
+//    how early a legato transition starts, percent of its articulation's measured delay (SSO's
+//    Performance patches reach the new pitch 70-430 ms after the note-on, median 180): the map's
+//    <Legato early>, unless the score sets its own (Mixer › Advanced Options…, metaTag
+//    "soundLibraryLegatoEarly": "75"). 0: on the beat, as written
+//---------------------------------------------------------
+
+extern const char* legatoEarlyMetaTag;
+int legatoEarly(const Score* score, const Library& library);
+
+//---------------------------------------------------------
+//   bendValue
+//    the 14-bit pitch bend (0 … 16383, centre 8192) that plays cents on a patch bending bendCents
+//    either way (linear); -1: beyond its range (varispeed plays it)
+//---------------------------------------------------------
+
+int bendValue(double cents, double bendCents);
 
 //---------------------------------------------------------
 //   TextTechniques
