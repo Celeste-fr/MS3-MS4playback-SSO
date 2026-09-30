@@ -149,16 +149,21 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
 
 - **What a clip holds:** what MuseScore's playback renders for that route, repeats written out: the
   notes and their velocities, and the controllers as **carrier notes** on the top keys 116-127, one
-  key per controller (UACC CC32, CC1, CC11, CC64 pedal … the table is `LiveClips::CARRIER_CCS`,
-  velocity = value + 1, so 127 plays as 126). The Live Object Model can write a clip's notes but not
+  key per controller (UACC CC32, CC1, CC11, CC64 pedal … the table is `LiveClips::CARRIER_CCS`; the
+  value is the velocity, 0 as 1, so 127 is exact and 1 plays as 0; the UACC switch is value + 1:
+  `carrierVelocity`), and the **pitch bend** (the microtones of a patch with
+  `bend=`, legato glides included) on keys 115 (its upper 7 bits) and 114 (its lower 7), each written
+  when it changes (2026-09-30). The Live Object Model can write a clip's notes but not
   its MIDI controller envelopes, so the controllers travel as notes, and the **MuseScore Link**
-  device, placed before Kontakt on the track, turns each carrier into its controller (and drops its
-  note-off). So everything is in the clip and played by Live's own clock: sample-exact with the notes,
+  device, placed before Kontakt on the track, turns each carrier into its controller or the pitch bend
+  (and drops its note-off). Keys 114-127 are never played as notes. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
   also in an export or a freeze, and chased when playback starts in the middle (Live's *Chase MIDI
   Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
-  placed just before it (0.26 ms at 120 bpm), switches before dynamics, as the renderer orders them.
-  Plug-in parameter events (MuseScore's own lanes and *Controllers…*) are left out: Live's automation
-  lanes play those.
+  placed just before it (0.26 ms at 120 bpm apart): switches first, then the controllers, the pitch bend
+  last; at a tick without a note (a glide's step) the last of them is at the tick itself.
+  Plug-in parameter events (MuseScore's own automation lanes) are left out: Live's automation lanes play
+  those. The part's *Controllers…* that are plug-in parameters are in each patch's state in the Live Set
+  (Create Live Set, below).
 - **Time:** the Live Object Model can't write the song's tempo automation, so Live plays at one tempo,
   the score's first, and the clips hold the notes at their real times (seconds as MuseScore plays them:
   tempo changes, rit./accel. lines, fermatas, repeats). With one tempo throughout, Live's bars are the
@@ -223,6 +228,8 @@ Only real Live can show (to check first):
   quickly enough;
 - the carriers become controllers before the notes at the same time (SSO's articulation right on the
   first note after a switch), in playback and in *Export Audio/Video*;
+- the pitch bend carriers (keys 115 / 114) become one pitch bend (Max's `pack 224 0 0` banged from its left inlet),
+  so a quarter-tone note on a Performance patch sounds in tune;
 - chasing at a mid-song start sends the controllers in force;
 - MuseScore following Live stays in step over a long piece.
 
@@ -264,7 +271,23 @@ renaming it, dragging in Kontakt 8, etc. possible to be automated?". MuseScore w
     comes with this MuseScore (an older device). Its saved *Port* is MuseScore's (`io/live/clipsPort`).
   - Kontakt's state is the patch's setup exactly as MuseScore loads it (`SoundLibraryHost::setupState`): Kontakt's
     own state when a load has resaved it, else made from the `.nki`; "UACC & UI only" (`$iooxo` 3) and **512
-    voices** as MuseScore sets them. Kontakt's controller state: what the setup holds (empty for Kontakt). The owner's
+    voices** as MuseScore sets them. Kontakt's controller state: what the setup holds (empty for Kontakt).
+  - **with the part's Controllers** (2026-09-30): when the part sets plug-in parameters of that patch in
+    *Controllers…* (the piano's mic levels, a violin's vibrato …), the state is the one MuseScore plays: the setup
+    loaded into a Kontakt instance as MuseScore loads it (its script settled, 1 s), the part's values set exactly as
+    playback sets them, a quarter second for Kontakt to take them, then Kontakt's state
+    (`SoundLibraryHost::stateWithControllers`). A patch without such values keeps its setup byte for byte. The same
+    parameters are listed in Live's panel of Kontakt (as after *Configure*: name, id, value), so whether Live sets
+    them again over the state or not, both agree, and they are ready for automation. The report lists per part
+    and patch what was set. Controllers on a MIDI CC are in the clips (carriers), as before.
+    **Changed later in MuseScore, they don't follow into the set** (the set is a file Live opened): create the set
+    again, or change and automate them in Live (Live's panel has them).
+  - **Live's mixer** = MuseScore's Mixer (2026-09-30): each track's Volume is the part's volume as MuseScore's host
+    plays it, (v/100)² as a linear gain (100 = 0 dB, 127 = +4.2 dB, 0 = -70 dB, Live's lowest; MuseScore's 0 is
+    silence), its Pan the same position (-1 … 1; Live's law is MuseScore's: constant power, sine / cosine, 0 dB in
+    the centre, +3 dB fully panned, Live 12 manual, Audio Fact Sheet › Panning: the same gains at every position). A
+    muted part: the track's Track Activator off. Solo is left out, as in MuseScore's audio export. Changed later:
+    as the Controllers (create the set again, or use Live's faders). The owner's
     Live set confirmed the form: Live's `Vst3Preset/ProcessorState` is Kontakt's component state (an NI "hsin"
     container whose size field is the whole blob's), `ControllerState` empty, `Uid` Fields.0-3 = Kontakt 8's class id
     5653544E-694B386B-6F6E7461-6B742038 as signed 32-bit numbers.
@@ -337,13 +360,127 @@ Only real Live can show (to check first):
   can locate it), and that its saved port comes back;
 - MIDI From = "MuseScore A" / "Ch. n" (the input's target form is unconfirmed);
 - dragging tracks from the *Add missing tracks* set in Live's browser into an open set brings their devices and
-  Kontakt's state along.
+  Kontakt's state along;
+- the Controllers: Kontakt shows the part's values (e.g. the piano's Mic 1 level) and Live's panel lists them with
+  the same values (the state itself was checked in real Kontakt on the VM: "Measured with SSO");
+- the mixer: each track's fader and pan at the written values (e.g. -3.9 dB, 25L), a muted part's track deactivated.
 
 ### Open questions for the owner
 
 - Live asks where to save a set opened from outside a project: save it next to the score, or in a Live project?
 - The track colours: one per part, from a fixed list. By family (strings, woodwinds …) instead?
 - Return tracks (a reverb / delay like Live's default set): none, since SSO brings its own room. Wanted?
+
+## Live against MuseScore
+
+The owner, 2026-09-30: **"make it a rule that Ableton's audio output and MuseScore's audio output for SSO must
+match"** (CLAUDE.md › Rule: Live and MuseScore sound alike). Any change to SSO playback (renderer, hosting, mixer,
+controllers, tuning) must reach the Live path too (the clips: notes and carriers; the generated set: Kontakt's state,
+the track mixer; the MuseScore Link device) or be listed below as a difference to fix.
+
+### What matches (2026-09-30)
+
+- Everything in the rendering reaches the clips, as the same events: notes and velocities (early legato transitions,
+  phrase marks, slur ends: tst_liveequivalence liveClipsLegatoEarly), the switches and every controller on a carrier
+  key (UACC, CC1 dynamics, CC11, pedal, the map's CC controllers; 127 exact since 2026-09-30: before, CC11 127 played
+  as 126 on every Live note, 0.07-0.08 dB under MuseScore on the VM), the **pitch bend** (keys 115 / 114, 14 bit:
+  the microtones of patches with `bend=`, glides included; liveClipsBend).
+- The controllers of a part's extra patches (the Performance legato …) come before the notes at their tick, as the
+  main patch's (renderer fix, 2026-09-30: they were after the note, so in Live a Performance note on a new dynamic
+  started at the old one: +4.0 dB on the VM's first note; MuseScore's own sound is unchanged by it).
+- The part's **Controllers** that are plug-in parameters: in each patch's state in the set, and in Live's panel with
+  the same value.
+- **Volume, pan, mute**: Live's track mixer, the same gains.
+- The time: Live plays at the score's first tempo with the notes at their real times (tempo changes, fermatas,
+  repeats).
+
+### What still differs
+
+- **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): MuseScore
+  plays them by varispeed on copies of the patch; a clip can't carry that, so in Live they play 12-TET. (The
+  Performance patches, Solo Cello and the tuned percussion bend: those match.)
+- **A note at the very start** (time 0) waits in Live for its carriers, which can't go before the clip's start: the
+  switch, controllers and bend at 0, 0.26 ms each at 120 bpm (1-4 ms). The wait itself is inaudible, but SSO's
+  Performance legato script is sensitive to where a line starts: on the VM the first note of a Solo Violin -
+  Performance line came out 0.9 dB under MuseScore's and the legato note after it +1.2 dB; MuseScore's own stream
+  with only its first note-on 1.4 ms later gives exactly Live's numbers, and the whole stream 1.4 ms later moves
+  the first note 0.9 dB as well (the same sensitivity inside MuseScore). The equivalence check leaves the span of
+  such notes out of its waveform measure and checks their onsets against the wait.
+- **Carriers are spread 0.26 ms apart** (EPSILON, so they come before the note in a known order), and a bend whose
+  two halves both change passes for 0.26 ms through a value between: a glide step or a dynamics change while a note
+  sounds is up to a few tenths of a millisecond off MuseScore's. On the test synth this is the whole remaining
+  difference (residual -32 dB; none without such changes: -327 dB); on SSO's Performance legato, the quarter-tone
+  glide notes of the VM score were within 0.36 dB.
+- **A carrier value of 1 plays as 0** (the UACC switch: 127 can't be carried, and it is no articulation): 128
+  controller values in a note's 127 velocities.
+- **MuseScore's own automation lanes of plug-in parameters** (ME_PARAMETER events) are not in the clips: in Live,
+  Live's automation lanes play those (the imported ones come from there).
+- **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
+  panel and faders.
+- The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.
+- The Mixer's volume 0: silence in MuseScore, -70 dB in Live (Live's lowest fader value).
+- Round robins: Kontakt picks its own on each render, in MuseScore and in Live alike (not a difference of the path,
+  but no two renders are sample-identical).
+
+### The check (`--live-equivalence`)
+
+`mscore/liveequivalence.h`. MuseScore's own offline render (as an audio export: the patches loaded, script settled,
+Controllers set, the Mixer in the host; one route at a time, summed) against "Live": the set MuseScore writes
+(planLiveSet) and the clips it sends, turned back into MIDI exactly as the device's patcher does (carriers to CC /
+pitch bend, their note-offs dropped), each track's plug-in loaded from the set's embedded state (settled, the
+configured parameters set again), Live's mixer, summed; both in seconds. Compared: the whole render (correlation and
+residual at the best lag within ±2 ms) and each note on its own track (level over its first 250 ms, the envelope's
+onset lag). Thresholds: deterministic (the test synth, `--live-equivalence-strict`): correlation ≥ 0.999, residual
+≤ -30 dB, every note ≤ 0.5 dB and ≤ 1 ms; with round robins (Kontakt): notes' median ≤ 1 dB, each ≤ 3 dB, onsets
+≤ 5 ms, the whole render reported only.
+
+```
+MuseScore3Evo.exe --live-equivalence <folder> <score> [--live-equivalence-wav] [--live-equivalence-strict] [--verify-library <library>]
+MuseScore3Evo.exe --create-live-set <out.als> <score> [--verify-library <library>]      (the report as <out.als>.txt)
+MuseScore3Evo.exe --live-set-readback <file.als> [--verify-library <library>]           (<file.als> readback.txt)
+```
+(the working MuseScore's setups and settings; no window). `--live-set-readback` loads each plug-in state of a set into
+the library's plug-in, settles it and reads back, by title, the parameters Live's panel lists: what the state holds
+before anything sets it.
+
+Tests (`tst_liveequivalence`, the test synth): liveEquivalence (quarter tones by bend with glides, a plug-in and a CC
+Controller, volume 80 / pan 32): correlation 0.99970, residual -32.2 dB, every note within 0.02 dB and 0 ms; each
+old way fails it (`MS_LIVE_EQUIVALENCE_FAULT`: no bend: correlation 0.50; no mixer: notes 4.6 dB off; the setup
+without the Controllers: 8.8 dB off). liveEquivalenceLegato (early legato transitions on an extra patch, two tempi):
+bit-identical after the start (residual -327 dB). liveSetControllersAndMix, liveClipsBend, liveClipsLegatoEarly.
+
+### Measured with SSO (the Windows VM, 2026-09-30)
+
+A small score written for it (not the owner's; kept outside the repository): a Solo Violin line with quarter tones
+and slurs (Solo Violin 1 and its Performance legato, which bends ±99.6 cents) and a Grand Piano part, 90 bpm, the
+Controllers Violin Vibrato 25, Piano Mic 1 level 20 and Mic 3 level 110, the Mixer at violin 88 / pan 31, piano
+101 / pan 84 (a MusicXML import's). Kontakt 8 with SSO over the owner's share; builds run 268 (22c33e8) and run
+271 (aea4507, with the fixes below).
+
+- `--create-live-set`: 3 tracks (Violin, "Violin – Solo Violin - Performance", Piano), Controllers set in each
+  patch's state ("Vibrato 25" on both violin patches, "Mic 1 level 20, Mic 3 level 110" on the piano), volume
+  -2.2 dB / pan 26L and +0.2 dB / 16R.
+- `--live-set-readback` of that file: each state loaded into a new Kontakt, settled, then read by title: Vibrato
+  0.196850 = 25/127 (Live's id 1) on both violin tracks, Mic 1 level 0.157479 = 20/127 (id 7), Mic 3 level 0.866142
+  = 110/127 (id 9): each the score's value.
+- `--live-equivalence` (build 268, before the fixes of 74ec57f and aea4507): whole render correlation 0.99993,
+  residual -36.8 dB; Piano 12 notes within 0.07 dB, 0 ms; the violin's Performance line median 0.08 dB, but its
+  first note +4.65 dB and the legato note after it 26 ms off: found to be the controllers after the note (renderer
+  fix) and CC11 126 (carrier values), confirmed by replaying the streams through Kontakt (the host below).
+- Replayed through Kontakt with the fixed streams (the Performance line alone in a small host; MuseScore's stream
+  against the clips as the device plays them): first note -0.9 dB, the legato note after it +1.2 dB (the start's
+  wait, above), the glide notes within 0.36 dB, the rest identical.
+- `--live-equivalence` with run 271: **PASS**. Whole render correlation 0.99961, residual -31.1 dB (after the start
+  span, 3.0 s); the violin's Performance line 11 notes, median 0.01 dB, max 0.44 dB (the legato note after the
+  first), onsets 0 ms; the first note -45.63 / -45.66 dB; Piano 12 notes 0.00 dB, 0 ms. (Every headless run with
+  Kontakt on the VM exits with 0xC000000D after writing its results, the playback verify's too: Kontakt at exit.)
+
+What the VM can't show: Live itself (not installed there). For the owner: open the set in Live 12.2 (LIVE.md ›
+Create Live Set › Only real Live can show), and compare an export from Live with MuseScore's.
+
+The streams were replayed with a small offline VST 3 host on the VM (not in this repository; it plays a list of
+"seconds on|off|cc|pb …" lines through one instance loaded from a `.vst3state`); `tst_liveequivalence dumpEvents`
+writes those lists for a score (MuseScore's events per route, and the device's MIDI from each clip).
 
 ## Editing Live clips in MuseScore
 
@@ -553,5 +690,6 @@ do.
 - `mscore/liveclipmodel.{h,cpp}`: editing Live clips: the import, the baseline, the diff, the messages;
   `mscore/liveclipedit.{h,cpp}`: the sessions, tabs and status line.
 - `tools/live/`: the device (`MuseScoreLink.js`, `make_device.py`) and its tests (`test/`).
+- `mscore/liveequivalence.{h,cpp}`: Live against MuseScore (the check, `readBack`); test `tst_liveequivalence`.
 - Tests: `mtest/libmscore/liveintegration`. Fixtures: `liveset.xml` (written by hand, gzipped by
   the test) and `violin-flute.musicxml`.

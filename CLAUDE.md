@@ -32,6 +32,8 @@ library work; the tuning work is described under "Tuning" below).
   last commit message, or *Run workflow* on that branch). Check `git log` of `main` and of
   your branch, and the latest commit messages, first. They are detailed on purpose and
   describe what each step did and how it was measured.
+- `live-set-export` (2026-09-30; worktree `wt-liveset`): Create Live Set, with live-integration, live-clip-edit,
+  piano-v37-fixes and legato-timing merged; Live against MuseScore (the rule below).
 - `live-integration` (2026-09-28, from main at f12a240; worktree `wt-live`): playing through
   Ableton Live 12: MIDI clock / SPP out, *Mixer › Play through Live*, automation imported from a
   Live Set as read-only lanes. **Read `LIVE.md`** (design, the owner's setup, what is unverified,
@@ -52,6 +54,17 @@ themselves, and say which sources could not be read. Open the page with a short 
 list: each reading to confirm, where to look for it, then the decision asked. Example: "Unpitched HEJI accidentals"
 (https://claude.ai/artifact/CPfVu3qdHzMr5xPKiJFD2Y), the HEJI 2020 legend behind the 10
 accidentals' pitches.
+
+## Rule: Live and MuseScore sound alike
+
+The owner (2026-09-30): **"make it a rule that Ableton's audio output and MuseScore's audio output for SSO must
+match."** Any change to SSO playback (the renderer, the hosting, the Mixer, the Controllers, the tuning) must reach
+the Live path too: the clips "Live plays the score" sends (notes and carrier notes: `libmscore/liveclips.*`), the
+set Create Live Set writes (each patch's Kontakt state, Live's track mixer: `mscore/livesetexport.*`,
+`libmscore/livesetwriter.*`) or the MuseScore Link device (`tools/live/`). Otherwise list it in LIVE.md › Live
+against MuseScore › What still differs, as a difference to fix, and keep that list current. Check with
+`tst_liveequivalence` (the test synth, strict: the whole render must match) and, for SSO, `MuseScore3Evo.exe
+--live-equivalence <folder> <score>` on the Windows VM (LIVE.md › The check), and say which you ran.
 
 ## Rule: files survive a round trip to MuseScore 3.6
 
@@ -319,7 +332,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
 - Renderer: library parts play on the instrument's first channel. Each note and switch carries
   its patch (`NPlayEvent::libraryPatch`); `finishLibraryEvents` routes by channel and patch
   (`libRoutes`: channel -> port/channel per patch), drops redundant switches per patch, and
-  copies the part's controllers (dynamics, pedal) to every patch. An articulation switch
+  copies the part's controllers (dynamics, pedal) to every patch (before the notes at their tick, as the main
+  patch's: 2026-09-30, found by the Live equivalence check; hosted it made no difference, in Live the note started
+  at the old dynamic). An articulation switch
   (`NPlayEvent::librarySwitch`) goes before each note. Events carry the route
   (`NPlayEvent::setExternal(port, channel)`); the old duplicate-controller pass compares routes,
   not channels. A legato articulation's note lasts DIVISION/16 into the next (Spitfire legato
@@ -644,9 +659,10 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     legato transition (`libGlideFrom`: the note before on the same lane) glides from that note's bend in 3 ms steps
     over 30 ms (`LEGATO_GLIDE`), steps cut at the lane's next note-on; a tuning beyond the range keeps varispeed for
     all of it, the bend at the centre. The bends are ME_PITCHBEND events on the lane's route: hosted
-    (`Vst3Plugin::midi` → kPitchBend) and over MIDI out alike. Live clips (the `live-*` branches' liveclips.h)
-    drop pitch bend (`Track::dropped`): there such notes stay untuned, as varispeed never reached Live either
-    (open: a carrier for the bend). Test `tuningBend` (bend 200 on the test synth: bends, glides, a narrower range
+    (`Vst3Plugin::midi` → kPitchBend) and over MIDI out alike. Live clips carry them (branch `live-set-export`,
+    2026-09-30): two carrier keys, 115 the upper and 114 the lower 7 bits, each written when it changes, turned into
+    one pitch bend by the MuseScore Link device; varispeed (patches without `bend=`) can't reach Live: those stay
+    12-TET there (LIVE.md › Live against MuseScore). Test `tuningBend` (bend 200 on the test synth: bends, glides, a narrower range
     falls back to varispeed, ±50 heard within 4 cents, no slot's varispeed engaged).
   - Test `tuningLanes` (quartertones.musicxml: 8 notes' lanes, their routing and tuning, CC1 and switches
     on both lanes, maxLanes 1, and Vst3Synth playing ±50 cents on the test synth by speed); `pitchShift`
@@ -668,8 +684,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `io/portMidi/syncOutputDevice`.
   **Live plays the score** (2026-09-29; LIVE.md › Live plays the score): each library route as a playable
   arrangement clip in Live, rewritten after every edit, Live the clock and MuseScore following it.
-  `libmscore/liveclips.*` (the clips from the rendering: controllers as carrier notes on keys 116-127, real
-  times at the score's first tempo, bar locators, the OSC protocol), `mscore/liveclips.*` (`LiveClipsLink`:
+  `libmscore/liveclips.*` (the clips from the rendering: controllers as carrier notes on keys 116-127, the pitch
+  bend on 115 / 114 (14 bit), the value as the velocity (`carrierVelocity`: 127 exact, 1 as 0; UACC value + 1),
+  real times at the score's first tempo, bar locators, the OSC protocol), `mscore/liveclips.*` (`LiveClipsLink`:
   debounced rendering, per-route hashes, confirmations, Live's transport followed; `Seq::setLiveClips`: no
   library events, no MIDI clock), `tools/live/` (the MuseScore Link Max for Live device: `MuseScoreLink.js`,
   `make_device.py` writes the patcher and `MuseScore Link.amxd`; Node tests against a stand-in Live, and
@@ -692,14 +709,24 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   track setup is "so many manual steps"): *Mixer › Advanced Options… › Ableton Live › Create Live Set…* / *Add
   missing tracks…* write a Live 12 set: a MIDI track per route named as the device finds it, MIDI From = the route,
   the MuseScore Link device (referenced in Live's User Library, else next to the exe) before Kontakt holding
-  `SoundLibraryHost::setupState` (resaved Kontakt state, 512 voices). `libmscore/livesetwriter.*` writes **every
+  `SoundLibraryHost::setupState` (resaved Kontakt state, 512 voices), or, where the part sets plug-in Controllers,
+  `SoundLibraryHost::stateWithControllers` (the setup loaded and settled as playback loads it, the part's values
+  applied by `applyParameters`, then getState; the same parameters listed in Live's panel, PluginDevice
+  ParameterList); each track's Live mixer from `SoundLib::partMix` (`LiveSetWriter::mixGain` (v/100)², `mixPan`,
+  a muted part's Track Activator off). `libmscore/livesetwriter.*` writes **every
   element Live 12.2 writes, in its order, with Live's defaults** (learned from the owner's sets, written by hand; the
   owner's files never go in the repository) and checks pointee ids / NextPointeeId / clip slots per scene
   (`validate`) before writing; `mscore/livesetexport.*` gathers routes, device and states. To change the format,
   compare with a set Live saved: `tools/live/test/compare_als_skeleton.py <generated.als> <live.als>` (the test
   writes one with `MS_LIVESET_OUT=<file> ./tst_liveintegration liveSetWrite`). `Vst3Plugin::classInfo` (class
-  name and FUID words without an instance), `splitState` (a setup's parts). Tests `tst_liveintegration`
-  liveSetWrite / liveSetMissing, `tst_soundlibrary` liveSetTestSynth. Unconfirmed: that Live opens it; MIDI From's
+  name and FUID words without an instance), `splitState` / `joinState` (a setup's parts). Tests `tst_liveintegration`
+  liveSetWrite / liveSetMissing, `tst_soundlibrary` liveSetTestSynth, `tst_liveequivalence`.
+  **Live against MuseScore** (2026-09-30, the rule above; LIVE.md › Live against MuseScore): `mscore/liveequivalence.*`
+  renders the score as MuseScore does and as Live would (the set's states, the clips turned into MIDI as the
+  device does, Live's mixer) and compares them; `MuseScore3Evo.exe --live-equivalence <folder> <score>`,
+  `--create-live-set <out.als> <score>`, `--live-set-readback <file.als>` (musescore.cpp `liveSetInBackground`).
+  Test `tst_liveequivalence` (links mscoreapp like tst_palette: tst_soundlibrary can't, both carry stringutils' moc;
+  uses tst_soundlibrary's test synth). Unconfirmed: that Live opens it; MIDI From's
   one-port target form; `OriginalCrc` (CRC-16/UMTS of the first 16 KiB, from one example).
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
@@ -797,6 +824,9 @@ attack not yet confirmed by ear.
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
   `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (50 counting initTestCase and cleanup, 3 skipped without the owner's files;
   `vst3Settle`, `kontaktMaxVoices` 2026-09-29; `liveSetTestSynth` 2026-09-30).
+- `mtest/libmscore/liveequivalence` (`tst_liveequivalence`): Create Live Set with the part's Controllers and the
+  Mixer, the clips' pitch bend and early legato notes, and Live against MuseScore on the test synth. All 7 pass
+  (counting initTestCase and cleanup; 2026-09-30).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order
@@ -1164,7 +1194,8 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
   plug-in, what each CC and parameter does, and the state blobs' zlib streams and strings (`_decoded/`).
 - Tested with the test synth (`tst_soundlibrary::pluginDescribe`, `pluginExtract`: it now has a "Tone"
-  parameter no CC maps to and twelve placeholder "Macro n"). In the GUI under Xvfb with sfizz (Solo Violin 1
+  parameter no CC maps to and twelve placeholder "Macro n"; since 2026-09-30 its state keeps Tone (24 bytes), as
+  Kontakt's keeps a script's controls, and `MSTESTSYNTH_INIT_MS` puts the state's Tone back). In the GUI under Xvfb with sfizz (Solo Violin 1
   set to the UACC SFZ, *Try every controller*, 7 minutes): 543 parameters (512 "Controller n" and 16 "Level n"
   placeholders), 130 CCs mapped per channel; CC 1, 7 (its Volume knob), 10 (its Pan knob), 11, 64, 66 and
   pitch bend found, put back at 100/104, 100, 64, 127, 0, 0, 64; parameters Volume, Polyphony, Preload size,
