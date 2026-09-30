@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "soundlibraryhost.h"
+#include "liveclips.h"
 #include "liveintegration.h"
 #include "libmscore/automation.h"
 #include "soundlibrarycheck.h"
@@ -2449,7 +2450,29 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             h->addStretch();
             h->addWidget(_liveUnlink);
             v->addLayout(h);
+            // Live plays the score (liveclips.h; a setting of this computer, for the score in front)
+            _liveClips = new QCheckBox(tr("Live plays the score (its notes as clips in Live; Live is the clock)"), liveBox);
+            _liveClips->setToolTip(tr("With the MuseScore Link device on each library track in Live (see LIVE.md): each part's "
+                                      "notes, articulation switches, dynamics and pedal become a clip in Live's arrangement, "
+                                      "kept up to date with every edit, and Live plays them. MuseScore sends the library "
+                                      "nothing and follows Live's transport; its own sounds play along.\n"
+                                      "The clips belong to MuseScore: edits made to them in Live are overwritten. Draw "
+                                      "automation in the tracks' lanes, not in the clips.\n"
+                                      "Off: MuseScore plays the notes through Live and is the clock (Play through Live)."));
+            _liveClipsStatus = new QLabel(liveBox);
+            _liveClipsStatus->setWordWrap(true);
+            v->addWidget(_liveClips);
+            v->addWidget(_liveClipsStatus);
             layout->addWidget(liveBox);
+            LiveIntegration::LiveClipsLink* link = LiveIntegration::LiveClipsLink::instance();
+            connect(_liveClips, &QCheckBox::toggled, this, [this, link](bool on) {
+                  if (on && !LiveIntegration::playingThroughMidi())
+                        LiveIntegration::setPlayThroughMidi(true, this);
+                  link->setOn(on);
+                  });
+            connect(link, &LiveIntegration::LiveClipsLink::statusChanged, this, [this, link]() {
+                  _liveClipsStatus->setText(link->statusText());
+                  });
             connect(import, &QPushButton::clicked, this, [this]() {
                   LiveIntegration::importDialog(_score, this);
                   load();
@@ -2551,6 +2574,10 @@ void SoundLibraryOptions::load()
             _liveAuto->setChecked(autoReimport);
             _liveAuto->setEnabled(!set.isEmpty());
             _liveUnlink->setEnabled(!set.isEmpty());
+            LiveIntegration::LiveClipsLink* link = LiveIntegration::LiveClipsLink::instance();
+            const QSignalBlocker g(_liveClips);
+            _liveClips->setChecked(link->isOn());
+            _liveClipsStatus->setText(link->statusText());
             }
       if (_evenSteps) {
             const QSignalBlocker blocker(_evenSteps);

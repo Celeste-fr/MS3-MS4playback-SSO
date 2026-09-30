@@ -235,6 +235,7 @@ class Seq : public QObject, public Sequencer {
       static constexpr int MAX_SYNC_OUT = 512;
       MidiSync::Clock syncClock;
       bool syncStartPending { false };    // playing: start once the score (not the count-in) plays
+      std::atomic<bool> _liveClips { false };   // Live plays the score (liveclips.h): no library events, no clock
       SyncOut syncOut[MAX_SYNC_OUT];
       int syncOutCount { 0 };
       int syncOutDone { 0 };
@@ -407,6 +408,10 @@ class Seq : public QObject, public Sequencer {
       virtual void sendEvent(const NPlayEvent&) override;
       void setScoreView(ScoreView*);
       MasterScore* score() const   { return cs; }
+      // Live plays the score (mscore/liveclips.h): the library's routes get nothing from MuseScore and no
+      // MIDI clock is sent (Live is the clock); MuseScore's own sounds still play
+      void setLiveClips(bool on)   { _liveClips = on; }
+      bool liveClips() const       { return _liveClips; }
       ScoreView* viewer() const { return cv; }
       void initInstruments(bool realTime = false);
 

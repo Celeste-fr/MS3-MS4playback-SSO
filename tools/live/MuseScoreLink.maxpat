@@ -1,0 +1,1921 @@
+{
+	"patcher": {
+		"fileversion": 1,
+		"appversion": {
+			"major": 9,
+			"minor": 0,
+			"revision": 7,
+			"architecture": "x64",
+			"modernui": 1
+		},
+		"classnamespace": "box",
+		"rect": [
+			100,
+			100,
+			900,
+			700
+		],
+		"openinpresentation": 1,
+		"default_fontsize": 10.0,
+		"default_fontface": 0,
+		"default_fontname": "Arial",
+		"gridonopen": 1,
+		"gridsize": [
+			15.0,
+			15.0
+		],
+		"gridsnaponopen": 1,
+		"objectsnaponopen": 1,
+		"statusbarvisible": 2,
+		"toolbarvisible": 1,
+		"boxanimatetime": 200,
+		"enablehscroll": 1,
+		"enablevscroll": 1,
+		"devicewidth": 330,
+		"description": "MuseScore Link: the score's parts as clips, kept up to date by MuseScore; turns their controller notes into MIDI controllers. Put it before the instrument.",
+		"digest": "",
+		"tags": "",
+		"style": "",
+		"subpatcher_template": "",
+		"boxes": [
+			{
+				"box": {
+					"id": "obj-1",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						30,
+						30,
+						58,
+						22
+					],
+					"text": "midiin",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-2",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 8,
+					"patching_rect": [
+						30,
+						70,
+						79,
+						22
+					],
+					"text": "midiparse",
+					"outlettype": [
+						"",
+						"",
+						"",
+						"int",
+						"int",
+						"",
+						"int",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-3",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 13,
+					"patching_rect": [
+						30,
+						110,
+						330,
+						22
+					],
+					"text": "route 127 126 125 124 123 122 121 120 119 118 117 116",
+					"outlettype": [
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-4",
+					"maxclass": "newobj",
+					"numinlets": 7,
+					"numoutlets": 2,
+					"patching_rect": [
+						30,
+						330,
+						86,
+						22
+					],
+					"text": "midiformat",
+					"outlettype": [
+						"int",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-5",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						420,
+						330,
+						44,
+						22
+					],
+					"text": "iter",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-6",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						30,
+						370,
+						65,
+						22
+					],
+					"text": "midiout"
+				}
+			},
+			{
+				"box": {
+					"id": "obj-7",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						30,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-8",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						30,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-9",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						30,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 32",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-10",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						90,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-11",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						90,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-12",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						90,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 1",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-13",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						150,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-14",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						150,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-15",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						150,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 11",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-16",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						210,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-17",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						210,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-18",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						210,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 64",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-19",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						270,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-20",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						270,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-21",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						270,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 2",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-22",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						330,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-23",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						330,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-24",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						330,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 4",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-25",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						390,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-26",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						390,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-27",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						390,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 21",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-28",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						450,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-29",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						450,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-30",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						450,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 5",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-31",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						510,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-32",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						510,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-33",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						510,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 65",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-34",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						570,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-35",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						570,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-36",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						570,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 66",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-37",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						630,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-38",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						630,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-39",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						630,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 67",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-40",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 2,
+					"patching_rect": [
+						690,
+						160,
+						51,
+						22
+					],
+					"text": "sel 0",
+					"outlettype": [
+						"bang",
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-41",
+					"maxclass": "newobj",
+					"numinlets": 2,
+					"numoutlets": 1,
+					"patching_rect": [
+						690,
+						200,
+						40,
+						22
+					],
+					"text": "- 1",
+					"outlettype": [
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-42",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						690,
+						240,
+						100,
+						22
+					],
+					"text": "prepend 176 68",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-43",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 3,
+					"patching_rect": [
+						500,
+						30,
+						121,
+						22
+					],
+					"text": "live.thisdevice",
+					"outlettype": [
+						"bang",
+						"int",
+						"int"
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-44",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 3,
+					"patching_rect": [
+						500,
+						450,
+						120,
+						22
+					],
+					"text": "v8",
+					"outlettype": [
+						"",
+						"",
+						""
+					],
+					"saved_object_attributes": {
+						"parameter_enable": 0
+					},
+					"textfile": {
+						"text": "// MuseScore Link: the Max for Live device for \"Live plays the score\" (LIVE.md; MuseScore's side:\n// libmscore/liveclips.h, mscore/liveclips.h).\n//\n// One copy goes on each MIDI track that plays a library part, BEFORE the instrument (Kontakt). In\n// every copy the patcher (not this script) turns the carrier notes of MuseScore's clips (keys 116-127)\n// into their MIDI controllers, in Max's scheduler, sample-timed with the notes; this script is not in\n// that path. One copy (the first loaded; another takes over when it goes) is the hub:\n//   - it listens to MuseScore (OSC over UDP on localhost, port 9001 by default; answers on port + 1);\n//   - it writes each part's clip on its track: found by MIDI From = the part's MuseScore port and\n//     channel, else (a part's main patch) by track name = part name; one arrangement clip from beat\n//     0 over the whole score, named \"MuseScore: <part>\", its notes replaced at each change;\n//   - it never touches a clip it didn't make (another name), and doesn't make one over a track's\n//     other clips;\n//   - it sets Live's tempo to the score's first and puts a locator (\"MS 12\") at each played bar,\n//     only while Live is stopped, and only its own locators;\n//   - it reports Live's transport (~25 a second while playing) so MuseScore follows, and starts or\n//     stops Live when MuseScore's Play or Stop is pressed;\n//   - \"/ms/mode stream\": MuseScore plays through Live (the tracks' Monitor on In, which silences\n//     clips); \"clips\": Live plays the clips (Monitor on Auto).\n// The Live Object Model is used from Max's low-priority thread only (messages from udpreceive go\n// through deferlow; the Tasks run there).\n//\n// Plain ECMAScript 5 so it runs in [js] and [v8] alike, and in the Node tests (tools/live/test).\n\nautowatch = 0;\ninlets = 1;\noutlets = 3;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text\n\nvar PROTOCOL = 1;\nvar UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT\nvar BATCH = 500;                        // notes per add_new_notes call\nvar HUB_STALE_MS = 5000;\n\nvar self = this;\n// shared by every copy of the device: which is the hub, and where each copy sits (as JSON: a\n// Global's values are safest as strings)\nvar g = new Global(\"musescore_link\");\nfunction registry() {\n      try { return JSON.parse(g.devices || \"{}\"); } catch (e) { return {}; }\n      }\nfunction saveRegistry(r) { g.devices = JSON.stringify(r); }\n\nvar me = { key: \"d\" + Math.floor(Math.random() * 1e9), track: 0, device: 0 };\nvar udpPort = 9001;\nvar isHub = false;\nvar session = \"\";\nvar receiver = null;          // hub: the udpreceive and deferlow it made\nvar deferrer = null;\nvar mode = \"clips\";\nvar pending = {};             // key -> a clip being received\nvar pendingSong = null;\nvar work = [];                // clips and the song to write, in order\nvar placed = {};              // key -> { track: id, clip: name } where the hub put it\nvar lastTransport = { playing: -1, beat: -1, sent: 0 };\nvar heartbeat = null;\nvar worker = null;\nvar reporter = null;\nvar initialised = false;\n\nfunction now() { return new Date().getTime(); }\nfunction num(v) { return Number(Array.isArray(v) ? v[0] : v); }\nfunction str(v) {\n      if (Array.isArray(v))\n            return v.join(\" \");\n      return v === undefined || v === null ? \"\" : String(v);\n      }\nfunction loose(s) { return str(s).toLowerCase().replace(/[^a-z0-9]/g, \"\"); }\nfunction loosePort(s) { return loose(str(s).replace(/^\\s*ext:\\s*/i, \"\")); }\n\n// a LOM dictionary property (input_routing_type \u2026): a JSON string, sometimes in an array\nfunction displayName(v) {\n      var s = str(v);\n      try {\n            var o = JSON.parse(s);\n            var find = function(x) {\n                  if (!x || typeof x !== \"object\")\n                        return null;\n                  if (typeof x.display_name === \"string\")\n                        return x.display_name;\n                  for (var k in x) {\n                        var r = find(x[k]);\n                        if (r !== null)\n                              return r;\n                        }\n                  return null;\n                  };\n            var r = find(o);\n            if (r !== null)\n                  return r;\n            }\n      catch (e) {}\n      var m = /\"display_name\"\\s*:\\s*\"([^\"]*)\"/.exec(s);\n      return m ? m[1] : s;\n      }\n\n// [\"id\", 3, \"id\", 7] -> [3, 7]\nfunction ids(v) {\n      var out = [];\n      if (!Array.isArray(v))\n            v = str(v).split(\" \");\n      for (var i = 0; i + 1 < v.length; i += 2)\n            if (str(v[i]) === \"id\" && num(v[i + 1]) > 0)\n                  out.push(num(v[i + 1]));\n      return out;\n      }\n\nfunction status(text) {\n      outlet(2, \"set\", text);\n      }\n\nfunction send() {\n      var a = Array.prototype.slice.call(arguments);\n      outlet.apply(this, [0].concat(a));\n      }\n\n//---------------------------------------------------------\n//   the device's life\n//---------------------------------------------------------\n\n// live.thisdevice: the Live API is ready\nfunction bang() {\n      if (initialised)\n            return;\n      initialised = true;\n      var dev = new LiveAPI(\"this_device\");\n      me.device = num(dev.id);\n      var tr = new LiveAPI(\"this_device canonical_parent\");\n      me.track = num(tr.id);\n      var r = registry();\n      r[me.key] = { track: me.track, device: me.device, beat: now() };\n      saveRegistry(r);\n      heartbeat = new Task(beat, this);\n      heartbeat.interval = 1000;\n      heartbeat.repeat();\n      elect();\n      if (!isHub)\n            status(\"MuseScore Link: on this track (the hub is another copy)\");\n      }\n\nfunction beat() {\n      var r = registry();\n      if (r[me.key]) {\n            r[me.key].beat = now();\n            saveRegistry(r);\n            }\n      if (isHub) {\n            g.hubBeat = now();\n            if (Math.floor(now() / 1000) % 2 === 0)\n                  send(\"/live/hello\", session, PROTOCOL);\n            }\n      else\n            elect();\n      }\n\nfunction elect() {\n      if (isHub)\n            return;\n      if (!g.hub || !g.hubBeat || now() - g.hubBeat > HUB_STALE_MS || !registry()[g.hub])\n            becomeHub();\n      }\n\nfunction becomeHub() {\n      g.hub = me.key;\n      g.hubBeat = now();\n      isHub = true;\n      session = \"s\" + Math.floor(Math.random() * 1e9);\n      openPort();\n      worker = new Task(workStep, this);\n      worker.interval = 20;\n      worker.repeat();\n      reporter = new Task(report, this);\n      reporter.interval = 40;\n      reporter.repeat();\n      send(\"/live/hello\", session, PROTOCOL);\n      status(\"MuseScore Link: hub, listening on UDP \" + udpPort + \", waiting for MuseScore\");\n      }\n\n// the hub alone listens: its udpreceive is made here (every copy binding the port would clash)\nfunction openPort() {\n      var p = self.patcher;\n      if (!p)\n            return;\n      if (receiver)\n            p.remove(receiver);\n      if (!deferrer) {\n            deferrer = p.newdefault(20, 600, \"deferlow\");\n            p.connect(deferrer, 0, self.box, 0);\n            }\n      receiver = p.newdefault(20, 570, \"udpreceive\", udpPort);\n      p.connect(receiver, 0, deferrer, 0);\n      outlet(1, \"host\", \"127.0.0.1\");\n      outlet(1, \"port\", udpPort + 1);\n      }\n\n// the Port box (\"port 9001\")\nfunction setPort(n) {\n      n = Math.floor(num(n));\n      if (!(n > 1023 && n < 65535) || n === udpPort)\n            return;\n      udpPort = n;\n      if (isHub)\n            openPort();\n      }\n\nfunction resync() {\n      if (isHub)\n            send(\"/live/resync\");\n      }\n\nfunction notifydeleted() {\n      var r = registry();\n      delete r[me.key];\n      saveRegistry(r);\n      if (isHub) {\n            g.hub = null;\n            g.hubBeat = 0;\n            }\n      if (heartbeat) heartbeat.cancel();\n      if (worker) worker.cancel();\n      if (reporter) reporter.cancel();\n      }\n\n//---------------------------------------------------------\n//   MuseScore's messages\n//---------------------------------------------------------\n\nfunction anything() {\n      var a = arrayfromargs(arguments);\n      if (messagename === \"port\")\n            return setPort(a[0]);\n      if (!isHub)\n            return;\n      handle(messagename, a);\n      }\n\nfunction handle(address, a) {\n      if (address === \"/ms/mode\") {\n            mode = str(a[0]) === \"stream\" ? \"stream\" : \"clips\";\n            work.push({ kind: \"mode\" });\n            }\n      else if (address === \"/ms/song\") {\n            pendingSong = { gen: num(a[0]), bpm: num(a[1]), length: num(a[2]), count: num(a[3]), chunks: num(a[4]),\n                            hash: num(a[5]), cues: [], got: 0 };\n            if (pendingSong.chunks === 0)\n                  queueSong();\n            }\n      else if (address === \"/ms/cues\") {\n            if (!pendingSong || pendingSong.gen !== num(a[0]))\n                  return;\n            for (var i = 2; i + 1 < a.length; i += 2)\n                  pendingSong.cues.push({ time: num(a[i]) / UNITS, name: str(a[i + 1]) });\n            if (++pendingSong.got === pendingSong.chunks)\n                  queueSong();\n            }\n      else if (address === \"/ms/track\") {\n            var t = { gen: num(a[0]), key: str(a[1]), port: str(a[2]), channel: num(a[3]), part: str(a[4]), clip: str(a[5]),\n                      main: num(a[6]) !== 0, length: num(a[7]) / UNITS, count: num(a[8]), chunks: num(a[9]), hash: num(a[10]),\n                      notes: [], got: 0 };\n            pending[t.key] = t;\n            if (t.chunks === 0)\n                  queueClip(t);\n            }\n      else if (address === \"/ms/notes\") {\n            var p = pending[str(a[1])];\n            if (!p || p.gen !== num(a[0]))\n                  return;\n            for (var k = 3; k + 4 < a.length; k += 5)\n                  p.notes.push({ pitch: num(a[k]), start_time: num(a[k + 1]) / UNITS, duration: num(a[k + 2]) / UNITS,\n                                 velocity: num(a[k + 3]), mute: num(a[k + 4]) ? 1 : 0 });\n            if (++p.got === p.chunks)\n                  queueClip(p);\n            }\n      else if (address === \"/ms/clear\")\n            work.push({ kind: \"clear\", key: str(a[1]), port: str(a[2]), channel: num(a[3]), part: str(a[4]), clip: str(a[5]),\n                        main: true });\n      else if (address === \"/ms/play\") {\n            var song = new LiveAPI(\"live_set\");\n            song.set(\"current_song_time\", Math.max(0, num(a[0])));\n            if (!num(song.get(\"is_playing\")))\n                  song.call(\"continue_playing\");\n            }\n      else if (address === \"/ms/stop\")\n            new LiveAPI(\"live_set\").call(\"stop_playing\");\n      }\n\nfunction queueClip(t) {\n      delete pending[t.key];\n      // a newer version of the same clip replaces one still waiting\n      for (var i = 0; i < work.length; ++i)\n            if (work[i].kind === \"clip\" && work[i].key === t.key) {\n                  work[i] = { kind: \"clip\", key: t.key, clip: t };\n                  return;\n                  }\n      work.push({ kind: \"clip\", key: t.key, clip: t });\n      }\n\nfunction queueSong() {\n      var s = pendingSong;\n      pendingSong = null;\n      for (var i = 0; i < work.length; ++i)\n            if (work[i].kind === \"song\") {\n                  work[i] = { kind: \"song\", song: s };\n                  return;\n                  }\n      work.unshift({ kind: \"song\", song: s });\n      }\n\n// one piece of work a turn (the Live API is slow: UDP keeps flowing between)\nfunction workStep() {\n      if (!work.length)\n            return;\n      var w = work.shift();\n      try {\n            if (w.kind === \"clip\")\n                  writeClip(w.clip);\n            else if (w.kind === \"clear\")\n                  clearClip(w);\n            else if (w.kind === \"song\") {\n                  if (!writeSong(w.song))\n                        work.push(w);           // (Live is playing: the locators wait)\n                  }\n            else if (w.kind === \"mode\")\n                  applyMode();\n            }\n      catch (e) {\n            if (w.kind === \"clip\")\n                  send(\"/live/applied\", w.clip.key, w.clip.hash, \"error: \" + e, \"\");\n            post(\"MuseScore Link: \" + e + \"\\n\");\n            }\n      }\n\n//---------------------------------------------------------\n//   tracks and clips\n//---------------------------------------------------------\n\nfunction tracks() {\n      var song = new LiveAPI(\"live_set\");\n      var n = song.getcount(\"tracks\");\n      var out = [];\n      for (var i = 0; i < n; ++i)\n            out.push(new LiveAPI(\"live_set tracks \" + i));\n      return out;\n      }\n\n// the track that plays a part: MIDI From = its port and channel, else (main patch) its name\nfunction findTrack(t) {\n      var all = tracks();\n      var i;\n      for (i = 0; i < all.length; ++i) {\n            var tr = all[i];\n            if (num(tr.get(\"has_midi_input\")) !== 1)\n                  continue;\n            if (!t.port)\n                  break;\n            var type = displayName(tr.get(\"input_routing_type\"));\n            var ch = displayName(tr.get(\"input_routing_channel\"));\n            var lt = loosePort(type), lp = loosePort(t.port);\n            if (lt && lp && (lt === lp || lt.indexOf(lp) === 0) && loose(ch) === loose(\"Ch. \" + t.channel))\n                  return { api: tr, how: \"MIDI input\" };\n            }\n      if (t.main)\n            for (i = 0; i < all.length; ++i)\n                  if (num(all[i].get(\"has_midi_input\")) === 1 && loose(all[i].get(\"name\")) === loose(t.part))\n                        return { api: all[i], how: \"name\" };\n      return null;\n      }\n\nfunction clipsOf(tr) {\n      var out = [];\n      var l = ids(tr.get(\"arrangement_clips\"));\n      for (var i = 0; i < l.length; ++i) {\n            var c = new LiveAPI(\"id \" + l[i]);\n            out.push({ id: l[i], api: c, name: str(c.get(\"name\")), start: num(c.get(\"start_time\")), end: num(c.get(\"end_time\")) });\n            }\n      return out;\n      }\n\n// is a MuseScore Link device on the track, before the instrument?\nfunction deviceCheck(tr) {\n      var mine = [];\n      var r = registry();\n      for (var k in r)\n            if (r[k].track === num(tr.id) && now() - r[k].beat < HUB_STALE_MS)\n                  mine.push(r[k].device);\n      if (!mine.length)\n            return \"no MuseScore Link device on the track (its controllers would reach the instrument as notes)\";\n      var devs = ids(tr.get(\"devices\"));\n      var link = -1, instrument = -1;\n      for (var i = 0; i < devs.length; ++i) {\n            if (mine.indexOf(devs[i]) >= 0 && link < 0)\n                  link = i;\n            if (instrument < 0 && str(new LiveAPI(\"id \" + devs[i]).get(\"class_name\")) === \"PluginDevice\")\n                  instrument = i;\n            }\n      if (link >= 0 && instrument >= 0 && link > instrument)\n            return \"the MuseScore Link device is after the instrument: move it before\";\n      return \"ok\";\n      }\n\nfunction setMonitor(tr) {\n      try {\n            tr.set(\"current_monitoring_state\", mode === \"clips\" ? 1 : 0);     // 1: Auto, 0: In\n            }\n      catch (e) {}\n      }\n\nfunction writeClip(t) {\n      var found = findTrack(t);\n      if (!found) {\n            send(\"/live/applied\", t.key, t.hash, \"no track (MIDI From \" + t.port + \" / Ch. \" + t.channel\n                 + (t.main ? \", or named \" + t.part : \"\") + \")\", \"\");\n            return;\n            }\n      var tr = found.api;\n      var trackName = str(tr.get(\"name\"));\n      var clips = clipsOf(tr);\n      var ours = null, i;\n      for (i = 0; i < clips.length; ++i)\n            if (clips[i].name === t.clip)\n                  ours = clips[i];\n      var fits = ours && Math.abs(ours.start) < 1e-6 && Math.abs(ours.end - t.length) < 1e-6;\n      if (!fits) {\n            for (i = 0; i < clips.length; ++i)\n                  if (clips[i] !== ours && clips[i].start < t.length && clips[i].end > 0) {\n                        send(\"/live/applied\", t.key, t.hash, \"other clips on track \" + trackName + \" (the clip isn't made over them)\",\n                             trackName);\n                        return;\n                        }\n            if (ours)\n                  tr.call(\"delete_clip\", \"id\", ours.id);\n            var before = ids(tr.get(\"arrangement_clips\"));\n            tr.call(\"create_midi_clip\", 0, t.length);\n            var after = ids(tr.get(\"arrangement_clips\"));\n            var id = 0;\n            for (i = 0; i < after.length; ++i)\n                  if (before.indexOf(after[i]) < 0)\n                        id = after[i];\n            if (!id) {\n                  send(\"/live/applied\", t.key, t.hash, \"error: Live made no clip (a frozen track? Live 12.1.10 or later needed)\",\n                       trackName);\n                  return;\n                  }\n            ours = { id: id, api: new LiveAPI(\"id \" + id) };\n            ours.api.set(\"name\", t.clip);\n            }\n      var c = ours.api;\n      c.set(\"muted\", 0);\n      c.call(\"remove_notes_extended\", 0, 128, 0, t.length + 1);\n      for (i = 0; i < t.notes.length; i += BATCH)\n            c.call(\"add_new_notes\", { notes: t.notes.slice(i, i + BATCH) });\n      setMonitor(tr);\n      placed[t.key] = { track: num(tr.id), clip: t.clip };\n      send(\"/live/applied\", t.key, t.hash, deviceCheck(tr), trackName);\n      status(\"MuseScore Link: hub; last clip \" + t.clip + \" on \" + trackName);\n      }\n\nfunction clearClip(w) {\n      var found = findTrack(w);\n      if (!found)\n            return;\n      var clips = clipsOf(found.api);\n      for (var i = 0; i < clips.length; ++i)\n            if (clips[i].name === w.clip)\n                  found.api.call(\"delete_clip\", \"id\", clips[i].id);\n      delete placed[w.key];\n      }\n\nfunction applyMode() {\n      for (var k in placed) {\n            var tr = new LiveAPI(\"id \" + placed[k].track);\n            if (num(tr.id) > 0)\n                  setMonitor(tr);\n            }\n      }\n\n//---------------------------------------------------------\n//   tempo and locators\n//---------------------------------------------------------\n\nfunction writeSong(s) {\n      var song = new LiveAPI(\"live_set\");\n      if (Math.abs(num(song.get(\"tempo\")) - s.bpm) > 1e-4)\n            song.set(\"tempo\", s.bpm);\n      if (num(song.get(\"is_playing\")))\n            return false;\n      var back = num(song.get(\"current_song_time\"));\n      var cueList = function() {\n            var l = ids(song.get(\"cue_points\"));\n            var out = [];\n            for (var i = 0; i < l.length; ++i) {\n                  var c = new LiveAPI(\"id \" + l[i]);\n                  out.push({ id: l[i], api: c, time: num(c.get(\"time\")), name: str(c.get(\"name\")) });\n                  }\n            return out;\n            };\n      var managed = function(name) { return /^MS \\d/.test(name); };\n      var toggleAt = function(time) {\n            song.set(\"current_song_time\", time);\n            song.call(\"set_or_delete_cue\");\n            };\n      var want = {};\n      for (var i = 0; i < s.cues.length; ++i)\n            want[s.cues[i].time.toFixed(6)] = s.cues[i].name;\n      var have = cueList();\n      var at = {};\n      for (i = 0; i < have.length; ++i) {\n            var key = have[i].time.toFixed(6);\n            if (managed(have[i].name) && !(key in want))\n                  toggleAt(have[i].time);             // ours, not wanted: goes\n            else\n                  at[key] = have[i];\n            }\n      for (i = 0; i < s.cues.length; ++i) {\n            var k2 = s.cues[i].time.toFixed(6);\n            var there = at[k2];\n            if (there) {\n                  if (managed(there.name) && there.name !== s.cues[i].name)\n                        there.api.set(\"name\", s.cues[i].name);\n                  continue;                           // (a locator of the owner's there: left)\n                  }\n            toggleAt(s.cues[i].time);\n            var now2 = cueList();\n            for (var j = 0; j < now2.length; ++j)\n                  if (Math.abs(now2[j].time - s.cues[i].time) < 1e-6 && !managed(now2[j].name))\n                        now2[j].api.set(\"name\", s.cues[i].name);\n            }\n      song.set(\"current_song_time\", back);\n      send(\"/live/applied\", \"song\", s.hash, \"ok\", \"\");\n      return true;\n      }\n\n//---------------------------------------------------------\n//   Live's transport, for MuseScore to follow\n//---------------------------------------------------------\n\nfunction report() {\n      var song = new LiveAPI(\"live_set\");\n      var playing = num(song.get(\"is_playing\")) ? 1 : 0;\n      var b = num(song.get(\"current_song_time\"));\n      var t = now();\n      if (playing || playing !== lastTransport.playing || Math.abs(b - lastTransport.beat) > 1e-6 || t - lastTransport.sent > 1000) {\n            send(\"/live/transport\", playing, b, num(song.get(\"tempo\")));\n            lastTransport = { playing: playing, beat: b, sent: t };\n            }\n      }\n\n// (Node tests)\nif (typeof module !== \"undefined\")\n      module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,\n                         findTrack: findTrack, writeSong: writeSong, report: report, state: function() {\n                               return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me };\n                               } };\n",
+						"filename": "none",
+						"flags": 0,
+						"embed": 1,
+						"autowatch": 1
+					}
+				}
+			},
+			{
+				"box": {
+					"id": "obj-45",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						500,
+						500,
+						170,
+						22
+					],
+					"text": "udpsend 127.0.0.1 9002"
+				}
+			},
+			{
+				"box": {
+					"id": "obj-46",
+					"maxclass": "comment",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						650,
+						30,
+						150,
+						20
+					],
+					"text": "MuseScore Link",
+					"presentation": 1,
+					"presentation_rect": [
+						6,
+						4,
+						150,
+						20
+					],
+					"fontsize": 12.0,
+					"fontface": 1
+				}
+			},
+			{
+				"box": {
+					"id": "obj-47",
+					"maxclass": "live.numbox",
+					"numinlets": 1,
+					"numoutlets": 2,
+					"patching_rect": [
+						650,
+						60,
+						50,
+						15
+					],
+					"outlettype": [
+						"",
+						"float"
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						160,
+						6,
+						50,
+						15
+					],
+					"varname": "Port",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_longname": "Port",
+							"parameter_shortname": "Port",
+							"parameter_type": 1,
+							"parameter_mmin": 1024,
+							"parameter_mmax": 65000,
+							"parameter_initial_enable": 1,
+							"parameter_initial": [
+								9001
+							],
+							"parameter_unitstyle": 0,
+							"parameter_invisible": 1
+						}
+					}
+				}
+			},
+			{
+				"box": {
+					"id": "obj-48",
+					"maxclass": "comment",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						705,
+						60,
+						60,
+						18
+					],
+					"text": "UDP port",
+					"presentation": 1,
+					"presentation_rect": [
+						212,
+						5,
+						60,
+						18
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-49",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						650,
+						90,
+						100,
+						22
+					],
+					"text": "prepend port",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-50",
+					"maxclass": "live.text",
+					"numinlets": 1,
+					"numoutlets": 2,
+					"patching_rect": [
+						650,
+						120,
+						60,
+						18
+					],
+					"text": "Resync",
+					"outlettype": [
+						"",
+						""
+					],
+					"presentation": 1,
+					"presentation_rect": [
+						270,
+						5,
+						55,
+						18
+					],
+					"mode": 0,
+					"texton": "Resync",
+					"varname": "Resync",
+					"parameter_enable": 1,
+					"saved_attribute_attributes": {
+						"valueof": {
+							"parameter_longname": "Resync",
+							"parameter_shortname": "Resync",
+							"parameter_type": 2,
+							"parameter_enum": [
+								"off",
+								"on"
+							],
+							"parameter_mmax": 1,
+							"parameter_invisible": 2
+						}
+					}
+				}
+			},
+			{
+				"box": {
+					"id": "obj-51",
+					"maxclass": "newobj",
+					"numinlets": 1,
+					"numoutlets": 1,
+					"patching_rect": [
+						650,
+						150,
+						72,
+						22
+					],
+					"text": "t resync",
+					"outlettype": [
+						""
+					]
+				}
+			},
+			{
+				"box": {
+					"id": "obj-52",
+					"maxclass": "comment",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						650,
+						200,
+						320,
+						40
+					],
+					"text": "MuseScore Link: loading",
+					"presentation": 1,
+					"presentation_rect": [
+						6,
+						26,
+						320,
+						40
+					],
+					"linecount": 3
+				}
+			},
+			{
+				"box": {
+					"id": "obj-53",
+					"maxclass": "comment",
+					"numinlets": 1,
+					"numoutlets": 0,
+					"patching_rect": [
+						650,
+						250,
+						320,
+						30
+					],
+					"text": "MuseScore owns its clips: edits to them here are overwritten. Keep this device before the instrument.",
+					"presentation": 1,
+					"presentation_rect": [
+						6,
+						68,
+						320,
+						28
+					],
+					"linecount": 2,
+					"fontsize": 9.0,
+					"textcolor": [
+						0.6,
+						0.6,
+						0.6,
+						1.0
+					]
+				}
+			}
+		],
+		"lines": [
+			{
+				"patchline": {
+					"source": [
+						"obj-1",
+						0
+					],
+					"destination": [
+						"obj-2",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-2",
+						0
+					],
+					"destination": [
+						"obj-3",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						0
+					],
+					"destination": [
+						"obj-7",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-7",
+						1
+					],
+					"destination": [
+						"obj-8",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-8",
+						0
+					],
+					"destination": [
+						"obj-9",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-9",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						1
+					],
+					"destination": [
+						"obj-10",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-10",
+						1
+					],
+					"destination": [
+						"obj-11",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-11",
+						0
+					],
+					"destination": [
+						"obj-12",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-12",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						2
+					],
+					"destination": [
+						"obj-13",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-13",
+						1
+					],
+					"destination": [
+						"obj-14",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-14",
+						0
+					],
+					"destination": [
+						"obj-15",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-15",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						3
+					],
+					"destination": [
+						"obj-16",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-16",
+						1
+					],
+					"destination": [
+						"obj-17",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-17",
+						0
+					],
+					"destination": [
+						"obj-18",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-18",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						4
+					],
+					"destination": [
+						"obj-19",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-19",
+						1
+					],
+					"destination": [
+						"obj-20",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-20",
+						0
+					],
+					"destination": [
+						"obj-21",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-21",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						5
+					],
+					"destination": [
+						"obj-22",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-22",
+						1
+					],
+					"destination": [
+						"obj-23",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-23",
+						0
+					],
+					"destination": [
+						"obj-24",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-24",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						6
+					],
+					"destination": [
+						"obj-25",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-25",
+						1
+					],
+					"destination": [
+						"obj-26",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-26",
+						0
+					],
+					"destination": [
+						"obj-27",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-27",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						7
+					],
+					"destination": [
+						"obj-28",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-28",
+						1
+					],
+					"destination": [
+						"obj-29",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-29",
+						0
+					],
+					"destination": [
+						"obj-30",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-30",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						8
+					],
+					"destination": [
+						"obj-31",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-31",
+						1
+					],
+					"destination": [
+						"obj-32",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-32",
+						0
+					],
+					"destination": [
+						"obj-33",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-33",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						9
+					],
+					"destination": [
+						"obj-34",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-34",
+						1
+					],
+					"destination": [
+						"obj-35",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-35",
+						0
+					],
+					"destination": [
+						"obj-36",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-36",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						10
+					],
+					"destination": [
+						"obj-37",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-37",
+						1
+					],
+					"destination": [
+						"obj-38",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-38",
+						0
+					],
+					"destination": [
+						"obj-39",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-39",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						11
+					],
+					"destination": [
+						"obj-40",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-40",
+						1
+					],
+					"destination": [
+						"obj-41",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-41",
+						0
+					],
+					"destination": [
+						"obj-42",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-42",
+						0
+					],
+					"destination": [
+						"obj-5",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-3",
+						12
+					],
+					"destination": [
+						"obj-4",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-2",
+						1
+					],
+					"destination": [
+						"obj-4",
+						1
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-2",
+						2
+					],
+					"destination": [
+						"obj-4",
+						2
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-2",
+						3
+					],
+					"destination": [
+						"obj-4",
+						3
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-2",
+						4
+					],
+					"destination": [
+						"obj-4",
+						4
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-2",
+						5
+					],
+					"destination": [
+						"obj-4",
+						5
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-2",
+						6
+					],
+					"destination": [
+						"obj-4",
+						6
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-4",
+						0
+					],
+					"destination": [
+						"obj-6",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-5",
+						0
+					],
+					"destination": [
+						"obj-6",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-43",
+						0
+					],
+					"destination": [
+						"obj-44",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-44",
+						0
+					],
+					"destination": [
+						"obj-45",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-44",
+						1
+					],
+					"destination": [
+						"obj-45",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-47",
+						0
+					],
+					"destination": [
+						"obj-49",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-49",
+						0
+					],
+					"destination": [
+						"obj-44",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-50",
+						0
+					],
+					"destination": [
+						"obj-51",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-51",
+						0
+					],
+					"destination": [
+						"obj-44",
+						0
+					]
+				}
+			},
+			{
+				"patchline": {
+					"source": [
+						"obj-44",
+						2
+					],
+					"destination": [
+						"obj-52",
+						0
+					]
+				}
+			}
+		],
+		"dependency_cache": [],
+		"autosave": 0
+	}
+}

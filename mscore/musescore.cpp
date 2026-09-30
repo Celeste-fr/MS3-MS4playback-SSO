@@ -134,6 +134,7 @@
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
 #include "liveintegration.h"
+#include "liveclips.h"
 #include "soundlibrarycheck.h"
 #include "soundlibraryloadtimes.h"
 #include "playbackverify.h"
@@ -3382,6 +3383,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
             seq->setScoreView(cv);
       SoundLibraryHost::instance()->preloadSoon(cs);    // the sound library's instances, ahead of play
       LiveIntegration::Watcher::instance()->update();   // a linked Live Set, re-imported when Live saves it
+      LiveIntegration::LiveClipsLink::instance()->setScore(cs ? cs->masterScore() : nullptr);  // Live plays the score
       if (playPanel)
             playPanel->setScore(cs);
       if (synthControl)

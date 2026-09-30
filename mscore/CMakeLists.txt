@@ -312,7 +312,7 @@ add_library(mscoreapp STATIC
       migration/handlers/styledefaultshandler.cpp migration/handlers/lelandstylehandler.cpp
       migration/handlers/edwinstylehandler.cpp
       soundlibraryhost.cpp soundlibraryhost.h soundlibrarymemory.cpp soundlibraryloadtimes.cpp soundlibraryloadtimes.h
-      liveintegration.cpp liveintegration.h
+      liveintegration.cpp liveintegration.h liveclips.cpp liveclips.h
       soundlibrarycheck.cpp soundlibrarycheck.h
       playbackverify.cpp playbackverify.h
       tuningdialog.cpp tuningdialog.h

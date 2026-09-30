@@ -19,6 +19,7 @@
 #include <QXmlStreamReader>
 #include <zlib.h>
 
+#include "liveclips.h"
 #include "part.h"
 #include "repeatlist.h"
 #include "score.h"
@@ -414,6 +415,8 @@ Set parse(const QByteArray& xml)
                         ts->timing.start = value.toDouble();
                   else if (clipDepth >= 0 && depth == clipDepth + 1 && n == "CurrentEnd")
                         ts->timing.end = value.toDouble();
+                  else if (clipDepth >= 0 && depth == clipDepth + 1 && n == "Name" && value.startsWith(QLatin1String("MuseScore: ")))
+                        set.museScoreClips = true;
                   else if (clipDepth >= 0 && parent() == "Loop" && depth == clipDepth + 2) {
                         if (n == "LoopStart")
                               ts->timing.loopStart = value.toDouble();
@@ -607,6 +610,13 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
             rep.unmatched << QObject::tr("No part of this score plays the sound library (Mixer: Playback \"Sound library\", or a "
                                          "part's \"This part plays\"), so no track has a part to go to.");
       std::set<const Part*> taken;
+      // a set where Live plays the score as clips: its beats at its one tempo, the score's real times
+      LiveClips::Timeline clipTimeline;
+      if (set.museScoreClips && set.tempo > 0) {
+            clipTimeline = LiveClips::timeline(score);
+            clipTimeline.bpm = set.tempo;
+            rep.matched << QObject::tr("Live played the score as clips: its beats read at %1 bpm.").arg(set.tempo);
+            }
       for (const Track& t : set.tracks) {
             std::vector<const Envelope*> useful;
             for (const Envelope& e : t.envelopes)
@@ -677,7 +687,8 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
                   if (e->initial >= 0 && (e->points.empty() || e->points.front().beat > 0))
                         put(0, e->initial * scale);
                   for (const Point& p : e->points) {
-                        const int utick = int(std::lround(std::max(0.0, p.beat) * 480));
+                        const int utick = clipTimeline.score ? std::max(0, clipTimeline.utick(std::max(0.0, p.beat)))
+                                                             : int(std::lround(std::max(0.0, p.beat) * 480));
                         const int tick = firstPassTick(score, utick);
                         if (tick < 0) {
                               ++rep.repeatedPoints;

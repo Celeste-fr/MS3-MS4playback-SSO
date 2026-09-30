@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "liveintegration.h"
+#include "liveclips.h"
 
 #include <QCheckBox>
 #include <QFileDialog>
@@ -74,6 +75,7 @@ bool setPlayThroughMidi(bool midi, QWidget* parent)
             seq->stopWait();
       preferences.setPreference(PREF_IO_SOUNDLIBRARY_OUTPUT, midi ? "midi" : "plugin");
       updateExternalValuesFromPreferences();          // (releases the instances for MIDI, marks playlists dirty)
+      LiveClipsLink::instance()->outputChanged();
       if (mscore) {
             mscore->updatePlaybackMode();
             if (!midi && mscore->currentScore())
@@ -85,6 +87,17 @@ bool setPlayThroughMidi(bool midi, QWidget* parent)
             mscore->showMessage(message, 6000);
             }
       return true;
+      }
+
+QStringList outputPortNames()
+      {
+      QStringList ports;
+#ifdef USE_PORTMIDI
+      for (const char* p : { PREF_IO_PORTMIDI_OUTPUTDEVICE, PREF_IO_PORTMIDI_OUTPUTDEVICE_B, PREF_IO_PORTMIDI_OUTPUTDEVICE_C,
+                             PREF_IO_PORTMIDI_OUTPUTDEVICE_D })
+            ports << LiveSet::portDisplayName(preferences.getString(p));
+#endif
+      return ports;
       }
 
 //---------------------------------------------------------
@@ -140,12 +153,7 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
                   *report = set.error;
             return false;
             }
-      QStringList ports;            // MIDI output A-D as Live shows them
-#ifdef USE_PORTMIDI
-      for (const char* p : { PREF_IO_PORTMIDI_OUTPUTDEVICE, PREF_IO_PORTMIDI_OUTPUTDEVICE_B, PREF_IO_PORTMIDI_OUTPUTDEVICE_C,
-                             PREF_IO_PORTMIDI_OUTPUTDEVICE_D })
-            ports << LiveSet::portDisplayName(preferences.getString(p));
-#endif
+      const QStringList ports = outputPortNames();
       const QDateTime modified = QFileInfo(path).lastModified();
       LiveSet::Report r;
       const std::map<const Part*, Automation::PartLanes> live = LiveSet::lanes(score, set, LiveSet::partInfos(score, ports),

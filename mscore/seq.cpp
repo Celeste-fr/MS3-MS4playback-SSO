@@ -52,6 +52,7 @@
 #include "libmscore/staff.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
+#include "liveclips.h"
 #include "libmscore/tempo.h"
 #include "libmscore/tie.h"
 #include "libmscore/utils.h"
@@ -424,6 +425,9 @@ void Seq::start()
             qDebug("No driver!");
             return;
             }
+      // Live plays the score: Play starts Live, and MuseScore follows it (liveclips.h)
+      if (state != Transport::PLAY && LiveIntegration::LiveClipsLink::instance()->startRequested(getPlayStartUtick()))
+            return;
 
       mscore->moveControlCursor();
 
@@ -471,6 +475,8 @@ void Seq::start()
 void Seq::stop()
       {
       const bool seqStopped = (state == Transport::STOP);
+      if (!seqStopped)
+            LiveIntegration::LiveClipsLink::instance()->stopRequested();     // (Live plays the score: Live stops too)
       const bool driverStopped = !_driver || _driver->getState() == Transport::STOP;
       if (seqStopped && driverStopped)
             return;
@@ -1190,7 +1196,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
             // the notes (syncFlush), as the notes are timed: from the tempo map, the Play Panel's
             // relative tempo included (utick2utime)
             syncOutCount = syncOutDone = 0;
-            if (!inCountIn && _driver->canOutputSync()) {
+            if (!inCountIn && _driver->canOutputSync() && !_liveClips) {
                   const int startFrame = *pPlayFrame;
                   const double sr = MScore::sampleRate;
                   auto out = [this, startFrame, sr](const MidiSync::Message& m) {
@@ -1622,7 +1628,7 @@ void Seq::setPos(int utick)
 
       // MIDI sync out: a jump while playing is Stop, SPP, Continue; while stopped the SPP alone
       // (a count-in's start waits: it starts from here)
-      if (_driver && _driver->canOutputSync())
+      if (_driver && _driver->canOutputSync() && !_liveClips)
             syncClock.locate(utick, 0, [this](const MidiSync::Message& m) { _driver->putSync(m.status, m.value, 0); });
 
       playFrame = cs->utick2utime(utick) * MScore::sampleRate;
@@ -2745,6 +2751,8 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
                   return;
                   }
             }
+      if (event.isExternal() && _liveClips)
+            return;                 // (Live plays the score: the library's parts are Live's clips)
       if (event.isExternal() && SoundLib::output() == SoundLib::Output::PLUGIN) {
             const int vst = _synti->findIndex("VST3");
             if (vst >= 0) {

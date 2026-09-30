@@ -1,12 +1,25 @@
 # Playing through Ableton Live 12
 
-Branch `live-integration` (2026-09-28). The owner's goal: MuseScore still plays by itself exactly as
-before (Spitfire Symphony Orchestra hosted in Kontakt Player 8). Optionally it plays through
-Ableton Live 12 instead. In that mode Live hosts SSO and all automation is drawn in Live. The
+Branch `live-integration` (2026-09-28, 2026-09-29). The owner's goal: MuseScore still plays by itself
+exactly as before (Spitfire Symphony Orchestra hosted in Kontakt Player 8). Optionally it plays
+through Ableton Live 12 instead. In that mode Live hosts SSO and all automation is drawn in Live. The
 automation is then read back into the score, so MuseScore alone plays it the same way. In
 MuseScore it is read-only: it is edited only in Live.
 
-How it fits together:
+There are two ways to play through Live:
+
+1. **MuseScore plays through Live** (*Mixer › Play through Live*, 2026-09-28). MuseScore is the
+   clock: it sends each part's notes, switches and controllers live to Live, plus MIDI clock and
+   Song Position Pointer. Live has no notes of its own; its arrangement is in the score's
+   quarter notes. Sections 1-5 below.
+2. **Live plays the score** (*Mixer › Advanced Options… › Ableton Live › Live plays the score*,
+   2026-09-29; the owner: "is it possible to have entered notes in the score live update in
+   ableton?", then "what if it's the other way, when ableton is playing sound MuseScore switches
+   off"). Each part's notes are a clip in Live's arrangement, kept up to date with every edit of
+   the score. Live is the clock and plays; MuseScore sends the library nothing and follows Live.
+   Section [Live plays the score](#live-plays-the-score).
+
+How the first fits together:
 
 - **Notes**: MuseScore sends each sound-library part to MIDI output A-D. Each part gets its own
   route (port and channel), the same one *View › Sound Library…* shows.

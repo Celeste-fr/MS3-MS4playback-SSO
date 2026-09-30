@@ -27,6 +27,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QStringList>
 
 class QFileSystemWatcher;
 class QTimer;
@@ -41,6 +42,8 @@ namespace LiveIntegration {
 extern const char* const linkMetaTag;       // "liveSet": {"path": …, "auto": true|false}
 
 bool playingThroughMidi();
+// MIDI output A-D as Live shows them ("MMSystem,MuseScore A" -> "MuseScore A"); "" for one not set
+QStringList outputPortNames();
 // the sound library's parts through MIDI output (true) or the hosted plug-in; asks first (patches
 // are reloaded / released); false: not switched
 bool setPlayThroughMidi(bool midi, QWidget* parent);

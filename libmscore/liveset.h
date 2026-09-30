@@ -89,6 +89,9 @@ struct Track {
 struct Set {
       QString creator;              // "Ableton Live 12.x"
       double tempo { 0 };           // the arrangement's first tempo (bpm)
+      // a clip named "MuseScore: …" (liveclips.h): Live played the score as clips, at one tempo, the
+      // notes at their real times: a beat is seconds × tempo / 60, not a quarter note of the score
+      bool museScoreClips { false };
       std::vector<Track> tracks;
       QString error;                // "": read
       };

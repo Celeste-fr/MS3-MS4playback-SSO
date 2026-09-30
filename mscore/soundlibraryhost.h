@@ -266,6 +266,8 @@ class SoundLibraryOptions : public QDialog {
       QLabel* _liveSet { nullptr };
       QCheckBox* _liveAuto { nullptr };
       QPushButton* _liveUnlink { nullptr };
+      QCheckBox* _liveClips { nullptr };
+      QLabel* _liveClipsStatus { nullptr };
 
       void load();
       void setLaneSettings(bool libraryDefaults);
