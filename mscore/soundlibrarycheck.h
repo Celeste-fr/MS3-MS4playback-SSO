@@ -97,6 +97,7 @@ class ArticulationCheckDialog : public QDialog {
       void measureTiming(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
                          QJsonObject& out, QStringList& lines);
       bool _timingOnly { false };   // runHeadless(…, timing): dynamicsPatch measures the timing instead
+      bool _everything { false };   // runHeadless(…, everything): every patch's every sound (soundsToMeasure)
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;
@@ -161,7 +162,8 @@ class ArticulationCheckDialog : public QDialog {
       // path in zip. false: nothing to do, or no plug-in
       bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false,   // dynamics: Dynamics only instead of the extract
                        bool controllers = false,   // controllers: every controller tried too (offline, no window: sound and parameters)
-                       bool timing = false);        // timing: each articulation's timing instead (as Dynamics only)
+                       bool timing = false,         // timing: each articulation's timing instead (as Dynamics only)
+                       bool everything = false);    // with dynamics or timing: every articulation, drum hit, one-sound patch
       static void setBackgroundLog(const QString& fileName);      // in Documents/MuseScore Sound Library Check (default "background extract.log")
       // an extract under a supervisor (MuseScore --extract-library without --extract-child starts one per round):
       // at each patch's start, the patch and those after it, one a line, in this file; removed when the run ends
@@ -185,7 +187,7 @@ class ArticulationCheckDialog : public QDialog {
       static void setPlanFile(const QString& path);
       static const PlanEntry* planFor(const QString& patch);        // null: no plan, or not in it
       static bool hasPlan();
-      QSet<QString> timedBefore() const;                            // patches an earlier timing run timed
+      QSet<QString> timedBefore(bool timing = true, bool everything = false) const;   // patches an earlier timing (dynamics) run did
       QSet<QString> linkedBefore() const;                           // patches an earlier links run did
       QSet<QString> measuredBefore(bool pitchBend) const;         // patches an earlier controller extract measured completely
       int librarySwitchCC() const;                                 // the CC the library switches articulations on (-1: none)                  // the folder zipped next to it (its path; empty: failed)

@@ -10,7 +10,8 @@ newest timing and writes only derived numbers (ArticulationCheck::timing, articu
   "<patch>": {
     "pitch": 60,                                the test note
     "<articulation name>": {
-      "value": 1,                               the switch value
+      "value": 1,                               the switch value (-1: none; a drum hit or a one-sound patch)
+      "key": 62,                                a drum hit's key ("every sound" runs, --all-sounds)
       "startMs": [pp, mf, ff],                  from the note-on to 30 dB under the note's peak
       "fullMs": [pp, mf, ff],                   to 6 dB under it
       "peakMs": [pp, mf, ff],                   to the peak
@@ -66,8 +67,12 @@ def compact(p):
         name = " / ".join(t.get("names", [])) or str(t.get("value"))
         if t.get("silent"):
             out[name] = {"value": t.get("value"), "silent": True}
+            if "key" in t:
+                out[name]["key"] = t["key"]
             continue
         e = {"value": t["value"]}
+        if "key" in t:                          # a drum hit ("every sound" runs): its key
+            e["key"] = t["key"]
         for k in ("startMs", "fullMs", "peakMs", "bodyMs", "lengthMs", "sustains", "releaseMs", "shortNoteBodyMs", "shortNoteMs"):
             if k in t:
                 e[k] = t[k]

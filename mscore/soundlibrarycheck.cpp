@@ -962,7 +962,7 @@ QSet<QString> ArticulationCheckDialog::measuredBefore(bool pitchBend) const
       }
 
 // the patches an earlier timing run (of TIMING_VERSION or later) timed: a check folder's results.json
-QSet<QString> ArticulationCheckDialog::timedBefore() const
+QSet<QString> ArticulationCheckDialog::timedBefore(bool timing, bool everything) const
       {
       QSet<QString> done;
       const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
@@ -972,7 +972,12 @@ QSet<QString> ArticulationCheckDialog::timedBefore() const
                   continue;
             for (const QJsonValue& v : QJsonDocument::fromJson(in.readAll()).object().value("patches").toArray()) {
                   const QJsonObject p = v.toObject();
-                  if (p.value("timingOnly").toBool() && p.contains("timing") && p.value("timingVersion").toInt() >= TIMING_VERSION)
+                  // (an error, "nothing to measure" …, is done too: the same again)
+                  if (everything != p.value("everything").toBool())
+                        continue;
+                  if (timing ? (p.value("timingOnly").toBool() && p.value("timingVersion").toInt() >= TIMING_VERSION
+                                && (p.contains("timing") || p.contains("error")))
+                             : (p.value("dynamicsOnly").toBool() && (p.contains("dynamics") || p.contains("error"))))
                         done.insert(p.value("patch").toString());
                   }
             }
@@ -1004,7 +1009,8 @@ QSet<QString> ArticulationCheckDialog::linkedBefore() const
       return done;
       }
 
-bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics, bool controllers, bool timing)
+bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics, bool controllers, bool timing,
+                                          bool everything)
       {
       _headless = true;
       if (!_library) {
@@ -1048,8 +1054,9 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
             }
       // a timing run leaves out the patches an earlier one of this version timed (a restart goes on; the
       // owner's first run, 2026-09-29, stopped after 19 of 159). MS_EXTRACT_REDO=1 times them again
-      if (timing && !qEnvironmentVariableIsSet("MS_EXTRACT_REDO")) {
-            const QSet<QString> done = timedBefore();
+      _everything = everything && (dynamics || timing);
+      if ((timing || _everything) && !qEnvironmentVariableIsSet("MS_EXTRACT_REDO")) {
+            const QSet<QString> done = timedBefore(timing, _everything);
             int left = 0;
             for (int row = 0; row < _table->rowCount(); ++row)
                   if (_table->item(row, 0)->checkState() == Qt::Checked && done.contains(_rows[row].instrument->name)) {
@@ -1058,9 +1065,10 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
                         ++left;
                         }
             if (left)
-                  say(QString("%1 patches timed in earlier runs: left out (MS_EXTRACT_REDO=1 times them again)").arg(left));
+                  say(QString("%1 patches %2 in earlier runs: left out (MS_EXTRACT_REDO=1 does them again)").arg(left)
+                      .arg(timing ? "timed" : "measured"));
             if (!ticked) {
-                  say("every patch was timed already");
+                  say(QString("every patch was %1 already").arg(timing ? "timed" : "measured"));
                   return false;
                   }
             }
@@ -1069,7 +1077,8 @@ bool ArticulationCheckDialog::runHeadless(const QString& patches, bool pitchBend
             _dynamicsOnly->setChecked(true);
             _timingOnly = timing;
             _scan->setChecked(false);
-            say(QString("%1: %3 of %2 patches").arg(_library->name).arg(ticked).arg(timing ? "timing" : "dynamics"));
+            say(QString("%1: %3 of %2 patches%4").arg(_library->name).arg(ticked).arg(timing ? "timing" : "dynamics")
+                .arg(_everything ? " (every sound: every articulation, drum hit and one-sound patch)" : ""));
             check();
             if (zip)
                   *zip = _zip;
@@ -1289,7 +1298,10 @@ void ArticulationCheckDialog::check()
       const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
       QString libName = _library->name;
       libName.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
-      const QString folder = root + "/" + libName + " " + stamp;
+      // (a folder of the same minute, another run's: " (2)" … the dynamics and timing of every sound, one after the other)
+      QString folder = root + "/" + libName + " " + stamp;
+      for (int n = 2; QFileInfo::exists(folder) || QFileInfo::exists(folder + ".zip"); ++n)
+            folder = root + "/" + libName + " " + stamp + QString(" (%1)").arg(n);
       if (!QDir().mkpath(folder)) {
             warn(tr("Cannot create %1").arg(folder));
             return;
@@ -1401,6 +1413,56 @@ void ArticulationCheckDialog::check()
       }
 
 //---------------------------------------------------------
+//   what a dynamics or timing measurement plays
+//    the articulations a notation chooses; "every sound" (the owner, 2026-09-30: extraction "100% complete"):
+//    every articulation, each drum hit with a key (its key, no switch, no other pitch tried: another key is
+//    another hit), and a patch with neither its one sound (value -1: no switch sent)
+//---------------------------------------------------------
+
+namespace {
+struct DrumHit { int code; int key; QString name; };
+static const int DRUM_CODE = -1000;       // a drum hit's value in the results: DRUM_CODE - its index
+}
+
+static void soundsToMeasure(const SoundLib::LibInstrument& ins, bool everything, std::vector<int>& values,
+                            std::map<int, QStringList>& names, std::vector<DrumHit>& drums)
+      {
+      for (const SoundLib::Articulation& a : ins.articulations) {
+            if (a.techniques.isEmpty() && !everything)
+                  continue;
+            if (!names.count(a.value))
+                  values.push_back(a.value);
+            names[a.value].append(a.name);
+            }
+      if (!everything)
+            return;
+      for (const SoundLib::DrumKey& d : ins.drums) {
+            if (d.key < 0 || d.offByDefault)
+                  continue;
+            // (one hit a key: a patch lists a key once per MuseScore sound it plays)
+            if (std::any_of(drums.begin(), drums.end(), [&](const DrumHit& h) { return h.key == d.key; }))
+                  continue;
+            const int code = DRUM_CODE - int(drums.size());
+            drums.push_back({ code, d.key, d.name });
+            names[code] << d.name;
+            }
+      if (values.empty() && drums.empty()) {
+            values.push_back(-1);
+            names[-1] << QString("(its sound)");
+            }
+      }
+
+// a drum hit's settings: its key, no switch, no other key tried
+static ArticulationCheck::Settings drumSettings(const ArticulationCheck::Settings& s, int key)
+      {
+      ArticulationCheck::Settings d = s;
+      d.switchCC = -1;
+      d.switchIsKey = false;
+      d.minPitch = d.maxPitch = d.pitch = key;
+      return d;
+      }
+
+//---------------------------------------------------------
 //   measureDynamics
 //    (the plug-in offline) each articulation a notation can choose (one no notation chooses is
 //    never played: not measured), the part's held note in full (the reference of every short)
@@ -1419,30 +1481,42 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
       const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
       const bool heldHere = held && patches[size_t(held.patch)]->name == ins.name;
 
-      std::vector<int> values, pitches;
-      std::vector<bool> full;
+      std::vector<int> values;
       std::map<int, QStringList> names;
-      for (const SoundLib::Articulation& a : ins.articulations) {
-            if (a.techniques.isEmpty())
-                  continue;
-            if (!names.count(a.value)) {
-                  values.push_back(a.value);
-                  pitches.push_back(pitch);
-                  full.push_back(heldHere && held.articulation->value == a.value);
-                  }
-            names[a.value].append(a.name);
-            }
+      std::vector<DrumHit> drums;
+      soundsToMeasure(ins, _everything, values, names, drums);
+      std::vector<int> pitches(values.size(), pitch);
+      std::vector<bool> full;
+      for (int v : values)
+            full.push_back(heldHere && v >= 0 && held.articulation->value == v);
+      // (the calibration keeps what a notation plays; "every sound" adds only to the results)
+      std::set<int> played;
+      for (const SoundLib::Articulation& a : ins.articulations)
+            if (!a.techniques.isEmpty())
+                  played.insert(a.value);
       QElapsedTimer events;
       events.start();
-      const std::vector<ArticulationCheck::DynamicsResult> dr = ArticulationCheck::dynamics(p, values, pitches, full, s,
-         [&](int done, int total) {
+      auto progress = [&](int done, int total) {
             if (events.elapsed() > 50) {
                   _status->setText(tr("%1: dynamics %2 of about %3").arg(ins.name).arg(done).arg(total));
                   QApplication::processEvents();
                   events.restart();
                   }
             return !_cancel;
-            });
+            };
+      std::vector<ArticulationCheck::DynamicsResult> dr;
+      if (!values.empty())
+            dr = ArticulationCheck::dynamics(p, values, pitches, full, s, progress);
+      std::map<int, int> drumKey;
+      for (const DrumHit& h : drums) {
+            if (_cancel)
+                  break;
+            for (const ArticulationCheck::DynamicsResult& d : ArticulationCheck::dynamics(p, { h.code }, { h.key }, { false },
+                                                                                          drumSettings(s, h.key), progress)) {
+                  drumKey[d.value] = h.key;
+                  dr.push_back(d);
+                  }
+            }
       auto r1 = [](double x) { return std::round(x * 10) / 10; };
       SoundLib::DynamicsCalibration cal;
       const QString calFile = SoundLibraryHost::calibrationFile(*_library);
@@ -1450,13 +1524,20 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
       QJsonArray dyn;
       for (const auto& d : dr) {
             QJsonObject o;
-            o["value"] = d.value;
+            const bool drum = d.value <= DRUM_CODE;
+            const QString label = drum ? QString("%1 (key %2)").arg(names[d.value].join(" / ")).arg(drumKey[d.value])
+                                       : QString("%1 (%2)").arg(names[d.value].join(" / ")).arg(d.value);
+            o["value"] = drum ? -1 : d.value;
+            if (drum) {
+                  o["drum"] = names[d.value].join(" / ");
+                  o["key"] = drumKey[d.value];
+                  }
             o["names"] = QJsonArray::fromStringList(names[d.value]);
             o["pitch"] = d.pitch;
             if (d.pitch < 0) {
                   o["silent"] = true;
                   dyn.append(o);
-                  lines << QString("%1 (%2): silent at every pitch tried").arg(names[d.value].join(" / ")).arg(d.value);
+                  lines << QString("%1: silent at every pitch tried").arg(label);
                   continue;
                   }
             SoundLib::DynamicsCurve c;
@@ -1465,7 +1546,8 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             c.perceived = d.perceived;
             c.expression = d.expression;
             c.expressionPerceived = d.expressionPerceived;
-            cal.setCurve(ins.name, d.value, c);
+            if (!drum && played.count(d.value))
+                  cal.setCurve(ins.name, d.value, c);
             QJsonArray pts;
             for (const auto& pt : d.curve)
                   pts.append(QJsonArray({ pt.first, r1(pt.second) }));
@@ -1487,7 +1569,7 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
             o["controllerDb"] = QJsonArray({ r1(d.ccDb[0]), r1(d.ccDb[1]) });
             o["drivenBy"] = c.drivenBy;
             dyn.append(o);
-            lines << QString("%1 (%2): on %3, %4 / %5 / %6 dB at pp / mf / ff%7").arg(names[d.value].join(" / ")).arg(d.value)
+            lines << QString("%1: on %2, %3 / %4 / %5 dB at pp / mf / ff%6").arg(label)
                .arg(c.drivenBy).arg(r1(c.at(32))).arg(r1(c.at(80))).arg(r1(c.at(112)))
                .arg(d.pitch != pitch ? QString(" (pitch %1)").arg(d.pitch) : QString());
             if (d.expression.size() >= 2) {     // the held note's volume (CC11) against 127, at mf
@@ -1498,7 +1580,7 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
                      .arg(r1(ex.at(32) - top)).arg(r1(ex.at(64) - top)).arg(r1(ex.at(96) - top));
                   }
             }
-      if (!dr.empty()) {
+      if (std::any_of(dr.begin(), dr.end(), [&](const ArticulationCheck::DynamicsResult& d) { return d.pitch >= 0 && played.count(d.value); })) {
             QDir().mkpath(QFileInfo(calFile).absolutePath());
             cal.write(calFile);
             SoundLibraryHost::loadCalibration();
@@ -1515,42 +1597,55 @@ void ArticulationCheckDialog::measureDynamics(const SoundLib::LibInstrument& ins
 void ArticulationCheckDialog::measureTiming(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
                                             QJsonObject& out, QStringList& lines)
       {
-      std::vector<int> values, pitches;
-      std::vector<bool> legato;
+      std::vector<int> values;
       std::map<int, QStringList> names;
-      for (const SoundLib::Articulation& a : ins.articulations) {
-            if (a.techniques.isEmpty())
-                  continue;
-            if (!names.count(a.value)) {
-                  values.push_back(a.value);
-                  pitches.push_back(pitch);
-                  legato.push_back(false);
-                  }
-            // (a legato patch's own: "legato" first, the Performance patches; the All techniques patches' Long
-            // is "long legato", a note that stands for a slur there but has no legato transitions: the owner's
-            // first run, 2026-09-29, measured retriggers on it)
+      std::vector<DrumHit> drums;
+      soundsToMeasure(ins, _everything, values, names, drums);
+      std::vector<int> pitches(values.size(), pitch);
+      std::vector<bool> legato(values.size(), false);
+      // (a legato patch's own: "legato" first, the Performance patches; the All techniques patches' Long
+      // is "long legato", a note that stands for a slur there but has no legato transitions: the owner's
+      // first run, 2026-09-29, measured retriggers on it)
+      for (const SoundLib::Articulation& a : ins.articulations)
             if (a.techniques.value(0) == "legato")
-                  legato[size_t(std::find(values.begin(), values.end(), a.value) - values.begin())] = true;
-            names[a.value].append(a.name);
-            }
+                  for (size_t i = 0; i < values.size(); ++i)
+                        if (values[i] == a.value)
+                              legato[i] = true;
       QElapsedTimer events;
       events.start();
-      const std::vector<ArticulationCheck::TimingResult> tr_ = ArticulationCheck::timing(p, values, pitches, legato, s,
-         [&](int done, int total) {
+      auto progress = [&](int done, int total) {
             if (events.elapsed() > 50) {
                   _status->setText(tr("%1: timing %2 of about %3").arg(ins.name).arg(done).arg(total));
                   QApplication::processEvents();
                   events.restart();
                   }
             return !_cancel;
-            });
+            };
+      std::vector<ArticulationCheck::TimingResult> tr_;
+      if (!values.empty())
+            tr_ = ArticulationCheck::timing(p, values, pitches, legato, s, progress);
+      std::map<int, int> drumKey;
+      for (const DrumHit& h : drums) {
+            if (_cancel)
+                  break;
+            for (ArticulationCheck::TimingResult t : ArticulationCheck::timing(p, { h.code }, { h.key }, { false }, drumSettings(s, h.key), progress)) {
+                  drumKey[t.value] = h.key;
+                  tr_.push_back(t);
+                  }
+            }
       auto r1 = [](double x) { return std::round(x * 10) / 10; };
       auto three = [&](const double* v) { return QJsonArray({ r1(v[0]), r1(v[1]), r1(v[2]) }); };
       QJsonArray timing;
       for (const auto& t : tr_) {
             QJsonObject o;
-            const QString label = QString("%1 (%2)").arg(names[t.value].join(" / ")).arg(t.value);
-            o["value"] = t.value;
+            const bool drum = t.value <= DRUM_CODE;
+            const QString label = drum ? QString("%1 (key %2)").arg(names[t.value].join(" / ")).arg(drumKey[t.value])
+                                       : QString("%1 (%2)").arg(names[t.value].join(" / ")).arg(t.value);
+            o["value"] = drum ? -1 : t.value;
+            if (drum) {
+                  o["drum"] = names[t.value].join(" / ");
+                  o["key"] = drumKey[t.value];
+                  }
             o["names"] = QJsonArray::fromStringList(names[t.value]);
             o["pitch"] = t.pitch;
             if (t.pitch < 0) {
@@ -1632,13 +1727,19 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
             _status->setText(QString("%1: %2").arg(ins.name, t));
             QApplication::processEvents();
             };
-      if (ins.keyScan || ins.articulations.empty())
-            return fail(tr("no articulations (a kit or keyswitched patch): nothing to measure"));
-      // (a patch whose articulations no notation chooses: never played, not loaded; the Fanfare patches)
-      if (std::none_of(ins.articulations.begin(), ins.articulations.end(), [](const SoundLib::Articulation& a) { return !a.techniques.isEmpty(); }))
-            return fail(tr("no articulation a notation plays: nothing to measure"));
-      if (ins.switchType != SoundLib::SwitchType::CC && ins.switchType != SoundLib::SwitchType::NONE)
-            return fail(tr("Only patches switched by a CC can be measured."));
+      if (_everything)
+            out["everything"] = true;
+      if (!_everything) {
+            if (ins.keyScan || ins.articulations.empty())
+                  return fail(tr("no articulations (a kit or keyswitched patch): nothing to measure"));
+            // (a patch whose articulations no notation chooses: never played, not loaded; the Fanfare patches)
+            if (std::none_of(ins.articulations.begin(), ins.articulations.end(), [](const SoundLib::Articulation& a) { return !a.techniques.isEmpty(); }))
+                  return fail(tr("no articulation a notation plays: nothing to measure"));
+            if (ins.switchType != SoundLib::SwitchType::CC && ins.switchType != SoundLib::SwitchType::NONE)
+                  return fail(tr("Only patches switched by a CC can be measured."));
+            }
+      else if (ins.switchType == SoundLib::SwitchType::PROGRAM && !ins.articulations.empty())
+            return fail(tr("Only patches switched by a CC or a keyswitch can be measured."));
       const int pitch = testPitch(ins);
       out["pitch"] = pitch;
       status(tr("loading…"));
@@ -1650,10 +1751,14 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
       if (!SoundLibraryHost::loadSetup(p.get(), *_library, ins.name, pluginPath, &error))
             return fail(error);
       // its samples: until a note sounds, in real time (up to 2 minutes), then offline (up to a minute)
-      const int first = ins.articulations.front().value;
+      const int first = ins.articulations.empty() ? -1 : ins.articulations.front().value;
       auto prime = [&]() {
-            if (ins.switchType == SoundLib::SwitchType::CC)
+            if (ins.switchType == SoundLib::SwitchType::CC && first >= 0)
                   p->midi(ME_CONTROLLER, 0, ins.switchNumber, first);
+            else if (ins.switchType == SoundLib::SwitchType::KEYSWITCH && first >= 0 && first <= 127) {
+                  p->midi(ME_NOTEON, 0, first, 100);
+                  p->midi(ME_NOTEON, 0, first, 0);
+                  }
             if (_library->dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, 0, _library->dynamicsCC, 100);
             if (_library->dynamicsCC != 11)
@@ -1708,6 +1813,7 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
       ArticulationCheck::Settings s;
       s.sampleRate = MScore::sampleRate;
       s.switchCC = ins.switchType == SoundLib::SwitchType::CC ? ins.switchNumber : -1;
+      s.switchIsKey = ins.switchType == SoundLib::SwitchType::KEYSWITCH;
       s.dynamicsCC = _library->dynamicsCC;
       s.expressionCC = _library->dynamicsCC == 11 ? -1 : 11;
       s.pitch = pitch;

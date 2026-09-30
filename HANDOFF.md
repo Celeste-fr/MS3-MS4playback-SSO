@@ -46,6 +46,9 @@ All numbers are in `tools/soundlibraries/` (see CLAUDE.md for how each was measu
   one-drum, tuned: skipped as "keyswitched"), the ~540 unmapped patches, articulations no notation plays.
 - **Timing and legato**: 96 patches (the mapped ones a notation plays). Not measured: the same gaps as dynamics.
 - **Parameters** measured at 0 and 1 only, not the curve between.
+- **Built 2026-09-30 to close the dynamics and timing gaps**: `Measure every SSO sound in background.bat` (CLAUDE.md ›
+  Every sound). The owner to run it on the next Windows build and hand back every zip; then `dynamics_from_check.py`
+  and `timing_from_check.py` on them.
 
 ## Where things are
 

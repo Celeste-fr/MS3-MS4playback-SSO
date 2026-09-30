@@ -255,6 +255,9 @@ static QString extractPlan;                 // --extract-plan: what each patch s
 static bool extractChild = false;           // --extract-child: a round of an extract, started by its supervisor (superviseExtract)
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static bool checkTimingMode = false;       // --check-timing (with --extract-library): each articulation's timing, in the background
+static bool allSoundsMode = false;         // --all-sounds (with --check-dynamics / --check-timing): every sound of every patch
+// a check run under the supervisor (superviseExtract): the timing check, and the dynamics check of every sound
+static bool supervisedCheck() { return checkTimingMode || (checkDynamicsMode && allSoundsMode); }
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
 static bool picturesMode = false;          // --window-pictures: the percussion patches' windows, in the background (extractMode too)
@@ -4724,6 +4727,10 @@ static bool superviseExtract(const QString& root, const QString& runName)
                   args << "--extract-plan" << extractPlan;
             if (checkTimingMode)
                   args << "--check-timing";
+            else if (checkDynamicsMode)
+                  args << "--check-dynamics";
+            if (allSoundsMode)
+                  args << "--all-sounds";
             const QDateTime started = QDateTime::currentDateTime().addSecs(-60);
             QProcess child;
             child.setProcessChannelMode(QProcess::ForwardedChannels);
@@ -4812,8 +4819,8 @@ static bool superviseExtract(const QString& root, const QString& runName)
             // what that round did before: its extract folder, zipped here (it ended before zipping it)
             // (not "background extract setups", the setups' folder, which the pattern also matches)
             // (a timing check's folder: "<library> <date>")
-            for (const QFileInfo& fi : QDir(root).entryInfoList({ checkTimingMode ? "* 2*" : "* extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
-                  if (fi.fileName().startsWith("background ") || (checkTimingMode && (fi.fileName().contains(" extract ")
+            for (const QFileInfo& fi : QDir(root).entryInfoList({ supervisedCheck() ? "* 2*" : "* extract *" }, QDir::Dirs | QDir::NoDotAndDotDot)) {
+                  if (fi.fileName().startsWith("background ") || (supervisedCheck() && (fi.fileName().contains(" extract ")
                       || fi.fileName().contains(" files ") || fi.fileName().contains(" windows "))))
                         continue;
                   if (fi.lastModified() >= started && !QFileInfo::exists(fi.absoluteFilePath() + ".zip")) {
@@ -4856,7 +4863,7 @@ static bool superviseExtract(const QString& root, const QString& runName)
       QFile::remove(progress);
       QFile::remove(stepFile);
       QFile::remove(crashFile);
-      const QString run = checkTimingMode ? QString("the timing check") : QString("the extract");
+      const QString run = checkTimingMode ? QString("the timing check") : checkDynamicsMode ? QString("the dynamics check") : QString("the extract");
       ArticulationCheckDialog::logBackground(skipped.isEmpty() ? QString("%1 is done").arg(run)
                                              : QString("%1 is done; left out: %2").arg(run, skipped.join(", ")));
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
@@ -4879,11 +4886,12 @@ static bool extractInBackground()
       const QString what = checkTimingMode ? "background timing check" : checkDynamicsMode ? "background dynamics check" : "background extract";
       if (checkDynamicsMode || checkTimingMode)
             ArticulationCheckDialog::setBackgroundLog(what + ".log");
-      ArticulationCheckDialog::setRunPrefix(checkTimingMode ? what : QString("background extract"));
-      if (!extractChild && (checkTimingMode || (!scanKeysMode && !picturesMode && !checkDynamicsMode)))
-            return superviseExtract(root, checkTimingMode ? what : QString("background extract"));
+      const QString runName = supervisedCheck() ? what : QString("background extract");
+      ArticulationCheckDialog::setRunPrefix(runName);
+      if (!extractChild && (supervisedCheck() || (!scanKeysMode && !picturesMode && !checkDynamicsMode)))
+            return superviseExtract(root, runName);
       if (extractChild) {
-            ArticulationCheckDialog::setProgressFile(root + "/" + (checkTimingMode ? what : QString("background extract")) + " current.txt");
+            ArticulationCheckDialog::setProgressFile(root + "/" + runName + " current.txt");
 #ifdef Q_OS_WIN
             const std::wstring crash = QDir::toNativeSeparators(ArticulationCheckDialog::runFile(root, "crash")).toStdWString();
             wcsncpy_s(extractCrashFile, crash.c_str(), _TRUNCATE);
@@ -4940,7 +4948,7 @@ static bool extractInBackground()
             ok = picturesMode ? dialog.runHeadlessPictures(extractPatches, &zip)
                : scanKeysMode ? dialog.runHeadlessKeyScan(extractPatches, &zip)
                               : dialog.runHeadless(extractPatches, extractPitchBend, &zip, checkDynamicsMode && !checkTimingMode,
-                                                  extractControllers, checkTimingMode);
+                                                  extractControllers, checkTimingMode, allSoundsMode);
       }
       if (scanKeysMode || picturesMode)
             return ok;          // (a key scan, the pictures: one process; its zip and log as the extract's)
@@ -4965,8 +4973,9 @@ static bool extractInBackground()
                         ArticulationCheckDialog::logBackground(QString("%1 curves into %2 (MuseScore uses them at its next start or "
                                                                        "Preferences › Apply)").arg(n).arg(QDir::toNativeSeparators(mine + "/dynamics.json")));
                   }
-            QDesktopServices::openUrl(QUrl::fromLocalFile(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
-                                                          + "/MuseScore Sound Library Check"));
+            if (!extractChild)            // (the supervisor opens it)
+                  QDesktopServices::openUrl(QUrl::fromLocalFile(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                                                + "/MuseScore Sound Library Check"));
             return ok;
             }
       // Kontakt broken for this process (a patch it can't recall, then no patch script runs, even on
@@ -8993,6 +9002,9 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                                           "process", "n"));
       parser.addOption(QCommandLineOption("check-dynamics", "Use with --extract-library: measure the patches' dynamics (Check articulations › "
                                           "Dynamics only) instead of extracting; the curves go into the working MuseScore's calibration at the end"));
+      parser.addOption(QCommandLineOption("all-sounds", "Use with --check-dynamics or --check-timing: every patch's every sound "
+                                          "(every articulation, each drum hit on its key, a one-sound patch's sound), not only what a "
+                                          "notation plays; under a supervisor like the extract"));
       parser.addOption(QCommandLineOption("check-timing", "Use with --extract-library: measure the patches' timing (when each articulation "
                                           "speaks, how long it sounds and rings, legato transitions) instead of extracting"));
       parser.addOption(QCommandLineOption("scan-keys", "Check articulations' key scan of a sound library's patches whose keys are not "
@@ -9089,6 +9101,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             extractChild = parser.isSet("extract-child");
             checkDynamicsMode = parser.isSet("check-dynamics");
             checkTimingMode = parser.isSet("check-timing");
+            allSoundsMode = parser.isSet("all-sounds");
             if (parser.isSet("extract-round"))
                   extractRound = qMax(1, parser.value("extract-round").toInt());
             }

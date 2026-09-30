@@ -490,6 +490,22 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   little or no difference in most patches** (Basses, Celli, Solo Violin 2, Flute Solo the exceptions). So a slurred
   note sounds its pitch that late: playing slurred notes earlier by about that much (per patch) would put them in time;
   not done. MuseScore crashed as it closed (c000000d, after the zip; the supervisor logs it and goes on).
+  **Every sound** (the owner, 2026-09-30, "yes", after the list of what dynamics and timing hadn't covered; no other
+  branch had it: main's dynamics check, with attack salience, still skips kits and keyswitched patches):
+  `Measure every SSO sound in background.bat` runs `--check-dynamics --all-sounds --extract-patches all`, then
+  `--check-timing --all-sounds …` (`allSoundsMode`; `runHeadless(…, everything)`, `_everything`). Every patch of the
+  library (the 541 `<Patch>` too), every articulation (also those no notation plays), each drum hit with a key on its
+  own key (no switch, no other key tried: `soundsToMeasure`, `drumSettings`; results `drum`, `key`, value -1), a
+  keyswitched patch switched by its key (`Settings::switchIsKey`: the key 50 ms before the note; tuned percussion, Harp
+  glissandi), a patch with neither its one sound (value -1, no switch, "(its sound)"). The calibration still gets only
+  what a notation plays; the rest is in results.json only (`"everything": true`). Both runs supervised
+  (`supervisedCheck()`: the dynamics check too with `--all-sounds`) and resumable (`timedBefore(timing, everything)`: an
+  error counts as done). A second run in the same minute gets its own folder (" (2)"; the two runs had shared one).
+  Readers: `timing_from_check.py` (now with `key`) and `dynamics_from_check.py` → `sso_sound_dynamics.json`. Tried
+  here with the test synth (a patch with an unplayed articulation, a keyswitched one, a drum patch with two hits and one
+  off, a one-sound `<Patch>`): every sound measured, drums at their keys, 4 curves into the calibration (the notated
+  ones), a second start leaving all out. Untried with Kontakt; several hours each (first loads of the 541 unmapped
+  patches, 2-43 s each; not timed).
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

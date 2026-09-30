@@ -473,11 +473,17 @@ struct Player {
       // the switch to value (after prior, when there is one), the dynamics and expression CCs, 0.1 s
       void arm(int prior, int value)
             {
-            if (prior >= 0 && s.switchCC >= 0) {
+            if (prior >= 0 && s.switchCC >= 0 && !s.switchIsKey) {
                   p->midi(ME_CONTROLLER, s.channel, s.switchCC, prior);
                   render(frames(0.1));
                   }
-            if (s.switchCC >= 0)          // (-1: a patch without switching)
+            if (s.switchIsKey && value >= 0 && value <= 127) {
+                  p->midi(ME_NOTEON, s.channel, value, 100);
+                  render(frames(0.05));
+                  p->midi(ME_NOTEON, s.channel, value, 0);
+                  render(frames(0.05));
+                  }
+            else if (s.switchCC >= 0 && value >= 0)       // (-1: a patch without switching, or no value)
                   p->midi(ME_CONTROLLER, s.channel, s.switchCC, value);
             if (s.dynamicsCC >= 0)
                   p->midi(ME_CONTROLLER, s.channel, s.dynamicsCC, s.dynamicsValue);

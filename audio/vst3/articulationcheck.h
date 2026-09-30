@@ -63,6 +63,8 @@ class ArticulationCheck {
             double sampleRate { 48000 };
             int channel { 0 };
             int switchCC { 32 };
+            bool switchIsKey { false };   // the value is a keyswitch's key (Kickstart's tuned percussion, Harp
+                                          // glissandi): played for 50 ms before the note, not sent as switchCC
             int dynamicsCC { 1 };         // -1: none
             int dynamicsValue { 100 };
             int expressionCC { 11 };      // -1: none
