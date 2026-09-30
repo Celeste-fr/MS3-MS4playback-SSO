@@ -537,6 +537,21 @@ void LiveClipsLink::poll()
             }
       }
 
+QStringList LiveClipsLink::keysWithoutTrack(const MasterScore* score, bool* known) const
+      {
+      QStringList keys;
+      bool all = _on && active() && connected() && score && _score == score && !_sent.empty();
+      for (const auto& s : _sent) {
+            if (!s.second.confirmed)
+                  all = false;
+            else if (s.second.status.startsWith("no track"))
+                  keys << s.first;
+            }
+      if (known)
+            *known = all;
+      return all ? keys : QStringList();
+      }
+
 QString LiveClipsLink::statusText() const
       {
       if (!_on)

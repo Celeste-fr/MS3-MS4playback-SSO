@@ -146,6 +146,9 @@ class LiveClipsLink : public QObject {
       void updateSocket();
       void sendDatagram(const QByteArray& packet) { send(packet); }
       bool deviceAnswers() const;                   // a hello within 6 s (either feature)
+      // the routes ("<port>:<channel>" keys) the device found no track for, for the score Live plays now;
+      // *known: false unless the device answers for this score and has confirmed every route's clip
+      QStringList keysWithoutTrack(const MasterScore* score, bool* known) const;
       };
 
 }     // namespace LiveIntegration

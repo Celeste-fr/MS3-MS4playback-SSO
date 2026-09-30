@@ -30,6 +30,8 @@
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
+#include "libmscore/liveset.h"
+#include "libmscore/livesetwriter.h"
 #include "libmscore/synthesizerstate.h"
 #include "mtest/testutils.h"
 
@@ -91,6 +93,7 @@ class TestSoundLibrary : public QObject, public MTest
 #ifdef TESTSYNTH
       void mixerSlot();
       void mixerScore();
+      void liveSetTestSynth();
       void liveParameters();
       void liveMidiControllers();
       void kontaktSetup();
@@ -3652,6 +3655,127 @@ static std::vector<float> renderThrough(MasterScore* score, const SoundLib::Libr
       vst.process(unsigned(rate), buffer.data() + at, nullptr, nullptr);
       vst.endExport();
       return buffer;
+      }
+
+//---------------------------------------------------------
+//   liveSetTestSynth
+//    Create Live Set (libmscore/livesetwriter.h) with a real VST 3 (the test synth): a part with extra
+//    patches (four routes: "<part> – <patch>" tracks) and a part on copies for other tunings ("(2)"),
+//    the plug-in's class id and name as its module gives them, each track's state the plug-in's own
+//    (Vst3Plugin::state as MuseScore's setups hold it, taken apart), read back
+//---------------------------------------------------------
+
+void TestSoundLibrary::liveSetTestSynth()
+      {
+      using namespace LiveSetWriter;
+      QString pluginName, error;
+      quint32 uid[4] = { 0, 0, 0, 0 };
+      QVERIFY2(Vst3Plugin::classInfo(TESTSYNTH, &pluginName, uid, &error), qPrintable(error));
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY(p);
+      QCOMPARE(pluginName, p->name());
+      // the test synth's ProcessorUID(0x6d737473, 0x796e7468, 0x70726f63, 1), as Live writes a class id (Kontakt 8's
+      // FUID 5653544E-694B386B-6F6E7461-6B742038 is Fields 1448301646 1766537323 1869509729 1802772536 in its sets)
+      QCOMPARE(uid[0], 0x6d737473u);
+      QCOMPARE(uid[1], 0x796e7468u);
+      QCOMPARE(uid[2], 0x70726f63u);
+      QCOMPARE(uid[3], 1u);
+      const QByteArray state = p->state();
+      QString stateName;
+      QByteArray component, controller;
+      QVERIFY(Vst3Plugin::splitState(state, &stateName, &component, &controller));
+      QCOMPARE(stateName, p->name());
+      QCOMPARE(component, p->componentState());
+      QVERIFY(!Vst3Plugin::splitState("MSV2xxxx", &stateName, &component, &controller));
+
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'><Articulation name='Legato' value='20' techniques='legato'/></Instrument>"
+         "<Instrument name='Violin Sul G' with='Violin'>"
+         "<Articulation name='Long Sul G' value='1' techniques='long legato' modifiers='sulg'/></Instrument>"
+         "<Instrument name='Violin Staccatissimo' with='Violin'>"
+         "<Articulation name='Staccatissimo' value='1' techniques='staccatissimo'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "patches.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Spec spec;
+      setSong(score, &spec);
+      spec.tracks = tracks(score, *lib, { "MuseScore A", "MuseScore B" });
+      QCOMPARE(int(spec.tracks.size()), 4);
+      const QString part = score->parts()[0]->partName();
+      QCOMPARE(spec.tracks[0].name, part);
+      QVERIFY(spec.tracks[0].mainPatch);
+      QStringList names;
+      for (size_t i = 1; i < 4; ++i) {
+            QVERIFY(!spec.tracks[i].mainPatch);
+            QCOMPARE(spec.tracks[i].name, part + " – " + spec.tracks[i].patch);
+            QCOMPARE(spec.tracks[i].color, spec.tracks[0].color);     // (a part's tracks share its colour)
+            names << spec.tracks[i].patch;
+            }
+      names.sort();
+      QCOMPARE(names, QStringList({ "Violin Legato", "Violin Staccatissimo", "Violin Sul G" }));
+      // each track the plug-in with a state of its own (here: the same patch, told apart by a byte)
+      for (size_t i = 0; i < spec.tracks.size(); ++i) {
+            Track& t = spec.tracks[i];
+            t.hasPlugin = true;
+            t.plugin.name = pluginName;
+            std::copy(uid, uid + 4, t.plugin.uid);
+            t.plugin.component = component + QByteArray(1, char(i));
+            t.plugin.controller = controller;
+            }
+      spec.link.path = "/tmp/MuseScore Link.amxd";
+      spec.link.size = 10;
+      const QByteArray xml = LiveSetWriter::xml(spec);
+      QCOMPARE(validate(xml), QString());
+      const LiveSet::Set set = LiveSet::parse(xml);
+      QVERIFY2(set.error.isEmpty(), qPrintable(set.error));
+      QCOMPARE(int(set.tracks.size()), 4);
+      for (size_t i = 0; i < 4; ++i) {
+            QCOMPARE(set.tracks[i].name, spec.tracks[i].name);
+            QCOMPARE(set.tracks[i].devices, QStringList({ pluginName }));
+            QCOMPARE(set.tracks[i].inputChannel, spec.tracks[i].channel);
+            QCOMPARE(set.tracks[i].inputDevice, QString(spec.tracks[i].routeKey.startsWith("0:") ? "MuseScore A" : "MuseScore B"));
+            }
+      // the states, byte for byte, in the tracks' order; the plug-in loads each
+      QXmlStreamReader r(xml);
+      std::vector<QByteArray> states;
+      while (!r.atEnd())
+            if (r.readNext() == QXmlStreamReader::StartElement && r.name() == "ProcessorState")
+                  states.push_back(QByteArray::fromHex(r.readElementText().simplified().replace(" ", "").toLatin1()));
+      QCOMPARE(int(states.size()), 4);
+      for (size_t i = 0; i < 4; ++i)
+            QCOMPARE(states[i], spec.tracks[i].plugin.component);
+      std::unique_ptr<Vst3Plugin> q = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY(q->setState(state));
+      delete score;
+
+      // copies for other tunings: "<part> (2)" …, found by the device as "<part> (2)" (LiveClips::clipName)
+      auto tuned = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(tuned);
+      SoundLib::setCurrent(tuned);
+      score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const std::vector<Track> lanes = tracks(score, *tuned, { "MuseScore A" });
+      QCOMPARE(int(lanes.size()), 2);
+      const QString p0 = score->parts()[0]->partName();
+      QCOMPARE(lanes[0].name, p0);
+      QCOMPARE(lanes[1].name, p0 + " (2)");
+      QVERIFY(lanes[0].mainPatch && !lanes[1].mainPatch);
+      QCOMPARE(lanes[1].instrument, lanes[0].instrument);           // the same patch (one state for both)
+      delete score;
       }
 
 void TestSoundLibrary::mixerScore()

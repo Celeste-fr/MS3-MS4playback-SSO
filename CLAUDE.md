@@ -612,6 +612,19 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `FileData::forcedInstrument`. Tests `tst_liveintegration` clipEdit*, `tools/live/test/test_clipedit.js`;
   `fake_live_server.js --edit-clip <track> --edit-at <s> [--live-change-at <s>]` for a GUI run. Not tried in
   real Live.
+  **Create Live Set** (branch `live-set-export`, 2026-09-30; LIVE.md › Create Live Set; the owner: the manual
+  track setup is "so many manual steps"): *Mixer › Advanced Options… › Ableton Live › Create Live Set…* / *Add
+  missing tracks…* write a Live 12 set: a MIDI track per route named as the device finds it, MIDI From = the route,
+  the MuseScore Link device (referenced in Live's User Library, else next to the exe) before Kontakt holding
+  `SoundLibraryHost::setupState` (resaved Kontakt state, 512 voices). `libmscore/livesetwriter.*` writes **every
+  element Live 12.2 writes, in its order, with Live's defaults** (learned from the owner's sets, written by hand; the
+  owner's files never go in the repository) and checks pointee ids / NextPointeeId / clip slots per scene
+  (`validate`) before writing; `mscore/livesetexport.*` gathers routes, device and states. To change the format,
+  compare with a set Live saved: `tools/live/test/compare_als_skeleton.py <generated.als> <live.als>` (the test
+  writes one with `MS_LIVESET_OUT=<file> ./tst_liveintegration liveSetWrite`). `Vst3Plugin::classInfo` (class
+  name and FUID words without an instance), `splitState` (a setup's parts). Tests `tst_liveintegration`
+  liveSetWrite / liveSetMissing, `tst_soundlibrary` liveSetTestSynth. Unconfirmed: that Live opens it; MIDI From's
+  one-port target form; `OriginalCrc` (CRC-16/UMTS of the first 16 KiB, from one example).
 - Output: `Seq::putEvent` sends external events to the MIDI driver (`Driver::canOutputMidi`;
   PortMidi outputs A–D in `audiodrivers/pm.cpp`) or to the hosted plugin (see below). The
   preference is `io/soundLibrary`, set in Preferences › I/O › Sound library (`prefsdialog.*`).
@@ -706,7 +719,8 @@ attack not yet confirmed by ear.
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
-  `liveMidiControllers`). All pass (46, 3 skipped without the owner's files; `vst3Settle`, `kontaktMaxVoices` 2026-09-29).
+  `liveMidiControllers`). All pass (47, 3 skipped without the owner's files; `vst3Settle`, `kontaktMaxVoices` 2026-09-29;
+  `liveSetTestSynth` 2026-09-30).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order

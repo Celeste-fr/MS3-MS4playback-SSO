@@ -448,6 +448,63 @@ Vst3Plugin::~Vst3Plugin()
       d->module.reset();
       }
 
+// the module (loaded once), and its first instrument class, else its first audio module class
+static std::shared_ptr<VST3::Hosting::Module> moduleOf(const QString& path, QString* error)
+      {
+      const QString key = QFileInfo(path).absoluteFilePath();
+      std::shared_ptr<VST3::Hosting::Module> module = modules()[key];
+      if (!module) {
+            std::string err;
+            module = VST3::Hosting::Module::create(path.toStdString(), err);
+            if (!module) {
+                  if (error)
+                        *error = QString("cannot load %1: %2").arg(path, QString::fromStdString(err));
+                  modules().erase(key);
+                  return nullptr;
+                  }
+            modules()[key] = module;
+            }
+      return module;
+      }
+
+static bool chooseClass(const VST3::Hosting::PluginFactory& factory, VST3::Hosting::ClassInfo* chosen)
+      {
+      bool found = false;
+      for (const VST3::Hosting::ClassInfo& ci : factory.classInfos()) {
+            if (ci.category() != kVstAudioEffectClass)
+                  continue;
+            const bool instrument = ci.subCategoriesString().find("Instrument") != std::string::npos;
+            if (!found || instrument) {
+                  *chosen = ci;
+                  found = true;
+                  if (instrument)
+                        break;
+                  }
+            }
+      return found;
+      }
+
+bool Vst3Plugin::classInfo(const QString& path, QString* name, quint32 uid[4], QString* error)
+      {
+      std::shared_ptr<VST3::Hosting::Module> module = moduleOf(path, error);
+      if (!module)
+            return false;
+      VST3::Hosting::ClassInfo chosen;
+      if (!chooseClass(module->getFactory(), &chosen)) {
+            if (error)
+                  *error = QString("%1 has no audio module class").arg(path);
+            return false;
+            }
+      if (name)
+            *name = QString::fromStdString(chosen.name());
+      const FUID fuid = FUID::fromTUID(chosen.ID().data());
+      uid[0] = fuid.getLong1();
+      uid[1] = fuid.getLong2();
+      uid[2] = fuid.getLong3();
+      uid[3] = fuid.getLong4();
+      return true;
+      }
+
 std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleRate, int maxBlock, QString* error)
       {
       auto fail = [error](const QString& msg) {
@@ -867,6 +924,27 @@ QByteArray Vst3Plugin::state() const
       ds.writeRawData(STATE_MAGIC, 4);
       ds << quint32(1) << d->name << componentState << controllerState;
       return result;
+      }
+
+bool Vst3Plugin::splitState(const QByteArray& state, QString* name, QByteArray* component, QByteArray* controller)
+      {
+      QDataStream ds(state);
+      char magic[4];
+      if (ds.readRawData(magic, 4) != 4 || std::memcmp(magic, STATE_MAGIC, 4) != 0)
+            return false;
+      quint32 version = 0;
+      QString n;
+      QByteArray a, b;
+      ds >> version >> n >> a >> b;
+      if (ds.status() != QDataStream::Ok || version != 1)
+            return false;
+      if (name)
+            *name = n;
+      if (component)
+            *component = a;
+      if (controller)
+            *controller = b;
+      return true;
       }
 
 bool Vst3Plugin::setState(const QByteArray& state)

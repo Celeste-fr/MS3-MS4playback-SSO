@@ -21,6 +21,7 @@
 #include "libmscore/instrument.h"
 #include "libmscore/liveclips.h"
 #include "libmscore/liveset.h"
+#include "libmscore/livesetwriter.h"
 #include "libmscore/midisync.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
@@ -77,6 +78,8 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEditInstrument();
       void clipEditOutside();
       void clipEditPackets();
+      void liveSetWrite();
+      void liveSetMissing();
       };
 
 //---------------------------------------------------------
@@ -1418,6 +1421,298 @@ void TestLiveIntegration::clipEditPackets()
       QCOMPARE(address, QString("/ms/clip/ops"));
       QCOMPARE(args.size(), 3 + 8 * 8);
       QCOMPARE(args[3 + 1].toInt(), 1032);
+      }
+
+//---------------------------------------------------------
+//   liveSetWrite
+//    Create Live Set (livesetwriter.h): the score's routes as tracks (names, MIDI From, colours), the
+//    song's tempo and time signature, the devices in order with the state bytes exactly, Live's
+//    bookkeeping (pointee ids, clip slots per scene), gzip, and the reader reads it back
+//---------------------------------------------------------
+
+namespace {
+struct Written {
+      QStringList tracks;
+      std::vector<QStringList> devices;                   // the Devices' children, per track
+      std::vector<QByteArray> processor, controller;      // per PluginDevice
+      std::vector<QByteArray> blobs;
+      std::map<QString, QString> values;                  // the first Value of some elements, by path end
+      QStringList fileRef;                                // the MxPatchRef's FileRef values
+      QStringList uid;
+      QString inputTarget;
+      };
+}
+
+static Written readWritten(const QByteArray& xml)
+      {
+      Written w;
+      QXmlStreamReader r(xml);
+      QStringList path;
+      QByteArray text;
+      while (!r.atEnd()) {
+            r.readNext();
+            if (r.isStartElement()) {
+                  const QString tag = r.name().toString();
+                  const QString parent = path.isEmpty() ? QString() : path.back();
+                  const QString value = r.attributes().value("Value").toString();
+                  if (parent == "Devices")
+                        w.devices.back() << tag;
+                  if (tag == "Devices" && path.contains("MidiTrack"))
+                        w.devices.push_back(QStringList());
+                  if (tag == "EffectiveName" && path.size() >= 2 && path[path.size() - 2] == "MidiTrack")
+                        w.tracks << value;
+                  if (parent == "FileRef" && path.contains("MxPatchRef"))
+                        w.fileRef << tag + "=" + value;
+                  if (parent == "Uid" && path.contains("Vst3Preset"))
+                        w.uid << value;
+                  if (tag == "Target" && parent == "MidiInputRouting" && path.contains("MidiTrack") && w.inputTarget.isEmpty())
+                        w.inputTarget = value;
+                  for (const char* k : { "Tempo/Manual", "TimeSignature/Manual", "Scene/Tempo", "Scene/TimeSignatureId" })
+                        if (QString(k) == parent + "/" + tag && !w.values.count(k))
+                              w.values[k] = value;
+                  if (tag == "EnumEvent" || tag == "FloatEvent")
+                        w.values[tag] = r.attributes().value("Value").toString() + "@" + r.attributes().value("Time").toString();
+                  text.clear();
+                  path << tag;
+                  }
+            else if (r.isCharacters())
+                  text += r.text().toUtf8();
+            else if (r.isEndElement()) {
+                  const QString tag = path.takeLast();
+                  const QByteArray bytes = QByteArray::fromHex(text.simplified().replace(' ', ""));
+                  if (tag == "ProcessorState")
+                        w.processor.push_back(bytes);
+                  else if (tag == "ControllerState")
+                        w.controller.push_back(bytes);
+                  else if (tag == "Blob")
+                        w.blobs.push_back(bytes);
+                  text.clear();
+                  }
+            }
+      return w;
+      }
+
+void TestLiveIntegration::liveSetWrite()
+      {
+      using namespace LiveSetWriter;
+      MasterScore* score = readScore(DIR + "clips.musicxml");
+      QVERIFY(score);
+      auto lib = loadMap(MAP);
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      score->rebuildMidiMapping();
+
+      Spec spec;
+      setSong(score, &spec);
+      QCOMPARE(spec.tempo, 60.0);                        // the first tempo (bar 3 has 120)
+      QCOMPARE(spec.numerator, 4);
+      QCOMPARE(spec.denominator, 4);
+      spec.tracks = tracks(score, *lib, { "MuseScore A" });
+      QCOMPARE(int(spec.tracks.size()), 2);
+      QCOMPARE(spec.tracks[0].name, QString("Violin"));
+      QCOMPARE(spec.tracks[1].name, QString("Flute"));
+      QCOMPARE(spec.tracks[0].routeKey, QString("0:1"));
+      QCOMPARE(spec.tracks[1].channel, 2);
+      QCOMPARE(spec.tracks[1].portName, QString("MuseScore A"));
+      QVERIFY(spec.tracks[0].mainPatch && spec.tracks[0].instrument && spec.tracks[0].instrument->name == "Violin");
+      QVERIFY(spec.tracks[0].color != spec.tracks[1].color);
+
+      // the states: every byte value, and a controller state on one
+      QByteArray a, b;
+      for (int i = 0; i < 5000; ++i)
+            a += char((i * 7) & 0xff);
+      for (int i = 0; i < 81; ++i)                       // (not a whole line of 40)
+            b += char(255 - i);
+      const quint32 kontakt[4] = { 0x5653544E, 0x694B386B, 0x6F6E7461, 0x6B742038 };
+      for (Track& t : spec.tracks) {
+            t.hasPlugin = true;
+            t.plugin.name = "Kontakt 8";
+            std::copy(kontakt, kontakt + 4, t.plugin.uid);
+            t.plugin.audioOutputs = 16;
+            }
+      spec.tracks[0].plugin.component = a;
+      spec.tracks[1].plugin.component = b;
+      spec.tracks[1].plugin.controller = "controller";
+      spec.link.path = "C:/Users/me/Documents/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd";
+      spec.link.userLibraryPath = "Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd";
+      spec.link.size = 65572;
+      spec.link.crc = 4321;
+      spec.link.modified = 1790000000;
+      spec.link.port = 9005;
+
+      int next = 0;
+      const QByteArray x = xml(spec, &next);
+      QCOMPARE(validate(x), QString());
+      QVERIFY(next > 800);                               // (two tracks' targets, 128 plug-in slots each …)
+      QVERIFY(x.startsWith("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<Ableton MajorVersion=\"5\" MinorVersion=\"12.0_12203\""));
+      QVERIFY(x.contains("\r\n\t\t<NextPointeeId Value=\"" + QByteArray::number(next) + "\" />\r\n"));
+      QVERIFY(x.endsWith("</Ableton>\r\n"));
+
+      const Written w = readWritten(x);
+      QCOMPARE(w.tracks, QStringList({ "Violin", "Flute" }));
+      QCOMPARE(int(w.devices.size()), 2);                // (the MIDI tracks.)
+      QCOMPARE(w.devices[0], QStringList({ "MxDeviceMidiEffect", "PluginDevice" }));   // the device before Kontakt
+      QCOMPARE(w.devices[1], QStringList({ "MxDeviceMidiEffect", "PluginDevice" }));
+      QCOMPARE(int(w.processor.size()), 2);
+      QCOMPARE(w.processor[0], a);                       // the states, byte for byte
+      QCOMPARE(w.processor[1], b);
+      QCOMPARE(w.controller[0], QByteArray());
+      QCOMPARE(w.controller[1], QByteArray("controller"));
+      QCOMPARE(w.blobs[0], QByteArray("{\r\n\t\"Port\" : [ 9005 ]\r\n}\r\n") + QByteArray(1, '\0'));
+      QCOMPARE(w.uid.mid(0, 4), QStringList({ "1448301646", "1766537323", "1869509729", "1802772536" }));
+      QCOMPARE(w.fileRef, QStringList({ "RelativePathType=6", "RelativePath=" + spec.link.userLibraryPath, "Path=" + spec.link.path,
+                                        "Type=1", "LivePackName=", "LivePackId=", "OriginalFileSize=65572", "OriginalCrc=4321",
+                                        "RelativePathType=6", "RelativePath=" + spec.link.userLibraryPath, "Path=" + spec.link.path,
+                                        "Type=1", "LivePackName=", "LivePackId=", "OriginalFileSize=65572", "OriginalCrc=4321" }));
+      QCOMPARE(w.inputTarget, QString("MidiIn/External.Dev:MuseScore A/0"));
+      QCOMPARE(w.values.at("Tempo/Manual"), QString("60"));
+      QCOMPARE(w.values.at("TimeSignature/Manual"), QString("201"));
+      QCOMPARE(w.values.at("EnumEvent"), QString("201@-63072000"));
+      QCOMPARE(w.values.at("FloatEvent"), QString("60@-63072000"));
+      QCOMPARE(w.values.at("Scene/TimeSignatureId"), QString("201"));
+
+      // written gzipped, read back by the automation import's reader
+      QString error;
+      QCOMPARE(LiveSet::gunzip(LiveSetWriter::gzip(x), &error), x);
+      QTemporaryDir dir;
+      const QString path = dir.path() + "/Score.als";
+      QVERIFY2(write(path, spec, &error), qPrintable(error));
+      // (MS_LIVESET_OUT: a copy to compare with a set Live saved: tools/live/test/compare_als_skeleton.py)
+      if (!qEnvironmentVariable("MS_LIVESET_OUT").isEmpty())
+            QVERIFY(write(qEnvironmentVariable("MS_LIVESET_OUT"), spec, &error));
+      QFile f(path);
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QVERIFY(f.read(2) == QByteArray("\x1f\x8b"));
+      const LiveSet::Set set = LiveSet::read(path);
+      QVERIFY2(set.error.isEmpty(), qPrintable(set.error));
+      QCOMPARE(set.creator, QString("Ableton Live 12.2"));
+      QCOMPARE(set.tempo, 60.0);
+      QCOMPARE(int(set.tracks.size()), 2);
+      QCOMPARE(set.tracks[0].name, QString("Violin"));
+      QCOMPARE(set.tracks[0].inputDevice, QString("MuseScore A"));
+      QCOMPARE(set.tracks[0].inputChannel, 1);
+      QCOMPARE(set.tracks[1].inputChannel, 2);
+      QCOMPARE(set.tracks[1].devices, QStringList({ "Kontakt 8" }));
+      QVERIFY(set.tracks[0].envelopes.empty());
+      QVERIFY(!set.museScoreClips);
+      // the automation import would match each track to its part by MIDI From (its rule: port and channel)
+      const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, { "MuseScore A" });
+      QCOMPARE(int(parts.size()), 2);
+      for (size_t i = 0; i < 2; ++i) {
+            QCOMPARE(LiveSet::portDisplayName(parts[i].portName), set.tracks[i].inputDevice);
+            QCOMPARE(parts[i].channel, set.tracks[i].inputChannel);
+            }
+
+      // no MIDI output set: All Ins; no plug-in, no device: an empty device chain
+      spec.tracks[1].portName.clear();
+      spec.tracks[1].hasPlugin = false;
+      spec.tracks[1].link = false;
+      const QByteArray y = xml(spec);
+      QCOMPARE(validate(y), QString());
+      const LiveSet::Set set2 = LiveSet::parse(y);
+      QCOMPARE(set2.tracks[1].inputDevice, QString());
+      QCOMPARE(set2.tracks[1].inputChannel, -1);
+      QVERIFY(set2.tracks[1].devices.isEmpty());
+      QCOMPARE(readWritten(y).devices[1], QStringList());
+      // no device found: no device on any track
+      spec.link = LinkDevice();
+      QCOMPARE(readWritten(xml(spec)).devices[0], QStringList({ "PluginDevice" }));
+
+      // the checks catch what Live would refuse
+      QByteArray bad = x;
+      bad.replace("<NextPointeeId Value=\"" + QByteArray::number(next) + "\"", "<NextPointeeId Value=\"5\"");
+      QVERIFY(validate(bad).contains("NextPointeeId"));
+      bad = x;
+      const int at = bad.indexOf("<Pointee Id=\"");
+      const int at2 = bad.indexOf("<Pointee Id=\"", at + 1);
+      bad.replace(at2, bad.indexOf('"', at2 + 13) - at2, bad.mid(at, bad.indexOf('"', at + 13) - at));
+      QVERIFY(validate(bad).contains("twice"));
+      bad = x;
+      bad.replace("<ClipSlot Id=\"7\">", "<Clip Id=\"7\">");
+      QVERIFY(!validate(bad).isEmpty());
+      QVERIFY(!validate(x.left(x.size() / 2)).isEmpty());
+
+      // Live's numbers
+      QCOMPARE(timeSignatureId(4, 4), 201);
+      QCOMPARE(timeSignatureId(3, 4), 200);
+      QCOMPARE(timeSignatureId(6, 8), 302);
+      QCOMPARE(timeSignatureId(7, 16), 402);
+      QCOMPARE(timeSignatureId(99, 16), 494);            // Live's range (TimeSignature's 0-494)
+      QCOMPARE(timeSignatureId(5, 3), -1);
+      QCOMPARE(timeSignatureId(100, 4), -1);
+      QCOMPARE(int(fileCrc("123456789")), 0xFEE8);       // CRC-16/UMTS's check value
+      QByteArray big(20000, 'x');
+      QCOMPARE(fileCrc(big), fileCrc(big.left(16384)));  // (the first 16 KiB)
+      QVERIFY(fileCrc(big) != fileCrc(big.left(16383)));
+      QCOMPARE(linkBlob(9001).toHex().toUpper(), QByteArray("7B0D0A0922506F727422203A205B2039303031205D0D0A7D0D0A00"));
+      // track names = the clips' without "MuseScore: " (the device's rule)
+      for (bool main : { true, false })
+            for (int lane : { 0, 1, 2 }) {
+                  QCOMPARE(trackName("Violin", "Solo Violin - Performance", main, lane),
+                           LiveClips::clipName("Violin", "Solo Violin - Performance", main, lane).mid(11));
+                  }
+      QCOMPARE(trackName("Violin", "Solo Violin - Performance", false, 0), QString("Violin – Solo Violin - Performance"));
+      QCOMPARE(trackName("Violin", "Violin", true, 1), QString("Violin (2)"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveSetMissing
+//    Add missing tracks: a route has a track in a set when the device would find one: MIDI From = its
+//    port and channel, else by name (the part's for its main patch; "<part> – <patch>", else the patch's
+//    alone on one track only), names compared loosely
+//---------------------------------------------------------
+
+void TestLiveIntegration::liveSetMissing()
+      {
+      using namespace LiveSetWriter;
+      auto setOf = [](const std::vector<std::pair<QString, QString>>& named) {   // name, MIDI From port ("": All Ins)
+            Spec s;
+            int ch = 0;
+            for (const auto& n : named) {
+                  Track t;
+                  t.name = n.first;
+                  t.portName = n.second;
+                  t.channel = ++ch;
+                  t.link = false;
+                  s.tracks.push_back(t);
+                  }
+            return LiveSet::parse(xml(s));
+            };
+      auto route = [](const QString& part, const QString& patch, bool main, int channel) {
+            Track t;
+            t.part = part;
+            t.patch = patch;
+            t.mainPatch = main;
+            t.name = trackName(part, patch, main, 0);
+            t.portName = "MuseScore A";
+            t.channel = channel;
+            return t;
+            };
+      const Track violin = route("Violin", "Violin", true, 1);
+      const Track legato = route("Violin", "Solo Violin - Performance", false, 2);
+      const Track flute = route("Flute", "Flute", true, 3);
+
+      LiveSet::Set set = setOf({ { "violin", "" }, { "Something else", "" } });
+      QVERIFY(hasTrack(set, violin));                     // by name, loosely
+      QVERIFY(!hasTrack(set, legato));
+      QVERIFY(!hasTrack(set, flute));
+      set = setOf({ { "Violin – Solo Violin - Performance", "" } });
+      QVERIFY(hasTrack(set, legato));
+      QVERIFY(!hasTrack(set, violin));
+      set = setOf({ { "Violin - Solo Violin - Performance", "" } });   // any dash
+      QVERIFY(hasTrack(set, legato));
+      set = setOf({ { "Solo Violin - Performance", "" } });            // the patch alone, on one track
+      QVERIFY(hasTrack(set, legato));
+      set = setOf({ { "Solo Violin - Performance", "" }, { "Solo Violin - Performance", "" } });
+      QVERIFY(!hasTrack(set, legato));
+      // by MIDI From: the third track listens to MuseScore A, channel 3 (setOf numbers them 1, 2, 3)
+      set = setOf({ { "a", "" }, { "b", "" }, { "Winds", "MuseScore A" } });
+      QVERIFY(hasTrack(set, flute));
+      QVERIFY(!hasTrack(set, violin));
+      set = setOf({ { "a", "" }, { "b", "" }, { "Winds", "MuseScore B" } });
+      QVERIFY(!hasTrack(set, flute));
       }
 
 QTEST_MAIN(TestLiveIntegration)

@@ -7,7 +7,8 @@ automation is then read back into the score, so MuseScore alone plays it the sam
 MuseScore it is read-only: it is edited only in Live.
 
 There are two ways to play through Live (and, besides them, [editing any Live MIDI clip in
-MuseScore](#editing-live-clips-in-musescore)):
+MuseScore](#editing-live-clips-in-musescore)). For both, MuseScore can write the Live Set with every track set up:
+[Create Live Set](#create-live-set).
 
 1. **MuseScore plays through Live** (*Mixer › Play through Live*, 2026-09-28). MuseScore is the
    clock: it sends each part's notes, switches and controllers live to Live, plus MIDI clock and
@@ -82,7 +83,8 @@ Install loopMIDI (Tobias Erichsen) and create these ports:
 - Keep Live's **Loop switch off**. With the loop on, Live wraps song positions into the loop
   (manual 34.3.2), so MuseScore's positions would land in the wrong place.
 
-**One MIDI track per part:**
+**One MIDI track per part:** *Mixer › Advanced Options… › Ableton Live › Create Live Set…* writes them
+(section [Create Live Set](#create-live-set)). By hand, as a fallback:
 - Kontakt 8 with the patch *View › Sound Library…* names for that part.
 - **Articulation switching "UACC & UI only"** in each patch. This is what MuseScore's own setups
   use (`$iooxo` = 3). MuseScore switches articulations with UACC on CC32.
@@ -185,8 +187,10 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
    (Suite) and Max 9 (Live 12.2 comes with 9.0.7): its script runs in Max's `v8` object.
 2. **Live's settings:** EXT (external sync) **off**: Live is the clock here. *Options › Chase MIDI
    Notes* on (the default).
-3. **One MIDI track per route** (*View › Sound Library…* lists them: each part, and under it (+) its
-   extra patches such as "Solo Violin - Performance"):
+3. **One MIDI track per route**: *Mixer › Advanced Options… › Ableton Live › **Create Live Set…*** writes a
+   set with all of them, ready to open ([Create Live Set](#create-live-set)); a part added later: *Add missing
+   tracks…*. By hand, as a fallback (*View › Sound Library…* lists the routes: each part, and under it (+)
+   its extra patches such as "Solo Violin - Performance"):
    - Kontakt 8 with that patch, articulation switching "UACC & UI only", as in section 3 above;
    - **MuseScore Link before Kontakt** on the track (drag it to the left of Kontakt);
    - the track found either by *MIDI From* = the route's port and channel (as for playing through
@@ -221,6 +225,125 @@ Only real Live can show (to check first):
   first note after a switch), in playback and in *Export Audio/Video*;
 - chasing at a mid-song start sends the controllers in force;
 - MuseScore following Live stays in step over a long piece.
+
+## Create Live Set
+
+The owner, 2026-09-30, about the tracks above: "that's so many manual steps. is the creating MIDI track and
+renaming it, dragging in Kontakt 8, etc. possible to be automated?". MuseScore writes the Live Set itself.
+
+### How to use it
+
+1. Open the score. Play it once in MuseScore with the library's plug-in (or let the patches load at score open):
+   each patch's first load resaves its setup as Kontakt's own state, which Kontakt loads about 20 times faster
+   than a setup made from the `.nki` (CLAUDE.md › Load times). The report says how many patches were never loaded.
+2. *Mixer › Advanced Options… › Ableton Live › **Create Live Set…***. The file dialog offers
+   "<score title>.als" next to the score. A report lists the tracks, their devices and MIDI From, and what was
+   left out.
+3. Open it in Live 12 (*File › Open Live Set…*), save it where you like (Live may ask to save it in a project).
+4. *Live plays the score* (or *Play through Live*) as before: the device finds every track.
+5. **A part added later**: *Add missing tracks…* writes a small set with only the routes that have no track in
+   Live yet. In Live's browser, go to that file, unfold it and drag its tracks into your set. Which routes have a
+   track: the MuseScore Link device's report when it answers for this score with *Live plays the score* on
+   (each route's clip "no track"), else the linked set as last saved (the automation import's link; MIDI From or
+   the name, as the device looks), else all of them. The report says which.
+
+### What is in the set
+
+- **One MIDI track per sound-library route** (`SoundLib::routes`, in score order: each part's main patch, its extra
+  patches, its copies for other tunings), named as the device finds it: the part's name for its main patch,
+  "<part> – <patch>" for another patch, "<part> (2)" … for a copy for another tuning (`LiveSetWriter::trackName`,
+  the clip names without "MuseScore: "). One colour per part.
+- **MIDI From** = the route's port and channel ("MuseScore A", "Ch. 3"), when that MIDI output is set in
+  Preferences; else *All Ins* (Live plays the score all the same: the device finds the tracks by name; for *Play
+  through Live* set MIDI From by hand). *Monitor* Auto. MIDI To, audio: Live's defaults (Master).
+- **Devices**: the **MuseScore Link** device, then the library's plug-in (**Kontakt 8**) holding the patch:
+  - the device (a Max MIDI Effect) is referenced by path, as Live does: the copy in Live's **User Library**
+    (Live's `Library.cfg` names the folder; else `Documents/Ableton/User Library`; the usual
+    `Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd`, else anywhere in the library), else the one next
+    to MuseScore3Evo.exe. The report says which, and warns when the User Library's copy differs from the one that
+    comes with this MuseScore (an older device). Its saved *Port* is MuseScore's (`io/live/clipsPort`).
+  - Kontakt's state is the patch's setup exactly as MuseScore loads it (`SoundLibraryHost::setupState`): Kontakt's
+    own state when a load has resaved it, else made from the `.nki`; "UACC & UI only" (`$iooxo` 3) and **512
+    voices** as MuseScore sets them. Kontakt's controller state: what the setup holds (empty for Kontakt). The owner's
+    Live set confirmed the form: Live's `Vst3Preset/ProcessorState` is Kontakt's component state (an NI "hsin"
+    container whose size field is the whole blob's), `ControllerState` empty, `Uid` Fields.0-3 = Kontakt 8's class id
+    5653544E-694B386B-6F6E7461-6B742038 as signed 32-bit numbers.
+  - left out, with a line in the report: a patch without a setup (its `.nki` not found), a kit's own route (a kit
+    has no patch of its own: its drums are extra patches with tracks of their own), everything when MuseScore was
+    built without plug-in hosting (the tracks then have the device only).
+- **The song**: the score's first tempo (as *Live plays the score* plays it) and time signature. No clips (the
+  device writes them), no automation, no return tracks, 8 empty scenes, loop off. (EXT and Link are Live's settings,
+  not the set's: keep EXT off for *Live plays the score*.)
+
+### How it is written, and what it rests on
+
+`libmscore/livesetwriter.*` writes the XML and gzips it; `mscore/livesetexport.*` gathers the routes, the device and
+the states, and runs the dialog.
+
+- Live refuses a set it can't read ("The document could not be opened"). The format is Ableton's and undocumented,
+  so nothing is left out of its structure on a guess: every element Live 12.2 writes is written, in its order, with
+  Live's own default values, learned from the owner's two Live 12.2 sets (2026-09-30; `MinorVersion` 12.0_12203; kept
+  outside the repository) and written by hand in the code. A set generator on GitHub (iron-static's
+  `create_als.py`) had to add elements it had left out of tracks and mixers (Speaker, Sends, the 131
+  ControllerTargets …) before Live 12.2 opened its sets; DawVert writes every element too. What is left out is content: return
+  tracks (a set may have none: `SendsPre` and the tracks' `Sends` are then empty), clips, envelopes, the devices'
+  browser `SourceContext` (written empty, as Live writes it for a mixer), other devices.
+- Live's bookkeeping, kept consistent and checked before writing (`LiveSetWriter::validate`; nothing is written if it
+  fails): every *pointee* id (AutomationTarget, ModulationTarget, Pointee, the modulation targets, MidiControllers'
+  ControllerTargets) unique and below `NextPointeeId`; each track's MainSequencer and FreezeSequencer with one clip
+  slot per scene; a track's devices with different ids. Binary data upper-case hex, 40 bytes a line, as Live writes it.
+- Numbers learned: the time signature is (numerator − 1) + 99 × log2(denominator) (4/4 = 201; the tempo and time
+  signature each also as an automation with one event at −63072000, as Live keeps them); the device's saved data
+  is `{"Port" : [ 9001 ]}` as Max writes it; the file reference's `RelativePathType` 6 with a path relative to the
+  User Library (as the owner's set has it for the device there), 0 with the absolute path alone for a copy outside
+  it (unconfirmed); `OriginalCrc`: CRC-16 (polynomial 0x8005, start 0, no reflection) of the file's first 16 KiB,
+  the one CRC-16 of the usual ones that gives the owner's set's value (35326) for its device (49211 bytes, the
+  device of 6175e30), at a round length: one example only; Live finds the file by its path first.
+- MIDI From for one port and channel: `MidiIn/External.Dev:<port>/<channel − 1>`, upper "<port>", lower "Ch. n",
+  **by analogy** with how a Live 10 set writes a MIDI output to one port (`MidiOut/External.Dev:IAC Driver (Bus
+  1)/0`, "IAC Driver (Bus 1)", "Ch. 1"); the owner's sets only had *All Ins*. If Live shows the input as missing,
+  choose it once in Live; the tracks are found by name either way.
+
+### What is tested, and what only Live can show
+
+Tested here:
+- `tst_liveintegration` liveSetWrite: a two-part score's routes as tracks (names, MIDI From, colours), tempo 60 and
+  4/4, the device before Kontakt on each track, the states byte for byte (every byte value, a controller state too),
+  the device's file reference and saved port, Kontakt's `Uid`, the tempo and time signature (mixer and default
+  events), gzip; the automation import's reader reads it back (tracks, MIDI From, plug-ins, tempo) and would match
+  each track to its part; All Ins and a track without devices; `validate` catches a wrong `NextPointeeId`, a pointee
+  id twice, a clip slot missing, a truncated file; the time signature numbers, the CRC (CRC-16/UMTS's check value,
+  16 KiB), the track names = the clips' without "MuseScore: ". liveSetMissing: which routes have a track (MIDI From;
+  the part's name; "<part> – <patch>" with any dash; the patch alone on one track only; loose names).
+- `tst_soundlibrary` liveSetTestSynth: with a real VST 3 (the test synth): its class id from its module
+  (`Vst3Plugin::classInfo`, the words of its FUID as Live writes Kontakt's), its state taken apart
+  (`Vst3Plugin::splitState`); a part with three extra patches ("<part> – <patch>" tracks) and one on two tunings
+  ("(2)"), read back.
+- The generated set's element tree against the owner's two Live 12.2 sets (`tools/live/test/compare_als_skeleton.py
+  <generated> <Live's>`, run here, not in CI: it needs the owner's files): 1332 kinds of element compared (their
+  attributes and children in order), none differ; left out only the content listed above (return tracks' sends,
+  the browser contexts). A value-by-value diff against the owner's empty MIDI track, main track and settings:
+  differences only in names, colours, MIDI From, tempo and view state.
+- A MuseScore GUI build under Xvfb (the test synth as the library's plug-in, a User Library in a scratch home):
+  *Create Live Set…* offered "Strings.als", wrote 2 tracks with the device from the User Library and each part's
+  setup byte for byte; after linking a set with only the violin's track, *Add missing tracks…* wrote the cello's
+  alone and said it found the tracks from the linked set.
+
+Only real Live can show (to check first):
+- that Live 12.2 opens the set at all, and without a message about the set or a device;
+- that Kontakt restores each patch from the state (the right patch, "UACC & UI only", 512 voices) and how long a
+  full orchestra takes to open (resaved setups: Kontakt's own states, as when MuseScore loads them);
+- that the MuseScore Link device loads from the User Library path (else Live lists it as missing: *File Manager*
+  can locate it), and that its saved port comes back;
+- MIDI From = "MuseScore A" / "Ch. n" (the input's target form is unconfirmed);
+- dragging tracks from the *Add missing tracks* set in Live's browser into an open set brings their devices and
+  Kontakt's state along.
+
+### Open questions for the owner
+
+- Live asks where to save a set opened from outside a project: save it next to the score, or in a Live project?
+- The track colours: one per part, from a fixed list. By family (strings, woodwinds …) instead?
+- Return tracks (a reverb / delay like Live's default set): none, since SSO brings its own room. Wanted?
 
 ## Editing Live clips in MuseScore
 
@@ -424,6 +547,9 @@ do.
 - `libmscore/automation.{h,cpp}`: `Lane::extra`, `source()`, `readOnly()`, `replaceSource`.
 - `mscore/liveintegration.{h,cpp}`: the Mixer switch, the import, the link, the watcher.
 - `mscore/liveclips.{h,cpp}`: Live plays the score (`LiveClipsLink`, which owns the UDP socket for both).
+- `libmscore/livesetwriter.{h,cpp}`: Create Live Set, the writer (and `validate`); `mscore/livesetexport.{h,cpp}`: the
+  routes, the device, the states, the dialog. `tools/live/test/compare_als_skeleton.py`: a written set against one
+  Live saved.
 - `mscore/liveclipmodel.{h,cpp}`: editing Live clips: the import, the baseline, the diff, the messages;
   `mscore/liveclipedit.{h,cpp}`: the sessions, tabs and status line.
 - `tools/live/`: the device (`MuseScoreLink.js`, `make_device.py`) and its tests (`test/`).

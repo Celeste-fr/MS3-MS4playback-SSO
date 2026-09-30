@@ -61,6 +61,13 @@ class Vst3Plugin {
 
       QString name() const;
       QString path() const;
+      // the class load() would make, without making it (only the module is loaded; it stays loaded, as
+      // for load()): its name and its class id (FUID) as four 32-bit words, most significant byte first
+      // (as Ableton Live's sets write it: Kontakt 8 is 5653544E 694B386B 6F6E7461 6B742038)
+      static bool classInfo(const QString& path, QString* name, quint32 uid[4], QString* error = nullptr);
+      // a state() (MuseScore's setup file: "MSV3", version, the plug-in's name, the component's and the
+      // controller's state) taken apart
+      static bool splitState(const QByteArray& state, QString* name, QByteArray* component, QByteArray* controller);
 
       // audio thread
       // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament

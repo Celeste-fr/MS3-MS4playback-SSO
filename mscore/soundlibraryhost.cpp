@@ -11,6 +11,7 @@
 #include "soundlibraryhost.h"
 #include "liveclipedit.h"
 #include "liveclips.h"
+#include "livesetexport.h"
 #include "liveintegration.h"
 #include "libmscore/automation.h"
 #include "soundlibrarycheck.h"
@@ -2526,6 +2527,28 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                   LiveIntegration::LiveClipEditor::setEnabledSetting(on);
                   });
             v->addWidget(editClips);
+            // the set itself (livesetexport.h): one track per route, the device and the patch on each
+            QHBoxLayout* sets = new QHBoxLayout;
+            QPushButton* create = new QPushButton(tr("Create Live Set…"), liveBox);
+            create->setToolTip(tr("Writes a Live Set (.als) for this score: one MIDI track per sound-library route (each part's "
+                                  "patch, its extra patches and copies for other tunings), named as the MuseScore Link device "
+                                  "finds them, MIDI From = the route's port and channel, with the MuseScore Link device and "
+                                  "the library's plug-in holding the patch as MuseScore sets it up (UACC & UI only, 512 voices). "
+                                  "Tempo and time signature: the score's first."));
+            QPushButton* missing = new QPushButton(tr("Add missing tracks…"), liveBox);
+            missing->setToolTip(tr("Writes a small Live Set with only the routes that have no track in Live yet (from the "
+                                   "MuseScore Link device's report when it answers, else from the linked set): drag its tracks "
+                                   "into your set from Live's browser."));
+            sets->addWidget(create);
+            sets->addWidget(missing);
+            sets->addStretch();
+            v->addLayout(sets);
+            connect(create, &QPushButton::clicked, this, [this]() {
+                  LiveIntegration::createLiveSetDialog(_score, this, false);
+                  });
+            connect(missing, &QPushButton::clicked, this, [this]() {
+                  LiveIntegration::createLiveSetDialog(_score, this, true);
+                  });
             layout->addWidget(liveBox);
             LiveIntegration::LiveClipsLink* link = LiveIntegration::LiveClipsLink::instance();
             connect(_liveClips, &QCheckBox::toggled, this, [this, link](bool on) {
