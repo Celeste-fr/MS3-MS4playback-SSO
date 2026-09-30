@@ -95,11 +95,13 @@ class TestSoundLibrary : public QObject, public MTest
       void liveMidiControllers();
       void kontaktSetup();
       void kontaktScriptValues();
+      void kontaktMaxVoices();
       void kontaktSetupReal();
       void vst3Plugin();
       void vst3LoadTimes();
       void vst3LooseTitle();
       void vst3Render();
+      void vst3Settle();
       void articulationCheck();
       void scanPictures();
       void pluginDescribe();
@@ -1259,6 +1261,48 @@ void TestSoundLibrary::kontaktScriptValues()
       }
 
 //---------------------------------------------------------
+//   kontaktMaxVoices
+//    the instrument's voice limit (Kontakt's instrument header › Max) set in a state, where Kontakt
+//    keeps it (the program's VOICE_GROUPS, its "<instrument>" entry: the one field that changed in the
+//    Grand Piano's state when Max went from 256 to 512 in Kontakt's window); all else as it was
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktMaxVoices()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      QString error;
+      const QByteArray made = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings", { { "$iooxo", "3" } }, &error);
+      QVERIFY2(!made.isEmpty(), qPrintable(error));
+      QCOMPARE(maxVoices(nkiProgram(nki, nullptr)), 256);
+      QCOMPARE(maxVoices(slotProgram(made, nullptr)), 256);
+
+      int before = 0;
+      const QByteArray limited = withMaxVoices(made, 512, &error, &before);
+      QVERIFY2(!limited.isEmpty(), qPrintable(error));
+      QCOMPARE(before, 256);
+      const QByteArray program = slotProgram(limited, &error);
+      QCOMPARE(maxVoices(program), 512);
+      // all else as it was: the program's size, its script values, the sample list, the marker
+      QCOMPARE(program.size(), slotProgram(made, nullptr).size());
+      QCOMPARE(scriptValues(program), scriptValues(slotProgram(made, nullptr)));
+      QCOMPARE(samplePaths(limited, &error), samplePaths(made, &error));
+      QCOMPARE(presetTail(limited), presetTail(made));
+      // already so: the very bytes; back to 256: the program as made
+      QCOMPARE(withMaxVoices(limited, 512, &error, &before), limited);
+      QCOMPARE(before, 512);
+      QCOMPARE(slotProgram(withMaxVoices(limited, 256, &error), nullptr), slotProgram(made, nullptr));
+      // no program in the first slot: an error
+      QVERIFY(withMaxVoices(empty, 512, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
 //   kontaktSetupReal
 //    with the owner's files (skipped without them): SSO_NKI (Violins 1 - All techniques.nki),
 //    SSO_EMPTY (Kontakt 8.9's state with nothing loaded), SSO_SETUP (the owner's own setup of it,
@@ -1779,6 +1823,51 @@ void TestSoundLibrary::tuningLanes()
       QVERIFY2(std::fabs(back) < 6, qPrintable(QString("back to %1 cents").arg(back)));
       SoundLib::setCurrent(nullptr);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   vst3Settle
+//    a sampler's own script initialises once the plug-in's engine runs after a setup is set, and puts
+//    the patch's own values back (Kontakt's KSP, SSO: the mic levels of a score's Controllers… set at
+//    score open were lost that way, 2026-09-29). The test synth does it after MSTESTSYNTH_INIT_MS: a
+//    parameter set before it has run that long is lost, one set after settle() holds
+//---------------------------------------------------------
+
+static double rms(const std::vector<float>& b, int side);
+static double dB(double a, double b);
+
+void TestSoundLibrary::vst3Settle()
+      {
+      const int rate = 48000;
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      auto level = [rate](bool settle, double* since = nullptr) {
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error);
+            if (!p || !p->setState(p->state()))
+                  return -1.0;
+            if (settle)
+                  p->settle();
+            if (since)
+                  *since = p->secondsSinceState();
+            const long tone = p->parameterId("Tone");
+            if (tone < 0)
+                  return -1.0;
+            p->setParameter(unsigned(tone), 0.0);             // (20 % of its level)
+            std::vector<float> b(2 * size_t(rate / 2), 0.f);
+            p->midi(ME_NOTEON, 0, 60, 100);
+            p->process(rate / 2, b.data());
+            return rms(b, 0);
+            };
+      double since = 0;
+      const double lost = level(false);
+      const double held = level(true, &since);
+      qunsetenv("MSTESTSYNTH_INIT_MS");
+      QVERIFY(lost > 0.001);
+      QVERIFY(held > 0);
+      QVERIFY2(since >= Vst3Plugin::SETTLE_SECONDS, qPrintable(QString::number(since)));
+      QVERIFY2(std::fabs(dB(held, lost) - dB(0.2, 1.0)) < 0.5, qPrintable(QString("%1 dB").arg(dB(held, lost))));
+      // without the "script": set at once, it holds as well
+      QVERIFY2(std::fabs(dB(level(false), lost) - dB(0.2, 1.0)) < 0.5, "no MSTESTSYNTH_INIT_MS");
       }
 
 //---------------------------------------------------------

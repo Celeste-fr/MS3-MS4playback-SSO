@@ -84,6 +84,17 @@ class Vst3Plugin {
       // SoundLibraryHost loads on worker threads: soundlibraryhost.h, loadThreads; the instance is
       // then in no Vst3Synth slot and nothing else touches it meanwhile)
       bool setState(const QByteArray& state);
+      // a sampler's own script (Kontakt's KSP) initialises only once the plug-in's engine runs: until the
+      // plug-in has processed some audio after setState, SSO's patches say "INSTRUMENT NOT INITIALISED",
+      // and a parameter set meanwhile (a mic level: Controllers…) is lost when the script initialises and
+      // puts back the patch's own (2026-09-29, SSO's Grand Piano on the Windows VM: set after 12 ms of
+      // audio it is lost, after 50 ms it holds). settle: silence processed (and discarded) until the
+      // plug-in has run seconds since its last setState; not while process() runs elsewhere (GUI thread
+      // before the instance is in a Vst3Synth slot, or the exporting thread). secondsSinceState: how
+      // much it has run (any thread)
+      static constexpr double SETTLE_SECONDS = 1.0;
+      void settle(double seconds = SETTLE_SECONDS);
+      double secondsSinceState() const;
 
       // how long the last load() and setState() took, by step, in ms (load times.log, the load
       // times measurement: where a Kontakt instance's time goes)

@@ -35,11 +35,18 @@ def script(values, code=b"on init\n  {the script}\nend on\n"):
     return pchunk(0x06, b"\x00" + public)
 
 
+def voice_groups(max_voices=256):
+    """VOICE_GROUPS as Kontakt 8 keeps it: the instrument's own entry ("<instrument>": 3 bytes, its Max
+    voices, its voice stealing fade-out in ms), then voice groups (here none of note)."""
+    public = u16(0x60) + utf16("<instrument>") + b"\x01\x00\x01" + u32(max_voices) + u32(10) + u32(0xFFFFFFFF)
+    return pchunk(0x32, b"\x00" + public + bytes(16))
+
+
 def program(name, values, zones=((48, 59, 0), (60, 72, 1))):
     groups = pchunk(0x33, u32(1) + pstruct(0x9C, group_data("Long")))
     zl = pchunk(0x34, u32(len(zones)) + b"".join(
         u32(0) + pstruct(0x9A, zone_data(lo, hi, 1, 127, lo, f)) for lo, hi, f in zones))
-    kids = script([]) + script(values) + groups + zl
+    kids = script([]) + script(values) + voice_groups() + groups + zl
     return pstruct(0xAF, program_data(name), kids)
 
 

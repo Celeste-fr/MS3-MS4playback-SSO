@@ -227,6 +227,17 @@ and hand back `load times.log` (setups folder) too: the real score open with the
   technique switches: a setup per part with only the techniques its notation plays (`usedPatches` already
   knows them per patch), made with `KontaktSetup::withScriptValues` from Kontakt's own state.
 
+## Piano v3.7's missing notes (2026-09-29, branch `piano-v37-fixes`): fixed, checked on the Windows VM
+
+Measured with Kontakt 8 + SSO on the VM (see CLAUDE.md › Plugin hosting › A patch's own script, VERIFY.md ›
+With the real library). Causes: (1) the Grand Piano's 256 voices, too few once the score's mics are on
+(31-40 notes dropped in busy bars, the owner's e39fe815 export); (2) the patch's script initialised only at
+the first render or play, which then dropped the Controllers set at score open (so only the second render
+had the mics, and the drops); (3) bars 68-69 (a key struck while still sounding) was 7755d65, confirmed.
+Fixed: 512 voices for every Kontakt patch MuseScore sets up, and `Vst3Plugin::settle` after each load.
+The owner: listen to the clips handed over (bars 49-52, 59-62, 68-69) and to a live play of the piece with a
+build of this branch; say whether the mic mix sounds as set in Controllers… from the first play on.
+
 ## What the owner is doing now
 
 The fifth run (all 42 patches, scanned) is in: see `CLAUDE.md` › Tried by the owner. Steps 1, 2

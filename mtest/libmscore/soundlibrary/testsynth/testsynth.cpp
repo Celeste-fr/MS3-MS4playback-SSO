@@ -82,7 +82,10 @@ struct Voice {
 // MSTESTSYNTH_SETSTATE_MS  setState takes that long;
 // MSTESTSYNTH_STREAM_MS    then its "samples" load on a thread of its own for that long: notes started
 //                          meanwhile play nothing;
-// MSTESTSYNTH_STREAM_MB    and the process grows by that much meanwhile (freed with the instance)
+// MSTESTSYNTH_STREAM_MB    and the process grows by that much meanwhile (freed with the instance);
+// MSTESTSYNTH_INIT_MS      like a sampler's own script (Kontakt's KSP: SSO's patches), that initialises
+//                          once its engine has run that long after setState and puts the patch's own
+//                          values back: "Tone" set before then is lost (100 % again), set after it holds
 static int envInt(const char* name)
       {
       const char* v = std::getenv(name);
@@ -136,6 +139,7 @@ class Processor : public AudioEffect {
       ParamValue tone { 1.0 };
       ParamValue bend { 0.5 };      // MIDI pitch bend: ±2 semitones, as most samplers
       int current { 1 };            // the articulation notes start with
+      long initLeft { -1 };         // MSTESTSYNTH_INIT_MS: samples until its "script" initialises
       int roundRobin { 0 };
       std::map<int, Voice> voices;  // pitch -> voice
 
@@ -227,6 +231,11 @@ class Processor : public AudioEffect {
                               }
                         }
                   }
+            if (initLeft >= 0) {
+                  initLeft -= data.numSamples;
+                  if (initLeft < 0)
+                        tone = 1.0;           // (the patch's own)
+                  }
             const bool eventsOn = getEventInput(0) && getEventInput(0)->isActive();
             if (IEventList* events = eventsOn ? data.inputEvents : nullptr) {
                   for (int32 i = 0; i < events->getEventCount(); ++i) {
@@ -301,6 +310,8 @@ class Processor : public AudioEffect {
                   all.insert(all.end(), buf, buf + got);
             if (const int ms = envInt("MSTESTSYNTH_SETSTATE_MS"))
                   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+            const int initMs = envInt("MSTESTSYNTH_INIT_MS");
+            initLeft = initMs > 0 ? long(initMs * processSetup.sampleRate / 1000) : -1;
             if (all.size() >= 16 && std::memcmp(all.data() + 12, "hsin", 4) == 0) {
                   kontakt = all;
                   stream();

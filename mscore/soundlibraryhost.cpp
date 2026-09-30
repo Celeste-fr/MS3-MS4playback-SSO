@@ -571,8 +571,50 @@ static QByteArray importResaved(const SoundLib::Library& library, const SoundLib
       return QByteArray();
       }
 
+//---------------------------------------------------------
+//   kontaktMaxVoices
+//    the voice limit MuseScore gives every Kontakt patch it sets up (the instrument header's Max):
+//    the same for all, not an edit of the owner's in Kontakt's window. SSO's patches come with 256
+//    (the Grand Piano) or less; with the score's mic positions on (Controllers…) the Grand Piano needs
+//    more in Piano v3.7's busy bars: at 256 Kontakt dropped 31-40 notes of it (bars 7, 16, 21, 29,
+//    34, 49, 59-62, 64 …), at 512 none (2026-09-29, on the Windows VM; the owner: "just raise all
+//    voices to 512"). MS_KONTAKT_MAX_VOICES: another value, 0 the library's own (for comparing)
+//---------------------------------------------------------
+
+int SoundLibraryHost::kontaktMaxVoices()
+      {
+      if (qEnvironmentVariableIsSet("MS_KONTAKT_MAX_VOICES"))
+            return qEnvironmentVariableIntValue("MS_KONTAKT_MAX_VOICES");
+      return KONTAKT_MAX_VOICES;
+      }
+
 QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                         QString* error)
+      {
+      const QByteArray state = savedSetupState(library, patch, pluginPath, error);
+      const int maxVoices = kontaktMaxVoices();
+      if (state.isEmpty() || !makesSetups(library) || maxVoices <= 0)
+            return state;
+      // Kontakt's (the setups MuseScore makes from the .nki, and Kontakt's own state they are resaved as):
+      // its instrument's voice limit, as it loads (a setup file on disk stays as it was made or resaved)
+      QString name, err;
+      QByteArray component, controller;
+      if (!readState(state, &name, &component, &controller))
+            return state;
+      int before = -1;
+      const QByteArray limited = KontaktSetup::withMaxVoices(component, maxVoices, &err, &before);
+      if (limited.isEmpty() || before < 0) {
+            qWarning("Sound library: %s: its voice limit was not set (%s)", qPrintable(patch), qPrintable(err));
+            return state;
+            }
+      if (limited == component)
+            return state;
+      logTime(library, QString("%1: Max voices %2 (the patch has %3)").arg(patch).arg(maxVoices).arg(before));
+      return writeState(name, limited, controller);
+      }
+
+QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
+                                             QString* error)
       {
       QString dummy;
       if (!error)
@@ -733,6 +775,8 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library
             return false;
       if (p->setState(state)) {
             setupLoaded(p, library, patch, state, setupMs);
+            // its own script initialised now, before the part's controllers are set (Vst3Plugin::settle)
+            p->settle();
             return true;
             }
       if (error)
@@ -1045,6 +1089,12 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       t.start();
       if (loaded) {
             setupLoaded(pl->plugin.get(), library, pl->name, pl->state, pl->setupMs);
+            // its own script initialised before it goes into its slot and the part's controllers are set
+            // (Vst3Plugin::settle: Kontakt's engine runs only once the plug-in processes, and a live
+            // instance processes only from its first note on; until then SSO's patches were "NOT
+            // INITIALISED", and the controllers set at score open were lost when they initialised: a
+            // score's mic positions were heard only from the second play or export on)
+            pl->plugin->settle();
             if (threaded)
                   logTime(library, QString("%1: set on a worker thread, %2 ms from its start to done").arg(pl->name, ms(wall)));
             }

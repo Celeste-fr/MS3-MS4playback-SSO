@@ -90,6 +90,25 @@ exports, known bugs); strings, winds and brass through Kontakt are untried.
   Orchestra" --verify-out <folder>` (the events come from this build: say so if the export came from
   an older one).
 
+## With the real library (agents, since 2026-09-29)
+
+Agents can reach a Windows VM of the owner's with Kontakt 8 and SSO (access in the agents' own notes, not
+here). What was learned there about checking playback:
+- The render must be what the owner hears. Two of MuseScore's renders of the same score differed: the first
+  after loading (the patch's KSP script not yet initialised, the score's Controllers… lost when it did) and
+  every later one (the mics on, several voices per note, 31-40 notes dropped at the patch's 256-voice limit).
+  An export right after opening a score, and this tool's render, were the first kind and missed the bug; the
+  owner exports after playing. Both are one kind now (`Vst3Plugin::settle`, CLAUDE.md › Plugin hosting).
+  When a finding depends on what happened before, render twice (two exports in a row, or a play then an
+  export) and compare.
+- In the GUI, a play and an export can be driven without a person: a QML plug-in (enabled in
+  `plugins.xml`) that calls `cmd("play")` and `writeScore(curScore, path, "wav")`, started over OSC
+  (`io/osc/useRemoteControl`, `/plugin/<name>/<method>`); the session must be the console's (a
+  disconnected remote session has no audio device: play does nothing).
+- `--verify-audio` here on Linux checks such an export against the score's events.
+- Kontakt's state can be diffed before and after a change made in its window (`Save Kontakt's state for
+  diagnosis`, or a test host's getState): that is how Max voices was found.
+
 ## Testing here (Linux, no Kontakt)
 
 - `tools/playbackverify/try_with_testsynth.sh <build dir> <install dir> [work dir]`: the whole
