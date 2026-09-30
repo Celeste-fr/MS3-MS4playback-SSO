@@ -479,6 +479,17 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `MS_EXTRACT_TEST_CRASH` / `MS_EXTRACT_TEST_HANG=<patch>` now in `check()` too. Tried here with the test synth: a patch
   hanging every time (`MS_EXTRACT_HANG_MINUTES=1`) stopped twice and left out, the rest done, a second start timing only
   it.
+  **The owner's second run (build 254, 2026-09-30 07:29-07:47, 17 minutes, no hang)**: 96 patches timed (the other 63 are
+  kits, percussion and patches no notation plays), kept as `tools/soundlibraries/sso_articulation_timing.json`
+  (`timing_from_check.py`). Kontakt offline renders a patch's notes in about a second; the first run's minutes were the
+  legato analysis on patches without legato. Repeatable: Violins 1's numbers are the first run's to the 5 ms. Found:
+  held notes at full level after 175 ms (median; 20-1540: Violas 305, Flautando / Sul Tasto up to 1 s), brass and
+  woodwinds 60-120 ms; releases 855 ms (median); shorts' bodies (20 dB) 265-2670 ms, median 1 s (the hall's ring is in
+  the recordings). **Legato (the 42 Performance patches): the second note's pitch arrives 70-430 ms after its note-on
+  (median 185), mostly in one step (a recorded slur, not a glide), with a 4-22 dB dip; velocity 20 / 64 / 110 makes
+  little or no difference in most patches** (Basses, Celli, Solo Violin 2, Flute Solo the exceptions). So a slurred
+  note sounds its pitch that late: playing slurred notes earlier by about that much (per patch) would put them in time;
+  not done. MuseScore crashed as it closed (c000000d, after the zip; the supervisor logs it and goes on).
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,
