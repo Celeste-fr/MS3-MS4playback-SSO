@@ -82,13 +82,13 @@ class Writer {
       void raw(const QByteArray& line) { indent(); _b.append(line); _b.append("\r\n"); }
       void open(const char* tag, const QByteArray& attrs = QByteArray())
             {
-            raw(QByteArray("<") + tag + (attrs.isEmpty() ? "" : " " + attrs) + ">");
+            raw(QByteArray("<") + tag + (attrs.isEmpty() ? QByteArray() : " " + attrs) + ">");
             ++_depth;
             }
       void close(const char* tag) { --_depth; raw(QByteArray("</") + tag + ">"); }
       void empty(const char* tag, const QByteArray& attrs = QByteArray())
             {
-            raw(QByteArray("<") + tag + " " + (attrs.isEmpty() ? "" : attrs + " ") + "/>");
+            raw(QByteArray("<") + tag + " " + (attrs.isEmpty() ? QByteArray() : attrs + " ") + "/>");
             }
       void value(const char* tag, const QString& v) { empty(tag, "Value=\"" + esc(v) + "\""); }
       void value(const char* tag, const char* v) { value(tag, QString::fromUtf8(v)); }
