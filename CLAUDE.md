@@ -547,6 +547,13 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   so every patch was measured again; the same 1804 sounds, every curve point the same to 0.0 dB (Kontakt offline, each
   patch freshly loaded, is exactly repeatable), now with each note's attack salience and rise (`attack`, `riseMs`, kept
   in `sso_sound_dynamics.json`). A resume needs the earlier runs' folders in Documents/MuseScore Sound Library Check.
+  **Timing of every sound (run 267 build, 2026-09-30 16:05-16:41, 36 minutes, no crash or hang)**: all 700 patches,
+  1804 sounds, kept as `sso_articulation_timing.json` (was 96 patches). The 96 timed before came out the same (median
+  0 ms, 90 % 0 ms, at most 170 ms). Silent: the same 7 as in the dynamics. Held notes at full level after 220 ms
+  (median; strings 150-300, woodwinds and brass 70-145), releases 890 ms, shorts' bodies 850 ms (75-4250), drum hits full
+  after 25 ms, bodies 740 ms. Legato measured on the 42 Performance patches (84 transitions per velocity, as before);
+  not on Horn Solo / Horns a2 - Legato and Oboe Principal - Total Performance (no map articulation named legato: their
+  one sound was timed, not a slur).
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

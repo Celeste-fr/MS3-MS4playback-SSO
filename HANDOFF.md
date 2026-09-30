@@ -44,10 +44,9 @@ All numbers are in `tools/soundlibraries/` (see CLAUDE.md for how each was measu
   Tutti - Low Wood String Stab have none); **pitch bend** on all 700. Done, apart from those 2 links.
 - **Dynamics curves**: every sound of all 700 patches (1804: articulations, 504 drum hits, one-sound patches;
   `sso_sound_dynamics.json`, build 261's run, 2026-09-30). Done.
-- **Timing and legato**: 96 patches (the mapped ones a notation plays); the every-sound timing run was stopped after 87 of
-  700 (the owner, 2026-09-30). To do: `Measure what's left of SSO in background.bat` (the dynamics step ends at once, the
-  timing skips the 87), then `timing_from_check.py` on the zips and on the stopped run's folder (`… 2026-09-30 1134`,
-  not zipped).
+- **Timing and legato**: every sound of all 700 patches (`sso_articulation_timing.json`, run 267's build, 2026-09-30).
+  Done, but for the slur transitions of Horn Solo - Legato, Horns a2 - Legato and Oboe Principal - Total Performance
+  (timed as one sound: the run measures a slur only on an articulation whose first technique is legato).
 - **Parameters** measured at 0 and 1 only, not the curve between.
 
 ## Where things are
