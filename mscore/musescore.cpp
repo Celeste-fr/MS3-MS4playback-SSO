@@ -139,6 +139,9 @@
 #include "soundlibrarycheck.h"
 #include "soundlibraryloadtimes.h"
 #include "playbackverify.h"
+#include "liveequivalence.h"
+#include "livesetexport.h"
+#include "libmscore/livesetwriter.h"
 #include <QLockFile>
 #include <atomic>
 #include <map>
@@ -269,6 +272,12 @@ static QString verifyAudio;                // --verify-audio
 static QString verifyLibrary;              // --verify-library
 static bool verifyWav = false;             // --verify-wav
 static bool verifyShareable = false;       // --verify-shareable
+static bool liveSetMode = false;           // --create-live-set / --live-equivalence (a score's Live Set, headless)
+static QString liveSetOut;                 // --create-live-set <file.als>
+static QString liveEquivalenceOut;         // --live-equivalence <folder>
+static QString liveSetReadback;            // --live-set-readback <file.als>
+static bool liveEquivalenceWav = false;    // --live-equivalence-wav
+static bool liveEquivalenceStrict = false; // --live-equivalence-strict: a deterministic plug-in's thresholds
 static bool startWithNewScore = false;
 double guiScaling = 0.0;
 static double userDPI = 0.0;
@@ -2596,7 +2605,7 @@ MuseScore::MuseScore()
       Workspace::addMenuAndString(menuHelp,        "menu-help");
       Workspace::addMenuAndString(menuTours,       "menu-tours");
 
-      if (!extractMode && !verifyMode)    // (the background extract writes nothing of the working MuseScore's)
+      if (!extractMode && !verifyMode && !liveSetMode)    // (the background extract writes nothing of the working MuseScore's)
             Workspace::writeGlobalMenuBar(mb);
 
       if (!MScore::noGui) {
@@ -4847,8 +4856,98 @@ static bool verifyInBackground(const QStringList& argv)
       return !folder.isEmpty();
       }
 
+//---------------------------------------------------------
+//   liveSetInBackground
+//    MuseScore --create-live-set <file.als> <score> [--verify-library <library>]: Create Live Set without a window
+//    (the Live Set the Mixer's Advanced Options write, and its report on the console);
+//    MuseScore --live-equivalence <folder> <score> [--live-equivalence-wav] [--live-equivalence-strict]
+//    [--verify-library <library>]: Live against MuseScore (liveequivalence.h): report.txt / report.json in the folder.
+//    Both with the working MuseScore's setups and settings (the library, its plug-in, MIDI outputs A-D)
+//---------------------------------------------------------
+
+static bool liveSetInBackground(const QStringList& argv)
+      {
+      auto log = [](const QString& line) { fprintf(stderr, "%s\n", qPrintable(line)); };
+      if (argv.isEmpty() && liveSetReadback.isEmpty()) {
+            log("--create-live-set / --live-equivalence: which score?");
+            return false;
+            }
+      QString path = verifyLibrary;
+      if (!path.isEmpty() && !QFileInfo::exists(path))
+            path = mscoreGlobalShare + "soundlibraries/" + verifyLibrary + ".xml";
+      if (path.isEmpty()) {
+            path = preferences.getString(PREF_IO_SOUNDLIBRARY);
+            if (path.isEmpty())
+                  path = soundLibraryPath();
+            }
+      QString error;
+      std::shared_ptr<const SoundLib::Library> library = path.isEmpty() ? nullptr : SoundLib::Library::load(path, &error);
+      if (!library) {
+            log(QString("no sound library (%1)").arg(error.isEmpty() ? verifyLibrary : error));
+            return false;
+            }
+      SoundLib::setCurrent(library);
+      SoundLibraryHost::loadCalibration();
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
+            return l && SoundLibraryHost::hasSetup(*l, li.name);
+            });
+      std::unique_ptr<MasterScore> score(argv.isEmpty() ? nullptr : mscore->readScore(argv[0]));
+      if (!score && (!liveSetOut.isEmpty() || !liveEquivalenceOut.isEmpty())) {
+            log("cannot read " + (argv.isEmpty() ? QString("the score") : argv[0]));
+            return false;
+            }
+      if (score)
+            score->rebuildMidiMapping();
+      bool ok = true;
+#ifdef Q_OS_WIN
+      DialogWatch watch;
+#endif
+      if (!liveSetOut.isEmpty()) {
+            LiveIntegration::LiveSetPlan plan;
+            if (!LiveIntegration::planLiveSet(score.get(), *library, false, &plan, &error)
+                || !LiveSetWriter::write(liveSetOut, plan.spec, &error)) {
+                  log(error);
+                  ok = false;
+                  }
+            else {
+                  const QString report = LiveIntegration::reportText(plan, liveSetOut, false);
+                  log(report);
+                  QFile f(liveSetOut + ".txt");       // (the console isn't seen on Windows)
+                  if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+                        f.write(report.toUtf8());
+                  }
+            }
+      if (!liveSetReadback.isEmpty()) {
+            const LiveEquivalence::ReadBack rb = LiveEquivalence::readBack(liveSetReadback, SoundLibraryHost::pluginPath(*library, &error));
+            const QString text = LiveEquivalence::readBackText(rb);
+            log(text);
+            QFile f(liveSetReadback + " readback.txt");
+            if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+                  f.write(text.toUtf8());
+            ok = ok && rb.error.isEmpty();
+            }
+      if (!liveEquivalenceOut.isEmpty()) {
+            LiveEquivalence::Options o;
+            std::unique_ptr<MasterSynthesizer> probe(synthesizerFactory());
+            probe->init();
+            o.state = probe->state();
+            probe.reset();
+            o.thresholds.roundRobins = !liveEquivalenceStrict;
+            const LiveEquivalence::Result r = LiveEquivalence::compare(score.get(), *library, o, log);
+            if (!LiveEquivalence::write(r, o.thresholds, liveEquivalenceOut, liveEquivalenceWav, &error))
+                  log(error);
+            log(LiveEquivalence::reportText(r, o.thresholds).section("\nThe set", 0, 0));
+            ok = ok && r.error.isEmpty() && r.passed;
+            }
+      return ok;
+      }
+
 static bool processNonGui(const QStringList& argv)
       {
+      if (liveSetMode)
+            return liveSetInBackground(argv);
       if (verifyMode)
             return verifyInBackground(argv);
       if (extractMode)
@@ -8846,6 +8945,17 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("verify-wav", "Use with --verify-playback: also keep the full renders"));
       parser.addOption(QCommandLineOption("verify-shareable", "Use with --verify-playback: only report.json and summary.txt, no "
                                           "audio clips and no lists of every note (a report on your own scores to post)"));
+      parser.addOption(QCommandLineOption("create-live-set", "Write the score's Ableton Live Set (Create Live Set) without a "
+                                          "window; the score follows (LIVE.md)", "file.als"));
+      parser.addOption(QCommandLineOption("live-equivalence", "Compare the score's playback through the Live Set and its clips "
+                                          "with MuseScore's own (liveequivalence.h); the score follows; the report goes to the "
+                                          "folder", "folder"));
+      parser.addOption(QCommandLineOption("live-set-readback", "Load each plug-in state of a Live Set into the library's "
+                                          "plug-in and read back the parameters Live's panel lists (with --create-live-set: "
+                                          "the set it wrote)", "file.als"));
+      parser.addOption(QCommandLineOption("live-equivalence-wav", "Use with --live-equivalence: also write both renders"));
+      parser.addOption(QCommandLineOption("live-equivalence-strict", "Use with --live-equivalence: a deterministic "
+                                          "plug-in's thresholds (the whole render must match)"));
       parser.addOption(QCommandLineOption({"E", "install-extension"}, "Install an extension, load soundfont as default unless -e is passed too", "extension file"));
       parser.addOption(QCommandLineOption(      "save-online", "Upload score(s) to their source URL. Replaces existing online score(s)."));
       parser.addOption(QCommandLineOption(      "score-media", "Export all media (excepting mp3) for a given score in a single JSON file and print it to stdout"));
@@ -8937,6 +9047,15 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             verifyLibrary = parser.value("verify-library");
             verifyWav = parser.isSet("verify-wav");
             verifyShareable = parser.isSet("verify-shareable");
+            }
+      if ((liveSetMode = parser.isSet("create-live-set") || parser.isSet("live-equivalence") || parser.isSet("live-set-readback"))) {
+            MScore::noGui = true;
+            liveSetOut = parser.value("create-live-set");
+            liveSetReadback = parser.value("live-set-readback");
+            liveEquivalenceOut = parser.value("live-equivalence");
+            liveEquivalenceWav = parser.isSet("live-equivalence-wav");
+            liveEquivalenceStrict = parser.isSet("live-equivalence-strict");
+            verifyLibrary = parser.value("verify-library");
             }
       if (parser.isSet("E")) {
             MScore::noGui = true;
@@ -9099,7 +9218,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
 
       QStringList argv = parser.positionalArguments();
 
-      if (app && !converterMode && !pluginMode && !extractMode && !verifyMode) {
+      if (app && !converterMode && !pluginMode && !extractMode && !verifyMode && !liveSetMode) {
             if (!argv.isEmpty()) {
                   int ok = true;
                   for (const QString& message : qAsConst(argv)) {
