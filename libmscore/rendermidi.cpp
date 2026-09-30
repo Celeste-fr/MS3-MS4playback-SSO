@@ -2157,8 +2157,16 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                   }
             ++i;
             }
-      for (const auto& c : copies)
-            events->insert(c);
+      // before the notes at their tick, as the main patch's controllers and switches are (an extra patch's note at
+      // a new dynamic started at the old one: Live's carriers after it, hosted up to the plug-in's order in a block),
+      // in their own order
+      for (const auto& c : copies) {
+            auto at = events->lower_bound(c.first);
+            while (at != events->end() && at->first == c.first
+                   && !(at->second.type() == ME_NOTEON && at->second.velo() > 0 && !at->second.librarySwitch()))
+                  ++at;
+            events->insert(at, c);
+            }
       libraryPitchBends(chunk, events);
       }
 
