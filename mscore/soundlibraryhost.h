@@ -155,8 +155,15 @@ class SoundLibraryHost : public QObject {
       static QString nkiPath(const SoundLib::Library& library, const QString& patch);
       static const SoundLib::LibInstrument* findPatch(const SoundLib::Library& library, const QString& name);
       static QByteArray setupId(const SoundLib::Library& library, const QString& patch);  // changes with its setup
+      // the voice limit MuseScore gives every Kontakt patch it sets up (setupState): 512, or
+      // MS_KONTAKT_MAX_VOICES (0: the patch's own)
+      static constexpr int KONTAKT_MAX_VOICES = 512;
+      static int kontaktMaxVoices();
       static QByteArray setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                    QString* error = nullptr);            // made first when needed
+      // (the setup as made or resaved, before setupState sets the voice limit)
+      static QByteArray savedSetupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
+                                        QString* error);
       static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
                             const QString& pluginPath, QString* error = nullptr);
       // after a setup was set on p (loadSetup does both): load times.log, and a setup made from the

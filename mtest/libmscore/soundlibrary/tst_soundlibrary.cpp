@@ -95,6 +95,7 @@ class TestSoundLibrary : public QObject, public MTest
       void liveMidiControllers();
       void kontaktSetup();
       void kontaktScriptValues();
+      void kontaktMaxVoices();
       void kontaktSetupReal();
       void vst3Plugin();
       void vst3LoadTimes();
@@ -1255,6 +1256,48 @@ void TestSoundLibrary::kontaktScriptValues()
       QCOMPARE(withScriptValues(made, { { "$none", "1" } }, &error, &set), made);
       QCOMPARE(set, 0);
       QVERIFY(withScriptValues(empty, { { "$zdiqz", "1" } }, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
+//   kontaktMaxVoices
+//    the instrument's voice limit (Kontakt's instrument header › Max) set in a state, where Kontakt
+//    keeps it (the program's VOICE_GROUPS, its "<instrument>" entry: the one field that changed in the
+//    Grand Piano's state when Max went from 256 to 512 in Kontakt's window); all else as it was
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktMaxVoices()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      QString error;
+      const QByteArray made = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings", { { "$iooxo", "3" } }, &error);
+      QVERIFY2(!made.isEmpty(), qPrintable(error));
+      QCOMPARE(maxVoices(nkiProgram(nki, nullptr)), 256);
+      QCOMPARE(maxVoices(slotProgram(made, nullptr)), 256);
+
+      int before = 0;
+      const QByteArray limited = withMaxVoices(made, 512, &error, &before);
+      QVERIFY2(!limited.isEmpty(), qPrintable(error));
+      QCOMPARE(before, 256);
+      const QByteArray program = slotProgram(limited, &error);
+      QCOMPARE(maxVoices(program), 512);
+      // all else as it was: the program's size, its script values, the sample list, the marker
+      QCOMPARE(program.size(), slotProgram(made, nullptr).size());
+      QCOMPARE(scriptValues(program), scriptValues(slotProgram(made, nullptr)));
+      QCOMPARE(samplePaths(limited, &error), samplePaths(made, &error));
+      QCOMPARE(presetTail(limited), presetTail(made));
+      // already so: the very bytes; back to 256: the program as made
+      QCOMPARE(withMaxVoices(limited, 512, &error, &before), limited);
+      QCOMPARE(before, 512);
+      QCOMPARE(slotProgram(withMaxVoices(limited, 256, &error), nullptr), slotProgram(made, nullptr));
+      // no program in the first slot: an error
+      QVERIFY(withMaxVoices(empty, 512, &error).isEmpty());
       QVERIFY(!error.isEmpty());
       }
 

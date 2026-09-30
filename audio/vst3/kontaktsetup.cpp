@@ -10,6 +10,8 @@
 
 #include "kontaktsetup.h"
 
+#include <functional>
+
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -1072,14 +1074,15 @@ int sampleListVersion(const QByteArray& component)
       return -1;
       }
 
-QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& set, QString* error,
-                            int* valuesSet)
+namespace {
+
+// a state's first slot's program, edited by edit (true: changed), everything else kept byte for byte;
+// empty with *error when the state has no program there. *changed: whether edit changed it (if not,
+// the very bytes come back)
+QByteArray editSlotProgram(const QByteArray& component, const std::function<bool(QByteArray&)>& edit, QString* error,
+                           bool* changed)
       {
-      QString dummy;
-      if (!error)
-            error = &dummy;
-      if (valuesSet)
-            *valuesSet = 0;
+      *changed = false;
       Item root;
       Preset preset;
       std::vector<PChunk> top;
@@ -1088,7 +1091,6 @@ QByteArray withScriptValues(const QByteArray& component, const std::map<QString,
                   *error = "Kontakt's state: its preset data could not be read";
             return QByteArray();
             }
-      int count = 0;
       bool found = false;
       for (PChunk& t : top) {
             if (t.id != BANK)
@@ -1110,7 +1112,9 @@ QByteArray withScriptValues(const QByteArray& component, const std::map<QString,
                   for (PChunk& c : ckids) {
                         if (c.id != PROGRAM_LIST || c.body.size() <= 4)
                               continue;
-                        c.body = c.body.left(4) + applyValues(c.body.mid(4), set, &count);
+                        QByteArray program = c.body.mid(4);
+                        *changed = edit(program);
+                        c.body = c.body.left(4) + program;
                         found = true;
                         break;
                         }
@@ -1127,13 +1131,112 @@ QByteArray withScriptValues(const QByteArray& component, const std::map<QString,
             *error = "no program in the first slot";
             return QByteArray();
             }
-      if (valuesSet)
-            *valuesSet = count;
-      if (!count)
-            return component;             // (nothing set: the very bytes)
+      if (!*changed)
+            return component;             // (nothing changed: the very bytes)
       preset.set(join(top));
       rebuild(root);
       return root.toBytes();
+      }
+
+//---------------------------------------------------------
+//   the instrument's voice limit (Instrument header › Max): in the program's VOICE_GROUPS (0x32,
+//   unstructured: 0, then its public data): u16, the instrument's own entry, named "<instrument>"
+//   (u32 length, UTF-16), 3 bytes, u32 Max voices, u32 its voice stealing fade-out (ms), …, then the
+//   voice groups. Found 2026-09-29: Kontakt's state of SSO's Grand Piano with Max changed in Kontakt's
+//   window from 256 to 512 differs from the one before in that field only
+//---------------------------------------------------------
+
+const quint16 VOICE_GROUPS = 0x32;
+
+int maxVoicesOffset(const QByteArray& pub)
+      {
+      static const QByteArray name = QByteArray::fromRawData(reinterpret_cast<const char*>(u"<instrument>"), 24);
+      if (pub.size() < 6 + 24 + 3 + 8 || get32(pub, 2) != 12 || pub.mid(6, 24) != name)
+            return -1;
+      const int at = 6 + 24 + 3;
+      const quint32 v = get32(pub, at);
+      return v >= 1 && v <= 100000 ? at : -1;
+      }
+
+// the program's voice limit set to maxVoices (true: changed); *before: what it was (-1: none found)
+bool setMaxVoices(QByteArray& program, int maxVoices, int* before)
+      {
+      *before = -1;
+      Struct st;
+      std::vector<PChunk> kids;
+      if (!st.read(program) || !chunks(st.kids, kids))
+            return false;
+      for (PChunk& k : kids) {
+            if (k.id != VOICE_GROUPS || k.body.isEmpty() || k.body.at(0) != 0)
+                  continue;
+            QByteArray pub = k.body.mid(1);
+            const int at = maxVoicesOffset(pub);
+            if (at < 0)
+                  return false;
+            *before = int(get32(pub, at));
+            if (*before == maxVoices)
+                  return false;
+            pub.replace(at, 4, le32(quint32(maxVoices)));
+            k.body = QByteArray(1, 0) + pub;
+            st.kids = join(kids);
+            program = st.body();
+            return true;
+            }
+      return false;
+      }
+
+} // namespace
+
+QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& set, QString* error,
+                            int* valuesSet)
+      {
+      QString dummy;
+      if (!error)
+            error = &dummy;
+      if (valuesSet)
+            *valuesSet = 0;
+      int count = 0;
+      bool changed = false;
+      const QByteArray out = editSlotProgram(component, [&](QByteArray& program) {
+            program = applyValues(program, set, &count);
+            return count > 0;
+            }, error, &changed);
+      if (valuesSet)
+            *valuesSet = count;
+      return out;
+      }
+
+QByteArray withMaxVoices(const QByteArray& component, int maxVoices, QString* error, int* before)
+      {
+      QString dummy;
+      if (!error)
+            error = &dummy;
+      int was = -1;
+      bool changed = false;
+      const QByteArray out = editSlotProgram(component, [&](QByteArray& program) {
+            return setMaxVoices(program, maxVoices, &was);
+            }, error, &changed);
+      if (before)
+            *before = was;
+      if (!out.isEmpty() && was < 0)
+            *error = "the program has no voice limit where Kontakt keeps it";
+      return out;
+      }
+
+int maxVoices(const QByteArray& program)
+      {
+      Struct st;
+      std::vector<PChunk> kids;
+      if (!st.read(program) || !chunks(st.kids, kids))
+            return -1;
+      for (const PChunk& k : kids) {
+            if (k.id != VOICE_GROUPS || k.body.isEmpty() || k.body.at(0) != 0)
+                  continue;
+            const QByteArray pub = k.body.mid(1);
+            const int at = maxVoicesOffset(pub);
+            return at < 0 ? -1 : int(get32(pub, at));
+            }
+      return -1;
       }
 
 QStringList samplePaths(const QByteArray& component, QString* error)

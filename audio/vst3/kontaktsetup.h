@@ -68,6 +68,13 @@ int sampleListVersion(const QByteArray& component);
 QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& values, QString* error,
                             int* valuesSet = nullptr);
 
+// the instrument's voice limit (Kontakt's instrument header › Max voices): a state with its first slot's
+// program's limit set to maxVoices, everything else kept (the very bytes when it already is); *before:
+// what it was (-1, and *error, when the program has none where Kontakt keeps it: the state comes back
+// unchanged). Empty with *error when the state has no program in its first slot
+QByteArray withMaxVoices(const QByteArray& component, int maxVoices, QString* error, int* before = nullptr);
+int maxVoices(const QByteArray& program);       // a program's (slotProgram, nkiProgram); -1: not found
+
 } // namespace KontaktSetup
 } // namespace Ms
 #endif
