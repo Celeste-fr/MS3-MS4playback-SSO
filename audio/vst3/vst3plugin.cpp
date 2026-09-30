@@ -13,6 +13,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <map>
@@ -310,6 +311,7 @@ class Vst3PluginPrivate {
       std::vector<float> scratch;
       bool offline { false };
       bool active { false };
+      std::atomic<long long> sinceState { 0 };      // frames processed since the last setState
       HostProcessData data;
       Steinberg::Vst::EventList events { 512 };
       ParameterChanges inChanges { 512 };
@@ -744,6 +746,7 @@ void Vst3Plugin::processDirect(int frames, float* buffer)
             d->data.outputParameterChanges = &d->outChanges;
             d->data.processContext = &d->context;
             d->processor->process(d->data);
+            d->sinceState += n;
             d->context.projectTimeSamples += n;
             d->events.clear();
             d->inChanges.clearQueue();
@@ -887,6 +890,7 @@ bool Vst3Plugin::setState(const QByteArray& state)
             return ms;
             };
       d->times.component = d->times.controllerComponent = d->times.controller = d->times.mapping = 0;
+      d->sinceState = 0;
       {
             IPtr<MemoryStream> s = owned(new MemoryStream(componentState.data(), componentState.size()));
             const tresult r = d->component->setState(s);
@@ -908,6 +912,28 @@ bool Vst3Plugin::setState(const QByteArray& state)
       d->times.mapping = lap();
       d->titleIndexValid = false;
       return true;
+      }
+
+//---------------------------------------------------------
+//   settle
+//---------------------------------------------------------
+
+void Vst3Plugin::settle(double seconds)
+      {
+      if (!d->active || d->sampleRate <= 0)
+            return;
+      const long long target = (long long)(seconds * d->sampleRate);
+      std::vector<float> scratch;
+      while (d->sinceState < target) {
+            const int n = int(std::min<long long>(std::min(d->maxBlock, 1024), target - d->sinceState));
+            scratch.assign(size_t(2 * n), 0.f);
+            processDirect(n, scratch.data());
+            }
+      }
+
+double Vst3Plugin::secondsSinceState() const
+      {
+      return d->sampleRate > 0 ? double(d->sinceState) / d->sampleRate : 0.0;
       }
 
 //---------------------------------------------------------

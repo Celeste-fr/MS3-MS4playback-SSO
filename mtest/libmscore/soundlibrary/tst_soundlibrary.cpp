@@ -101,6 +101,7 @@ class TestSoundLibrary : public QObject, public MTest
       void vst3LoadTimes();
       void vst3LooseTitle();
       void vst3Render();
+      void vst3Settle();
       void articulationCheck();
       void scanPictures();
       void pluginDescribe();
@@ -1822,6 +1823,51 @@ void TestSoundLibrary::tuningLanes()
       QVERIFY2(std::fabs(back) < 6, qPrintable(QString("back to %1 cents").arg(back)));
       SoundLib::setCurrent(nullptr);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   vst3Settle
+//    a sampler's own script initialises once the plug-in's engine runs after a setup is set, and puts
+//    the patch's own values back (Kontakt's KSP, SSO: the mic levels of a score's Controllers… set at
+//    score open were lost that way, 2026-09-29). The test synth does it after MSTESTSYNTH_INIT_MS: a
+//    parameter set before it has run that long is lost, one set after settle() holds
+//---------------------------------------------------------
+
+static double rms(const std::vector<float>& b, int side);
+static double dB(double a, double b);
+
+void TestSoundLibrary::vst3Settle()
+      {
+      const int rate = 48000;
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      auto level = [rate](bool settle, double* since = nullptr) {
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error);
+            if (!p || !p->setState(p->state()))
+                  return -1.0;
+            if (settle)
+                  p->settle();
+            if (since)
+                  *since = p->secondsSinceState();
+            const long tone = p->parameterId("Tone");
+            if (tone < 0)
+                  return -1.0;
+            p->setParameter(unsigned(tone), 0.0);             // (20 % of its level)
+            std::vector<float> b(2 * size_t(rate / 2), 0.f);
+            p->midi(ME_NOTEON, 0, 60, 100);
+            p->process(rate / 2, b.data());
+            return rms(b, 0);
+            };
+      double since = 0;
+      const double lost = level(false);
+      const double held = level(true, &since);
+      qunsetenv("MSTESTSYNTH_INIT_MS");
+      QVERIFY(lost > 0.001);
+      QVERIFY(held > 0);
+      QVERIFY2(since >= Vst3Plugin::SETTLE_SECONDS, qPrintable(QString::number(since)));
+      QVERIFY2(std::fabs(dB(held, lost) - dB(0.2, 1.0)) < 0.5, qPrintable(QString("%1 dB").arg(dB(held, lost))));
+      // without the "script": set at once, it holds as well
+      QVERIFY2(std::fabs(dB(level(false), lost) - dB(0.2, 1.0)) < 0.5, "no MSTESTSYNTH_INIT_MS");
       }
 
 //---------------------------------------------------------

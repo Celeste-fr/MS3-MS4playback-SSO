@@ -771,6 +771,8 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library
             return false;
       if (p->setState(state)) {
             setupLoaded(p, library, patch, state, setupMs);
+            // its own script initialised now, before the part's controllers are set (Vst3Plugin::settle)
+            p->settle();
             return true;
             }
       if (error)
@@ -1083,6 +1085,12 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       t.start();
       if (loaded) {
             setupLoaded(pl->plugin.get(), library, pl->name, pl->state, pl->setupMs);
+            // its own script initialised before it goes into its slot and the part's controllers are set
+            // (Vst3Plugin::settle: Kontakt's engine runs only once the plug-in processes, and a live
+            // instance processes only from its first note on; until then SSO's patches were "NOT
+            // INITIALISED", and the controllers set at score open were lost when they initialised: a
+            // score's mic positions were heard only from the second play or export on)
+            pl->plugin->settle();
             if (threaded)
                   logTime(library, QString("%1: set on a worker thread, %2 ms from its start to done").arg(pl->name, ms(wall)));
             }

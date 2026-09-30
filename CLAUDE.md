@@ -674,7 +674,7 @@ attack not yet confirmed by ear.
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
-  `liveMidiControllers`). All pass (43, 3 skipped without the owner's files).
+  `liveMidiControllers`). All pass (46, 3 skipped without the owner's files; `vst3Settle`, `kontaktMaxVoices` 2026-09-29).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order
@@ -779,6 +779,28 @@ macOS.
   the export: memory.** With 40 GB at 89 %, the owner's playback crackled at start and stop;
   Kontakt's *Options › Memory › Override instrument's preload size* at 30 kB fixed it. Suggest that
   first when the owner reports crackles or a slow load.
+- **A patch's own script, and its voice limit** (branch `piano-v37-fixes`, 2026-09-29; the owner's Piano v3.7:
+  notes missing "randomly"). Found on the Windows VM (Kontakt 8 + SSO, see VERIFY.md › With the real library):
+  - Kontakt's engine runs only while the plug-in is processed, and `MasterSynthesizer` processes `Vst3Synth`
+    only from its first event on (`MasterSynthesizer::play` sets it active; `Seq::setScoreView` resets it).
+    Until then SSO's patches show "INSTRUMENT NOT INITIALISED!" in Kontakt's window: their KSP script has not
+    run. When it runs (the first render or play) it puts the patch's own control values back, so a parameter
+    set before is lost: the part's Controllers… (mic 1-4) set at score open were heard only from the second
+    play or export on. Measured with a test host: a parameter set after 12 ms of the plug-in's audio is
+    lost, after 50 ms it holds. Now `Vst3Plugin::settle()` (1 s of silence processed and discarded, since
+    the last setState) runs after each setup is loaded (`loadSetup`, `finishLoad`), before the instance
+    goes into its slot and before the controllers are set; `secondsSinceState()` says how far it ran. Test
+    synth: `MSTESTSYNTH_INIT_MS` does the same as SSO's script (tst `vst3Settle`).
+  - With the mics on, a note uses several voices, and the Grand Piano's limit (the instrument header's
+    Max, 256) dropped 31-40 notes of the piece in busy bars (20-39 notes in 2 s): the owner's missing
+    notes (export e39fe815) and the "after playing, exports drop notes" of 2026-09-29 (it was the second
+    render, the first with the mics). Every Kontakt patch MuseScore sets up now gets 512
+    (`SoundLibraryHost::KONTAKT_MAX_VOICES`, applied in `setupState` as it loads: `KontaktSetup::
+    withMaxVoices`; the owner approved "just raise all voices to 512"; `MS_KONTAKT_MAX_VOICES` another
+    value, 0 the patch's own). Kontakt keeps it in the program's VOICE_GROUPS (0x32): the entry
+    "<instrument>", 3 bytes, u32 Max voices, u32 fade-out ms (found by changing Max in Kontakt's window and
+    diffing the state: that field only). At 1024 the render differs from 512's by -82 dB rms (quiet ends of
+    a few stolen voices).
 - **Load times** (the owner, 2026-09-28: "optimize load times of the SSO plugin"; branch `sso-load-times`).
   Where the time goes: (a) Kontakt's setState, 0.06-0.8 s a patch from its own state, 2-43 s from a setup
   made from the `.nki` (its first load); (b) Kontakt's samples, loaded after setState returns (the extract:
