@@ -2397,7 +2397,8 @@ void TestSoundLibrary::timingCheck()
                                                          { false, false, false, true, false }, s,
                                                          [&](int, int) { ++steps; return true; });
       QCOMPARE(int(r.size()), 5);
-      auto near = [](double x, double want, double tolerance, const char* what) {
+      // (not "near": a macro in Windows' headers)
+      auto within = [](double x, double want, double tolerance, const char* what) {
             if (std::fabs(x - want) > tolerance)
                   qWarning() << what << x << "expected" << want;
             return std::fabs(x - want) <= tolerance;
@@ -2406,21 +2407,21 @@ void TestSoundLibrary::timingCheck()
       QCOMPARE(r[0].pitch, 67);
       QVERIFY(r[0].startMs[1] <= 5 && r[0].fullMs[1] <= 5);
       QVERIFY(r[0].sustains);
-      QVERIFY(near(r[0].releaseMs, 0, 10, "1 release"));
-      QVERIFY(near(r[0].shortNoteMs, 100, 10, "1 a 0.1 s note"));
+      QVERIFY(within(r[0].releaseMs, 0, 10, "1 release"));
+      QVERIFY(within(r[0].shortNoteMs, 100, 10, "1 a 0.1 s note"));
       // 14: -30 dB at 3 % of 200 ms (6 ms), -6 dB at 50 % (100 ms), full at 200 ms; release 30 dB at 450 ms
       for (int k = 0; k < 3; ++k) {
-            QVERIFY(near(r[1].startMs[k], 5, 6, "14 start"));
-            QVERIFY(near(r[1].fullMs[k], 100, 10, "14 full"));
+            QVERIFY(within(r[1].startMs[k], 5, 6, "14 start"));
+            QVERIFY(within(r[1].fullMs[k], 100, 10, "14 full"));
             }
       QVERIFY(r[1].sustains);
-      QVERIFY(near(r[1].releaseMs, 450, 20, "14 release"));
+      QVERIFY(within(r[1].releaseMs, 450, 20, "14 release"));
       // 42: decays -40 dB in 0.46 s whether held or not
       QVERIFY(!r[2].sustains);
-      QVERIFY(near(r[2].lengthMs, 460, 20, "42 length"));
-      QVERIFY(near(r[2].shortNoteMs, 100, 10, "42 a 0.1 s note (cut at the note-off)"));
+      QVERIFY(within(r[2].lengthMs, 460, 20, "42 length"));
+      QVERIFY(within(r[2].shortNoteMs, 100, 10, "42 a 0.1 s note (cut at the note-off)"));
       // pp / mf / ff: velocity = CC = 32 / 80 / 112, the level velocity * CC
-      QVERIFY(near(r[0].peakDb[2] - r[0].peakDb[0], 40 * std::log10(112.0 / 32.0), 2, "1 pp to ff"));
+      QVERIFY(within(r[0].peakDb[2] - r[0].peakDb[0], 40 * std::log10(112.0 / 32.0), 2, "1 pp to ff"));
       // 24: 6 transitions (3 velocities, +2 and -5), glides of 300 / 150 / 60 ms: the pitch leaves before it arrives,
       // slower at velocity 20
       QCOMPARE(int(r[3].legato.size()), 6);
@@ -2430,7 +2431,7 @@ void TestSoundLibrary::timingCheck()
             QVERIFY2(l.leaveMs >= 0 && l.arriveMs >= l.leaveMs,
                      qPrintable(QString("velocity %1, %2: leaves %3, arrives %4").arg(l.velocity).arg(l.interval).arg(l.leaveMs).arg(l.arriveMs)));
             const double glide = l.velocity < 40 ? 300 : l.velocity < 100 ? 150 : 60;
-            QVERIFY(near(l.arriveMs, glide, 60, "24 arrival"));
+            QVERIFY(within(l.arriveMs, glide, 60, "24 arrival"));
             QVERIFY(l.dipDb > -3);                // (one voice, no gap)
             QVERIFY(!l.cents.empty());
             }
