@@ -126,6 +126,50 @@ def arrival(x, sr, t_written, f_old, f_new, t_from, t_to):
     return None
 
 
+def arrival_template(x, sr, t_written, f_old, f_new, a_from, a_to, b_from, b_to, t_from, t_to):
+    """when the new note's share of the power first passes half (for 30 ms), each frame's magnitude spectrum fitted
+    as a A + b B (a, b >= 0), A / B the old / new note's own spectra averaged over [a_from, a_to] / [b_from, b_to]
+    (seconds in the render); 50 Hz-8 kHz; 4096-point frames (8192 under 120 Hz) every 10 ms. Right for octaves,
+    where the harmonics' ratio (arrival) is not: octave_synth_check.py"""
+    N = 8192 if min(f_old, f_new) < 120 else 4096
+    if a_to - a_from < 0.05 or b_to - b_from < 0.05:
+        return None
+    freqs = np.fft.rfftfreq(N, 1 / sr)
+    band = (freqs > 50) & (freqs < 8000)
+    win = np.hanning(N)
+    def mag(c):
+        s0 = int(c * sr) - N // 2
+        if s0 < 0 or s0 + N > len(x):
+            return None
+        return np.abs(np.fft.rfft(x[s0:s0 + N] * win))[band]
+    def avg(t0, t1):
+        ms = [m for m in (mag(t) for t in np.arange(t0, t1 + 1e-9, 0.01)) if m is not None]
+        return np.sqrt(np.mean(np.square(ms), axis=0)) if ms else None
+    A, B = avg(a_from, a_to), avg(b_from, b_to)
+    if A is None or B is None:
+        return None
+    aa, bb, ab = A @ A, B @ B, A @ B
+    det = aa * bb - ab * ab
+    if det <= 1e-12 * aa * bb:
+        return None
+    run = 0
+    for t in np.arange(t_from, t_to, 0.01):
+        m = mag(t)
+        if m is None:
+            break
+        am, bm = A @ m, B @ m
+        a, b = (bb * am - ab * bm) / det, (aa * bm - ab * am) / det
+        if a < 0:
+            a, b = 0.0, max(0.0, bm / bb)
+        elif b < 0:
+            a, b = max(0.0, am / aa), 0.0
+        share = b * b * bb / max(a * a * aa + b * b * bb, 1e-30)
+        run = run + 1 if share >= 0.5 else 0
+        if run == 3:
+            return t - 0.02 - t_written
+    return None
+
+
 def hz(p):
     return 440.0 * 2 ** ((p - 69) / 12)
 
@@ -148,6 +192,11 @@ def analyse(meta, wav):
             lo_, hi_ = max(0, env_at(env, first, t + 0.03)), min(len(env), env_at(env, first, t + n["seconds"]))
             r["levelDb"] = round(float(env[lo_:hi_].max()), 1) if hi_ > lo_ else None
             r["interval"] = n["pitch"] - prev["pitch"]
+            # by templates (the old note from 0.2 s after its written time to 80 ms before the new one's, the new note
+            # likewise; notes of 0.4 s and more)
+            at = arrival_template(m, sr, t, hz(prev["pitch"]), hz(n["pitch"]), prev["time"] + 0.2, t - 0.08,
+                                  t + 0.2, t + n["seconds"] - 0.08, max(t - 0.45, prev["time"] + 0.1), t + min(0.9, n["seconds"]))
+            r["arriveTMs"] = None if at is None else round(at * 1000)
             r["before"] = prev["seconds"]
         else:
             o = onset_of(env, first, t - 0.4, min(nxt, t + 1.5))

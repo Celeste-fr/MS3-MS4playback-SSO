@@ -56,6 +56,14 @@ the playback changes (legato delay by interval, held notes early by their onset,
   slurred sixteenths' level spread 4.5-12.4 dB in every instrument, unchanged; sul tasto / flautando -10 dB time
   median 253 → 149 ms but over-shifted in places (Violins 2 sul tasto high -399 at -15 dB, Celli flautando -189 /
   -216) and still late in others (Violas sul tasto mid 567, Violins 1 flautando low 536 at -10 dB).
+- **Octaves timed by templates** (f0bef96; the coordinator: a reliable +12): each frame fitted as a A + b B of the two
+  notes' own spectra, the second note's share of the power at 10 / 50 / 90 % (`tLeaveMs` / `tMidMs` / `tArriveMs`, appended
+  to `sso_legato_grid_pitches.json`'s rows; `arriveTMs` in the sweep analysis). Synthetic slurs with a known answer
+  (`tools/playbackverify/octave_synth_check.py`): -40..+60 ms for every interval and hall level, where the harmonic
+  ratio was +75..+320 late for +12 and 60-70 early for -12. On real SSO it agrees with the harmonic times for
+  non-octaves (grid: median +10 ms; sweep: +1, 80 % within ±50). Grid mid by templates: brass +12 130 / -12 140 /
+  others 140; woodwinds 125 / 170 / 140; strings 350 / 210 / 240 (string upward octaves really are ~100 ms slower).
+  The a289780 sweep re-read with templates: octaves strings +12 +60 / -12 +40, woodwinds -50 / +60, brass -70 / +90.
 - **VM IP** changed to 172.29.253.109 (2026-10-01 host reboot). Disk is tight: `sweep/fetch.sh` deletes each render's
   audio once analysed; keep VM outputs under ~2 GB.
 

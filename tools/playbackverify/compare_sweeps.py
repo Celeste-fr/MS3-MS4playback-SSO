@@ -6,7 +6,7 @@
 Columns (ms, medians, from the written time): L the slurred notes' pitch arrival (not the slurs' first notes), by
 note length; Lfirst a slur's first note's perceived onset (15 dB); H held notes' perceived onset at mf / pp / ff and
 sul tasto / flautando; S shorts' onset; Send how long shorts sound past their written length (10 dB). Lbad: slurred
-arrivals off by more than 100 ms either way (of those found); L16spread: the
+arrivals off by more than 100 ms either way (of those found); oct+T / oct-T: octave slurs' arrival by templates (arriveTMs); L16spread: the
 largest level spread (max - min, dB) of a slurred sixteenths group's inner notes.
 """
 import glob
@@ -27,6 +27,9 @@ def metrics(path):
     L = [r for r in rows if r["section"] == "L" and not r["first"]]
     for sec in (2.0, 1.0, 0.5, 0.25):
         m[f"L{sec:g}"] = med(r.get("arriveMs") for r in L if r["seconds"] == sec)
+    for sign in ("+", "-"):
+        oc = [r for r in L if r.get("interval") == int(sign + "12")]
+        m[f"oct{sign}T"] = med(r.get("arriveTMs") for r in oc)
     found = [r["arriveMs"] for r in L if r.get("arriveMs") is not None]
     m["Lbad"] = f"{sum(1 for x in found if abs(x) > 100)}/{len(found)}"
     m["Lfirst"] = med(r.get("onsetMs") for r in rows if r["section"] == "L" and r["first"])
