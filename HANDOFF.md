@@ -36,8 +36,11 @@ the playback changes (legato delay by interval, held notes early by their onset,
 - **Paused by the owner (2026-10-01 ~08:15 VM time).** Measured and committed: `sso_sound_onset.json` 112 patches
   (every non-percussion map instrument), `sso_short_lengths.json` 24, `sso_legato_lengths.json` 6,
   `sso_legato_grid_pitches.json` 8 (the string Performance patches; -12…+7 usable, mid 160-245 ms; **+12 still
-  unreliable**, median 540: the old note's reverb keeps the lower pitch's odd harmonics). Not done: legatopitches for
-  the other 35 Performance patches, shorts for the 88 `onsetB.txt` patches, legato lengths for `legB.txt`.
+  unreliable**, median 540: the old note's reverb keeps the lower pitch's odd harmonics).
+  **Done 2026-10-01 after the resume** (build c7338f4, `job7.cmd`): `sso_legato_grid_pitches.json` 43 Performance
+  patches, `sso_short_lengths.json` 112, `sso_legato_lengths.json` 43. Grid mid times, family medians: strings 210-240,
+  woodwinds 120-130, brass 130 ms; **octaves still not trustworthy** (+12: 375-550, the reverb; -12: 70-160, the new
+  lower note's own harmonics rise before the step): use each patch's other intervals for ±12.
   **Resume**: on the VM, `C:\claude\measure\job6.cmd` with its onsetB step removed (restBefore skips what is done;
   use build c7338f4 for every step, aff12be is deleted), task `claude-measure`; read every results folder since
   2026-10-01 0329 in `Documents\MuseScore Sound Library Check` with `onset_from_check.py`.
@@ -47,6 +50,12 @@ the playback changes (legato delay by interval, held notes early by their onset,
   Violins 2 (-51..-76). Rerun: `make_sweep_scores.py`, convert, `fix_sweep_ids.py`, copy to `C:\claude\sweep\scores`,
   `args.txt` = build shas one per line, `schtasks /Run /TN claude-sweep`, then `sweep/fetch.sh <sha>` (in the job
   tmp `~/.claude/jobs/ed934dfd/tmp/cray/`; it deletes each render's audio once analysed) and `compare_sweeps.py`.
+- **Sweep e6f44e6 (claude/intelligent-volta-gx7gmw: onsets from the 112, string grid) vs 3f0cda5**: slurs 1-7 pooled
+  -6..+19; string octaves -86 → -8, winds -84 and brass -111 unchanged (no grid then); Basses / Violas / Violins 2
+  long slurred notes no longer early (Violins 2 now +32..+52 late at every length); strings' sixteenths +19..+62;
+  slurred sixteenths' level spread 4.5-12.4 dB in every instrument, unchanged; sul tasto / flautando -10 dB time
+  median 253 → 149 ms but over-shifted in places (Violins 2 sul tasto high -399 at -15 dB, Celli flautando -189 /
+  -216) and still late in others (Violas sul tasto mid 567, Violins 1 flautando low 536 at -10 dB).
 - **VM IP** changed to 172.29.253.109 (2026-10-01 host reboot). Disk is tight: `sweep/fetch.sh` deletes each render's
   audio once analysed; keep VM outputs under ~2 GB.
 
