@@ -6,7 +6,8 @@
 Columns (ms, medians, from the written time): L the slurred notes' pitch arrival (not the slurs' first notes), by
 note length; Lfirst a slur's first note's perceived onset (15 dB); H held notes' perceived onset at mf / pp / ff and
 sul tasto / flautando; S shorts' onset; Send how long shorts sound past their written length (10 dB). Lbad: slurred
-arrivals off by more than 100 ms either way (of those found).
+arrivals off by more than 100 ms either way (of those found); L16spread: the
+largest level spread (max - min, dB) of a slurred sixteenths group's inner notes.
 """
 import glob
 import json
@@ -34,6 +35,12 @@ def metrics(path):
     m["Htasto"] = med(r.get("onsetMs") for r in rows if r["section"] == "H" and r["technique"] == "sul tasto")
     m["Hflaut"] = med(r.get("onsetMs") for r in rows if r["section"] == "H" and r["technique"] == "flaut.")
     m["S"] = med(r.get("onsetMs") for r in rows if r["section"] == "S")
+    try:
+        from analyze_sweep import level_spreads
+        sp = level_spreads(rows, 0.25)
+        m["L16spread"] = max(sp) if sp and all("levelDb" in r for r in rows if r["section"] == "L" and not r["first"]) else None
+    except ImportError:
+        pass
     m["Send"] = med((r["end10Ms"] - r["seconds"] * 1000) if r.get("end10Ms") is not None else None for r in rows if r["section"] == "S")
     return m
 

@@ -144,6 +144,9 @@ def analyse(meta, wav):
         if n["section"] == "L" and not n["first"]:
             a = arrival(m, sr, t, hz(prev["pitch"]), hz(n["pitch"]), max(t - 0.45, prev["time"] - 0.15), t + min(0.9, n["seconds"] + 0.6))
             r["arriveMs"] = None if a is None else round(a * 1000)
+            # its level: the loudest perceived loudness over its written length (from 30 ms after its written time)
+            lo_, hi_ = max(0, env_at(env, first, t + 0.03)), min(len(env), env_at(env, first, t + n["seconds"]))
+            r["levelDb"] = round(float(env[lo_:hi_].max()), 1) if hi_ > lo_ else None
             r["interval"] = n["pitch"] - prev["pitch"]
             r["before"] = prev["seconds"]
         else:
@@ -189,7 +192,26 @@ def summary(rows, label=""):
         lines.append(f"{label}  {key[0]:24s} {key[1]:5s} {key[2]:22s} {stat(groups[key])}")
     missing = sum(1 for r in rows if r["section"] == "L" and not r["first"] and r.get("arriveMs") is None)
     lines.append(f"{label}  L transitions not found: {missing}")
+    # evenness of slurred groups: the levels of a group's inner notes (not its first or last), max - min
+    for sec in (0.25, 0.5):
+        spreads = level_spreads(rows, sec)
+        if spreads:
+            lines.append(f"{label}  L {sec:g}s groups' level spread (dB): " + ", ".join(f"{x:.1f}" for x in spreads))
     return "\n".join(lines)
+
+
+def level_spreads(rows, sec):
+    """per slurred group of notes sec long: max - min of its inner notes' levels (dB)"""
+    spreads, group = [], []
+    for r in rows + [dict(section="", first=True)]:
+        if r["section"] == "L" and not r["first"] and r["seconds"] == sec:
+            group.append(r.get("levelDb"))
+        elif group:
+            inner = [x for x in group[:-1] if x is not None]
+            if len(inner) >= 3:
+                spreads.append(round(max(inner) - min(inner), 1))
+            group = []
+    return spreads
 
 
 def main():
