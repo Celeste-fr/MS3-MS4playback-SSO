@@ -32,6 +32,9 @@ library work; the tuning work is described under "Tuning" below).
   last commit message, or *Run workflow* on that branch). Check `git log` of `main` and of
   your branch, and the latest commit messages, first. They are detailed on purpose and
   describe what each step did and how it was measured.
+- `automation-editor` (2026-09-30; worktree `wt-autoedit`, from live-set-export): the automation editor (lanes under a
+  selected part in Continuous View, edited as in Live), curves, Dynamics lanes, every lane editable and synced with
+  Live (LIVE.md › Automation lanes in MuseScore and in Live).
 - `live-set-export` (2026-09-30; worktree `wt-liveset`): Create Live Set, with live-integration, live-clip-edit,
   piano-v37-fixes and legato-timing merged; Live against MuseScore (the rule below).
 - `live-integration` (2026-09-28, from main at f12a240; worktree `wt-live`): playing through
@@ -457,9 +460,24 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `SoundLibraryHost::sync` and the command-line export fill the ids (`parameterIds`: the part's main patch
   controllers' titles, looked up on each slot's instance). The SSO extract (sso_patch_controls.json) names
   what can be automated per patch (Dynamics, Expression, Mic 1-5 level, Mic Mix Distance, Release,
-  Tightness, Vibrato, Variation, Reverb …). Not yet: a UI; a dynamics lane (CC1 from notation stays);
-  which mic "Mic 1 … 5" is; whether Spitfire's scripts keep a value set this way (untried with Kontakt).
-  Test `automation`.
+  Tightness, Vibrato, Variation, Reverb …). Test `automation`.
+  **The editor (2026-09-30, branch `automation-editor`; the owner: "when you select a MIDI track, MuseScore lets you
+  edit the notes AND show you automation tracks for every possible parameter in SSO, in which you can draw automation
+  curves just like you can in Ableton")**: `mscore/automationlanes.*` (`AutomationLanes`, one per ScoreView; header
+  comment lists every gesture). Continuous View only: selecting an element of a library part unfolds its lanes under
+  its staves; room from `Score::setAutomationSpace` (view state, never saved) in `System::layout2` (`SysStaff::lanesY`);
+  ticks to x through the laid-out segments. Hooks in events.cpp (mouse, keys via ShortcutOverride while a lane has the
+  focus, context menu), `ScoreView::paintEvent`, `startUndoRedo`, `layoutChanged`, `MuseScore::selectionChanged`;
+  *View › Automation Lanes* (`toggle-automation-lanes`, QSettings `ui/canvas/automationLanes`). Model:
+  `Automation::Edit` (add / move / remove / curve / draw / copy / paste, pure functions), `undoWrite` (one
+  ChangeMetaTags per gesture). **Curves**: a LINEAR point may carry Live's Bézier control points (CurveControl1X/1Y/2X/2Y
+  in the segment's box; metaTag 4th element, absent when straight, so old files are unchanged); the editor's Alt-drag
+  sets a curvature k (`setCurvature`). **Dynamics lane**: a lane on the library's dynamics CC replaces the notation's
+  CC1 from its first point (`LibPart::dynamicsLaneFrom`). **No read-only lanes** any more (the owner: "edit the
+  automation curves in both and they sync up"): `liveHash` / `pointsHash` in a lane's extra, `Lane::playedByLive`,
+  `Automation::merge` on import (the newer edit wins). Tests `automationCurves`, `automationEditing`, `automationMerge`;
+  3.6 round trip of a score with curved lanes (ab/roundtrip2.py): 0 lines, pages and MIDI identical. GUI tried under
+  Xvfb (no unit test drives the widget).
   **Recommended short notes' balance** (the owner, 2026-09-28: "measure out a recommended number for each of the
   sections, and add a button called recommended"): each dynamics note also gets a perceived loudness
   (`ArticulationCheck::perceivedLoudnessDb`: K-weighting (BS.1770), auditory filters one ERB apart with a
@@ -687,9 +705,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     line the total and MuseScore's own. Not done: lighter single-technique patches for the copies (needs
     which lighter patches SSO has per instrument: the library-files extract).
 - Live integration (branch `live-integration`, `LIVE.md`): automation lanes may carry a `source`;
-  `"source": "live"` lanes come from a Live Set (`libmscore/liveset.*`) and are **read-only**
-  (`Lane::readOnly`, only `Automation::replaceSource` changes them; a lane editor must not edit
-  them). Through MIDI output they send nothing (Live plays them); with the hosted plug-in they play.
+  `"source": "live"` lanes come from a Live Set (`libmscore/liveset.*`). Read-only until 2026-09-30; now editable
+  (`automation-editor`): `Lane::playedByLive` (unedited since Live's set had it) decides who plays it. Through MIDI
+  output a lane Live plays sends nothing; with the hosted plug-in every lane plays. Plug-in parameter lanes MuseScore
+  plays reach Live through the MuseScore Link device (protocol 3: `/ms/params`, `/ms/pvals`; live.remote~ from a table
+  at Live's song position; `SoundLibraryHost::rememberParameterIds` / `knownParameterId`, since Live names Kontakt's
+  slots "#001"). Tried in real Live 12.2 on the VM (LIVE.md).
   MIDI sync out: `libmscore/midisync.h`, `Seq::process` / `setPos`, preference
   `io/portMidi/syncOutputDevice`.
   **Live plays the score** (2026-09-29; LIVE.md › Live plays the score): each library route as a playable
@@ -832,11 +853,11 @@ attack not yet confirmed by ear.
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
-  `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (50 counting initTestCase and cleanup, 3 skipped without the owner's files;
+  `liveMidiControllers`), phrase marks (`renderPhraseMark`), automation (`automationCurves`, `automationEditing`, `automationMerge`). All pass (54 counting initTestCase and cleanup, 3 skipped without the owner's files;
   `vst3Settle`, `kontaktMaxVoices` 2026-09-29; `liveSetTestSynth` 2026-09-30).
 - `mtest/libmscore/liveequivalence` (`tst_liveequivalence`): Create Live Set with the part's Controllers and the
-  Mixer, the clips' pitch bend and early legato notes, and Live against MuseScore on the test synth. All 7 pass
-  (counting initTestCase and cleanup; 2026-09-30).
+  Mixer, the clips' pitch bend and early legato notes, automation lanes (`liveEquivalenceAutomation`), and Live against
+  MuseScore on the test synth. All 8 pass (counting initTestCase and cleanup; 2026-09-30).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
   sound-library work too. The references predate the MS4 note model. Same-tick event order

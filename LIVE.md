@@ -2,9 +2,10 @@
 
 Branch `live-integration` (2026-09-28, 2026-09-29). The owner's goal: MuseScore still plays by itself
 exactly as before (Spitfire Symphony Orchestra hosted in Kontakt Player 8). Optionally it plays
-through Ableton Live 12 instead. In that mode Live hosts SSO and all automation is drawn in Live. The
-automation is then read back into the score, so MuseScore alone plays it the same way. In
-MuseScore it is read-only: it is edited only in Live.
+through Ableton Live 12 instead. In that mode Live hosts SSO. Automation can be drawn in Live (read back
+into the score when Live saves the set, so MuseScore alone plays it the same way) or in MuseScore's own
+automation editor (2026-09-30: [Automation lanes in MuseScore and in Live](#automation-lanes-in-musescore-and-in-live));
+both sides can edit every lane.
 
 There are two ways to play through Live (and, besides them, [editing any Live MIDI clip in
 MuseScore](#editing-live-clips-in-musescore)). For both, MuseScore can write the Live Set with every track set up:
@@ -29,7 +30,7 @@ How the first fits together:
   Start/Continue/Stop to a separate *MIDI sync output* (`libmscore/midisync.h`, `Seq::process`).
   Live follows tempo and position, jumps included.
 - **Automation**: Live saves the automation in its set (.als). *Mixer › Advanced Options… ›
-  Import automation from Live Set…* reads it into the score as read-only lanes
+  Import automation from Live Set…* reads it into the score as lanes (editable in MuseScore too)
   (`libmscore/liveset.h`, `libmscore/automation.h`, `mscore/liveintegration.h`).
 - **Switching**: *Mixer › Play through Live* switches between Live and the plug-in hosted by
   MuseScore.
@@ -126,6 +127,9 @@ Install loopMIDI (Tobias Erichsen) and create these ports:
   1. By its MIDI input: the port and channel of the part's route. The port names are MuseScore's
      MIDI outputs without the driver's prefix (`MMSystem,MuseScore A` → `MuseScore A`).
   2. Otherwise by track name = part name.
+- Each import merges per lane (`Automation::merge`, 2026-09-30): a lane whose events in Live changed since it came
+  from Live takes Live's (the later save); one edited in MuseScore since, unchanged in Live, keeps MuseScore's;
+  edited on both sides: Live's, and the report says so. Curved segments keep Live's curve (on the score's own axis).
 - The lanes are stored in the score's metaTag `automation`, each marked `"source": "live"` with
   the set's path and time, the track and Live's parameter name and id. The metaTag `liveSet`
   holds the link. MuseScore 3.6 keeps both through a round trip (tested with 3.6.2).
@@ -161,8 +165,9 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
   placed just before it (0.26 ms at 120 bpm apart): switches first, then the controllers, the pitch bend
   last; at a tick without a note (a glide's step) the last of them is at the tick itself.
-  Plug-in parameter events (MuseScore's own automation lanes) are left out: Live's automation lanes play
-  those. The part's *Controllers…* that are plug-in parameters are in each patch's state in the Live Set
+  Plug-in parameter events (MuseScore's own automation lanes of Kontakt's parameters: Vibrato, mics …) are
+  not notes: the device sets those parameters itself while Live plays ([Automation lanes in MuseScore and in
+  Live](#automation-lanes-in-musescore-and-in-live)); lanes Live's set already holds are left to Live. The part's *Controllers…* that are plug-in parameters are in each patch's state in the Live Set
   (Create Live Set, below).
 - **Time:** the Live Object Model can't write the song's tempo automation, so Live plays at one tempo,
   the score's first, and the clips hold the notes at their real times (seconds as MuseScore plays them:
@@ -278,7 +283,9 @@ renaming it, dragging in Kontakt 8, etc. possible to be automated?". MuseScore w
     playback sets them, a quarter second for Kontakt to take them, then Kontakt's state
     (`SoundLibraryHost::stateWithControllers`). A patch without such values keeps its setup byte for byte. The same
     parameters are listed in Live's panel of Kontakt (as after *Configure*: name, id, value), so whether Live sets
-    them again over the state or not, both agree, and they are ready for automation. The report lists per part
+    them again over the state or not, both agree, and they are ready for automation.
+  - **with the part's automation lanes** (2026-09-30): each lane's parameter is in Live's panel too (at the patch's own
+    value), so the MuseScore Link device finds it and plays the lane. The report lists per part
     and patch what was set. Controllers on a MIDI CC are in the clips (carriers), as before.
     **Changed later in MuseScore, they don't follow into the set** (the set is a file Live opened): create the set
     again, or change and automate them in Live (Live's panel has them).
@@ -371,6 +378,66 @@ Only real Live can show (to check first):
 - The track colours: one per part, from a fixed list. By family (strings, woodwinds …) instead?
 - Return tracks (a reverb / delay like Live's default set): none, since SSO brings its own room. Wanted?
 
+## Automation lanes in MuseScore and in Live
+
+The owner, 2026-09-30: "when you select a MIDI track, MuseScore lets you edit the notes AND show you automation
+tracks for every possible parameter in SSO, in which you can draw automation curves just like you can in Ableton",
+then "why not make it so that you can edit the automation curves in both and they sync up with each other?".
+
+### Drawing them in MuseScore
+
+In **Continuous View**, click any note (or anything) of a part the sound library plays: its automation opens under
+its staves, on the score's own time axis (a lane's point sits under its note). Header row: *+* adds a lane (Dynamics
+(CC1), Expression (CC11), and every control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5,
+Release, Tightness, Mute …), *All* shows them all, the pencil is Draw Mode, the triangle folds. Empty lanes are hidden
+until added; × hides a lane (it still plays). Editing as in Live 12 (manual 25.5): click adds a breakpoint (snapped to
+the grid, which follows the zoom; Alt: free), drag moves (Shift: fine), double-click or Delete removes, Alt-drag a
+segment curves it (Live's own Bézier: a curve drawn here is Live's curve, and back), Alt-double-click straightens,
+Draw Mode drags grid-wide steps, a drag on the background selects, Ctrl+C / X / V / D copy, cut, paste (at the mouse,
+in any lane) and duplicate, right-click for Edit Value…, Step / Ramp, Clear and Hide. Values 0-127. Every gesture is
+one undo step. *View › Automation Lanes* turns the editor off. A **Dynamics** lane replaces the notation's CC1 from its
+first point (the notation still sets short notes' velocities). Page View shows no lanes.
+
+### How they reach Live
+
+Max for Live's Object Model (Live 12.2) can neither write nor read a clip's envelopes or the arrangement's automation
+(the Clip has `has_envelopes` and `clear_envelope` only; Live's Python API has envelopes for session clips only,
+"None for Arrangement clips"). So:
+
+- **MuseScore → Live, while Live plays the score**: the MuseScore Link device sets the parameters itself. MuseScore
+  sends each route's parameter lanes (`/ms/params`, `/ms/pvals`: the parameter's title and plug-in id, each value from
+  its time on, ramps and curves sampled as MuseScore's renderer plays them); the track's copy of the device fills a
+  table (the value in force at each millisecond; before the first point the parameter's own value) and plays it at
+  Live's song position (`phasor~ @frequency 7864320 ticks @lock 1` → `index~` → `live.remote~`): sample-timed with
+  Live's transport, a start mid-song included. The parameter must be in Live's panel of Kontakt (*Configure*): **Create
+  Live Set** puts every lane's parameter there. Live names Kontakt's slots by number ("#001"), so the device matches
+  them by the plug-in id MuseScore learnt from a loaded instance (`parameter ids.json` in the setups folder). The status
+  line lists a parameter the track's panel lacks. CC lanes (Dynamics, Expression, CC controllers) travel as carriers in
+  the clip, as before.
+- **Live → MuseScore**: draw the parameter's automation in the track's lane in Live and save the set; with the set
+  linked (*Import automation from Live Set…*, *Import again when Live saves it*) MuseScore reads it on each save and
+  merges per lane (the newer edit wins). Such a lane is "in Live" (`Lane::playedByLive`): Live plays it, the device
+  leaves it alone. Editing it in MuseScore makes MuseScore's version the newer one: the device plays it from then on,
+  over Live's track automation (live.remote~ overrides it; Live's lane then shows the parameter as remote-controlled),
+  until Live's own changes again (a later save) and is taken back.
+- **Create Live Set** makes every lane MuseScore's (the new set has none of Live's automation; one undo step).
+
+What only real Live could show, and what was shown (the Windows VM, Live 12.2 unauthorized, Kontakt 8, SSO's Solo
+Violin; the generated set cut to one track, MuseScore's datagrams sent by a script): the clip and the lane applied
+(`/live/papplied ok`); playing from beat 0, the parameter read back each second followed the lane (0.1875, 0.375,
+0.5625, 0.75, 0.97 up the ramp, back down, 0 at beat 16, the step 0.75 at 24) and Kontakt's own *Vibrato* slider
+moved on screen. Not tried: Live's export (not authorized on the VM), a tempo change in Live while playing (the table
+is refilled at Live's tempo, the clips assume one tempo anyway), MuseScore's own GUI against real Live (the Windows
+build of this branch).
+
+### Open questions for the owner
+
+- Edit-in-MuseScore clip tabs: lanes drawn there play in MuseScore only. Writing them back as the clip's envelopes
+  needs Live's Python API (a Control Surface script; session clips only) or Live 12.4's `create_event`. Wanted?
+- Live's track automation of a parameter MuseScore also drives: the device wins until the next save brings Live's
+  edit back. Prefer that an edit in MuseScore of a lane that came from Live is refused until it is moved (a "Move to
+  MuseScore" command), so the two never disagree on screen?
+
 ## Live against MuseScore
 
 The owner, 2026-09-30: **"make it a rule that Ableton's audio output and MuseScore's audio output for SSO must
@@ -390,6 +457,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   started at the old one: +4.0 dB on the VM's first note; MuseScore's own sound is unchanged by it).
 - The part's **Controllers** that are plug-in parameters: in each patch's state in the set, and in Live's panel with
   the same value.
+- **Automation lanes** (2026-09-30): CC lanes as carriers, plug-in parameter lanes through the device (curves sampled
+  as MuseScore's renderer plays them; tst_liveequivalence liveEquivalenceAutomation: residual -56 dB, every note within
+  0.01 dB; the 1 ms table is the whole difference). A Dynamics lane in the notation's CC1 place, in both.
 - **Volume, pan, mute**: Live's track mixer, the same gains.
 - The time: Live plays at the score's first tempo with the notes at their real times (tempo changes, fermatas,
   repeats).
@@ -413,8 +483,11 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   glide notes of the VM score were within 0.36 dB.
 - **A carrier value of 1 plays as 0** (the UACC switch: 127 can't be carried, and it is no articulation): 128
   controller values in a note's 127 velocities.
-- **MuseScore's own automation lanes of plug-in parameters** (ME_PARAMETER events) are not in the clips: in Live,
-  Live's automation lanes play those (the imported ones come from there).
+- **MuseScore's automation lanes of plug-in parameters** play in Live through the device (since 2026-09-30), from a
+  table of the value in force at each millisecond: a change comes up to 1 ms after MuseScore's (in Live's audio
+  blocks, as MuseScore's host applies it in its own). While the device drives a parameter, Live's own automation of
+  it is overridden (live.remote~). Lanes in *Edit in MuseScore* clip tabs don't reach Live (those tabs play with
+  MuseScore's own sounds; nothing can write a clip's envelopes from Max for Live in Live 12.2).
 - **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
   panel and faders.
 - The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.
@@ -681,7 +754,8 @@ do.
 - `audiodrivers/pm.*`, `pa.*`, `driver.h`: the sync port (`io/portMidi/syncOutputDevice`) and
   `putSync`.
 - `libmscore/liveset.{h,cpp}`: the .als reader, and matching to parts and controllers.
-- `libmscore/automation.{h,cpp}`: `Lane::extra`, `source()`, `readOnly()`, `replaceSource`.
+- `libmscore/automation.{h,cpp}`: lanes, curves, `Lane::extra`, `source()`, `playedByLive()`, `merge`, `Edit`
+  (the editor's operations), `undoWrite`; `mscore/automationlanes.{h,cpp}`: the editor.
 - `mscore/liveintegration.{h,cpp}`: the Mixer switch, the import, the link, the watcher.
 - `mscore/liveclips.{h,cpp}`: Live plays the score (`LiveClipsLink`, which owns the UDP socket for both).
 - `libmscore/livesetwriter.{h,cpp}`: Create Live Set, the writer (and `validate`); `mscore/livesetexport.{h,cpp}`: the
