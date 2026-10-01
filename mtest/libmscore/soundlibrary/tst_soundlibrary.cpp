@@ -72,6 +72,9 @@ class TestSoundLibrary : public QObject, public MTest
       void spitfireMap();
       void routesTiming();
       void automation();
+      void automationCurves();
+      void automationEditing();
+      void automationMerge();
       void perceivedLoudness();
       void attackSalience();
       void noteSecondsWritten();
@@ -3654,6 +3657,373 @@ void TestSoundLibrary::attackSalience()
       QVERIFY2(as2.riseMs > ac.riseMs + 10, qPrintable(QString::number(as2.riseMs)));
       QVERIFY2(ah.riseMs > 40, qPrintable(QString::number(ah.riseMs)));
       QCOMPARE(AC::attackSalience({}, sr).salienceDb, -200.0);
+      }
+
+//---------------------------------------------------------
+//   automationCurves
+//    Live's curved segment (a cubic Bézier in the segment's box) as a lane's ramp: the editor's
+//    curvature, the value along it, the metaTag (a lane without curves written as before), rendering
+//---------------------------------------------------------
+
+void TestSoundLibrary::automationCurves()
+      {
+      using namespace Automation;
+      Point p(0, 0.0, Curve::LINEAR);
+      QVERIFY(!p.curved());
+      for (double k : { -1.0, -0.4, 0.3, 1.0 }) {
+            setCurvature(p, k);
+            QVERIFY(p.curved());
+            QVERIFY2(std::fabs(curvature(p) - k) < 1e-9, qPrintable(QString::number(curvature(p))));
+            // monotone, from 0 to 1, bowed the curvature's way
+            double last = 0;
+            for (int i = 1; i <= 100; ++i) {
+                  const double y = curveAt(p.c1x, p.c1y, p.c2x, p.c2y, i / 100.0);
+                  QVERIFY(y >= last - 1e-12);
+                  last = y;
+                  }
+            QVERIFY(std::fabs(last - 1) < 1e-9);
+            QVERIFY(k > 0 ? curveAt(p.c1x, p.c1y, p.c2x, p.c2y, 0.5) > 0.5 : curveAt(p.c1x, p.c1y, p.c2x, p.c2y, 0.5) < 0.5);
+            }
+      setCurvature(p, 0);
+      QVERIFY(!p.curved());
+      // k = 1: Q = (0, 1), x = t², y = 2t - t²: at x 0.5, y = 2 √0.5 - 0.5
+      Lane lane;
+      lane.target = "vibrato";
+      lane.points = { Point(0, 0.2, Curve::LINEAR), Point(1920, 1.0, Curve::STEP) };
+      setCurvature(lane.points[0], 1.0);
+      const double y = 2 * std::sqrt(0.5) - 0.5;
+      QVERIFY(std::fabs(lane.valueAt(960) - (0.2 + 0.8 * y)) < 1e-6);
+      // Live's own control points (the importer's test curve): its own values, not the editor's form
+      Lane live = lane;
+      live.points[0].c1x = 0.2; live.points[0].c1y = 0.8; live.points[0].c2x = 0.5; live.points[0].c2y = 1.0;
+      const std::vector<LiveSet::Point> pieces = LiveSet::curve({ 0, 0.2 }, { 4, 1.0 }, 0.2, 0.8, 0.5, 1.0, 64);
+      for (const LiveSet::Point& q : pieces)
+            QVERIFY2(std::fabs(live.valueAt(int(std::lround(q.beat * 480))) - q.value) < 0.01, qPrintable(QString::number(q.beat)));
+      // events along a curve: every 30 ticks, the curve's values
+      const auto ev = lane.events(0, 1920, 30, 0.001);
+      QVERIFY(ev.size() > 30);
+      for (const auto& e : ev)
+            QVERIFY(std::fabs(e.second - lane.valueAt(e.first)) < 1e-12);
+
+      // the metaTag: a curve's control points as a fourth element; a lane without curves as before
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      Lane plain;
+      plain.target = "tone";
+      plain.points = { Point(0, 1.0, Curve::STEP), Point(1920, 0.25, Curve::LINEAR), Point(3840, 0.5, Curve::STEP) };
+      std::map<const Part*, PartLanes> all { { score->parts()[0], { plain } } };
+      QCOMPARE(write(score, all), QString("[{\"lanes\":[{\"points\":[[0,1,\"step\"],[1920,0.25,\"linear\"],[3840,0.5,\"step\"]],"
+                                          "\"target\":\"tone\"}],\"name\":\"%1\",\"part\":0}]").arg(score->parts()[0]->partName()));
+      all = { { score->parts()[0], { lane, plain } } };
+      score->setMetaTag(metaTag, write(score, all));
+      QVERIFY(score->metaTag(metaTag).contains("[0,0.2,\"linear\",[0,0.666667,0.333333,1]]"));
+      const std::map<const Part*, PartLanes> back = read(score);
+      const Lane& b = back.at(score->parts()[0])[0];
+      QVERIFY(b.points[0].curved());
+      QVERIFY(std::fabs(curvature(b.points[0]) - 1.0) < 1e-5);
+      QVERIFY(std::fabs(b.valueAt(960) - lane.valueAt(960)) < 1e-5);
+      QVERIFY(!back.at(score->parts()[0])[1].points[1].curved());
+      QCOMPARE(write(score, back), score->metaTag(metaTag));            // read and written again: the same
+      // through a save
+      QVERIFY(saveScore(score, "automation-curves.mscx"));
+      MasterScore* saved = readCreatedScore("automation-curves.mscx");
+      QVERIFY(saved);
+      QCOMPARE(saved->metaTag(metaTag), score->metaTag(metaTag));
+      delete saved;
+
+      // rendered: the plug-in parameter's events follow the curve
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Controller id='vibrato' name='Vibrato' cc='21' default='64'/>"
+         "<Controller id='tone' name='Tone' param='Tone'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      Lane tone = lane;
+      tone.target = "tone";
+      Lane vib = lane;
+      setCurvature(vib.points[0], -0.6);
+      score->setMetaTag(metaTag, write(score, { { score->parts()[0], { tone, vib } } }));
+      score->rebuildMidiMapping();
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      int checked = 0, checkedCC = 0;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (e.channel() != ch || te.first > 1920)
+                  continue;
+            if (e.type() == ME_PARAMETER) {
+                  QVERIFY2(std::fabs(e.tuning() - tone.valueAt(te.first)) < 1e-6, qPrintable(QString::number(te.first)));
+                  ++checked;
+                  }
+            else if (e.type() == ME_CONTROLLER && e.dataA() == 21) {
+                  QCOMPARE(e.dataB(), int(std::lround(vib.valueAt(te.first) * 127)));
+                  ++checkedCC;
+                  }
+            }
+      QVERIFY2(checked > 20, qPrintable(QString::number(checked)));
+      QVERIFY2(checkedCC > 20, qPrintable(QString::number(checkedCC)));
+      // for the clips Live plays: the parameter's events whatever the output, none for a lane Live has as it is
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      auto paramsFor = [&](bool forLive) {
+            MidiRenderer r(score);
+            r.setForLiveClips(forLive);
+            r.setMinChunkSize(1000);
+            EventMap ev2;
+            MidiRenderer::Context ctx(ss);
+            r.renderChunk(r.getChunkAt(0), &ev2, ctx);
+            int n = 0;
+            for (const auto& te : ev2)
+                  n += te.second.type() == ME_PARAMETER;
+            return n;
+            };
+      QCOMPARE(paramsFor(false), 0);
+      QVERIFY(paramsFor(true) > 20);
+      tone.extra["source"] = SOURCE_LIVE;
+      tone.extra["pointsHash"] = pointsHash(tone.points);
+      score->setMetaTag(metaTag, write(score, { { score->parts()[0], { tone, vib } } }));
+      QCOMPARE(paramsFor(true), 0);
+
+      // a Dynamics (CC1) lane: from its first point it sends CC1, not the notation's dynamics
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      auto cc1 = [&](const std::vector<Lane>& lanes) {
+            score->setMetaTag(metaTag, write(score, { { score->parts()[0], lanes } }));
+            EventMap ev3;
+            score->renderMidi(&ev3, false, true, ss);
+            std::vector<std::pair<int, int>> out;
+            for (const auto& te : ev3)
+                  if (te.second.channel() == ch && te.second.type() == ME_CONTROLLER && te.second.dataA() == 1)
+                        out.push_back({ te.first, te.second.dataB() });
+            return out;
+            };
+      const std::vector<std::pair<int, int>> notation = cc1({});
+      QVERIFY(!notation.empty());
+      Lane dyn;
+      dyn.target = "cc1";
+      dyn.points = { Point(960, 0.0, Curve::LINEAR), Point(1920, 1.0, Curve::STEP) };
+      const std::vector<std::pair<int, int>> drawn = cc1({ dyn });
+      bool before = false, laneOnly = true;
+      for (const auto& e : drawn) {
+            if (e.first < 960)
+                  before = true;
+            else
+                  laneOnly = laneOnly && e.second == int(std::lround(dyn.valueAt(e.first) * 127));
+            }
+      QVERIFY(before);              // the notation's, before the lane
+      QVERIFY(laneOnly);
+      QCOMPARE(drawn.back().second, 127);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   automationEditing
+//    the editor's operations (Live 12 manual 25.5: breakpoints, segments, Draw Mode, copy / paste)
+//    and one undoable step each
+//---------------------------------------------------------
+
+void TestSoundLibrary::automationEditing()
+      {
+      using namespace Automation;
+      Lane lane;
+      lane.target = "vibrato";
+      // click: a point; the first one holds
+      QCOMPARE(Edit::addPoint(lane, 480, 0.25), 0);
+      QCOMPARE(lane.valueAt(479), -1.0);
+      QCOMPARE(lane.valueAt(5000), 0.25);
+      // a second: a ramp from the first (Live's envelopes are ramps)
+      QCOMPARE(Edit::addPoint(lane, 1440, 0.75), 1);
+      QCOMPARE(lane.points[0].curve, Curve::LINEAR);
+      QVERIFY(std::fabs(lane.valueAt(960) - 0.5) < 1e-9);
+      // on the line: the envelope unchanged
+      QCOMPARE(Edit::addPointOnLine(lane, 720), 1);
+      QVERIFY(std::fabs(lane.points[1].value - 0.375) < 1e-9);
+      QVERIFY(std::fabs(lane.valueAt(900) - 0.46875) < 1e-9);
+      // on a curve: split exactly (de Casteljau), the envelope unchanged
+      Edit::removePoints(lane, { 1 });
+      QCOMPARE(int(lane.points.size()), 2);
+      Edit::setSegmentCurvature(lane, 0, 0.8);
+      std::vector<double> before;
+      for (int t = 480; t <= 1440; t += 40)
+            before.push_back(lane.valueAt(t));
+      const int mid = Edit::addPointOnLine(lane, 800);
+      QCOMPARE(mid, 1);
+      QVERIFY(lane.points[0].curved());
+      QVERIFY(lane.points[1].curved());
+      for (int t = 480, i = 0; t <= 1440; t += 40, ++i)
+            QVERIFY2(std::fabs(lane.valueAt(t) - before[size_t(i)]) < 1e-6, qPrintable(QString("%1: %2 / %3").arg(t).arg(lane.valueAt(t)).arg(before[size_t(i)])));
+      // a point already at a tick: its value
+      QCOMPARE(Edit::addPoint(lane, 800, 0.9), 1);
+      QCOMPARE(int(lane.points.size()), 3);
+      QCOMPARE(lane.points[1].value, 0.9);
+      // straighten (Alt + double-click)
+      Edit::setSegmentCurvature(lane, 0, 0);
+      QVERIFY(!lane.points[0].curved());
+      // step / linear
+      Edit::setSegmentCurve(lane, 1, Curve::STEP);
+      QCOMPARE(lane.valueAt(1439), 0.9);
+
+      // move: by time and value, clamped; passing over a neighbour removes it
+      lane.points = { Point(0, 0.5, Curve::LINEAR), Point(480, 0.6, Curve::LINEAR), Point(960, 0.7, Curve::LINEAR),
+                      Point(1440, 0.8, Curve::LINEAR), Point(1920, 0.9, Curve::STEP) };
+      std::vector<int> moved = Edit::movePoints(lane, { 1 }, 240, 0.1);
+      QCOMPARE(moved, std::vector<int>({ 1 }));
+      QCOMPARE(lane.points[1].tick, 720);
+      QVERIFY(std::fabs(lane.points[1].value - 0.7) < 1e-9);
+      QCOMPARE(int(lane.points.size()), 5);
+      moved = Edit::movePoints(lane, { 1 }, 900, 1.0);          // to 1620: over 960 and 1440
+      QCOMPARE(int(lane.points.size()), 3);
+      QCOMPARE(lane.points[1].tick, 1620);
+      QCOMPARE(lane.points[1].value, 1.0);
+      QCOMPARE(moved, std::vector<int>({ 1 }));
+      moved = Edit::movePoints(lane, { 0, 1 }, -500, -2);        // not before 0, not under 0
+      QCOMPARE(lane.points[0].tick, 0);
+      QCOMPARE(lane.points[1].tick, 1620);
+      QCOMPARE(lane.points[0].value, 0.0);
+      // several at once, onto a neighbour's tick: a jump (both kept)
+      lane.points = { Point(0, 0.5, Curve::LINEAR), Point(480, 0.6, Curve::LINEAR), Point(960, 0.7, Curve::LINEAR),
+                      Point(1440, 0.8, Curve::STEP) };
+      moved = Edit::movePoints(lane, { 1, 2 }, 480, 0);
+      QCOMPARE(int(lane.points.size()), 4);
+      QCOMPARE(lane.points[2].tick, 1440);
+      QCOMPARE(lane.points[3].tick, 1440);
+      QCOMPARE(moved, std::vector<int>({ 1, 3 }));               // (moved right: after the one there)
+
+      // Draw Mode: steps on the grid, the envelope after them as before
+      lane.points = { Point(0, 0.0, Curve::LINEAR), Point(1920, 1.0, Curve::STEP) };
+      Edit::drawStep(lane, 480, 720, 0.9);
+      Edit::drawStep(lane, 720, 960, 0.1);
+      QCOMPARE(lane.valueAt(500), 0.9);
+      QCOMPARE(lane.valueAt(959), 0.1);
+      QVERIFY(std::fabs(lane.valueAt(960) - 0.5) < 1e-9);      // the ramp again, where it was
+      QVERIFY(std::fabs(lane.valueAt(1440) - 0.75) < 1e-9);
+      QVERIFY(std::fabs(lane.valueAt(240) - 0.125) < 1e-9);     // before: the ramp, to the step
+      // a step drawn twice in a cell: the last value
+      Edit::drawStep(lane, 480, 720, 0.3);
+      QCOMPARE(lane.valueAt(600), 0.3);
+      // into an empty lane: a step, holding (nothing after it)
+      Lane empty;
+      Edit::drawStep(empty, 960, 1200, 0.4);
+      QCOMPARE(int(empty.points.size()), 1);
+      QCOMPARE(empty.valueAt(5000), 0.4);
+      // a drag's steps one after the other, against the lane before the drag: the last one holds
+      Lane drag;
+      const Lane dragBefore = drag;
+      Edit::drawStep(drag, 960, 1200, 0.4, &dragBefore);
+      Edit::drawStep(drag, 1200, 1440, 0.6, &dragBefore);
+      Edit::drawStep(drag, 1440, 1680, 0.8, &dragBefore);
+      QCOMPARE(int(drag.points.size()), 3);
+      QCOMPARE(drag.valueAt(5000), 0.8);
+      Lane ramp;
+      ramp.points = { Point(0, 0.0, Curve::LINEAR), Point(1920, 1.0, Curve::STEP) };
+      const Lane rampBefore = ramp;
+      Edit::drawStep(ramp, 480, 720, 0.9, &rampBefore);
+      Edit::drawStep(ramp, 720, 960, 0.1, &rampBefore);
+      QVERIFY(std::fabs(ramp.valueAt(960) - 0.5) < 1e-9);
+      QCOMPARE(ramp.valueAt(700), 0.9);
+      QCOMPARE(int(ramp.points.size()), 6);           // 0, the ramp's end at 480 and the step, 720, back at 960, 1920
+
+      // copy / paste: the points and their shapes at another time, over what was there; after them as before
+      lane.points = { Point(0, 0.0, Curve::LINEAR), Point(480, 1.0, Curve::LINEAR), Point(960, 0.0, Curve::STEP),
+                      Point(3840, 0.5, Curve::STEP) };
+      setCurvature(lane.points[0], 0.5);
+      const std::vector<Point> clip = Edit::copyPoints(lane, { 0, 1, 2 });
+      QCOMPARE(int(clip.size()), 3);
+      QCOMPARE(clip.front().tick, 0);
+      QCOMPARE(clip.back().tick, 960);
+      QVERIFY(clip.front().curved());
+      const std::vector<int> pasted = Edit::pastePoints(lane, 1920, clip);
+      QCOMPARE(int(pasted.size()), 3);
+      for (int t = 0; t <= 960; t += 60)
+            QVERIFY(std::fabs(lane.valueAt(1920 + t) - lane.valueAt(t)) < 1e-9 || t == 960);
+      QCOMPARE(lane.valueAt(3840), 0.5);
+
+      // one undoable step each
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      score->setMetaTag("workTitle", "x");
+      Lane a;
+      a.target = "vibrato";
+      Edit::addPoint(a, 0, 0.5);
+      QVERIFY(undoWrite(score, { { score->parts()[0], { a } } }));
+      const QString first = score->metaTag(metaTag);
+      QVERIFY(!first.isEmpty());
+      Edit::addPoint(a, 960, 1.0);
+      QVERIFY(undoWrite(score, { { score->parts()[0], { a } } }));
+      QVERIFY(!undoWrite(score, { { score->parts()[0], { a } } }));      // nothing changed: no step
+      const QString second = score->metaTag(metaTag);
+      QVERIFY(second != first);
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->metaTag(metaTag), first);
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->metaTag(metaTag), QString());
+      score->undoRedo(false, nullptr);
+      score->undoRedo(false, nullptr);
+      QCOMPARE(score->metaTag(metaTag), second);
+      QCOMPARE(score->metaTag("workTitle"), QString("x"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   automationMerge
+//    a Live Set imported again: the newer edit wins per lane (automation.h)
+//---------------------------------------------------------
+
+void TestSoundLibrary::automationMerge()
+      {
+      using namespace Automation;
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      const Part* part = score->parts()[0];
+      auto liveLane = [](const QString& target, double v, const QString& liveHash) {
+            Lane l;
+            l.target = target;
+            l.points = { Point(0, v, Curve::STEP) };
+            l.extra["source"] = SOURCE_LIVE;
+            l.extra["liveHash"] = liveHash;
+            l.extra["pointsHash"] = pointsHash(l.points);
+            return l;
+            };
+      // the first import
+      std::map<const Part*, PartLanes> mine;
+      std::map<const Part*, PartLanes> all = merge(mine, { { part, { liveLane("vibrato", 0.5, "a"), liveLane("mic1", 0.2, "b") } } });
+      QCOMPARE(int(all.at(part).size()), 2);
+      QVERIFY(all.at(part)[0].playedByLive());
+      // vibrato edited here; mic1 not
+      Edit::addPoint(all[part][0], 960, 0.9);
+      QVERIFY(!all.at(part)[0].playedByLive());
+      // Live saved again, nothing changed there: MuseScore's edit stays
+      std::map<const Part*, PartLanes> again = merge(all, { { part, { liveLane("vibrato", 0.5, "a"), liveLane("mic1", 0.2, "b") } } });
+      QCOMPARE(int(again.at(part)[0].points.size()), 2);
+      // vibrato changed in Live too (another liveHash): Live's, the later save; reported
+      QStringList report;
+      again = merge(all, { { part, { liveLane("vibrato", 0.1, "c"), liveLane("mic1", 0.2, "b") } } }, &report);
+      QCOMPARE(int(again.at(part)[0].points.size()), 1);
+      QCOMPARE(again.at(part)[0].points[0].value, 0.1);
+      QCOMPARE(report.size(), 1);
+      // mic1 removed in Live (unedited here): gone; vibrato removed in Live (edited here): kept as MuseScore's
+      again = merge(all, {});
+      QCOMPARE(int(again.at(part).size()), 1);
+      QCOMPARE(again.at(part)[0].target, QString("vibrato"));
+      QCOMPARE(again.at(part)[0].source(), QString());
+      QVERIFY(!again.at(part)[0].playedByLive());
+      // a lane of the score's own, no lane in Live: kept
+      Lane own;
+      own.target = "cc11";
+      own.points = { Point(0, 1.0, Curve::STEP) };
+      again = merge({ { part, { own } } }, { { part, { liveLane("vibrato", 0.5, "a") } } });
+      QCOMPARE(int(again.at(part).size()), 2);
+      // a lane of an older import (source live, no hashes): Live's until edited here
+      Lane old;
+      old.target = "vibrato";
+      old.points = { Point(0, 0.3, Curve::STEP) };
+      old.extra["source"] = SOURCE_LIVE;
+      QVERIFY(old.playedByLive());
+      delete score;
       }
 
 //---------------------------------------------------------

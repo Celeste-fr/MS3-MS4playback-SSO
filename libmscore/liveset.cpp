@@ -92,6 +92,34 @@ std::vector<Point> curve(const Point& a, const Point& b, double c1x, double c1y,
       }
 
 //---------------------------------------------------------
+//   eventsHash
+//---------------------------------------------------------
+
+QString eventsHash(double initial, const std::vector<Event>& events)
+      {
+      quint32 h = 2166136261u;
+      auto mix = [&h](qint64 v) {
+            for (int i = 0; i < 8; ++i) {
+                  h ^= quint32((v >> (8 * i)) & 0xff);
+                  h *= 16777619u;
+                  }
+            };
+      auto r = [](double v, double unit) { return qint64(std::llround(v / unit)); };
+      mix(initial < 0 ? -1 : r(initial, 1e-5));
+      for (const Event& e : events) {
+            mix(r(e.time, 1e-4));
+            mix(r(e.value, 1e-5));
+            if (e.curved) {
+                  mix(r(e.c1x, 1e-4));
+                  mix(r(e.c1y, 1e-4));
+                  mix(r(e.c2x, 1e-4));
+                  mix(r(e.c2y, 1e-4));
+                  }
+            }
+      return QString::number(h, 16);
+      }
+
+//---------------------------------------------------------
 //   parse
 //---------------------------------------------------------
 
@@ -254,6 +282,17 @@ static Envelope resolve(const RawEnvelope& raw, const TrackState& ts)
             e.parameter = QString("target %1").arg(raw.pointee);
       std::vector<RawEvent> ev = raw.events;
       std::stable_sort(ev.begin(), ev.end(), [](const RawEvent& a, const RawEvent& b) { return a.time < b.time; });
+      e.inClip = raw.inClip;
+      for (const RawEvent& r : ev) {
+            if (r.time <= DEFAULT_EVENT_TIME + 1)
+                  continue;
+            Event x;
+            x.time = r.time;
+            x.value = r.value;
+            x.curved = r.curved;
+            x.c1x = r.c1x; x.c1y = r.c1y; x.c2x = r.c2x; x.c2y = r.c2y;
+            e.events.push_back(x);
+            }
       // on its own axis (the arrangement's, or a clip's), curves made straight
       std::vector<Point> pts;
       for (size_t i = 0; i < ev.size(); ++i) {
@@ -686,7 +725,28 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
                   // Live's value before everything: from the start
                   if (e->initial >= 0 && (e->points.empty() || e->points.front().beat > 0))
                         put(0, e->initial * scale);
-                  for (const Point& p : e->points) {
+                  // on the score's own axis (beat = quarter note, no clip): Live's events as they are, curves as curves
+                  // (Live's Bézier is the lane's: automation.h), a jump as two points at one tick
+                  const bool exact = !clipTimeline.score && !e->inClip;
+                  if (exact) {
+                        bool repeated = false;
+                        for (size_t k = 0; k < e->events.size(); ++k) {
+                              const Event& x = e->events[k];
+                              const int tick = firstPassTick(score, int(std::lround(std::max(0.0, x.time) * 480)));
+                              if (tick < 0) {
+                                    ++rep.repeatedPoints;
+                                    repeated = true;
+                                    continue;
+                                    }
+                              put(tick, x.value * scale);
+                              if (x.curved && k + 1 < e->events.size()) {
+                                    Automation::Point& p = lane.points.back();
+                                    p.c1x = x.c1x; p.c1y = x.c1y; p.c2x = x.c2x; p.c2y = x.c2y;
+                                    }
+                              }
+                        (void)repeated;
+                        }
+                  for (const Point& p : exact ? std::vector<Point>() : e->points) {
                         const int utick = clipTimeline.score ? std::max(0, clipTimeline.utick(std::max(0.0, p.beat)))
                                                              : int(std::lround(std::max(0.0, p.beat) * 480));
                         const int tick = firstPassTick(score, utick);
@@ -700,6 +760,9 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
                   if (lane.points.empty())
                         continue;
                   lane.points.back().curve = Automation::Curve::STEP;
+                  // which Live events it came from, and the points it gave (Automation::merge: the newer edit wins)
+                  lane.extra["liveHash"] = eventsHash(e->initial, e->events);
+                  lane.extra["pointsHash"] = Automation::pointsHash(lane.points);
                   out[pi->part].push_back(lane);
                   ++n;
                   }

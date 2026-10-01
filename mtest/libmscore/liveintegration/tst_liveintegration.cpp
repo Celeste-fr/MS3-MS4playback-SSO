@@ -376,7 +376,7 @@ void TestLiveIntegration::liveSetLanes()
       QCOMPARE(int(violin.size()), 2);
       const Automation::Lane& vib = violin[0];
       QCOMPARE(vib.target, QString("vibrato"));
-      QVERIFY(vib.readOnly());
+      QVERIFY(vib.playedByLive());
       QCOMPARE(vib.source(), QString("live"));
       QCOMPARE(vib.extra.value("track").toString(), QString("Strings 1"));
       QCOMPARE(vib.extra.value("param").toString(), QString("Vibrato"));
@@ -420,8 +420,8 @@ void TestLiveIntegration::liveSetLanes()
       QCOMPARE(back->metaTag(Automation::metaTag), score->metaTag(Automation::metaTag));
       const std::map<const Part*, Automation::PartLanes> read = Automation::read(back);
       QCOMPARE(int(read.at(back->parts()[0]).size()), 2);
-      QVERIFY(read.at(back->parts()[0])[0].readOnly());
-      QVERIFY(!read.at(back->parts()[1])[0].readOnly());           // the score's own
+      QVERIFY(read.at(back->parts()[0])[0].playedByLive());
+      QVERIFY(!read.at(back->parts()[1])[0].playedByLive());       // the score's own
       QCOMPARE(read.at(back->parts()[0])[0].extra.value("param").toString(), QString("Vibrato"));
       delete back;
       delete score;

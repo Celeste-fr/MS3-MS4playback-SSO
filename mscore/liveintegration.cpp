@@ -158,16 +158,20 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
       LiveSet::Report r;
       const std::map<const Part*, Automation::PartLanes> live = LiveSet::lanes(score, set, LiveSet::partInfos(score, ports),
                                                                                path, modified, &r);
-      const std::map<const Part*, Automation::PartLanes> all = Automation::replaceSource(Automation::read(score),
-                                                                                          Automation::SOURCE_LIVE, live);
+      // per lane the newer edit (automation.h: Automation::merge): Live's where it changed since, else MuseScore's
+      QStringList both;
+      const std::map<const Part*, Automation::PartLanes> all = Automation::merge(Automation::read(score), live, &both);
       QJsonObject o;
       o["path"] = path;
       o["auto"] = autoReimport;
       o["setTime"] = modified.toUTC().toString(Qt::ISODate);
       o["creator"] = set.creator;
       setTags(score, Automation::write(score, all), QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)));
-      if (report)
+      if (report) {
             *report = r.text();
+            if (!both.isEmpty())
+                  *report += "\n" + QObject::tr("Edited in MuseScore and in Live (Live's taken, saved later):") + "\n  " + both.join("\n  ");
+            }
       Watcher::instance()->update();
       return true;
       }

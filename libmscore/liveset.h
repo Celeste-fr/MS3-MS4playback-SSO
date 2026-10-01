@@ -66,6 +66,17 @@ struct Point {
       double value { 0 };           // as Live stores it (plug-in: 0-1; clip CC: 0-127)
       };
 
+// an envelope's event as Live keeps it (FloatEvent): a curved one carries the Bézier of the segment after it
+struct Event {
+      double time { 0 };            // beats (Live's axis: the arrangement's, or a clip's)
+      double value { 0 };
+      bool curved { false };
+      double c1x { 1.0 / 3 }, c1y { 1.0 / 3 }, c2x { 2.0 / 3 }, c2y { 2.0 / 3 };
+      };
+// a hash of Live's events (rounded: Live may write the same numbers otherwise when it saves), "initial" the default
+// event's value (-1: none): the lane's liveHash (automation.h), the same whether the set was written here or by Live
+QString eventsHash(double initial, const std::vector<Event>& events);
+
 struct Envelope {
       enum class Kind : signed char { PARAMETER, CLIP_CC, OTHER };
       Kind kind { Kind::OTHER };
@@ -75,6 +86,8 @@ struct Envelope {
       int cc { -1 };                // CLIP_CC: 0-127
       double initial { -1 };        // the value before the first point (Live's default event), -1: none
       std::vector<Point> points;    // by beat; curves already made into straight segments
+      std::vector<Event> events;    // as Live has them (the default event left out: initial), by time
+      bool inClip { false };        // a clip's envelope (its own axis, looped: points placed in the arrangement)
       };
 
 struct Track {

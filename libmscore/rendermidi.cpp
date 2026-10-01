@@ -1922,6 +1922,8 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                               ev.setOriginatingStaff(part->staff(0)->idx());
                               events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
                               }
+                        if (lp && tick >= lp->dynamicsLaneFrom)
+                              continue;               // (a dynamics lane plays it from there)
                         NPlayEvent ev(ME_CONTROLLER, ch, controller, step.dynamics);
                         ev.setOriginatingStaff(part->staff(0)->idx());
                         // a library's dynamics CC ahead of the notes at its tick (a long starting on a
@@ -4034,13 +4036,17 @@ void MidiRenderer::updateState()
                                                 continue;
                                           if (all[size_t(i)].cc >= 0)
                                                 a.cc = all[size_t(i)].cc;
-                                          else if (!all[size_t(i)].param.isEmpty() && SoundLib::output() == SoundLib::Output::PLUGIN)
+                                          else if (!all[size_t(i)].param.isEmpty()
+                                                   && (SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips))
                                                 a.param = i;
                                           }
                                     }
-                              // a lane from a Live Set (automation.h) while the library plays through MIDI
-                              // output, to Live: Live plays it; MuseScore sends nothing for its controller
-                              if (lane.source() == Automation::SOURCE_LIVE && SoundLib::output() == SoundLib::Output::MIDI) {
+                              // a lane Live's set has as it is here (automation.h) while the library plays
+                              // through Live: Live plays it; MuseScore sends nothing for its controller
+                              const int laneCC = a.cc >= 0 ? a.cc : lane.cc();
+                              if (laneCC >= 0 && laneCC == library->dynamicsCC && !lane.points.empty())
+                                    lp.dynamicsLaneFrom = std::min(lp.dynamicsLaneFrom, lane.points.front().tick);
+                              if (lane.playedByLive() && (SoundLib::output() == SoundLib::Output::MIDI || forLiveClips)) {
                                     automated.insert(lane.target);
                                     continue;
                                     }

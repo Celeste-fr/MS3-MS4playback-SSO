@@ -12,8 +12,10 @@
 #include "partplayback.h"
 #include "part.h"
 #include "score.h"
+#include "undo.h"
 
 #include <algorithm>
+#include <set>
 #include <cmath>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -43,6 +45,72 @@ int Lane::cc() const
       return ok && n >= 0 && n <= 127 ? n : -1;
       }
 
+//---------------------------------------------------------
+//   curves
+//---------------------------------------------------------
+
+static bool onDiagonal(double x, double y)
+      {
+      return std::fabs(x - y) <= 1e-6;
+      }
+
+bool Point::curved() const
+      {
+      return curve == Curve::LINEAR && !(onDiagonal(c1x, c1y) && onDiagonal(c2x, c2y));
+      }
+
+void setCurvature(Point& p, double k)
+      {
+      k = std::max(-1.0, std::min(1.0, k));
+      if (std::fabs(k) < 1e-4) {
+            p.straighten();
+            return;
+            }
+      // the quadratic Bézier (0,0) Q (1,1), Q = (0.5 - k/2, 0.5 + k/2), as a cubic
+      const double qx = 0.5 - 0.5 * k;
+      const double qy = 0.5 + 0.5 * k;
+      p.c1x = 2.0 / 3 * qx;
+      p.c1y = 2.0 / 3 * qy;
+      p.c2x = 1.0 / 3 + 2.0 / 3 * qx;
+      p.c2y = 1.0 / 3 + 2.0 / 3 * qy;
+      }
+
+double curvature(const Point& p)
+      {
+      if (!p.curved())
+            return 0;
+      // Q from both control points (exact for setCurvature's), the nearest k
+      const double qx = (1.5 * p.c1x + 1.5 * p.c2x - 0.5) * 0.5;
+      const double qy = (1.5 * p.c1y + 1.5 * p.c2y - 0.5) * 0.5;
+      return std::max(-1.0, std::min(1.0, qy - qx));
+      }
+
+static double bez(double p1, double p2, double t)
+      {
+      const double u = 1 - t;
+      return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;             // p0 0, p3 1
+      }
+
+double curveAt(double c1x, double c1y, double c2x, double c2y, double x)
+      {
+      if (x <= 0)
+            return 0;
+      if (x >= 1)
+            return 1;
+      if (onDiagonal(c1x, c1y) && onDiagonal(c2x, c2y))
+            return x;
+      // t for x (x(t) rises when the control points' x are in 0-1, as Live keeps them): bisection
+      double lo = 0, hi = 1, t = x;
+      for (int i = 0; i < 60; ++i) {
+            t = 0.5 * (lo + hi);
+            if (bez(c1x, c2x, t) < x)
+                  lo = t;
+            else
+                  hi = t;
+            }
+      return bez(c1y, c2y, 0.5 * (lo + hi));
+      }
+
 double Lane::valueAt(int tick) const
       {
       if (points.empty() || tick < points.front().tick)
@@ -51,7 +119,39 @@ double Lane::valueAt(int tick) const
       const Point& p = *std::prev(next);
       if (next == points.end() || p.curve == Curve::STEP || next->tick == p.tick)
             return p.value;
-      return p.value + (next->value - p.value) * double(tick - p.tick) / double(next->tick - p.tick);
+      const double x = double(tick - p.tick) / double(next->tick - p.tick);
+      const double y = p.curved() ? curveAt(p.c1x, p.c1y, p.c2x, p.c2y, x) : x;
+      return p.value + (next->value - p.value) * y;
+      }
+
+bool Lane::playedByLive() const
+      {
+      if (extra.contains("pointsHash"))
+            return extra.value("pointsHash").toString() == pointsHash(points);
+      return source() == SOURCE_LIVE;
+      }
+
+static QJsonArray pointJson(const Point& p)
+      {
+      QJsonArray a({ p.tick, std::round(p.value * 10000) / 10000, p.curve == Curve::LINEAR ? "linear" : "step" });
+      if (p.curved())
+            a.append(QJsonArray({ std::round(p.c1x * 1e6) / 1e6, std::round(p.c1y * 1e6) / 1e6,
+                                  std::round(p.c2x * 1e6) / 1e6, std::round(p.c2y * 1e6) / 1e6 }));
+      return a;
+      }
+
+QString pointsHash(const std::vector<Point>& points)
+      {
+      QJsonArray a;
+      for (const Point& p : points)
+            a.append(pointJson(p));
+      // FNV-1a 32 (stable across runs and Qt versions)
+      quint32 h = 2166136261u;
+      for (char c : QJsonDocument(a).toJson(QJsonDocument::Compact)) {
+            h ^= quint32(quint8(c));
+            h *= 16777619u;
+            }
+      return QString::number(h, 16);
       }
 
 std::vector<std::pair<int, double>> Lane::events(int tick1, int tick2, int stepTicks, double resolution) const
@@ -117,6 +217,14 @@ std::map<const Part*, PartLanes> read(const MasterScore* score)
                         p.tick = pa.at(0).toInt();
                         p.value = std::min(1.0, std::max(0.0, pa.at(1).toDouble()));
                         p.curve = pa.size() > 2 && pa.at(2).toString() == "linear" ? Curve::LINEAR : Curve::STEP;
+                        const QJsonArray c = pa.size() > 3 ? pa.at(3).toArray() : QJsonArray();
+                        if (p.curve == Curve::LINEAR && c.size() == 4) {
+                              auto in01 = [](double v) { return std::min(1.0, std::max(0.0, v)); };
+                              p.c1x = in01(c.at(0).toDouble());
+                              p.c1y = c.at(1).toDouble();
+                              p.c2x = in01(c.at(2).toDouble());
+                              p.c2y = c.at(3).toDouble();
+                              }
                         lane.points.push_back(p);
                         }
                   std::stable_sort(lane.points.begin(), lane.points.end());
@@ -147,8 +255,7 @@ QString write(const MasterScore* score, const std::map<const Part*, PartLanes>& 
                         continue;
                   QJsonArray pts;
                   for (const Point& p : lane.points)
-                        pts.append(QJsonArray({ p.tick, std::round(p.value * 10000) / 10000,
-                                                p.curve == Curve::LINEAR ? "linear" : "step" }));
+                        pts.append(pointJson(p));
                   QJsonObject lo = lane.extra;
                   lo["target"] = lane.target;
                   lo["points"] = pts;
@@ -163,6 +270,25 @@ QString write(const MasterScore* score, const std::map<const Part*, PartLanes>& 
             list.append(o);
             }
       return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
+      }
+
+bool undoWrite(MasterScore* score, const std::map<const Part*, PartLanes>& lanes)
+      {
+      if (!score)
+            return false;
+      const QString tag = write(score, lanes);
+      if (tag == score->metaTag(metaTag))
+            return false;
+      QMap<QString, QString> tags = score->metaTags();
+      if (tag.isEmpty())
+            tags.remove(metaTag);
+      else
+            tags.insert(metaTag, tag);
+      score->startCmd();
+      score->undo(new ChangeMetaTags(score, tags));
+      score->endCmd();
+      score->setPlaylistDirty();
+      return true;
       }
 
 PartLanes lanes(const Part* part, const std::map<const Part*, PartLanes>& all)
@@ -186,6 +312,344 @@ std::map<const Part*, PartLanes> replaceSource(const std::map<const Part*, PartL
             i = i->second.empty() ? out.erase(i) : std::next(i);
       return out;
       }
+
+//---------------------------------------------------------
+//   merge
+//---------------------------------------------------------
+
+std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& all, const std::map<const Part*, PartLanes>& with,
+                                       QStringList* report)
+      {
+      std::map<const Part*, PartLanes> out;
+      std::set<const Part*> parts;
+      for (const auto& pl : all)
+            parts.insert(pl.first);
+      for (const auto& pl : with)
+            parts.insert(pl.first);
+      for (const Part* part : parts) {
+            const PartLanes mine = all.count(part) ? all.at(part) : PartLanes();
+            const PartLanes live = with.count(part) ? with.at(part) : PartLanes();
+            PartLanes res;
+            std::set<QString> taken;
+            for (const Lane& l : live) {
+                  const Lane* m = nullptr;
+                  for (const Lane& x : mine)
+                        if (x.target == l.target)
+                              m = &x;
+                  taken.insert(l.target);
+                  if (!m) {
+                        res.push_back(l);
+                        continue;
+                        }
+                  const bool liveSame = m->extra.value("liveHash").toString() == l.extra.value("liveHash").toString()
+                                        && !l.extra.value("liveHash").toString().isEmpty();
+                  if (liveSame && !m->playedByLive()) {
+                        res.push_back(*m);            // edited here since: MuseScore's is newer
+                        continue;
+                        }
+                  if (!liveSame && !m->playedByLive() && report)
+                        *report << QObject::tr("%1: changed in Live and in MuseScore; Live's (saved later) taken").arg(l.target);
+                  res.push_back(l);
+                  }
+            for (const Lane& m : mine) {
+                  if (taken.count(m.target))
+                        continue;
+                  const bool fromLive = m.source() == SOURCE_LIVE || m.extra.contains("liveHash");
+                  if (fromLive && m.playedByLive())
+                        continue;                     // gone from Live, unedited here
+                  Lane k = m;
+                  if (fromLive) {
+                        k.extra.remove("source");     // edited here: MuseScore's own now
+                        k.extra.remove("liveHash");
+                        k.extra.remove("pointsHash");
+                        }
+                  res.push_back(k);
+                  }
+            if (!res.empty())
+                  out[part] = res;
+            }
+      return out;
+      }
+
+//---------------------------------------------------------
+//   Edit
+//---------------------------------------------------------
+
+namespace Edit {
+
+static void sortPoints(Lane& lane)
+      {
+      std::stable_sort(lane.points.begin(), lane.points.end());
+      }
+
+// de Casteljau: the curved segment p -> n split at its time fraction x; p's shape becomes the first half's,
+// the returned point (at the split) carries the second half's
+static Point splitCurve(Point& p, const Point& n, double x, int tick, double value)
+      {
+      Point m(tick, value, Curve::LINEAR);
+      if (!p.curved())
+            return m;
+      double lo = 0, hi = 1;
+      for (int i = 0; i < 60; ++i) {
+            const double t = 0.5 * (lo + hi);
+            if (bez(p.c1x, p.c2x, t) < x)
+                  lo = t;
+            else
+                  hi = t;
+            }
+      const double t = 0.5 * (lo + hi);
+      // control polygon (box units): P0 (0,0), P1 c1, P2 c2, P3 (1,1)
+      auto lerp = [](double a, double b, double t) { return a + (b - a) * t; };
+      const double p01x = lerp(0, p.c1x, t), p01y = lerp(0, p.c1y, t);
+      const double p12x = lerp(p.c1x, p.c2x, t), p12y = lerp(p.c1y, p.c2y, t);
+      const double p23x = lerp(p.c2x, 1, t), p23y = lerp(p.c2y, 1, t);
+      const double a1x = lerp(p01x, p12x, t), a1y = lerp(p01y, p12y, t);
+      const double a2x = lerp(p12x, p23x, t), a2y = lerp(p12y, p23y, t);
+      const double sx = lerp(a1x, a2x, t), sy = lerp(a1y, a2y, t);
+      // each half in its own box (a half without time or value span: straight)
+      auto box = [](double x0, double y0, double x1, double y1, double& cx, double& cy, double px, double py) {
+            cx = x1 > x0 ? (px - x0) / (x1 - x0) : 0;
+            cy = std::fabs(y1 - y0) > 1e-9 ? (py - y0) / (y1 - y0) : cx;
+            cx = std::min(1.0, std::max(0.0, cx));
+            };
+      Point first = p;
+      box(0, 0, sx, sy, first.c1x, first.c1y, p01x, p01y);
+      box(0, 0, sx, sy, first.c2x, first.c2y, a1x, a1y);
+      box(sx, sy, 1, 1, m.c1x, m.c1y, a2x, a2y);
+      box(sx, sy, 1, 1, m.c2x, m.c2y, p23x, p23y);
+      if (std::fabs(sy) < 1e-9)
+            first.straighten();
+      if (std::fabs(1 - sy) < 1e-9)
+            m.straighten();
+      p.c1x = first.c1x; p.c1y = first.c1y; p.c2x = first.c2x; p.c2y = first.c2y;
+      (void)n;
+      return m;
+      }
+
+int addPoint(Lane& lane, int tick, double value)
+      {
+      tick = std::max(0, tick);
+      value = std::min(1.0, std::max(0.0, value));
+      for (size_t i = 0; i < lane.points.size(); ++i)
+            if (lane.points[i].tick == tick) {
+                  lane.points[i].value = value;
+                  return int(i);
+                  }
+      auto next = std::upper_bound(lane.points.begin(), lane.points.end(), Point(tick, 0, Curve::STEP));
+      Point np(tick, value, Curve::LINEAR);
+      if (next != lane.points.begin()) {
+            Point& p = *std::prev(next);
+            np.curve = p.curve;
+            if (p.curve == Curve::LINEAR && next != lane.points.end()) {
+                  const double x = double(tick - p.tick) / double(next->tick - p.tick);
+                  np = splitCurve(p, *next, x, tick, value);
+                  }
+            }
+      else if (!lane.points.empty())
+            np.curve = Curve::LINEAR;
+      auto it = lane.points.insert(next, np);
+      return int(it - lane.points.begin());
+      }
+
+int addPointOnLine(Lane& lane, int tick)
+      {
+      double v = lane.valueAt(tick);
+      if (v < 0)
+            v = lane.points.empty() ? 0.5 : lane.points.front().value;
+      return addPoint(lane, tick, v);
+      }
+
+void removePoints(Lane& lane, const std::vector<int>& indices)
+      {
+      std::vector<int> idx = indices;
+      std::sort(idx.begin(), idx.end());
+      idx.erase(std::unique(idx.begin(), idx.end()), idx.end());
+      for (auto i = idx.rbegin(); i != idx.rend(); ++i)
+            if (*i >= 0 && *i < int(lane.points.size()))
+                  lane.points.erase(lane.points.begin() + *i);
+      }
+
+std::vector<int> movePoints(Lane& lane, const std::vector<int>& indices, int dtick, double dvalue)
+      {
+      std::vector<int> idx;
+      for (int i : indices)
+            if (i >= 0 && i < int(lane.points.size()))
+                  idx.push_back(i);
+      std::sort(idx.begin(), idx.end());
+      idx.erase(std::unique(idx.begin(), idx.end()), idx.end());
+      if (idx.empty())
+            return {};
+      int a0 = lane.points[size_t(idx.front())].tick, b0 = a0;
+      for (int i : idx) {
+            a0 = std::min(a0, lane.points[size_t(i)].tick);
+            b0 = std::max(b0, lane.points[size_t(i)].tick);
+            }
+      dtick = std::max(dtick, -a0);
+      const int a1 = a0 + dtick, b1 = b0 + dtick;
+      std::vector<Point> moved, kept;
+      std::set<int> sel(idx.begin(), idx.end());
+      for (int i = 0; i < int(lane.points.size()); ++i) {
+            Point p = lane.points[size_t(i)];
+            if (sel.count(i)) {
+                  p.tick += dtick;
+                  p.value = std::min(1.0, std::max(0.0, p.value + dvalue));
+                  moved.push_back(p);
+                  }
+            else {
+                  // passed over: removed
+                  if (dtick > 0 && p.tick > b0 && p.tick < b1)
+                        continue;
+                  if (dtick < 0 && p.tick < a0 && p.tick > a1)
+                        continue;
+                  kept.push_back(p);
+                  }
+            }
+      // the moved group goes after kept points at an equal tick when it moved right (left: before)
+      std::vector<Point> all;
+      std::vector<bool> isMoved;
+      size_t k = 0, m = 0;
+      while (k < kept.size() || m < moved.size()) {
+            bool takeMoved;
+            if (k == kept.size())
+                  takeMoved = true;
+            else if (m == moved.size())
+                  takeMoved = false;
+            else if (moved[m].tick != kept[k].tick)
+                  takeMoved = moved[m].tick < kept[k].tick;
+            else
+                  takeMoved = dtick < 0;
+            all.push_back(takeMoved ? moved[m++] : kept[k++]);
+            isMoved.push_back(takeMoved);
+            }
+      lane.points = all;
+      std::vector<int> out;
+      for (int i = 0; i < int(isMoved.size()); ++i)
+            if (isMoved[size_t(i)])
+                  out.push_back(i);
+      return out;
+      }
+
+void setSegmentCurvature(Lane& lane, int i, double k)
+      {
+      if (i < 0 || i + 1 >= int(lane.points.size()))
+            return;
+      Point& p = lane.points[size_t(i)];
+      p.curve = Curve::LINEAR;
+      setCurvature(p, k);
+      }
+
+void setSegmentCurve(Lane& lane, int i, Curve c)
+      {
+      if (i < 0 || i >= int(lane.points.size()))
+            return;
+      lane.points[size_t(i)].curve = c;
+      if (c == Curve::STEP)
+            lane.points[size_t(i)].straighten();
+      }
+
+void drawStep(Lane& lane, int tick1, int tick2, double value, const Lane* original)
+      {
+      tick1 = std::max(0, tick1);
+      if (tick2 <= tick1)
+            return;
+      value = std::min(1.0, std::max(0.0, value));
+      const Lane& was = original ? *original : lane;
+      const double after = was.valueAt(tick2);
+      // the envelope arriving at tick1 (a ramp's end at a point there: that point's first value)
+      double arriving = lane.valueAt(tick1);
+      for (const Point& p : lane.points)
+            if (p.tick == tick1) {
+                  arriving = p.value;
+                  break;
+                  }
+      const bool laterPoints = !was.points.empty() && was.points.back().tick > tick2;
+      // the envelope's segment at tick2 goes on from there as it was (a step or a ramp)
+      Curve afterCurve = Curve::STEP;
+      for (const Point& p : was.points)
+            if (p.tick <= tick2)
+                  afterCurve = p.curve;
+      bool pointAtEnd = false;
+      std::vector<Point> pts;
+      for (const Point& p : lane.points) {
+            if (p.tick >= tick1 && p.tick < tick2)
+                  continue;
+            pointAtEnd = pointAtEnd || p.tick == tick2;
+            pts.push_back(p);
+            }
+      // a ramp running into the step: it ends where the step starts, at the value it had there (a jump then)
+      Point before(tick1, -1, Curve::LINEAR);
+      for (const Point& p : pts)
+            if (p.tick < tick1)
+                  before.curve = p.curve, before.value = p.curve == Curve::LINEAR ? 0 : -1;
+      lane.points = pts;
+      if (before.value >= 0 && arriving >= 0) {
+            before.value = arriving;
+            lane.points.push_back(before);
+            }
+      lane.points.push_back(Point(tick1, value, Curve::STEP));
+      if (!pointAtEnd && after >= 0 && laterPoints)
+            lane.points.push_back(Point(tick2, after, afterCurve));
+      else if (!pointAtEnd && after >= 0 && !laterPoints && std::fabs(after - value) > 1e-9)
+            lane.points.push_back(Point(tick2, after, Curve::STEP));
+      sortPoints(lane);
+      // a step that repeats the step before it says nothing (a drag across cells at one height)
+      for (size_t i = 1; i < lane.points.size(); ) {
+            const Point& a = lane.points[i - 1];
+            const Point& b = lane.points[i];
+            if (a.curve == Curve::STEP && b.curve == Curve::STEP && std::fabs(a.value - b.value) < 1e-9)
+                  lane.points.erase(lane.points.begin() + long(i));
+            else
+                  ++i;
+            }
+      }
+
+std::vector<Point> copyPoints(const Lane& lane, const std::vector<int>& indices)
+      {
+      std::vector<Point> out;
+      for (int i : indices)
+            if (i >= 0 && i < int(lane.points.size()))
+                  out.push_back(lane.points[size_t(i)]);
+      std::stable_sort(out.begin(), out.end());
+      if (!out.empty()) {
+            const int t0 = out.front().tick;
+            for (Point& p : out)
+                  p.tick -= t0;
+            }
+      return out;
+      }
+
+std::vector<int> pastePoints(Lane& lane, int tick, const std::vector<Point>& clip)
+      {
+      if (clip.empty())
+            return {};
+      tick = std::max(0, tick);
+      const int span = clip.back().tick;
+      const double after = lane.valueAt(tick + span);
+      const bool laterPoints = span > 0 && !lane.points.empty() && lane.points.back().tick > tick + span;
+      std::vector<Point> pts;
+      for (const Point& p : lane.points)
+            if (p.tick < tick || p.tick > tick + span)
+                  pts.push_back(p);
+      lane.points = pts;
+      std::vector<Point> added;
+      for (Point p : clip) {
+            p.tick += tick;
+            added.push_back(p);
+            }
+      for (const Point& p : added)
+            lane.points.push_back(p);
+      // after the pasted span the envelope goes on as before (a jump back at its end, as Live pastes)
+      if (laterPoints && after >= 0 && std::fabs(after - added.back().value) > 1e-9)
+            lane.points.push_back(Point(tick + span, after, Curve::LINEAR));
+      sortPoints(lane);
+      std::vector<int> out;
+      for (int i = 0; i < int(lane.points.size()); ++i)
+            if (lane.points[size_t(i)].tick >= tick && lane.points[size_t(i)].tick <= tick + span)
+                  out.push_back(i);
+      return out;
+      }
+
+}     // namespace Edit
 
 }     // namespace Automation
 }     // namespace Ms

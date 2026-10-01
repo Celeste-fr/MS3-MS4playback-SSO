@@ -28,6 +28,7 @@
 #include "ms4playback.h"
 #include "soundlibrary.h"
 #include "automation.h"
+#include <limits>
 
 namespace Ms {
 
@@ -76,6 +77,7 @@ class MidiRenderer {
       QString partModes;                                    // the parts' playback modes as last read
       QString partControllers;                              // the parts' library controllers as last read
       QString partAutomation;                               // the parts' automation lanes as last read
+      bool forLiveClips { false };
 
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {
@@ -97,6 +99,9 @@ class MidiRenderer {
                   int param { -1 };
                   };
             std::vector<Auto> automation;
+            // a lane on the library's dynamics controller (CC1): from its first point it, not the notation's
+            // dynamics, sends that controller (the notation still sets the shorts' velocities)
+            int dynamicsLaneFrom { std::numeric_limits<int>::max() };
             std::map<const Instrument*, const SoundLib::LibInstrument*> instruments;
             QStringList velocityDynamics;                   // Library::velocityDynamics
             std::vector<const SoundLib::LibInstrument*> patches;    // routed: the main one, then extras
@@ -191,6 +196,9 @@ class MidiRenderer {
       void renderChunk(const Chunk&, EventMap* events, const Context& ctx);
 
       void setScoreChanged() { needUpdate = true; }
+      // rendering the clips Live plays (liveclips.h): plug-in parameter lanes as ME_PARAMETER events whatever the
+      // output (the MuseScore Link device sets them in Live), lanes Live plays itself (Lane::playedByLive) left out
+      void setForLiveClips(bool v) { forLiveClips = v; needUpdate = true; }
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
 
       Chunk getChunkAt(int utick);
