@@ -13,6 +13,8 @@
 #include <atomic>
 
 #include <cmath>
+#include <cstring>
+#include <QtEndian>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
 #include <QJsonArray>
@@ -98,6 +100,7 @@ class TestSoundLibrary : public QObject, public MTest
       void kontaktSetup();
       void kontaktScriptValues();
       void kontaktScriptValueLengths();
+      void kontaktKickstartUnpurge();
       void kontaktSetupReal();
       void vst3Plugin();
       void vst3LoadTimes();
@@ -338,12 +341,16 @@ void TestSoundLibrary::spitfireMap()
                   }
             // a kit with every technique switched on (measured, never chosen): the kit's .nki, Kickstart's
             // arrays set whole (each value as written: an array's elements separated by spaces), every hit
-            // with a key, an off one on a free key (Bass Drum Roll, technique 3, on key 1)
+            // with a key, an off one on a free key (Bass Drum Roll, technique 3, on key 1); every drum on
+            // (%x4jsr) and Kickstart's round-robin reset keyswitches off ($nd5ia, else keys from 24 play nothing)
             if (p.name.endsWith(" (all on)")) {
                   ++allOn;
-                  QCOMPARE(int(p.setupValues.size()), 2);
+                  QCOMPARE(int(p.setupValues.size()), 4);
                   QCOMPARE(p.setupValues[0].first, QString("%c2lsa"));
                   QCOMPARE(p.setupValues[1].first, QString("%4jwcn"));
+                  QCOMPARE(p.setupValues[2].first, QString("%x4jsr"));
+                  QVERIFY(p.setupValues[2].second.startsWith("1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 ") && !p.setupValues[2].second.contains(" 0 "));
+                  QCOMPARE(p.setupValues[3], std::make_pair(QString("$nd5ia"), QString("0")));
                   QVERIFY(!p.setupValues[1].second.contains("  ") && p.setupValues[1].second.endsWith(" 0"));
                   QCOMPARE(int(p.setupValues[0].second.split(' ').size()), int(p.drums.size()) + 1);
                   for (const SoundLib::DrumKey& d : p.drums) {
@@ -1484,6 +1491,214 @@ void TestSoundLibrary::kontaktScriptValueLengths()
       QVERIFY(after == kitValues);
       QCOMPARE(slotProgram(kitState, nullptr).size(), slotProgram(fromEmpty(empty, kit, "D:/x", {}, &error), nullptr).size()
                + (allKeys.size() - kitValues.at("%4jwcn").size()) + (allOn.size() - kitValues.at("%c2lsa").size()));
+      }
+
+//---------------------------------------------------------
+//   kontaktKickstartUnpurge
+//    a Kickstart percussion patch's techniques (drums, mics) switched on: their sample groups loaded too,
+//    as Kickstart's window does (a technique switched on by the arrays alone stayed silent, its groups
+//    purged). A synthetic program: a script with the values, groups with Kickstart's metadata (eight
+//    floats from 1e-6: [1] mic, [2] hit, [6] drum) and purge flags (55 bytes before the private data's
+//    end), zones with theirs (private byte 47); with SSO_KICKSTART_NKI (e.g. Drums - Low.nki) the real kit
+//---------------------------------------------------------
+
+static QByteArray le32Bytes(quint32 v)
+      {
+      char b[4];
+      qToLittleEndian<quint32>(v, reinterpret_cast<uchar*>(b));
+      return QByteArray(b, 4);
+      }
+
+static QByteArray structBody(quint16 version, const QByteArray& priv, const QByteArray& pub, const QByteArray& kids)
+      {
+      char v[2];
+      qToLittleEndian<quint16>(version, reinterpret_cast<uchar*>(v));
+      return QByteArray(1, 1) + QByteArray(v, 2) + le32Bytes(priv.size()) + priv + le32Bytes(pub.size()) + pub
+             + le32Bytes(kids.size()) + kids;
+      }
+
+static QByteArray pchunk(quint16 id, const QByteArray& body)
+      {
+      char b[2];
+      qToLittleEndian<quint16>(id, reinterpret_cast<uchar*>(b));
+      return QByteArray(b, 2) + le32Bytes(body.size()) + body;
+      }
+
+// a group: drum < 0 for one without Kickstart's metadata (a mic header)
+static QByteArray kickstartGroup(int drum, int hit, int mic, bool purged)
+      {
+      QByteArray priv(120, '\x07');
+      if (drum >= 0) {
+            const int values[8] = { 1, 0x2000 | mic, hit, 0, 47104, 0, 50152 - 1000 + drum, 100352 };
+            QByteArray floats;
+            for (int v : values) {
+                  const float f = float(v / 1e6);
+                  quint32 bits;
+                  std::memcpy(&bits, &f, 4);
+                  floats += le32Bytes(bits);
+                  }
+            priv.replace(20, 32, floats);
+            }
+      priv[priv.size() - 55] = purged ? 1 : 0;
+      return structBody(150, priv, QByteArray("name"), QByteArray());
+      }
+
+static QByteArray kickstartZone(int group, bool purged)
+      {
+      QByteArray priv(87, '\x05');
+      priv[47] = purged ? 1 : 0;
+      return le32Bytes(group) + structBody(156, priv, QByteArray(82, '\x03'), QByteArray());
+      }
+
+// a PAR_SCRIPT chunk: its code, then the saved values
+static QByteArray kickstartScript(const std::map<QString, QByteArray>& values)
+      {
+      const QByteArray code("on init\nend on\n");
+      QByteArray pub = QByteArray(2, '\0') + le32Bytes(code.size()) + code + le32Bytes(quint32(values.size()));
+      for (const auto& v : values) {
+            const QByteArray entry = v.first.toLatin1() + " " + v.second;
+            pub += le32Bytes(entry.size()) + entry;
+            }
+      return pchunk(0x06, QByteArray(1, '\0') + pub);
+      }
+
+void TestSoundLibrary::kontaktKickstartUnpurge()
+      {
+      using namespace KontaktSetup;
+      // drums 1000 (on; mic 3 off) and 1001 (off); techniques (1000, 1) on, (1000, 2) off in two tree
+      // groups and one on mic 3, (1001, 1) on, (1000, 3) off
+      struct G { int drum, hit, mic; bool purged; };
+      const std::vector<G> gs = { { -1, 0, 0, true }, { 1000, 0, 2, true }, { 1000, 1, 2, false }, { 1000, 2, 2, true },
+                                  { 1000, 2, 2, true }, { 1000, 2, 3, true }, { 1001, 1, 2, true }, { 1000, 3, 2, true } };
+      QByteArray groups = le32Bytes(quint32(gs.size()));
+      for (const G& g : gs)
+            groups += kickstartGroup(g.drum, g.hit, g.mic, g.purged);
+      const std::vector<int> zoneGroups = { 2, 3, 3, 4, 5, 6, 7 };
+      QByteArray zones = le32Bytes(quint32(zoneGroups.size()));
+      for (int g : zoneGroups)
+            zones += kickstartZone(g, gs[g].purged);
+      const std::map<QString, QByteArray> defaults = { { "%c2lsa", "1 0 1 0 0" }, { "%x4jsr", "1 0" }, { "%nvmxz", "4 4 0" },
+                                                       { "$other", "3" } };
+      auto program = [&](const std::map<QString, QByteArray>& set, const QByteArray& groupList, bool withZones = true) {
+            std::map<QString, QByteArray> values = defaults;
+            for (const auto& v : set)
+                  values[v.first] = v.second;
+            return structBody(181, QByteArray(10, '\x01'), QByteArray(8, '\x02'), pchunk(0x3A, "abc") + kickstartScript(values)
+                              + pchunk(0x33, groupList) + (withZones ? pchunk(0x34, zones) : QByteArray()) + pchunk(0x32, "x"));
+            };
+      const QByteArray plain = program({}, groups);
+      QCOMPARE(scriptValues(plain).at("%c2lsa"), QByteArray("1 0 1 0 0"));
+      QCOMPARE(purgedGroups(plain), std::vector<int>({ 0, 1, 3, 4, 5, 6, 7 }));
+
+      int n = -1;
+      // the technique (1000, 2): its tree groups, not the one on mic 3 (off for its drum)
+      const QByteArray on = program({ { "%c2lsa", "1 1 1 0 0" } }, groups);
+      const QByteArray loaded = unpurgeSwitchedOn(on, defaults, &n);
+      QCOMPARE(n, 2);
+      QCOMPARE(loaded.size(), on.size());
+      QCOMPARE(purgedGroups(loaded), std::vector<int>({ 0, 1, 5, 6, 7 }));
+      std::vector<int> differ;
+      for (int i = 0; i < on.size(); ++i)
+            if (on.at(i) != loaded.at(i))
+                  differ.push_back(i);
+      QCOMPARE(int(differ.size()), 2 + 3);              // two groups' flags, their three zones' flags
+      for (int i : differ)
+            QVERIFY(on.at(i) == 1 && loaded.at(i) == 0);
+      const int zonesAt = loaded.indexOf(zones.left(64));
+      QVERIFY(zonesAt > 0);
+      for (int z = 0; z < int(zoneGroups.size()); ++z) {
+            const int at = zonesAt + 4 + z * (4 + 3 + 4 + 87 + 4 + 82 + 4) + 4 + 3 + 4 + 47;
+            const bool nowLoaded = zoneGroups[z] == 3 || zoneGroups[z] == 4;
+            QCOMPARE(int(loaded.at(at)), nowLoaded ? 0 : int(gs[zoneGroups[z]].purged));
+            }
+      // and mic 3 on for drum 1000: its group too
+      QCOMPARE(purgedGroups(unpurgeSwitchedOn(program({ { "%c2lsa", "1 1 1 0 0" }, { "%nvmxz", "0 4 0" } }, groups), defaults, &n)),
+               std::vector<int>({ 0, 1, 6, 7 }));
+      QCOMPARE(n, 3);
+      // drum 1001 on: its technique, on at the defaults
+      QCOMPARE(purgedGroups(unpurgeSwitchedOn(program({ { "%x4jsr", "1 1 0" } }, groups), defaults, &n)),
+               std::vector<int>({ 0, 1, 3, 4, 5, 7 }));
+      QCOMPARE(n, 1);
+      // the 4th technique (1000, 3)
+      QCOMPARE(purgedGroups(unpurgeSwitchedOn(program({ { "%c2lsa", "1 0 1 1 0" } }, groups), defaults, &n)),
+               std::vector<int>({ 0, 1, 3, 4, 5, 6 }));
+      QCOMPARE(n, 1);
+      // nothing switched on (the same values, a technique switched off, a mic off): the very bytes
+      QCOMPARE(unpurgeSwitchedOn(plain, defaults, &n), plain);
+      QCOMPARE(n, 0);
+      const QByteArray off = program({ { "%c2lsa", "0 0 1 0 0" }, { "%nvmxz", "6 4 0" } }, groups);
+      QCOMPARE(unpurgeSwitchedOn(off, defaults, &n), off);
+      // not what the rule was made for: defaults whose rule doesn't give the flags ((1000, 2) on but purged)
+      std::map<QString, QByteArray> wrong = defaults;
+      wrong["%c2lsa"] = "1 1 1 0 0";
+      const QByteArray more = program({ { "%c2lsa", "1 1 1 1 0" } }, groups);
+      QCOMPARE(unpurgeSwitchedOn(more, wrong, &n), more);
+      // not Kickstart's: no %c2lsa, no metadata, no zone list, a flag that isn't 0 / 1, a list cut short
+      QCOMPARE(unpurgeSwitchedOn(on, { { "$other", "3" } }, &n), on);
+      const QByteArray plainGroups = le32Bytes(2) + kickstartGroup(-1, 0, 0, true) + kickstartGroup(-1, 0, 0, false);
+      const QByteArray noMarker = program({ { "%c2lsa", "1 1 1 0 0" } }, plainGroups);
+      QCOMPARE(unpurgeSwitchedOn(noMarker, defaults, &n), noMarker);
+      const QByteArray noZones = program({ { "%c2lsa", "1 1 1 0 0" } }, groups, false);
+      QCOMPARE(unpurgeSwitchedOn(noZones, defaults, &n), noZones);
+      QByteArray odd = groups;
+      odd[4 + 7 + 120 - 55] = 2;                      // the first group's flag
+      const QByteArray oddProgram = program({ { "%c2lsa", "1 1 1 0 0" } }, odd);
+      QCOMPARE(unpurgeSwitchedOn(oddProgram, defaults, &n), oddProgram);
+      const QByteArray cut = program({ { "%c2lsa", "1 1 1 0 0" } }, groups.left(groups.size() - 3));
+      QCOMPARE(unpurgeSwitchedOn(cut, defaults, &n), cut);
+      QCOMPARE(unpurgeSwitchedOn(QByteArray("not a program"), defaults, &n), QByteArray("not a program"));
+      QCOMPARE(n, 0);
+
+      // with a Kickstart patch's .nki (SSO_KICKSTART_NKI; skipped without): every technique and drum switched
+      // on loads only groups purged at the defaults; values that switch nothing on leave the program as made
+      // before; Drums - Low's Bass Drum Roll (the 4th technique) loads exactly the groups Kickstart's window
+      // loaded (2026-09-30: the tree's Roll and Roll HS groups, 104-121)
+      const QString kitPath = qEnvironmentVariable("SSO_KICKSTART_NKI");
+      if (kitPath.isEmpty())
+            return;
+      QFile kitFile(kitPath);
+      QVERIFY2(kitFile.open(QIODevice::ReadOnly), qPrintable(kitPath));
+      const QByteArray kit = kitFile.readAll();
+      QFile emptyFile(root + "/" + DIR + "kontakt/empty.bin");
+      QVERIFY(emptyFile.open(QIODevice::ReadOnly));
+      const QByteArray empty = emptyFile.readAll();
+      QString error;
+      const QByteArray kitProgram = nkiProgram(kit, &error);
+      const std::vector<int> before = purgedGroups(kitProgram);
+      QVERIFY(!before.empty());
+      const std::map<QString, QByteArray> kitValues = scriptValues(kitProgram);
+      auto allOnes = [](const QByteArray& v, int atLeast) {
+            QList<QByteArray> e = v.split(' ');
+            while (e.size() < atLeast)
+                  e.append("0");
+            for (QByteArray& x : e)
+                  x = "1";
+            e.last() = "0";
+            return e.join(' ');
+            };
+      int set = 0, loadedGroups = 0;
+      const QByteArray state = fromEmpty(empty, kit, "D:/x", { { "%c2lsa", allOnes(kitValues.at("%c2lsa"), 0) },
+                                                               { "%x4jsr", allOnes(kitValues.at("%x4jsr"), 17) } },
+                                         &error, &set, &loadedGroups);
+      QVERIFY2(!state.isEmpty(), qPrintable(error));
+      const std::vector<int> after = purgedGroups(slotProgram(state, nullptr));
+      QVERIFY(loadedGroups > 0);
+      QCOMPARE(int(before.size() - after.size()), loadedGroups);
+      QVERIFY(std::includes(before.begin(), before.end(), after.begin(), after.end()));
+      const QByteArray same = fromEmpty(empty, kit, "D:/x", { { "%c2lsa", kitValues.at("%c2lsa") } }, &error, &set, &loadedGroups);
+      QCOMPARE(loadedGroups, 0);
+      QCOMPARE(slotProgram(same, nullptr), slotProgram(fromEmpty(empty, kit, "D:/x", {}, &error), nullptr));
+      if (QFileInfo(kitPath).fileName() == "Drums - Low.nki") {
+            QList<QByteArray> roll = kitValues.at("%c2lsa").split(' ');
+            roll[3] = "1";
+            const QByteArray rollState = fromEmpty(empty, kit, "D:/x", { { "%c2lsa", roll.join(' ') } }, &error, &set, &loadedGroups);
+            QCOMPARE(loadedGroups, 18);
+            std::vector<int> expect;
+            for (int g : before)
+                  if (g < 104 || g > 121)
+                        expect.push_back(g);
+            QCOMPARE(purgedGroups(slotProgram(rollState, nullptr)), expect);
+            }
       }
 
 //---------------------------------------------------------

@@ -892,6 +892,13 @@ for nki in NKI_FILES:
 # never a key the patch uses. Each hit is a <Drum> with its key, so measuring every sound measures them all.
 # A <Patch>: never chosen by notation. %yknvz (also per technique in the kits, differs between a kit and the
 # one-drum patch, no clear meaning) is left as it is.
+# Also (2026-09-30, Ensembles - Metal Clangs / Traditional Orchestra (all on) "played nothing": their test key 36,
+# on at the defaults, was silent): every drum on, %x4jsr (per drum; Traditional Orchestra's Cymbal Med and Unpitched
+# - Metal's two triangles are off at the defaults, so their techniques never play; Kontakt keeps 16 elements, the
+# kits' all 1), and Kickstart's round-robin reset keyswitches off, $nd5ia 0 (on at the defaults: keys from $bcqbk, 24,
+# one per round robin of the technique with the most that is on: 13-15 with the cymbals' Brush or Rain Sheet on,
+# so 24-38 reset round robins and play nothing, the drums' own keys 36-37 among them). KontaktSetup loads the
+# samples of what this switches on (unpurgeSwitchedOn).
 #
 # A drum's technique order is its hit list's in sso_percussion_hits.json, but for a list of more than 11 (Toms,
 # Bongos, Timbales) the window showed it from technique 11 on, wrapping round: index 0 is the list's len - 11th.
@@ -960,22 +967,23 @@ for kit in PERCUSSION:
     # (on where it has a key; on at key 0 twice; the keys those of HITS's on hits)
     assert all(bool(k) <= bool(o) for k, o in zip(keys, on)), kit
     assert {k for k in keys if k} == {k for k, _, o in HITS[kit] if o}, (kit, sorted({k for k in keys if k} ^ {k for k, _, o in HITS[kit] if o}))
-    allOn.append((kit, nkiByName[kit.lower()], [(n, keys[i] or None) for i, (n, _) in enumerate(t)]))
+    allOn.append((kit, nkiByName[kit.lower()], [(n, keys[i] or None) for i, (n, _) in enumerate(t)], len(drums)))
 for name in sorted(p for p in PERCUSSION_HITS if p.startswith('Ensembles - ')):
     drums = [(d['drum'], d['hits']) for d in PERCUSSION_HITS[name]['drums']]
     assert [d for d, _ in drums] == groupOrder(name), name
     t = techniques(drums)
     if all(k is not None for _, k in t):
         continue                            # (Snare ensemble: every technique on)
-    allOn.append((name, nkiByName[name.lower()], t))
+    allOn.append((name, nkiByName[name.lower()], t, len(drums)))
 out.append('  <!-- every technique switched on (off ones on free keys), to measure them: not chosen by notation -->')
-for name, nki, t in allOn:
+for name, nki, t, drumCount in allOn:
     used = {k for _, k in t if k}
     free = [k for k in list(range(1, 36)) + list(range(97, 128)) if k not in used]
     assert len(free) >= sum(1 for _, k in t if not k), name
     free.reverse()
     keys = [k if k else free.pop() for _, k in t]
-    setup = '%c2lsa=' + ' '.join(['1'] * len(t) + ['0']) + ';%4jwcn=' + ' '.join(str(k) for k in keys + [0])
+    setup = ('%c2lsa=' + ' '.join(['1'] * len(t) + ['0']) + ';%4jwcn=' + ' '.join(str(k) for k in keys + [0])
+             + ';%x4jsr=' + ' '.join(['1'] * max(16, drumCount) + ['0']) + ';$nd5ia=0')
     pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
     out.append(f'  <Patch name={q(name + " (all on)")} nki={q(nki)} setup={q(setup)}{pitch}>')
     out.append(f'    <!-- {sum(1 for _, k in t if not k)} of {len(t)} techniques switched on: '
