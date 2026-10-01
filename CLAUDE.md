@@ -346,7 +346,13 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   **Legato transitions start early** (the owner, 2026-09-30, "go ahead"; branch `legato-timing`): SSO's 42
   Performance patches reach a slurred note's new pitch 70-430 ms after its note-on (median 180 over 252
   transitions, a 4-22 dB dip; the timing check, `sso_articulation_timing.json` `legato`), so slurred notes sounded
-  late. `<Articulation legatoDelay>` (ms, per patch the median of its six transitions; `gen_spitfire_sso.py`) and
+  late. `<Articulation legatoDelay>` (ms; `gen_spitfire_sso.py`; **by interval since 2026-10-01**: `interval:ms` pairs
+  from the legato grid `sso_legato_grid.json`, per patch and interval the median over 9 velocities, `Articulation::
+  legatoDelays` / `legatoDelayAt(interval)`: linear between listed intervals, the widest's beyond, one number for
+  every interval when there is no grid; the interval is from the nearest note of the chord before that goes on legato
+  on the patch. Medians over the 45 patches -12: 210, -7: 230, -5: 190, -1: 170, +1: 150, +2: 160, +7: 230, +12: 360;
+  per patch 60-690; velocity changes nothing, median 190 at each. Before, one number per patch, the median of the
+  timing check's six transitions, +2 / -5 only: leaps of a fourth or more stayed 100-280 ms late) and
   `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
   transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
@@ -370,6 +376,30 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   so a shifted note is judged at its new time; its drift check now leaves out strikes that are all legato (a
   transition's onset is where the slide puts it, no timing mark: a legato window against a detached one read as
   drift, on the owner's Violins before this change too; test `playbackVerifyDrift`). Test `legatoEarly`
+  **Held notes early by their onset** (2026-10-01, HANDOFF problem 3, "slow attacks"): SSO's held notes reach full
+  level a median 175 ms after the note-on (Violas ~300, flautando / sul tasto / harmonics up to 1 s), but that is
+  mostly the bow's swell: the sound starts within 15-50 ms. Measured on the VM (build ce7d801, lone held notes, 13
+  instruments x 3 registers x pp / mf / ff, Violins 1 sul tasto / flautando / harmonics; K-weighted level in 10 ms
+  hops against the note's peak in its first 1.5 s): the time to -15 dB under the peak is the perceptual onset (Vos &
+  Rasch 1981; -6 dB jumps 150 ms where a swell levels off), 10-60 ms for most longs (brass median 26, Performance
+  strings 42, woodwinds 37), 175-440 ms for the slow techniques; per family it follows the rest check's per-semitone mf
+  full time (`sso_sound_range.json`): brass 0.11 full + 21 ms, strings 0.15 full + 22, woodwinds 0.28 full + 8, sul
+  tasto / flautando / harmonics 0.58 full - 118 (rms 12-48 ms). `<Articulation onset>` (ms or `pitch:ms` pairs;
+  `Articulation::onsets` / `onsetAt(pitch)`, the same reader as legatoDelay, `readKeyedMs` / `keyedMsAt`) on longs and
+  legato only (gen_spitfire_sso.py `onset()`: smoothed, Douglas-Peucker within 10 ms / 10 %) and `<Onset early="100"/>`
+  (percent; metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
+  Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
+  no grace notes or arpeggio before, plays `onset × percent` early (its chord's latest onset, so a chord starts
+  together; `SndConfig::libEarly` as for transitions), capped by the note just before on its track on the same patch as
+  transitions are (`onsetEarliest`: none up to 125 ms, half from 250 ms), the chunk's and the pass's start. Each such
+  note goes in `libShifts` (`SndConfig::libOn` / `libWrittenOn`); `finishLibraryEvents` first ends what ends on the same
+  channel and patch between the new and the written start at the new start (a Performance patch would play the overlap
+  as a legato transition, not the note's attack; not a note that started after the new start), and moves the note's
+  switch (put at the written tick) and the channel's controllers at the chord's tick (its dynamic; only when no other
+  note of the channel starts in between) to the new start. Live playback's chunks don't end before a measure where a
+  library part starts a note (`libNoteAfter`), up to twice the chunk size; export, verify and Live clips render a pass
+  as one chunk. Test `onsetEarly` (legato-early.musicxml: a lone note by pitch, slurs' first notes, a repeated key, the
+  switch moved, the note before ended, 0 %).
   (legato-early.musicxml). Interval: +2 and -5 differ by up to 250 ms on some patches, either way round (Oboes a2
   90 / 340, Bass Flute 220 / 100): with two intervals measured, one number per patch.
   **Measured on the VM with SSO (2026-09-30, build a1b1e74 against df273c3)**: Solo Violin, Violins 1 and Flute Solo
@@ -659,9 +689,13 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     note stays on its previous note's lane (the legato transition needs one instrument; it glides), else a
     lane at its tuning (within the tolerance, cents; the note then plays at the lane's tuning, `Lanes::cents`,
     `libLaneCents`, so nothing sounding on it moves; 0.5 merges rounding only, not HEJI's 1.95-cent schisma), else a lane silent by then (its notes' end plus the
-    tail, seconds, or the note's articulation's measured release if longer: `<Articulation release>` ms, SSO's
-    releases 0.4-2.9 s, median 855, Flautando 2.9 s; retuning a lane while a release rings moved its pitch;
-    `legato-timing`), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
+    tail, seconds, or the note's articulation's measured release if longer: `<Articulation release>` ms;
+    retuning a lane while a release rings moved its pitch; `legato-timing`. SSO's, since 2026-10-01, the longest
+    over the articulation's range from the rest check's per-semitone releases, `sso_sound_range.json`: they differ by
+    pitch far more than by articulation, pairs of neighbouring semitones ringing twice as long, e.g. Violins 1 -
+    Performance 855 ms at the test pitch, 2180 at D4; 287 articulations, median 1120 ms, 77 over the 1.5 s tail, up to
+    3.5 s on strings' flautando and 4.7-6.1 s on timpani rolls and tubular bells; was the test pitch's only, 241
+    articulations, median 855, 12 over 1.5 s), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
     Tied notes follow their first note, grace notes their chord. `routes()` gives each patch one route
     per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer
     (`libLanes`, `finishLibraryEvents`) sends a note's events to its lane and the part's switches and
