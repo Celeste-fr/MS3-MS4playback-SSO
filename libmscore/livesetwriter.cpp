@@ -1417,7 +1417,7 @@ QByteArray linkBlob(int port, const Track* track, bool* lanesKept)
             else {
                   const QByteArray stamp = QByteArray::number(qHash(track->routeKey) % 1000000000u);
                   for (size_t k = 0; k < parts; ++k) {
-                        out += ",\r\n\t\"" + QByteArray(k ? "Lanes" + QByteArray::number(int(k + 1)) : "Lanes") + "\" : [ \"msl-lanes\", 2, "
+                        out += ",\r\n\t\"" + (k ? QByteArray("Lanes") + QByteArray::number(int(k + 1)) : QByteArray("Lanes")) + "\" : [ \"msl-lanes\", 2, "
                                + stamp + ", " + QByteArray::number(int(k)) + ", " + QByteArray::number(int(parts));
                         for (size_t i = k * per; i < std::min(data.size(), (k + 1) * per); ++i)
                               out += ", " + data[i];
