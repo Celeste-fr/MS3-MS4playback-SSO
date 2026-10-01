@@ -317,8 +317,38 @@ std::map<const Part*, PartLanes> replaceSource(const std::map<const Part*, PartL
 //   merge
 //---------------------------------------------------------
 
+// one target in both: whose lane goes on (a conflict: both changed since they last agreed, or never agreed and differ)
+enum class Side : signed char { MINE, LIVE, CONFLICT };
+static Side classify(const Lane& m, const Lane& l)
+      {
+      const QString base = m.extra.value("liveHash").toString();
+      const bool liveChanged = base.isEmpty() || base != l.extra.value("liveHash").toString();
+      if (!liveChanged)
+            return Side::MINE;                    // Live's as it was: MuseScore's (edited here or not) goes on
+      if (!base.isEmpty() && m.playedByLive())
+            return Side::LIVE;                    // unedited here: Live's newer one
+      if (pointsHash(m.points) == pointsHash(l.points))
+            return Side::LIVE;                    // the same envelope: they agree (Live's marks taken)
+      return Side::CONFLICT;
+      }
+
+std::vector<Conflict> conflicts(const std::map<const Part*, PartLanes>& all, const std::map<const Part*, PartLanes>& with)
+      {
+      std::vector<Conflict> out;
+      for (const auto& pl : with) {
+            auto mi = all.find(pl.first);
+            if (mi == all.end())
+                  continue;
+            for (const Lane& l : pl.second)
+                  for (const Lane& m : mi->second)
+                        if (m.target == l.target && classify(m, l) == Side::CONFLICT)
+                              out.push_back({ pl.first, l.target, m, l });
+            }
+      return out;
+      }
+
 std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& all, const std::map<const Part*, PartLanes>& with,
-                                       QStringList* report)
+                                       const std::map<std::pair<const Part*, QString>, Keep>& choices, QStringList* report)
       {
       std::map<const Part*, PartLanes> out;
       std::set<const Part*> parts;
@@ -341,15 +371,24 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
                         res.push_back(l);
                         continue;
                         }
-                  const bool liveSame = m->extra.value("liveHash").toString() == l.extra.value("liveHash").toString()
-                                        && !l.extra.value("liveHash").toString().isEmpty();
-                  if (liveSame && !m->playedByLive()) {
-                        res.push_back(*m);            // edited here since: MuseScore's is newer
-                        continue;
+                  Side side = classify(*m, l);
+                  if (side == Side::CONFLICT) {
+                        auto c = choices.find({ part, l.target });
+                        const Keep k = c == choices.end() ? Keep::MUSESCORE : c->second;
+                        side = k == Keep::LIVE ? Side::LIVE : Side::MINE;
+                        if (report)
+                              *report << QObject::tr("%1: changed in MuseScore and in Live: %2's kept").arg(l.target)
+                                         .arg(k == Keep::LIVE ? QObject::tr("Live") : QObject::tr("MuseScore"));
+                        if (side == Side::MINE) {
+                              // MuseScore's goes on, now against Live's latest: asked again only when Live's changes again
+                              Lane k2 = *m;
+                              k2.extra["liveHash"] = l.extra.value("liveHash");
+                              k2.extra["pointsHash"] = l.extra.value("pointsHash");
+                              res.push_back(k2);
+                              continue;
+                              }
                         }
-                  if (!liveSame && !m->playedByLive() && report)
-                        *report << QObject::tr("%1: changed in Live and in MuseScore; Live's (saved later) taken").arg(l.target);
-                  res.push_back(l);
+                  res.push_back(side == Side::LIVE ? l : *m);
                   }
             for (const Lane& m : mine) {
                   if (taken.count(m.target))

@@ -4055,12 +4055,43 @@ void TestSoundLibrary::automationMerge()
       // Live saved again, nothing changed there: MuseScore's edit stays
       std::map<const Part*, PartLanes> again = merge(all, { { part, { liveLane("vibrato", 0.5, "a"), liveLane("mic1", 0.2, "b") } } });
       QCOMPARE(int(again.at(part)[0].points.size()), 2);
-      // vibrato changed in Live too (another liveHash): Live's, the later save; reported
+      // vibrato changed in Live too (another liveHash): a conflict, nothing taken without a choice
+      const std::map<const Part*, PartLanes> liveNow { { part, { liveLane("vibrato", 0.1, "c"), liveLane("mic1", 0.2, "b") } } };
+      std::vector<Conflict> cs = conflicts(all, liveNow);
+      QCOMPARE(int(cs.size()), 1);
+      QCOMPARE(cs[0].target, QString("vibrato"));
+      QCOMPARE(int(cs[0].mine.points.size()), 2);
+      QCOMPARE(cs[0].live.points[0].value, 0.1);
+      // no choice: MuseScore's kept (reported), now against Live's latest: the same set again asks nothing
       QStringList report;
-      again = merge(all, { { part, { liveLane("vibrato", 0.1, "c"), liveLane("mic1", 0.2, "b") } } }, &report);
+      again = merge(all, liveNow, {}, &report);
+      QCOMPARE(int(again.at(part)[0].points.size()), 2);
+      QCOMPARE(report.size(), 1);
+      QVERIFY(!again.at(part)[0].playedByLive());               // (the device plays it in Live)
+      QVERIFY(conflicts(again, liveNow).empty());
+      QVERIFY(!conflicts(again, { { part, { liveLane("vibrato", 0.3, "d") } } }).empty());   // Live changes again: asked
+      // keep Live's
+      again = merge(all, liveNow, { { { part, QString("vibrato") }, Keep::LIVE } });
       QCOMPARE(int(again.at(part)[0].points.size()), 1);
       QCOMPARE(again.at(part)[0].points[0].value, 0.1);
-      QCOMPARE(report.size(), 1);
+      QVERIFY(again.at(part)[0].playedByLive());
+      // keep MuseScore's explicitly
+      again = merge(all, liveNow, { { { part, QString("vibrato") }, Keep::MUSESCORE } });
+      QCOMPARE(int(again.at(part)[0].points.size()), 2);
+      // a lane of the score's own (never from Live) and Live's on the same target: differ -> conflict; the same -> agree
+      Lane mineOwn;
+      mineOwn.target = "mic1";
+      mineOwn.points = { Point(0, 0.7, Curve::STEP) };
+      QCOMPARE(int(conflicts({ { part, { mineOwn } } }, { { part, { liveLane("mic1", 0.2, "e") } } }).size()), 1);
+      QVERIFY(conflicts({ { part, { mineOwn } } }, { { part, { liveLane("mic1", 0.7, "e") } } }).empty());
+      QVERIFY(merge({ { part, { mineOwn } } }, { { part, { liveLane("mic1", 0.7, "e") } } }).at(part)[0].playedByLive());
+      // the choice as one undoable step
+      score->setMetaTag(metaTag, write(score, all));
+      const QString before = score->metaTag(metaTag);
+      QVERIFY(undoWrite(score, merge(all, liveNow, { { { part, QString("vibrato") }, Keep::LIVE } })));
+      QVERIFY(score->metaTag(metaTag) != before);
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->metaTag(metaTag), before);
       // mic1 removed in Live (unedited here): gone; vibrato removed in Live (edited here): kept as MuseScore's
       again = merge(all, {});
       QCOMPARE(int(again.at(part).size()), 1);

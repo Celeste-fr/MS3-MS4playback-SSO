@@ -58,7 +58,7 @@ class FakeLive {
       // a DeviceParameter of a device (Live lists only the plug-in's Configured ones)
       param(device, name, value, min, max) {
             const p = this.add({ kind: "param", name: name, value: value, min: min === undefined ? 0 : min,
-                                 max: max === undefined ? 1 : max, device: device.id });
+                                 max: max === undefined ? 1 : max, device: device.id, automation_state: 0 });
             (device.parameters = device.parameters || []).push(p.id);
             return p;
             }

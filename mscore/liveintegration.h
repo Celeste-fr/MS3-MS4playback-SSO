@@ -33,6 +33,11 @@ class QFileSystemWatcher;
 class QTimer;
 class QWidget;
 
+#include <map>
+#include <vector>
+#include <QDateTime>
+#include "libmscore/automation.h"
+
 namespace Ms {
 
 class MasterScore;
@@ -50,8 +55,13 @@ bool setPlayThroughMidi(bool midi, QWidget* parent);
 
 // the score's linked Live Set, "" when none
 QString linkedSet(const MasterScore* score, bool* autoReimport = nullptr);
-// import the set's automation into the score (undoable); report: what was and wasn't matched
-bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report);
+// import the set's automation into the score (undoable); report: what was and wasn't matched. A lane changed both
+// in MuseScore and in Live (Automation::conflicts) is asked about (askParent: the dialog's parent; none: MuseScore's
+// kept, reported); the dialog cancelled: nothing imported, false and the report says so
+bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report, QWidget* askParent = nullptr);
+// the conflict dialog: per lane MuseScore's or Live's (false: cancelled)
+bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conflicts, const QString& setPath,
+                  const QDateTime& setTime, std::map<std::pair<const Part*, QString>, Automation::Keep>* choices);
 // Mixer › Advanced Options…: choose a set, import, show the report
 void importDialog(MasterScore* score, QWidget* parent);
 // drop the link and the imported lanes (undoable)
