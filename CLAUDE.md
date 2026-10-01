@@ -350,14 +350,17 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   its track slurred into it (`slurGoesOn`) and legato on the same patch, in the same pass, no key struck again, no
   grace notes or arpeggio before) starts `delay × percent` earlier in time (`SndConfig::libEarly`, converted at the
   tempo there with `utick2utime` / `utime2utick` in `collectNote`), not before the chunk (`libChunkStart`) or the
-  pass's start, and the note before loses at most a share of its length in time (`libEarliest`): a quarter up to
-  250 ms, its length in seconds between, half from 500 ms (`qBound(0.25, len, 0.5)`). **Fast runs (the owner,
+  pass's start, and the note before loses at most a share of its length in time (`libEarliest`): none up to 125 ms,
+  rising linearly to half at 250 ms and longer (`qBound(0.0, (len - 0.125) / 0.25, 0.5)`). **Fast runs (the owner,
   2026-09-30)**: the cap was half; in "Whence" the cellos' sixteenths at 110 (136 ms) under 4-note slurs (Celli
-  Performance, delay above a sixteenth) all got the full half: as played 68 / 136 / 136 / 205 ms, levels −46.3 /
+  Performance, delay above a sixteenth) all got the full half: as played 68 / 136 / 136 / 205 ms, levels −46.4 /
   −44.8 / −40.5 / −44.9 dB (on the beat: 136 ms each, −43.8 / −43.1 / −43.6 / −44.2) -- a slur's first note squeezed,
-  the third ~4 dB louder. SSO plays faster transitions in fast passages, so a quarter there (a slur's first keeps
-  75 %); the measured quarters at 120 (500 ms) were as late as at 60, so they keep the half (full correction).
-  Test `legatoEarlyFastRun` (legato-fast.musicxml). Its note-off, the switches and the
+  the third ~4 dB louder. SSO plays faster transitions in fast passages. Measured on the VM: capped at a quarter
+  (102 / 136 / 136 / 170 ms) still −47.0 / −44.7 / −42.8 / −45.6 (4.2 dB spread, against 1.1 on the beat), so a
+  136 ms note gets next to nothing (6 ms); eighths at 120 (250 ms, 8-note slurs) are as even shifted by half as on
+  the beat (~3 dB spread, all three) and land best with half (pitch a median 58 ms after the beat; a quarter 123, on
+  the beat 183), so 250 ms keeps the half. Quarters at 60 / 120 unchanged (median 45 / 31 ms). Test
+  `legatoEarlyFastRun` (legato-fast.musicxml). Its note-off, the switches and the
   controllers stay; the previous note still overlaps it. A chunk doesn't end where a library part's slur goes on
   (`libSlurAcross`), so a transition is never a chunk's first note. The glide of its tuning lane moves with the note-on.
   Built-in playback untouched. The playback verify tool reads the notes from the same events (the reference too),
