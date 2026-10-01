@@ -995,16 +995,20 @@ def release(patch, sound, t):
     if rel:
         return int(max(rel))
     return int(t['releaseMs']) if t.get('releaseMs', -1) > 0 else None
-# - from= (seconds) on Short 0.5 / Short 1.0: chosen for a note from this written length on (else 90 % of length=,
-#   Spitfire's nominal 0.5 / 1.0 s). Measured (sso_short_lengths.json, the rest check's shorts part, 2026-10-01: each
-#   short held 50 ... 2000 ms at its test pitch and an octave either side, the last time its perceived loudness is
-#   within 10 dB of its peak, the median over the three pitches): the note-off hardly cuts them; Spiccato sounds
-#   0.28-0.47 s whatever the note, Short 0.5 0.45-1.0 s, Short 1.0 0.47-1.26 s growing with the note up to ~1 s. The
-#   body to -20 dB (bodyMs, ~1 s) is mostly the hall, so -10 dB is the note as heard. A note plays the choice whose
-#   sounding length (at its written length) is closest to its written length: Short 0.5 against Spiccato (what a
-#   staccato falls back to), Short 1.0 against Short 0.5 (a portato's or tenuto's next); from= is the written length
-#   from which it is the closer one for every longer note. E.g. Violins 1 Short 0.5 from 0.43 s, Short 1.0 from 0.71
-#   (nominal: 0.45, 0.90); Violas 0.61 / 1.06; Basses 0.73 / 1.07. Unmeasured patches keep the nominal rule.
+# - from= (seconds) on Short 0.5 / Short 1.0: chosen for a note meant to sound at least this long (else 90 % of
+#   length=, Spitfire's nominal 0.5 / 1.0 s, against the written length). Meant to sound: the written length times
+#   MS4's duration factor for its articulations (the renderer's Want::soundSeconds; ms4tables.h PROFILE, strings:
+#   staccato 50 %, staccatissimo 25 %, tenuto 99 %, a portato the average, 74.5 %; the owner, 2026-10-01: a portato
+#   must stay detached, so not the full written length). Measured (sso_short_lengths.json, the rest check's shorts
+#   part: each short held 50 ... 2000 ms at its test pitch and an octave either side, the last time its perceived
+#   loudness is within 10 dB of its peak, the median over the three pitches): the note-off hardly cuts them; Spiccato
+#   sounds 0.28-0.47 s whatever the note, Short 0.5 0.45-1.0 s, Short 1.0 0.47-1.26 s growing with the note up to
+#   ~1 s. The body to -20 dB (bodyMs, ~1 s) is mostly the hall, so -10 dB is the note as heard. A note plays the
+#   choice whose sounding length (held as MS4 holds it, i.e. for the meant length) is closest to its meant length:
+#   Short 0.5 against Spiccato (what a staccato falls back to), Short 1.0 against Short 0.5 (a portato's or tenuto's
+#   next); from= is the meant length from which it is the closer one for every longer note. E.g. Violins 1 Short 0.5
+#   from 0.43 s (a staccato from 0.86 s written), Short 1.0 from 0.71 (a portato from 0.95 s, a tenuto from 0.72);
+#   Violas 0.61 / 1.06; Basses 0.73 / 1.07. Unmeasured patches keep the nominal rule.
 import bisect
 SHORT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_short_lengths.json')
 SHORT_LENGTHS = json.load(open(SHORT_FILE, encoding='utf-8')) if os.path.exists(SHORT_FILE) else {}
