@@ -98,8 +98,11 @@ struct SndConfig {
       bool ms4Once = false;       // the note once, as written, whatever MuseScore 3's play events are
       int libPatch = 0;           // a sound library part: the patch that plays the note
       int libOverlap = 0;         // ticks the note lasts into the next (a library's legato)
-      double libEarly = 0;        // seconds a legato transition starts early (a library's legato delay)
+      double libEarly = 0;        // seconds a legato transition (a library's legato delay) or a held note (its
+                                  // onset) starts early
       int libEarliest = 0;        // … but not before this utick
+      int* libOn = nullptr;       // where the note starts, as written and as played (libEarly)
+      int* libWrittenOn = nullptr;
       int libKey = -1;            // a library kit: the patch's key that plays the drum sound
                                   // (a sound library plays the trill / tremolo: SoundLib)
 
@@ -526,12 +529,17 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                         off = sc->utime2utick(sc->utick2utime(on) + span * config.ms4Dur / Ms4::HUNDRED);
             }
             off += config.libOverlap;
+            if (config.libWrittenOn)
+                  *config.libWrittenOn = on;
             if (config.libEarly > 0) {
-                  // a legato transition: early by the patch's delay in time, at the tempo there (the note-off stays)
+                  // a legato transition or a held note: early by the patch's delay or onset in time, at the tempo
+                  // there (the note-off stays)
                   Score* sc = note->score();
                   const int early = sc->utime2utick(sc->utick2utime(on) - config.libEarly);
                   on = qMin(on, qMax(config.libEarliest, early));
                   }
+            if (config.libOn)
+                  *config.libOn = on;
             playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx, config.ms4Layer >= 0 ? config.ms4Layer : note->voice(), config.libPatch);
             nels = 0;                             // done; bends below still apply
             }
@@ -1347,6 +1355,45 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return nullptr;
                         };
 
+                  // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
+                  // articulation with a measured onset: how early it may start (utick). As for a transition, the note
+                  // just before on its track, when it plays on the same patch, loses at most a share of its length
+                  // (none up to 125 ms, half from 250 ms); not before the chunk or the pass; -1: not at all (grace
+                  // notes or an arpeggio before it)
+                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c) -> int {
+                        Chord* ch = note->chord();
+                        if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
+                              return -1;
+                        const int utick = ch->tick().ticks() + tickOffset;
+                        const RepeatList& repeats = score->repeatList();
+                        auto rs = repeats.findRepeatSegmentFromUTick(utick);
+                        if (rs == repeats.end())
+                              return -1;
+                        int earliest = std::max(libChunkStart, (*rs)->utick);
+                        ChordRest* pcr = prevChordRest(ch, true);
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
+                            || pcr->tick().ticks() < (*rs)->tick)
+                              return earliest;
+                        for (const Note* pn : toChord(pcr)->notes()) {
+                              if (!pn->play())
+                                    continue;
+                              const Note* first = pn->firstTiedNote();
+                              const Chord* fc = first->chord();
+                              const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
+                              if (!pc || pc.patch != c.patch)
+                                    continue;
+                              const int start = fc->tick().ticks() + tickOffset;
+                              const qreal t1 = score->utick2utime(utick);
+                              const qreal len = t1 - score->utick2utime(start);
+                              const int cap = score->utime2utick(t1 - qBound(0.0, (len - 0.125) / 0.25, 0.5) * len);
+                              return std::max({ earliest, start, cap });
+                              }
+                        return earliest;
+                        };
+
+                  int libShiftOn = -1;          // a held note started early: where it starts, as played and as written
+                  int libShiftWritten = -1;
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0, bool once = false) {
                         // a discrete glissando: its steps over the note's length, each a note of its own at the
@@ -1471,12 +1518,33 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           config.libEarliest = earliest;
                                           }
                                     }
+                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
+                                       && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
+                                    // a held note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
+                                    // the note-on, sul tasto / flautando / harmonics 175-440 ms): early by its onset, the
+                                    // chord's latest so that its notes start together
+                                    double onsetMs = 0;
+                                    for (const Note* n : note->chord()->notes())
+                                          if (n->play())
+                                                onsetMs = std::max(onsetMs, libChoice.articulation->onsetAt(n->ppitch()));
+                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
+                                    if (earliest >= 0) {
+                                          config.libEarly = onsetMs * libOnsetEarly / 100.0 / 1000.0;
+                                          config.libEarliest = earliest;
+                                          config.libOn = &libShiftOn;
+                                          config.libWrittenOn = &libShiftWritten;
+                                          libShiftOn = libShiftWritten = -1;
+                                          }
+                                    }
                               }
                         config.libKey = libNote.key;
                         if (libNote.velocity > 0)
                               config.ms4Velocity = libNote.velocity;
                         ms4Swing(note->chord(), config.ms4SwingOn, config.ms4SwingGate);
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
+                        if (config.libOn && libShiftOn >= 0 && libShiftOn < libShiftWritten)
+                              libShifts.push_back({ noteChannel, libChoice.patch, libShiftOn, libShiftWritten,
+                                                    note->chord()->tick().ticks() + tickOffset });
                         if (r.bend && (!li || libNote.builtIn) && !note->chord()->isGrace() && !note->tieBack()) {
                               const Chord* ch = note->chord();
                               const int ticks = ch->actualTicks().ticks();
@@ -2061,6 +2129,50 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       if (libRoutes.empty())
             return;
       const int utick2 = chunk.utick2();
+
+      // held notes started early by their onset (SSO: 10-60 ms for most longs, up to 440 for flautando or harmonics):
+      // a note on the same patch that ends between the new start and the written one ends at the new start (it
+      // would end there anyway; on a Performance patch the overlap would play a legato transition instead of the
+      // note's own attack), unless it started after the new start; the note's switch, sent at the written start,
+      // and the controllers sent at the chord's tick (the dynamic it starts on) go with it, the controllers only
+      // when no other note of the channel starts in between
+      for (const LibShift& s : libShifts) {
+            std::vector<NPlayEvent> moved;
+            for (auto i = events->upper_bound(s.on); i != events->end() && i->first <= std::max(s.written, s.chordTick);) {
+                  const NPlayEvent& ev = i->second;
+                  bool move = false;
+                  if (ev.channel() == s.channel && !ev.isExternal()) {
+                        if (ev.librarySwitch())
+                              move = ev.libraryPatch() == s.patch && i->first <= s.written;
+                        else if (ev.type() == ME_NOTEON && ev.velo() == 0 && ev.libraryPatch() == s.patch && i->first <= s.written) {
+                              move = true;
+                              for (auto j = events->lower_bound(s.on); j != i; ++j) {
+                                    const NPlayEvent& o = j->second;
+                                    if (o.type() == ME_NOTEON && o.velo() > 0 && !o.librarySwitch() && o.channel() == ev.channel()
+                                        && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch() && j->first > s.on)
+                                          move = false;       // (a note that started after the new start)
+                                    }
+                              }
+                        else if (ev.type() == ME_CONTROLLER && i->first == s.chordTick) {
+                              move = true;
+                              for (auto j = events->upper_bound(s.on); j != i; ++j) {
+                                    const NPlayEvent& o = j->second;
+                                    if (o.type() == ME_NOTEON && o.velo() > 0 && !o.librarySwitch() && o.channel() == ev.channel())
+                                          move = false;
+                                    }
+                              }
+                        }
+                  if (move) {
+                        moved.push_back(ev);
+                        i = events->erase(i);
+                        }
+                  else
+                        ++i;
+                  }
+            const auto at = events->lower_bound(s.on);
+            for (const NPlayEvent& ev : moved)
+                  events->insert(at, std::make_pair(s.on, ev));
+            }
 
       // a key struck again on the same patch while its last note still sounds (a legato overlap, a note
       // lasting into the next of its pitch): that note ends just before, as a finger lifts before it strikes
@@ -3937,6 +4049,8 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 
       libChunkStart = chunk.utick1();
       libLegatoEarly = library ? SoundLib::legatoEarly(score, *library) : 0;
+      libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
+      libShifts.clear();
 
       // create note & other events
       for (Staff*& st : score->staves()) {
@@ -4190,6 +4304,36 @@ bool MidiRenderer::libSlurAcross(const Measure* last) const
       }
 
 //---------------------------------------------------------
+//   MidiRenderer::libNoteAfter
+//    a sound library part starts a note (not tied into) on the measure after this one's first tick,
+//    where a held note would start early by its onset: a chunk's first tick can't (the chunk before
+//    may be played already)
+//---------------------------------------------------------
+
+bool MidiRenderer::libNoteAfter(const Measure* last) const
+      {
+      if (libParts.empty())
+            return false;
+      const Measure* next = last->nextMeasure();
+      if (!next)
+            return false;
+      const Segment* seg = next->first(SegmentType::ChordRest);
+      if (!seg || seg->tick() != next->tick())
+            return false;
+      for (const auto& lp : libParts) {
+            for (int track = lp.first->startTrack(); track < lp.first->endTrack(); ++track) {
+                  const Element* e = seg->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  for (const Note* n : toChord(e)->notes())
+                        if (n->play() && !n->tieBack())
+                              return true;
+                  }
+            }
+      return false;
+      }
+
+//---------------------------------------------------------
 //   MidiRenderer::updateChunksPartition
 //---------------------------------------------------------
 
@@ -4217,7 +4361,9 @@ void MidiRenderer::updateChunksPartition()
                         chunkStart = m;
                   if ((++count) >= minChunkSize)
                         needBreak = true;
-                  if (needBreak && canBreakChunk(m) && !libSlurAcross(m)) {
+                  // (a library part's held note right after the measure would start early by its onset, which a
+                  // chunk's first tick can't: the break waits for a measure without one, up to twice the size)
+                  if (needBreak && canBreakChunk(m) && !libSlurAcross(m) && (count >= 2 * minChunkSize || !libNoteAfter(m))) {
                         chunks.emplace_back(tickOffset, chunkStart, m);
                         chunkStart = nullptr;
                         needBreak = false;

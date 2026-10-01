@@ -259,6 +259,7 @@ class SoundLibraryOptions : public QDialog {
       QDoubleSpinBox* _tail { nullptr };
       QSpinBox* _maxLanes { nullptr };
       QSpinBox* _legatoEarly { nullptr };
+      QSpinBox* _onsetEarly { nullptr };
       std::map<QString, QDoubleSpinBox*> _balance;
       QComboBox* _evenSteps { nullptr };
       QLabel* _folder { nullptr };

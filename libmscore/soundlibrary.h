@@ -91,6 +91,12 @@ struct Articulation {
                                           // -> ms, sorted by interval; empty: legatoDelayMs for every interval
       double legatoDelayAt(int interval) const;   // the delay for that interval: interpolated linearly between
                                           // the measured ones, beyond the widest the widest's (-1: unknown)
+      // a sustained note's attack: it is heard (its level 15 dB under its peak) this long after its note-on
+      // (<Articulation onset>: one number or "pitch:ms" pairs by played pitch): a note that is not a legato
+      // transition starts early by it (the renderer, onsetEarly()); -1: unknown / not shifted
+      double onsetMs { -1 };
+      std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
+      double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
       };
 
 struct DrumKey {
@@ -200,6 +206,9 @@ class Library {
       // a legato transition starts early by this share of its articulation's legatoDelayMs (<Legato early>,
       // percent; the score's own: legatoEarly())
       int legatoEarly { 0 };
+      // a held note (not a legato transition) starts early by this share of its articulation's onset (<Onset
+      // early>, percent; the score's own: onsetEarly())
+      int onsetEarly { 0 };
       std::vector<Controller> controllers;          // for all its instruments
       std::vector<LibInstrument> instruments;
       // the library's other patches (<Patch>): none of the map's, but set up and checked (Check
@@ -488,6 +497,18 @@ QString writeLaneSettings(const LaneSettings& s, const Library&);      // "" whe
 
 extern const char* legatoEarlyMetaTag;
 int legatoEarly(const Score* score, const Library& library);
+
+//---------------------------------------------------------
+//   onsetEarly
+//    how early a held note that is not a legato transition (a lone held note, a slur's first note)
+//    starts, percent of its articulation's measured onset (SSO: the level 15 dB under the note's peak
+//    10-60 ms after the note-on for most longs, 175-440 ms for sul tasto, flautando, harmonics): the
+//    map's <Onset early>, unless the score sets its own (Mixer › Advanced Options…, metaTag
+//    "soundLibraryOnsetEarly"). 0: on the beat, as written
+//---------------------------------------------------------
+
+extern const char* onsetEarlyMetaTag;
+int onsetEarly(const Score* score, const Library& library);
 
 //---------------------------------------------------------
 //   bendValue

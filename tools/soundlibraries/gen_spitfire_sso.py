@@ -177,6 +177,9 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  <!-- a slurred note on a Performance patch (a legato transition) reaches its pitch legatoDelay ms after',
 '       its note-on (measured, sso_articulation_timing.json): it starts early by that times early percent -->',
 f'  <Legato early="{LEGATO_EARLY}"/>',
+'  <!-- a held note that is no legato transition (a lone one, a slur\'s first) is heard onset ms after its note-on',
+'       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent -->',
+'  <Onset early="100"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
 '  <Files registry="Spitfire Symphony Orchestra"/>']
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
@@ -871,6 +874,66 @@ def bendRange(name):
     if abs(up + down) > 0.03 * mean:
         return None
     return round(mean, 1)
+# - onset= (ms): a sustained articulation's attack, by pitch: when it is heard, its level 15 dB under the note's peak
+#   (the renderer starts a held note that is no legato transition that much early, times <Onset early> percent).
+#   Measured on the VM (2026-10-01, build ce7d801, lone held notes at 3 registers and pp / mf / ff on 13 instruments
+#   and Violins 1 sul tasto / flautando / harmonics, K-weighted level in 10 ms hops against the note's peak in its
+#   first 1.5 s; the thresholds -20 ... -6 dB compared): -15 dB is where the ear puts the start (Vos & Rasch 1981's
+#   relative threshold; -6 dB, the full level, jumps by 150 ms where a swell levels off). It follows the rest check's
+#   per-semitone mf full level (sso_sound_range.json, 6 dB under the peak) per family, fitted over the 83 notes:
+#   brass 0.11 full + 21 ms (rms 12), strings 0.15 full + 22 (19), woodwinds 0.28 full + 8 (27), sul tasto /
+#   flautando / harmonics 0.58 full - 118 (48; not under the strings'); 10-60 ms for most longs, 175-440 for the slow
+#   techniques. Per semitone, smoothed (a running median of 7), as few pitch:ms pairs as stay within 10 ms or 10 %
+#   of the median (Douglas-Peucker; the fits' own error is 12-48 ms); one number where all are. Only longs and legato
+#   (what was measured): not tremolos, trills, long marcato, nor harp, keyboards and percussion.
+RANGE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_sound_range.json'), encoding='utf-8'))
+ONSET_EARLY = 100
+def onsetFamily(patch, sound):
+    if re.search(r'Sul Tasto|Flautando|Harmonics', sound):
+        return 'slow'
+    if re.search(r'Horn|Trumpet|Trombone|Tuba|Cimbass', patch):
+        return 'brass'
+    if re.search(r'Flute|Piccolo|Oboe|Cor Anglais|Clarinet|Bassoon', patch):
+        return 'woodwinds'
+    if re.search(r'Violin|Viola|Cell|Basses|Strings', patch):
+        return 'strings'
+    return None
+def onsetFit(family, full):
+    strings = 0.15 * full + 22
+    return {'brass': 0.11 * full + 21, 'strings': strings, 'woodwinds': 0.28 * full + 8,
+            'slow': max(0.58 * full - 118, strings)}[family]
+def simplify(points, tolerance):
+    """Douglas-Peucker on (pitch, ms): the fewest points the line through stays within tolerance of"""
+    if len(points) <= 2:
+        return points
+    (x0, y0), (x1, y1) = points[0], points[-1]
+    worst, at = -1, 0
+    for i in range(1, len(points) - 1):
+        x, y = points[i]
+        d = abs(y - (y0 + (y1 - y0) * (x - x0) / (x1 - x0)))
+        if d > worst:
+            worst, at = d, i
+    if worst <= tolerance:
+        return [points[0], points[-1]]
+    return simplify(points[:at + 1], tolerance)[:-1] + simplify(points[at:], tolerance)
+def onset(patch, sound):
+    """the onset= text of a sustained sound (None: not measured or no family)"""
+    family = onsetFamily(patch, sound)
+    rows = RANGE.get(patch, {}).get(sound, {}).get('range')
+    if not family or not rows:
+        return None
+    full = [(r[0], r[8]) for r in rows if r[8] is not None and r[8] >= 0]
+    if not full:
+        return None
+    ms = [onsetFit(family, f) for _, f in full]
+    smooth = [statistics.median(ms[max(0, i - 3):i + 4]) for i in range(len(ms))]
+    points = [(p, m) for (p, _), m in zip(full, smooth)]
+    mid = statistics.median(smooth)
+    tolerance = max(10, 0.1 * mid)
+    if all(abs(m - mid) <= tolerance for m in smooth):
+        return str(int(5 * round(mid / 5)))
+    return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, tolerance))
+onsetCount = 0
 current = None
 legatoGridUsed = set()
 timedValues = set()
@@ -900,6 +963,11 @@ for i, line in enumerate(out):
     if delay:
         extra += f' legatoDelay="{delay}"'
         legatoGridUsed.add(current)
+    techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
+    o = onset(current, sound) if t.get('sustains') and ('long' in techniques or 'legato' in techniques) else None
+    if o:
+        extra += f' onset="{o}"'
+        onsetCount += 1
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'
