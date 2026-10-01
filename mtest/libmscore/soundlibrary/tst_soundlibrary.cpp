@@ -418,9 +418,10 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(familyOf("Horns a6"), QString("brass"));
       QCOMPARE(familyOf("Motif Horns a4"), QString("brass"));
       QCOMPARE(familyOf("Harp"), QString("other"));
-      // shorts by the note's written length (2026-09-28, "Whence" bar 8), since 2026-10-01 from where their measured
-      // sounding length is the closest (map from=): Violins 2 Short 0'5 from 0.42 s, Short 1'0 from 0.76 s (were 0.45,
-      // 0.9), Violas 0.61 / 1.06; else the next shorter, down to Spiccato
+      // shorts by the note's length (2026-09-28, "Whence" bar 8). Since 2026-10-01 a measured short (map from=) is chosen
+      // where its sounding length is the closest to how long the note is meant to sound: the written length times MS4's
+      // duration factor (staccato 50 %, staccatissimo 25 %, tenuto 99 %, portato 74.5 %): Violins 2 Short 0'5 from
+      // 0.42 s meant (a staccato from 0.84 s written), Short 1'0 from 0.76 s (a portato from 1.02 s); Violas 0.61 / 1.06
       auto byLengthOf = [&](const QString& patch, std::vector<Ms4::Art> arts, double seconds) {
             std::vector<Ms4::ArtRef> refs;
             for (Ms4::Art a : arts)
@@ -429,20 +430,23 @@ void TestSoundLibrary::spitfireMap()
             };
       auto byLength = [&](std::vector<Ms4::Art> arts, double seconds) { return byLengthOf("Violins 2", arts, seconds); };
       using A = Ms4::Art;
+      {
+            std::vector<Ms4::ArtRef> portato { { A::Staccato, false }, { A::Tenuto, false } };
+            QVERIFY(qAbs(SoundLib::want(portato, SoundLib::TextState(), 0.8, 0).soundSeconds - 0.8 * 0.745) < 1e-9);
+      }
       QCOMPARE(byLength({ A::Staccato }, 0.27), QString("Violins 2: Spiccato"));          // an eighth at 110
-      QCOMPARE(byLength({ A::Staccato }, 0.55), QString("Violins 2: Short 0.5"));         // a quarter at 110
+      QCOMPARE(byLength({ A::Staccato }, 0.55), QString("Violins 2: Spiccato"));          // a quarter at 110: 0.28 s meant
+      QCOMPARE(byLength({ A::Staccato }, 0.9), QString("Violins 2: Short 0.5"));          // 0.45 s meant
       QCOMPARE(byLength({ A::Staccato, A::Accent }, 0.27), QString("Violins 2: Spiccato"));
       QCOMPARE(byLength({ A::Tenuto }, 1.1), QString("Violins 2 - Performance: Legato"));   // a held note
       QCOMPARE(byLength({ A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
       QCOMPARE(byLength({ A::Tenuto }, 0.3), QString("Violins 2 - Performance: Legato"));    // fast: no spiccato
-      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 1.0), QString("Violins 2: Short 1.0")); // portato
-      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 1.1), QString("Violins 2: Short 1.0")); // portato, 0.82 s meant
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.8), QString("Violins 2: Short 0.5")); // portato, 0.6 s: detached
       QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.27), QString("Violins 2: Spiccato"));
       QCOMPARE(byLength({ A::Staccatissimo }, 1.0), QString("Violins 2: Spiccato"));
-      QCOMPARE(byLength({ A::Staccato }, 0.43), QString("Violins 2: Short 0.5"));         // (0.45 nominal: Spiccato)
-      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.8), QString("Violins 2: Short 1.0")); // (0.9 nominal: Short 0.5)
-      QCOMPARE(byLengthOf("Violas", { A::Staccato }, 0.55), QString("Violas: Spiccato"));  // Violas' Short 0'5 rings 0.84 s
-      QCOMPARE(byLengthOf("Violas", { A::Staccato }, 0.62), QString("Violas: Short 0.5"));
+      QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.1), QString("Violas: Spiccato"));   // 0.55 s meant; Short 0'5 rings 0.84 s
+      QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.3), QString("Violas: Short 0.5"));
       // (a length unknown: as before)
       QCOMPARE(patchFor("Violins 2", { { "short" }, {} }), QString("Violins 2: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
