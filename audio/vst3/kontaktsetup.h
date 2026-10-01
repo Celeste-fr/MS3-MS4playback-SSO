@@ -5,7 +5,7 @@
 //  KontaktSetup: a Kontakt patch's setup made from its .nki file, without loading the patch by
 //  hand in Kontakt's window (the owner, 2026-09-27: MuseScore sets every patch up by itself, at
 //  the library's defaults; tools/soundlibraries/make_setups.py is the same in Python, and
-//  CLAUDE.md › "Setups made from the .nki files" tells how it was found).
+//  docs/HISTORY.md › "Setups made from the .nki files" tells how it was found).
 //
 //  Kontakt's state (what VST 3's getState gives, the component part of a .vst3state setup) is an
 //  NI container like an .nki: "hsin" items (a 64-bit size, a 32-byte header, a stack of data

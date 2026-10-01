@@ -80,12 +80,25 @@ struct Articulation {
       QStringList prefer;                 // bases it plays over another patch's equal fit (<Articulation
                                           // prefer>: SSO's Performance legato for held notes)
       double length { -1 };               // seconds its sample lasts (<Articulation length>: SSO's Short 0'5,
-                                          // Short 1'0): not chosen for a note under 90 % of it
+                                          // Short 1'0): not chosen for a note under 90 % of it, unless
+      double fromSeconds { -1 };          // <Articulation from>: chosen for a note from this long on (SSO: where its
+                                          // measured sounding length is closer to the note's than the next choice's)
       // measured with the library (<Articulation release legatoDelay>, ms; the timing check):
       double releaseMs { -1 };            // a sustained note rings this long after its note-off (a tuning lane
                                           // stays busy until then: Lanes); -1: unknown (the tail only)
       double legatoDelayMs { -1 };        // a legato transition reaches the new pitch this long after its note-on:
-                                          // it starts early (the renderer, legatoEarly()); -1: not a legato / unknown
+                                          // it starts early (the renderer, legatoEarly()); -1: not a legato / unknown.
+                                          // By interval (legatoDelay="-12:210 … +12:360"): their median
+      std::vector<std::pair<int, double>> legatoDelays;   // interval (semitones, the new note minus the one before)
+                                          // -> ms, sorted by interval; empty: legatoDelayMs for every interval
+      double legatoDelayAt(int interval) const;   // the delay for that interval: interpolated linearly between
+                                          // the measured ones, beyond the widest the widest's (-1: unknown)
+      // a sustained note's attack: it is heard (its level 15 dB under its peak) this long after its note-on
+      // (<Articulation onset>: one number or "pitch:ms" pairs by played pitch): a note that is not a legato
+      // transition starts early by it (the renderer, onsetEarly()); -1: unknown / not shifted
+      double onsetMs { -1 };
+      std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
+      double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
       };
 
 struct DrumKey {
@@ -160,6 +173,9 @@ struct Want {
       QStringList bases;                  // in order of preference
       QStringList modifiers;
       double seconds { -1 };              // the note's written length (noteSeconds); -1: unknown
+      double soundSeconds { -1 };         // how long it is meant to sound: seconds times MS4's duration factor for its
+                                          // articulations (strings: staccato 50 %, staccatissimo 25 %, tenuto 99 %,
+                                          // portato their average 74.5 %); <Articulation from> is compared with this
       };
 
 //---------------------------------------------------------
@@ -195,6 +211,9 @@ class Library {
       // a legato transition starts early by this share of its articulation's legatoDelayMs (<Legato early>,
       // percent; the score's own: legatoEarly())
       int legatoEarly { 0 };
+      // a held note (not a legato transition) starts early by this share of its articulation's onset (<Onset
+      // early>, percent; the score's own: onsetEarly())
+      int onsetEarly { 0 };
       std::vector<Controller> controllers;          // for all its instruments
       std::vector<LibInstrument> instruments;
       // the library's other patches (<Patch>): none of the map's, but set up and checked (Check
@@ -483,6 +502,18 @@ QString writeLaneSettings(const LaneSettings& s, const Library&);      // "" whe
 
 extern const char* legatoEarlyMetaTag;
 int legatoEarly(const Score* score, const Library& library);
+
+//---------------------------------------------------------
+//   onsetEarly
+//    how early a held note that is not a legato transition (a lone held note, a slur's first note)
+//    starts, percent of its articulation's measured onset (SSO: the level 15 dB under the note's peak
+//    10-60 ms after the note-on for most longs, 175-440 ms for sul tasto, flautando, harmonics): the
+//    map's <Onset early>, unless the score sets its own (Mixer › Advanced Options…, metaTag
+//    "soundLibraryOnsetEarly"). 0: on the beat, as written
+//---------------------------------------------------------
+
+extern const char* onsetEarlyMetaTag;
+int onsetEarly(const Score* score, const Library& library);
 
 //---------------------------------------------------------
 //   bendValue

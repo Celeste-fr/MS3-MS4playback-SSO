@@ -92,6 +92,8 @@ class TestSoundLibrary : public QObject, public MTest
       void renderPhraseMark();
       void legatoEarly();
       void legatoEarlyFastRun();
+      void legatoEarlyByInterval();
+      void onsetEarly();
       void renderKit();
       void renderKitRoll();
       void controllers();
@@ -424,25 +426,35 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(familyOf("Horns a6"), QString("brass"));
       QCOMPARE(familyOf("Motif Horns a4"), QString("brass"));
       QCOMPARE(familyOf("Harp"), QString("other"));
-      // shorts by the note's written length (2026-09-28, "Whence" bar 8): Short 0'5 from 0.45 s, Short 1'0
-      // from 0.9 s, else the next shorter, down to Spiccato
-      auto byLength = [&](std::vector<Ms4::Art> arts, double seconds) {
+      // shorts by the note's length (2026-09-28, "Whence" bar 8). Since 2026-10-01 a measured short (map from=) is chosen
+      // where its sounding length is the closest to how long the note is meant to sound: the written length times MS4's
+      // duration factor (staccato 50 %, staccatissimo 25 %, tenuto 99 %, portato 74.5 %): Violins 2 Short 0'5 from
+      // 0.42 s meant (a staccato from 0.84 s written), Short 1'0 from 0.76 s (a portato from 1.02 s); Violas 0.61 / 1.06
+      auto byLengthOf = [&](const QString& patch, std::vector<Ms4::Art> arts, double seconds) {
             std::vector<Ms4::ArtRef> refs;
             for (Ms4::Art a : arts)
                   refs.push_back(Ms4::ArtRef { a, false });
-            return patchFor("Violins 2", SoundLib::want(refs, SoundLib::TextState(), seconds, 0));
+            return patchFor(patch, SoundLib::want(refs, SoundLib::TextState(), seconds, 0));
             };
+      auto byLength = [&](std::vector<Ms4::Art> arts, double seconds) { return byLengthOf("Violins 2", arts, seconds); };
       using A = Ms4::Art;
+      {
+            std::vector<Ms4::ArtRef> portato { { A::Staccato, false }, { A::Tenuto, false } };
+            QVERIFY(qAbs(SoundLib::want(portato, SoundLib::TextState(), 0.8, 0).soundSeconds - 0.8 * 0.745) < 1e-9);
+      }
       QCOMPARE(byLength({ A::Staccato }, 0.27), QString("Violins 2: Spiccato"));          // an eighth at 110
-      QCOMPARE(byLength({ A::Staccato }, 0.55), QString("Violins 2: Short 0.5"));         // a quarter at 110
+      QCOMPARE(byLength({ A::Staccato }, 0.55), QString("Violins 2: Spiccato"));          // a quarter at 110: 0.28 s meant
+      QCOMPARE(byLength({ A::Staccato }, 0.9), QString("Violins 2: Short 0.5"));          // 0.45 s meant
       QCOMPARE(byLength({ A::Staccato, A::Accent }, 0.27), QString("Violins 2: Spiccato"));
       QCOMPARE(byLength({ A::Tenuto }, 1.1), QString("Violins 2 - Performance: Legato"));   // a held note
       QCOMPARE(byLength({ A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
       QCOMPARE(byLength({ A::Tenuto }, 0.3), QString("Violins 2 - Performance: Legato"));    // fast: no spiccato
-      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 1.0), QString("Violins 2: Short 1.0")); // portato
-      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 1.1), QString("Violins 2: Short 1.0")); // portato, 0.82 s meant
+      QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.8), QString("Violins 2: Short 0.5")); // portato, 0.6 s: detached
       QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.27), QString("Violins 2: Spiccato"));
       QCOMPARE(byLength({ A::Staccatissimo }, 1.0), QString("Violins 2: Spiccato"));
+      QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.1), QString("Violas: Spiccato"));   // 0.55 s meant; Short 0'5 rings 0.84 s
+      QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.3), QString("Violas: Short 0.5"));
       // (a length unknown: as before)
       QCOMPARE(patchFor("Violins 2", { { "short" }, {} }), QString("Violins 2: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
@@ -918,6 +930,175 @@ void TestSoundLibrary::legatoEarlyFastRun()
                      qPrintable(QString("note %1 plays %2 ticks of %3").arg(i).arg(played).arg(S)));
             }
       QVERIFY(ons[1] - ons[0] >= S * 3 / 4 - 1);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   legatoEarlyByInterval
+//    legatoDelay by interval ("interval:ms" pairs, SSO's legato grid: a patch's transitions take 60-690 ms
+//    by interval): read, interpolated between intervals, the widest's beyond; each transition of
+//    legato-early.musicxml starts early by its own interval's delay (+1, +2, +3, +4 between +3 and +5, +5)
+//---------------------------------------------------------
+
+void TestSoundLibrary::legatoEarlyByInterval()
+      {
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+2:abc'/>"
+                       "</Instrument></SoundLibrary>"));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+12:800 -12:400 +1:100 +2:200 +3:150 +5:230'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::Articulation& a = lib->instruments[1].articulations[0];
+      QCOMPARE(int(a.legatoDelays.size()), 6);
+      QCOMPARE(a.legatoDelayMs, 215.0);                         // (the median: 200 and 230)
+      QCOMPARE(a.legatoDelayAt(2), 200.0);
+      QCOMPARE(a.legatoDelayAt(4), 190.0);                      // half way from +3 to +5
+      QCOMPARE(a.legatoDelayAt(-20), 400.0);                    // beyond the widest: the widest's
+      QCOMPARE(a.legatoDelayAt(24), 800.0);
+      QVERIFY(qAbs(a.legatoDelayAt(8) - (230 + 570 * 3 / 7.0)) < 1e-9);
+      QVERIFY(qAbs(a.legatoDelayAt(-1) - (400 - 300 * 11 / 13.0)) < 1e-9);
+      SoundLib::Articulation one;
+      one.legatoDelayMs = 180;
+      QCOMPARE(one.legatoDelayAt(7), 180.0);                    // (one number: every interval)
+
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::vector<std::pair<int, int>> ons;                     // (on, pitch)
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0)
+                  ons.push_back({ te.first, ev.pitch() });
+            }
+      std::stable_sort(ons.begin(), ons.end());
+      QCOMPARE(int(ons.size()), 20);
+      const int Q = DIVISION;
+      // early by: at 60 bpm 0.48 ticks a ms, at 120 0.96 (a quarter at 120 may lose 250 ms: none is capped)
+      const std::vector<std::pair<int, double>> written = {
+            { 0, 0 }, { Q, 200 * 0.48 }, { 2 * Q, 200 * 0.48 }, { 3 * Q, 100 * 0.48 },     // C D E F: +2 +2 +1
+            { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 200 * 0.48 },             // G, A A (struck again) B: +2
+            { 8 * Q, 0 }, { 9 * Q, 190 * 0.96 }, { 10 * Q, 150 * 0.96 }, { 11 * Q, 230 * 0.96 },   // C E G C: +4 +3 +5
+            };
+      for (size_t i = 0; i < written.size(); ++i) {
+            const double expected = written[i].first - written[i].second;
+            QVERIFY2(qAbs(ons[i].first - expected) <= 1.0,
+                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(ons[i].second)
+                                .arg(ons[i].first).arg(expected)));
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   onsetEarly
+//    a held note that is not a legato transition (a lone held note, a slur's first note) starts early by its
+//    articulation's onset (<Articulation onset>, by pitch; <Onset early> percent; SSO's longs are heard 10-60
+//    ms after the note-on, sul tasto / flautando / harmonics up to 440): capped by the note before on the
+//    same patch as transitions are, not before the score's start; what ends on its patch in between ends at
+//    the new start, its switch moves with it. legato-early.musicxml (see legatoEarly)
+//---------------------------------------------------------
+
+void TestSoundLibrary::onsetEarly()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' onset='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(lib->onsetEarly, 100);
+      const SoundLib::Articulation& longArt = lib->instruments[0].articulations[0];
+      QCOMPARE(longArt.onsetAt(60), 50.0);
+      QCOMPARE(longArt.onsetAt(78), 100.0);
+      QCOMPARE(lib->instruments[1].articulations[0].onsetAt(40), 100.0);
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='Long' value='1' techniques='long' onset='60:x'/>"
+                       "</Instrument></SoundLibrary>"));
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(SoundLib::onsetEarly(score, *lib), 100);
+
+      struct N { int on; int off; int pitch; int channel; };
+      std::vector<int> switches;                                // CC32 ticks
+      auto render = [score, &switches]() {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            switches.clear();
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal())
+                        continue;
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == 32)
+                        switches.push_back(te.first);
+                  if (ev.type() != ME_NOTEON)
+                        continue;
+                  if (ev.velo() > 0)
+                        notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel() });
+                  else {
+                        for (N& n : notes)
+                              if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
+                                    n.off = te.first;
+                        }
+                  }
+            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
+            return notes;
+            };
+      const int Q = DIVISION, S = DIVISION / 4;
+      // at 60 bpm 0.48 ticks a ms, at 120 0.96. G5 (79) on the main patch: 50 + 100 * 7 / 12 ms; the legato
+      // patch's fresh notes 100 ms; transitions 200 ms (a quarter at 120 may lose 250 ms)
+      const double g5 = (50 + 100 * 7 / 12.0) * 0.48;
+      const std::vector<std::pair<int, double>> written = {
+            { 0, 0 }, { Q, 96 }, { 2 * Q, 96 }, { 3 * Q, 96 },         // the slur's first at the score's start: not earlier
+            { 4 * Q, g5 }, { 5 * Q, 48 }, { 6 * Q, 48 }, { 7 * Q, 96 },  // G5 unslurred, A4 a slur's first, A4 again, B4
+            { 8 * Q, 48 },                                              // C5 at 120, a slur's first: its 100 ms are at 60 bpm
+            { 9 * Q, 192 }, { 10 * Q, 192 }, { 11 * Q, 192 },
+            { 12 * Q, 96 },                                             // the run's first: a slur's first
+            };
+      std::vector<N> notes = render();
+      QCOMPARE(int(notes.size()), 20);
+      for (size_t i = 0; i < written.size(); ++i) {
+            const double expected = written[i].first - written[i].second;
+            QVERIFY2(qAbs(notes[i].on - expected) <= 1.0,
+                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(notes[i].pitch)
+                                .arg(notes[i].on).arg(expected)));
+            }
+      for (int i = 1; i < 8; ++i)
+            QCOMPARE(notes[size_t(12 + i)].on, 12 * Q + i * S);       // (the run's transitions: 125 ms, not moved)
+      // G5's switch to Long goes with it, before it; the B4 before C5 (same patch, no overlap: the slur ended)
+      // ends where C5 now starts; F5 before G5 (another patch) keeps its end
+      QVERIFY(std::find(switches.begin(), switches.end(), notes[4].on) != switches.end());
+      QVERIFY(std::find(switches.begin(), switches.end(), 4 * Q) == switches.end());
+      QCOMPARE(notes[7].off, notes[8].on);
+      const int f5off = notes[3].off;
+      QVERIFY(f5off > notes[4].on);
+      // the score's own percent: 0 plays held notes as written, transitions still early
+      score->setMetaTag(SoundLib::onsetEarlyMetaTag, "0");
+      notes = render();
+      QCOMPARE(notes[3].off, f5off);
+      QCOMPARE(notes[4].on, 4 * Q);
+      QCOMPARE(notes[5].on, 5 * Q);
+      QCOMPARE(notes[8].on, 8 * Q);
+      QCOMPARE(notes[1].on, Q - 96);
+      QVERIFY(notes[7].off > 8 * Q - 48);                       // (B4 keeps its end)
+      score->setMetaTag(SoundLib::onsetEarlyMetaTag, "");
       delete score;
       }
 

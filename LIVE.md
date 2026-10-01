@@ -253,7 +253,7 @@ renaming it, dragging in Kontakt 8, etc. possible to be automated?". MuseScore w
 
 1. Open the score. Play it once in MuseScore with the library's plug-in (or let the patches load at score open):
    each patch's first load resaves its setup as Kontakt's own state, which Kontakt loads about 20 times faster
-   than a setup made from the `.nki` (CLAUDE.md › Load times). The report says how many patches were never loaded.
+   than a setup made from the `.nki` (docs/HISTORY.md › Load times). The report says how many patches were never loaded.
 2. *Mixer › Advanced Options… › Ableton Live › **Create Live Set…***. The file dialog offers
    "<score title>.als" next to the score. A report lists the tracks, their devices and MIDI From, and what was
    left out.
@@ -521,7 +521,7 @@ What Live 12.2 offers, checked in the running program (`dir()` of its Python cla
 ## Live against MuseScore
 
 The owner, 2026-09-30: **"make it a rule that Ableton's audio output and MuseScore's audio output for SSO must
-match"** (CLAUDE.md › Rule: Live and MuseScore sound alike). Any change to SSO playback (renderer, hosting, mixer,
+match"** (CLAUDE.md › Rules: Live and MuseScore sound alike). Any change to SSO playback (renderer, hosting, mixer,
 controllers, tuning) must reach the Live path too (the clips: notes and carriers; the generated set: Kontakt's state,
 the track mixer; the MuseScore Link device) or be listed below as a difference to fix.
 

@@ -122,6 +122,11 @@ class MidiRenderer {
       std::map<const Note*, const Note*> libGlideFrom;            // a legato transition's note before (its lane glides)
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libLegatoEarly = 0;                                     // SoundLib::legatoEarly, percent (this chunk)
+      int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
+      // held notes started early by their onset (this chunk): what ends on their patch between their new and
+      // their written start ends at the new one, and their switch and controllers move with them (finishLibraryEvents)
+      struct LibShift { int channel; int patch; int on; int written; int chordTick; };
+      std::vector<LibShift> libShifts;
       int minChunkSize = 0;
 
    public:
@@ -162,6 +167,7 @@ class MidiRenderer {
       void updateChunksPartition();
       static bool canBreakChunk(const Measure* last);
       bool libSlurAcross(const Measure* last) const;
+      bool libNoteAfter(const Measure* last) const;
       void updateState();
 
       void renderStaffChunk(const Chunk&, EventMap* events, const StaffContext& sctx);

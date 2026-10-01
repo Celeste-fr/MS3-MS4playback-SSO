@@ -18,6 +18,8 @@
 #include "libmscore/undo.h"
 #include "libmscore/fraction.h"
 #include "libmscore/part.h"
+#include "libmscore/staff.h"
+#include "libmscore/pitchspelling.h"
 
 #define DIR QString("libmscore/keysig/")
 
@@ -38,6 +40,7 @@ class TestKeySig : public QObject, public MTest
       void keysig_78216();
       void preferSharpFlat();
       void keysigMode();
+      void scaleDegrees();
       };
 
 //---------------------------------------------------------
@@ -189,6 +192,42 @@ void TestKeySig::keysigMode()
       score->update();
       score->doLayout();
       QVERIFY(saveCompareScore(score, "keysig03.mscx", DIR + "keysig03-ref.mscx"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   scaleDegrees
+//    numpad 1-7 (note-degree-n): the note name of each degree counted from the key's tonic, the key signature's
+//    mode deciding the tonic (none: major)
+//---------------------------------------------------------
+
+void TestKeySig::scaleDegrees()
+      {
+      MasterScore* score = readScore(DIR + "keysigMode.mscx");
+      Measure* m1 = score->firstMeasure();
+      score->inputState().setTrack(0);
+      score->inputState().setSegment(m1->first(SegmentType::ChordRest));
+      Staff* staff = score->staff(0);
+      auto degrees = [&](Key key, KeyMode mode) {
+            KeySigEvent e;
+            e.setKey(key);
+            e.setMode(mode);
+            staff->setKey(m1->tick(), e);
+            QString names;
+            for (int d = 1; d <= 7; ++d)
+                  names += QChar("CDEFGAB"[score->scaleDegreeStep(d)]);
+            return names;
+            };
+      QCOMPARE(degrees(Key::C, KeyMode::NONE), QString("CDEFGAB"));
+      QCOMPARE(degrees(Key::C, KeyMode::MAJOR), QString("CDEFGAB"));
+      QCOMPARE(degrees(Key::C, KeyMode::MINOR), QString("ABCDEFG"));          // A minor
+      QCOMPARE(degrees(Key::E_B, KeyMode::MINOR), QString("CDEFGAB"));        // C minor: 1 is C
+      QCOMPARE(degrees(Key::E_B, KeyMode::UNKNOWN), QString("EFGABCD"));      // no mode: E flat major
+      QCOMPARE(degrees(Key::G, KeyMode::MAJOR), QString("GABCDEF"));
+      QCOMPARE(degrees(Key::C_S, KeyMode::MAJOR), QString("CDEFGAB"));        // C sharp major
+      QCOMPARE(degrees(Key::C_B, KeyMode::MINOR), QString("ABCDEFG"));        // A flat minor
+      QCOMPARE(degrees(Key::C, KeyMode::DORIAN), QString("DEFGABC"));
+      QCOMPARE(degrees(Key::C, KeyMode::LYDIAN), QString("FGABCDE"));
       delete score;
       }
 

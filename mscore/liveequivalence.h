@@ -13,7 +13,7 @@
 
 //---------------------------------------------------------
 //   LiveEquivalence: does Live play the score as MuseScore does? (the owner, 2026-09-30: "make it a rule that
-//   Ableton's audio output and MuseScore's audio output for SSO must match"; CLAUDE.md › Rule: Live and MuseScore
+//   Ableton's audio output and MuseScore's audio output for SSO must match"; CLAUDE.md › Rules: Live and MuseScore
 //   sound alike; LIVE.md › Live against MuseScore). The best proof short of opening Live, since Live can't run
 //   here or headless:
 //

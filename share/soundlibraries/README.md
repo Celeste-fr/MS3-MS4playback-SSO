@@ -178,11 +178,17 @@ switch value of each articulation. For example:
     <Articulation name="Legato" value="20" techniques="legato"/>   <!-- slurred notes -->
   </Instrument>
   ```
-- **Measured timing.** Three optional attributes come from measuring the library (SSO's come from
+- **Measured timing.** Optional attributes come from measuring the library (SSO's come from
   the owner's background timing run and plug-in extract, `tools/soundlibraries/sso_articulation_timing.json`
   and `sso_patch_measurements.json`, written by `gen_spitfire_sso.py`):
   - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long
-    after its note-on (SSO's Performance patches: 70–430 ms, median 180). A slurred note that is a
+    after its note-on (SSO's Performance patches: 60–690 ms, median 190). Either one number for
+    every interval or the delay by interval, `interval:ms` pairs in semitones (the new note minus the
+    one before; `legatoDelay="-12:200 -7:210 -5:240 … +7:300 +12:600"`): an interval between two listed
+    ones takes the straight line between them, one beyond the widest the widest's (a chord before: its
+    nearest note on the same patch). SSO's come from the legato grid (`sso_legato_grid.json`: 14
+    intervals from -12 to +12, velocity changes nothing), for the string Performance patches from
+    5 starting pitches (`sso_legato_grid_pitches.json`; +12 takes -12's). A slurred note that is a
     transition (its note before, on the same patch, is slurred into it) starts early by this times
     `<Legato early>` percent, so the new pitch lands near the beat. The note before loses at most
     a share of its length: none up to 125 ms, rising linearly to half at 250 ms and longer (fast
@@ -194,15 +200,43 @@ switch value of each articulation. For example:
     median 40 ms after the beat). A score can set its own in
     *Mixer › Advanced Options…* ("Legato transitions early by", metaTag `soundLibraryLegatoEarly`);
     0 plays transitions on the beat.
+  - `onset` on an `Articulation` (ms): a sustained note is heard this long after its note-on (its
+    level 15 dB under the note's peak), one number or `pitch:ms` pairs by played MIDI pitch
+    (`onset="55:65 68:55 78:65 89:40 97:80"`, linear between, the nearest end's beyond). A note that is
+    not a legato transition (a lone held note, a slur's first note) starts early by it times `<Onset
+    early>` percent; a chord by its notes' latest. As for transitions, the note just before on its
+    track, when it plays on the same patch, loses at most a share of its length (none up to 125 ms,
+    half from 250 ms), and it never starts before the chunk's or the repeat's start (a chunk of live
+    playback doesn't end before a measure where a library part starts a note, up to twice its size).
+    What ends on the same patch between the new and the written start ends at the new start (on a
+    legato patch an overlap would play a transition instead of the note's attack), and the note's
+    switch and the controllers sent at its tick move with it. SSO: 10-60 ms for most longs, 175-440 ms
+    for sul tasto, flautando and harmonics (from the rest check's per-semitone full-level times by
+    family; `gen_spitfire_sso.py`); not on tremolos, trills, shorts, harp, keyboards or percussion.
+  - `<Onset early="100"/>` (top level): that percent (SSO: 100). A score can set its own in *Mixer ›
+    Advanced Options…* ("Held notes early by", metaTag `soundLibraryOnsetEarly`); 0 plays them on the beat.
+  - `length` on an `Articulation` (seconds): how long its sample is (SSO's Short 0.5 / Short 1.0): not
+    chosen for a note whose written length is under 90 % of it; with `from` (seconds): not chosen for
+    a note meant to sound shorter than that instead: its written length times MS4's duration factor
+    for its articulations (staccato 50 %, staccatissimo 25 %, tenuto 99 %, portato 74.5 %). SSO's
+    `from` is measured: the meant length from which the short's sounding length (the last time it is
+    within 10 dB of its peak; the note-off hardly cuts them) is closer to it than what would play
+    otherwise (Spiccato for Short 0.5, Short 0.5 for Short 1.0): Violins 1 0.43 / 0.71 s (a staccato
+    from 0.86 s written, a portato from 0.95 s), Violas 0.61 / 1.06, Basses 0.73 / 1.07.
   - `release` on an `Articulation` (ms): how long a sustained note rings after its note-off. A
     tuning copy (below) is retuned only after its notes' end plus the longer of `tail` and this.
+    SSO's: the longest over the articulation's range (the rest check measured every semitone; neighbouring
+    semitones can ring twice as long as the rest: Violins 1 - Performance 855 ms at its test pitch, 2180 at D4).
   - `bend` on an `Instrument` (cents): the patch bends its pitch this far either way at full pitch
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
 
   ```xml
   <Legato early="100"/>
+  <Onset early="100"/>
   <Instrument name="Violins 1 - Performance" with="Violins 1" bend="99.1">
-    <Articulation name="Legato" value="20" techniques="legato long" release="885" legatoDelay="210"/>
+    <Articulation name="Legato" value="20" techniques="legato long" release="885"
+                  legatoDelay="-12:200 -7:210 -5:240 -4:190 -3:210 -2:300 -1:350 +1:220 +2:240 +3:230 +4:300 +5:300 +7:300 +12:600"
+                  onset="45"/>
   </Instrument>
   ```
 - **Microtones.** `<Tuning method="varispeed" tolerance="0.5" tail="1.5" maxLanes="4"/>`: a plug-in

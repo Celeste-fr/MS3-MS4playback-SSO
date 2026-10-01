@@ -64,6 +64,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipsTimeline();
       void clipsControllers();
       void clipsScore();
+      void clipsOnsetEarly();
       void clipsChanges();
       void clipsOsc();
       void clipsImport();
@@ -760,6 +761,49 @@ void TestLiveIntegration::clipsScore()
       QCOMPARE(once[0].length, 12 * U);
       QVERIFY(once[0].hash != violin.hash);
       score->setExpandRepeats(true);
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipsOnsetEarly
+//    held notes early by their measured onset (<Articulation onset>, <Onset early>; the sound library's
+//    renderer) reach the clips as MuseScore plays them: 100 ms (a tenth of a beat at 60) early, but the
+//    clip's first note and the first of a repeat's pass (where a pass starts, a note can't move earlier)
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipsOnsetEarly()
+      {
+      MasterScore* score = readScore(DIR + "clips.musicxml");
+      QVERIFY(score);
+      auto lib = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+                         "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato' onset='100'/></Instrument>"
+                         "<Instrument name='Flute' ids='flute'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      score->rebuildMidiMapping();
+      score->setExpandRepeats(true);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      QCOMPARE(int(tracks.size()), 2);
+      const std::vector<LiveClips::Note> notes = realNotes(tracks[0].notes);
+      QVERIFY2(notes.size() == 6, qPrintable(describe(tracks[0].notes)));
+      const int starts[] = { 0, 4, 8, 10, 14, 16 };          // seconds = beats at 60
+      const bool early[] = { false, true, true, false, true, true };
+      for (int i = 0; i < 6; ++i) {
+            const int expected = starts[i] * U - (early[i] ? U / 10 : 0);
+            QVERIFY2(qAbs(notes[size_t(i)].start - expected) <= 8 * LiveClips::EPSILON,
+                     qPrintable(QString("note %1 at %2, expected %3: %4").arg(i).arg(notes[size_t(i)].start).arg(expected)
+                                .arg(describe(notes))));
+            }
+      // (the flute has no onset: as written)
+      const std::vector<LiveClips::Note> fn = realNotes(tracks[1].notes);
+      QCOMPARE(int(fn.size()), 2);
+      QCOMPARE(fn[1].start, 2 * U);
+      const std::vector<LiveClips::Note> uacc = carriers(tracks[0].notes, 127);
+      QVERIFY(!uacc.empty() && uacc.front().start <= notes.front().start - LiveClips::EPSILON);
       SoundLib::setCurrent(nullptr);
       delete score;
       }

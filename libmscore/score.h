@@ -550,6 +550,7 @@ class Score : public QObject, public ScoreElement {
       bool canReselectItem(const Element* e) const;
 
       void cmdAddPitch(const EditData&, int note, bool addFlag, bool insert);
+      void cmdAddScaleDegree(const EditData&, int degree, bool addFlag, bool insert);
       void cmdAddFret(int fret);
       void cmdToggleVisible();
 
@@ -1278,6 +1279,7 @@ class Score : public QObject, public ScoreElement {
       void setFooterText(Text* t, int index)          { _footersText.at(index) = t;     }
 
       void cmdAddPitch(int note, bool addFlag, bool insert);
+      int scaleDegreeStep(int degree) const;
       void forAllLyrics(std::function<void(Lyrics*)> f);
 
       System* getNextSystem(LayoutContext&);
