@@ -422,10 +422,17 @@ struct Struct {
 
 //---------------------------------------------------------
 //   script values: after a PAR_SCRIPT's code, "<u32 length><name value>" entries
+//    (after the code a header ending in the u32 number of entries, then the entries back to
+//    back; no total size anywhere, so an entry can change length: the chunks around it are
+//    sized again when joined). The length counts the name, its space and the value. A number
+//    is its digits; an array (a Kickstart percussion patch's %4jwcn keys, %c2lsa on / off …)
+//    its elements separated by single spaces, no trailing space, saved up to its last non-zero
+//    element and one 0 after it ("48 52 55 61 59 72 41 0")
 //---------------------------------------------------------
 
 struct ScriptValue {
-      int offset;                   // of the value, in the script's public data
+      int entry;                    // of the entry (its u32 length), in the script's public data
+      int offset;                   // of the value
       QByteArray value;
       };
 
@@ -449,10 +456,12 @@ std::map<QString, ScriptValue> values(const QByteArray& pub)
             const int end = m.capturedEnd();
             if (s >= 4) {
                   const quint32 length = get32(pub, s - 4);
-                  if (length > 0 && length <= 400 && s + int(length) <= pub.size()) {
+                  // (no limit but the data's end: Kickstart's arrays and Spitfire's settings strings
+                  // take 400-650 bytes; once 400, which left those out)
+                  if (length > 0 && length <= quint32(pub.size() - s) && s + int(length) >= end) {
                         const QString key = text.mid(s, end - s - 1);
                         if (!out.count(key))
-                              out[key] = { end, pub.mid(end, s + int(length) - end) };
+                              out[key] = { s - 4, end, pub.mid(end, s + int(length) - end) };
                         p = s + int(length);
                         continue;
                         }
@@ -483,12 +492,25 @@ QByteArray applyValues(const QByteArray& program, const std::map<QString, QByteA
       for (int i : scripts) {
             QByteArray pub = kids[i].body.mid(1);
             const std::map<QString, ScriptValue> have = values(pub);
-            bool changed = false;
+            // (from the last entry back: the offsets of those still to set stay right)
+            std::vector<std::pair<const ScriptValue*, QByteArray>> todo;
             for (const auto& v : set) {
                   auto h = have.find(v.first);
-                  if (h == have.end() || h->second.value.size() != v.second.size())
-                        continue;
-                  pub.replace(h->second.offset, v.second.size(), v.second);
+                  if (h != have.end())
+                        todo.emplace_back(&h->second, v.second);
+                  }
+            std::sort(todo.begin(), todo.end(), [](const std::pair<const ScriptValue*, QByteArray>& a,
+                                                   const std::pair<const ScriptValue*, QByteArray>& b) {
+                  return a.first->offset > b.first->offset;
+                  });
+            bool changed = false;
+            for (const auto& t : todo) {
+                  const ScriptValue& h = *t.first;
+                  const QByteArray& value = t.second;
+                  // another length (a Kickstart array made longer or shorter): the entry's length too
+                  if (value.size() != h.value.size())
+                        pub.replace(h.entry, 4, le32(get32(pub, h.entry) - quint32(h.value.size()) + quint32(value.size())));
+                  pub.replace(h.offset, h.value.size(), value);
                   changed = true;
                   ++*count;
                   }
