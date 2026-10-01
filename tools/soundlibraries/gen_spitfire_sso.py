@@ -853,23 +853,36 @@ LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file
 # Basses' half notes up to 156 ms early), Violins 2 140-175 (230-280; 51-76 early).
 GRID_PITCHES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid_pitches.json'),
                               encoding='utf-8'))
+OCTAVE_UP_EXCESS = {'strings': 60, 'woodwinds': 45, 'brass': 95, None: 60, 'slow': 60}
+SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performance': 45}
 def legatoDelayFromPitches(patch, sound):
     rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
     if not rows:
         return None
     by = {}
     for start, interval, leave, mid, arrive, dip in rows:
-        if mid >= 0 and abs(interval) != 12:
+        if mid >= 0 and interval != 12:
             by.setdefault(interval, []).append(mid)
     if not by:
         return None
     ms = {i: statistics.median(a) for i, a in by.items()}
-    # octaves: neither is usable (+12 reads 375-760 ms, the first note's room keeping the lower pitch's odd harmonics;
-    # -12 70-160, the step crossing the old note's own octave); the sweep of 3f0cda5 heard winds' and brass octaves
-    # 84-111 ms early on them. Each patch's own: the median of its -7, -5, +5, +7 delays, for both
+    # Octaves, from the sweeps of e6f44e6 and c27da62 (16 instruments, slurs after notes of 0.5 s and longer, each
+    # arrival taken back to its note-on): -12 arrives where the grid's measured -12 says (median excess +4 ms strings,
+    # +9 woodwinds, +20 brass), so the measured -12 (the grid's +12 reads the first note's room); +12 takes longer than
+    # the patch's fourths and fifths: their median plus the family's excess (sweeps: strings +228, woodwinds +90, brass
+    # +118, but +12 arrivals are themselves hard to time; the coordinator's fit of the two sweeps: +60 / +45 / +95, the
+    # smaller, later choice)
     large = [ms[i] for i in (-7, -5, 5, 7) if i in ms]
     if large:
-        ms[-12] = ms[12] = statistics.median(large)
+        if -12 in by:
+            ms[-12] = statistics.median(by[-12])
+        else:
+            ms[-12] = statistics.median(large)
+        ms[12] = statistics.median(large) + OCTAVE_UP_EXCESS[onsetFamily(patch, 'Legato')]
+    # patches the sweeps heard off on every other interval (median over their non-octave slurs of 0.5 s and longer):
+    # Oboe Solo 60 ms late, Violins 2 45 late (the others within -21 ... +23)
+    corr = SWEEP_LEGATO_CORRECTION.get(patch, 0)
+    ms = {i: m + corr for i, m in ms.items()}
     return ' '.join(f'{i:+d}:{int(round(m))}' for i, m in sorted(ms.items()))
 def legatoDelay(patch, sound, t):
     """the legatoDelay= text of a patch's legato sound (None: not measured)"""
@@ -1024,17 +1037,16 @@ def onset(patch, sound):
     if not family:
         return None
     if family == 'slow' and isinstance(measured, list):
-        # swells (sul tasto, flautando, harmonics) vary note to note: per semitone, never more than its neighbours'
-        # (a minimum over +-1 semitone: where neighbours differ by 150 ms or more, or a still-rising swell's -10 dB
-        # time stands out, the smaller shift wins). Err late: the measurement agent's sweep of e6f44e6 (median per
-        # semitone over 7) heard Violins 2 sul tasto up to 399 ms early, Celli flautando 189-216, Basses flautando
-        # 159, Violas flautando 123 early; an early swell sounds worse than a late one. Pairs within 15 ms, not 15 %.
-        smooth = [min(ms[max(0, i - 1):i + 2]) for i in range(len(ms))]
+        # swells (sul tasto, flautando, harmonics): each semitone's own -15 dB time, no smoothing. Checked against
+        # both sweeps' 30 sul tasto / flautando notes (each note's -15 dB time back to its note-on): this puts them a
+        # median 59 ms after the beat, 21-259, none early; a minimum over +-1 semitone (c27da62) 180 (27-470); a
+        # median of 5: 125 with two 125 ms early; the -12 or -10 dB time 19 / -50 with 6 / 15 notes over 50 ms early
+        smooth = list(ms)
         points = [(p, m) for (p, _), m in zip(full, smooth)]
         mid = statistics.median(smooth)
         if all(abs(m - mid) <= 15 for m in smooth):
             return str(int(5 * round(mid / 5)))
-        return ' '.join(f'{p}:{int(5 * (m // 5))}' for p, m in simplify(points, 15))
+        return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, 15))
     smooth = [statistics.median(ms[max(0, i - 3):i + 4]) for i in range(len(ms))]
     points = [(p, m) for (p, _), m in zip(full, smooth)]
     mid = statistics.median(smooth)
