@@ -177,6 +177,9 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  <!-- a slurred note on a Performance patch (a legato transition) reaches its pitch legatoDelay ms after',
 '       its note-on (measured, sso_articulation_timing.json): it starts early by that times early percent -->',
 f'  <Legato early="{LEGATO_EARLY}"/>',
+'  <!-- a held note that is no legato transition (a lone one, a slur\'s first) is heard onset ms after its note-on',
+'       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent -->',
+'  <Onset early="100"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
 '  <Files registry="Spitfire Symphony Orchestra"/>']
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
@@ -823,16 +826,35 @@ assert not measuredMissing, measuredMissing         # (every map patch was in th
 # Measured timing (the owner's background timing run with SSO, 2026-09-29/30; tools/soundlibraries/
 # sso_articulation_timing.json, timing_from_check.py; patch -> articulation name -> {value, releaseMs,
 # legato: [[velocity, interval, leaveMs, arriveMs, dipDb], ...]}):
-# - release= (ms): a sustained articulation's ring after the note-off (to 30 dB under its level). A tuning
-#   lane stays busy until a note's end plus the longer of the tail and this (SoundLib::lanes): a lane
-#   retuned while a release rings would move the ringing pitch (Flautando 2.9 s, tail 1.5 s).
+# - release= (ms): a sustained articulation's ring after the note-off (to 30 dB under its level; the longest over its
+#   range, below). A tuning lane stays busy until a note's end plus the longer of the tail and this
+#   (SoundLib::lanes): a lane retuned while a release rings would move the ringing pitch (Flautando 3.5 s, tail 1.5 s).
 # - legatoDelay= (ms): a legato articulation (the Performance patches): when the second of two slurred
-#   notes reaches its pitch after its note-on, the median of the six measured transitions (velocity 20 /
-#   64 / 110, +2 and -5 semitones). Velocity makes no difference on most patches (median spread 0 ms);
-#   up (+2) and down (-5) differ on some patches either way round (Oboes a2 90 / 340, Bassoons a2 90 / 260,
-#   Bass Flute 220 / 100), with two intervals only, so one number per patch.
+#   notes reaches its pitch after its note-on, by interval: "interval:ms" pairs from the legato grid
+#   (sso_legato_grid.json, the rest check, 2026-10-01: slurs from the patch's test pitch at 9 velocities
+#   1 … 127 x 14 intervals -12, -7, -5 … -1, +1 … +5, +7, +12), per interval the median over the
+#   velocities where it arrived (within 800 ms). Velocity changes nothing (median arrival 190 ms at
+#   every velocity, spread over the 9 at one interval: median 10 ms); the interval does (median over
+#   the 45 patches -12: 210, -2: 190, +1: 150, +7: 230, +12: 360; per patch 60-690). The renderer
+#   interpolates between intervals and keeps the widest's beyond. A patch without grid data: one number,
+#   the median of the timing check's six transitions (velocity 20 / 64 / 110, +2 and -5 semitones).
+import statistics
 TIMING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_articulation_timing.json'),
                         encoding='utf-8'))
+LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid.json'),
+                             encoding='utf-8'))
+def legatoDelay(patch, sound, t):
+    """the legatoDelay= text of a patch's legato sound (None: not measured)"""
+    rows = LEGATO_GRID.get(patch, {}).get(sound)
+    if rows:
+        by = {}
+        for vel, interval, leave, arrive, dip in rows:
+            if arrive >= 0:
+                by.setdefault(interval, []).append(arrive)
+        if by:
+            return ' '.join(f'{i:+d}:{int(round(statistics.median(a)))}' for i, a in sorted(by.items()))
+    arrive = [l[3] for l in t.get('legato', []) if l[3] >= 0]
+    return str(int(round(statistics.median(arrive)))) if arrive else None
 # Pitch bend (the owner's extracts, sso_patch_measurements.json "pitchBend": cents at bend 0 and 16383
 # against 8192; the extract found the cents at 4096 … 12288 on a straight line): bend= (cents at full
 # deflection) where the patch bends cleanly: both ways at least 50 cents and the two within 3 % of each
@@ -852,8 +874,81 @@ def bendRange(name):
     if abs(up + down) > 0.03 * mean:
         return None
     return round(mean, 1)
-import statistics
+# - onset= (ms): a sustained articulation's attack, by pitch: when it is heard, its level 15 dB under the note's peak
+#   (the renderer starts a held note that is no legato transition that much early, times <Onset early> percent).
+#   Measured on the VM (2026-10-01, build ce7d801, lone held notes at 3 registers and pp / mf / ff on 13 instruments
+#   and Violins 1 sul tasto / flautando / harmonics, K-weighted level in 10 ms hops against the note's peak in its
+#   first 1.5 s; the thresholds -20 ... -6 dB compared): -15 dB is where the ear puts the start (Vos & Rasch 1981's
+#   relative threshold; -6 dB, the full level, jumps by 150 ms where a swell levels off). It follows the rest check's
+#   per-semitone mf full level (sso_sound_range.json, 6 dB under the peak) per family, fitted over the 83 notes:
+#   brass 0.11 full + 21 ms (rms 12), strings 0.15 full + 22 (19), woodwinds 0.28 full + 8 (27), sul tasto /
+#   flautando / harmonics 0.58 full - 118 (48; not under the strings'); 10-60 ms for most longs, 175-440 for the slow
+#   techniques. Per semitone, smoothed (a running median of 7), as few pitch:ms pairs as stay within 10 ms or 10 %
+#   of the median (Douglas-Peucker; the fits' own error is 12-48 ms); one number where all are. Only longs and legato
+#   (what was measured): not tremolos, trills, long marcato, nor harp, keyboards and percussion.
+RANGE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_sound_range.json'), encoding='utf-8'))
+ONSET_EARLY = 100
+def onsetFamily(patch, sound):
+    if re.search(r'Sul Tasto|Flautando|Harmonics', sound):
+        return 'slow'
+    if re.search(r'Horn|Trumpet|Trombone|Tuba|Cimbass', patch):
+        return 'brass'
+    if re.search(r'Flute|Piccolo|Oboe|Cor Anglais|Clarinet|Bassoon', patch):
+        return 'woodwinds'
+    if re.search(r'Violin|Viola|Cell|Basses|Strings', patch):
+        return 'strings'
+    return None
+def onsetFit(family, full):
+    strings = 0.15 * full + 22
+    return {'brass': 0.11 * full + 21, 'strings': strings, 'woodwinds': 0.28 * full + 8,
+            'slow': max(0.58 * full - 118, strings)}[family]
+def simplify(points, tolerance):
+    """Douglas-Peucker on (pitch, ms): the fewest points the line through stays within tolerance of"""
+    if len(points) <= 2:
+        return points
+    (x0, y0), (x1, y1) = points[0], points[-1]
+    worst, at = -1, 0
+    for i in range(1, len(points) - 1):
+        x, y = points[i]
+        d = abs(y - (y0 + (y1 - y0) * (x - x0) / (x1 - x0)))
+        if d > worst:
+            worst, at = d, i
+    if worst <= tolerance:
+        return [points[0], points[-1]]
+    return simplify(points[:at + 1], tolerance)[:-1] + simplify(points[at:], tolerance)
+def onset(patch, sound):
+    """the onset= text of a sustained sound (None: not measured or no family)"""
+    family = onsetFamily(patch, sound)
+    rows = RANGE.get(patch, {}).get(sound, {}).get('range')
+    if not family or not rows:
+        return None
+    full = [(r[0], r[8]) for r in rows if r[8] is not None and r[8] >= 0]
+    if not full:
+        return None
+    ms = [onsetFit(family, f) for _, f in full]
+    smooth = [statistics.median(ms[max(0, i - 3):i + 4]) for i in range(len(ms))]
+    points = [(p, m) for (p, _), m in zip(full, smooth)]
+    mid = statistics.median(smooth)
+    tolerance = max(10, 0.1 * mid)
+    if all(abs(m - mid) <= tolerance for m in smooth):
+        return str(int(5 * round(mid / 5)))
+    return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, tolerance))
+# - release= (ms), by register: the rest check measured each semitone's release at mf (sso_sound_range.json, to 30 dB
+#   under its level before the note-off). It differs by pitch far more than by articulation: pairs of neighbouring
+#   semitones ring twice as long as the rest (Violins 1 - Performance Legato 855 at the test pitch, 2180 / 2055 at
+#   62 / 63; Basses - Performance 965-2955; Violins 1 Long Flautando 775-3480), most likely the recordings' open
+#   strings and room. A lane must stay busy while any of its notes rings, so the articulation's longest over its
+#   range (240 articulations: a median 1.3 times the test pitch's, 46 over 1.5 s and 30 % above it, up to 3.5 s);
+#   a release over 6 s (-1) is left out; no range data: the timing check's, at the test pitch.
+def release(patch, sound, t):
+    rows = RANGE.get(patch, {}).get(sound, {}).get('range')
+    rel = [r[9] for r in rows or [] if r[9] is not None and r[9] > 0]
+    if rel:
+        return int(max(rel))
+    return int(t['releaseMs']) if t.get('releaseMs', -1) > 0 else None
+onsetCount = 0
 current = None
+legatoGridUsed = set()
 timedValues = set()
 for i, line in enumerate(out):
     m = re.match(r'  <(Instrument|Patch) name="([^"]*)"', line)
@@ -870,21 +965,37 @@ for i, line in enumerate(out):
     if not m or current not in TIMING:
         continue
     value = int(m.group(1))
-    t = [a for k, a in TIMING[current].items() if isinstance(a, dict) and a.get('value') == value]
+    t = [(k, a) for k, a in TIMING[current].items() if isinstance(a, dict) and a.get('value') == value]
     if not t:
         continue
-    t = t[0]
+    sound, t = t[0]
     extra = ''
-    if t.get('sustains') and t.get('releaseMs'):
-        extra += f' release="{int(t["releaseMs"])}"'
-    arrive = [l[3] for l in t.get('legato', []) if l[3] >= 0]
-    if arrive:
-        extra += f' legatoDelay="{int(round(statistics.median(arrive)))}"'
+    if t.get('sustains'):
+        r = release(current, sound, t)
+        if r:
+            extra += f' release="{r}"'
+    delay = legatoDelay(current, sound, t) if t.get('legato') else None
+    if delay:
+        extra += f' legatoDelay="{delay}"'
+        legatoGridUsed.add(current)
+    techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
+    o = onset(current, sound) if t.get('sustains') and ('long' in techniques or 'legato' in techniques) else None
+    if o:
+        extra += f' onset="{o}"'
+        onsetCount += 1
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'
         timedValues.add(current)
-# (every timed patch with a sustained or legato articulation found in the map)
-assert {p for p, v in TIMING.items() if any(isinstance(a, dict) and (a.get('sustains') or a.get('legato'))
-                                            for a in v.values())} <= timedValues
+# (every timed map instrument with a sustained or legato articulation found; the timing file has every sound of
+# the library: also the <Patch>es, the measurement-only ones and the drum hits (value -1, by key), which get none)
+mapInstruments = {re.match(r'  <Instrument name="([^"]*)"', l).group(1).replace('&amp;', '&') for l in out
+                  if l.startswith('  <Instrument name="')}
+missing = {p for p, v in TIMING.items() if p in mapInstruments and any(isinstance(a, dict) and a.get('value', -1) >= 0
+                                                                     and (a.get('sustains') or a.get('legato')) for a in v.values())}
+assert missing <= timedValues, missing - timedValues
+# (every map instrument in the legato grid got its delays; the grid's other three, Horn Solo / Horns a2 - Legato
+# and Oboe Principal, play no articulation a notation chooses as legato)
+assert set(LEGATO_GRID) & mapInstruments - {'Oboe Principal - Total Performance'} <= legatoGridUsed, \
+    set(LEGATO_GRID) & mapInstruments - legatoGridUsed
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

@@ -75,8 +75,71 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
       }
 
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
-//               [prefer="…"] [length="0.5"] [release="885"] [legatoDelay="210"]/>;
+//               [prefer="…"] [length="0.5"] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
+//               [onset="40" | onset="55:60 67:40 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
+
+// legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
+// semitones, a MIDI pitch), sorted into table; value: one number, or the pairs' median; false: malformed
+static bool readKeyedMs(const QString& text, double& value, std::vector<std::pair<int, double>>& table)
+      {
+      table.clear();
+      if (!text.contains(':')) {
+            bool ok = false;
+            value = text.toDouble(&ok);
+            return ok;
+            }
+      std::vector<double> values;
+      for (const QString& pair : text.split(' ', QString::SkipEmptyParts)) {
+            const QStringList iv = pair.split(':');
+            bool ok1 = false, ok2 = false;
+            const int interval = iv.size() == 2 ? iv[0].trimmed().toInt(&ok1) : 0;      // ("+2" reads as 2)
+            const double ms = iv.size() == 2 ? iv[1].toDouble(&ok2) : 0;
+            if (!ok1 || !ok2 || ms < 0)
+                  return false;
+            table.push_back({ interval, ms });
+            values.push_back(ms);
+            }
+      if (values.empty())
+            return false;
+      std::sort(table.begin(), table.end());
+      std::sort(values.begin(), values.end());
+      const size_t n = values.size();
+      value = n % 2 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
+      return true;
+      }
+
+// the table's value at key: linear between its keys, the nearest end's beyond; none: value
+static double keyedMsAt(const std::vector<std::pair<int, double>>& table, double value, int key)
+      {
+      if (table.empty())
+            return value;
+      if (key <= table.front().first)
+            return table.front().second;
+      if (key >= table.back().first)
+            return table.back().second;
+      for (size_t i = 1; i < table.size(); ++i) {
+            const auto& b = table[i];
+            if (key > b.first)
+                  continue;
+            const auto& a = table[i - 1];
+            if (b.first == a.first)
+                  return b.second;
+            return a.second + (b.second - a.second) * (key - a.first) / double(b.first - a.first);
+            }
+      return table.back().second;
+      }
+
+double Articulation::legatoDelayAt(int interval) const
+      {
+      return keyedMsAt(legatoDelays, legatoDelayMs, interval);
+      }
+
+double Articulation::onsetAt(int pitch) const
+      {
+      return keyedMsAt(onsets, onsetMs, pitch);
+      }
+
 static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       {
       Articulation art;
@@ -87,7 +150,10 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.prefer = words(a.value("prefer").toString());
       art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
       art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
-      art.legatoDelayMs = a.hasAttribute("legatoDelay") ? a.value("legatoDelay").toDouble() : -1;
+      if (a.hasAttribute("legatoDelay") && !readKeyedMs(a.value("legatoDelay").toString(), art.legatoDelayMs, art.legatoDelays))
+            return false;
+      if (a.hasAttribute("onset") && !readKeyedMs(a.value("onset").toString(), art.onsetMs, art.onsets))
+            return false;
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -208,6 +274,11 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
             else if (r.name() == "Legato") {
                   // <Legato early="100"/>
                   lib->legatoEarly = qBound(0, a.value("early").toInt(), 200);
+                  r.skipCurrentElement();
+                  }
+            else if (r.name() == "Onset") {
+                  // <Onset early="100"/>
+                  lib->onsetEarly = qBound(0, a.value("early").toInt(), 200);
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Dynamics") {
@@ -1221,6 +1292,19 @@ int legatoEarly(const Score* score, const Library& library)
                   return std::min(v, 200);
             }
       return library.legatoEarly;
+      }
+
+const char* onsetEarlyMetaTag = "soundLibraryOnsetEarly";
+
+int onsetEarly(const Score* score, const Library& library)
+      {
+      if (score) {
+            bool ok = false;
+            const int v = score->masterScore()->metaTag(onsetEarlyMetaTag).trimmed().toInt(&ok);
+            if (ok && v >= 0)
+                  return std::min(v, 200);
+            }
+      return library.onsetEarly;
       }
 
 int bendValue(double cents, double bendCents)
