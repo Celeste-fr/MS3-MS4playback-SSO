@@ -187,7 +187,8 @@ switch value of each articulation. For example:
     one before; `legatoDelay="-12:200 -7:210 -5:240 … +7:300 +12:600"`): an interval between two listed
     ones takes the straight line between them, one beyond the widest the widest's (a chord before: its
     nearest note on the same patch). SSO's come from the legato grid (`sso_legato_grid.json`: 14
-    intervals from -12 to +12, velocity changes nothing). A slurred note that is a
+    intervals from -12 to +12, velocity changes nothing), for the string Performance patches from
+    5 starting pitches (`sso_legato_grid_pitches.json`; +12 takes -12's). A slurred note that is a
     transition (its note before, on the same patch, is slurred into it) starts early by this times
     `<Legato early>` percent, so the new pitch lands near the beat. The note before loses at most
     a share of its length: none up to 125 ms, rising linearly to half at 250 ms and longer (fast

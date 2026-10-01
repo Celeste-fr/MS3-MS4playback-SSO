@@ -843,8 +843,35 @@ TIMING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         encoding='utf-8'))
 LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid.json'),
                              encoding='utf-8'))
+# From several starting pitches (sso_legato_grid_pitches.json, the rest check's legatopitches part, 2026-10-01: the
+# 8 string Performance patches, slurs from 10 / 30 / 50 / 70 / 90 % of the legato sound's range at mf, timed by the
+# two pitches' own harmonics, so octaves don't fold onto the unison as in the grid above): per interval the median over
+# the starting pitches of the 50 % time (midMs: the new pitch's harmonics half way from their level on the first note
+# to that on the second, the crossing the sweep's arrival measures). +12 is not usable (its median 405-680 against
+# 110-205 for -12: the first note's room keeps the lower pitch's odd harmonics, which the upper octave shares), so +12
+# takes -12's: the sweep of build 3f0cda5 heard +12 slurs 121 ms early on the +7 delay (~250), -12 86 ms early, both
+# where -12's measured delay puts them. Against the single-pitch grid: Basses 70-160 (were 210-300; the sweep heard
+# Basses' half notes up to 156 ms early), Violins 2 140-175 (230-280; 51-76 early).
+GRID_PITCHES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid_pitches.json'),
+                              encoding='utf-8'))
+def legatoDelayFromPitches(patch, sound):
+    rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
+    if not rows:
+        return None
+    by = {}
+    for start, interval, leave, mid, arrive, dip in rows:
+        if mid >= 0 and interval != 12:
+            by.setdefault(interval, []).append(mid)
+    if -12 in by:
+        by[12] = by[-12]
+    if not by:
+        return None
+    return ' '.join(f'{i:+d}:{int(round(statistics.median(a)))}' for i, a in sorted(by.items()))
 def legatoDelay(patch, sound, t):
     """the legatoDelay= text of a patch's legato sound (None: not measured)"""
+    fromPitches = legatoDelayFromPitches(patch, sound)
+    if fromPitches:
+        return fromPitches
     rows = LEGATO_GRID.get(patch, {}).get(sound)
     if rows:
         by = {}
@@ -936,12 +963,30 @@ def articulationKind(sound):
         if k in sound:
             return k
     return sound
+# A swell still rising at the end of the check's 1.5 s (the mf peak at 1.3 s or later: 40-86 % of the semitones of sul
+# tasto, flautando and long harmonics, none of the other sounds') is measured against a peak under the one it reaches
+# in a longer note. The measurement agent's sweep of build 3f0cda5 (whole notes at 60 bpm, its peak up to 1.5 s after
+# the beat, so up to ~2 s after the note-on) heard those 123-223 ms late (Violins 1 Long Sul Tasto 123, Long Flautando
+# 223, Violas Long Super Sul Tasto 185, Long Flautando 160), where the check's -10 dB time comes 130-177 ms after its
+# -15: the full level is ~5 dB above the 1.5 s peak. So for such a semitone of those techniques the -10 dB time (on the
+# perceived envelope). Not for the other sounds: a late peak there is mostly a level that no longer rises (the sweep
+# heard ordinary held notes within -14 ... +57 ms), and the -10 dB time would move some (Basses Long) 75 ms earlier.
+ONSET_RISING_MS = 1300
+def onsetMs(r, sound):
+    """a sound_onset row's mf onset in ms after the note-on (None: not measured)"""
+    if len(r) < 3 or not r[2] or r[2][1] is None or r[2][1] < 0:
+        return None
+    t = r[2][1]
+    peak = r[7][1] if len(r) > 7 and r[7] and r[7][1] is not None else None
+    if (onsetFamily('', sound) == 'slow' and peak is not None and peak >= ONSET_RISING_MS
+            and r[2][3] is not None and r[2][3] >= 0):
+        t = r[2][3]
+    return max(0, t - ONSET_LATENCY)
 def measuredOnsets(patch, sound):
     rows = MEASURED_ONSET.get(patch, {}).get(sound)
     if not isinstance(rows, list):
         return []
-    return [(r[0], max(0, r[2][1] - ONSET_LATENCY)) for r in rows
-            if len(r) > 2 and r[2] and r[2][1] is not None and r[2][1] >= 0]
+    return [(r[0], onsetMs(r, sound)) for r in rows if onsetMs(r, sound) is not None]
 # For what isn't measured: per articulation (not per family: the slow techniques' onsets follow their own full-level
 # times, sul tasto / flautando held notes stayed 150-600 ms late on the family fit), the median over the measured
 # patches' semitones of onset / mf full-level time (sso_sound_range.json), times this patch's full-level time.
@@ -961,8 +1006,7 @@ def onset(patch, sound):
     measured = MEASURED_ONSET.get(patch, {}).get(sound)
     full = None
     if isinstance(measured, list):
-        full = [(r[0], max(0, r[2][1] - ONSET_LATENCY)) for r in measured
-                if len(r) > 2 and r[2] and r[2][1] is not None and r[2][1] >= 0]
+        full = measuredOnsets(patch, sound)
         ms = [m for _, m in full]
     if not full:
         rows = RANGE.get(patch, {}).get(sound, {}).get('range')
