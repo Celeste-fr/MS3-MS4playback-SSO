@@ -916,20 +916,39 @@ def simplify(points, tolerance):
     if worst <= tolerance:
         return [points[0], points[-1]]
     return simplify(points[:at + 1], tolerance)[:-1] + simplify(points[at:], tolerance)
+# Measured directly where the rest check's onset part ran (sso_sound_onset.json, branch claude/intelligent-cray-6pd4o1:
+# every semitone at pp / mf / ff, the first time within 20 / 15 / 12 / 10 dB of the peak, on the perceived envelope and
+# on 5 ms power): the mf power -15 dB time, less 10 ms (the analysis window's latency: plucks, Pizzicato / Bartok / Col
+# Legno, come out at 10-20 ms on it, where the sound starts within a few ms; the perceived envelope's 22 ms smoothing adds
+# another 15-20). On the string sections' All techniques patches it is well above the family fit made on the Performance
+# patches (Violins 2 Long 145 against 90, Celli Long CS 210 against 98, Violins 1 Flautando 370 against 133), so the fit
+# is only for what isn't measured yet.
+ONSET_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_sound_onset.json')
+MEASURED_ONSET = json.load(open(ONSET_FILE, encoding='utf-8')) if os.path.exists(ONSET_FILE) else {}
+ONSET_LATENCY = 10
 def onset(patch, sound):
     """the onset= text of a sustained sound (None: not measured or no family)"""
     family = onsetFamily(patch, sound)
-    rows = RANGE.get(patch, {}).get(sound, {}).get('range')
-    if not family or not rows:
-        return None
-    full = [(r[0], r[8]) for r in rows if r[8] is not None and r[8] >= 0]
+    measured = MEASURED_ONSET.get(patch, {}).get(sound)
+    full = None
+    if isinstance(measured, list):
+        full = [(r[0], max(0, r[5][1] - ONSET_LATENCY)) for r in measured
+                if len(r) > 5 and r[5] and r[5][1] is not None and r[5][1] >= 0]
+        ms = [m for _, m in full]
     if not full:
+        rows = RANGE.get(patch, {}).get(sound, {}).get('range')
+        if not family or not rows:
+            return None
+        full = [(r[0], r[8]) for r in rows if r[8] is not None and r[8] >= 0]
+        if not full:
+            return None
+        ms = [onsetFit(family, f) for _, f in full]
+    if not family:
         return None
-    ms = [onsetFit(family, f) for _, f in full]
     smooth = [statistics.median(ms[max(0, i - 3):i + 4]) for i in range(len(ms))]
     points = [(p, m) for (p, _), m in zip(full, smooth)]
     mid = statistics.median(smooth)
-    tolerance = max(10, 0.1 * mid)
+    tolerance = max(15, 0.15 * mid)
     if all(abs(m - mid) <= tolerance for m in smooth):
         return str(int(5 * round(mid / 5)))
     return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, tolerance))
@@ -946,6 +965,56 @@ def release(patch, sound, t):
     if rel:
         return int(max(rel))
     return int(t['releaseMs']) if t.get('releaseMs', -1) > 0 else None
+# - from= (seconds) on Short 0.5 / Short 1.0: chosen for a note from this written length on (else 90 % of length=,
+#   Spitfire's nominal 0.5 / 1.0 s). Measured (sso_short_lengths.json, the rest check's shorts part, 2026-10-01: each
+#   short held 50 ... 2000 ms at its test pitch and an octave either side, the last time its perceived loudness is
+#   within 10 dB of its peak, the median over the three pitches): the note-off hardly cuts them; Spiccato sounds
+#   0.28-0.47 s whatever the note, Short 0.5 0.45-1.0 s, Short 1.0 0.47-1.26 s growing with the note up to ~1 s. The
+#   body to -20 dB (bodyMs, ~1 s) is mostly the hall, so -10 dB is the note as heard. A note plays the choice whose
+#   sounding length (at its written length) is closest to its written length: Short 0.5 against Spiccato (what a
+#   staccato falls back to), Short 1.0 against Short 0.5 (a portato's or tenuto's next); from= is the written length
+#   from which it is the closer one for every longer note. E.g. Violins 1 Short 0.5 from 0.43 s, Short 1.0 from 0.71
+#   (nominal: 0.45, 0.90); Violas 0.61 / 1.06; Basses 0.73 / 1.07. Unmeasured patches keep the nominal rule.
+import bisect
+SHORT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_short_lengths.json')
+SHORT_LENGTHS = json.load(open(SHORT_FILE, encoding='utf-8')) if os.path.exists(SHORT_FILE) else {}
+SHORT_NEXT = {'Short 0.5': 'Spiccato', 'Short 1.0': 'Short 0.5'}
+def soundingCurve(patch, sound):
+    rows = SHORT_LENGTHS.get(patch, {}).get(sound)
+    if not isinstance(rows, list):
+        return None
+    by = {}
+    for r in rows:
+        if r[3] and r[3][1] is not None and r[3][1] >= 0:
+            by.setdefault(r[1], []).append(r[3][1])
+    held = sorted(by)
+    return (held, [statistics.median(by[h]) for h in held]) if len(held) >= 2 else None
+def sounding(curve, seconds):
+    held, ms = curve
+    x = seconds * 1000
+    if x <= held[0]:
+        return ms[0] / 1000
+    if x >= held[-1]:
+        return ms[-1] / 1000
+    i = bisect.bisect_right(held, x)
+    a, b = held[i - 1], held[i]
+    return (ms[i - 1] + (ms[i] - ms[i - 1]) * (x - a) / (b - a)) / 1000
+def shortFrom(patch, sound):
+    """from= of a timed short (None: not measured)"""
+    if sound not in SHORT_NEXT:
+        return None
+    a, b = soundingCurve(patch, sound), soundingCurve(patch, SHORT_NEXT[sound])
+    if not a or not b:
+        return None
+    w, last = 2.5, None
+    while w > 0.05:
+        if abs(sounding(a, w) - w) <= abs(sounding(b, w) - w):
+            last = w
+        else:
+            break
+        w = round(w - 0.01, 2)
+    return last
+shortFromCount = 0
 onsetCount = 0
 current = None
 legatoGridUsed = set()
@@ -979,6 +1048,10 @@ for i, line in enumerate(out):
         extra += f' legatoDelay="{delay}"'
         legatoGridUsed.add(current)
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
+    f = shortFrom(current, sound)
+    if f:
+        extra += f' from="{f:g}"'
+        shortFromCount += 1
     o = onset(current, sound) if t.get('sustains') and ('long' in techniques or 'legato' in techniques) else None
     if o:
         extra += f' onset="{o}"'

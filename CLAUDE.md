@@ -384,7 +384,11 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   tasto / flautando / harmonics 0.58 full - 118 (rms 12-48 ms). `<Articulation onset>` (ms or `pitch:ms` pairs;
   `Articulation::onsets` / `onsetAt(pitch)`, the same reader as legatoDelay, `readKeyedMs` / `keyedMsAt`) on longs and
   legato only (gen_spitfire_sso.py `onset()`: smoothed, Douglas-Peucker within 10 ms / 10 %) and `<Onset early="100"/>`
-  (percent; metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
+  (percent; **measured since 2026-10-01** where the rest check's onset part ran, `sso_sound_onset.json`: per semitone
+  the mf -15 dB time on 5 ms power less 10 ms of analysis latency (plucks come out at 10-20 ms); the fit only for what
+  isn't measured: the All techniques strings were well above it, Violins 2 Long 145 against 90, Violins 1 Flautando 370
+  against 133; Performance legato 0-65 ms, e.g. Violins 1 55, Celli 50-80, Bassoon Solo 0, Horn Solo 10-30;
+  metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
   Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
   no grace notes or arpeggio before, plays `onset × percent` early (its chord's latest onset, so a chord starts
   together; `SndConfig::libEarly` as for transitions), capped by the note just before on its track on the same patch as
@@ -561,6 +565,15 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   length>` (Short 0.5 = 0.5 s, Short 1.0 = 1.0 s; gen_spitfire_sso.py `LENGTHS`) is skipped for a note under
   90 % of it (`choose`, `Want::seconds`); staccato falls back to spiccato, portato (staccato + tenuto) Short
   1'0 -> Short 0'5 -> spiccato, a fast plain tenuto Short 0'5 -> the held note (never a bouncing spiccato).
+  **By measured sounding length since 2026-10-01** (HANDOFF problem 4): `<Articulation from>` (seconds,
+  `Articulation::fromSeconds`) replaces the 90 % rule where it is given. The rest check's shorts part
+  (`sso_short_lengths.json`: each short held 50-2000 ms at its test pitch and an octave either side, the last time its
+  perceived loudness is within 10 dB of its peak) shows the note-off hardly cuts them: Spiccato 0.28-0.47 s whatever
+  the note, Short 0.5 0.45-1.0, Short 1.0 0.47-1.26 growing with the note up to ~1 s (the -20 dB body, ~1 s, is mostly
+  the hall). gen_spitfire_sso.py `shortFrom`: the written length from which the articulation's sounding length is
+  closer to the note's than its fallback's (Short 0.5 against Spiccato, Short 1.0 against Short 0.5) for every longer
+  note: Violins 1 0.43 / 0.71 s, Violins 2 0.42 / 0.76, Violas 0.61 / 1.06, Celli 0.51 / 0.84, Basses 0.73 / 1.07
+  (nominal 0.45 / 0.90); unmeasured patches (Strings Ensemble) keep the nominal rule.
   A note's length: `SoundLib::noteSeconds` / `TempoMap::writtenTime` (the tempo map: tempo changes, gradual
   tempo lines, fermatas; not the Play Panel's speed, `relTempo`, which used to change the choice) over the
   whole tie chain (it used the first chord only). The playability checker's `secondsBetween` uses it too
