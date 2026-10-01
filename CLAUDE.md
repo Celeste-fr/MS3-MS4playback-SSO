@@ -349,7 +349,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   crossing the sweep's arrival measures), -12 … +7; +12 (405-680, the first note's room) takes -12's 110-205, where the
   sweep of 3f0cda5 put octave slurs (+12 121 ms early, -12 86 early on the ±7 delay). Basses 70-160 (were 210-300),
   Violins 2 140-175 (230-280): the sweep's early half notes there. The other 35 Performance patches: the grid above,
-  octaves on ±7 still (not measured from several pitches yet). And
+  octaves on ±7 still (not measured from several pitches yet; the single-pitch grid has no common offset to correct
+  by: against the 5-pitch 50 % time it reads a median 95-98 ms long on Basses / Violins 2, 58 on Violas, -25 … +30 on
+  the others, so it stays until `legatopitches` measures those 35; HANDOFF.md › Legato and onset timing). And
   `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
   transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
@@ -836,7 +838,7 @@ attack not yet confirmed by ear.
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
-  `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (45 counting initTestCase and cleanup, 3 skipped without the
+  `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (50 counting initTestCase and cleanup, 2026-10-01; 3 skipped without the
   owner's files).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
 - `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
