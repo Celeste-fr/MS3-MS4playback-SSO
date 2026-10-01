@@ -6,8 +6,8 @@ when each note is heard against its written time.
 
   L (slurred, not the first of its slur)  arriveMs: when the new pitch takes over from the one before (after
         the old one led by 3 dB for 20 ms, the energy of the harmonics only the new pitch has passes that of those only
-        the old one has, for 20 ms; 4096-point frames every 5 ms, their centres; 8192 under 120 Hz), from the written
-        time
+        the old one has, for 20 ms; 4096-point frames every 5 ms, their centres; 8192 under 120 Hz; an octave: the lower pitch's own harmonics against the
+        shared ones cross the midpoint of their levels before and after), from the written time
   H, S and a slur's first note  onsetMs: the first time the perceived loudness (loudness.perceived_envelope) is
         within 15 dB of the note's peak (and onset10Ms / onset20Ms); S also endMs: the last time within 10 / 15 dB
         of the peak before the next note (from the written time; against the written length)
@@ -68,8 +68,6 @@ def arrival(x, sr, t_written, f_old, f_new, t_from, t_to):
     hop = int(sr * 0.005)
     top = min(8000.0, sr * 0.45)
     hn, ho = unique_harmonics(f_new, f_old, top), unique_harmonics(f_old, f_new, top)
-    if not hn or not ho:
-        return None
     freqs = np.fft.rfftfreq(N, 1 / sr)
     def bins(hs):
         return [np.nonzero(np.abs(freqs / h - 1) <= 0.015)[0] for h in hs]
@@ -77,6 +75,37 @@ def arrival(x, sr, t_written, f_old, f_new, t_from, t_to):
     win = np.hanning(N)
     start = max(0, int(t_from * sr) - N // 2)
     stop = min(len(x) - N, int(t_to * sr) - N // 2)
+    if not hn or not ho:
+        # an octave (or twelfth …): one pitch has no harmonics of its own. The lower one's own harmonics against
+        # those both share, in dB: from its level under the old note to that under the new one, the crossing of
+        # the midpoint (for 20 ms)
+        low, high = (f_old, f_new) if f_old < f_new else (f_new, f_old)
+        own = bins(unique_harmonics(low, high, top))
+        shared = bins([h * high for h in range(1, 13) if h * high < top])
+        if not own or not shared:
+            return None
+        ts, rs = [], []
+        for s in range(start, stop, hop):
+            p = np.abs(np.fft.rfft(x[s:s + N] * win)) ** 2
+            eo = sum(p[b].max() for b in own if len(b))
+            es = sum(p[b].max() for b in shared if len(b))
+            ts.append((s + N // 2) / sr)
+            rs.append(10 * np.log10(max(eo, 1e-30) / max(es, 1e-30)))
+        if len(rs) < 30:
+            return None
+        before, after = np.median(rs[:10]), np.median(rs[-20:])
+        if abs(before - after) < 6:
+            return None
+        mid = 0.5 * (before + after)
+        run = 0
+        for t, r in zip(ts, rs):
+            if (r > mid) == (after > before):
+                run += 1
+                if run == 4:
+                    return t - 3 * hop / sr - t_written
+            else:
+                run = 0
+        return None
     run = 0
     old = 0       # (the old pitch heard first: frames before it are another note's)
     for s in range(start, stop, hop):
