@@ -132,12 +132,23 @@ PartLanes lanes(const Part* part, const std::map<const Part*, PartLanes>& all);
 // all lanes with the given source replaced by `with` (by part; lanes of other sources kept)
 std::map<const Part*, PartLanes> replaceSource(const std::map<const Part*, PartLanes>& all, const QString& source,
                                                const std::map<const Part*, PartLanes>& with);
-// a Live Set imported again (`with`: its lanes, each with liveHash / pointsHash) over the score's lanes: per part
-// and target, Live's lane where Live's events changed since the score's lane came from Live (another liveHash) or
-// the score has no lane there; the score's lane where Live's are as they were (an edit here is newer); a lane that
-// came from Live and is no longer in the set: removed if unedited here, else kept as MuseScore's own. `report`:
-// a line per lane where both had changed (Live's taken: the later save)
+// a Live Set imported again (`with`: its lanes, each with liveHash / pointsHash) over the score's lanes, per part and
+// target: Live's where Live's events changed since the score's lane came from Live and it is unedited here, or the
+// two are the same; the score's where Live's are as they were (an edit here is newer); a lane that came from Live and
+// is no longer in the set: removed if unedited here, else kept as MuseScore's own. Both changed since they last
+// agreed (or they never agreed and differ): a conflict (the owner, 2026-10-01: "whenever there's conflict, it asks
+// the user to preserve one"), resolved by `choices` (none given: MuseScore's kept, now against Live's latest, so it
+// is asked again only when Live's changes again). `report`: a line per conflict and what was kept
+struct Conflict {
+      const Part* part { nullptr };
+      QString target;
+      Lane mine;                          // the score's
+      Lane live;                          // Live's, as imported
+      };
+enum class Keep : signed char { MUSESCORE, LIVE };
+std::vector<Conflict> conflicts(const std::map<const Part*, PartLanes>& all, const std::map<const Part*, PartLanes>& with);
 std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& all, const std::map<const Part*, PartLanes>& with,
+                                       const std::map<std::pair<const Part*, QString>, Keep>& choices = {},
                                        QStringList* report = nullptr);
 
 //---------------------------------------------------------

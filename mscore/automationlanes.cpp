@@ -271,11 +271,23 @@ void AutomationLanes::commit(const QString& what)
       Score* s = score();
       if (!s)
             return;
+      const std::map<const Part*, PartLanes>& stored = lanes();
+      const QString now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
       for (auto& pl : all) {
             PartLanes keep;
-            for (const Lane& l : pl.second)
-                  if (!l.points.empty())
-                        keep.push_back(l);
+            for (Lane l : pl.second) {
+                  if (l.points.empty())
+                        continue;
+                  // when it was last changed here (the Live conflict dialog shows it)
+                  bool same = false;
+                  auto s = stored.find(pl.first);
+                  if (s != stored.end())
+                        for (const Lane& o : s->second)
+                              same = same || (o.target == l.target && pointsHash(o.points) == pointsHash(l.points));
+                  if (!same)
+                        l.extra["edited"] = now;
+                  keep.push_back(l);
+                  }
             pl.second = keep;
             }
       if (seq)

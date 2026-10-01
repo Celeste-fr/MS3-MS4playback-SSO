@@ -128,8 +128,14 @@ Install loopMIDI (Tobias Erichsen) and create these ports:
      MIDI outputs without the driver's prefix (`MMSystem,MuseScore A` → `MuseScore A`).
   2. Otherwise by track name = part name.
 - Each import merges per lane (`Automation::merge`, 2026-09-30): a lane whose events in Live changed since it came
-  from Live takes Live's (the later save); one edited in MuseScore since, unchanged in Live, keeps MuseScore's;
-  edited on both sides: Live's, and the report says so. Curved segments keep Live's curve (on the score's own axis).
+  from Live (and unedited in MuseScore) takes Live's; one edited in MuseScore since, unchanged in Live, keeps MuseScore's;
+  the same envelope on both sides: they agree. **Changed on both sides since they last agreed, or never agreed and
+  different (the owner, 2026-10-01: "whenever there's conflict, it asks the user to preserve one")**: a dialog lists
+  each such lane (part, parameter, both curves, when each changed) with *MuseScore's* / *Live's* (and *All
+  MuseScore's* / *All Live's*); *Import* applies the import with those choices as one undoable step, *Don't import
+  now* changes nothing (`Automation::conflicts`, `LiveIntegration::askConflicts`; without a window, e.g. a
+  command-line import, MuseScore's are kept and reported). A kept MuseScore lane is asked about again only when
+  Live's changes again. Curved segments keep Live's curve (on the score's own axis).
 - The lanes are stored in the score's metaTag `automation`, each marked `"source": "live"` with
   the set's path and time, the track and Live's parameter name and id. The metaTag `liveSet`
   holds the link. MuseScore 3.6 keeps both through a round trip (tested with 3.6.2).
@@ -418,8 +424,14 @@ Max for Live's Object Model (Live 12.2) can neither write nor read a clip's enve
   linked (*Import automation from Live Set…*, *Import again when Live saves it*) MuseScore reads it on each save and
   merges per lane (the newer edit wins). Such a lane is "in Live" (`Lane::playedByLive`): Live plays it, the device
   leaves it alone. Editing it in MuseScore makes MuseScore's version the newer one: the device plays it from then on,
-  over Live's track automation (live.remote~ overrides it; Live's lane then shows the parameter as remote-controlled),
-  until Live's own changes again (a later save) and is taken back.
+  over Live's track automation, until Live's own changes again (a later save) and the conflict dialog asks which to keep.
+  **Both moving one parameter, tried in Live 12.2 (2026-10-01)**: the track automated Kontakt's Vibrato at 0.9; with
+  the device driving a MuseScore lane the parameter followed the lane (live.remote~ wins over the automation); when
+  the device let go, Live kept the last driven value (0.656) although the automation stayed "active", until
+  `re_enable_automation` was called: the device now calls it (150 ms after releasing) for a parameter Live automates,
+  and Live's 0.9 came back. Keeping MuseScore's in the dialog leaves Live's automation in the set, overridden while
+  the device drives it: delete it in Live (right-click › Delete Automation) so the set shows what plays (the dialog
+  says so).
 - **Create Live Set** makes every lane MuseScore's (the new set has none of Live's automation; one undo step).
 
 What only real Live could show, and what was shown (the Windows VM, Live 12.2 unauthorized, Kontakt 8, SSO's Solo
@@ -434,9 +446,6 @@ build of this branch).
 
 - Edit-in-MuseScore clip tabs: lanes drawn there play in MuseScore only. Writing them back as the clip's envelopes
   needs Live's Python API (a Control Surface script; session clips only) or Live 12.4's `create_event`. Wanted?
-- Live's track automation of a parameter MuseScore also drives: the device wins until the next save brings Live's
-  edit back. Prefer that an edit in MuseScore of a lane that came from Live is refused until it is moved (a "Move to
-  MuseScore" command), so the two never disagree on screen?
 
 ## Live against MuseScore
 

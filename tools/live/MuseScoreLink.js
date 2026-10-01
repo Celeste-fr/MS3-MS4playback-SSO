@@ -112,6 +112,7 @@ var pendingParams = {};       // key -> lanes being received
 var paramTracks = {};         // key -> the track its lanes were put on
 var waiting = {};             // key -> lanes handed to a copy, its answer awaited
 var songBeats = 0;            // the song's length (/ms/song)
+var keepTasks = [];           // one-shot Tasks, kept referenced until they run
 var probes = [];              // "pos" probes awaiting the snapshot~
 // … every copy's
 var prefix = "";              // the slots' buffer~ names' resolved "---mslp"
@@ -1160,8 +1161,27 @@ function release(k) {
             return;
       outlet(3, k, "id", 0);
       var b = bases[s.id];
-      if (b) {                                // (Live's value back as it was)
-            try { new LiveAPI("id " + s.id).set("value", b.value); } catch (e) {}
+      if (b) {
+            // Live's own automation of it comes back (tried in Live 12.2: live.remote~ overrides the track's
+            // automation while it drives, and setting the value leaves that automation overridden); else Live's
+            // value back as it was
+            // (re-enabled a little later: right after "id 0" live.remote~ still holds it, and Live keeps the last
+            // driven value until something re-enables its automation)
+            try {
+                  var api = new LiveAPI("id " + s.id);
+                  if (num(api.get("automation_state")) > 0) {
+                        var pid = s.id;
+                        var later = new Task(function() {
+                              try { new LiveAPI("id " + pid).call("re_enable_automation"); } catch (e2) {}
+                              }, self);
+                        later.schedule(150);
+                        keepTasks.push(later);            // (held until it ran)
+                        if (keepTasks.length > 32)
+                              keepTasks.shift();
+                        }
+                  else
+                        api.set("value", b.value);
+                  } catch (e) {}
             delete bases[s.id];
             }
       slots[k] = null;

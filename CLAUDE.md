@@ -475,7 +475,8 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   sets a curvature k (`setCurvature`). **Dynamics lane**: a lane on the library's dynamics CC replaces the notation's
   CC1 from its first point (`LibPart::dynamicsLaneFrom`). **No read-only lanes** any more (the owner: "edit the
   automation curves in both and they sync up"): `liveHash` / `pointsHash` in a lane's extra, `Lane::playedByLive`,
-  `Automation::merge` on import (the newer edit wins). Tests `automationCurves`, `automationEditing`, `automationMerge`;
+  `Automation::merge` on import (the newer edit wins; changed on both sides: `Automation::conflicts`, a dialog asks per
+  lane, the owner 2026-10-01). Tests `automationCurves`, `automationEditing`, `automationMerge`;
   3.6 round trip of a score with curved lanes (ab/roundtrip2.py): 0 lines, pages and MIDI identical. GUI tried under
   Xvfb (no unit test drives the widget).
   **Recommended short notes' balance** (the owner, 2026-09-28: "measure out a recommended number for each of the

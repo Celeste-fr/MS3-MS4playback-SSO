@@ -11,7 +11,21 @@
 #include "liveintegration.h"
 #include "liveclips.h"
 
+#include <climits>
+#include <QApplication>
+#include <QButtonGroup>
 #include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QLabel>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPushButton>
+#include <QRadioButton>
+#include <QTableWidget>
+#include <QVBoxLayout>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
@@ -23,6 +37,7 @@
 
 #include "libmscore/automation.h"
 #include "libmscore/liveset.h"
+#include "libmscore/part.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/undo.h"
@@ -143,7 +158,7 @@ static void setTags(MasterScore* score, const QString& automation, const QString
 //   importSet
 //---------------------------------------------------------
 
-bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report)
+bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report, QWidget* askParent)
       {
       if (!score)
             return false;
@@ -158,9 +173,21 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
       LiveSet::Report r;
       const std::map<const Part*, Automation::PartLanes> live = LiveSet::lanes(score, set, LiveSet::partInfos(score, ports),
                                                                                path, modified, &r);
-      // per lane the newer edit (automation.h: Automation::merge): Live's where it changed since, else MuseScore's
+      // per lane the newer edit (automation.h: Automation::merge); changed on both sides: asked
+      const std::map<const Part*, Automation::PartLanes> before = Automation::read(score);
+      std::map<std::pair<const Part*, QString>, Automation::Keep> choices;
+      const std::vector<Automation::Conflict> conflicts = Automation::conflicts(before, live);
+      if (!conflicts.empty() && askParent && !MScore::noGui) {
+            QApplication::restoreOverrideCursor();
+            if (!askConflicts(askParent, conflicts, path, modified, &choices)) {
+                  if (report)
+                        *report = QObject::tr("Not imported: %n lane(s) changed both in MuseScore and in Live, and the choice "
+                                              "was cancelled. Nothing in the score changed.", "", int(conflicts.size()));
+                  return false;
+                  }
+            }
       QStringList both;
-      const std::map<const Part*, Automation::PartLanes> all = Automation::merge(Automation::read(score), live, &both);
+      const std::map<const Part*, Automation::PartLanes> all = Automation::merge(before, live, choices, &both);
       QJsonObject o;
       o["path"] = path;
       o["auto"] = autoReimport;
@@ -170,7 +197,7 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
       if (report) {
             *report = r.text();
             if (!both.isEmpty())
-                  *report += "\n" + QObject::tr("Edited in MuseScore and in Live (Live's taken, saved later):") + "\n  " + both.join("\n  ");
+                  *report += "\n" + QObject::tr("Changed in MuseScore and in Live:") + "\n  " + both.join("\n  ");
             }
       Watcher::instance()->update();
       return true;
@@ -183,6 +210,134 @@ void unlink(MasterScore* score)
       const auto all = Automation::replaceSource(Automation::read(score), Automation::SOURCE_LIVE, {});
       setTags(score, Automation::write(score, all), QString());
       Watcher::instance()->update();
+      }
+
+//---------------------------------------------------------
+//   askConflicts
+//    the owner, 2026-10-01: "whenever there's conflict, it asks the user to preserve one"
+//---------------------------------------------------------
+
+static QPixmap curvesPixmap(const Automation::Lane& a, const Automation::Lane& b, int w, int h)
+      {
+      QPixmap pm(w, h);
+      pm.fill(QColor(250, 250, 248));
+      QPainter p(&pm);
+      p.setRenderHint(QPainter::Antialiasing);
+      int t0 = INT_MAX, t1 = 0;
+      for (const Automation::Lane* l : { &a, &b })
+            for (const Automation::Point& pt : l->points) {
+                  t0 = std::min(t0, pt.tick);
+                  t1 = std::max(t1, pt.tick);
+                  }
+      if (t0 == INT_MAX)
+            return pm;
+      t1 = std::max(t1 + 480, t0 + 1920);
+      p.setPen(QColor(220, 220, 220));
+      p.drawRect(0, 0, w - 1, h - 1);
+      auto draw = [&](const Automation::Lane& l, const QColor& c, Qt::PenStyle style) {
+            QPainterPath path;
+            bool started = false;
+            for (int x = 0; x < w; ++x) {
+                  const double v = l.valueAt(t0 + int(double(t1 - t0) * x / (w - 1)));
+                  if (v < 0)
+                        continue;
+                  const QPointF q(x, 3 + (h - 6) * (1 - v));
+                  if (!started)
+                        path.moveTo(q), started = true;
+                  else
+                        path.lineTo(q);
+                  }
+            p.setPen(QPen(c, 2, style));
+            p.drawPath(path);
+            };
+      draw(b, QColor(118, 72, 160), Qt::DashLine);
+      draw(a, QColor(47, 109, 181), Qt::SolidLine);
+      return pm;
+      }
+
+bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conflicts, const QString& setPath,
+                  const QDateTime& setTime, std::map<std::pair<const Part*, QString>, Automation::Keep>* choices)
+      {
+      QDialog d(parent);
+      d.setWindowTitle(QObject::tr("Automation changed in MuseScore and in Live"));
+      QVBoxLayout* v = new QVBoxLayout(&d);
+      QLabel* intro = new QLabel(QObject::tr("These lanes were changed in MuseScore and in the Live Set %1 since they last agreed. "
+                                             "Choose which to keep for each; nothing is overwritten without it.")
+                                 .arg(QFileInfo(setPath).fileName()), &d);
+      intro->setWordWrap(true);
+      v->addWidget(intro);
+      QTableWidget* t = new QTableWidget(int(conflicts.size()), 5, &d);
+      t->setHorizontalHeaderLabels({ QObject::tr("Part"), QObject::tr("Parameter"),
+                                     QObject::tr("Curves (MuseScore solid, Live dashed)"), QObject::tr("Changed"), QObject::tr("Keep") });
+      t->verticalHeader()->hide();
+      t->setSelectionMode(QAbstractItemView::NoSelection);
+      t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      std::vector<QRadioButton*> keepMine, keepLive;
+      for (int i = 0; i < int(conflicts.size()); ++i) {
+            const Automation::Conflict& c = conflicts[size_t(i)];
+            t->setItem(i, 0, new QTableWidgetItem(c.part ? c.part->partName() : QString()));
+            const QString param = c.live.extra.value("param").toString();
+            t->setItem(i, 1, new QTableWidgetItem(param.isEmpty() ? c.target : param));
+            QLabel* pic = new QLabel;
+            pic->setPixmap(curvesPixmap(c.mine, c.live, 220, 44));
+            t->setCellWidget(i, 2, pic);
+            const QString edited = c.mine.extra.value("edited").toString();
+            const QString when = QObject::tr("MuseScore: %1\nLive: set saved %2")
+                                 .arg(edited.isEmpty() ? QObject::tr("edited in this score")
+                                                       : QDateTime::fromString(edited, Qt::ISODate).toLocalTime().toString("yyyy-MM-dd HH:mm"),
+                                      setTime.toLocalTime().toString("yyyy-MM-dd HH:mm"));
+            t->setItem(i, 3, new QTableWidgetItem(when));
+            QWidget* w = new QWidget;
+            QHBoxLayout* hl = new QHBoxLayout(w);
+            hl->setContentsMargins(4, 0, 4, 0);
+            QRadioButton* m = new QRadioButton(QObject::tr("MuseScore's"), w);
+            QRadioButton* l = new QRadioButton(QObject::tr("Live's"), w);
+            QButtonGroup* g = new QButtonGroup(w);
+            g->addButton(m);
+            g->addButton(l);
+            m->setChecked(true);
+            hl->addWidget(m);
+            hl->addWidget(l);
+            t->setCellWidget(i, 4, w);
+            t->setRowHeight(i, 52);
+            keepMine.push_back(m);
+            keepLive.push_back(l);
+            }
+      t->resizeColumnsToContents();
+      t->horizontalHeader()->setStretchLastSection(true);
+      v->addWidget(t);
+      QLabel* note = new QLabel(QObject::tr("MuseScore's kept: in Live the MuseScore Link device plays it and overrides Live's "
+                                            "own automation of that parameter while Live plays the score. Delete Live's "
+                                            "automation of it (right-click the parameter › Delete Automation) so the set shows "
+                                            "what plays. Live's kept: MuseScore's lane is replaced by it (Undo brings it back)."), &d);
+      note->setWordWrap(true);
+      v->addWidget(note);
+      QHBoxLayout* buttons = new QHBoxLayout;
+      QPushButton* allMine = new QPushButton(QObject::tr("All MuseScore's"), &d);
+      QPushButton* allLive = new QPushButton(QObject::tr("All Live's"), &d);
+      QObject::connect(allMine, &QPushButton::clicked, [&]() { for (QRadioButton* b : keepMine) b->setChecked(true); });
+      QObject::connect(allLive, &QPushButton::clicked, [&]() { for (QRadioButton* b : keepLive) b->setChecked(true); });
+      buttons->addWidget(allMine);
+      buttons->addWidget(allLive);
+      buttons->addStretch();
+      QDialogButtonBox* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
+      box->button(QDialogButtonBox::Ok)->setText(QObject::tr("Import"));
+      box->button(QDialogButtonBox::Cancel)->setText(QObject::tr("Don't import now"));
+      QObject::connect(box, &QDialogButtonBox::accepted, &d, &QDialog::accept);
+      QObject::connect(box, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+      buttons->addWidget(box);
+      v->addLayout(buttons);
+      d.resize(860, std::min(640, 200 + 56 * int(conflicts.size())));
+      if (qEnvironmentVariableIsSet("MS_LIVE_CONFLICT_AUTOSHOT")) {          // (the GUI check: a screenshot, then Import)
+            const QString shot = qEnvironmentVariable("MS_LIVE_CONFLICT_AUTOSHOT");
+            QTimer::singleShot(1500, &d, [&d, shot]() { d.grab().save(shot); });
+            }
+      if (d.exec() != QDialog::Accepted)
+            return false;
+      for (size_t i = 0; i < conflicts.size(); ++i)
+            (*choices)[{ conflicts[i].part, conflicts[i].target }] = keepLive[i]->isChecked() ? Automation::Keep::LIVE
+                                                                                                : Automation::Keep::MUSESCORE;
+      return true;
       }
 
 //---------------------------------------------------------
@@ -204,7 +359,7 @@ void importDialog(MasterScore* score, QWidget* parent)
       QSettings().setValue("liveIntegration/lastFolder", QFileInfo(path).absolutePath());
       QString report;
       QApplication::setOverrideCursor(Qt::WaitCursor);
-      const bool ok = importSet(score, path, autoReimport, &report);
+      const bool ok = importSet(score, path, autoReimport, &report, parent);
       QApplication::restoreOverrideCursor();
       if (ok)
             QMessageBox::information(parent, QObject::tr("Import automation from Live Set"), report);
@@ -281,7 +436,7 @@ void Watcher::reimport()
             if (QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate) == link(s).value("setTime").toString())
                   continue;
             QString report;
-            if (importSet(s, path, true, &report))
+            if (importSet(s, path, true, &report, mscore))
                   mscore->showMessage(QObject::tr("Automation re-imported from %1").arg(QFileInfo(path).fileName()), 5000);
             else
                   mscore->showMessage(QObject::tr("Could not re-import %1: %2").arg(QFileInfo(path).fileName(), report), 10000);

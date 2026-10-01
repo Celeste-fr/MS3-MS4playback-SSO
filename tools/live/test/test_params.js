@@ -147,6 +147,19 @@ test("Live naming Kontakt's slot by its number only (\"#004\", Live 12.2 on the 
       assert.deepStrictEqual(s.hub.slotIds(), [[0, slot.id]]);
       });
 
+test("let go of a parameter Live also automates: Live's automation re-enabled, its value not set over it", () => {
+      const s = setUp();
+      s.p.vib.automation_state = 1;                    // (the track automates Vibrato)
+      sendParams(s.hub, 1, "0:1", 5, [{ title: "Vibrato", events: [[0, 1]] }]);
+      s.live.settle();
+      s.live.calls.length = 0;
+      sendParams(s.hub, 2, "0:1", 6, []);
+      s.live.settle();
+      assert.ok(s.live.calls.some((c) => c[0] === "call" && c[2] === "re_enable_automation"));
+      assert.ok(!s.live.calls.some((c) => c[0] === "set" && c[1] === "param" && c[2] === "value"));
+      assert.deepStrictEqual(s.hub.slotIds().pop(), [0, 0]);
+      });
+
 test("lanes 0: every parameter let go (id 0) and Live's value put back", () => {
       const s = setUp();
       sendParams(s.hub, 1, "0:1", 5, [{ title: "Vibrato", events: [[0, 1]] }, { title: "Mic 1 level", events: [[0, 1]] }]);
