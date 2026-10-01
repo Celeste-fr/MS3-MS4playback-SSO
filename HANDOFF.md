@@ -33,6 +33,20 @@ the playback changes (legato delay by interval, held notes early by their onset,
   early overall (the grid's arrive = end of the step); held mf onsets 20-112 → -1..+67 ms; sul tasto (Long Super
   Sul Tasto) still 240-600 ms late, flautando 145-255 (fixer then switched onsets to perceived t15). Per-note results:
   `~/.claude/jobs/ed934dfd/tmp/cray/sweepres/<sha>/` (not in the repository); compare with `compare_sweeps.py`.
+- **Paused by the owner (2026-10-01 ~08:15 VM time).** Measured and committed: `sso_sound_onset.json` 112 patches
+  (every non-percussion map instrument), `sso_short_lengths.json` 24, `sso_legato_lengths.json` 6,
+  `sso_legato_grid_pitches.json` 8 (the string Performance patches; -12…+7 usable, mid 160-245 ms; **+12 still
+  unreliable**, median 540: the old note's reverb keeps the lower pitch's odd harmonics). Not done: legatopitches for
+  the other 35 Performance patches, shorts for the 88 `onsetB.txt` patches, legato lengths for `legB.txt`.
+  **Resume**: on the VM, `C:\claude\measure\job6.cmd` with its onsetB step removed (restBefore skips what is done;
+  use build c7338f4 for every step, aff12be is deleted), task `claude-measure`; read every results folder since
+  2026-10-01 0329 in `Documents\MuseScore Sound Library Check` with `onset_from_check.py`.
+- **Sweep 3f0cda5 vs aff12be** (all 16): held mf onsets -14..+57 ms; sul tasto 45-185 (Violins 1 123, Violas 185),
+  flautando -39..+223 (Violins 1 223, Violas 160); slurs -7…+7 pooled within -16..+9 but octaves still early (-12:
+  -86, +12: -121); strings' sixteenths +59..+84 late, ≥ 0.5 s notes early in Basses (to -156), Horn, Violas,
+  Violins 2 (-51..-76). Rerun: `make_sweep_scores.py`, convert, `fix_sweep_ids.py`, copy to `C:\claude\sweep\scores`,
+  `args.txt` = build shas one per line, `schtasks /Run /TN claude-sweep`, then `sweep/fetch.sh <sha>` (in the job
+  tmp `~/.claude/jobs/ed934dfd/tmp/cray/`; it deletes each render's audio once analysed) and `compare_sweeps.py`.
 - **VM IP** changed to 172.29.253.109 (2026-10-01 host reboot). Disk is tight: `sweep/fetch.sh` deletes each render's
   audio once analysed; keep VM outputs under ~2 GB.
 
