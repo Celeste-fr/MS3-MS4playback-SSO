@@ -5,6 +5,27 @@ agent (Claude Code on the owner's local machine) where things stand. Read `CLAUD
 describes the architecture, the build, the articulation check and every run the owner has
 made. The commit messages on this branch explain each step in detail.
 
+## Legato and onset timing (2026-10-01, branch `claude/intelligent-volta-gx7gmw`)
+
+On top of `legato-timing` (3f0cda5): 696341d takes the measurement branch's data (f8908f8 on
+`claude/intelligent-cray-6pd4o1`; its HANDOFF.md, "Measurements for the legato-timing fixes", has the VM jobs, the
+sweep tools and the sweep results of ed3a294 and 3f0cda5). Not heard or swept with SSO yet: the next step is the VM
+sweep (`make_sweep_scores.py`, task `claude-sweep`) on a Windows build of this branch against 3f0cda5's.
+Open, deliberately not changed (no data here supports a change):
+- **Octave slurs of the other 35 Performance patches** (winds, brass, Solo Cello and the Sul G / Sul C Performance patches) still use
+  their ±7 delay. Only the 8 string Performance patches have the 5-pitch grid (`sso_legato_grid_pitches.json`);
+  `sso_legato_grid.json`'s ±12 are octave errors. Needs the rest check's `legatopitches` part on those 35 (VM, build
+  c7338f4; the measurement HANDOFF's "Resume"). The single-pitch grid can't be corrected by a rule: on the 8 string
+  patches its arrival is above the 5-pitch 50 % time by a median 95 ms (Basses), 98 (Violins 2), 58 (Violas), 25-30
+  (Celli, Violins 1), -25…+5 (the three solo strings), per interval -150…+190: no common offset to carry to the winds.
+- **Long slurred notes early** (sweep of 3f0cda5: ≥ 0.5 s notes to -156 ms in Basses, Horn, Violas, Violins 2 -51…-76):
+  Basses, Violas and Violins 2 now use the 5-pitch grid, which is exactly where the single-pitch grid read 58-98 ms too
+  long (above); whether that closes it needs the sweep. Horn Solo - Performance is still on the single-pitch grid
+  (no 5-pitch data): leave it until `legatopitches` measures it.
+- **Strings' slurred sixteenths 59-84 ms late**: the price of the `legatoTransition` cap (none up to 125 ms, half from
+  250; CLAUDE.md › Fast runs), chosen on the VM for even levels in fast runs (a quarter's shift: 4.2 dB spread). Not
+  changed: undoing it needs a measurement that shows even levels with a larger shift.
+
 ## Where things are
 
 - Branch: `main` (called `ms4-playback` until 2026-09-27), the default branch (the

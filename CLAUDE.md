@@ -116,6 +116,18 @@ RemoveRedundantSig plugin for it). `Score::cmdRemoveTimeSig`, test `tst_timesig:
 (fails without the fix). `tst_timesig::timesig05` fails since 5f65a1d (fermatas' MS4 default
 time stretch is written into the file: `<timeStretch>2</timeStretch>`), not from this.
 
+Note input by scale degree (the owner, 2026-10-01): numpad 1-7 (`note-degree-1` … `-7`, pitched staves, as the letter
+keys) enter the key's degrees: `Score::scaleDegreeStep` counts letters from the tonic of the staff's key signature where
+notes go (as written; its mode picks the tonic: C minor's 1 is C, A minor's A; no mode counts as major, so three flats
+is E flat), then `cmdAddPitch` as for that letter (key signature accidentals, nearest octave). No raised leading note in
+minor. `chord-degree-n` / `insert-degree-n` have no default keys (Ctrl+digits are tuplets; Shift / Alt with the numpad are
+taken on Windows); *Add › Notes › Scale Degree*. A user's own shortcuts.xml saved before an action existed now gives that
+action its default keys where the file doesn't bind them elsewhere (`Shortcut::load`). Qt on Linux (xcb) matches
+shortcuts without the keypad modifier, so a `NumPad+n` binding never wins there over the plain digit's (durations);
+`ScoreView::event` takes numpad 1-7 itself when a degree action holds that key and is enabled (`numpadDegreeAction`).
+Tried in the GUI under Xvfb: C minor, numpad 1-7 gave C D E♭ F G A♭ B♭; an old user shortcuts.xml binding numpad 3
+elsewhere left Degree 3 without a key, the others got theirs. Not tried on Windows. Test `tst_keysig::scaleDegrees`.
+
 ## Layout of the fork-specific code
 
 MS4 playback (see the header comment of each file):
@@ -350,7 +362,15 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   every interval when there is no grid; the interval is from the nearest note of the chord before that goes on legato
   on the patch. Medians over the 45 patches -12: 210, -7: 230, -5: 190, -1: 170, +1: 150, +2: 160, +7: 230, +12: 360;
   per patch 60-690; velocity changes nothing, median 190 at each. Before, one number per patch, the median of the
-  timing check's six transitions, +2 / -5 only: leaps of a fourth or more stayed 100-280 ms late) and
+  timing check's six transitions, +2 / -5 only: leaps of a fourth or more stayed 100-280 ms late). **The 8 string
+  Performance patches from 5 starting pitches** (`sso_legato_grid_pitches.json`, the rest check's legatopitches part,
+  timed by harmonics; `legatoDelayFromPitches`): per interval the median 50 % time over the starting pitches (the
+  crossing the sweep's arrival measures), -12 … +7; +12 (405-680, the first note's room) takes -12's 110-205, where the
+  sweep of 3f0cda5 put octave slurs (+12 121 ms early, -12 86 early on the ±7 delay). Basses 70-160 (were 210-300),
+  Violins 2 140-175 (230-280): the sweep's early half notes there. The other 35 Performance patches: the grid above,
+  octaves on ±7 still (not measured from several pitches yet; the single-pitch grid has no common offset to correct
+  by: against the 5-pitch 50 % time it reads a median 95-98 ms long on Basses / Violins 2, 58 on Violas, -25 … +30 on
+  the others, so it stays until `legatopitches` measures those 35; HANDOFF.md › Legato and onset timing). And
   `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
   transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
@@ -391,7 +411,11 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   build ed3a294 heard sul tasto 240-600 ms and flautando 145-255 ms late); unmeasured sounds: per articulation kind
   (`articulationKind`, brass apart), the measured patches' median of onset / mf full-level time times the patch's own
   full-level time (Long 0.39, Legato 0.31 (brass 0.22), Sul Tasto 0.57, Super Sul Tasto 0.87, Flautando 0.66, Harmonics
-  0.48), the family fit only where no kind has 20 measured semitones;
+  0.48), the family fit only where no kind has 20 measured semitones; a sul tasto / flautando / harmonics semitone
+  whose mf peak is at 1.3 s or later (still rising at the check's 1.5 s end: 40-86 % of theirs, no other sound's) takes
+  the -10 dB time, since its full level is ~5 dB higher (the sweep of 3f0cda5, its peak up to ~2 s after the note-on,
+  heard those 123-223 ms late; -10 comes 130-177 ms after -15; `onsetMs`). All 112 non-percussion map instruments
+  measured since f8908f8 (2026-10-01);
   metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
   Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
   no grace notes or arpeggio before, plays `onset × percent` early (its chord's latest onset, so a chord starts
@@ -886,7 +910,7 @@ attack not yet confirmed by ear.
   Spitfire map's instrument matching, and a rendered MusicXML score (the switch per note,
   routing, sampled ornaments), the playback verification's analysis (`playbackVerify`,
   `playbackVerifyDrift`), the Controllers window's live changes (`liveControllers`, `liveParameters`,
-  `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (50 counting initTestCase and cleanup, 3 skipped without the owner's files;
+  `liveMidiControllers`), phrase marks (`renderPhraseMark`). All pass (50 counting initTestCase and cleanup, 2026-10-01; 3 skipped without the owner's files;
   `vst3Settle`, `kontaktMaxVoices` 2026-09-29; `liveSetTestSynth` 2026-09-30).
 - `mtest/libmscore/liveequivalence` (`tst_liveequivalence`): Create Live Set with the part's Controllers and the
   Mixer, the clips' pitch bend and early legato notes, and Live against MuseScore on the test synth. All 7 pass

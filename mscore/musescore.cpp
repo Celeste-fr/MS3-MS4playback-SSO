@@ -2250,6 +2250,19 @@ MuseScore::MuseScore()
             a = getAction(buffer);
             menuAddPitch->addAction(a);
             }
+      menuAddPitch->addSeparator();
+      // scale degrees of the key (numpad 1-7): the note, added to the chord, inserted
+      menuAddDegree = new QMenu();
+      for (const char* kind : { "note", "chord", "insert" }) {
+            if (strcmp(kind, "note"))
+                  menuAddDegree->addSeparator();
+            for (int i = 1; i <= 7; ++i) {
+                  char buffer[24];
+                  snprintf(buffer, sizeof buffer, "%s-degree-%d", kind, i);
+                  menuAddDegree->addAction(getAction(buffer));
+                  }
+            }
+      menuAddPitch->addMenu(menuAddDegree);
       menuAdd->addMenu(menuAddPitch);
 
       menuAddInterval = new QMenu();
@@ -2594,6 +2607,7 @@ MuseScore::MuseScore()
       Workspace::addMenuAndString(menuAddLines,    "menu-add-lines");
       Workspace::addMenuAndString(menuAddPitch,    "menu-add-pitch");
       Workspace::addMenuAndString(menuAddInterval, "menu-add-interval");
+      Workspace::addMenuAndString(menuAddDegree,   "menu-add-degree");
       Workspace::addMenuAndString(menuTuplet,      "menu-tuplet");
       Workspace::addMenuAndString(menuFormat,      "menu-format");
       Workspace::addMenuAndString(menuTools,       "menu-tools");
@@ -2834,6 +2848,7 @@ void MuseScore::setMenuTitles()
             { menuAddLines,         tr("&Lines")            },
             { menuAddPitch,         tr("N&otes")            },
             { menuAddInterval,      tr("&Intervals")        },
+            { menuAddDegree,        tr("Scale &Degree")     },
             { menuTuplet,           tr("T&uplets")          },
             { menuFormat,           tr("F&ormat")           },
             { menuStretch,          tr("&Stretch")          },
@@ -2887,6 +2902,7 @@ void MuseScore::updateMenus()
       updateMenu(menuAddLines,    "menu-add-lines",    "");
       updateMenu(menuAddPitch,    "menu-add-pitch",    "");
       updateMenu(menuAddInterval, "menu-add-interval", "");
+      updateMenu(menuAddDegree,   "menu-add-degree",   "");
       updateMenu(menuTuplet,      "menu-tuplet",       "");
       updateMenu(menuFormat,      "menu-format",       "Format");
       updateMenu(menuStretch,     "menu-stretch",      "");

@@ -4239,6 +4239,58 @@ void Score::cmdAddPitch(const EditData& ed, int note, bool addFlag, bool insert)
       ed.view->adjustCanvasPosition(is.cr(), false);
       }
 
+//---------------------------------------------------------
+//   scaleDegreeStep
+///   the note name (0 = C … 6 = B) of scale degree 1-7 in the key signature where notes are entered: counted from
+///   the key's tonic as written on that staff (the key signature's mode decides the tonic: C minor's 1 is C, A
+///   minor's A; a key signature without a mode counts as major, so three flats is E flat), and played with the key
+///   signature's accidentals as the letter keys are. Only letters are counted: no raised leading note in minor.
+//---------------------------------------------------------
+
+int Score::scaleDegreeStep(int degree) const
+      {
+      const InputState& is = inputState();
+      int staffIdx = -1;
+      Fraction tick;
+      const Element* el = selection().element();
+      if (!is.noteEntryMode() && el && (el->isNote() || el->isRest() || el->isChord())) {
+            staffIdx = el->staffIdx();
+            tick = el->tick();
+            }
+      else if (is.segment() && is.track() >= 0) {
+            staffIdx = is.track() / VOICES;
+            tick = is.segment()->tick();
+            }
+      else if (el) {
+            staffIdx = el->staffIdx();
+            tick = el->tick();
+            }
+      const Staff* st = staffIdx >= 0 ? staff(staffIdx) : nullptr;
+      const KeySigEvent key = st ? st->keySigEvent(tick) : KeySigEvent();
+      int fifths = key.isValid() ? int(key.key()) : 0;      // the tonic of the major key on the circle of fifths
+      switch (key.mode()) {                                 // the mode's final from the major key's tonic
+            case KeyMode::MINOR:
+            case KeyMode::AEOLIAN:    fifths += 3; break;
+            case KeyMode::DORIAN:     fifths += 2; break;
+            case KeyMode::PHRYGIAN:   fifths += 4; break;
+            case KeyMode::LYDIAN:     fifths -= 1; break;
+            case KeyMode::MIXOLYDIAN: fifths += 1; break;
+            case KeyMode::LOCRIAN:    fifths += 5; break;
+            default: break;
+            }
+      return (tpc2step(Tpc::TPC_C + fifths) + qBound(1, degree, 7) - 1) % 7;
+      }
+
+//---------------------------------------------------------
+//   cmdAddScaleDegree
+///   enter scale degree 1-7 of the key (numpad 1-7): the letter key of that note name
+//---------------------------------------------------------
+
+void Score::cmdAddScaleDegree(const EditData& ed, int degree, bool addFlag, bool insert)
+      {
+      cmdAddPitch(ed, scaleDegreeStep(degree), addFlag, insert);
+      }
+
 void Score::cmdAddPitch(int step, bool addFlag, bool insert)
       {
       insert = insert || inputState().usingNoteEntryMethod(NoteEntryMethod::TIMEWISE);
@@ -4585,6 +4637,27 @@ void Score::cmd(const QAction* a, EditData& ed)
             { "insert-g",                   [](Score* cs, EditData& ed){ cs->cmdAddPitch(ed, 4, false, true);                         }},
             { "insert-a",                   [](Score* cs, EditData& ed){ cs->cmdAddPitch(ed, 5, false, true);                         }},
             { "insert-b",                   [](Score* cs, EditData& ed){ cs->cmdAddPitch(ed, 6, false, true);                         }},
+            { "note-degree-1",              [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 1, false, false);                    }},
+            { "note-degree-2",              [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 2, false, false);                    }},
+            { "note-degree-3",              [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 3, false, false);                    }},
+            { "note-degree-4",              [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 4, false, false);                    }},
+            { "note-degree-5",              [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 5, false, false);                    }},
+            { "note-degree-6",              [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 6, false, false);                    }},
+            { "note-degree-7",              [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 7, false, false);                    }},
+            { "chord-degree-1",             [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 1, true, false);                    }},
+            { "chord-degree-2",             [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 2, true, false);                    }},
+            { "chord-degree-3",             [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 3, true, false);                    }},
+            { "chord-degree-4",             [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 4, true, false);                    }},
+            { "chord-degree-5",             [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 5, true, false);                    }},
+            { "chord-degree-6",             [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 6, true, false);                    }},
+            { "chord-degree-7",             [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 7, true, false);                    }},
+            { "insert-degree-1",            [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 1, false, true);                    }},
+            { "insert-degree-2",            [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 2, false, true);                    }},
+            { "insert-degree-3",            [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 3, false, true);                    }},
+            { "insert-degree-4",            [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 4, false, true);                    }},
+            { "insert-degree-5",            [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 5, false, true);                    }},
+            { "insert-degree-6",            [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 6, false, true);                    }},
+            { "insert-degree-7",            [](Score* cs, EditData& ed){ cs->cmdAddScaleDegree(ed, 7, false, true);                    }},
             { "fret-0",                     [](Score* cs, EditData&){ cs->cmdAddFret(0);                                              }},
             { "fret-1",                     [](Score* cs, EditData&){ cs->cmdAddFret(1);                                              }},
             { "fret-2",                     [](Score* cs, EditData&){ cs->cmdAddFret(2);                                              }},

@@ -566,6 +566,153 @@ Shortcut Shortcut::_sc[] = {
          },
       {
          MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "note-degree-1",
+         QT_TRANSLATE_NOOP("action","Degree 1"),
+         QT_TRANSLATE_NOOP("action","Enter scale degree 1 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "note-degree-2",
+         QT_TRANSLATE_NOOP("action","Degree 2"),
+         QT_TRANSLATE_NOOP("action","Enter scale degree 2 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "note-degree-3",
+         QT_TRANSLATE_NOOP("action","Degree 3"),
+         QT_TRANSLATE_NOOP("action","Enter scale degree 3 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "note-degree-4",
+         QT_TRANSLATE_NOOP("action","Degree 4"),
+         QT_TRANSLATE_NOOP("action","Enter scale degree 4 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "note-degree-5",
+         QT_TRANSLATE_NOOP("action","Degree 5"),
+         QT_TRANSLATE_NOOP("action","Enter scale degree 5 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "note-degree-6",
+         QT_TRANSLATE_NOOP("action","Degree 6"),
+         QT_TRANSLATE_NOOP("action","Enter scale degree 6 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "note-degree-7",
+         QT_TRANSLATE_NOOP("action","Degree 7"),
+         QT_TRANSLATE_NOOP("action","Enter scale degree 7 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "chord-degree-1",
+         QT_TRANSLATE_NOOP("action","Add Degree 1 to Chord"),
+         QT_TRANSLATE_NOOP("action","Add scale degree 1 of the key to chord")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "chord-degree-2",
+         QT_TRANSLATE_NOOP("action","Add Degree 2 to Chord"),
+         QT_TRANSLATE_NOOP("action","Add scale degree 2 of the key to chord")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "chord-degree-3",
+         QT_TRANSLATE_NOOP("action","Add Degree 3 to Chord"),
+         QT_TRANSLATE_NOOP("action","Add scale degree 3 of the key to chord")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "chord-degree-4",
+         QT_TRANSLATE_NOOP("action","Add Degree 4 to Chord"),
+         QT_TRANSLATE_NOOP("action","Add scale degree 4 of the key to chord")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "chord-degree-5",
+         QT_TRANSLATE_NOOP("action","Add Degree 5 to Chord"),
+         QT_TRANSLATE_NOOP("action","Add scale degree 5 of the key to chord")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "chord-degree-6",
+         QT_TRANSLATE_NOOP("action","Add Degree 6 to Chord"),
+         QT_TRANSLATE_NOOP("action","Add scale degree 6 of the key to chord")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "chord-degree-7",
+         QT_TRANSLATE_NOOP("action","Add Degree 7 to Chord"),
+         QT_TRANSLATE_NOOP("action","Add scale degree 7 of the key to chord")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "insert-degree-1",
+         QT_TRANSLATE_NOOP("action","Insert Degree 1"),
+         QT_TRANSLATE_NOOP("action","Insert scale degree 1 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "insert-degree-2",
+         QT_TRANSLATE_NOOP("action","Insert Degree 2"),
+         QT_TRANSLATE_NOOP("action","Insert scale degree 2 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "insert-degree-3",
+         QT_TRANSLATE_NOOP("action","Insert Degree 3"),
+         QT_TRANSLATE_NOOP("action","Insert scale degree 3 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "insert-degree-4",
+         QT_TRANSLATE_NOOP("action","Insert Degree 4"),
+         QT_TRANSLATE_NOOP("action","Insert scale degree 4 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "insert-degree-5",
+         QT_TRANSLATE_NOOP("action","Insert Degree 5"),
+         QT_TRANSLATE_NOOP("action","Insert scale degree 5 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "insert-degree-6",
+         QT_TRANSLATE_NOOP("action","Insert Degree 6"),
+         QT_TRANSLATE_NOOP("action","Insert scale degree 6 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
+         STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED,
+         "insert-degree-7",
+         QT_TRANSLATE_NOOP("action","Insert Degree 7"),
+         QT_TRANSLATE_NOOP("action","Insert scale degree 7 of the key")
+         },
+      {
+         MsWidget::SCORE_TAB,
          STATE_NORMAL | STATE_NOTE_ENTRY_STAFF_PITCHED | STATE_NOTE_ENTRY_STAFF_DRUM,
          "chord-a",
          QT_TRANSLATE_NOOP("action","Add A to Chord"),
@@ -4759,6 +4906,18 @@ void Shortcut::read(XmlReader& e)
       }
 
 //---------------------------------------------------------
+//   Shortcut1
+//---------------------------------------------------------
+
+struct Shortcut1 {
+      QByteArray key;
+      QList<QKeySequence> keys;
+      QKeySequence::StandardKey standardKey { QKeySequence::UnknownKey };
+      };
+
+static QList<Shortcut1> loadShortcuts(QString fileLocation);
+
+//---------------------------------------------------------
 //   read
 //---------------------------------------------------------
 
@@ -4775,6 +4934,7 @@ void Shortcut::load()
             qDebug("read shortcuts from <%s>", qPrintable(f.fileName()));
 
       XmlReader e(&f);
+      QSet<QByteArray> inFile;      // the actions the file lists (a saved file lists every action, with keys or not)
 
       while (e.readNextStartElement()) {
             if (e.name() == "Shortcuts") {
@@ -4785,6 +4945,7 @@ void Shortcut::load()
                                     const QStringRef& tag(e.name());
                                     if (tag == "key") {
                                           QString val(e.readElementText());
+                                          inFile.insert(val.toLocal8Bit());
                                           sc = getShortcut(qPrintable(val));
                                           if (!sc) { // shortcut not found
                                                 if (!(!strcmp(qPrintable(val), "toggle-feedback")
@@ -4816,19 +4977,39 @@ void Shortcut::load()
             else
                   e.unknown();
             }
+      // the user's own file, saved before an action was added (numpad scale degrees): the new action takes its
+      // default keys, each one the user hasn't bound to something else (a key another action has by default too,
+      // as the tablature durations' numpad keys, stays shared as in the defaults)
+      if (f.fileName() != defaultFileName) {
+            const QList<Shortcut1> defaults = loadShortcuts(defaultFileName);
+            QSet<QString> byDefault;      // "action key"
+            for (const Shortcut1& d : defaults)
+                  for (const QKeySequence& k : d.keys)
+                        byDefault.insert(QString::fromLatin1(d.key) + ' ' + k.toString(QKeySequence::PortableText));
+            QSet<QString> bound;
+            for (const Shortcut* sc : qAsConst(_shortcuts)) {
+                  for (const QKeySequence& k : sc->_keys) {
+                        const QString ks = k.toString(QKeySequence::PortableText);
+                        if (!byDefault.contains(QString::fromLatin1(sc->_key) + ' ' + ks))
+                              bound.insert(ks);
+                        }
+                  }
+            for (const Shortcut1& d : defaults) {
+                  if (inFile.contains(d.key))
+                        continue;
+                  Shortcut* sc = getShortcut(d.key.constData());
+                  if (!sc)
+                        continue;
+                  for (const QKeySequence& k : d.keys) {
+                        const QString ks = k.toString(QKeySequence::PortableText);
+                        if (!bound.contains(ks))
+                              sc->_keys.append(k);
+                        }
+                  }
+            }
       source = f.fileName();
       dirty = false;
       }
-
-//---------------------------------------------------------
-//   Shortcut1
-//---------------------------------------------------------
-
-struct Shortcut1 {
-      QByteArray key;
-      QList<QKeySequence> keys;
-      QKeySequence::StandardKey standardKey { QKeySequence::UnknownKey };
-      };
 
 
 //---------------------------------------------------------
