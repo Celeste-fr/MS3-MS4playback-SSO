@@ -214,6 +214,12 @@ switch value of each articulation. For example:
     family; `gen_spitfire_sso.py`); not on tremolos, trills, shorts, harp, keyboards or percussion.
   - `<Onset early="100"/>` (top level): that percent (SSO: 100). A score can set its own in *Mixer ›
     Advanced Options…* ("Held notes early by", metaTag `soundLibraryOnsetEarly`); 0 plays them on the beat.
+  - `length` on an `Articulation` (seconds): how long its sample is (SSO's Short 0.5 / Short 1.0): not
+    chosen for a note whose written length is under 90 % of it; with `from` (seconds): not chosen for
+    a note under that instead. SSO's `from` is measured: the written length from which the short's
+    sounding length (the last time it is within 10 dB of its peak; the note-off hardly cuts them) is
+    closer to the note's than what would play otherwise (Spiccato for Short 0.5, Short 0.5 for Short
+    1.0): Violins 1 0.43 / 0.71 s, Violas 0.61 / 1.06, Basses 0.73 / 1.07.
   - `release` on an `Articulation` (ms): how long a sustained note rings after its note-off. A
     tuning copy (below) is retuned only after its notes' end plus the longer of `tail` and this.
     SSO's: the longest over the articulation's range (the rest check measured every semitone; neighbouring

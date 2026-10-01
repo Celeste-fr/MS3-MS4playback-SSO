@@ -965,6 +965,56 @@ def release(patch, sound, t):
     if rel:
         return int(max(rel))
     return int(t['releaseMs']) if t.get('releaseMs', -1) > 0 else None
+# - from= (seconds) on Short 0.5 / Short 1.0: chosen for a note from this written length on (else 90 % of length=,
+#   Spitfire's nominal 0.5 / 1.0 s). Measured (sso_short_lengths.json, the rest check's shorts part, 2026-10-01: each
+#   short held 50 ... 2000 ms at its test pitch and an octave either side, the last time its perceived loudness is
+#   within 10 dB of its peak, the median over the three pitches): the note-off hardly cuts them; Spiccato sounds
+#   0.28-0.47 s whatever the note, Short 0.5 0.45-1.0 s, Short 1.0 0.47-1.26 s growing with the note up to ~1 s. The
+#   body to -20 dB (bodyMs, ~1 s) is mostly the hall, so -10 dB is the note as heard. A note plays the choice whose
+#   sounding length (at its written length) is closest to its written length: Short 0.5 against Spiccato (what a
+#   staccato falls back to), Short 1.0 against Short 0.5 (a portato's or tenuto's next); from= is the written length
+#   from which it is the closer one for every longer note. E.g. Violins 1 Short 0.5 from 0.43 s, Short 1.0 from 0.71
+#   (nominal: 0.45, 0.90); Violas 0.61 / 1.06; Basses 0.73 / 1.07. Unmeasured patches keep the nominal rule.
+import bisect
+SHORT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_short_lengths.json')
+SHORT_LENGTHS = json.load(open(SHORT_FILE, encoding='utf-8')) if os.path.exists(SHORT_FILE) else {}
+SHORT_NEXT = {'Short 0.5': 'Spiccato', 'Short 1.0': 'Short 0.5'}
+def soundingCurve(patch, sound):
+    rows = SHORT_LENGTHS.get(patch, {}).get(sound)
+    if not isinstance(rows, list):
+        return None
+    by = {}
+    for r in rows:
+        if r[3] and r[3][1] is not None and r[3][1] >= 0:
+            by.setdefault(r[1], []).append(r[3][1])
+    held = sorted(by)
+    return (held, [statistics.median(by[h]) for h in held]) if len(held) >= 2 else None
+def sounding(curve, seconds):
+    held, ms = curve
+    x = seconds * 1000
+    if x <= held[0]:
+        return ms[0] / 1000
+    if x >= held[-1]:
+        return ms[-1] / 1000
+    i = bisect.bisect_right(held, x)
+    a, b = held[i - 1], held[i]
+    return (ms[i - 1] + (ms[i] - ms[i - 1]) * (x - a) / (b - a)) / 1000
+def shortFrom(patch, sound):
+    """from= of a timed short (None: not measured)"""
+    if sound not in SHORT_NEXT:
+        return None
+    a, b = soundingCurve(patch, sound), soundingCurve(patch, SHORT_NEXT[sound])
+    if not a or not b:
+        return None
+    w, last = 2.5, None
+    while w > 0.05:
+        if abs(sounding(a, w) - w) <= abs(sounding(b, w) - w):
+            last = w
+        else:
+            break
+        w = round(w - 0.01, 2)
+    return last
+shortFromCount = 0
 onsetCount = 0
 current = None
 legatoGridUsed = set()
@@ -998,6 +1048,10 @@ for i, line in enumerate(out):
         extra += f' legatoDelay="{delay}"'
         legatoGridUsed.add(current)
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
+    f = shortFrom(current, sound)
+    if f:
+        extra += f' from="{f:g}"'
+        shortFromCount += 1
     o = onset(current, sound) if t.get('sustains') and ('long' in techniques or 'legato' in techniques) else None
     if o:
         extra += f' onset="{o}"'

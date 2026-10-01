@@ -75,7 +75,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
       }
 
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
-//               [prefer="…"] [length="0.5"] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
+//               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [onset="40" | onset="55:60 67:40 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
@@ -149,6 +149,7 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.expect = a.value("expect").toString();
       art.prefer = words(a.value("prefer").toString());
       art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
+      art.fromSeconds = a.hasAttribute("from") ? a.value("from").toDouble() : -1;
       art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
       if (a.hasAttribute("legatoDelay") && !readKeyedMs(a.value("legatoDelay").toString(), art.legatoDelayMs, art.legatoDelays))
             return false;
@@ -557,7 +558,9 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
                         if (!a.techniques.contains(base))
                               continue;
                         // a short that lasts longer than the note (Short 0'5 for a fast eighth): not this one
-                        if (a.length > 0 && want.seconds > 0 && want.seconds < 0.9 * a.length)
+                        // (measured: from where it sounds closer to the note's length than the next choice)
+                        const double from = a.fromSeconds > 0 ? a.fromSeconds : 0.9 * a.length;
+                        if (from > 0 && want.seconds > 0 && want.seconds < from)
                               continue;
                         bool fits = true;
                         for (const QString& m : a.modifiers)

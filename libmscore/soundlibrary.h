@@ -80,7 +80,9 @@ struct Articulation {
       QStringList prefer;                 // bases it plays over another patch's equal fit (<Articulation
                                           // prefer>: SSO's Performance legato for held notes)
       double length { -1 };               // seconds its sample lasts (<Articulation length>: SSO's Short 0'5,
-                                          // Short 1'0): not chosen for a note under 90 % of it
+                                          // Short 1'0): not chosen for a note under 90 % of it, unless
+      double fromSeconds { -1 };          // <Articulation from>: chosen for a note from this long on (SSO: where its
+                                          // measured sounding length is closer to the note's than the next choice's)
       // measured with the library (<Articulation release legatoDelay>, ms; the timing check):
       double releaseMs { -1 };            // a sustained note rings this long after its note-off (a tuning lane
                                           // stays busy until then: Lanes); -1: unknown (the tail only)
