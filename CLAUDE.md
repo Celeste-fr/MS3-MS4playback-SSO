@@ -324,7 +324,13 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   **Legato transitions start early** (the owner, 2026-09-30, "go ahead"; branch `legato-timing`): SSO's 42
   Performance patches reach a slurred note's new pitch 70-430 ms after its note-on (median 180 over 252
   transitions, a 4-22 dB dip; the timing check, `sso_articulation_timing.json` `legato`), so slurred notes sounded
-  late. `<Articulation legatoDelay>` (ms, per patch the median of its six transitions; `gen_spitfire_sso.py`) and
+  late. `<Articulation legatoDelay>` (ms; `gen_spitfire_sso.py`; **by interval since 2026-10-01**: `interval:ms` pairs
+  from the legato grid `sso_legato_grid.json`, per patch and interval the median over 9 velocities, `Articulation::
+  legatoDelays` / `legatoDelayAt(interval)`: linear between listed intervals, the widest's beyond, one number for
+  every interval when there is no grid; the interval is from the nearest note of the chord before that goes on legato
+  on the patch. Medians over the 45 patches -12: 210, -7: 230, -5: 190, -1: 170, +1: 150, +2: 160, +7: 230, +12: 360;
+  per patch 60-690; velocity changes nothing, median 190 at each. Before, one number per patch, the median of the
+  timing check's six transitions, +2 / -5 only: leaps of a fourth or more stayed 100-280 ms late) and
   `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
   transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on

@@ -87,6 +87,7 @@ class TestSoundLibrary : public QObject, public MTest
       void renderPhraseMark();
       void legatoEarly();
       void legatoEarlyFastRun();
+      void legatoEarlyByInterval();
       void renderKit();
       void renderKitRoll();
       void controllers();
@@ -910,6 +911,72 @@ void TestSoundLibrary::legatoEarlyFastRun()
                      qPrintable(QString("note %1 plays %2 ticks of %3").arg(i).arg(played).arg(S)));
             }
       QVERIFY(ons[1] - ons[0] >= S * 3 / 4 - 1);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   legatoEarlyByInterval
+//    legatoDelay by interval ("interval:ms" pairs, SSO's legato grid: a patch's transitions take 60-690 ms
+//    by interval): read, interpolated between intervals, the widest's beyond; each transition of
+//    legato-early.musicxml starts early by its own interval's delay (+1, +2, +3, +4 between +3 and +5, +5)
+//---------------------------------------------------------
+
+void TestSoundLibrary::legatoEarlyByInterval()
+      {
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+2:abc'/>"
+                       "</Instrument></SoundLibrary>"));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+12:800 -12:400 +1:100 +2:200 +3:150 +5:230'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::Articulation& a = lib->instruments[1].articulations[0];
+      QCOMPARE(int(a.legatoDelays.size()), 6);
+      QCOMPARE(a.legatoDelayMs, 215.0);                         // (the median: 200 and 230)
+      QCOMPARE(a.legatoDelayAt(2), 200.0);
+      QCOMPARE(a.legatoDelayAt(4), 190.0);                      // half way from +3 to +5
+      QCOMPARE(a.legatoDelayAt(-20), 400.0);                    // beyond the widest: the widest's
+      QCOMPARE(a.legatoDelayAt(24), 800.0);
+      QVERIFY(qAbs(a.legatoDelayAt(8) - (230 + 570 * 3 / 7.0)) < 1e-9);
+      QVERIFY(qAbs(a.legatoDelayAt(-1) - (400 - 300 * 11 / 13.0)) < 1e-9);
+      SoundLib::Articulation one;
+      one.legatoDelayMs = 180;
+      QCOMPARE(one.legatoDelayAt(7), 180.0);                    // (one number: every interval)
+
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::vector<std::pair<int, int>> ons;                     // (on, pitch)
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0)
+                  ons.push_back({ te.first, ev.pitch() });
+            }
+      std::stable_sort(ons.begin(), ons.end());
+      QCOMPARE(int(ons.size()), 20);
+      const int Q = DIVISION;
+      // early by: at 60 bpm 0.48 ticks a ms, at 120 0.96 (a quarter at 120 may lose 250 ms: none is capped)
+      const std::vector<std::pair<int, double>> written = {
+            { 0, 0 }, { Q, 200 * 0.48 }, { 2 * Q, 200 * 0.48 }, { 3 * Q, 100 * 0.48 },     // C D E F: +2 +2 +1
+            { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 200 * 0.48 },             // G, A A (struck again) B: +2
+            { 8 * Q, 0 }, { 9 * Q, 190 * 0.96 }, { 10 * Q, 150 * 0.96 }, { 11 * Q, 230 * 0.96 },   // C E G C: +4 +3 +5
+            };
+      for (size_t i = 0; i < written.size(); ++i) {
+            const double expected = written[i].first - written[i].second;
+            QVERIFY2(qAbs(ons[i].first - expected) <= 1.0,
+                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(ons[i].second)
+                                .arg(ons[i].first).arg(expected)));
+            }
       delete score;
       }
 

@@ -1296,9 +1296,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
                   // patch). Returns that note (nullptr: not a transition: a slur's first note, the note after its
-                  // end, the same key struck again) and the earliest utick the note may start: up to half
-                  // way into it (below), not before the chunk or the pass
-                  auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest) -> const Note* {
+                  // end, the same key struck again), the earliest utick the note may start: up to half
+                  // way into it (below), not before the chunk or the pass, and the interval from it (semitones;
+                  // of a chord before, its nearest note that goes on legato)
+                  auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest, int* interval) -> const Note* {
                         if (!c || c.base != "legato")
                               return nullptr;
                         Chord* ch = note->chord();
@@ -1316,7 +1317,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         for (const Note* pn : pch->notes())
                               if (pn->pitch() == note->pitch())
                                     return nullptr;     // (struck again: its note ends first, no transition)
-                        for (const Note* pn : pch->notes()) {
+                        std::vector<const Note*> before(pch->notes().begin(), pch->notes().end());
+                        std::stable_sort(before.begin(), before.end(), [note](const Note* a, const Note* b) {
+                              return std::abs(a->ppitch() - note->ppitch()) < std::abs(b->ppitch() - note->ppitch());
+                              });
+                        for (const Note* pn : before) {
                               if (!pn->play() || !slurGoesOn(pn))
                                     continue;
                               const Note* first = pn->firstTiedNote();
@@ -1336,6 +1341,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const qreal len = t1 - score->utick2utime(start);
                               const int cap = score->utime2utick(t1 - qBound(0.0, (len - 0.125) / 0.25, 0.5) * len);
                               *earliest = std::max({ start, cap, libChunkStart, (*rs)->utick });
+                              *interval = note->ppitch() - pn->ppitch();
                               return first;
                               }
                         return nullptr;
@@ -1450,15 +1456,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.libPatch = libChoice.patch;
                         config.libOverlap = libOverlap(libChoice, note);
                         if (li && !libNote.builtIn && !li->kit) {
-                              // a legato transition (SSO's Performance patches reach the new pitch 70-430 ms after the
-                              // note-on, median 180: the timing check) starts early by the patch's delay, times the
-                              // score's percent; its tuning lane glides from the note before (pitch bend)
+                              // a legato transition (SSO's Performance patches reach the new pitch 60-690 ms after the
+                              // note-on, median 190, by patch and interval: the legato grid) starts early by the patch's
+                              // delay for the interval, times the score's percent; its tuning lane glides from the note
+                              // before (pitch bend)
                               int earliest = 0;
-                              const Note* from = legatoTransition(note, libChoice, &earliest);
+                              int interval = 0;
+                              const Note* from = legatoTransition(note, libChoice, &earliest, &interval);
                               if (from) {
                                     libGlideFrom[note] = from;
-                                    if (offset == 0 && libLegatoEarly > 0 && libChoice.articulation->legatoDelayMs > 0) {
-                                          config.libEarly = libChoice.articulation->legatoDelayMs * libLegatoEarly / 100.0 / 1000.0;
+                                    const double delayMs = libChoice.articulation->legatoDelayAt(interval);
+                                    if (offset == 0 && libLegatoEarly > 0 && delayMs > 0) {
+                                          config.libEarly = delayMs * libLegatoEarly / 100.0 / 1000.0;
                                           config.libEarliest = earliest;
                                           }
                                     }

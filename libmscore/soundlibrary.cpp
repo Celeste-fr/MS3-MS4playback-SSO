@@ -75,8 +75,58 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
       }
 
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
-//               [prefer="…"] [length="0.5"] [release="885"] [legatoDelay="210"]/>;
+//               [prefer="…"] [length="0.5"] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
+
+// legatoDelay: one number (ms, every interval) or "interval:ms" pairs (semitones, signed); false: malformed
+static bool readLegatoDelay(const QString& text, Articulation& art)
+      {
+      art.legatoDelays.clear();
+      if (!text.contains(':')) {
+            bool ok = false;
+            art.legatoDelayMs = text.toDouble(&ok);
+            return ok;
+            }
+      std::vector<double> values;
+      for (const QString& pair : text.split(' ', QString::SkipEmptyParts)) {
+            const QStringList iv = pair.split(':');
+            bool ok1 = false, ok2 = false;
+            const int interval = iv.size() == 2 ? iv[0].trimmed().toInt(&ok1) : 0;      // ("+2" reads as 2)
+            const double ms = iv.size() == 2 ? iv[1].toDouble(&ok2) : 0;
+            if (!ok1 || !ok2 || ms < 0)
+                  return false;
+            art.legatoDelays.push_back({ interval, ms });
+            values.push_back(ms);
+            }
+      if (values.empty())
+            return false;
+      std::sort(art.legatoDelays.begin(), art.legatoDelays.end());
+      std::sort(values.begin(), values.end());
+      const size_t n = values.size();
+      art.legatoDelayMs = n % 2 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
+      return true;
+      }
+
+double Articulation::legatoDelayAt(int interval) const
+      {
+      if (legatoDelays.empty())
+            return legatoDelayMs;
+      if (interval <= legatoDelays.front().first)
+            return legatoDelays.front().second;
+      if (interval >= legatoDelays.back().first)
+            return legatoDelays.back().second;
+      for (size_t i = 1; i < legatoDelays.size(); ++i) {
+            const auto& b = legatoDelays[i];
+            if (interval > b.first)
+                  continue;
+            const auto& a = legatoDelays[i - 1];
+            if (b.first == a.first)
+                  return b.second;
+            return a.second + (b.second - a.second) * (interval - a.first) / double(b.first - a.first);
+            }
+      return legatoDelays.back().second;
+      }
+
 static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       {
       Articulation art;
@@ -87,7 +137,8 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.prefer = words(a.value("prefer").toString());
       art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
       art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
-      art.legatoDelayMs = a.hasAttribute("legatoDelay") ? a.value("legatoDelay").toDouble() : -1;
+      if (a.hasAttribute("legatoDelay") && !readLegatoDelay(a.value("legatoDelay").toString(), art))
+            return false;
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")

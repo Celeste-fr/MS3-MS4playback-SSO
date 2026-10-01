@@ -85,7 +85,12 @@ struct Articulation {
       double releaseMs { -1 };            // a sustained note rings this long after its note-off (a tuning lane
                                           // stays busy until then: Lanes); -1: unknown (the tail only)
       double legatoDelayMs { -1 };        // a legato transition reaches the new pitch this long after its note-on:
-                                          // it starts early (the renderer, legatoEarly()); -1: not a legato / unknown
+                                          // it starts early (the renderer, legatoEarly()); -1: not a legato / unknown.
+                                          // By interval (legatoDelay="-12:210 … +12:360"): their median
+      std::vector<std::pair<int, double>> legatoDelays;   // interval (semitones, the new note minus the one before)
+                                          // -> ms, sorted by interval; empty: legatoDelayMs for every interval
+      double legatoDelayAt(int interval) const;   // the delay for that interval: interpolated linearly between
+                                          // the measured ones, beyond the widest the widest's (-1: unknown)
       };
 
 struct DrumKey {

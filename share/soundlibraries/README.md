@@ -182,7 +182,12 @@ switch value of each articulation. For example:
   the owner's background timing run and plug-in extract, `tools/soundlibraries/sso_articulation_timing.json`
   and `sso_patch_measurements.json`, written by `gen_spitfire_sso.py`):
   - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long
-    after its note-on (SSO's Performance patches: 70–430 ms, median 180). A slurred note that is a
+    after its note-on (SSO's Performance patches: 60–690 ms, median 190). Either one number for
+    every interval or the delay by interval, `interval:ms` pairs in semitones (the new note minus the
+    one before; `legatoDelay="-12:200 -7:210 -5:240 … +7:300 +12:600"`): an interval between two listed
+    ones takes the straight line between them, one beyond the widest the widest's (a chord before: its
+    nearest note on the same patch). SSO's come from the legato grid (`sso_legato_grid.json`: 14
+    intervals from -12 to +12, velocity changes nothing). A slurred note that is a
     transition (its note before, on the same patch, is slurred into it) starts early by this times
     `<Legato early>` percent, so the new pitch lands near the beat. The note before loses at most
     a share of its length: none up to 125 ms, rising linearly to half at 250 ms and longer (fast
@@ -202,7 +207,8 @@ switch value of each articulation. For example:
   ```xml
   <Legato early="100"/>
   <Instrument name="Violins 1 - Performance" with="Violins 1" bend="99.1">
-    <Articulation name="Legato" value="20" techniques="legato long" release="885" legatoDelay="210"/>
+    <Articulation name="Legato" value="20" techniques="legato long" release="885"
+                  legatoDelay="-12:200 -7:210 -5:240 -4:190 -3:210 -2:300 -1:350 +1:220 +2:240 +3:230 +4:300 +5:300 +7:300 +12:600"/>
   </Instrument>
   ```
 - **Microtones.** `<Tuning method="varispeed" tolerance="0.5" tail="1.5" maxLanes="4"/>`: a plug-in

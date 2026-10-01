@@ -827,12 +827,31 @@ assert not measuredMissing, measuredMissing         # (every map patch was in th
 #   lane stays busy until a note's end plus the longer of the tail and this (SoundLib::lanes): a lane
 #   retuned while a release rings would move the ringing pitch (Flautando 2.9 s, tail 1.5 s).
 # - legatoDelay= (ms): a legato articulation (the Performance patches): when the second of two slurred
-#   notes reaches its pitch after its note-on, the median of the six measured transitions (velocity 20 /
-#   64 / 110, +2 and -5 semitones). Velocity makes no difference on most patches (median spread 0 ms);
-#   up (+2) and down (-5) differ on some patches either way round (Oboes a2 90 / 340, Bassoons a2 90 / 260,
-#   Bass Flute 220 / 100), with two intervals only, so one number per patch.
+#   notes reaches its pitch after its note-on, by interval: "interval:ms" pairs from the legato grid
+#   (sso_legato_grid.json, the rest check, 2026-10-01: slurs from the patch's test pitch at 9 velocities
+#   1 … 127 x 14 intervals -12, -7, -5 … -1, +1 … +5, +7, +12), per interval the median over the
+#   velocities where it arrived (within 800 ms). Velocity changes nothing (median arrival 190 ms at
+#   every velocity, spread over the 9 at one interval: median 10 ms); the interval does (median over
+#   the 45 patches -12: 210, -2: 190, +1: 150, +7: 230, +12: 360; per patch 60-690). The renderer
+#   interpolates between intervals and keeps the widest's beyond. A patch without grid data: one number,
+#   the median of the timing check's six transitions (velocity 20 / 64 / 110, +2 and -5 semitones).
+import statistics
 TIMING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_articulation_timing.json'),
                         encoding='utf-8'))
+LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid.json'),
+                             encoding='utf-8'))
+def legatoDelay(patch, sound, t):
+    """the legatoDelay= text of a patch's legato sound (None: not measured)"""
+    rows = LEGATO_GRID.get(patch, {}).get(sound)
+    if rows:
+        by = {}
+        for vel, interval, leave, arrive, dip in rows:
+            if arrive >= 0:
+                by.setdefault(interval, []).append(arrive)
+        if by:
+            return ' '.join(f'{i:+d}:{int(round(statistics.median(a)))}' for i, a in sorted(by.items()))
+    arrive = [l[3] for l in t.get('legato', []) if l[3] >= 0]
+    return str(int(round(statistics.median(arrive)))) if arrive else None
 # Pitch bend (the owner's extracts, sso_patch_measurements.json "pitchBend": cents at bend 0 and 16383
 # against 8192; the extract found the cents at 4096 … 12288 on a straight line): bend= (cents at full
 # deflection) where the patch bends cleanly: both ways at least 50 cents and the two within 3 % of each
@@ -852,8 +871,8 @@ def bendRange(name):
     if abs(up + down) > 0.03 * mean:
         return None
     return round(mean, 1)
-import statistics
 current = None
+legatoGridUsed = set()
 timedValues = set()
 for i, line in enumerate(out):
     m = re.match(r'  <(Instrument|Patch) name="([^"]*)"', line)
@@ -870,21 +889,30 @@ for i, line in enumerate(out):
     if not m or current not in TIMING:
         continue
     value = int(m.group(1))
-    t = [a for k, a in TIMING[current].items() if isinstance(a, dict) and a.get('value') == value]
+    t = [(k, a) for k, a in TIMING[current].items() if isinstance(a, dict) and a.get('value') == value]
     if not t:
         continue
-    t = t[0]
+    sound, t = t[0]
     extra = ''
     if t.get('sustains') and t.get('releaseMs'):
         extra += f' release="{int(t["releaseMs"])}"'
-    arrive = [l[3] for l in t.get('legato', []) if l[3] >= 0]
-    if arrive:
-        extra += f' legatoDelay="{int(round(statistics.median(arrive)))}"'
+    delay = legatoDelay(current, sound, t) if t.get('legato') else None
+    if delay:
+        extra += f' legatoDelay="{delay}"'
+        legatoGridUsed.add(current)
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'
         timedValues.add(current)
-# (every timed patch with a sustained or legato articulation found in the map)
-assert {p for p, v in TIMING.items() if any(isinstance(a, dict) and (a.get('sustains') or a.get('legato'))
-                                            for a in v.values())} <= timedValues
+# (every timed map instrument with a sustained or legato articulation found; the timing file has every sound of
+# the library: also the <Patch>es, the measurement-only ones and the drum hits (value -1, by key), which get none)
+mapInstruments = {re.match(r'  <Instrument name="([^"]*)"', l).group(1).replace('&amp;', '&') for l in out
+                  if l.startswith('  <Instrument name="')}
+missing = {p for p, v in TIMING.items() if p in mapInstruments and any(isinstance(a, dict) and a.get('value', -1) >= 0
+                                                                     and (a.get('sustains') or a.get('legato')) for a in v.values())}
+assert missing <= timedValues, missing - timedValues
+# (every map instrument in the legato grid got its delays; the grid's other three, Horn Solo / Horns a2 - Legato
+# and Oboe Principal, play no articulation a notation chooses as legato)
+assert set(LEGATO_GRID) & mapInstruments - {'Oboe Principal - Total Performance'} <= legatoGridUsed, \
+    set(LEGATO_GRID) & mapInstruments - legatoGridUsed
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')
