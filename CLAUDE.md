@@ -365,7 +365,11 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   tasto / flautando / harmonics 0.58 full - 118 (rms 12-48 ms). `<Articulation onset>` (ms or `pitch:ms` pairs;
   `Articulation::onsets` / `onsetAt(pitch)`, the same reader as legatoDelay, `readKeyedMs` / `keyedMsAt`) on longs and
   legato only (gen_spitfire_sso.py `onset()`: smoothed, Douglas-Peucker within 10 ms / 10 %) and `<Onset early="100"/>`
-  (percent; metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
+  (percent; **measured since 2026-10-01** where the rest check's onset part ran, `sso_sound_onset.json`: per semitone
+  the mf -15 dB time on 5 ms power less 10 ms of analysis latency (plucks come out at 10-20 ms); the fit only for what
+  isn't measured: the All techniques strings were well above it, Violins 2 Long 145 against 90, Violins 1 Flautando 370
+  against 133; Performance legato 0-65 ms, e.g. Violins 1 55, Celli 50-80, Bassoon Solo 0, Horn Solo 10-30;
+  metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
   Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
   no grace notes or arpeggio before, plays `onset × percent` early (its chord's latest onset, so a chord starts
   together; `SndConfig::libEarly` as for transitions), capped by the note just before on its track on the same patch as
