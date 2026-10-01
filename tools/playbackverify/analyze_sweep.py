@@ -9,7 +9,7 @@ when each note is heard against its written time.
         the old one has, for 20 ms; 4096-point frames every 5 ms, their centres; 8192 under 120 Hz; an octave: the lower pitch's own harmonics against the
         shared ones cross the midpoint of their levels before and after), from the written time
   H, S and a slur's first note  onsetMs: the first time the perceived loudness (loudness.perceived_envelope) is
-        within 15 dB of the note's peak (and onset10Ms / onset20Ms); S also endMs: the last time within 10 / 15 dB
+        within 15 dB of the note's peak (and onset10Ms / onset12Ms / onset20Ms); S also endMs: the last time within 10 / 15 dB
         of the peak before the next note (from the written time; against the written length)
 Prints per section, register and length the median and the 10-90 % range; --json keeps every note.
 """
@@ -42,7 +42,7 @@ def onset_of(env, first, t0, t1):
     k = int(np.argmax(seg))
     peak = seg[k]
     out = {}
-    for d in (20, 15, 10):
+    for d in (20, 15, 12, 10):
         i = int(np.argmax(seg[:k + 1] >= peak - d))
         out[d] = at_ms(first, a + i)
     return peak, at_ms(first, a + k), out
@@ -155,6 +155,7 @@ def analyse(meta, wav):
                 peak, peak_t, on = o
                 r["onsetMs"] = round((on[15] - t) * 1000)
                 r["onset10Ms"] = round((on[10] - t) * 1000)
+                r["onset12Ms"] = round((on[12] - t) * 1000)
                 r["onset20Ms"] = round((on[20] - t) * 1000)
                 r["peakMs"] = round((peak_t - t) * 1000)
                 if n["section"] == "S":
