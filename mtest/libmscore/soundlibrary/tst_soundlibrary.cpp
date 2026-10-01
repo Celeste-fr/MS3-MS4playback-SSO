@@ -291,10 +291,11 @@ void TestSoundLibrary::spitfireMap()
             values += p.scan == "values";
             keys += p.scan == "keys" && p.keyScan;
             }
-      QCOMPARE(int(lib->otherPatches.size()), 541);
+      QCOMPARE(int(lib->otherPatches.size()), 541 + 9);    // (+ 4 kits and 5 ensembles with every technique on)
       QCOMPARE(values, 0);                                  // (every values patch's values are known)
       QCOMPARE(keys, 7);
       int scanned = 0;
+      int allOn = 0;
       for (const SoundLib::LibInstrument& p : lib->otherPatches) {
             if (p.name == "Basses - Core techniques")
                   QCOMPARE(p.testPitch, 39);                    // (its samples' keys: 24-78; 60 has none)
@@ -335,6 +336,29 @@ void TestSoundLibrary::spitfireMap()
                   QVERIFY(off > 0);
                   QCOMPARE(toms3to5, 3);                // (Toms 3-5 share E2 at its defaults)
                   }
+            // a kit with every technique switched on (measured, never chosen): the kit's .nki, Kickstart's
+            // arrays set whole (each value as written: an array's elements separated by spaces), every hit
+            // with a key, an off one on a free key (Bass Drum Roll, technique 3, on key 1)
+            if (p.name.endsWith(" (all on)")) {
+                  ++allOn;
+                  QCOMPARE(int(p.setupValues.size()), 2);
+                  QCOMPARE(p.setupValues[0].first, QString("%c2lsa"));
+                  QCOMPARE(p.setupValues[1].first, QString("%4jwcn"));
+                  QVERIFY(!p.setupValues[1].second.contains("  ") && p.setupValues[1].second.endsWith(" 0"));
+                  QCOMPARE(int(p.setupValues[0].second.split(' ').size()), int(p.drums.size()) + 1);
+                  for (const SoundLib::DrumKey& d : p.drums) {
+                        QVERIFY(d.key > 0 && !d.offByDefault);
+                        QCOMPARE(d.pitch, -1);
+                        }
+                  }
+            if (p.name == "Drums - Low (all on)") {
+                  QCOMPARE(p.nki, QString("Instruments/Symphonic Percussion/Drums - Low.nki"));
+                  QVERIFY(p.setupValues[1].second.startsWith("84 86 88 1 89 2 3 48 50 52 53 4 "));
+                  QCOMPARE(int(p.drums.size()), 39);
+                  QCOMPARE(p.drums[3].name, QString("Bass Drum Roll"));
+                  QCOMPARE(p.drums[3].key, 1);
+                  QVERIFY(p.scan.isEmpty() && !p.keyScan);
+                  }
             // a keyswitch patch: Harp glissandi's scales on keys 0-5 (the owner's reviewed pictures)
             if (p.name == "Other - Harp glissandi") {
                   QVERIFY(p.switchType == SoundLib::SwitchType::KEYSWITCH);
@@ -345,6 +369,7 @@ void TestSoundLibrary::spitfireMap()
                   }
             }
       QCOMPARE(scanned, 4);
+      QCOMPARE(allOn, 9);
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);

@@ -881,6 +881,108 @@ for nki in NKI_FILES:
         out.append('  </Patch>')
     else:
         out.append(head + scan + pitch + '/>')
+# Techniques off at a percussion patch's defaults, switched on for measuring (the owner, 2026-10-01: "measure
+# everything left"; HANDOFF item 6). Kickstart (every percussion .nki's main script, slot 20) keeps each
+# technique's key in the persistent array %4jwcn and whether it is on in %c2lsa (1 / 0), one element per technique:
+# the patch's drums in its group order (sso_nki_groups.json), each drum's techniques in its own order. A technique
+# is off where its key is 0; Kontakt saves an array up to its last non-zero element and one 0. So "<patch> (all on)"
+# is the same .nki with both arrays set whole (setup=, KontaktSetup resizes the entries): every technique on, an
+# off one (or one on at key 0: Toys' Ratchet Long, Metal's Rivet Cymbal Roll) on the next free key, 1-35 then
+# 97-127 (no kit plays there; Kickstart itself gives a technique switched on a key at the ends of the keyboard),
+# never a key the patch uses. Each hit is a <Drum> with its key, so measuring every sound measures them all.
+# A <Patch>: never chosen by notation. %yknvz (also per technique in the kits, differs between a kit and the
+# one-drum patch, no clear meaning) is left as it is.
+#
+# A drum's technique order is its hit list's in sso_percussion_hits.json, but for a list of more than 11 (Toms,
+# Bongos, Timbales) the window showed it from technique 11 on, wrapping round: index 0 is the list's len - 11th.
+def techniqueOrder(hits):
+    s = len(hits) - 11 if len(hits) > 11 else 0
+    return hits[s:] + hits[:s]
+# The kits' arrays at their defaults (%4jwcn, %c2lsa), read from the owner's .nki files (2026-10-01): the check that
+# the order above is the script's (every element's key is the kit's key of the hit of that name, HITS) and what
+# is on at key 0. Unpitched - Wood: every technique on at its defaults (its one-drum patches' lists), no patch.
+KIT_ARRAYS = {
+ 'Drums - High': ('48 50 52 53 55 57 59 0 0 0 0 0 0 0 0 0 0 60 62 64 65 0 0 0 0 0 0 67 69 71 65 0 0 0 0 0 84 86 88 89 91 '
+                  '0 0 0 0 0 36 38 40 0 0 0 0 0 41 43 0 0 0 0 0 0 0 0 45 72 74 76 0 0 77 79 81 0',
+                  '1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 1 1 1 1 1 0 0 0 0 0 1 1 1 0 '
+                  '0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 0 0 1 1 1 0'),
+ 'Drums - Low': ('84 86 88 0 89 0 0 48 50 52 53 0 0 0 0 36 38 0 0 0 60 62 64 65 67 0 0 0 0 0 0 0 0 0 0 72 74 76 77 0',
+                 '1 1 1 0 1 0 0 1 1 1 1 0 0 0 0 1 1 0 0 0 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0'),
+ 'Other - Toys': ('83 84 89 91 93 95 96 47 48 50 0 52 53 55 57 59 60 36 38 40 41 69 71 72 74 86 88 62 0 64 65 67 79 81 '
+                  '76 77 0 0 43 45 0',
+                  '1 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 1 1 0'),
+ 'Unpitched - Metal': ('65 67 69 71 72 0 0 0 0 74 76 77 79 81 83 84 0 0 0 86 88 89 91 93 95 96 43 45 47 0 0 0 0 0 48 50 '
+                       '52 0 0 0 53 55 57 0 0 0 0 0 59 0 0 0 0 40 41 0 0 0 0 0 60 0 0 36 38 0 0 0 0 0 62 64 0',
+                       '1 1 1 1 1 0 0 0 0 1 1 1 1 1 1 1 0 0 0 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 1 1 1 0 0 0 1 1 1 0 0 0 0 0 1 '
+                       '0 0 0 0 1 1 0 0 0 0 0 1 1 0 1 1 0 0 0 0 0 1 1 0'),
+}
+# the one-drum patches' own arrays (the owner's .nki files): the order above, checked
+ONE_DRUM_KEYS = {
+ 'Percussion - Drums - Low - Bass Drum': [48, 52, 55, 61, 59, 72, 41],
+ 'Percussion - Drums - Low - Field Drum': [48, 52, 55, 59, 49, 66, 41, 43],
+ 'Percussion - Drums - Low - Toms': [48, 53, 59, 64, 69, 84, 86, 88, 89, 91, 96, 98, 100, 101, 103],
+ 'Percussion - Unpitched - Metal - Tam Tam': [48, 50, 61, 41, 43, 72, 89],
+}
+for _p, _keys in ONE_DRUM_KEYS.items():
+    (_d,) = PERCUSSION_HITS[_p]['drums']
+    assert [h['key'] for h in techniqueOrder(_d['hits'])] == _keys, _p
+NKI_GROUPS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_groups.json'),
+                            encoding='utf-8'))
+def groupOrder(patch):
+    tops = []
+    for g in NKI_GROUPS[patch]:
+        if not g[0].startswith((' ', '@')) and g[0] not in tops:
+            tops.append(g[0])
+    return tops
+def techniques(drums):
+    """[(drum, [hits in the script's order])] -> [(name, key or None)], one per array element"""
+    return [(_hitName(d, h['name']), h['key']) for d, hits in drums for h in techniqueOrder(hits)]
+allOn = []                                  # (patch name, .nki, [(name, key at the defaults or None)])
+for kit in PERCUSSION:
+    if kit not in KIT_ARRAYS:
+        for drum in SINGLES[kit]:            # (nothing off: nothing to switch on)
+            assert all(h['key'] is not None for h in PERCUSSION_HITS[f'Percussion - {kit} - {drum}']['drums'][0]['hits'])
+        continue
+    single = {d.lower(): d for d in SINGLES[kit]}
+    drums = []
+    for g in groupOrder(kit):
+        d = single[g.lower()]
+        (e,) = PERCUSSION_HITS[f'Percussion - {kit} - {d}']['drums']
+        drums.append((e['drum'], e['hits']))
+    assert len(drums) == len(SINGLES[kit]), kit
+    t = techniques(drums)
+    keys = [int(k) for k in KIT_ARRAYS[kit][0].split()]
+    on = [int(k) for k in KIT_ARRAYS[kit][1].split()]
+    assert len(keys) == len(on) and keys[-1] == 0 and on[-1] == 0 and len(keys) <= len(t) + 1, kit
+    keys += [0] * (len(t) + 1 - len(keys))
+    on += [0] * (len(t) + 1 - len(on))
+    assert not any(keys[len(t):]) and not any(on[len(t):]), kit
+    # (on where it has a key; on at key 0 twice; the keys those of HITS's on hits)
+    assert all(bool(k) <= bool(o) for k, o in zip(keys, on)), kit
+    assert {k for k in keys if k} == {k for k, _, o in HITS[kit] if o}, (kit, sorted({k for k in keys if k} ^ {k for k, _, o in HITS[kit] if o}))
+    allOn.append((kit, nkiByName[kit.lower()], [(n, keys[i] or None) for i, (n, _) in enumerate(t)]))
+for name in sorted(p for p in PERCUSSION_HITS if p.startswith('Ensembles - ')):
+    drums = [(d['drum'], d['hits']) for d in PERCUSSION_HITS[name]['drums']]
+    assert [d for d, _ in drums] == groupOrder(name), name
+    t = techniques(drums)
+    if all(k is not None for _, k in t):
+        continue                            # (Snare ensemble: every technique on)
+    allOn.append((name, nkiByName[name.lower()], t))
+out.append('  <!-- every technique switched on (off ones on free keys), to measure them: not chosen by notation -->')
+for name, nki, t in allOn:
+    used = {k for _, k in t if k}
+    free = [k for k in list(range(1, 36)) + list(range(97, 128)) if k not in used]
+    assert len(free) >= sum(1 for _, k in t if not k), name
+    free.reverse()
+    keys = [k if k else free.pop() for _, k in t]
+    setup = '%c2lsa=' + ' '.join(['1'] * len(t) + ['0']) + ';%4jwcn=' + ' '.join(str(k) for k in keys + [0])
+    pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
+    out.append(f'  <Patch name={q(name + " (all on)")} nki={q(nki)} setup={q(setup)}{pitch}>')
+    out.append(f'    <!-- {sum(1 for _, k in t if not k)} of {len(t)} techniques switched on: '
+               + ', '.join(f'{n} {k}' for (n, d), k in zip(t, keys) if not d) + ' -->')
+    for (n, _), k in zip(t, keys):
+        out.append(f'    <Drum key="{k}" name={q(n)}/>')
+    out.append('  </Patch>')
 out.append('</SoundLibrary>')
 _ensembles = {p for p in PERCUSSION_HITS if p.startswith('Ensembles - ')}
 assert scannedUsed == set(SCANNED) | set(SCANNED_KEYS) | _ensembles, (set(SCANNED) | set(SCANNED_KEYS) | _ensembles) - scannedUsed
