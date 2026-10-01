@@ -1296,8 +1296,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
                   // patch). Returns that note (nullptr: not a transition: a slur's first note, the note after its
-                  // end, the same key struck again) and the earliest utick the note may start: half way into
-                  // it, not before the chunk or the pass
+                  // end, the same key struck again) and the earliest utick the note may start: up to half
+                  // way into it (below), not before the chunk or the pass
                   auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest) -> const Note* {
                         if (!c || c.base != "legato")
                               return nullptr;
@@ -1325,8 +1325,17 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.base != "legato" || pc.patch != c.patch)
                                     continue;
+                              // the note before loses at most a share of its length in time: none up to 125 ms,
+                              // rising linearly to half at 250 ms and longer. Measured with SSO (2026-09-30): the
+                              // owner's cellos, sixteenths at 110 (136 ms) under 4-note slurs, went uneven when
+                              // shifted (half: a 5.9 dB spread over the slur's four notes, a quarter: 4.2, on the
+                              // beat: 1.1); eighths at 120 (250 ms) stay as even shifted by half as on the beat,
+                              // and their pitch lands 58 ms after the beat instead of 123 (a quarter) or 183
                               const int start = fc->tick().ticks() + tickOffset;
-                              *earliest = std::max({ start + (utick - start) / 2, libChunkStart, (*rs)->utick });
+                              const qreal t1 = score->utick2utime(utick);
+                              const qreal len = t1 - score->utick2utime(start);
+                              const int cap = score->utime2utick(t1 - qBound(0.0, (len - 0.125) / 0.25, 0.5) * len);
+                              *earliest = std::max({ start, cap, libChunkStart, (*rs)->utick });
                               return first;
                               }
                         return nullptr;
