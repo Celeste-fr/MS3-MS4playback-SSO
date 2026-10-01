@@ -190,7 +190,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 - `tst_soundlibrary`: 53 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-01); the skips need inputs
   (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the owner's files).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 7 passed, `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 8 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31 passed, `tst_keysig` 8 passed
   (2026-10-01). `tst_tuning` (13), `tst_tempochange`, `tst_phrasemark`, `tst_playability`,
   `tst_timesig::removeRedundant`: passed when last run on their branches.

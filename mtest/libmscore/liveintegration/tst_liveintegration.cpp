@@ -1744,7 +1744,7 @@ void TestLiveIntegration::liveSetWrite()
       // over two stores: "Lanes" and "Lanes2", each at most LINK_STORE_ATOMS atoms
       t.linkLanes[0].events.resize(20000);
       const QByteArray two = linkBlob(9001, &t, &kept);
-      QVERIFY(kept && two.contains("\"Lanes2\" : [ \"msl-lanes\", 1, ") && !two.contains("\"Lanes3\""));
+      QVERIFY(kept && two.contains("\"Lanes2\" : [ \"msl-lanes\", 2, ") && !two.contains("\"Lanes3\""));
       }
       // track names = the clips' without "MuseScore: " (the device's rule)
       for (bool main : { true, false })
