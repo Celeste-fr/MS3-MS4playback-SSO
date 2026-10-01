@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Reads sweep renders (make_sweep_scores.py's scores through MuseScore --verify-playback --verify-wav with SSO):
+when each note is heard against its written time.
+
+    analyze_sweep.py <Sweep X.notes.json> <the part's "library.wav"> [--json out.json] [--label name]
+
+  L (slurred, not the first of its slur)  arriveMs: when the new pitch takes over from the one before (after
+        the old one led by 3 dB for 20 ms, the energy of the harmonics only the new pitch has passes that of those only
+        the old one has, for 20 ms; 4096-point frames every 5 ms, their centres; 8192 under 120 Hz), from the written
+        time
+  H, S and a slur's first note  onsetMs: the first time the perceived loudness (loudness.perceived_envelope) is
+        within 15 dB of the note's peak (and onset10Ms / onset20Ms); S also endMs: the last time within 10 / 15 dB
+        of the peak before the next note (from the written time; against the written length)
+Prints per section, register and length the median and the 10-90 % range; --json keeps every note.
+"""
+import argparse
+import json
+import statistics
+
+import numpy as np
+import soundfile as sf
+
+from loudness import perceived_envelope
+
+
+HOP = [5.0]   # ms per envelope value (perceived_envelope's hop_ms)
+
+
+def env_at(env, first, t):
+    return int(round((t * 1000 - first) / HOP[0]))
+
+
+def at_ms(first, i):
+    return (first + HOP[0] * i) / 1000
+
+
+def onset_of(env, first, t0, t1):
+    a, b = max(0, env_at(env, first, t0)), min(len(env), env_at(env, first, t1))
+    if b <= a:
+        return None
+    seg = env[a:b]
+    k = int(np.argmax(seg))
+    peak = seg[k]
+    out = {}
+    for d in (20, 15, 10):
+        i = int(np.argmax(seg[:k + 1] >= peak - d))
+        out[d] = at_ms(first, a + i)
+    return peak, at_ms(first, a + k), out
+
+
+def end_of(env, first, peak_t, peak, t1, drops=(10, 15)):
+    a, b = env_at(env, first, peak_t), min(len(env), env_at(env, first, t1))
+    out = {}
+    for d in drops:
+        idx = np.nonzero(env[a:b] >= peak - d)[0]
+        out[d] = at_ms(first, a + idx[-1] + 1) if len(idx) else None
+    return out
+
+
+def unique_harmonics(f, other, top):
+    hs = [h * f for h in range(1, 41) if h * f < top]
+    os_ = [h * other for h in range(1, 81) if h * other < top * 1.1]
+    return [x for x in hs if all(abs(x / o - 1) > 0.03 for o in os_)][:12]
+
+
+def arrival(x, sr, t_written, f_old, f_new, t_from, t_to):
+    N = 8192 if min(f_old, f_new) < 120 else 4096
+    hop = int(sr * 0.005)
+    top = min(8000.0, sr * 0.45)
+    hn, ho = unique_harmonics(f_new, f_old, top), unique_harmonics(f_old, f_new, top)
+    if not hn or not ho:
+        return None
+    freqs = np.fft.rfftfreq(N, 1 / sr)
+    def bins(hs):
+        return [np.nonzero(np.abs(freqs / h - 1) <= 0.015)[0] for h in hs]
+    bn, bo = bins(hn), bins(ho)
+    win = np.hanning(N)
+    start = max(0, int(t_from * sr) - N // 2)
+    stop = min(len(x) - N, int(t_to * sr) - N // 2)
+    run = 0
+    old = 0       # (the old pitch heard first: frames before it are another note's)
+    for s in range(start, stop, hop):
+        p = np.abs(np.fft.rfft(x[s:s + N] * win)) ** 2
+        en = sum(p[b].max() for b in bn if len(b))
+        eo = sum(p[b].max() for b in bo if len(b))
+        if old < 4:
+            old = old + 1 if eo > 2 * en else 0
+            continue
+        if en > eo:
+            run += 1
+            if run == 4:
+                return (s - 3 * hop + N // 2) / sr - t_written
+        else:
+            run = 0
+    return None
+
+
+def hz(p):
+    return 440.0 * 2 ** ((p - 69) / 12)
+
+
+def analyse(meta, wav):
+    x, sr = sf.read(wav, always_2d=True)
+    m = x.mean(axis=1)
+    env, first, HOP[0] = perceived_envelope(x, sr)
+    notes = meta["notes"]
+    rows = []
+    for i, n in enumerate(notes):
+        t = n["time"]
+        nxt = notes[i + 1]["time"] if i + 1 < len(notes) else t + n["seconds"] + 4
+        prev = notes[i - 1] if i else None
+        r = dict(n)
+        if n["section"] == "L" and not n["first"]:
+            a = arrival(m, sr, t, hz(prev["pitch"]), hz(n["pitch"]), max(t - 0.45, prev["time"] - 0.15), t + min(0.9, n["seconds"] + 0.6))
+            r["arriveMs"] = None if a is None else round(a * 1000)
+            r["interval"] = n["pitch"] - prev["pitch"]
+            r["before"] = prev["seconds"]
+        else:
+            o = onset_of(env, first, t - 0.4, min(nxt, t + 1.5))
+            if o:
+                peak, peak_t, on = o
+                r["onsetMs"] = round((on[15] - t) * 1000)
+                r["onset10Ms"] = round((on[10] - t) * 1000)
+                r["onset20Ms"] = round((on[20] - t) * 1000)
+                r["peakMs"] = round((peak_t - t) * 1000)
+                if n["section"] == "S":
+                    e = end_of(env, first, peak_t, peak, nxt - 0.05)
+                    r["end10Ms"] = None if e[10] is None else round((e[10] - t) * 1000)
+                    r["end15Ms"] = None if e[15] is None else round((e[15] - t) * 1000)
+        rows.append(r)
+    return rows
+
+
+def summary(rows, label=""):
+    def stat(xs):
+        xs = sorted(x for x in xs if x is not None)
+        if not xs:
+            return "-"
+        q = lambda f: xs[min(len(xs) - 1, int(f * len(xs)))]
+        return f"{statistics.median(xs):+.0f} ({q(0.1):+.0f}..{q(0.9):+.0f}, n={len(xs)})"
+    groups = {}
+    for r in rows:
+        if r["section"] == "L":
+            key = ("L arrive", r["register"], f"{r['seconds']:g}s" + (" first(onset)" if r["first"] else ""))
+            val = r.get("onsetMs") if r["first"] else r.get("arriveMs")
+        elif r["section"] == "H":
+            key = ("H onset-15", r["register"], f"{r['dynamic']} {r['technique']}".strip())
+            val = r.get("onsetMs")
+        else:
+            key = ("S onset-15", r["register"], f"{r.get('mark')} {r['seconds']:g}s")
+            val = r.get("onsetMs")
+        groups.setdefault(key, []).append(val)
+        if r["section"] == "S":
+            groups.setdefault(("S end-10 minus written", r["register"], f"{r.get('mark')} {r['seconds']:g}s"), []).append(
+                None if r.get("end10Ms") is None else r["end10Ms"] - r["seconds"] * 1000)
+    lines = []
+    for key in sorted(groups):
+        lines.append(f"{label}  {key[0]:24s} {key[1]:5s} {key[2]:22s} {stat(groups[key])}")
+    missing = sum(1 for r in rows if r["section"] == "L" and not r["first"] and r.get("arriveMs") is None)
+    lines.append(f"{label}  L transitions not found: {missing}")
+    return "\n".join(lines)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("notes")
+    ap.add_argument("wav")
+    ap.add_argument("--json")
+    ap.add_argument("--label", default="")
+    a = ap.parse_args()
+    meta = json.load(open(a.notes, encoding="utf-8"))
+    rows = analyse(meta, a.wav)
+    print(summary(rows, a.label or meta["part"]))
+    if a.json:
+        json.dump(dict(part=meta["part"], instrument=meta["instrument"], notes=rows), open(a.json, "w"), indent=0)
+
+
+if __name__ == "__main__":
+    main()
