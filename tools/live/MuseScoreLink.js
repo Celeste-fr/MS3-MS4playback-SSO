@@ -204,7 +204,7 @@ function openPort() {
 
 // the Port box ("port 9001")
 function setPort(n) {
-      n = Math.floor(num(n));
+      n = Math.round(num(n));             // (a Float parameter in Live: 9001.0)
       if (!(n > 1023 && n < 65535) || n === udpPort)
             return;
       udpPort = n;

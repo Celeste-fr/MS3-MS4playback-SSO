@@ -140,11 +140,14 @@ def build(script):
     # --- the face: title, port, Resync, status
     p.box("comment", "MuseScore Link", 1, 0, (650, 30, 150, 20), presentation=1,
           presentation_rect=[6, 4, 150, 20], fontsize=12.0, fontface=1)
+    # a Float parameter shown as a whole number (unitstyle 0): Live's Int parameters have 256 steps
+    # (0-255 from the minimum), so an Int port from 1024 could reach 1279 at most -- 9001 became 1279 and
+    # the device never heard MuseScore (seen in Live 12.2 on the test VM, 2026-09-30)
     port = p.box("live.numbox", None, 1, 2, (650, 60, 50, 15), outlettype=["", "float"],
                  presentation=1, presentation_rect=[160, 6, 50, 15], varname="Port",
                  parameter_enable=1,
                  saved_attribute_attributes={"valueof": {
-                     "parameter_longname": "Port", "parameter_shortname": "Port", "parameter_type": 1,
+                     "parameter_longname": "Port", "parameter_shortname": "Port", "parameter_type": 0,
                      "parameter_mmin": 1024, "parameter_mmax": 65000, "parameter_initial_enable": 1,
                      "parameter_initial": [9001], "parameter_unitstyle": 0, "parameter_invisible": 1}})
     p.box("comment", "UDP port", 1, 0, (705, 60, 60, 18), presentation=1, presentation_rect=[212, 5, 60, 18])

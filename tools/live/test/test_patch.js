@@ -242,6 +242,21 @@ test("the .amxd: ampf mmmm, meta, ptch with mx@c and the same JSON, its director
       assert.ok(a.toString("latin1", jsonEnd).includes("MuseScore Link.amxd"));
       });
 
+test("Live parameters can hold their range: an Int one has 256 steps, so the port is a Float shown whole, initial 9001", () => {
+      for (const b of patcher.boxes) {
+            const v = b.box.saved_attribute_attributes && b.box.saved_attribute_attributes.valueof;
+            if (!v || v.parameter_type !== 1)
+                  continue;
+            const lo = v.parameter_mmin || 0, hi = v.parameter_mmax === undefined ? 127 : v.parameter_mmax;
+            assert.ok(hi - lo <= 255, v.parameter_longname + ": an Int parameter spans " + (hi - lo + 1) + " values (Live: 256)");
+            }
+      const port = patcher.boxes.find((b) => b.box.varname === "Port").box.saved_attribute_attributes.valueof;
+      assert.strictEqual(port.parameter_type, 0);
+      assert.strictEqual(port.parameter_unitstyle, 0);
+      assert.deepStrictEqual(port.parameter_initial, [9001]);
+      assert.ok(port.parameter_mmin <= 9001 && 9001 <= port.parameter_mmax);
+      });
+
 test("the carrier table is MuseScore's (libmscore/liveclips.cpp)", () => {
       const cpp = fs.readFileSync(path.join(dir, "..", "..", "libmscore", "liveclips.cpp"), "utf8");
       const m = /CARRIER_CCS\[CARRIER_COUNT\] = \{([^}]*)\}/.exec(cpp);
