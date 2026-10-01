@@ -847,13 +847,14 @@ LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file
 # 8 string Performance patches, slurs from 10 / 30 / 50 / 70 / 90 % of the legato sound's range at mf, timed by the
 # two pitches' own harmonics, so octaves don't fold onto the unison as in the grid above): per interval the median over
 # the starting pitches of the 50 % time (midMs: the new pitch's harmonics half way from their level on the first note
-# to that on the second, the crossing the sweep's arrival measures). +12 is not usable (its median 405-680 against
-# 110-205 for -12: the first note's room keeps the lower pitch's odd harmonics, which the upper octave shares), so +12
-# takes -12's: the sweep of build 3f0cda5 heard +12 slurs 121 ms early on the +7 delay (~250), -12 86 ms early, both
+# to that on the second, the crossing the sweep's arrival measures; all 43 Performance patches since b9b3b0c). Octaves
+# are not usable (below: each patch's median of its fourths and fifths); before, the sweep of build 3f0cda5 heard +12 slurs 121 ms early on the +7 delay (~250), -12 86 ms early, both
 # where -12's measured delay puts them. Against the single-pitch grid: Basses 70-160 (were 210-300; the sweep heard
 # Basses' half notes up to 156 ms early), Violins 2 140-175 (230-280; 51-76 early).
 GRID_PITCHES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid_pitches.json'),
                               encoding='utf-8'))
+OCTAVE_UP_EXCESS = {'strings': 60, 'woodwinds': 45, 'brass': 95, None: 60, 'slow': 60}
+SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performance': 45}
 def legatoDelayFromPitches(patch, sound):
     rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
     if not rows:
@@ -862,11 +863,27 @@ def legatoDelayFromPitches(patch, sound):
     for start, interval, leave, mid, arrive, dip in rows:
         if mid >= 0 and interval != 12:
             by.setdefault(interval, []).append(mid)
-    if -12 in by:
-        by[12] = by[-12]
     if not by:
         return None
-    return ' '.join(f'{i:+d}:{int(round(statistics.median(a)))}' for i, a in sorted(by.items()))
+    ms = {i: statistics.median(a) for i, a in by.items()}
+    # Octaves, from the sweeps of e6f44e6 and c27da62 (16 instruments, slurs after notes of 0.5 s and longer, each
+    # arrival taken back to its note-on): -12 arrives where the grid's measured -12 says (median excess +4 ms strings,
+    # +9 woodwinds, +20 brass), so the measured -12 (the grid's +12 reads the first note's room); +12 takes longer than
+    # the patch's fourths and fifths: their median plus the family's excess (sweeps: strings +228, woodwinds +90, brass
+    # +118, but +12 arrivals are themselves hard to time; the coordinator's fit of the two sweeps: +60 / +45 / +95, the
+    # smaller, later choice)
+    large = [ms[i] for i in (-7, -5, 5, 7) if i in ms]
+    if large:
+        if -12 in by:
+            ms[-12] = statistics.median(by[-12])
+        else:
+            ms[-12] = statistics.median(large)
+        ms[12] = statistics.median(large) + OCTAVE_UP_EXCESS[onsetFamily(patch, 'Legato')]
+    # patches the sweeps heard off on every other interval (median over their non-octave slurs of 0.5 s and longer):
+    # Oboe Solo 60 ms late, Violins 2 45 late (the others within -21 ... +23)
+    corr = SWEEP_LEGATO_CORRECTION.get(patch, 0)
+    ms = {i: m + corr for i, m in ms.items()}
+    return ' '.join(f'{i:+d}:{int(round(m))}' for i, m in sorted(ms.items()))
 def legatoDelay(patch, sound, t):
     """the legatoDelay= text of a patch's legato sound (None: not measured)"""
     fromPitches = legatoDelayFromPitches(patch, sound)
@@ -978,9 +995,9 @@ def onsetMs(r, sound):
         return None
     t = r[2][1]
     peak = r[7][1] if len(r) > 7 and r[7] and r[7][1] is not None else None
-    if (onsetFamily('', sound) == 'slow' and peak is not None and peak >= ONSET_RISING_MS
-            and r[2][3] is not None and r[2][3] >= 0):
-        t = r[2][3]
+    # (the -10 dB time for a still-rising swell, 696341d, is not used any more: on these swells it comes 100-600 ms
+    # after the -15 dB time, varying note to note, and the sweep of e6f44e6 heard such notes up to 399 ms early; the
+    # -15 dB time leaves some of them late, 123-223 ms in the sweep of 3f0cda5, which sounds less wrong)
     return max(0, t - ONSET_LATENCY)
 def measuredOnsets(patch, sound):
     rows = MEASURED_ONSET.get(patch, {}).get(sound)
@@ -1019,6 +1036,17 @@ def onset(patch, sound):
         ms = [ratio * f if ratio else onsetFit(family, f) for _, f in full]
     if not family:
         return None
+    if family == 'slow' and isinstance(measured, list):
+        # swells (sul tasto, flautando, harmonics): each semitone's own -15 dB time, no smoothing. Checked against
+        # both sweeps' 30 sul tasto / flautando notes (each note's -15 dB time back to its note-on): this puts them a
+        # median 59 ms after the beat, 21-259, none early; a minimum over +-1 semitone (c27da62) 180 (27-470); a
+        # median of 5: 125 with two 125 ms early; the -12 or -10 dB time 19 / -50 with 6 / 15 notes over 50 ms early
+        smooth = list(ms)
+        points = [(p, m) for (p, _), m in zip(full, smooth)]
+        mid = statistics.median(smooth)
+        if all(abs(m - mid) <= 15 for m in smooth):
+            return str(int(5 * round(mid / 5)))
+        return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, 15))
     smooth = [statistics.median(ms[max(0, i - 3):i + 4]) for i in range(len(ms))]
     points = [(p, m) for (p, _), m in zip(full, smooth)]
     mid = statistics.median(smooth)
