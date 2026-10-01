@@ -67,7 +67,7 @@ class FakeLive {
             for (let n = 0; n < 50; ++n) {
                   let busy = false;
                   for (const d of this.loaded) {
-                        if (d.runScheduled())
+                        if (d.runScheduled(true))
                               busy = true;
                         if (d.api.state().isHub && d.api.state().work.length) {
                               d.api.workStep();
@@ -276,7 +276,11 @@ function loadDevice(live, shared, deviceId) {
                   this.interval = 0;
                   this.repeat = function() { tasks.push(this); };
                   this.cancel = function() { this.cancelled = true; };
-                  this.schedule = function() { if (scheduled.indexOf(this) < 0) scheduled.push(this); };
+                  this.schedule = function(ms) {
+                        this.delay = Number(ms) || 0;
+                        if (scheduled.indexOf(this) < 0)
+                              scheduled.push(this);
+                        };
                   },
             Buffer: function(name) {
                   const b = live.buffers[name] = live.buffers[name] || { size: 0, data: [] };
@@ -324,8 +328,12 @@ function loadDevice(live, shared, deviceId) {
                   },
             call(fn) { return vm.runInContext(fn, ctx); },
             runTasks() { for (const t of tasks) if (!t.cancelled) t.fn(); },
-            runScheduled() {
-                  const l = scheduled.splice(0);
+            // the scheduled Tasks (a delayed one only with all: settle() lets the time pass)
+            runScheduled(all) {
+                  const l = [];
+                  for (let i = scheduled.length - 1; i >= 0; --i)
+                        if (all || !scheduled[i].delay)
+                              l.unshift(scheduled.splice(i, 1)[0]);
                   for (const t of l)
                         if (!t.cancelled)
                               t.fn();

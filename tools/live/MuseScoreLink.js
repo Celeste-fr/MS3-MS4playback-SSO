@@ -127,13 +127,16 @@ var paramTask = null;
 var saved = null;             // { length (beats), routes: { key: { hash, lanes: [{ title, pid, ev }] } } }
 var savedSerial = 0;          // counts the values the set gave back (an entry's serial "saved<n>")
 var SAVED_TAG = "msl-lanes";
-var SAVED_VERSION = 1;
+var SAVED_VERSION = 2;                  // 1: (time value) pairs; 2: pairs and runs (packLane)
+var STORE_DELAY_MS = 2000;              // the stores are set once MuseScore's lane edits pause this long (Live: one
+                                        // undo step a pause, not one a keystroke; playback follows at once)
 var STORES = 4;                         // make_device.py STORES: [pattr Lanes], [pattr Lanes2] …
 var STORE_ATOMS = 30000;                // atoms a store at most (Live 12.2 crashed on a [pattr] set to 34010 atoms;
                                         // 24010 copied fine: the test VM, 2026-10-01)
 var parts = [];                         // k -> the atoms store k gave back
 var sentParts = [];                     // k -> the atoms last sent to store k (as JSON: its echo is left alone)
 var keptStatus = "";                    // "" or why the lanes aren't kept in the set
+var storeTask = null;                   // sets the stores STORE_DELAY_MS after the last change
 var restoredLog = [];         // (debugging: the values the set gave back, for the "state" probe)
 
 function now() { return new Date().getTime(); }
@@ -212,6 +215,7 @@ function bang() {
       heartbeat.interval = 1000;
       heartbeat.repeat();
       paramTask = new Task(applyParams, this);
+      storeTask = new Task(flushStores, this);
       elect();
       if (!isHub)
             status("MuseScore Link: on this track (the hub is another copy)");
@@ -303,6 +307,7 @@ function notifydeleted() {
       if (worker) worker.cancel();
       if (reporter) reporter.cancel();
       if (paramTask) paramTask.cancel();
+      if (storeTask) storeTask.cancel();
       }
 
 //---------------------------------------------------------
@@ -1315,6 +1320,14 @@ function keep(e) {
       if (saved && JSON.stringify(saved) === JSON.stringify(next))
             return;
       saved = next;
+      if (storeTask)
+            storeTask.schedule(STORE_DELAY_MS);   // (again: the delay starts over)
+      else
+            flushStores();
+      }
+
+// the lanes into the stores (only the parts that changed)
+function flushStores() {
       var chunks = splitSaved(encodeSaved(saved));
       keptStatus = chunks ? "" : "too many lane events to keep in the Live Set (they play while MuseScore runs)";
       if (!chunks)
@@ -1329,7 +1342,7 @@ function keep(e) {
             }
       }
 
-// the encoded lanes in the stores' parts: each "msl-lanes 1 <stamp> <k> <parts> …" (the stamp: parts of one value);
+// the encoded lanes in the stores' parts: each "msl-lanes 2 <stamp> <k> <parts> …" (the stamp: parts of one value);
 // null: too long
 function splitSaved(a) {
       var data = a.slice(2), n = Math.max(1, Math.ceil(data.length / (STORE_ATOMS - 5)));
@@ -1342,8 +1355,8 @@ function splitSaved(a) {
       }
 
 // the saved value as atoms (numbers and symbols: no JSON symbol to intern in Max at each change):
-//   msl-lanes 1 <length beats> <routes> then per route: <key> <hash> <lanes>, per lane: <title> <pid> <pairs>
-//   (time value) × pairs
+//   msl-lanes 2 <length beats> <routes> then per route: <key> <hash> <lanes>, per lane: <title> <pid> <atoms>
+//   then the lane's events packed (packLane) in <atoms> atoms (version 1: <pairs>, then (time value) × pairs)
 function encodeSaved(sv) {
       var a = [SAVED_TAG, SAVED_VERSION, sv ? num(sv.length) || 0 : 0];
       var keys = [];
@@ -1356,18 +1369,93 @@ function encodeSaved(sv) {
             a.push(keys[i], num(r.hash) || 0, r.lanes.length);
             for (var l = 0; l < r.lanes.length; ++l) {
                   var lane = r.lanes[l];
-                  a.push(str(lane.title), lane.pid === undefined ? -1 : num(lane.pid), Math.floor(lane.ev.length / 2));
-                  for (var j = 0; j + 1 < lane.ev.length; j += 2)
-                        a.push(num(lane.ev[j]), num(lane.ev[j + 1]));
+                  var packed = packLane(lane.ev);
+                  a.push(str(lane.title), lane.pid === undefined ? -1 : num(lane.pid), packed.length);
+                  for (var j = 0; j < packed.length; ++j)
+                        a.push(packed[j]);
                   }
             }
       return a;
       }
 
+// a lane's events (time value …, as MuseScore sends them: a point, then a ramp's steps every 30 ticks as far as
+// the value moves by 0.001) in fewer atoms: an event "time value" (time >= 0), or a run of m >= 3 evenly spaced
+// steps "-m t1 v1 tm vm vh": step k (0 … m-1) at round(t1 + k (tm - t1) / (m - 1)), its value on the parabola
+// through v1 (k = 0), vh (k = h = floor((m - 1) / 2)) and vm (k = m - 1). A straight ramp is one run, a curved one
+// one or a few. A run is taken while each step's value is within PACK_DV of the original, and its time within 2
+// units (0.26 ms at 120 bpm) of it unless the step itself moves by no more than PACK_DV (a slow ramp's 0.001 steps
+// come at uneven times): what plays is MuseScore's staircase to within 0.0015.
+// livesetwriter.cpp packLane does the same (Create Live Set)
+var PACK_DV = 0.0015;
+var PACK_MAX = 4096;                    // steps a run at most
+function runValue(k, m, v1, vh, vm) {
+      var h = Math.floor((m - 1) / 2), e = m - 1;
+      if (h === 0)
+            return v1 + k * (vm - v1) / e;
+      return v1 * (k - h) * (k - e) / (h * e) - vh * k * (k - e) / (h * (e - h)) + vm * k * (k - h) / (e * (e - h));
+      }
+function runFits(ev, i, j) {
+      var m = j - i + 1, t1 = num(ev[2 * i]), tm = num(ev[2 * j]);
+      if (!(tm > t1))
+            return false;
+      var v1 = num(ev[2 * i + 1]), vm = num(ev[2 * j + 1]), vh = num(ev[2 * (i + Math.floor((m - 1) / 2)) + 1]);
+      for (var k = 1; k < m - 1; ++k) {
+            var t = Math.round(t1 + k * (tm - t1) / (m - 1)), o = num(ev[2 * (i + k) + 1]);
+            if (Math.abs(runValue(k, m, v1, vh, vm) - o) > PACK_DV)
+                  return false;
+            if (Math.abs(t - num(ev[2 * (i + k)])) > 2 && Math.abs(o - num(ev[2 * (i + k) - 1])) > PACK_DV)
+                  return false;
+            }
+      return true;
+      }
+function packLane(ev) {
+      var n = Math.floor(ev.length / 2), out = [], i = 0;
+      while (i < n) {
+            var j = i + 2, best = -1;
+            while (j < n && j - i < PACK_MAX && runFits(ev, i, j)) {
+                  best = j;
+                  ++j;
+                  }
+            if (best >= 0) {
+                  var m = best - i + 1;
+                  out.push(-m, num(ev[2 * i]), num(ev[2 * i + 1]), num(ev[2 * best]), num(ev[2 * best + 1]),
+                           num(ev[2 * (i + Math.floor((m - 1) / 2)) + 1]));
+                  i = best + 1;
+                  }
+            else {
+                  out.push(num(ev[2 * i]), num(ev[2 * i + 1]));
+                  ++i;
+                  }
+            }
+      return out;
+      }
+function unpackLane(a) {
+      var ev = [], p = 0;
+      while (p < a.length) {
+            var x = num(a[p]);
+            if (x >= 0) {
+                  if (p + 1 >= a.length)
+                        return null;
+                  ev.push(x, num(a[p + 1]));
+                  p += 2;
+                  continue;
+                  }
+            var m = -x;
+            if (p + 5 >= a.length || m < 3)
+                  return null;
+            var t1 = num(a[p + 1]), v1 = num(a[p + 2]), tm = num(a[p + 3]), vm = num(a[p + 4]), vh = num(a[p + 5]);
+            for (var k = 0; k < m; ++k)
+                  ev.push(Math.round(t1 + k * (tm - t1) / (m - 1)), runValue(k, m, v1, vh, vm));
+            p += 6;
+            }
+      return ev;
+      }
+
 // the atoms back (null: not this format, or cut short)
 function decodeSaved(a) {
-      if (!a || a.length < 4 || str(a[0]) !== SAVED_TAG || num(a[1]) !== SAVED_VERSION)
+      if (!a || a.length < 4 || str(a[0]) !== SAVED_TAG || !(num(a[1]) === 1 || num(a[1]) === 2))
             return null;
+      var version = num(a[1]);
       var sv = { length: num(a[2]) || 0, routes: {} };
       var p = 4, n = num(a[3]);
       for (var i = 0; i < n; ++i) {
@@ -1378,13 +1466,16 @@ function decodeSaved(a) {
             for (var l = 0; l < lanes; ++l) {
                   if (p + 3 > a.length)
                         return null;
-                  var lane = { title: str(a[p]), pid: num(a[p + 1]), ev: [] }, pairs = num(a[p + 2]);
+                  var lane = { title: str(a[p]), pid: num(a[p + 1]), ev: [] }, count = num(a[p + 2]);
                   p += 3;
-                  if (p + 2 * pairs > a.length)
+                  if (version === 1)
+                        count *= 2;           // (pairs)
+                  if (p + count > a.length)
                         return null;
-                  for (var j = 0; j < 2 * pairs; ++j)
-                        lane.ev.push(num(a[p + j]));
-                  p += 2 * pairs;
+                  lane.ev = version === 1 ? a.slice(p, p + count).map(num) : unpackLane(a.slice(p, p + count));
+                  if (!lane.ev)
+                        return null;
+                  p += count;
                   route.lanes.push(lane);
                   }
             sv.routes[key] = route;
@@ -1413,7 +1504,7 @@ function restoreSaved(args) {
       sentParts[k] = undefined;
       // the parts of one value: same stamp, 0 … n-1
       var p0 = parts[0];
-      if (!p0 || str(p0[0]) !== SAVED_TAG || num(p0[1]) !== SAVED_VERSION)
+      if (!p0 || str(p0[0]) !== SAVED_TAG || !(num(p0[1]) === 1 || num(p0[1]) === 2))
             return;
       var stamp = num(p0[2]), n = num(p0[4]), data = [];
       if (n === 0) {                          // (nothing kept)
@@ -1430,7 +1521,7 @@ function restoreSaved(args) {
                   return;                     // (another part still to come)
             data = data.concat(pi.slice(5));
             }
-      var sv = decodeSaved([SAVED_TAG, SAVED_VERSION].concat(data));
+      var sv = decodeSaved([SAVED_TAG, num(p0[1])].concat(data));
       saved = sv && Object.keys(sv.routes).length ? sv : null;
       ++savedSerial;
       paramsCheck(true);
@@ -1535,7 +1626,8 @@ if (typeof module !== "undefined")
       module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,
                          findTrack: findTrack, writeSong: writeSong, report: report, hashNotes: hashNotes,
                          checkEdits: checkEdits, edit: edit, looseTitle: looseTitle, applyParams: applyParams,
-                         pollParams: pollParams, restoreSaved: restoreSaved, encodeSaved: encodeSaved,
+                         pollParams: pollParams, restoreSaved: restoreSaved, encodeSaved: encodeSaved, packLane: packLane,
+                         unpackLane: unpackLane, flushStores: flushStores,
                          decodeSaved: decodeSaved, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
                                         edits: edits, slots: slots, bases: bases, waiting: waiting, prefix: prefix,

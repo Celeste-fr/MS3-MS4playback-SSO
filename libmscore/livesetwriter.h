@@ -165,8 +165,10 @@ int timeSignatureId(int numerator, int denominator);
 // this is the one match at a round length; a single example, so unconfirmed (Live finds the file by its path first)
 quint16 fileCrc(const QByteArray& data);
 // the device's saved data (MxDBlob) with its port, as Max writes it
+// a lane's events packed as the device keeps them (MuseScoreLink.js packLane: events and runs of steps)
+std::vector<double> packLane(const std::vector<std::pair<int, float>>& events);
 // the device's saved data (Max's dictionary as JSON, as in the owner's set): its Port, and the track's lanes in its
-// stores "Lanes", "Lanes2" … (MuseScoreLink.js: msl-lanes 1 <stamp> <part> <parts> <length> <routes> …, at most
+// stores "Lanes", "Lanes2" … (MuseScoreLink.js: msl-lanes 2 <stamp> <part> <parts> <length> <routes> …, at most
 // LINK_STORE_ATOMS atoms each, LINK_STORES of them); lanes too long for the stores are left out (*lanesKept false)
 constexpr int LINK_STORES = 4;
 constexpr int LINK_STORE_ATOMS = 30000;

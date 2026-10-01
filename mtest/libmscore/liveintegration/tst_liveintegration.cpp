@@ -1671,13 +1671,29 @@ void TestLiveIntegration::liveSetWrite()
       bool kept = false;
       const QByteArray blob = linkBlob(9001, &t, &kept);
       QVERIFY(kept);
-      const QRegularExpression re("^\\{\r\n\t\"Port\" : \\[ 9001 \\],\r\n\t\"Lanes\" : \\[ \"msl-lanes\", 1, \\d+, 0, 1, 8, 1, "
-                                  "\"0:1\", 4243, 1, \"Vib \\\\\"x\\\\\"\", 1, 2, 0, 0.5, 3840, 1 \\]\r\n\\}\r\n$");
+      const QRegularExpression re("^\\{\r\n\t\"Port\" : \\[ 9001 \\],\r\n\t\"Lanes\" : \\[ \"msl-lanes\", 2, \\d+, 0, 1, 8, 1, "
+                                  "\"0:1\", 4243, 1, \"Vib \\\\\"x\\\\\"\", 1, 4, 0, 0.5, 3840, 1 \\]\r\n\\}\r\n$");
       QVERIFY(blob.endsWith(QByteArray("}\r\n", 3) + QByteArray(1, '\0')));
       QVERIFY2(re.match(QString::fromLatin1(blob.chopped(1))).hasMatch(), blob.constData());
-      // too many points for the 4 stores: no lanes kept, the port as before
+      // a straight ramp's steps: one run (MuseScoreLink.js packLane, test_params.js the same atoms)
+      {
+      std::vector<std::pair<int, float>> ramp;
+      for (int i = 0; i <= 32; ++i)
+            ramp.push_back({ i * 240, float(0.9 - 0.7 * i / 32) });
+      ramp.push_back({ 7680 + 3840, 0.5f });
+      const std::vector<double> p = packLane(ramp);
+      QCOMPARE(int(p.size()), 8);
+      QCOMPARE(p[0], -33.0);
+      QCOMPARE(p[1], 0.0);
+      QCOMPARE(p[3], 7680.0);
+      QCOMPARE(float(p[4]), ramp[32].second);
+      QCOMPARE(p[6], 11520.0);
+      }
+      // too many points for the 4 stores (values nothing packs): no lanes kept, the port as before
+      quint32 seed = 1;
+      auto rnd = [&seed]() { seed = quint32((quint64(seed) * 16807) % 2147483647); return float(seed % 1000) / 1000; };
       for (int i = 0; i < 70000; ++i)
-            t.linkLanes[0].events.push_back({ 7680 + i, 0.25f });
+            t.linkLanes[0].events.push_back({ 7680 + 7 * i + int(seed % 3), rnd() });
       const QByteArray huge = linkBlob(9001, &t, &kept);
       QCOMPARE(huge, linkBlob(9001));
       QVERIFY(!kept);

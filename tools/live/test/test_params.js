@@ -348,7 +348,7 @@ test("the lanes kept in the set: sent to the stores when applied, played from th
       assert.strictEqual(sent.map((m) => m[0]).join(), "0,1,2,3");
       assert.strictEqual(sent[0][1], "msl-lanes");
       assert.strictEqual(sent[0][5], 1);                         // one part
-      assert.strictEqual(JSON.stringify(sent[1].slice(1)), JSON.stringify(["msl-lanes", 1, 0, 1, 0]));
+      assert.strictEqual(JSON.stringify(sent[1].slice(1)), JSON.stringify(["msl-lanes", 2, 0, 1, 0]));
       // the same lanes again: nothing sent; their echo from the stores: left alone
       sendParams(s.hub, 2, "0:1", 111, [{ title: "Vibrato", events: [[2, 0.8], [4, 0.2]] }]);
       s.live.settle();
@@ -370,9 +370,11 @@ test("the lanes kept in the set: sent to the stores when applied, played from th
 
 test("the lanes kept in the set: a long value over several stores, put together only when all parts are there", () => {
       const s = setUp();
-      const many = [];
+      const many = [];                                           // (values nothing packs: 40000 atoms)
+      let seed = 1;
+      const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
       for (let i = 0; i < 20000; ++i)
-            many.push([i / 1000, (i % 7) / 7]);
+            many.push([i / 1000, Math.round(rnd() * 1000) / 1000]);
       sendParams(s.hub, 1, "0:1", 111, [{ title: "Vibrato", events: many }]);
       s.live.settle();
       const sent = stores(s.hub);
@@ -387,15 +389,16 @@ test("the lanes kept in the set: a long value over several stores, put together 
       t.live.settle();
       const sv = t.hub.call("saved");
       assert.strictEqual(sv.routes["0:1"].lanes[0].ev.length, 40000);
+      assert.ok(near(sv.routes["0:1"].lanes[0].ev[1], many[0][1]));
       // too long for the stores: nothing kept (an empty value), the lanes still played
       const u = setUp();
       const huge = [];
       for (let i = 0; i < 70000; ++i)
-            huge.push([i / 1000, (i % 7) / 7]);
+            huge.push([i / 1000, Math.round(rnd() * 1000) / 1000]);
       sendParams(u.hub, 1, "0:1", 111, [{ title: "Vibrato", events: huge }]);
       u.live.settle();
       const last = stores(u.hub).filter((m) => m[0] === 0).pop();
-      assert.strictEqual(JSON.stringify(last.slice(1, 3)), JSON.stringify(["msl-lanes", 1]));
+      assert.strictEqual(JSON.stringify(last.slice(1, 3)), JSON.stringify(["msl-lanes", 2]));
       assert.strictEqual(last[5], 1);
       assert.ok(last.length < 20);
       assert.strictEqual(u.hub.call("keptStatus").indexOf("too many"), 0);
@@ -403,8 +406,8 @@ test("the lanes kept in the set: a long value over several stores, put together 
 
 test("the blob as Create Live Set writes it (livesetwriter.cpp linkBlob, tst_liveintegration): the set plays its lanes", () => {
       // Max's dictionary as in the set; Max gives each store's list to [pattr], which outputs it as "lanes k …"
-      const blob = '{\r\n\t"Port" : [ 9001 ],\r\n\t"Lanes" : [ "msl-lanes", 1, 47975, 0, 1, 8, 1, "0:1", 4243, 1, ' +
-                   '"Vibrato", 1, 2, 0, 0.5, 3840, 1 ]\r\n}\r\n';
+      const blob = '{\r\n\t"Port" : [ 9001 ],\r\n\t"Lanes" : [ "msl-lanes", 2, 47975, 0, 1, 8, 1, "0:1", 4243, 1, ' +
+                   '"Vibrato", 1, 4, 0, 0.5, 3840, 1 ]\r\n}\r\n';
       const d = JSON.parse(blob);
       const t = setUp();
       t.shared.musescore_link["p" + t.vln.id] = undefined;
@@ -413,6 +416,141 @@ test("the blob as Create Live Set writes it (livesetwriter.cpp linkBlob, tst_liv
       const vib = buf(t, "001mslp0");
       assert.ok(near(vib.data[0], 0.5) && near(vib.data[499], 0.5) && near(vib.data[500], 1));
       assert.strictEqual(vib.size, 4001);                         // the song: 8 beats at 120 bpm
+      });
+
+// MuseScore's events for a lane of points as rendermidi plays them (Automation::Lane::events: the points, a ramp's
+// steps every 30 ticks as far as the value moves by 0.001), at 120 bpm: ticks -> units (480 ticks a beat)
+function rendered(points, bend) {
+      const ev = [];
+      let last = null;
+      const put = (tick, v) => {
+            const t = Math.round(tick / 480 * UNITS);
+            if (last !== null && Math.abs(v - last) < 0.001)
+                  return;
+            ev.push(t, v);
+            last = v;
+            };
+      for (let i = 0; i < points.length; ++i) {
+            const [tick, v, ramp] = points[i];
+            put(tick, v);
+            const nx = points[i + 1];
+            if (!ramp || !nx)
+                  continue;
+            for (let t = tick + 30; t < nx[0]; t += 30) {
+                  const x = (t - tick) / (nx[0] - tick), y = bend ? Math.pow(x, 2.5) : x;   // (a curved ramp: some bend)
+                  put(t, Math.round((v + (nx[1] - v) * y) * 1000) / 1000);
+                  }
+            }
+      return ev;
+      }
+
+// the staircase a lane's events play: the value at each unit in [0, end)
+function staircase(ev, end) {
+      const out = new Float64Array(end);
+      let v = 0, j = 0;
+      for (let t = 0; t < end; ++t) {
+            while (j + 1 < ev.length && ev[j] <= t) {
+                  v = ev[j + 1];
+                  j += 2;
+                  }
+            out[t] = v;
+            }
+      return out;
+      }
+
+// the largest difference between two staircases, away from (more than 2 units from) the first's event times
+function worstDiff(ev, back, end) {
+      const a = staircase(ev, end), b = staircase(back, end), near2 = new Uint8Array(end);
+      for (let i = 0; i < ev.length; i += 2)
+            for (let d = -2; d <= 2; ++d)
+                  if (ev[i] + d >= 0 && ev[i] + d < end)
+                        near2[ev[i] + d] = 1;
+      let worst = 0;
+      for (let t = 0; t < end; ++t)
+            if (!near2[t])
+                  worst = Math.max(worst, Math.abs(a[t] - b[t]));
+      return worst;
+      }
+
+test("lanes packed for the set: straight ramps one run each, curves a few; played as MuseScore's staircase to 0.0015-0.003", () => {
+      const s = setUp();
+      const pts = [];
+      for (let b = 0; b < 64; b += 2)                            // a point every 2 beats, ramps up and down
+            pts.push([b * 480, (b / 2) % 2 ? 0.2 : 0.9, true]);
+      for (const bend of [false, true]) {
+            const ev = rendered(pts, bend);
+            const packed = s.hub.api.packLane(ev);
+            const back = s.hub.api.unpackLane(packed);
+            const worst = worstDiff(ev, back, 64 * UNITS);
+            assert.ok(worst <= 0.003 + 1e-9, "worst " + worst);       // (0.0015 at the steps; a slow ramp's step a little early or late)
+            if (!bend)
+                  assert.ok(packed.length <= 32 * 6, packed.length + " atoms for " + ev.length / 2 + " events");
+            else
+                  assert.ok(packed.length < ev.length / 3, packed.length + " atoms for " + ev.length / 2 + " events");
+            }
+      });
+
+test("a 10-minute piece with 10 curved lanes fits the stores and comes back", () => {
+      const s = setUp();
+      // 120 bpm, 10 min = 1200 beats; each lane: a point every 2 beats, curved ramps, a step now and then
+      const lanes = [];
+      for (let l = 0; l < 10; ++l) {
+            const pts = [];
+            for (let b = 0; b < 1200; b += 2)
+                  pts.push([b * 480, ((b * 7 + l * 13) % 10) / 10, (b / 2 + l) % 5 !== 0]);
+            const ev = rendered(pts, l % 2 === 1), events = [];
+            for (let i = 0; i < ev.length; i += 2)
+                  events.push([ev[i] / UNITS, ev[i + 1]]);
+            lanes.push({ title: "Vibrato", events: events });
+            }
+      lanes.forEach((l, i) => { l.title = ["Vibrato", "Mic 1 level"][i % 2] + (i > 1 ? " " + i : ""); });
+      s.hub.message("/ms/song", [2, 120, 1200 * UNITS, 0, 0, 2]);
+      sendParams(s.hub, 1, "0:1", 111, lanes);
+      s.live.settle();
+      const atoms = stores(s.hub).filter((m) => m[1] === "msl-lanes" && m[5] > 0).reduce((n, m) => n + m.length - 1, 0);
+      const raw = lanes.reduce((n, l) => n + 2 * l.events.length, 0);
+      console.log("    10 min x 10 lanes: " + raw + " event atoms -> " + atoms + " stored atoms in " +
+                  stores(s.hub).filter((m) => m[5] > 0).length + " store(s)");
+      assert.strictEqual(s.hub.call("keptStatus"), "");
+      // a duplicated device (the stores' values, no hub entry) has the same lanes
+      const t = setUp();
+      t.shared.musescore_link["p" + t.vln.id] = undefined;
+      for (const m of stores(s.hub))
+            t.hub.message("lanes", m);
+      t.live.settle();
+      const a = s.hub.call("saved").routes["0:1"].lanes, b = t.hub.call("saved").routes["0:1"].lanes;
+      assert.strictEqual(b.length, 10);
+      for (let l = 0; l < 10; ++l) {
+            const worst = worstDiff(a[l].ev, b[l].ev, 1200 * UNITS);
+            assert.ok(worst <= 0.003 + 1e-6, "lane " + l + " worst " + worst);
+            }
+      });
+
+test("the stores are set once MuseScore's edits pause (one Live undo step), playback follows each edit at once", () => {
+      const s = setUp();
+      const before = stores(s.hub).length;
+      for (let g = 1; g <= 5; ++g) {
+            sendParams(s.hub, g, "0:1", 100 + g, [{ title: "Vibrato", events: [[2, g / 10]] }]);
+            s.hub.work();
+            s.hub.runScheduled();                                  // (the copy's work: the table; not the store's delay)
+            assert.ok(near(buf(s, "001mslp0").data[1000], g / 10));      // (played at once)
+            }
+      assert.strictEqual(stores(s.hub).length, before);           // nothing stored yet
+      s.live.settle();                                             // (the delay's Task)
+      const now = stores(s.hub).slice(before);
+      assert.ok(now.length >= 1 && now.length <= 4);
+      assert.ok(near(s.hub.call("saved").routes["0:1"].lanes[0].ev[1], 0.5));
+      });
+
+test("a straight ramp's steps pack to one run, as livesetwriter.cpp packLane does (tst_liveintegration)", () => {
+      const s = setUp(), ev = [];
+      for (let i = 0; i <= 32; ++i)
+            ev.push(i * 240, Math.fround(0.9 - 0.7 * i / 32));
+      ev.push(7680 + 3840, Math.fround(0.5));
+      const p = s.hub.api.packLane(ev);
+      assert.strictEqual(p.length, 8);
+      assert.deepStrictEqual([p[0], p[1], p[3], p[6]], [-33, 0, 7680, 11520]);
+      assert.strictEqual(p[4], ev[65]);
       });
 
 console.log(failures ? failures + " failed" : "all passed");

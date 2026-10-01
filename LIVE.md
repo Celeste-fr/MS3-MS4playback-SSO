@@ -433,16 +433,29 @@ build of this branch).
 ### Without MuseScore: the lanes kept in the set (2026-10-01)
 
 Each copy of the device keeps its track's lanes, as last applied, in `[pattr Lanes]` … `[pattr Lanes4]`: Live parameters
-of type Blob, *Stored Only*, saved in the device's `MxDBlob` next to `Port` (atoms only: `msl-lanes 1 <stamp> <part>
-<parts> <length> <routes>` then per route `<key> <hash> <lanes>`, per lane `<title> <id> <pairs> (time value)…`; at most
-30000 atoms a store). When the set opens the stores give the lanes back and, as long as MuseScore hasn't sent its own for
-the track, the device plays them. **Create Live Set** writes them into the set (`LiveSetWriter::linkBlob`); the device
-updates them whenever MuseScore's lanes change (one Live undo step, "Change in MuseScore Link"). Lanes needing more than
-the 4 stores are not kept (a note in the report; they still play while MuseScore runs).
+of type Blob, *Stored Only*, saved in the device's `MxDBlob` next to `Port` (atoms only: `msl-lanes 2 <stamp> <part>
+<parts> <length> <routes>` then per route `<key> <hash> <lanes>`, per lane `<title> <id> <atoms>` and its events packed;
+at most 30000 atoms a store). When the set opens the stores give the lanes back, the device rebuilds its tables from
+them and, as long as MuseScore hasn't sent its own for the track, plays them. **Create Live Set** writes them into the set
+(`LiveSetWriter::linkBlob`); the device stores MuseScore's lanes **2 s after its edits pause** (one Live undo step,
+"Change in MuseScore Link", per pause; playback follows each edit at once). Lanes needing more than the 4 stores are not
+kept (a note in the report; they still play while MuseScore runs).
+
+**Packed** (`packLane`, the same in `MuseScoreLink.js` and `livesetwriter.cpp`, checked atom for atom): a lane's events
+are its points and a ramp's steps (every 30 ticks as far as the value moves by 0.001), so a long ramp is hundreds of
+events. Stored: an event `time value`, or a run of m evenly spaced steps `-m t1 v1 tm vm vh` on the parabola through the
+first, middle and last step. A straight ramp is one run, a curved one one to three. Played back it is MuseScore's own
+staircase: each step's value within 0.0015, its time within 2 units (0.26 ms at 120 bpm) or, for a step of no more than
+0.0015, a little earlier or later. (The lane's own points can't be stored instead: repeats and tempo changes are already
+unrolled into the events.) A 10-minute piece with 10 lanes, a point every 2 beats, curved and straight ramps: 300 480
+event atoms → 49 663 stored (2 of the 4 stores) (`test_params.js`; also on the VM: stored, copied to a duplicated device
+whole). Sets saved by the earlier device (`msl-lanes 1`, plain pairs) still load.
 
 Tried in Live 12.2 on the VM: a set with the stores, MuseScore not running, played its Kontakt *Vibrato* lane (read back
 each second along the curve); a duplicated device got the stores' value as last set (Live's own parameter state, which a
-save writes); 4 stores holding 100 010 atoms copied fine. Found on the way: the `v8` box as a Blob parameter
+save writes), the 10-minute data included; five lane updates 0.3 s apart were stored once, and one *Undo* went back to
+the value before them. While MuseScore is connected its lanes win: after a Live *Undo* of the stores the device stores
+MuseScore's lanes again 2 s later (another undo step). Found on the way: the `v8` box as a Blob parameter
 (`getvalueof`/`notifyclients`) is restored from the set but Live never takes its later values (a copy got the old one), so
 the store is `[pattr]`; one `[pattr]` set to 34 010 atoms crashed Live (24 010 were fine). Not tried (Live there can't
 save): reopening a set Live saved. **Owner test** (2 min): play a score with a lane in Live (*Live plays the score*),

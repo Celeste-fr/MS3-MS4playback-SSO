@@ -1339,6 +1339,57 @@ static QByteArray jsonNumber(double v)
       return QByteArray::number(v, 'g', 9);
       }
 
+// a lane's events packed as MuseScoreLink.js packLane does (the same rule, the same atoms): an event "time value",
+// or a run of m >= 3 evenly spaced steps "-m t1 v1 tm vm vh" on the parabola through v1, vh (step floor((m-1)/2)), vm
+static constexpr double PACK_DV = 0.0015;
+static constexpr int PACK_MAX = 4096;
+
+static double runValue(int k, int m, double v1, double vh, double vm)
+      {
+      const double h = (m - 1) / 2, e = m - 1;
+      if (h == 0)
+            return v1 + k * (vm - v1) / e;
+      return v1 * (k - h) * (k - e) / (h * e) - vh * k * (k - e) / (h * (e - h)) + vm * k * (k - h) / (e * (e - h));
+      }
+
+std::vector<double> packLane(const std::vector<std::pair<int, float>>& ev)
+      {
+      // (the values as the device has them: the float the OSC packet carries, as a double)
+      auto fits = [&ev](size_t i, size_t j) {
+            const int m = int(j - i + 1);
+            const double t1 = ev[i].first, tm = ev[j].first;
+            if (!(tm > t1))
+                  return false;
+            const double v1 = ev[i].second, vm = ev[j].second, vh = ev[i + size_t((m - 1) / 2)].second;
+            for (int k = 1; k < m - 1; ++k) {
+                  const double t = std::round(t1 + k * (tm - t1) / (m - 1)), o = ev[i + size_t(k)].second;
+                  if (std::fabs(runValue(k, m, v1, vh, vm) - o) > PACK_DV)
+                        return false;
+                  if (std::fabs(t - ev[i + size_t(k)].first) > 2 && std::fabs(o - double(ev[i + size_t(k) - 1].second)) > PACK_DV)
+                        return false;
+                  }
+            return true;
+            };
+      std::vector<double> out;
+      const size_t n = ev.size();
+      for (size_t i = 0; i < n;) {
+            long best = -1;
+            for (size_t j = i + 2; j < n && j - i < size_t(PACK_MAX) && fits(i, j); ++j)
+                  best = long(j);
+            if (best >= 0) {
+                  const size_t b = size_t(best), m = b - i + 1;
+                  out.insert(out.end(), { -double(m), double(ev[i].first), double(ev[i].second), double(ev[b].first),
+                                          double(ev[b].second), double(ev[i + (m - 1) / 2].second) });
+                  i = b + 1;
+                  }
+            else {
+                  out.insert(out.end(), { double(ev[i].first), double(ev[i].second) });
+                  ++i;
+                  }
+            }
+      return out;
+      }
+
 QByteArray linkBlob(int port, const Track* track, bool* lanesKept)
       {
       QByteArray out = QByteArray("{\r\n\t\"Port\" : [ ") + QByteArray::number(port) + " ]";
@@ -1352,11 +1403,10 @@ QByteArray linkBlob(int port, const Track* track, bool* lanesKept)
             for (const Track::LinkLane& l : track->linkLanes) {
                   data.push_back(jsonString(l.title));
                   data.push_back(QByteArray::number(qint64(l.id)));
-                  data.push_back(QByteArray::number(int(l.events.size())));
-                  for (const auto& e : l.events) {
-                        data.push_back(QByteArray::number(e.first));
-                        data.push_back(jsonNumber(double(e.second)));
-                        }
+                  const std::vector<double> packed = packLane(l.events);
+                  data.push_back(QByteArray::number(int(packed.size())));
+                  for (double x : packed)
+                        data.push_back(jsonNumber(x));
                   }
             const size_t per = LINK_STORE_ATOMS - 5;
             const size_t parts = std::max<size_t>(1, (data.size() + per - 1) / per);
@@ -1367,7 +1417,7 @@ QByteArray linkBlob(int port, const Track* track, bool* lanesKept)
             else {
                   const QByteArray stamp = QByteArray::number(qHash(track->routeKey) % 1000000000u);
                   for (size_t k = 0; k < parts; ++k) {
-                        out += ",\r\n\t\"" + QByteArray(k ? "Lanes" + QByteArray::number(int(k + 1)) : "Lanes") + "\" : [ \"msl-lanes\", 1, "
+                        out += ",\r\n\t\"" + QByteArray(k ? "Lanes" + QByteArray::number(int(k + 1)) : "Lanes") + "\" : [ \"msl-lanes\", 2, "
                                + stamp + ", " + QByteArray::number(int(k)) + ", " + QByteArray::number(int(parts));
                         for (size_t i = k * per; i < std::min(data.size(), (k + 1) * per); ++i)
                               out += ", " + data[i];
