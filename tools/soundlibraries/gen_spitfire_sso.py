@@ -853,32 +853,34 @@ LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file
 # Basses' half notes up to 156 ms early), Violins 2 140-175 (230-280; 51-76 early).
 GRID_PITCHES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid_pitches.json'),
                               encoding='utf-8'))
-OCTAVE_UP_EXCESS = {'strings': 60, 'woodwinds': 45, 'brass': 95, None: 60, 'slow': 60}
 SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performance': 25}
 def legatoDelayFromPitches(patch, sound):
     rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
     if not rows:
         return None
     by = {}
-    for start, interval, leave, mid, arrive, dip in rows:
-        if mid >= 0 and interval != 12:
-            by.setdefault(interval, []).append(mid)
+    for r in rows:
+        # tMidMs (row[7], measurement branch 42c6117): each frame fitted as a mix of the two notes' own spectra, the
+        # time the new note first carries half the power; it doesn't depend on which harmonics the notes share, so
+        # octaves are measured too (synthetic slurs: within -40 ... +60 ms at every interval and hall level; the
+        # harmonic midMs was 75-320 late at +12, 60-70 early at -12). On the other intervals it agrees with midMs
+        # (median +10 ms). Family medians +12 / -12 / others: strings 350 / 210 / 240, woodwinds 125 / 170 / 140,
+        # brass 130 / 140 / 140: the strings' upward octaves really are ~100 ms slower. Rows without it: midMs.
+        # Only for the octaves: the other intervals keep midMs, which the sweeps confirmed (a289780: strings +24,
+        # woodwinds +9, brass +9 ms; tMid differs from it per patch, Violins 1 +5 by 110 ms, though not on average)
+        if abs(r[1]) == 12:
+            t = r[7] if len(r) > 7 and r[7] is not None and r[7] >= 0 else None
+        else:
+            t = r[3] if r[3] >= 0 else None
+        if t is not None:
+            by.setdefault(r[1], []).append(t)
     if not by:
         return None
     ms = {i: statistics.median(a) for i, a in by.items()}
-    # Octaves, from the sweeps of e6f44e6 and c27da62 (16 instruments, slurs after notes of 0.5 s and longer, each
-    # arrival taken back to its note-on): -12 arrives where the grid's measured -12 says (median excess +4 ms strings,
-    # +9 woodwinds, +20 brass), so the measured -12 (the grid's +12 reads the first note's room); +12 takes longer than
-    # the patch's fourths and fifths: their median plus the family's excess (sweeps: strings +228, woodwinds +90, brass
-    # +118, but +12 arrivals are themselves hard to time; the coordinator's fit of the two sweeps: +60 / +45 / +95, the
-    # smaller, later choice)
     large = [ms[i] for i in (-7, -5, 5, 7) if i in ms]
-    if large:
-        if -12 in by:
-            ms[-12] = statistics.median(by[-12])
-        else:
-            ms[-12] = statistics.median(large)
-        ms[12] = statistics.median(large) + OCTAVE_UP_EXCESS[onsetFamily(patch, 'Legato')]
+    for octave in (-12, 12):
+        if octave not in ms and large:
+            ms[octave] = statistics.median(large)
     # patches the sweeps heard off on every other interval (median over their non-octave slurs of 0.5 s and longer):
     # Oboe Solo 60 ms late, Violins 2 45 late (the others within -21 ... +23); Violins 2 halved to 25 after the sweep
     # of a289780 heard its 2 s and 0.5 s slurs 31-36 ms early with 45

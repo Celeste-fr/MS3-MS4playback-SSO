@@ -347,9 +347,10 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   (`sso_legato_grid_pitches.json`, the rest check's legatopitches part, timed by harmonics; `legatoDelayFromPitches`):
   per interval the median 50 % time over the starting pitches (the crossing the sweep's arrival measures; strings
   210-240 ms, woodwinds 120-130, brass 130). Octaves are not usable (+12 reads 375-760, the first note's room; -12
-  70-160): -12 the measured one (the sweeps of e6f44e6 / c27da62, slurs after notes of 0.5 s and longer taken back to
-  their note-on, put -12 within +4 / +9 / +20 ms of it for strings / woodwinds / brass), +12 the patch's median of -7,
-  -5, +5, +7 plus 60 / 45 / 95 ms; Oboe Solo +60 and Violins 2 +25 ms on every interval (the sweeps' median lateness; Violins 2 halved from 45 after the sweep of a289780). And
+  70-160): since 42c6117's re-measurement both octaves from `tMidMs` (row[7]: each frame fitted as a mix of the two
+  notes' own spectra, the new note's 50 % power share; synthetic check within -40 ... +60 ms), the other intervals
+  keep midMs (confirmed by the sweeps). Family medians +12 / -12: strings 350 / 210, woodwinds 125 / 170, brass 130 /
+  140 (a289780's stand-ins put -12 40-90 ms late, winds' and brass +12 50-70 early); Oboe Solo +60 and Violins 2 +25 ms on every interval (the sweeps' median lateness; Violins 2 halved from 45 after the sweep of a289780). And
   `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
   transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
