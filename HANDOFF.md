@@ -1,9 +1,42 @@
-# Handoff: state of the sound library work (2026-09-25)
+# Handoff: state of the sound library work (updated 2026-10-01)
 
-The work so far was done in a claude.ai cloud session, which has ended. This file tells the next
-agent (Claude Code on the owner's local machine) where things stand. Read `CLAUDE.md` first: it
-describes the architecture, the build, the articulation check and every run the owner has
-made. The commit messages on this branch explain each step in detail.
+Read `CLAUDE.md` first: it describes the architecture, the build and every run the owner has made. The commit
+messages on each branch explain each step in detail. The sections below the first three are older notes, kept for
+their history; where they disagree with "Start here", "Start here" is right.
+
+## Start here (2026-10-01: the cloud session ends, the work moves to the owner's Debian VM)
+
+- **Branch**: `claude/intelligent-cray-6pd4o1`, last commit e82a202, everything pushed, `main` merged in on
+  2026-09-30 (341aa78). Work on your own branch; the owner decides what goes to `main` (CLAUDE.md › Branches).
+  To continue this session's conversation itself: `claude --teleport session_01DpUCQZEy2ysGW5HaKShRvm` in a clean
+  clone (same claude.ai account).
+- **Latest Windows build**: run 267, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36783186961
+  (artifact `MuseScore-soundlibrary-win64-eddd1bc`). Windows builds come from `[windows-build]` in a pushed commit
+  message on the branch (`.github/workflows/test_soundlibrary_windows.yml`). Name builds by run number and link.
+- **What runs where**: Kontakt and SSO run only on the owner's Windows PC. The VM (like the cloud container before)
+  can build MuseScore, run the tests with the test synth (`mtest/libmscore/soundlibrary/testsynth`) and read the
+  zips the owner sends back; it can't play SSO. Build steps: CLAUDE.md › Building (Linux container); headless runs
+  with the test synth: CLAUDE.md › Load times (isolated `HOME`, `~/.vst3/mstestsynth.vst3` linked, …).
+- **The owner's direction (2026-09-30)**: "your job is only to collect data". The extraction is done (below); the
+  playback problems it found are listed for whoever builds playback next, not fixed.
+- **Background runs on Windows** (bat files next to the exe, each with its own log in Documents/MuseScore Sound
+  Library Check, supervised: a crash or hang is retried, then that patch left out): `Measure what's left of SSO in
+  background.bat` (dynamics, then timing, of every sound; skips what earlier runs did, as long as their folders are
+  still in Documents/MuseScore Sound Library Check). A run that looks stuck usually isn't: Performance patches take
+  12-16 s each. Hand-backs are zips; read them with `tools/soundlibraries/dynamics_from_check.py` and
+  `timing_from_check.py` (derived numbers only go into the repository: it is public).
+- **Gotcha**: a `.bat.in` line inside `if ( … )` must not contain parentheses (an `echo` with "(…)" closed the block
+  and the window vanished at once, run 266).
+- **Not measured** (the owner asked "is 100% measured?", 2026-10-01; none of it started, the owner to choose):
+  1. each sound at one test pitch only (dynamics and timing across the range not known);
+  2. each sound at the patch's default controls only (mic mix, vibrato, release … : how they change loudness and
+     attack not measured, only that they change the sound);
+  3. parameters tried at 0 and 1 only;
+  4. legato at 3 velocities and 2 intervals (+2, -5) only, on the 42 Performance patches; Horn Solo / Horns a2 -
+     Legato and Oboe Principal - Total Performance not as a slur at all (no map articulation named legato);
+  5. round robins (one note per sound; earlier checks ±1-2 dB);
+  6. percussion techniques that are off at a patch's defaults (no key; needs the switch-on system the owner plans);
+  7. Vibraphone and Curated Tutti - Low Wood String Stab: measured, but no controller matched a control on screen.
 
 ## For the next agent: playback problems the extraction found (2026-09-30; not fixed, the owner: "your job is only to collect data")
 
@@ -49,20 +82,9 @@ All numbers are in `tools/soundlibraries/` (see CLAUDE.md for how each was measu
   (timed as one sound: the run measures a slur only on an articulation whose first technique is legato).
 - **Parameters** measured at 0 and 1 only, not the curve between.
 
-## Where things are
+## Where things were (2026-09-25; superseded by "Start here")
 
-- Branch: `main` (called `ms4-playback` until 2026-09-27), the default branch (the
-  sound-library branch was merged into it and deleted on 2026-09-25). Develop and push there;
-  no pull requests.
-- Latest Windows build: run 11 (commit 6bc3a62). All 10 `tst_soundlibrary` tests passed on
-  Windows. Artifact `MuseScore-soundlibrary-win64`:
-  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36178930191
-- That build has:
-  - the check memory (`checks.json`; *Tick what needs checking*);
-  - the scan of every value 0–127;
-  - *Add a patch…* for patches missing from the map;
-  - the map fixes from the owner's full 42-patch run: Legato 20 is removed from the woodwinds
-    and brass, and trills 70/71 from Trumpets a6.
+- Branch then: `main`; latest Windows build then: run 11 (6bc3a62).
 
 ## Tuning and Ethanol bar 14 (2026-09-26, edb5eec)
 
