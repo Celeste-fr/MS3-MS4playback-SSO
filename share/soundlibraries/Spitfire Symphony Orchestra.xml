@@ -1081,7 +1081,7 @@
   </Instrument>
   <Instrument name="Violins 2 - Performance" with="Violins 2" nki="Instruments/Symphonic Strings/Violins 2 - Performance.nki" setup="$iooxo=3" pitch="74" bend="99.7">
     <Switch type="none"/>
-    <Articulation name="Legato" value="20" techniques="legato long" prefer="long" release="2945" legatoDelay="-12:155 -7:180 -5:300 -3:255 -2:265 -1:205 +1:185 +2:185 +3:185 +5:190 +7:220 +12:265" onset="55:70 59:70 60:40 64:25 96:20"/>
+    <Articulation name="Legato" value="20" techniques="legato long" prefer="long" release="2945" legatoDelay="-12:135 -7:160 -5:280 -3:235 -2:245 -1:185 +1:165 +2:165 +3:165 +5:170 +7:200 +12:245" onset="55:70 59:70 60:40 64:25 96:20"/>
     <Controller id="vibrato" name="Vibrato" param="Vibrato"/>
     <Controller id="mute" name="Mute" param="Mute"/>
     <Controller id="micmix" name="Mic Mix Distance (sets all mics)" param="Mic Mix Distance"/>

@@ -854,7 +854,7 @@ LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file
 GRID_PITCHES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid_pitches.json'),
                               encoding='utf-8'))
 OCTAVE_UP_EXCESS = {'strings': 60, 'woodwinds': 45, 'brass': 95, None: 60, 'slow': 60}
-SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performance': 45}
+SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performance': 25}
 def legatoDelayFromPitches(patch, sound):
     rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
     if not rows:
@@ -880,7 +880,8 @@ def legatoDelayFromPitches(patch, sound):
             ms[-12] = statistics.median(large)
         ms[12] = statistics.median(large) + OCTAVE_UP_EXCESS[onsetFamily(patch, 'Legato')]
     # patches the sweeps heard off on every other interval (median over their non-octave slurs of 0.5 s and longer):
-    # Oboe Solo 60 ms late, Violins 2 45 late (the others within -21 ... +23)
+    # Oboe Solo 60 ms late, Violins 2 45 late (the others within -21 ... +23); Violins 2 halved to 25 after the sweep
+    # of a289780 heard its 2 s and 0.5 s slurs 31-36 ms early with 45
     corr = SWEEP_LEGATO_CORRECTION.get(patch, 0)
     ms = {i: m + corr for i, m in ms.items()}
     return ' '.join(f'{i:+d}:{int(round(m))}' for i, m in sorted(ms.items()))
