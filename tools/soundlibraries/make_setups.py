@@ -8,7 +8,7 @@ instead of loading each patch by hand in the plug-in's window.
     python make_setups.py --all                    every patch of the library that has no setup yet
     python make_setups.py --only X --overwrite     also over an existing setup (kept as .bak)
 
-What a setup is (found on SSO, 2026-09-27; see CLAUDE.md › Extract plug-in data): MuseScore's
+What a setup is (found on SSO, 2026-09-27; see docs/HISTORY.md › Extract plug-in data): MuseScore's
 .vst3state ("MSV3", Vst3Plugin::state) holds Kontakt's own state, an NI container (like an .nki)
 whose preset data is a Kontakt multi: a BANK whose SLOT_LIST holds the patch's program, plus the
 bank's sample list (FILENAME_LIST_EX). The program in it is the .nki's program, as Kontakt 8 saves

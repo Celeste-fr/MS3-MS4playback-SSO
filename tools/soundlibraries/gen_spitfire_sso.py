@@ -136,7 +136,7 @@ I=[
 # Flute Solo Performance, slurred steps and leaps at 60 and 120 bpm, 42 transitions; the new pitch within
 # 35 cents, YIN every 5 ms): after the beat by a median of 230 ms before, 128 at 50 %, 80 at 75 %, 40 at 100 %
 # (20 of 42 within 40 ms, one 59 ms early); leaps of a fourth or fifth stay 100-280 ms late. 100 %: the
-# full arrival lands a little late, where the ear already hears the new note (CLAUDE.md, Legato transitions)
+# full arrival lands a little late, where the ear already hears the new note (docs/HISTORY.md, Legato transitions start early)
 LEGATO_EARLY = 100
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',

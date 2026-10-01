@@ -98,7 +98,7 @@ here). What was learned there about checking playback:
   after loading (the patch's KSP script not yet initialised, the score's Controllers… lost when it did) and
   every later one (the mics on, several voices per note, 31-40 notes dropped at the patch's 256-voice limit).
   An export right after opening a score, and this tool's render, were the first kind and missed the bug; the
-  owner exports after playing. Both are one kind now (`Vst3Plugin::settle`, CLAUDE.md › Plugin hosting).
+  owner exports after playing. Both are one kind now (`Vst3Plugin::settle`, docs/HISTORY.md › A patch's own script, and its voice limit).
   When a finding depends on what happened before, render twice (two exports in a row, or a play then an
   export) and compare.
 - In the GUI, a play and an export can be driven without a person: a QML plug-in (enabled in

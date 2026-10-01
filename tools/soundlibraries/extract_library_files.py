@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Extract what a Kontakt sound library's files tell, without Kontakt: the other half of
-"Extract plug-in data" (which asks the running plug-in; see CLAUDE.md).
+"Extract plug-in data" (which asks the running plug-in; see docs/HISTORY.md › Extract plug-in data).
 
 On the owner's Windows machine (Python 3.8+, standard library only; or the .exe the
 workflow "Tool: Extract library files" builds):
