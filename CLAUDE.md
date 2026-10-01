@@ -345,7 +345,8 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   transitions, a 4-22 dB dip; the timing check, `sso_articulation_timing.json` `legato`), so slurred notes sounded
   late. `<Articulation legatoDelay>` (ms; `gen_spitfire_sso.py`; **by interval since 2026-10-01**: `interval:ms` pairs
   from the legato grid `sso_legato_grid.json`, per patch and interval the median over 9 velocities, `Articulation::
-  legatoDelays` / `legatoDelayAt(interval)`: linear between listed intervals, the widest's beyond, one number for
+  legatoDelays` / `legatoDelayAt(interval)` (±12 left out for now: the grid's octaves have octave errors, Basses +12 680,
+  and the sweep heard octave slurs 120-176 ms early; beyond ±7 the ±7 delay): linear between listed intervals, the widest's beyond, one number for
   every interval when there is no grid; the interval is from the nearest note of the chord before that goes on legato
   on the patch. Medians over the 45 patches -12: 210, -7: 230, -5: 190, -1: 170, +1: 150, +2: 160, +7: 230, +12: 360;
   per patch 60-690; velocity changes nothing, median 190 at each. Before, one number per patch, the median of the
@@ -385,9 +386,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `Articulation::onsets` / `onsetAt(pitch)`, the same reader as legatoDelay, `readKeyedMs` / `keyedMsAt`) on longs and
   legato only (gen_spitfire_sso.py `onset()`: smoothed, Douglas-Peucker within 10 ms / 10 %) and `<Onset early="100"/>`
   (percent; **measured since 2026-10-01** where the rest check's onset part ran, `sso_sound_onset.json`: per semitone
-  the mf -15 dB time on 5 ms power less 10 ms of analysis latency (plucks come out at 10-20 ms); the fit only for what
-  isn't measured: the All techniques strings were well above it, Violins 2 Long 145 against 90, Violins 1 Flautando 370
-  against 133; Performance legato 0-65 ms, e.g. Violins 1 55, Celli 50-80, Bassoon Solo 0, Horn Solo 10-30;
+  the mf -15 dB time on the perceived envelope less 30 ms of analysis latency (plucks come out at 28-53 ms; power was used
+  first and badly under-read slow swells: Violins 1 Super Sul Tasto 122 ms on power, 598 perceived, and the sweep of
+  build ed3a294 heard sul tasto 240-600 ms and flautando 145-255 ms late); unmeasured sounds: per articulation kind
+  (`articulationKind`, brass apart), the measured patches' median of onset / mf full-level time times the patch's own
+  full-level time (Long 0.39, Legato 0.31 (brass 0.22), Sul Tasto 0.57, Super Sul Tasto 0.87, Flautando 0.66, Harmonics
+  0.48), the family fit only where no kind has 20 measured semitones;
   metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
   Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
   no grace notes or arpeggio before, plays `onset × percent` early (its chord's latest onset, so a chord starts
