@@ -196,8 +196,8 @@ class ArticulationCheckDialog : public QDialog {
       static void setPlanFile(const QString& path);
       static const PlanEntry* planFor(const QString& patch);        // null: no plan, or not in it
       static bool hasPlan();
-      QSet<QString> timedBefore(bool timing = true, bool everything = false) const;
-      QSet<QString> restBefore() const;   // patches an earlier rest run did (with these parts)   // patches an earlier timing (dynamics) run did
+      QSet<QString> timedBefore(bool timing = true, bool everything = false) const;   // patches an earlier timing (dynamics) run did
+      QSet<QString> restBefore() const;                             // patches an earlier rest run did (with these parts)
       QSet<QString> linkedBefore() const;                           // patches an earlier links run did
       QSet<QString> measuredBefore(bool pitchBend) const;         // patches an earlier controller extract measured completely
       int librarySwitchCC() const;                                 // the CC the library switches articulations on (-1: none)                  // the folder zipped next to it (its path; empty: failed)
