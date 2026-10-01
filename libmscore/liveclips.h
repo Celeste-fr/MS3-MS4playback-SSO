@@ -40,8 +40,12 @@
 //     note: the bend and the controllers also move what still rings). At a tick without a note (a
 //     glide's step, a change under a held note) the last of them is at the tick itself. At the very
 //     start, where nothing can come earlier, the notes wait instead.
-//   - Left out: plug-in parameter events (Track::parameters: Live's own automation lanes play
-//     those), other controllers (Track::dropped), program and bank changes.
+//   - Plug-in parameter events (the automation lanes MuseScore plays: Track::params, rendered with
+//     MidiRenderer::setForLiveClips) are not notes: they go to the device as /ms/params, which sets the
+//     track's plug-in parameter at signal rate (live.remote~ from a table of the value in force at each
+//     millisecond, read at Live's song position: tools/live). A lane Live's set plays itself
+//     (Automation::Lane::playedByLive) is left to Live.
+//   - Left out: other controllers (Track::dropped), program and bank changes.
 //
 //   Timeline. Live can't be given the score's tempo map (the Live Object Model can't write the
 //   song tempo automation), so Live plays at one tempo, the score's first (Timeline::bpm), and
@@ -61,12 +65,18 @@
 //       /ms/track  gen:i key:s port:s channel:i part:s clip:s main:i length:i notes:i chunks:i hash:i
 //       /ms/notes  gen:i key:s chunk:i  (pitch:i start:i length:i velocity:i mute:i) × n
 //       /ms/clear  gen:i key:s port:s channel:i part:s clip:s          (a route gone: its clip goes)
+//       /ms/params gen:i key:s lanes:i hash:i  (protocol 3: the route's plug-in parameter lanes follow; 0: none)
+//       /ms/pvals  gen:i key:s lane:i title:s pid:i chunk:i chunks:i (time:i value:f) × n
+//                                        (a lane: the parameter's title and plug-in id (-1: not known; Live 12.2
+//                                         names Kontakt's slots "#001" …), each value from its time on, steps:
+//                                         ramps and curves come sampled as the renderer plays them)
 //       /ms/play   beat:f                (MuseScore's Play: Live starts there)
 //       /ms/stop
 //     device -> MuseScore
 //       /live/hello     session:s protocol:i        (on load, then every 2 s)
 //       /live/resync                                (send everything again)
 //       /live/applied   key:s hash:i status:s track:s   (key "song" for the tempo and locators)
+//       /live/papplied  key:s hash:i status:s track:s   (the parameter lanes: "ok", "missing: <titles>" …)
 //       /live/transport playing:i beat:f bpm:f      (~25 a second while playing, on each change)
 //---------------------------------------------------------
 
@@ -89,7 +99,8 @@ class Library;
 
 namespace LiveClips {
 
-constexpr int PROTOCOL           = 2;         // 2: editing Live clips (mscore/liveclipmodel.h)
+constexpr int PROTOCOL           = 3;         // 2: editing Live clips (mscore/liveclipmodel.h); 3: parameter lanes
+constexpr int PVALS_PER_PACKET   = 100;       // (time, value) pairs a /ms/pvals
 constexpr int UNITS_PER_BEAT     = 3840;
 constexpr int EPSILON            = 2;         // units: ~0.26 ms at 120 bpm
 constexpr int NOTES_PER_PACKET   = 48;        // 5 int32 + 5 type tags each: about 1.3 kB a datagram
@@ -151,8 +162,10 @@ struct RouteNotes {
       std::vector<Note> notes;      // notes and carriers, by start
       int dropped { 0 };            // controllers without a carrier
       int bends { 0 };              // pitch bend values carried (one like the value before isn't written again)
-      int parameters { 0 };         // plug-in parameter events (MuseScore's lanes and Controllers: Live's own there)
+      int parameters { 0 };         // plug-in parameter events (the automation lanes MuseScore plays in Live: params)
       int highNotes { 0 };          // notes at a carrier's pitch (not played as notes by the device)
+      // the plug-in parameter events by the controller's index (the main patch's allControllers): (units, value 0-1)
+      std::map<int, std::vector<std::pair<int, float>>> params;
       };
 
 // route index: port * 16 + channel (0-15), as NPlayEvent::extPort / extChannel
@@ -165,6 +178,7 @@ struct Track {
       QString portName;             // as Live shows it ("MuseScore A"); "" when that output isn't set
       QString part;                 // the part's name (the track found by name when no track has the route)
       QString clip;                 // "MuseScore: Violins 1", "MuseScore: Violins 1 – <patch>"
+      QString patch;                // the patch it plays
       bool main { true };           // the part's main patch (its first tuning lane): may be found by name
       int length { 0 };             // units: the played score
       std::vector<Note> notes;
@@ -173,6 +187,15 @@ struct Track {
       int parameters { 0 };
       int highNotes { 0 };
       quint32 hash { 0 };           // of all that is drawn
+      // the automation lanes of plug-in parameters MuseScore plays (not those Live's set plays itself:
+      // Automation::Lane::playedByLive), for the device to set on the track's plug-in (/ms/params)
+      struct ParamLane {
+            QString title;                                  // the parameter's title (the map's <Controller param>)
+            long id { -1 };                                 // the plug-in's parameter id, when known (-1)
+            std::vector<std::pair<int, float>> events;      // (units, value 0-1): the value from then on
+            };
+      std::vector<ParamLane> params;
+      quint32 paramsHash { 0 };
       };
 
 QString clipName(const QString& part, const QString& patch, bool main, int lane);
@@ -200,6 +223,7 @@ QByteArray osc(const QString& address, const QVariantList& args);
 bool parseOsc(const QByteArray& data, QString* address, QVariantList* args);
 
 std::vector<QByteArray> packets(const Track& t, int generation);      // /ms/track, then its /ms/notes
+std::vector<QByteArray> paramPackets(const Track& t, int generation); // /ms/params, then its lanes' /ms/pvals
 std::vector<QByteArray> packets(const Song& s, int generation);       // /ms/song, then its /ms/cues
 QByteArray clearPacket(const Track& t, int generation);
 

@@ -48,6 +48,25 @@ namespace LiveEquivalence {
 //   deviceMidi
 //---------------------------------------------------------
 
+std::vector<DeviceEvent> deviceParams(const std::vector<LiveClips::Track::ParamLane>& lanes, double bpm, int rate)
+      {
+      std::vector<DeviceEvent> out;
+      for (int l = 0; l < int(lanes.size()); ++l) {
+            for (const auto& e : lanes[size_t(l)].events) {
+                  const double seconds = double(e.first) / LiveClips::UNITS_PER_BEAT * 60.0 / bpm;
+                  const double ms = std::ceil(seconds * 1000.0 - 1e-9);
+                  DeviceEvent d;
+                  d.frame = qint64(std::llround(ms / 1000.0 * rate));
+                  d.type = ME_PARAMETER;
+                  d.a = l;
+                  d.value = double(e.second);
+                  out.push_back(d);
+                  }
+            }
+      std::stable_sort(out.begin(), out.end(), [](const DeviceEvent& x, const DeviceEvent& y) { return x.frame < y.frame; });
+      return out;
+      }
+
 std::vector<DeviceEvent> deviceMidi(const std::vector<LiveClips::Note>& notes, double bpm, int rate)
       {
       struct E { DeviceEvent e; int order; };
@@ -347,10 +366,26 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                         pos += n;
                         }
                   };
-            for (const DeviceEvent& e : deviceMidi(clip->notes, tl.bpm, rate)) {
+            // the device's MIDI and its parameter lanes (live.remote~ on the track's plug-in), in time; at one frame the
+            // parameters first
+            std::vector<DeviceEvent> dev = deviceParams(clip->params, tl.bpm, rate);
+            if (fault.contains("no-params"))
+                  dev.clear();
+            std::vector<long> laneIds;
+            for (const LiveClips::Track::ParamLane& pl : clip->params)
+                  laneIds.push_back(p->parameterId(pl.title));
+            const std::vector<DeviceEvent> midi = deviceMidi(clip->notes, tl.bpm, rate);
+            dev.insert(dev.end(), midi.begin(), midi.end());
+            std::stable_sort(dev.begin(), dev.end(), [](const DeviceEvent& x, const DeviceEvent& y) { return x.frame < y.frame; });
+            for (const DeviceEvent& e : dev) {
                   if (e.type == ME_PITCHBEND && fault.contains("no-bend"))
                         continue;
                   processTo(std::min(total, e.frame));
+                  if (e.type == ME_PARAMETER) {
+                        if (e.a < int(laneIds.size()) && laneIds[size_t(e.a)] >= 0)
+                              p->queueParameter(unsigned(laneIds[size_t(e.a)]), e.value);
+                        continue;
+                        }
                   p->midi(e.type, 0, e.a, e.b);
                   }
             processTo(total);

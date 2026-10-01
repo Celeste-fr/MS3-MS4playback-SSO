@@ -29,6 +29,8 @@
 #include "audio/vst3/vst3synth.h"
 #include "libmscore/instrument.h"
 #include "libmscore/liveclips.h"
+#include "libmscore/automation.h"
+#include "libmscore/rendermidi.h"
 #include "libmscore/livesetwriter.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
@@ -71,6 +73,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveClipsLegatoEarly();
       void liveEquivalence();
       void liveEquivalenceLegato();
+      void liveEquivalenceAutomation();
       void dumpEvents();
       };
 
@@ -603,6 +606,93 @@ void TestLiveEquivalence::liveEquivalenceLegato()
       QVERIFY2(r.passed, qPrintable(report));
       QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(report));
       qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveEquivalenceAutomation
+//    automation lanes drawn in MuseScore (the automation editor): a plug-in parameter's (Tone: a curved ramp and a
+//    step) reaches Live through the MuseScore Link device (/ms/params: live.remote~ from a table, deviceParams), a
+//    CC's (vibrato) through the clips' carriers, a Dynamics (CC1) lane in the notation's place. Live matches; without
+//    the device's lanes ("no-params") it doesn't. A lane Live's set holds as it is (playedByLive) is left to Live
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveEquivalenceAutomation()
+      {
+      using namespace Automation;
+      LiveHost host(this, "", { "Violin" });
+      QVERIFY(host.ok);
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Part* violin = score->parts().front();
+      Lane tone;
+      tone.target = "tone";
+      tone.points = { Point(0, 0.1, Curve::LINEAR), Point(1920, 0.9, Curve::STEP), Point(3840, 0.3, Curve::LINEAR),
+                      Point(5760, 1.0, Curve::STEP) };
+      setCurvature(tone.points[2], 0.7);
+      Lane vib;
+      vib.target = "vibrato";
+      vib.points = { Point(960, 0.2, Curve::LINEAR), Point(4800, 0.8, Curve::STEP) };
+      Lane dyn;
+      dyn.target = "cc1";
+      dyn.points = { Point(2880, 0.4, Curve::LINEAR), Point(4800, 1.0, Curve::STEP) };
+      score->setMetaTag(metaTag, write(score, { { violin, { tone, vib, dyn } } }));
+
+      // the clips carry the parameter lane (the renderer's events: the curve sampled), titled as the map has it
+      {
+            EventMap events;
+            SynthesizerState ss;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setMinChunkSize(1000);
+            MidiRenderer::Context ctx(ss);
+            r.renderChunk(r.getChunkAt(0), &events, ctx);
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            const std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *host.lib, events, QStringList(), tl);
+            QCOMPARE(int(tracks.size()), 1);
+            QCOMPARE(int(tracks[0].params.size()), 1);
+            QCOMPARE(tracks[0].params[0].title, QString("Tone"));
+            QVERIFY(tracks[0].params[0].events.size() > 20);
+            const std::vector<QByteArray> packets = LiveClips::paramPackets(tracks[0], 7);
+            QString address;
+            QVariantList args;
+            QVERIFY(LiveClips::parseOsc(packets.front(), &address, &args));
+            QCOMPARE(address, QString("/ms/params"));
+            QCOMPARE(args.value(2).toInt(), 1);
+            QVERIFY(LiveClips::parseOsc(packets[1], &address, &args));
+            QCOMPARE(address, QString("/ms/pvals"));
+            QCOMPARE(args.value(3).toString(), QString("Tone"));
+            QCOMPARE(args.value(4).toInt(), -1);                        // (the plug-in id: not known here)
+            QCOMPARE(args.value(7).toInt(), 0);                         // the first event's time
+            QVERIFY(std::fabs(args.value(8).toDouble() - 0.1) < 1e-6);
+            // the same lane as Live's set has it: left to Live
+            Lane inLive = tone;
+            inLive.extra["source"] = SOURCE_LIVE;
+            inLive.extra["pointsHash"] = pointsHash(inLive.points);
+            score->setMetaTag(metaTag, write(score, { { violin, { inLive, vib, dyn } } }));
+            MidiRenderer r2(score);
+            r2.setForLiveClips(true);
+            r2.setMinChunkSize(1000);
+            EventMap e2;
+            r2.renderChunk(r2.getChunkAt(0), &e2, ctx);
+            QVERIFY(LiveClips::tracks(score, *host.lib, e2, QStringList(), tl)[0].params.empty());
+            score->setMetaTag(metaTag, write(score, { { violin, { tone, vib, dyn } } }));
+      }
+
+      LiveEquivalence::Options o;
+      o.thresholds.roundRobins = false;
+      const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);
+      const QString report = LiveEquivalence::reportText(r, o.thresholds);
+      QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+      QVERIFY2(r.passed, qPrintable(report));
+      qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));
+      qputenv("MS_LIVE_EQUIVALENCE_FAULT", "no-params");
+      const LiveEquivalence::Result f = LiveEquivalence::compare(score, *host.lib, o);
+      QVERIFY2(f.error.isEmpty(), qPrintable(f.error));
+      QVERIFY2(!f.passed, qPrintable(LiveEquivalence::reportText(f, o.thresholds)));
+      qDebug("no-params: %s (correlation %.4f, residual %.1f dB)", qPrintable(f.failures.join("; ")), f.correlation, f.residualDb);
+      qunsetenv("MS_LIVE_EQUIVALENCE_FAULT");
       delete score;
       }
 

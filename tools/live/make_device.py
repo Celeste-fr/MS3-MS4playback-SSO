@@ -26,6 +26,15 @@ The MIDI path is plain Max objects in the scheduler thread (the script is never 
     the whole bend (status 224 = pitch bend on channel 1, lower, upper) -> iter -> midiout. Either half sends it
     with the other's last value, so a pair chased in any order ends right; note-offs dropped;
     any other note -> midiformat (with the rest of midiparse's messages and its channel) -> midiout.
+
+Plug-in parameter lanes (MuseScoreLink.js › Parameter lanes), in the signal domain:
+  phasor~ @frequency <PERIOD_TICKS> ticks @lock 1 (phase-locked to Live's transport: the song position over the period)
+    -> *~ (right inlet from the script's outlet 4: PERIOD_QUARTERS x 60000 / tempo) = the song position in ms
+    -> index~ ---mslp<k> (k = 0 … SLOTS-1; buffer~ ---mslp<k>: the value at each ms, step-hold) -> live.remote~ (left)
+    and -> snapshot~ (banged by outlet 5; its value back as "posvalue <ms>", the "pos" probe);
+  the script's outlet 3 "k id n" -> route 0 … 15 -> live.remote~ k's right inlet ("id n" takes parameter n, "id 0"
+    lets it go); loadmess prefix ---mslp gives the script the buffers' resolved "---" prefix;
+  receive msl_params -> deferlow -> prepend msl_params -> the script (the hub's word that a track's lanes changed).
 """
 
 import json
@@ -37,6 +46,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CARRIER_CCS = [32, 1, 11, 64, 2, 4, 21, 5, 65, 66, 67, 68]     # pitch 127 - i -> CARRIER_CCS[i] (liveclips.cpp)
 BEND_MSB, BEND_LSB = 115, 114                                   # the pitch bend's carriers (liveclips.h)
 DEVICE_WIDTH = 330
+SLOTS = 16                                                      # parameters a track's device drives (MuseScoreLink.js SLOTS)
+# the song-position phasor's period: 16384 quarter notes at Max's 480 ticks a quarter (MuseScoreLink.js PERIOD_QUARTERS);
+# 2 h 16 min at 120 bpm before it wraps
+PERIOD_TICKS = 16384 * 480
 
 
 class Patch:
@@ -129,13 +142,45 @@ def build(script):
 
     # --- the script: the hub's work (clips, locators, transport), the status line
     dev = p.obj("live.thisdevice", 1, 3, 500, 30, outlettype=["bang", "int", "int"])
-    js = p.box("newobj", "v8", 1, 3, (500, 450, 120, 22), outlettype=["", "", ""],
+    js = p.box("newobj", "v8", 1, 6, (500, 450, 120, 22), outlettype=["", "", "", "", "", ""],
                saved_object_attributes={"parameter_enable": 0},
                textfile={"text": script, "filename": "none", "flags": 0, "embed": 1, "autowatch": 1})
     send = p.obj("udpsend 127.0.0.1 9002", 1, 0, 500, 500)
     p.connect(dev, 0, js, 0)
     p.connect(js, 0, send, 0)
     p.connect(js, 1, send, 0)
+
+    # --- plug-in parameter lanes: the song position in ms, 16 tables, 16 live.remote~
+    # (the period as the frequency attribute: "phasor~ 7864320 ticks" as arguments ran at 0 Hz in Live 12.2 / Max 9;
+    # "@frequency 7864320 ticks" follows the song position, tried on the VM)
+    phasor = p.obj(f"phasor~ @frequency {PERIOD_TICKS} ticks @lock 1", 2, 1, 30, 450, outlettype=["signal"])
+    ms = p.obj("*~ 1.", 2, 1, 30, 490, outlettype=["signal"])
+    p.connect(phasor, 0, ms, 0)
+    p.connect(js, 4, ms, 1)
+    snap = p.obj("snapshot~", 2, 1, 200, 490, outlettype=["float"])
+    pos = p.obj("prepend posvalue", 1, 1, 200, 520)
+    p.connect(ms, 0, snap, 0)
+    p.connect(js, 5, snap, 0)
+    p.connect(snap, 0, pos, 0)
+    p.connect(pos, 0, js, 0)
+    slots = p.obj("route " + " ".join(str(k) for k in range(SLOTS)), 1, SLOTS + 1, 30, 650, w=300)
+    p.connect(js, 3, slots, 0)
+    for k in range(SLOTS):
+        x = 30 + k * 70
+        p.obj(f"buffer~ ---mslp{k}", 1, 2, x, 690, w=65, outlettype=["float", "bang"])
+        idx = p.obj(f"index~ ---mslp{k}", 2, 1, x, 720, w=65, outlettype=["signal"])
+        remote = p.obj("live.remote~", 2, 0, x, 750, w=65)
+        p.connect(ms, 0, idx, 0)
+        p.connect(idx, 0, remote, 0)
+        p.connect(slots, k, remote, 1)
+    prefix = p.obj("loadmess prefix ---mslp", 1, 1, 650, 450, outlettype=[""])
+    p.connect(prefix, 0, js, 0)
+    rcv = p.obj("receive msl_params", 0, 1, 650, 480, outlettype=[""])
+    dl = p.obj("deferlow", 1, 1, 650, 505)
+    pre_p = p.obj("prepend msl_params", 1, 1, 650, 530)
+    p.connect(rcv, 0, dl, 0)
+    p.connect(dl, 0, pre_p, 0)
+    p.connect(pre_p, 0, js, 0)
 
     # --- the face: title, port, Resync, status
     p.box("comment", "MuseScore Link", 1, 0, (650, 30, 150, 20), presentation=1,

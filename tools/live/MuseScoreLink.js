@@ -23,16 +23,52 @@
 //     with Live's own note data and only the edited fields changed, add_new_notes), checks the clip once
 //     a second and reports a change made in Live as a conflict (nothing more is written until MuseScore
 //     reads it again). LIVE.md › Editing Live clips in MuseScore; mscore/liveclipmodel.h.
+//   - plug-in parameter lanes (MuseScore's automation of Kontakt's parameters): the LOM can't write clip
+//     envelopes or arrangement automation, so each copy drives its own track's plug-in parameters
+//     itself while Live plays. Below, "Parameter lanes".
 // The Live Object Model is used from Max's low-priority thread only (messages from udpreceive go
 // through deferlow; the Tasks run there).
+//
+// Parameter lanes (protocol 3):
+//   MuseScore -> hub: /ms/params gen:i key:s lanes:i hash:i, then per lane /ms/pvals gen:i key:s lane:i
+//     title:s pid:i (the plug-in's parameter id, -1: not known) chunk:i chunks:i (time:i value:f) × n (time in UNITS from the song start, value 0-1, a
+//     step from that time on; ≤ 100 pairs a packet). lanes 0: the route drives nothing any more.
+//   hub -> copies: only the hub hears MuseScore, so the lanes go through the Global: "p<track id>" holds
+//     the track's entry, JSON { serial, length (beats), routes: { key: { hash, lanes: [{ title, ev:
+//     [time, value, …] }] } } } (every route on that track), g.pserial the last serial. Then
+//     messnamed("msl_params", track, serial); every copy's [receive msl_params] -> [deferlow] (no
+//     re-entry into the sending script) -> "msl_params track serial" here; the copy on that track
+//     schedules the work (a Task). Each copy also checks its entry's serial once a second (a missed
+//     message, a copy loaded later).
+//   copy -> hub: the copy writes "pr<track id>" = JSON { serial, results: { key: { status } } }; the hub
+//     polls it (workStep) and answers /live/papplied key:s hash:i status:s track:s (status "ok", or
+//     "missing: Vibrato, Mic 1 level" / "too many lanes (16 at most): …" / "no plug-in on the track",
+//     "; " between; "no track …"; "no MuseScore Link device on the track" after 3 s without an answer,
+//     and the real answer still sent when it comes). Only the first copy on a track (the track's device
+//     order) drives; another releases.
+//   in a copy: the patcher's song-position signal, [phasor~ @frequency 7864320 ticks @lock 1] (16384 quarter
+//     notes, phase-locked to Live's transport) -> [*~ f], f = 16384 × 60000 / Live's tempo (outlet 4):
+//     the song position in ms. 16 slots: [buffer~ ---mslp<k>] read by [index~] at that ms (step-hold,
+//     1 ms) -> [live.remote~] k (its right inlet: "id n" takes the parameter, "id 0" releases). The
+//     buffer holds the value in force at each ms of the song, in the parameter's range (min + v ×
+//     (max - min)); before a lane's first event: the parameter's value as read from the LOM before
+//     it was taken (kept while driven; put back when released). A title matches a parameter of the
+//     track's plug-in (the first PluginDevice, else the first non-Max device after this one) as
+//     Vst3Plugin::looseTitle compares them. The "---" prefix comes resolved from [loadmess prefix
+//     ---mslp]. Tables are rewritten when Live's tempo changes (checked once a second).
+//   debugging (hub): /ms/probe id:i what:s -> /live/probe id:i text:s (what "pos": the ms signal now,
+//     through [snapshot~]; "state": this copy's slots and the Global's entries; else a LOM path: its
+//     id, type and info); /ms/probecall id:i path:s fn:s args… -> /live/probe id text (call, or "get" /
+//     "set" a property).
 //
 // Plain ECMAScript 5 so it runs in [js] and [v8] alike, and in the Node tests (tools/live/test).
 
 autowatch = 0;
 inlets = 1;
-outlets = 3;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text
+outlets = 6;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text,
+                  // 3: "k id n" to the slots' live.remote~ (route 0 … 15), 4: the ms factor ([*~]), 5: bang [snapshot~]
 
-var PROTOCOL = 2;                       // 2: editing Live clips
+var PROTOCOL = 3;                       // 2: editing Live clips; 3: parameter lanes
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 var HUB_STALE_MS = 5000;
@@ -65,6 +101,25 @@ var heartbeat = null;
 var worker = null;
 var reporter = null;
 var initialised = false;
+// parameter lanes: the hub's side
+var SLOTS = 16;                         // make_device.py SLOTS
+var PERIOD_QUARTERS = 16384;            // the phasor~'s period (make_device.py PERIOD_TICKS / 480)
+var MAX_MS = 3600000;                   // a table's length at most (an hour)
+var POKE = 8192;                        // values a Buffer.poke
+var NO_DEVICE_MS = 3000;
+var routes = {};              // key -> the route as /ms/track gave it (to find its track)
+var pendingParams = {};       // key -> lanes being received
+var paramTracks = {};         // key -> the track its lanes were put on
+var waiting = {};             // key -> lanes handed to a copy, its answer awaited
+var songBeats = 0;            // the song's length (/ms/song)
+var probes = [];              // "pos" probes awaiting the snapshot~
+// … every copy's
+var prefix = "";              // the slots' buffer~ names' resolved "---mslp"
+var slots = [];               // k -> { id, sig } the parameter slot k drives
+var bases = {};               // parameter id -> { value, min, max } before it was driven
+var seenSerial = -1;          // the entry last applied
+var filledBpm = 0;
+var paramTask = null;
 
 function now() { return new Date().getTime(); }
 function num(v) { return Number(Array.isArray(v) ? v[0] : v); }
@@ -141,9 +196,12 @@ function bang() {
       heartbeat = new Task(beat, this);
       heartbeat.interval = 1000;
       heartbeat.repeat();
+      paramTask = new Task(applyParams, this);
       elect();
       if (!isHub)
             status("MuseScore Link: on this track (the hub is another copy)");
+      outlet(4, msFactor(liveTempo()));
+      paramsCheck();
       }
 
 function beat() {
@@ -160,6 +218,7 @@ function beat() {
             }
       else
             elect();
+      paramsCheck();
       }
 
 function elect() {
@@ -228,6 +287,7 @@ function notifydeleted() {
       if (heartbeat) heartbeat.cancel();
       if (worker) worker.cancel();
       if (reporter) reporter.cancel();
+      if (paramTask) paramTask.cancel();
       }
 
 //---------------------------------------------------------
@@ -250,6 +310,17 @@ function anything() {
             return setPort(a[0]);
       if (messagename === "edit")
             return edit();
+      if (messagename === "prefix") {                         // ([loadmess prefix ---mslp], resolved)
+            prefix = str(a[0]);
+            return paramsCheck(true);
+            }
+      if (messagename === "msl_params") {                     // (the hub put lanes on a track)
+            if (num(a[0]) === me.track && me.track)
+                  paramsCheck();
+            return;
+            }
+      if (messagename === "posvalue")                         // ([snapshot~]: a "pos" probe's answer)
+            return answerPos(num(a[0]));
       if (!isHub)
             return;
       handle(messagename, a);
@@ -263,6 +334,7 @@ function handle(address, a) {
       else if (address === "/ms/song") {
             pendingSong = { gen: num(a[0]), bpm: num(a[1]), length: num(a[2]), count: num(a[3]), chunks: num(a[4]),
                             hash: num(a[5]), cues: [], got: 0 };
+            songBeats = pendingSong.length / UNITS;
             if (pendingSong.chunks === 0)
                   queueSong();
             }
@@ -279,6 +351,7 @@ function handle(address, a) {
                       main: num(a[6]) !== 0, length: num(a[7]) / UNITS, count: num(a[8]), chunks: num(a[9]), hash: num(a[10]),
                       notes: [], got: 0 };
             pending[t.key] = t;
+            routes[t.key] = { key: t.key, port: t.port, channel: t.channel, part: t.part, clip: t.clip, main: t.main };
             if (t.chunks === 0)
                   queueClip(t);
             }
@@ -292,9 +365,24 @@ function handle(address, a) {
             if (++p.got === p.chunks)
                   queueClip(p);
             }
-      else if (address === "/ms/clear")
+      else if (address === "/ms/clear") {
             work.push({ kind: "clear", key: str(a[1]), port: str(a[2]), channel: num(a[3]), part: str(a[4]), clip: str(a[5]),
                         main: true });
+            if (paramTracks[str(a[1])])                         // (its parameters released, nothing answered)
+                  queueParams({ gen: num(a[0]), key: str(a[1]), lanes: 0, hash: 0, got: {}, done: 0, silent: true });
+            }
+      else if (address === "/ms/params") {
+            var q = { gen: num(a[0]), key: str(a[1]), lanes: Math.max(0, num(a[2])), hash: num(a[3]), got: {}, done: 0 };
+            pendingParams[q.key] = q;
+            if (q.lanes === 0)
+                  queueParams(q);
+            }
+      else if (address === "/ms/pvals")
+            paramValues(a);
+      else if (address === "/ms/probe")
+            probe(num(a[0]), str(a[1]));
+      else if (address === "/ms/probecall")
+            probeCall(num(a[0]), str(a[1]), str(a[2]), a.slice(3));
       else if (address === "/ms/play") {
             var song = new LiveAPI("live_set");
             song.set("current_song_time", Math.max(0, num(a[0])));
@@ -336,6 +424,49 @@ function handle(address, a) {
             delete edits[str(a[0])];
       }
 
+// a packet of one lane's events: a chunk sent again replaces itself; another gen's are dropped
+function paramValues(a) {
+      var q = pendingParams[str(a[1])];
+      var lane = num(a[2]);
+      if (!q || q.gen !== num(a[0]) || !(lane >= 0 && lane < q.lanes))
+            return;
+      var l = q.got[lane];
+      if (!l)
+            l = q.got[lane] = { title: str(a[3]), pid: num(a[4]), chunks: num(a[6]), parts: {}, n: 0, complete: false };
+      var c = num(a[5]);
+      if (l.chunks > 0 && !(c >= 0 && c < l.chunks))
+            return;
+      var ev = [];
+      for (var k = 7; k + 1 < a.length; k += 2)
+            ev.push(num(a[k]), num(a[k + 1]));
+      if (!l.parts[c])
+            ++l.n;
+      l.parts[c] = ev;
+      if (!l.complete && l.n >= l.chunks) {
+            l.complete = true;
+            if (++q.done === q.lanes)
+                  queueParams(q);
+            }
+      }
+
+function queueParams(q) {
+      delete pendingParams[q.key];
+      var lanes = [];
+      for (var i = 0; i < q.lanes; ++i) {
+            var l = q.got[i], ev = [];
+            for (var c = 0; c < Math.max(1, l.chunks); ++c)
+                  ev = ev.concat(l.parts[c] || []);
+            lanes.push({ title: l.title, pid: l.pid, ev: ev });
+            }
+      var w = { kind: "params", key: q.key, hash: q.hash, lanes: lanes, silent: !!q.silent };
+      for (i = 0; i < work.length; ++i)
+            if (work[i].kind === "params" && work[i].key === q.key) {
+                  work[i] = w;
+                  return;
+                  }
+      work.push(w);
+      }
+
 function queueWrite(e) {
       var w = e.incoming;
       e.incoming = null;
@@ -371,6 +502,7 @@ function workStep() {
             if (isHub)
                   work.push({ kind: "edit" });
             }
+      pollParams();
       if (!work.length)
             return;
       var w = work.shift();
@@ -391,12 +523,16 @@ function workStep() {
                   sendClip(edits[w.key]);
             else if (w.kind === "write")
                   applyWrite(edits[w.key], w.write);
+            else if (w.kind === "params")
+                  writeParams(w);
             }
       catch (e) {
             if (w.kind === "clip")
                   send("/live/applied", w.clip.key, w.clip.hash, "error: " + e, "");
             else if (w.kind === "write")
                   send("/live/clip/written", w.key, w.write.write, "error: " + e, 0);
+            else if (w.kind === "params" && !w.silent)
+                  send("/live/papplied", w.key, w.hash, "error: " + e, "");
             post("MuseScore Link: " + e + "\n");
             }
       }
@@ -886,11 +1022,355 @@ function checkEdits() {
             }
       }
 
+//---------------------------------------------------------
+//   parameter lanes: the hub
+//---------------------------------------------------------
+
+function entry(track) {
+      try { return JSON.parse(g["p" + track] || "null"); } catch (e) { return null; }
+      }
+
+// a route's lanes into its track's entry (null: out of it); the copies told. Returns the entry's serial
+function putRoute(track, key, route) {
+      var e = entry(track) || { routes: {} };
+      if (route)
+            e.routes[key] = route;
+      else
+            delete e.routes[key];
+      g.pserial = (Number(g.pserial) || 0) + 1;
+      e.serial = g.pserial;
+      e.length = songBeats;
+      g["p" + track] = JSON.stringify(e);
+      if (typeof messnamed === "function")
+            messnamed("msl_params", track, e.serial);
+      return e.serial;
+      }
+
+function writeParams(w) {
+      var tr = null;
+      if (placed[w.key])
+            tr = new LiveAPI("id " + placed[w.key].track);
+      else if (routes[w.key]) {
+            var found = findTrack(routes[w.key]);
+            tr = found ? found.api : null;
+            }
+      var track = tr && num(tr.id) > 0 ? num(tr.id) : 0;
+      var old = paramTracks[w.key];
+      if (old && old !== track)
+            putRoute(old, w.key, null);
+      if (!track) {
+            delete paramTracks[w.key];
+            if (!w.silent)
+                  send("/live/papplied", w.key, w.hash, w.lanes.length ? "no track (its clip's track isn't known)" : "ok", "");
+            return;
+            }
+      var serial = putRoute(track, w.key, w.lanes.length ? { hash: w.hash, lanes: w.lanes } : null);
+      if (w.lanes.length)
+            paramTracks[w.key] = track;
+      else
+            delete paramTracks[w.key];
+      if (!w.silent)
+            waiting[w.key] = { track: track, serial: serial, hash: w.hash, name: str(tr.get("name")), since: now(), told: false };
+      }
+
+// the copies' answers (each copy writes "pr<track>"): /live/papplied
+function pollParams() {
+      for (var key in waiting) {
+            var w = waiting[key];
+            var r = null;
+            try { r = JSON.parse(g["pr" + w.track] || "null"); } catch (e) {}
+            if (r && r.serial >= w.serial) {
+                  var res = r.results && r.results[key];
+                  send("/live/papplied", key, w.hash, res ? res.status : "ok", w.name);
+                  delete waiting[key];
+                  }
+            else if (!w.told && now() - w.since > NO_DEVICE_MS) {
+                  w.told = true;
+                  send("/live/papplied", key, w.hash, "no MuseScore Link device on the track (its parameters can't be driven)",
+                       w.name);
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   parameter lanes: each copy, its own track
+//---------------------------------------------------------
+
+function liveTempo() {
+      try { return num(new LiveAPI("live_set").get("tempo")) || 120; } catch (e) { return 120; }
+      }
+function msFactor(bpm) { return PERIOD_QUARTERS * 60000 / bpm; }
+
+// Vst3Plugin::looseTitle: lower case, a slot number in front left out, then a-z 0-9 only
+function looseTitle(t) {
+      return str(t).toLowerCase().replace(/^\s*#?\d+\s*[:.)-]?\s+/, "").replace(/[^a-z0-9]/g, "");
+      }
+
+// the entry changed (or Live's tempo, or the prefix came): the work, in a Task
+function paramsCheck(force) {
+      if (!me.track)
+            return;
+      var e = entry(me.track);
+      var used = false;
+      for (var k = 0; k < SLOTS; ++k)
+            if (slots[k])
+                  used = true;
+      var due = force || (e && e.serial !== seenSerial) || (used && Math.abs(liveTempo() - filledBpm) > 1e-6);
+      if (!due)
+            return;
+      if (paramTask)
+            paramTask.schedule(0);
+      else
+            applyParams();
+      }
+
+// the first registered copy on the track (in the track's device order) drives it
+function drivesTrack(tr) {
+      var mine = [];
+      var r = registry();
+      for (var k in r)
+            if (r[k].track === me.track && (k === me.key || now() - r[k].beat < HUB_STALE_MS))
+                  mine.push(r[k].device);
+      var devs = ids(tr.get("devices"));
+      for (var i = 0; i < devs.length; ++i)
+            if (mine.indexOf(devs[i]) >= 0)
+                  return devs[i] === me.device;
+      return true;
+      }
+
+// the track's plug-in: the first PluginDevice, else the first device after this one that isn't a Max device
+function pluginOf(tr) {
+      var devs = ids(tr.get("devices"));
+      var i, after = -1;
+      for (i = 0; i < devs.length; ++i)
+            if (/PluginDevice$/.test(str(new LiveAPI("id " + devs[i]).get("class_name"))))
+                  return new LiveAPI("id " + devs[i]);
+      for (i = 0; i < devs.length; ++i)
+            if (devs[i] === me.device)
+                  after = i;
+      for (i = after + 1; after >= 0 && i < devs.length; ++i)
+            if (!/^Mx/.test(str(new LiveAPI("id " + devs[i]).get("class_name"))))
+                  return new LiveAPI("id " + devs[i]);
+      return null;
+      }
+
+function release(k) {
+      var s = slots[k];
+      if (!s)
+            return;
+      outlet(3, k, "id", 0);
+      var b = bases[s.id];
+      if (b) {                                // (Live's value back as it was)
+            try { new LiveAPI("id " + s.id).set("value", b.value); } catch (e) {}
+            delete bases[s.id];
+            }
+      slots[k] = null;
+      }
+
+function applyParams() {
+      if (!me.track)
+            return;
+      var e = entry(me.track);
+      if (!e || !prefix)
+            return;                           // (the prefix comes from loadmess: then again)
+      var tr = new LiveAPI("id " + me.track);
+      var bpm = liveTempo();
+      outlet(4, msFactor(bpm));
+      var k, had = 0;
+      for (k = 0; k < SLOTS; ++k)
+            if (slots[k])
+                  ++had;
+      if (!drivesTrack(tr)) {                 // (another copy on this track does it)
+            for (k = 0; k < SLOTS; ++k)
+                  release(k);
+            seenSerial = e.serial;
+            return;
+            }
+      var plugin = pluginOf(tr);
+      var params = [];                        // { id, name, loose }
+      if (plugin) {
+            var pl = ids(plugin.get("parameters"));
+            for (var i = 0; i < pl.length; ++i) {
+                  var name = str(new LiveAPI("id " + pl[i]).get("name"));
+                  params.push({ id: pl[i], name: name, exact: str(name).toLowerCase().replace(/[^a-z0-9]/g, ""),
+                                loose: looseTitle(name) });
+                  }
+            }
+      // by title; else by the plug-in's parameter id where Live names the parameter by its slot only (Kontakt in
+      // Live 12.2: "#001" for the slot whose title MuseScore's host reads as "Vibrato", id 1)
+      var find = function(title, pid) {
+            var x = str(title).toLowerCase().replace(/[^a-z0-9]/g, ""), y = looseTitle(title), j, m;
+            for (j = 0; x && j < params.length; ++j)
+                  if (params[j].exact === x)
+                        return params[j].id;
+            for (j = 0; y && j < params.length; ++j)
+                  if (params[j].loose === y)
+                        return params[j].id;
+            for (j = 0; pid >= 0 && j < params.length; ++j) {
+                  m = /^\s*#?0*(\d+)\b/.exec(params[j].name);
+                  if (m && Number(m[1]) === pid)
+                        return params[j].id;
+                  }
+            return 0;
+            };
+      var want = [], wanted = {}, results = {};
+      for (var key in e.routes) {
+            var route = e.routes[key], missing = [], extra = [];
+            if (!plugin) {
+                  results[key] = { status: route.lanes.length ? "no plug-in on the track" : "ok" };
+                  continue;
+                  }
+            for (var l = 0; l < route.lanes.length; ++l) {
+                  var lane = route.lanes[l], id = find(lane.title, lane.pid === undefined ? -1 : num(lane.pid));
+                  if (!id)
+                        missing.push(lane.title);
+                  else if (wanted[id])
+                        continue;                         // (two lanes on one parameter: the first)
+                  else if (want.length >= SLOTS)
+                        extra.push(lane.title);
+                  else {
+                        wanted[id] = true;
+                        want.push({ id: id, lane: lane });
+                        }
+                  }
+            var st = [];
+            if (missing.length)
+                  st.push("missing: " + missing.join(", "));
+            if (extra.length)
+                  st.push("too many lanes (" + SLOTS + " at most): " + extra.join(", "));
+            results[key] = { status: st.length ? st.join("; ") : "ok" };
+            }
+      // slots: a parameter keeps its slot; the others go
+      var at = {};
+      for (k = 0; k < SLOTS; ++k) {
+            if (slots[k] && wanted[slots[k].id])
+                  at[slots[k].id] = k;
+            else
+                  release(k);
+            }
+      for (i = 0; i < want.length; ++i) {
+            var w = want[i];
+            if (at[w.id] === undefined)
+                  for (k = 0; k < SLOTS; ++k)
+                        if (!slots[k]) {
+                              slots[k] = { id: w.id, sig: "", fresh: true };
+                              at[w.id] = k;
+                              break;
+                              }
+            k = at[w.id];
+            var p = new LiveAPI("id " + w.id);
+            if (!bases[w.id])                       // (read before it is taken)
+                  bases[w.id] = { value: num(p.get("value")), min: num(p.get("min")), max: num(p.get("max")) };
+            fillSlot(k, w.lane, bases[w.id], bpm, num(e.length));
+            if (slots[k].fresh) {
+                  slots[k].fresh = false;
+                  outlet(3, k, "id", w.id);
+                  }
+            }
+      filledBpm = bpm;
+      seenSerial = e.serial;
+      g["pr" + me.track] = JSON.stringify({ serial: e.serial, results: results });
+      if (want.length || had)
+            status("MuseScore Link: " + want.length + " plug-in parameter" + (want.length === 1 ? "" : "s") + " driven"
+                   + (isHub ? " (hub)" : ""));
+      }
+
+// slot k's table: the value in force at each ms of the song, in the parameter's range
+function fillSlot(k, lane, base, bpm, lengthBeats) {
+      var msPerBeat = 60000 / bpm, span = base.max - base.min;
+      var ev = [];
+      for (var i = 0; i + 1 < lane.ev.length; i += 2)
+            ev.push({ at: Math.max(0, Math.round(lane.ev[i] / UNITS * msPerBeat)), v: base.min + lane.ev[i + 1] * span, n: i });
+      ev.sort(function(a, b) { return a.at - b.at || a.n - b.n; });
+      var last = ev.length ? ev[ev.length - 1].at : 0;
+      var n = Math.min(MAX_MS, Math.ceil(Math.max(lengthBeats * msPerBeat, last + 1000)) + 1);
+      var sig = n + "|" + bpm + "|" + base.value + "|" + base.min + "|" + base.max + "|" + lane.ev.join(",");
+      if (slots[k].sig === sig)
+            return;
+      var b = new Buffer(prefix + k);
+      b.send("sizeinsamps", n, 1);
+      var v = base.value, j = 0, chunk = [];
+      for (i = 0; i < n; ++i) {
+            while (j < ev.length && ev[j].at <= i)
+                  v = ev[j++].v;
+            chunk.push(v);
+            if (chunk.length === POKE || i === n - 1) {
+                  b.poke(1, i + 1 - chunk.length, chunk);
+                  chunk = [];
+                  }
+            }
+      slots[k].sig = sig;
+      }
+
+//---------------------------------------------------------
+//   debugging in real Live (hub): /ms/probe, /ms/probecall
+//---------------------------------------------------------
+
+function probeText(v) {
+      if (v === undefined || v === null)
+            return "";
+      if (typeof v === "object")
+            try { return JSON.stringify(v); } catch (e) {}
+      return str(v);
+      }
+
+function probe(id, what) {
+      if (what === "pos") {
+            probes.push(id);
+            outlet(5, "bang");                  // ([snapshot~] answers "posvalue <ms>")
+            return;
+            }
+      if (what === "state") {
+            var o = { me: me, prefix: prefix, slots: slots, bases: bases, seenSerial: seenSerial, filledBpm: filledBpm,
+                      waiting: waiting, paramTracks: paramTracks, entries: {} };
+            var r = registry();
+            for (var k in r)
+                  if (!o.entries[r[k].track])
+                        o.entries[r[k].track] = { p: str(g["p" + r[k].track]).substring(0, 1500),
+                                                  pr: str(g["pr" + r[k].track]) };
+            return send("/live/probe", id, probeText(o).substring(0, 7000));
+            }
+      try {
+            var api = new LiveAPI(what);
+            var text = "id " + num(api.id) + " type " + str(api.type) + " path " + str(api.path) + "\n" + str(api.info);
+            send("/live/probe", id, text.substring(0, 7000));
+            }
+      catch (e) {
+            send("/live/probe", id, "error: " + e);
+            }
+      }
+
+function answerPos(ms) {
+      var t = "pos " + ms + " ms; factor " + msFactor(liveTempo()) + "; tempo " + liveTempo() + "; song time "
+              + num(new LiveAPI("live_set").get("current_song_time"));
+      while (probes.length)
+            send("/live/probe", probes.shift(), t);
+      }
+
+function probeCall(id, path, fn, args) {
+      try {
+            var api = new LiveAPI(path);
+            var r;
+            if (fn === "get")
+                  r = api.get(str(args[0]));
+            else if (fn === "set")
+                  r = api.set.apply(api, [str(args[0])].concat(args.slice(1)));
+            else
+                  r = api.call.apply(api, [fn].concat(args));
+            send("/live/probe", id, probeText(r).substring(0, 7000));
+            }
+      catch (e) {
+            send("/live/probe", id, "error: " + e);
+            }
+      }
+
 // (Node tests)
 if (typeof module !== "undefined")
       module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,
                          findTrack: findTrack, writeSong: writeSong, report: report, hashNotes: hashNotes,
-                         checkEdits: checkEdits, edit: edit, state: function() {
+                         checkEdits: checkEdits, edit: edit, looseTitle: looseTitle, applyParams: applyParams,
+                         pollParams: pollParams, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
-                                        edits: edits };
+                                        edits: edits, slots: slots, bases: bases, waiting: waiting, prefix: prefix,
+                                        pendingParams: pendingParams };
                                } };

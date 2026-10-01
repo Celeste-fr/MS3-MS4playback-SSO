@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "livesetexport.h"
+#include "libmscore/automation.h"
 
 #include <algorithm>
 #include <cmath>
@@ -233,6 +234,8 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
       const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score);
       std::map<std::pair<const Part*, QString>, LiveSetWriter::Plugin> withControllers;      // by part and patch
       std::map<std::pair<const Part*, QString>, QString> controllerNotes;
+      const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score);
+      std::map<std::pair<const Part*, QString>, std::vector<SoundLibraryHost::AppliedParameter>> laneParameters;
       int slow = 0;
       for (LiveSetWriter::Track& t : tracks) {
             if (!plugin)
@@ -280,42 +283,79 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
             r.channel = t.channel - 1;
             r.patch = t.routePatch;
             r.lane = t.lane;
-            if (SoundLibraryHost::routeParameterControllers(r, values).empty())
-                  continue;
             const std::pair<const Part*, QString> key { t.partRef, patch };
-            if (!withControllers.count(key) && !controllerNotes.count(key)) {
-                  QString err;
-                  std::vector<SoundLibraryHost::AppliedParameter> applied;
-                  const QByteArray state = SoundLibraryHost::stateWithControllers(library, r, values, pluginPath, &applied, &err);
-                  LiveSetWriter::Plugin p = made[patch];
-                  QString stateName;
-                  if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
-                        err = QObject::tr("the plug-in's state could not be read");
-                  QStringList set;
-                  for (const SoundLibraryHost::AppliedParameter& a : applied) {
-                        if (a.id < 0) {
-                              set << QObject::tr("%1: not in this patch").arg(a.title);
-                              continue;
+            if (!SoundLibraryHost::routeParameterControllers(r, values).empty()) {
+                  if (!withControllers.count(key) && !controllerNotes.count(key)) {
+                        QString err;
+                        std::vector<SoundLibraryHost::AppliedParameter> applied;
+                        const QByteArray state = SoundLibraryHost::stateWithControllers(library, r, values, pluginPath, &applied, &err);
+                        LiveSetWriter::Plugin p = made[patch];
+                        QString stateName;
+                        if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
+                              err = QObject::tr("the plug-in's state could not be read");
+                        QStringList set;
+                        for (const SoundLibraryHost::AppliedParameter& a : applied) {
+                              if (a.id < 0) {
+                                    set << QObject::tr("%1: not in this patch").arg(a.title);
+                                    continue;
+                                    }
+                              const bool held = std::fabs(a.readBack - a.value / 127.0) < 0.5 / 127.0;
+                              set << QString("%1 %2%3").arg(a.title).arg(a.value)
+                                     .arg(held ? QString() : QObject::tr(" (the plug-in holds %1)").arg(std::lround(a.readBack * 127.0)));
+                              LiveSetWriter::Plugin::Parameter lp;
+                              lp.id = a.id;
+                              lp.name = a.title;
+                              lp.value = a.value / 127.0;
+                              p.parameters.push_back(lp);
                               }
-                        const bool held = std::fabs(a.readBack - a.value / 127.0) < 0.5 / 127.0;
-                        set << QString("%1 %2%3").arg(a.title).arg(a.value)
-                               .arg(held ? QString() : QObject::tr(" (the plug-in holds %1)").arg(std::lround(a.readBack * 127.0)));
-                        LiveSetWriter::Plugin::Parameter lp;
-                        lp.id = a.id;
-                        lp.name = a.title;
-                        lp.value = a.value / 127.0;
-                        p.parameters.push_back(lp);
+                        if (!err.isEmpty())
+                              controllerNotes[key] = QObject::tr("%1 – %2: its Controllers could not be set (%3): the patch's own values")
+                                                     .arg(t.part, patch, err);
+                        else {
+                              withControllers[key] = p;
+                              controllerNotes[key] = QObject::tr("%1 – %2: Controllers set in the plug-in's state: %3").arg(t.part, patch, set.join(", "));
+                              }
                         }
-                  if (!err.isEmpty())
-                        controllerNotes[key] = QObject::tr("%1 – %2: its Controllers could not be set (%3): the patch's own values")
-                                               .arg(t.part, patch, err);
-                  else {
-                        withControllers[key] = p;
-                        controllerNotes[key] = QObject::tr("%1 – %2: Controllers set in the plug-in's state: %3").arg(t.part, patch, set.join(", "));
+                  if (withControllers.count(key))
+                        t.plugin = withControllers[key];
+                  }
+            // its automation lanes of plug-in parameters (the automation editor): in Live's panel too (Configure), so the
+            // MuseScore Link device finds them on the track and plays them (live.remote~); the patch's own value
+            QStringList titles;
+            for (const Automation::Lane& lane : Automation::lanes(t.partRef, allLanes))
+                  for (const SoundLib::Controller& c : t.instrument->allControllers)
+                        if (c.id == lane.target && c.cc < 0 && !c.param.isEmpty())
+                              titles << c.param;
+            if (!titles.isEmpty()) {
+                  if (!laneParameters.count(key)) {
+                        QString err;
+                        std::vector<SoundLibraryHost::AppliedParameter> found;
+                        SoundLibraryHost::parametersOf(library, r, titles, pluginPath, &found, &err);
+                        laneParameters[key] = found;
+                        QStringList names;
+                        for (const SoundLibraryHost::AppliedParameter& f : found)
+                              names << (f.id >= 0 ? f.title : QObject::tr("%1: not in this patch").arg(f.title));
+                        plan->controllers << (err.isEmpty() ? QObject::tr("%1 – %2: automation lanes MuseScore plays in Live (the "
+                                                                          "MuseScore Link device), in Live's panel: %3")
+                                                                          .arg(t.part, patch, names.join(", "))
+                                                            : QObject::tr("%1 – %2: the automation lanes' parameters could not be "
+                                                                          "found (%3)").arg(t.part, patch, err));
+                        }
+                  for (const SoundLibraryHost::AppliedParameter& f : laneParameters[key]) {
+                        if (f.id < 0)
+                              continue;
+                        bool have = false;
+                        for (const LiveSetWriter::Plugin::Parameter& lp : t.plugin.parameters)
+                              have = have || lp.id == f.id;
+                        if (have)
+                              continue;
+                        LiveSetWriter::Plugin::Parameter lp;
+                        lp.id = f.id;
+                        lp.name = f.title;
+                        lp.value = std::max(0.0, f.readBack);
+                        t.plugin.parameters.push_back(lp);
                         }
                   }
-            if (withControllers.count(key))
-                  t.plugin = withControllers[key];
             }
       for (const auto& n : controllerNotes)
             plan->controllers << n.second;
@@ -423,6 +463,25 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
             QMessageBox::warning(parent, title, error);
             return;
             }
+      // a new set has none of Live's automation: lanes that came from (or were marked as in) another set are
+      // MuseScore's to play there now, through the MuseScore Link device (automation.h: playedByLive); one undoable step
+      int fromLive = 0;
+      if (!onlyMissing) {
+            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+            for (auto& pl : all)
+                  for (Automation::Lane& l : pl.second)
+                        if (l.playedByLive() || l.extra.contains("liveHash")) {
+                              l.extra.remove("source");
+                              l.extra.remove("liveHash");
+                              l.extra.remove("pointsHash");
+                              ++fromLive;
+                              }
+            if (fromLive)
+                  Automation::undoWrite(score, all);
+            }
+      if (fromLive)
+            plan.notes << QObject::tr("%n automation lane(s) from a Live Set are MuseScore's now: the new set doesn't have them, the "
+                                      "MuseScore Link device plays them.", "", fromLive);
       QMessageBox box(QMessageBox::Information, title, onlyMissing ? QObject::tr("The missing tracks were written.")
                                                                    : QObject::tr("The Live Set was written."),
                       QMessageBox::Ok, parent);

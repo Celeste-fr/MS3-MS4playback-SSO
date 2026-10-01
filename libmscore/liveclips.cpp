@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "liveclips.h"
+#include <cstring>
 
 #include <algorithm>
 #include <cmath>
@@ -304,8 +305,14 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                               n.length = std::max(1, at - n.start);
                               rn.notes.push_back(n);
                               }
-                        else if (e.type() == ME_PARAMETER)
-                              ++rn.parameters;  // (Live's own automation lanes)
+                        else if (e.type() == ME_PARAMETER) {
+                              ++rn.parameters;  // (an automation lane MuseScore plays: the device sets it in Live)
+                              std::vector<std::pair<int, float>>& p = rn.params[e.dataA()];
+                              if (!p.empty() && p.back().first == at)
+                                    p.back().second = e.tuning();
+                              else if (p.empty() || p.back().second != e.tuning())
+                                    p.push_back({ at, e.tuning() });
+                              }
                         else if (e.type() == ME_CONTROLLER && !isControl(e) && e.controller() != CTRL_HBANK
                                  && e.controller() < 0x78)
                               ++rn.dropped;     // other controllers (programs, banks, all-off: no matter)
@@ -399,7 +406,8 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             return out;
       const int end = playedTicks(score);
       std::map<int, RouteNotes> byRoute = clipNotes(events, tl, end);
-      for (const SoundLib::Route& r : SoundLib::routes(score, library)) {
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library);
+      for (const SoundLib::Route& r : routes) {
             Track t;
             t.port = r.port;
             t.channel = r.channel + 1;
@@ -408,6 +416,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             t.part = r.part ? r.part->partName() : QString();
             t.main = r.patch == 0 && r.lane == 0;
             t.clip = clipName(t.part, r.instrument ? r.instrument->name : QString(), r.patch == 0, r.lane);
+            t.patch = r.instrument ? r.instrument->name : QString();
             t.length = std::max(1, tl.units(end));
             auto n = byRoute.find(r.port * 16 + r.channel);
             if (n != byRoute.end()) {
@@ -416,8 +425,39 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
                   t.bends = n->second.bends;
                   t.parameters = n->second.parameters;
                   t.highNotes = n->second.highNotes;
+                  // the parameter lanes: titled by the part's main patch's controllers (the events' index)
+                  const SoundLib::LibInstrument* main = nullptr;
+                  for (const SoundLib::Route& m : routes)
+                        if (m.part == r.part && m.patch == 0 && m.lane == 0)
+                              main = m.instrument;
+                  for (const auto& pe : n->second.params) {
+                        if (!main || pe.first < 0 || pe.first >= int(main->allControllers.size()))
+                              continue;
+                        const QString title = main->allControllers[size_t(pe.first)].param;
+                        if (title.isEmpty())
+                              continue;
+                        Track::ParamLane pl;
+                        pl.title = title;
+                        pl.events = pe.second;
+                        t.params.push_back(pl);
+                        }
                   }
             t.hash = hashOf(t);
+            Fnv pf;
+            pf.mix(quint32(t.params.size()));
+            for (const Track::ParamLane& pl : t.params) {
+                  pf.mix(pl.title);
+                  pf.mix(quint32(pl.id));
+                  pf.mix(quint32(pl.events.size()));
+                  for (const auto& e : pl.events) {
+                        pf.mix(quint32(e.first));
+                        quint32 bits;
+                        memcpy(&bits, &e.second, 4);
+                        pf.mix(bits);
+                        }
+                  }
+            pf.mix(quint32(t.length));
+            t.paramsHash = pf.h;
             out.push_back(t);
             }
       return out;
@@ -603,6 +643,25 @@ std::vector<QByteArray> packets(const Song& s, int generation)
             for (int i = c * CUES_PER_PACKET; i < end; ++i)
                   args << s.cues[size_t(i)].time << s.cues[size_t(i)].name;
             out.push_back(osc("/ms/cues", args));
+            }
+      return out;
+      }
+
+std::vector<QByteArray> paramPackets(const Track& t, int generation)
+      {
+      std::vector<QByteArray> out;
+      out.push_back(osc("/ms/params", { generation, t.key, int(t.params.size()), t.paramsHash }));
+      for (int l = 0; l < int(t.params.size()); ++l) {
+            const Track::ParamLane& pl = t.params[size_t(l)];
+            const int n = int(pl.events.size());
+            const int chunks = std::max(1, (n + PVALS_PER_PACKET - 1) / PVALS_PER_PACKET);
+            for (int c = 0; c < chunks; ++c) {
+                  QVariantList args { generation, t.key, l, pl.title, int(pl.id), c, chunks };
+                  const int end = std::min(n, (c + 1) * PVALS_PER_PACKET);
+                  for (int i = c * PVALS_PER_PACKET; i < end; ++i)
+                        args << pl.events[size_t(i)].first << double(pl.events[size_t(i)].second);
+                  out.push_back(osc("/ms/pvals", args));
+                  }
             }
       return out;
       }

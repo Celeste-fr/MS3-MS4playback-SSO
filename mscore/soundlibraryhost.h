@@ -184,6 +184,15 @@ class SoundLibraryHost : public QObject {
       // (LibraryControllers::applyParameters), a moment of audio for the plug-in to take them, then its state (the
       // form of a setup: Vst3Plugin::state). Create Live Set embeds it (LIVE.md › Create Live Set). Empty and *error
       // when it failed
+      // the plug-in's parameter ids by title per patch, as last found on a loaded instance (hosted playback, Create
+      // Live Set): kept in the setups folder ("parameter ids.json") for when no instance is loaded ("Live plays the
+      // score": Live names Kontakt's automation slots "#001" … and the MuseScore Link device finds them by id)
+      static void rememberParameterIds(const SoundLib::Library& library, const QString& patch, const std::map<QString, long>& ids);
+      static long knownParameterId(const SoundLib::Library& library, const QString& patch, const QString& title);
+      // the parameters with these titles on the patch as MuseScore loads it (setup, script settled): id (-1: not in it)
+      // and the patch's own value (readBack); controller empty
+      static bool parametersOf(const SoundLib::Library& library, const SoundLib::Route& r, const QStringList& titles,
+                               const QString& pluginPath, std::vector<AppliedParameter>* found, QString* error = nullptr);
       static QByteArray stateWithControllers(const SoundLib::Library& library, const SoundLib::Route& r,
                                              const std::map<const Part*, PartControllers::Values>& values,
                                              const QString& pluginPath, std::vector<AppliedParameter>* applied,

@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "liveclips.h"
+#include "soundlibraryhost.h"
 
 #include <cmath>
 
@@ -227,6 +228,7 @@ void LiveClipsLink::received(const QString& address, const QVariantList& args)
             }
       if (address == "/live/hello") {
             const QString session = args.value(0).toString();
+            _deviceProtocol = args.value(1).toInt();
             _lastHello = now;
             if (session != _session) {          // the device (re)loaded: it knows nothing yet
                   _session = session;
@@ -257,6 +259,15 @@ void LiveClipsLink::received(const QString& address, const QVariantList& args)
                         s->second.liveTrack = args.value(3).toString();
                         _lastSync = now;
                         }
+                  }
+            emit statusChanged();
+            }
+      else if (address == "/live/papplied") {
+            _lastHello = now;
+            auto s = _sent.find(args.value(0).toString());
+            if (s != _sent.end() && qint32(s->second.track.paramsHash) == args.value(1).toInt()) {
+                  s->second.paramsConfirmed = true;
+                  s->second.paramsStatus = args.value(2).toString();
                   }
             emit statusChanged();
             }
@@ -394,6 +405,7 @@ void LiveClipsLink::startRender()
             return;
             }
       _renderer.reset(new MidiRenderer(_score));
+      _renderer->setForLiveClips(true);   // (the automation lanes of plug-in parameters: for the device)
       _events.clear();
       _nextUtick = 0;
       _renderStarted = QDateTime::currentMSecsSinceEpoch();
@@ -439,6 +451,16 @@ void LiveClipsLink::finish()
       std::vector<LiveClips::Track> tracks;
       if (library && _score)
             tracks = LiveClips::tracks(_score, *library, _events, _portNames, _timeline);
+      // the parameters' plug-in ids as last seen on a loaded instance (Live names Kontakt's slots by number)
+      for (LiveClips::Track& t : tracks) {
+            if (t.params.empty())
+                  continue;
+            for (LiveClips::Track::ParamLane& pl : t.params)
+                  pl.id = SoundLibraryHost::knownParameterId(*library, t.patch, pl.title);
+            t.paramsHash ^= quint32(qHash(t.patch));
+            for (const LiveClips::Track::ParamLane& pl : t.params)
+                  t.paramsHash = t.paramsHash * 31u + quint32(pl.id + 1);
+            }
       _events.clear();
 
       sendMode();
@@ -452,11 +474,15 @@ void LiveClipsLink::finish()
                   _queue.push_back(p);
             }
       std::map<QString, Sent> keep;
-      std::vector<LiveClips::Track> changed;
+      std::vector<LiveClips::Track> changed, paramsChanged;
       for (const LiveClips::Track& t : tracks) {
             auto s = _sent.find(t.key);
             if (s != _sent.end() && s->second.track.hash == t.hash) {
                   keep[t.key] = s->second;
+                  if (s->second.track.paramsHash != t.paramsHash) {
+                        keep[t.key].track = t;
+                        paramsChanged.push_back(t);
+                        }
                   continue;
                   }
             keep[t.key].track = t;
@@ -466,8 +492,12 @@ void LiveClipsLink::finish()
             if (!keep.count(s.first))
                   _queue.push_back(LiveClips::clearPacket(s.second.track, ++_generation));
       _sent = keep;
-      for (const LiveClips::Track& t : changed)
+      for (const LiveClips::Track& t : changed) {
             enqueue(t);
+            enqueueParams(t);
+            }
+      for (const LiveClips::Track& t : paramsChanged)
+            enqueueParams(t);
       if (!_queue.empty() && !_pace->isActive())
             _pace->start();
       log(QString("rendered in %1 ms (after the change: +%2 ms), clips made in %3 ms: %4 route(s), %5 changed, %6 datagram(s)")
@@ -483,6 +513,21 @@ void LiveClipsLink::enqueue(const LiveClips::Track& t)
       s.tries++;
       s.confirmed = false;
       for (const QByteArray& p : LiveClips::packets(t, ++_generation))
+            _queue.push_back(p);
+      if (!_pace->isActive())
+            _pace->start();
+      }
+
+void LiveClipsLink::enqueueParams(const LiveClips::Track& t)
+      {
+      Sent& s = _sent[t.key];
+      s.paramsConfirmed = false;
+      s.paramsStatus.clear();
+      if (_deviceProtocol < 3 && t.params.empty())
+            return;           // (an older device: nothing to say; with lanes it hears them once a newer one loads)
+      s.paramsSentAt = QDateTime::currentMSecsSinceEpoch();
+      s.paramsTries++;
+      for (const QByteArray& p : LiveClips::paramPackets(t, ++_generation))
             _queue.push_back(p);
       if (!_pace->isActive())
             _pace->start();
@@ -530,10 +575,17 @@ void LiveClipsLink::poll()
             return;
       const qint64 t = QDateTime::currentMSecsSinceEpoch();
       for (auto& s : _sent) {
-            if (s.second.confirmed || s.second.tries >= MAX_TRIES || t - s.second.sentAt < CONFIRM_MS)
+            if (!s.second.confirmed && s.second.tries < MAX_TRIES && t - s.second.sentAt >= CONFIRM_MS) {
+                  const LiveClips::Track track = s.second.track;
+                  enqueue(track);
+                  enqueueParams(track);
                   continue;
-            const LiveClips::Track track = s.second.track;
-            enqueue(track);
+                  }
+            if (_deviceProtocol >= 3 && s.second.paramsSentAt && !s.second.paramsConfirmed && s.second.paramsTries < MAX_TRIES
+                && t - s.second.paramsSentAt >= CONFIRM_MS) {
+                  const LiveClips::Track track = s.second.track;
+                  enqueueParams(track);
+                  }
             }
       }
 
@@ -571,6 +623,13 @@ QString LiveClipsLink::statusText() const
                   ++ok;
             else
                   problems << QString("%1: %2").arg(s.second.track.clip.mid(QString("MuseScore: ").size()), s.second.status);
+            if (!s.second.track.params.empty()) {
+                  if (_deviceProtocol < 3)
+                        problems << tr("%1: automation of plug-in parameters needs the MuseScore Link device of this MuseScore")
+                                    .arg(s.second.track.clip.mid(QString("MuseScore: ").size()));
+                  else if (s.second.paramsConfirmed && s.second.paramsStatus != "ok")
+                        problems << QString("%1: %2").arg(s.second.track.clip.mid(QString("MuseScore: ").size()), s.second.paramsStatus);
+                  }
             }
       QString text = tr("Connected to Live. %n clip(s) up to date", "", ok);
       if (waiting)
@@ -586,7 +645,7 @@ QString LiveClipsLink::statusText() const
       if (!problems.isEmpty())
             text += "\n" + tr("Not in Live: %1").arg(problems.join("; "));
       if (dropped)
-            text += "\n" + tr("%n event(s) a clip can't hold were left out (plug-in parameters, other controllers).",
+            text += "\n" + tr("%n event(s) a clip can't hold were left out (other controllers).",
                               "", dropped);
       if (high)
             text += "\n" + tr("%n note(s) at F#8 or above were left out (those keys carry the controllers and the pitch bend).", "", high);

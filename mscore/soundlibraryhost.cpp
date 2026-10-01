@@ -841,6 +841,30 @@ QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library& libra
       return state;
       }
 
+bool SoundLibraryHost::parametersOf(const SoundLib::Library& library, const SoundLib::Route& r, const QStringList& titles,
+                                    const QString& pluginPath, std::vector<AppliedParameter>* found, QString* error)
+      {
+      if (!r.instrument)
+            return false;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
+      if (!p || !loadSetup(p.get(), library, r.instrument->name, pluginPath, error))
+            return false;
+      std::map<long, QString> names;
+      for (const Vst3Plugin::Parameter& pp : p->parameters())
+            names[long(pp.id)] = pp.title;
+      std::map<QString, long> byTitle;
+      for (const QString& t : titles) {
+            AppliedParameter a;
+            a.id = p->parameterId(t);
+            a.title = a.id >= 0 ? names[a.id] : t;
+            a.readBack = a.id >= 0 ? p->parameter(unsigned(a.id)) : -1;
+            found->push_back(a);
+            byTitle[t] = a.id;
+            }
+      rememberParameterIds(library, r.instrument->name, byTitle);
+      return true;
+      }
+
 static QString ms(double v)
       {
       return QString::number(v, 'f', v < 10 ? 1 : 0);
@@ -881,6 +905,14 @@ std::vector<QString> SoundLibraryHost::routeParameterControllers(const SoundLib:
       return std::vector<QString>();
       }
 
+bool SoundLibraryHost::parametersOf(const SoundLib::Library&, const SoundLib::Route&, const QStringList&, const QString&,
+                                    std::vector<AppliedParameter>*, QString* error)
+      {
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return false;
+      }
+
 QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library&, const SoundLib::Route&,
                                                   const std::map<const Part*, PartControllers::Values>&, const QString&,
                                                   std::vector<AppliedParameter>*, QString* error)
@@ -890,6 +922,63 @@ QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library&, cons
       return QByteArray();
       }
 #endif
+
+//---------------------------------------------------------
+//   rememberParameterIds / knownParameterId
+//---------------------------------------------------------
+
+static QString looseKey(const QString& t)
+      {
+      QString s = t.toLower();
+      s.remove(QRegularExpression("^\\s*#?\\d+\\s*[:.)-]?\\s+"));
+      s.remove(QRegularExpression("[^a-z0-9]"));
+      return s;
+      }
+
+static QJsonObject& parameterIdCache(const SoundLib::Library& library, QString* path)
+      {
+      static std::map<QString, QJsonObject> cache;
+      *path = SoundLibraryHost::setupsFolder(library) + "/parameter ids.json";
+      auto it = cache.find(*path);
+      if (it == cache.end()) {
+            QFile f(*path);
+            QJsonObject o;
+            if (f.open(QIODevice::ReadOnly))
+                  o = QJsonDocument::fromJson(f.readAll()).object();
+            it = cache.insert({ *path, o }).first;
+            }
+      return it->second;
+      }
+
+void SoundLibraryHost::rememberParameterIds(const SoundLib::Library& library, const QString& patch, const std::map<QString, long>& ids)
+      {
+      QString path;
+      QJsonObject& all = parameterIdCache(library, &path);
+      QJsonObject p = all.value(patch).toObject();
+      bool changed = false;
+      for (const auto& t : ids) {
+            if (t.second < 0)
+                  continue;
+            const QString k = looseKey(t.first);
+            if (p.value(k).toInt(-1) != int(t.second)) {
+                  p[k] = int(t.second);
+                  changed = true;
+                  }
+            }
+      if (!changed)
+            return;
+      all[patch] = p;
+      QDir().mkpath(QFileInfo(path).absolutePath());
+      QFile f(path);
+      if (f.open(QIODevice::WriteOnly))
+            f.write(QJsonDocument(all).toJson());
+      }
+
+long SoundLibraryHost::knownParameterId(const SoundLib::Library& library, const QString& patch, const QString& title)
+      {
+      QString path;
+      return parameterIdCache(library, &path).value(patch).toObject().value(looseKey(title)).toInt(-1);
+      }
 
 #ifdef USE_VST3
 //---------------------------------------------------------
@@ -905,8 +994,15 @@ static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, c
             if (m.part == r.part && m.patch == 0 && m.lane == 0)
                   main = m.instrument;
       std::vector<long> ids;
-      for (const SoundLib::Controller& c : main->allControllers)
+      std::map<QString, long> byTitle;
+      for (const SoundLib::Controller& c : main->allControllers) {
             ids.push_back(c.param.isEmpty() ? -1 : p->parameterId(c.param));
+            if (!c.param.isEmpty())
+                  byTitle[c.param] = ids.back();
+            }
+      if (const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current())
+            if (r.instrument)
+                  SoundLibraryHost::rememberParameterIds(*lib, r.instrument->name, byTitle);
       return ids;
       }
 
@@ -2583,7 +2679,7 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
       }
       layout->addWidget(scoreBox);
 
-      // Ableton Live (liveintegration.h, LIVE.md): the automation drawn in Live, read-only here
+      // Ableton Live (liveintegration.h, LIVE.md): the automation drawn in Live (editable here too: automation.h)
       {
             QGroupBox* liveBox = new QGroupBox(tr("Ableton Live (this score)"), this);
             QVBoxLayout* v = new QVBoxLayout(liveBox);

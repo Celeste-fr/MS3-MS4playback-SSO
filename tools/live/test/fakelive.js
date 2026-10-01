@@ -5,6 +5,9 @@
 // overlap on a track (making one over another is recorded as an error here, so a test fails).
 // Notes (Live 11+): each has a note_id and every field get_all_notes_extended returns; Song.View has
 // detail_clip (the clip in the Detail View) and highlighted_clip_slot (session slots: clipSlot()).
+// Parameter lanes: a device's parameters (DeviceParameter: name, value, min, max), Max's Buffer (a stub keeping
+// its size and values, by name, shared by every copy as buffer~ names are global), messnamed (to every copy's
+// [receive msl_params] -> [prepend msl_params] -> the script), Task.schedule (run by settle()).
 
 "use strict";
 const fs = require("fs");
@@ -18,6 +21,8 @@ class FakeLive {
             this.errors = [];
             this.calls = [];
             this.nextNoteId = 1;
+            this.loaded = [];             // the copies of the device (loadDevice)
+            this.buffers = {};            // buffer~ name -> { size, data }
             this.song = this.add({ kind: "song", tempo: 120, is_playing: 0, current_song_time: 0, cues: [], tracks: [],
                                    signature_numerator: 4, signature_denominator: 4 });
             this.view = this.add({ kind: "view", detail_clip: 0, highlighted_clip_slot: 0 });
@@ -49,6 +54,32 @@ class FakeLive {
             const d = this.add({ kind: "device", class_name: className, name: name, track: track.id });
             track.devices.push(d.id);
             return d;
+            }
+      // a DeviceParameter of a device (Live lists only the plug-in's Configured ones)
+      param(device, name, value, min, max) {
+            const p = this.add({ kind: "param", name: name, value: value, min: min === undefined ? 0 : min,
+                                 max: max === undefined ? 1 : max, device: device.id });
+            (device.parameters = device.parameters || []).push(p.id);
+            return p;
+            }
+      // every copy's scheduled work and the hubs' work steps, until nothing is left
+      settle() {
+            for (let n = 0; n < 50; ++n) {
+                  let busy = false;
+                  for (const d of this.loaded) {
+                        if (d.runScheduled())
+                              busy = true;
+                        if (d.api.state().isHub && d.api.state().work.length) {
+                              d.api.workStep();
+                              busy = true;
+                              }
+                        }
+                  for (const d of this.loaded)
+                        if (d.api.state().isHub)
+                              d.api.pollParams();
+                  if (!busy)
+                        return;
+                  }
             }
       clip(track, name, start, end) {
             const c = this.add({ kind: "clip", name: name, start_time: start, end_time: end, muted: 0, notes: [], track: track.id,
@@ -95,7 +126,8 @@ function liveApiFor(live, deviceId) {
             this.id = o ? o.id : 0;
             this.path = p;
             this.type = o ? { song: "Song", track: "Track", clip: "Clip", clipslot: "ClipSlot", device: "Device", cue: "CuePoint",
-                              view: "Song.View" }[o.kind] : "";
+                              view: "Song.View", param: "DeviceParameter" }[o.kind] : "";
+            this.info = o ? "id " + o.id + "\ntype " + this.type + "\nproperty name str\ndone" : "No object";
             const self = this;
             this.getcount = function(what) {
                   if (o.kind === "song" && what === "tracks")
@@ -122,6 +154,8 @@ function liveApiFor(live, deviceId) {
                               return [JSON.stringify({ input_routing_channel: { display_name: o.inputChannel, identifier: 3 } })];
                         return [o[prop]];
                         }
+                  if (o.kind === "device" && prop === "parameters")
+                        return live.idList(o.parameters || []);
                   if (o.kind === "clip" && prop === "canonical_parent")
                         return ["id", o.parent];
                   if (o.kind === "clipslot" && prop === "canonical_parent")
@@ -222,6 +256,7 @@ function loadDevice(live, shared, deviceId) {
       const src = fs.readFileSync(path.join(__dirname, "..", "MuseScoreLink.js"), "utf8");
       const out = [];
       const tasks = [];
+      const scheduled = [];
       const patcher = { made: [], lines: [], removed: [],
             newdefault(x, y, cls, arg) { const o = { cls: cls, arg: arg }; this.made.push(o); return o; },
             connect(a, ai, b, bi) { this.lines.push([a, ai, b, bi]); },
@@ -241,6 +276,33 @@ function loadDevice(live, shared, deviceId) {
                   this.interval = 0;
                   this.repeat = function() { tasks.push(this); };
                   this.cancel = function() { this.cancelled = true; };
+                  this.schedule = function() { if (scheduled.indexOf(this) < 0) scheduled.push(this); };
+                  },
+            Buffer: function(name) {
+                  const b = live.buffers[name] = live.buffers[name] || { size: 0, data: [] };
+                  this.send = function(msg, n) {
+                        if (msg !== "sizeinsamps")
+                              throw new Error("buffer~ " + msg);
+                        b.size = Number(n);
+                        b.data = new Array(b.size).fill(0);
+                        };
+                  this.poke = function(ch, frame, values) {
+                        if (ch !== 1)
+                              throw new Error("poke channel " + ch);
+                        const v = Array.isArray(values) ? values : [values];
+                        if (frame < 0 || frame + v.length > b.size)
+                              throw new Error("poke past the end of " + name);
+                        for (let i = 0; i < v.length; ++i)
+                              b.data[frame + i] = v[i];
+                        };
+                  this.framecount = function() { return b.size; };
+                  },
+            messnamed(name) {
+                  const args = Array.prototype.slice.call(arguments, 1);
+                  live.messages = (live.messages || []).concat([[name].concat(args)]);
+                  if (name === "msl_params")
+                        for (const d of live.loaded)
+                              d.message("msl_params", args);
                   },
             module: { exports: {} },
             messagename: "",
@@ -252,7 +314,7 @@ function loadDevice(live, shared, deviceId) {
       vm.createContext(ctx);
       vm.runInContext(src, ctx, { filename: "MuseScoreLink.js" });
       const api = ctx.module.exports;
-      return {
+      const dev = {
             ctx: ctx, out: out, tasks: tasks, patcher: patcher, api: api,
             bang() { vm.runInContext("bang()", ctx); },
             message(name, args) {
@@ -262,9 +324,20 @@ function loadDevice(live, shared, deviceId) {
                   },
             call(fn) { return vm.runInContext(fn, ctx); },
             runTasks() { for (const t of tasks) if (!t.cancelled) t.fn(); },
+            runScheduled() {
+                  const l = scheduled.splice(0);
+                  for (const t of l)
+                        if (!t.cancelled)
+                              t.fn();
+                  return l.length > 0;
+                  },
+            // what went to slot k's live.remote~ ("id n")
+            slotIds() { return out.filter((m) => m[0] === 3).map((m) => [m[1], m[3]]); },
             work() { let n = 0; while (api.state().work.length && n++ < 1000) api.workStep(); },
             sent(address) { return out.filter((m) => m[0] === 0 && m[1] === address).map((m) => m.slice(2)); },
             };
+      live.loaded.push(dev);
+      return dev;
       }
 
 module.exports = { FakeLive, loadDevice };

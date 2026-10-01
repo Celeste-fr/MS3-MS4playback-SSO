@@ -38,7 +38,8 @@
 //
 //   A fault for the tests (MS_LIVE_EQUIVALENCE_FAULT, comma-separated): the Live side as before this branch's fixes,
 //   so the check shows it catches each: "no-bend" (the pitch bend carriers dropped), "no-mixer" (Live's faders at
-//   0 dB, centre, on), "no-controllers" (each track the patch's setup as it is, without the part's Controllers).
+//   0 dB, centre, on), "no-controllers" (each track the patch's setup as it is, without the part's Controllers),
+//   "no-params" (the parameter lanes left out: as before the device played them).
 //
 //   Thresholds (Thresholds; LIVE.md has them too): a deterministic plug-in (the test synth) must match nearly
 //   sample for sample: correlation 0.999 and above, residual -30 dB and below, every note within 0.5 dB and 1 ms.
@@ -76,11 +77,17 @@ namespace LiveEquivalence {
 
 struct DeviceEvent {
       qint64 frame { 0 };
-      int type { 0 };               // ME_NOTEON (b 0: off), ME_CONTROLLER, ME_PITCHBEND (a lower 7 bits, b upper)
+      int type { 0 };               // ME_NOTEON (b 0: off), ME_CONTROLLER, ME_PITCHBEND (a lower 7 bits, b upper),
+                                    // ME_PARAMETER (a: the track's parameter lane, value)
       int a { 0 };
       int b { 0 };
+      double value { 0 };
       };
 std::vector<DeviceEvent> deviceMidi(const std::vector<LiveClips::Note>& notes, double bpm, int rate);
+// the parameter lanes as the device plays them (tools/live: a table of the value in force at each millisecond, read
+// at the song position by index~ into live.remote~): each value from the start of the first whole millisecond at
+// or after its time; at one frame before the notes
+std::vector<DeviceEvent> deviceParams(const std::vector<LiveClips::Track::ParamLane>& lanes, double bpm, int rate);
 
 // Live's mixer on a stereo track: volume (linear) × constant-power sine / cosine pan, 0 dB in the centre and +3 dB
 // fully panned (Live 12 manual, Audio Fact Sheet › Panning); the Track Activator off: silent

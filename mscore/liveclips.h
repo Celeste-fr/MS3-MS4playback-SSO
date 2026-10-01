@@ -67,6 +67,11 @@ class LiveClipsLink : public QObject {
             bool confirmed { false };
             QString status;               // the device's: "ok", "no track", …
             QString liveTrack;            // the Live track it went to
+            // its plug-in parameter lanes (/ms/params; the device sets them on the track's plug-in)
+            qint64 paramsSentAt { 0 };
+            int paramsTries { 0 };
+            bool paramsConfirmed { false };
+            QString paramsStatus;         // "ok", "missing: Vibrato" …
             };
 
       bool _on { false };
@@ -93,6 +98,7 @@ class LiveClipsLink : public QObject {
       std::deque<QByteArray> _queue;
       int _generation { 0 };
       QString _session;
+      int _deviceProtocol { 0 };    // the device's (/live/hello): parameter lanes from 3 on
       qint64 _lastHello { 0 };
       qint64 _lastSync { 0 };
       bool _wasConnected { false };
@@ -115,6 +121,7 @@ class LiveClipsLink : public QObject {
       void renderStep();
       void finish();
       void enqueue(const LiveClips::Track& t);
+      void enqueueParams(const LiveClips::Track& t);
       void send(const QByteArray& packet);
       void sendSome();
       void poll();

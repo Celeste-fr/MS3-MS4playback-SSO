@@ -266,6 +266,53 @@ test("the carrier table is MuseScore's (libmscore/liveclips.cpp)", () => {
       assert.deepStrictEqual(pre, CARRIER_CCS);
       });
 
+test("parameter lanes: the song position in ms (phasor~ locked to Live's transport, *~ from the script), 16 slots", () => {
+      const byText = (t) => patcher.boxes.filter((b) => b.box.text === t).map((b) => b.box.id);
+      const has = (a, ao, b, bi) => (wires[a + ":" + ao] || []).some(([d, i]) => d === b && i === bi);
+      const v8 = byText("v8")[0];
+      assert.strictEqual(boxes[v8].numoutlets, 6);
+      const [phasor] = byText("phasor~ @frequency 7864320 ticks @lock 1");
+      assert.strictEqual(7864320, 16384 * 480);
+      const [ms] = byText("*~ 1.");
+      assert.ok(phasor && ms);
+      assert.ok(has(phasor, 0, ms, 0));
+      assert.ok(has(v8, 4, ms, 1));                          // the factor
+      const [snap] = byText("snapshot~");
+      const [pos] = byText("prepend posvalue");
+      assert.ok(has(ms, 0, snap, 0) && has(v8, 5, snap, 0) && has(snap, 0, pos, 0) && has(pos, 0, v8, 0));
+      const [route] = byText("route " + Array.from({ length: 16 }, (_, k) => k).join(" "));
+      assert.ok(route && has(v8, 3, route, 0));
+      const remotes = byText("live.remote~");
+      assert.strictEqual(remotes.length, 16);
+      for (let k = 0; k < 16; ++k) {
+            assert.strictEqual(byText("buffer~ ---mslp" + k).length, 1);
+            const [idx] = byText("index~ ---mslp" + k);
+            assert.ok(idx && has(ms, 0, idx, 0), "index~ " + k);
+            const remote = remotes.find((r) => has(idx, 0, r, 0));
+            assert.ok(remote, "index~ " + k + " -> a live.remote~");
+            assert.ok(has(route, k, remote, 1), "route " + k + " -> live.remote~'s id inlet");
+            assert.ok(!remotes.some((r) => r !== remote && has(route, k, r, 1)));
+            }
+      // the "---" prefix and the hub's word, through deferlow
+      const [prefix] = byText("loadmess prefix ---mslp");
+      assert.ok(prefix && has(prefix, 0, v8, 0));
+      const [rcv] = byText("receive msl_params");
+      const [dl] = byText("deferlow");
+      const [pre] = byText("prepend msl_params");
+      assert.ok(has(rcv, 0, dl, 0) && has(dl, 0, pre, 0) && has(pre, 0, v8, 0));
+      // the script's own outlets kept: OSC and udpsend's settings, the status
+      const [send] = byText("udpsend 127.0.0.1 9002");
+      assert.ok(has(v8, 0, send, 0) && has(v8, 1, send, 0));
+      assert.ok(patcher.boxes.some((b) => b.box.maxclass === "comment" && has(v8, 2, b.box.id, 0)));
+      });
+
+test("the script's constants agree with the patcher's", () => {
+      const js = fs.readFileSync(path.join(dir, "MuseScoreLink.js"), "utf8");
+      assert.ok(/var SLOTS = 16;/.test(js));
+      assert.ok(/var PERIOD_QUARTERS = 16384;/.test(js));
+      assert.ok(/outlets = 6;/.test(js));
+      });
+
 if (failures) {
       console.log(failures + " failed");
       process.exit(1);
