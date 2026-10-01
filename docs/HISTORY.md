@@ -433,7 +433,10 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   0.48), the family fit only where no kind has 20 measured semitones; a sul tasto / flautando / harmonics semitone
   whose mf peak is at 1.3 s or later (still rising at the check's 1.5 s end: 40-86 % of theirs, no other sound's) takes
   the -10 dB time, since its full level is ~5 dB higher (the sweep of 3f0cda5, its peak up to ~2 s after the note-on,
-  heard those 123-223 ms late; -10 comes 130-177 ms after -15; `onsetMs`). All 112 non-percussion map instruments
+  heard those 123-223 ms late; -10 comes 130-177 ms after -15; `onsetMs`; dropped in c27da62: the sweep of e6f44e6
+  heard such notes up to 399 ms early, so now the -15 dB time, never more than a neighbouring semitone's: err late).
+  Legato delays from the 5-pitch grid of all 43 Performance patches since c27da62, octaves from each patch's median
+  of -7 -5 +5 +7 (both measured octaves unusable). All 112 non-percussion map instruments
   measured since f8908f8 (2026-10-01);
   metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
   Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
