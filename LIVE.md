@@ -426,9 +426,67 @@ What only real Live could show, and what was shown (the Windows VM, Live 12.2 un
 Violin; the generated set cut to one track, MuseScore's datagrams sent by a script): the clip and the lane applied
 (`/live/papplied ok`); playing from beat 0, the parameter read back each second followed the lane (0.1875, 0.375,
 0.5625, 0.75, 0.97 up the ramp, back down, 0 at beat 16, the step 0.75 at 24) and Kontakt's own *Vibrato* slider
-moved on screen. Not tried: Live's export (not authorized on the VM), a tempo change in Live while playing (the table
+moved on screen. Export and freeze, and the lanes kept in the set: below. Not tried: a tempo change in Live while playing (the table
 is refilled at Live's tempo, the clips assume one tempo anyway), MuseScore's own GUI against real Live (the Windows
 build of this branch).
+
+### Without MuseScore: the lanes kept in the set (2026-10-01)
+
+Each copy of the device keeps its track's lanes, as last applied, in `[pattr Lanes]` … `[pattr Lanes4]`: Live parameters
+of type Blob, *Stored Only*, saved in the device's `MxDBlob` next to `Port` (atoms only: `msl-lanes 1 <stamp> <part>
+<parts> <length> <routes>` then per route `<key> <hash> <lanes>`, per lane `<title> <id> <pairs> (time value)…`; at most
+30000 atoms a store). When the set opens the stores give the lanes back and, as long as MuseScore hasn't sent its own for
+the track, the device plays them. **Create Live Set** writes them into the set (`LiveSetWriter::linkBlob`); the device
+updates them whenever MuseScore's lanes change (one Live undo step, "Change in MuseScore Link"). Lanes needing more than
+the 4 stores are not kept (a note in the report; they still play while MuseScore runs).
+
+Tried in Live 12.2 on the VM: a set with the stores, MuseScore not running, played its Kontakt *Vibrato* lane (read back
+each second along the curve); a duplicated device got the stores' value as last set (Live's own parameter state, which a
+save writes); 4 stores holding 100 010 atoms copied fine. Found on the way: the `v8` box as a Blob parameter
+(`getvalueof`/`notifyclients`) is restored from the set but Live never takes its later values (a copy got the old one), so
+the store is `[pattr]`; one `[pattr]` set to 34 010 atoms crashed Live (24 010 were fine). Not tried (Live there can't
+save): reopening a set Live saved. **Owner test** (2 min): play a score with a lane in Live (*Live plays the score*),
+save the set, quit MuseScore, reopen the set: the device says "1 plug-in parameter driven" and the parameter moves.
+
+### Live's export and freeze (2026-10-01)
+
+The device's path is all signal (`phasor~ … @lock 1` → `index~` → `live.remote~`), so it runs inside Live's rendering.
+Measured on the VM with Operator's *Volume* driven by a lane (a step every beat, then a ramp; the device before
+Operator on a MIDI track), level edges found in the audio:
+- **Freeze** (Live's offline render, allowed unauthorized): every edge on its beat within ±1.5 ms (the analysis
+  window's resolution); the ramp monotonic. With Kontakt (SSO Solo Violin, *Vibrato* 0/1 every 4 beats) the frozen
+  audio's pitch spread alternates 0.9-1.6 Hz / 3.0-3.4 Hz with the lane.
+- **Playback** (a take of the track's output recorded in Live): each edge late by the same amount within a take (sd ~1
+  ms), but that amount changes from one start of playback to the next: +11, +17, +40, +40, +52 ms (512 and 4096-sample
+  buffers, 90 and 120 bpm; the notes themselves on time). The same with the position made from `phasor~` plus
+  `[plugphasor~]` (+17 / -0.2 ms in two takes), so it isn't the coarse phasor; `[plugsync~]` outputs nothing in a
+  device. Cause not found; for vibrato, mic or release changes 0-50 ms is inaudible, for anything sharp it would not be.
+- **Export Audio/Video** can't be tried there (unauthorized). Freeze renders the same way, so it should match.
+  **Owner test** (2-3 min): a violin part with one long note over 8 bars and a *Vibrato* lane 0 / 127 alternating every
+  bar; *Create Live Set*, quit MuseScore, open the set, *File › Export Audio/Video* (the Violin track, 8 bars); send the
+  WAV: the vibrato must switch at the bar lines (the VM analysis script measures it).
+
+### Writing Live's own automation (option B, 2026-10-01)
+
+What Live 12.2 offers, checked in the running program (`dir()` of its Python classes) and the docs:
+- **Max for Live (LOM)**: a Clip has `has_envelopes`, `clear_envelope`, `clear_all_envelopes` only; no envelope class, no
+  arrangement automation (docs.cycling74.com/apiref/lom, Live 12.3.5). Not in 12.2, not later.
+- **Python Control Surface scripts**: `Clip.create_automation_envelope` / `automation_envelope` (Session clips only:
+  "Returns None for Arrangement clips"), `Envelope.insert_step / value_at_time / events_in_range /
+  delete_events_in_range`; `Envelope.create_event` (a breakpoint with curve coefficients) only from Live 12.4. No API
+  writes a track's Arrangement automation. `Track.duplicate_clip_to_arrangement` exists.
+- **The way that works in 12.2** (tried on the VM, `tools/live/research/MuseScoreAuto`): a Session clip with an envelope
+  for the parameter, `duplicate_clip_to_arrangement` at the lane's start, then both clips deleted: the envelope becomes
+  the **track's Arrangement automation** over that span (other spans untouched; it stays after the clips are deleted;
+  Live plays it: the track's Pan read back within 0.02 of the curve). 193 points in 136 ms. Ramps are staircases of
+  `insert_step`s (12.2 has no breakpoint insertion), i.e. MuseScore's sampled points. Catch: the copy replaces any clip
+  on that span (MuseScore's clip was cut in two), so the script must copy MuseScore's whole clip (notes and envelopes)
+  over its own span. It needs a Control Surface script installed and chosen once in Live's settings, and it would take
+  over what the device's hub does today (it can open a UDP socket as AbletonOSC does).
+- **Recording** instead: with *Automation Arm* (`session_automation_record`) and *Arrangement Record* (`record_mode`) on
+  while playing, Live recorded nothing from the device: `live.remote~` (documented: no automation, no undo) and LiveAPI
+  `set value` (tried: `automation_state` stayed 0). It could only be real time anyway.
+- **Clipboard / file tricks**: Live's clipboard isn't reachable; editing the `.als` needs the set closed and reopened.
 
 ### Open questions for the owner
 
