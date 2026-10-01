@@ -1,4 +1,4 @@
-# Handoff: state of the sound library work (updated 2026-10-01)
+# Handoff: state of the sound library work (updated 2026-10-01, after the VM measurements)
 
 Read `CLAUDE.md` first: it describes the architecture, the build and every run the owner has made. The commit
 messages on each branch explain each step in detail. The sections below the first three are older notes, kept for
@@ -27,16 +27,20 @@ their history; where they disagree with "Start here", "Start here" is right.
   `timing_from_check.py` (derived numbers only go into the repository: it is public).
 - **Gotcha**: a `.bat.in` line inside `if ( … )` must not contain parentheses (an `echo` with "(…)" closed the block
   and the window vanished at once, run 266).
-- **Not measured** (the owner asked "is 100% measured?", 2026-10-01; none of it started, the owner to choose):
-  1. each sound at one test pitch only (dynamics and timing across the range not known);
-  2. each sound at the patch's default controls only (mic mix, vibrato, release … : how they change loudness and
-     attack not measured, only that they change the sound);
-  3. parameters tried at 0 and 1 only;
-  4. legato at 3 velocities and 2 intervals (+2, -5) only, on the 42 Performance patches; Horn Solo / Horns a2 -
-     Legato and Oboe Principal - Total Performance not as a slur at all (no map articulation named legato);
-  5. round robins (one note per sound; earlier checks ±1-2 dB);
-  6. percussion techniques that are off at a patch's defaults (no key; needs the switch-on system the owner plans);
-  7. Vibraphone and Curated Tutti - Low Wood String Stab: measured, but no controller matched a control on screen.
+- **Measured on the Windows test VM (2026-09-30/10-01; the owner: "measure everything left in the VM, I'm sick of
+  doing everything manually")**: the VM (see the memory note / CLAUDE.md) runs Kontakt + SSO itself now; scheduled task
+  `claude-measure` → `C:\claude\measure\job.cmd`. What the old "Not measured" list had:
+  1-5. `--check-rest` (CLAUDE.md › The rest of every sound): every sound of all 700 patches across its range at pp / mf /
+     ff, 8 repeats (round robins), every control at 0-1 in 5 steps, a 9 × 14 legato grid on 45 patches (Horn Solo /
+     Horns a2 - Legato and Oboe Principal included) → `sso_sound_range.json`, `sso_sound_repeats.json`,
+     `sso_sound_controls.json`, `sso_legato_grid.json` (`rest_from_check.py`).
+  6. Percussion techniques off at the defaults: Kickstart's `%c2lsa` / `%4jwcn` (+ `%x4jsr`, `$nd5ia`) and the groups'
+     purge flags (`KontaktSetup::unpurgeSwitchedOn`); 9 measurement-only "(all on)" `<Patch>`es switch every off
+     technique on at a free key; their dynamics, timing and rest measured with build 0e9f0c4: all 258 switched-on techniques sound (in the rest check Tam Tam FX Scrape and Wind Gong FX Bow, slow swells, missed its 10 dB "sounds" test).
+  7. Vibraphone: links as its group's (CC 11 Expression, CC 23 Mic 2 level; Kickstart doesn't redraw offline). Low Wood
+     String Stab: no CC moves a named control (only Kontakt's volume / pan and CC 111). `sso_patch_measurements.json`.
+  Still not measured: parameters only in 5 steps; legato from the test pitch only; the controls' effect at the test
+  pitch only.
 
 ## For the next agent: playback problems the extraction found (2026-09-30; not fixed, the owner: "your job is only to collect data")
 
