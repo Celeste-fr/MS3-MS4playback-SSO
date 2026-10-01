@@ -47,6 +47,7 @@ CARRIER_CCS = [32, 1, 11, 64, 2, 4, 21, 5, 65, 66, 67, 68]     # pitch 127 - i -
 BEND_MSB, BEND_LSB = 115, 114                                   # the pitch bend's carriers (liveclips.h)
 DEVICE_WIDTH = 330
 SLOTS = 16                                                      # parameters a track's device drives (MuseScoreLink.js SLOTS)
+STORES = 4                                                      # [pattr Lanes] … kept in the set (MuseScoreLink.js STORES)
 # the song-position phasor's period: 16384 quarter notes at Max's 480 ticks a quarter (MuseScoreLink.js PERIOD_QUARTERS);
 # 2 h 16 min at 120 bpm before it wraps
 PERIOD_TICKS = 16384 * 480
@@ -142,9 +143,30 @@ def build(script):
 
     # --- the script: the hub's work (clips, locators, transport), the status line
     dev = p.obj("live.thisdevice", 1, 3, 500, 30, outlettype=["bang", "int", "int"])
-    js = p.box("newobj", "v8", 1, 6, (500, 450, 120, 22), outlettype=["", "", "", "", "", ""],
+    js = p.box("newobj", "v8", 1, 7, (500, 450, 120, 22), outlettype=["", "", "", "", "", "", ""],
                saved_object_attributes={"parameter_enable": 0},
                textfile={"text": script, "filename": "none", "flags": 0, "embed": 1, "autowatch": 1})
+    # the track's parameter lanes kept in the Live Set: a [pattr] that is a Live parameter of type Blob, Stored Only
+    # (in the device's MxDBlob as "Lanes", next to "Port"). The script sets it (outlet 6) when MuseScore's lanes
+    # change; it gives the value back when the set opens (and on Live's undo). Tried in Live 12.2 (the test VM,
+    # 2026-10-01): a duplicated device and Live's undo carry the [pattr]'s value as last set; the v8 box's own value
+    # (getvalueof / notifyclients) stayed at the value the set was opened with, so the store is this [pattr]
+    # STORES of them ("Lanes", "Lanes2" …): Live 12.2 crashed when one [pattr] was set to 34010 atoms, so the script
+    # sends at most MuseScoreLink.js STORE_ATOMS to each ("k atoms…" -> route k)
+    route_st = p.obj("route " + " ".join(str(k) for k in range(STORES)), 1, STORES + 1, 700, 420, w=120)
+    p.connect(js, 6, route_st, 0)
+    for k in range(STORES):
+        name = "Lanes" if k == 0 else f"Lanes{k + 1}"
+        st = p.box("newobj", f"pattr {name}", 1, 3, (700 + k * 110, 450, 100, 22),
+                   outlettype=["", "", ""], varname=name,
+                   parameter_enable=1, saved_object_attributes={"parameter_enable": 1},
+                   saved_attribute_attributes={"valueof": {
+                       "parameter_longname": name, "parameter_shortname": name, "parameter_type": 3,
+                       "parameter_invisible": 1, "parameter_initial_enable": 0}})
+        pre_st = p.obj(f"prepend lanes {k}", 1, 1, 700 + k * 110, 480)
+        p.connect(route_st, k, st, 0)
+        p.connect(st, 0, pre_st, 0)
+        p.connect(pre_st, 0, js, 0)
     send = p.obj("udpsend 127.0.0.1 9002", 1, 0, 500, 500)
     p.connect(dev, 0, js, 0)
     p.connect(js, 0, send, 0)

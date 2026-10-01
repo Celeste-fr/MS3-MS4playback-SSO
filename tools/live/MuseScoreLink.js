@@ -65,8 +65,9 @@
 
 autowatch = 0;
 inlets = 1;
-outlets = 6;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text,
-                  // 3: "k id n" to the slots' live.remote~ (route 0 … 15), 4: the ms factor ([*~]), 5: bang [snapshot~]
+outlets = 7;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text,
+                  // 3: "k id n" to the slots' live.remote~ (route 0 … 15), 4: the ms factor ([*~]), 5: bang [snapshot~],
+                  // 6: the lanes to keep in the Live Set ([pattr Lanes])
 
 var PROTOCOL = 3;                       // 2: editing Live clips; 3: parameter lanes
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
@@ -120,6 +121,20 @@ var bases = {};               // parameter id -> { value, min, max } before it w
 var seenSerial = -1;          // the entry last applied
 var filledBpm = 0;
 var paramTask = null;
+// … and kept in the Live Set ([pattr Lanes], a Live parameter of type Blob, Stored Only: outlet 6 sets it, its value
+// comes back as "lanes …" when the set opens), so the lanes play without MuseScore (LIVE.md › Automation lanes ›
+// Without MuseScore). The track's lanes as last applied:
+var saved = null;             // { length (beats), routes: { key: { hash, lanes: [{ title, pid, ev }] } } }
+var savedSerial = 0;          // counts the values the set gave back (an entry's serial "saved<n>")
+var SAVED_TAG = "msl-lanes";
+var SAVED_VERSION = 1;
+var STORES = 4;                         // make_device.py STORES: [pattr Lanes], [pattr Lanes2] …
+var STORE_ATOMS = 30000;                // atoms a store at most (Live 12.2 crashed on a [pattr] set to 34010 atoms;
+                                        // 24010 copied fine: the test VM, 2026-10-01)
+var parts = [];                         // k -> the atoms store k gave back
+var sentParts = [];                     // k -> the atoms last sent to store k (as JSON: its echo is left alone)
+var keptStatus = "";                    // "" or why the lanes aren't kept in the set
+var restoredLog = [];         // (debugging: the values the set gave back, for the "state" probe)
 
 function now() { return new Date().getTime(); }
 function num(v) { return Number(Array.isArray(v) ? v[0] : v); }
@@ -201,7 +216,7 @@ function bang() {
       if (!isHub)
             status("MuseScore Link: on this track (the hub is another copy)");
       outlet(4, msFactor(liveTempo()));
-      paramsCheck();
+      paramsCheck(!!saved);
       }
 
 function beat() {
@@ -319,6 +334,8 @@ function anything() {
                   paramsCheck();
             return;
             }
+      if (messagename === "lanes")                            // ([pattr Lanes]: the value the Live Set kept)
+            return restoreSaved(a);
       if (messagename === "posvalue")                         // ([snapshot~]: a "pos" probe's answer)
             return answerPos(num(a[0]));
       if (!isHub)
@@ -1110,7 +1127,7 @@ function looseTitle(t) {
 function paramsCheck(force) {
       if (!me.track)
             return;
-      var e = entry(me.track);
+      var e = currentEntry();
       var used = false;
       for (var k = 0; k < SLOTS; ++k)
             if (slots[k])
@@ -1170,7 +1187,7 @@ function release(k) {
 function applyParams() {
       if (!me.track)
             return;
-      var e = entry(me.track);
+      var e = currentEntry();
       if (!e || !prefix)
             return;                           // (the prefix comes from loadmess: then again)
       var tr = new LiveAPI("id " + me.track);
@@ -1269,10 +1286,154 @@ function applyParams() {
             }
       filledBpm = bpm;
       seenSerial = e.serial;
+      if (!e.fromSet)
+            keep(e);
       g["pr" + me.track] = JSON.stringify({ serial: e.serial, results: results });
       if (want.length || had)
             status("MuseScore Link: " + want.length + " plug-in parameter" + (want.length === 1 ? "" : "s") + " driven"
                    + (isHub ? " (hub)" : ""));
+      }
+
+//---------------------------------------------------------
+//   parameter lanes kept in the Live Set
+//---------------------------------------------------------
+
+// the lanes this copy plays: the hub's entry for the track (MuseScore's word in this Live session), else those
+// the set kept (MuseScore not running, or not yet connected)
+function currentEntry() {
+      var e = entry(me.track);
+      if (e)
+            return e;
+      if (!saved)
+            return null;
+      return { serial: "saved" + savedSerial, length: saved.length, routes: saved.routes, fromSet: true };
+      }
+
+// the hub's entry applied: kept in [pattr Lanes] (Live saves it with the set)
+function keep(e) {
+      var next = { length: num(e.length) || 0, routes: e.routes || {} };
+      if (saved && JSON.stringify(saved) === JSON.stringify(next))
+            return;
+      saved = next;
+      var chunks = splitSaved(encodeSaved(saved));
+      keptStatus = chunks ? "" : "too many lane events to keep in the Live Set (they play while MuseScore runs)";
+      if (!chunks)
+            chunks = splitSaved(encodeSaved(null));
+      for (var k = 0; k < STORES; ++k) {      // (Live: one undo step, "Change in MuseScore Link")
+            var part = k < chunks.length ? chunks[k] : [SAVED_TAG, SAVED_VERSION, 0, k, 0];
+            var j = JSON.stringify(part);
+            if (sentParts[k] === j)
+                  continue;
+            sentParts[k] = j;
+            outlet(6, [k].concat(part));
+            }
+      }
+
+// the encoded lanes in the stores' parts: each "msl-lanes 1 <stamp> <k> <parts> …" (the stamp: parts of one value);
+// null: too long
+function splitSaved(a) {
+      var data = a.slice(2), n = Math.max(1, Math.ceil(data.length / (STORE_ATOMS - 5)));
+      if (n > STORES)
+            return null;
+      var stamp = Math.floor(Math.random() * 1e9), out = [];
+      for (var k = 0; k < n; ++k)
+            out.push([SAVED_TAG, SAVED_VERSION, stamp, k, n].concat(data.slice(k * (STORE_ATOMS - 5), (k + 1) * (STORE_ATOMS - 5))));
+      return out;
+      }
+
+// the saved value as atoms (numbers and symbols: no JSON symbol to intern in Max at each change):
+//   msl-lanes 1 <length beats> <routes> then per route: <key> <hash> <lanes>, per lane: <title> <pid> <pairs>
+//   (time value) × pairs
+function encodeSaved(sv) {
+      var a = [SAVED_TAG, SAVED_VERSION, sv ? num(sv.length) || 0 : 0];
+      var keys = [];
+      if (sv)
+            for (var k in sv.routes)
+                  keys.push(k);
+      a.push(keys.length);
+      for (var i = 0; i < keys.length; ++i) {
+            var r = sv.routes[keys[i]];
+            a.push(keys[i], num(r.hash) || 0, r.lanes.length);
+            for (var l = 0; l < r.lanes.length; ++l) {
+                  var lane = r.lanes[l];
+                  a.push(str(lane.title), lane.pid === undefined ? -1 : num(lane.pid), Math.floor(lane.ev.length / 2));
+                  for (var j = 0; j + 1 < lane.ev.length; j += 2)
+                        a.push(num(lane.ev[j]), num(lane.ev[j + 1]));
+                  }
+            }
+      return a;
+      }
+
+// the atoms back (null: not this format, or cut short)
+function decodeSaved(a) {
+      if (!a || a.length < 4 || str(a[0]) !== SAVED_TAG || num(a[1]) !== SAVED_VERSION)
+            return null;
+      var sv = { length: num(a[2]) || 0, routes: {} };
+      var p = 4, n = num(a[3]);
+      for (var i = 0; i < n; ++i) {
+            if (p + 3 > a.length)
+                  return null;
+            var key = str(a[p]), route = { hash: num(a[p + 1]), lanes: [] }, lanes = num(a[p + 2]);
+            p += 3;
+            for (var l = 0; l < lanes; ++l) {
+                  if (p + 3 > a.length)
+                        return null;
+                  var lane = { title: str(a[p]), pid: num(a[p + 1]), ev: [] }, pairs = num(a[p + 2]);
+                  p += 3;
+                  if (p + 2 * pairs > a.length)
+                        return null;
+                  for (var j = 0; j < 2 * pairs; ++j)
+                        lane.ev.push(num(a[p + j]));
+                  p += 2 * pairs;
+                  route.lanes.push(lane);
+                  }
+            sv.routes[key] = route;
+            }
+      return sv;
+      }
+
+// a store's value ("lanes <k> …"): the set opened, the device pasted or duplicated, Live's undo. When the parts of
+// one value are all there, they are the lanes (an echo of what the script set is left alone)
+function restoreSaved(args) {
+      var k = num(args[0]), part = args.slice(1);
+      restoredLog.push("lanes " + k + ": " + part.length + " atoms: " + str(part.slice(0, 6)));
+      if (restoredLog.length > 20)
+            restoredLog.shift();
+      try {                                   // (debugging: the "saved" probe)
+            var info = JSON.parse(g.savedInfo || "{}");
+            info[me.key] = restoredLog.slice(-4);
+            g.savedInfo = JSON.stringify(info);
+            }
+      catch (e) {}
+      if (!(k >= 0 && k < STORES))
+            return;
+      if (sentParts[k] === JSON.stringify(part))
+            return;
+      parts[k] = part;
+      sentParts[k] = undefined;
+      // the parts of one value: same stamp, 0 … n-1
+      var p0 = parts[0];
+      if (!p0 || str(p0[0]) !== SAVED_TAG || num(p0[1]) !== SAVED_VERSION)
+            return;
+      var stamp = num(p0[2]), n = num(p0[4]), data = [];
+      if (n === 0) {                          // (nothing kept)
+            if (saved) {
+                  saved = null;
+                  ++savedSerial;
+                  paramsCheck(true);
+                  }
+            return;
+            }
+      for (var i = 0; i < n; ++i) {
+            var pi = parts[i];
+            if (!pi || num(pi[2]) !== stamp || num(pi[3]) !== i || num(pi[4]) !== n)
+                  return;                     // (another part still to come)
+            data = data.concat(pi.slice(5));
+            }
+      var sv = decodeSaved([SAVED_TAG, SAVED_VERSION].concat(data));
+      saved = sv && Object.keys(sv.routes).length ? sv : null;
+      ++savedSerial;
+      paramsCheck(true);
       }
 
 // slot k's table: the value in force at each ms of the song, in the parameter's range
@@ -1320,8 +1481,13 @@ function probe(id, what) {
             outlet(5, "bang");                  // ([snapshot~] answers "posvalue <ms>")
             return;
             }
+      if (what === "saved") {                   // (the lanes kept in the set: every copy's, through the Global)
+            return send("/live/probe", id, str(g.savedInfo).substring(0, 7000));
+            }
       if (what === "state") {
             var o = { me: me, prefix: prefix, slots: slots, bases: bases, seenSerial: seenSerial, filledBpm: filledBpm,
+                      saved: saved ? { length: saved.length, routes: Object.keys(saved.routes), atoms: encodeSaved(saved).length }
+                                   : null, savedSerial: savedSerial, restoredLog: restoredLog,
                       waiting: waiting, paramTracks: paramTracks, entries: {} };
             var r = registry();
             for (var k in r)
@@ -1369,8 +1535,9 @@ if (typeof module !== "undefined")
       module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,
                          findTrack: findTrack, writeSong: writeSong, report: report, hashNotes: hashNotes,
                          checkEdits: checkEdits, edit: edit, looseTitle: looseTitle, applyParams: applyParams,
-                         pollParams: pollParams, state: function() {
+                         pollParams: pollParams, restoreSaved: restoreSaved, encodeSaved: encodeSaved,
+                         decodeSaved: decodeSaved, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
                                         edits: edits, slots: slots, bases: bases, waiting: waiting, prefix: prefix,
-                                        pendingParams: pendingParams };
+                                        pendingParams: pendingParams, saved: saved };
                                } };

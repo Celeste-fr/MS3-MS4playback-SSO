@@ -336,5 +336,70 @@ test("titles match as Vst3Plugin::looseTitle", () => {
       assert.strictEqual(l("Mic 1 level"), "mic1level");
       });
 
+// the lanes kept in the Live Set: outlet 6 "k atoms…" to [pattr Lanes] … (make_device.py STORES), given back as "lanes k …"
+const stores = (dev) => dev.out.filter((m) => m[0] === 6).map((m) => (Array.isArray(m[1]) ? m[1] : m.slice(1)));
+
+test("the lanes kept in the set: sent to the stores when applied, played from them without MuseScore", () => {
+      const s = setUp();
+      sendParams(s.hub, 1, "0:1", 111, [{ title: "Vibrato", events: [[2, 0.8], [4, 0.2]] }]);
+      s.live.settle();
+      const sent = stores(s.hub);
+      assert.strictEqual(sent.length, 4);                       // every store: the value in store 0, the others empty
+      assert.strictEqual(sent.map((m) => m[0]).join(), "0,1,2,3");
+      assert.strictEqual(sent[0][1], "msl-lanes");
+      assert.strictEqual(sent[0][5], 1);                         // one part
+      assert.strictEqual(JSON.stringify(sent[1].slice(1)), JSON.stringify(["msl-lanes", 1, 0, 1, 0]));
+      // the same lanes again: nothing sent; their echo from the stores: left alone
+      sendParams(s.hub, 2, "0:1", 111, [{ title: "Vibrato", events: [[2, 0.8], [4, 0.2]] }]);
+      s.live.settle();
+      assert.strictEqual(stores(s.hub).length, 4);
+      for (const m of sent)
+            s.hub.message("lanes", m);
+      assert.strictEqual(s.hub.call("savedSerial"), 0);
+      // a new set: a copy of the device on the violin's track, no hub entry (MuseScore not running): plays the stores
+      const t = setUp();
+      t.live.settle();
+      t.shared.musescore_link["p" + t.vln.id] = undefined;
+      for (const m of sent)
+            t.hub.message("lanes", m);
+      t.live.settle();
+      const vib = buf(t, "001mslp0");
+      assert.ok(near(vib.data[999], 0.3) && near(vib.data[1000], 0.8) && near(vib.data[2000], 0.2));
+      assert.deepStrictEqual(t.hub.slotIds(), [[0, t.p.vib.id]]);
+      });
+
+test("the lanes kept in the set: a long value over several stores, put together only when all parts are there", () => {
+      const s = setUp();
+      const many = [];
+      for (let i = 0; i < 20000; ++i)
+            many.push([i / 1000, (i % 7) / 7]);
+      sendParams(s.hub, 1, "0:1", 111, [{ title: "Vibrato", events: many }]);
+      s.live.settle();
+      const sent = stores(s.hub);
+      assert.ok(sent.every((m) => m.length - 1 <= 30000));
+      assert.strictEqual(sent[0][5], 2);                         // two parts
+      const t = setUp();
+      t.shared.musescore_link["p" + t.vln.id] = undefined;
+      t.hub.message("lanes", sent[1]);                           // (the parts in any order)
+      t.live.settle();
+      assert.strictEqual(t.hub.call("saved"), null);
+      t.hub.message("lanes", sent[0]);
+      t.live.settle();
+      const sv = t.hub.call("saved");
+      assert.strictEqual(sv.routes["0:1"].lanes[0].ev.length, 40000);
+      // too long for the stores: nothing kept (an empty value), the lanes still played
+      const u = setUp();
+      const huge = [];
+      for (let i = 0; i < 70000; ++i)
+            huge.push([i / 1000, (i % 7) / 7]);
+      sendParams(u.hub, 1, "0:1", 111, [{ title: "Vibrato", events: huge }]);
+      u.live.settle();
+      const last = stores(u.hub).filter((m) => m[0] === 0).pop();
+      assert.strictEqual(JSON.stringify(last.slice(1, 3)), JSON.stringify(["msl-lanes", 1]));
+      assert.strictEqual(last[5], 1);
+      assert.ok(last.length < 20);
+      assert.strictEqual(u.hub.call("keptStatus").indexOf("too many"), 0);
+      });
+
 console.log(failures ? failures + " failed" : "all passed");
 process.exitCode = failures ? 1 : 0;

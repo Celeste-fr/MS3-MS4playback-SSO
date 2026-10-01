@@ -270,7 +270,7 @@ test("parameter lanes: the song position in ms (phasor~ locked to Live's transpo
       const byText = (t) => patcher.boxes.filter((b) => b.box.text === t).map((b) => b.box.id);
       const has = (a, ao, b, bi) => (wires[a + ":" + ao] || []).some(([d, i]) => d === b && i === bi);
       const v8 = byText("v8")[0];
-      assert.strictEqual(boxes[v8].numoutlets, 6);
+      assert.strictEqual(boxes[v8].numoutlets, 7);
       const [phasor] = byText("phasor~ @frequency 7864320 ticks @lock 1");
       assert.strictEqual(7864320, 16384 * 480);
       const [ms] = byText("*~ 1.");
@@ -310,7 +310,7 @@ test("the script's constants agree with the patcher's", () => {
       const js = fs.readFileSync(path.join(dir, "MuseScoreLink.js"), "utf8");
       assert.ok(/var SLOTS = 16;/.test(js));
       assert.ok(/var PERIOD_QUARTERS = 16384;/.test(js));
-      assert.ok(/outlets = 6;/.test(js));
+      assert.ok(/outlets = 7;/.test(js));
       });
 
 if (failures) {
