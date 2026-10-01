@@ -849,7 +849,10 @@ def legatoDelay(patch, sound, t):
     if rows:
         by = {}
         for vel, interval, leave, arrive, dip in rows:
-            if arrive >= 0:
+            # (+-12 left out: the grid's octaves are inflated by octave errors in its pitch analysis -- Basses +12 680,
+            # Horn Solo -12 685 against 150-250 for the other intervals -- and the measurement sweep of build ed3a294
+            # heard octave slurs land 120-176 ms early; beyond +-7 the +-7 delay is used until they are measured again)
+            if arrive >= 0 and abs(interval) < 12:
                 by.setdefault(interval, []).append(arrive)
         if by:
             return ' '.join(f'{i:+d}:{int(round(statistics.median(a)))}' for i, a in sorted(by.items()))
@@ -918,22 +921,48 @@ def simplify(points, tolerance):
     return simplify(points[:at + 1], tolerance)[:-1] + simplify(points[at:], tolerance)
 # Measured directly where the rest check's onset part ran (sso_sound_onset.json, branch claude/intelligent-cray-6pd4o1:
 # every semitone at pp / mf / ff, the first time within 20 / 15 / 12 / 10 dB of the peak, on the perceived envelope and
-# on 5 ms power): the mf power -15 dB time, less 10 ms (the analysis window's latency: plucks, Pizzicato / Bartok / Col
-# Legno, come out at 10-20 ms on it, where the sound starts within a few ms; the perceived envelope's 22 ms smoothing adds
-# another 15-20). On the string sections' All techniques patches it is well above the family fit made on the Performance
-# patches (Violins 2 Long 145 against 90, Celli Long CS 210 against 98, Violins 1 Flautando 370 against 133), so the fit
-# is only for what isn't measured yet.
+# on 5 ms power): the mf -15 dB time on the perceived envelope, less 30 ms of analysis latency (plucks, Pizzicato /
+# Bartok / Col Legno, come out at 28-53 ms on it, where they sound within a few ms). Perceived, not power: on slow
+# swells the low partials' energy rises long before the sound is heard (Violins 1 Long Super Sul Tasto 122 ms on power,
+# 598 perceived), and the measurement agent's sweep of build ed3a294 (which used power) heard sul tasto still 240-600 ms
+# and flautando 145-255 ms late, ordinary held notes up to 67 ms late. The family fit is only for what isn't measured.
 ONSET_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_sound_onset.json')
 MEASURED_ONSET = json.load(open(ONSET_FILE, encoding='utf-8')) if os.path.exists(ONSET_FILE) else {}
-ONSET_LATENCY = 10
+ONSET_LATENCY = 30
+def articulationKind(sound):
+    """the articulation a sound is, for the fit (patch-independent: 'Legato Sul G' is a Legato)"""
+    for k in ('Super Sul Tasto', 'Sul Tasto', 'Flautando', 'Harmonics', 'CS Sul Pont', 'Sul Pont', 'CS Blend', 'CS',
+              'Rachm', 'Legato', 'Long'):
+        if k in sound:
+            return k
+    return sound
+def measuredOnsets(patch, sound):
+    rows = MEASURED_ONSET.get(patch, {}).get(sound)
+    if not isinstance(rows, list):
+        return []
+    return [(r[0], max(0, r[2][1] - ONSET_LATENCY)) for r in rows
+            if len(r) > 2 and r[2] and r[2][1] is not None and r[2][1] >= 0]
+# For what isn't measured: per articulation (not per family: the slow techniques' onsets follow their own full-level
+# times, sul tasto / flautando held notes stayed 150-600 ms late on the family fit), the median over the measured
+# patches' semitones of onset / mf full-level time (sso_sound_range.json), times this patch's full-level time.
+def _ratios():
+    out = {}
+    for patch, sounds in MEASURED_ONSET.items():
+        for sound in sounds:
+            rng = {r[0]: r[8] for r in RANGE.get(patch, {}).get(sound, {}).get('range', []) if r[8] and r[8] > 0}
+            for pitch, ms in measuredOnsets(patch, sound):
+                if pitch in rng:
+                    out.setdefault((onsetFamily(patch, sound) == 'brass', articulationKind(sound)), []).append(ms / rng[pitch])
+    return {k: statistics.median(v) for k, v in out.items() if len(v) >= 20}
+ONSET_RATIO = _ratios()
 def onset(patch, sound):
     """the onset= text of a sustained sound (None: not measured or no family)"""
     family = onsetFamily(patch, sound)
     measured = MEASURED_ONSET.get(patch, {}).get(sound)
     full = None
     if isinstance(measured, list):
-        full = [(r[0], max(0, r[5][1] - ONSET_LATENCY)) for r in measured
-                if len(r) > 5 and r[5] and r[5][1] is not None and r[5][1] >= 0]
+        full = [(r[0], max(0, r[2][1] - ONSET_LATENCY)) for r in measured
+                if len(r) > 2 and r[2] and r[2][1] is not None and r[2][1] >= 0]
         ms = [m for _, m in full]
     if not full:
         rows = RANGE.get(patch, {}).get(sound, {}).get('range')
@@ -942,7 +971,8 @@ def onset(patch, sound):
         full = [(r[0], r[8]) for r in rows if r[8] is not None and r[8] >= 0]
         if not full:
             return None
-        ms = [onsetFit(family, f) for _, f in full]
+        ratio = ONSET_RATIO.get((family == 'brass', articulationKind(sound)))
+        ms = [ratio * f if ratio else onsetFit(family, f) for _, f in full]
     if not family:
         return None
     smooth = [statistics.median(ms[max(0, i - 3):i + 4]) for i in range(len(ms))]
