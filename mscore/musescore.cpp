@@ -258,8 +258,10 @@ static bool extractChild = false;           // --extract-child: a round of an ex
 static bool checkDynamicsMode = false;     // --check-dynamics (with --extract-library): Dynamics only, in the background
 static bool checkTimingMode = false;       // --check-timing (with --extract-library): each articulation's timing, in the background
 static bool allSoundsMode = false;         // --all-sounds (with --check-dynamics / --check-timing): every sound of every patch
-// a check run under the supervisor (superviseExtract): the timing check, and the dynamics check of every sound
-static bool supervisedCheck() { return checkTimingMode || (checkDynamicsMode && allSoundsMode); }
+static bool checkRestMode = false;         // --check-rest (with --extract-library): the rest of every sound (ArticulationCheck::rest)
+static QString restParts = "range,repeats,controls,legato";   // its parts (--rest-parts)
+// a check run under the supervisor (superviseExtract): the timing check, the rest, and the dynamics check of every sound
+static bool supervisedCheck() { return checkTimingMode || checkRestMode || (checkDynamicsMode && allSoundsMode); }
 static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
 static bool picturesMode = false;          // --window-pictures: the percussion patches' windows, in the background (extractMode too)
@@ -4738,7 +4740,9 @@ static bool superviseExtract(const QString& root, const QString& runName)
                   args << "--extract-controllers";
             if (!extractPlan.isEmpty())
                   args << "--extract-plan" << extractPlan;
-            if (checkTimingMode)
+            if (checkRestMode)
+                  args << "--check-rest" << "--rest-parts" << restParts;
+            else if (checkTimingMode)
                   args << "--check-timing";
             else if (checkDynamicsMode)
                   args << "--check-dynamics";
@@ -4876,7 +4880,8 @@ static bool superviseExtract(const QString& root, const QString& runName)
       QFile::remove(progress);
       QFile::remove(stepFile);
       QFile::remove(crashFile);
-      const QString run = checkTimingMode ? QString("the timing check") : checkDynamicsMode ? QString("the dynamics check") : QString("the extract");
+      const QString run = checkRestMode ? QString("the rest check") : checkTimingMode ? QString("the timing check")
+                          : checkDynamicsMode ? QString("the dynamics check") : QString("the extract");
       ArticulationCheckDialog::logBackground(skipped.isEmpty() ? QString("%1 is done").arg(run)
                                              : QString("%1 is done; left out: %2").arg(run, skipped.join(", ")));
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
@@ -4897,9 +4902,10 @@ static bool extractInBackground(const QStringList& argv)
 #endif
       const QString root = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/MuseScore Sound Library Check";
       // the extract and the timing check (not a key scan, pictures or the dynamics check): under a supervisor
-      const QString what = measureLoadTimesMode ? "background load times" : checkTimingMode ? "background timing check"
+      const QString what = measureLoadTimesMode ? "background load times" : checkRestMode ? "background rest check"
+                           : checkTimingMode ? "background timing check"
                            : checkDynamicsMode ? "background dynamics check" : "background extract";
-      if (checkDynamicsMode || checkTimingMode || measureLoadTimesMode)
+      if (checkDynamicsMode || checkTimingMode || checkRestMode || measureLoadTimesMode)
             ArticulationCheckDialog::setBackgroundLog(what + ".log");
       const QString runName = supervisedCheck() ? what : QString("background extract");
       ArticulationCheckDialog::setRunPrefix(runName);
@@ -4984,6 +4990,8 @@ static bool extractInBackground(const QStringList& argv)
             return ok;
             }
       ArticulationCheckDialog dialog(library);
+      if (checkRestMode)
+            dialog.setRest(restParts);
       QString zip;
       bool ok;
       {
@@ -4997,7 +5005,7 @@ static bool extractInBackground(const QStringList& argv)
       }
       if (scanKeysMode || picturesMode)
             return ok;          // (a key scan, the pictures: one process; its zip and log as the extract's)
-      if (checkTimingMode) {
+      if (checkTimingMode || checkRestMode) {
             if (!extractChild)            // (the supervisor opens it)
                   QDesktopServices::openUrl(QUrl::fromLocalFile(root));
             return ok;
@@ -9142,6 +9150,11 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                                           "notation plays; under a supervisor like the extract"));
       parser.addOption(QCommandLineOption("check-timing", "Use with --extract-library: measure the patches' timing (when each articulation "
                                           "speaks, how long it sounds and rings, legato transitions) instead of extracting"));
+      parser.addOption(QCommandLineOption("check-rest", "Use with --extract-library: measure the rest of every sound of every patch (across "
+                                          "its range, repeated, under each control, a legato's slurs at every velocity and interval) "
+                                          "instead of extracting; under a supervisor like the extract"));
+      parser.addOption(QCommandLineOption("rest-parts", "Use with --check-rest: which parts, any of range,repeats,controls,legato "
+                                          "(default: all)", "parts"));
       parser.addOption(QCommandLineOption("scan-keys", "Check articulations' key scan of a sound library's patches whose keys are not "
                                           "known yet, without a window, as a process of its own like --extract-library (listening "
                                           "only); --extract-patches <file> for other patches", "library"));
@@ -9262,6 +9275,9 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             extractChild = parser.isSet("extract-child");
             checkDynamicsMode = parser.isSet("check-dynamics");
             checkTimingMode = parser.isSet("check-timing");
+            checkRestMode = parser.isSet("check-rest");
+            if (parser.isSet("rest-parts"))
+                  restParts = parser.value("rest-parts");
             allSoundsMode = parser.isSet("all-sounds");
             if (parser.isSet("extract-round"))
                   extractRound = qMax(1, parser.value("extract-round").toInt());

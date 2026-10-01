@@ -184,6 +184,63 @@ class ArticulationCheck {
             };
       static std::vector<TimingResult> timing(Vst3Plugin* plugin, const std::vector<int>& values, const std::vector<int>& pitches,
                                               const std::vector<bool>& legato, const Settings& settings, Progress progress = nullptr);
+      // the rest (the owner, 2026-10-01: "measure everything left"; what dynamics and timing leave out, both measuring
+      // each sound at one pitch, the patch's own controls, one note and 3 velocities / 2 intervals of legato):
+      //   range      every semitone from the test pitch down and up until silenceRun semitones in a row are silent
+      //              (or the range's ends, avoid's pitches never played: keyswitches), at pp / mf / ff (velocity =
+      //              dynamics CC = 32 / 80 / 112): its level, perceived loudness, attack, onset; at mf also how long
+      //              it sounds and its release (mf held MF_SECONDS, pp and ff PP_FF_SECONDS)
+      //   repeats    the test pitch at mf, repeatCount times in a row (round robins: how much each repeat differs)
+      //   controls   each control (setControl) at each of controlValues, the test pitch at mf, then back at its own
+      //              value (the patch's mics, vibrato, release … : what they do to level, attack and release)
+      //   legato     a legato value: slurred pairs (TimingResult::Legato) at every REST_LEGATO_VELOCITIES and
+      //              REST_LEGATO_INTERVALS from the test pitch
+      static constexpr double MF_SECONDS = 1.5;
+      static constexpr double PP_FF_SECONDS = 1.0;
+      static constexpr int REST_LEGATO_VELOCITIES[9] = { 1, 16, 32, 48, 64, 80, 96, 112, 127 };
+      static constexpr int REST_LEGATO_INTERVALS[14] = { -12, -7, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 7, 12 };
+      struct NoteStats {
+            int pitch { -1 };
+            int level { 0 };                // velocity = dynamics CC
+            bool sounds { false };          // above SILENT and 10 dB above what was left of the last note
+            double loudDb { -200 };         // the loudest 50 ms (as dynamics)
+            double perceivedDb { -200 };    // perceivedLoudnessDb (the note and 0.3 s)
+            double salienceDb { -200 };     // attackSalience
+            double riseMs { -1 };
+            double startMs { -1 }, fullMs { -1 }, peakMs { -1 };    // as timing: 30 dB, 6 dB under the peak, the peak
+            double bodyMs { -1 };           // to 20 dB under the peak (mf only, else -1)
+            bool sustains { false };
+            double releaseMs { -1 };        // a sustaining note's release (mf only; -1: none or longer than the tail)
+            };
+      struct RestSettings {
+            bool range { true };
+            bool repeats { true };
+            bool controls { true };
+            bool legato { true };
+            int silenceRun { 4 };
+            int low { 0 };                  // the range's ends (a drum hit: its key)
+            int high { 127 };
+            std::vector<int> avoid;
+            int repeatCount { 8 };
+            std::vector<double> controlValues { 0, 0.25, 0.5, 0.75, 1 };
+            };
+      struct RestResult {
+            struct ControlPoint {
+                  int control { -1 };
+                  double value { 0 };
+                  NoteStats note;
+                  };
+            int value { -1 };
+            int pitch { -1 };                   // the test pitch (another where it was silent); -1: silent everywhere tried
+            std::vector<NoteStats> range;       // by pitch, pp / mf / ff (a silent pitch: mf only)
+            std::vector<NoteStats> repeats;
+            std::vector<ControlPoint> controls;
+            std::vector<TimingResult::Legato> legato;
+            };
+      // control i (0 … controls - 1) to a value 0-1; value < 0: back to its own. false: stop
+      using SetControl = std::function<bool(int control, double value)>;
+      static RestResult rest(Vst3Plugin* plugin, int value, int pitch, bool legato, int controls, SetControl setControl,
+                             const Settings& settings, const RestSettings& rs, Progress progress = nullptr);
       // the note's level, dB, in 5 ms windows of a stereo interleaved clip (for the tests)
       static std::vector<double> envelope(const std::vector<float>& clip, double sampleRate);
 

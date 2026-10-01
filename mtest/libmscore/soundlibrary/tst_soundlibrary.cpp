@@ -77,6 +77,7 @@ class TestSoundLibrary : public QObject, public MTest
       void heldOnPerformance();
       void dynamicsCheck();
       void timingCheck();
+      void restCheck();
       void shortsFollowDynamics();
       void evenDynamicSteps();
       void pedalChangeAfterChord();
@@ -2976,6 +2977,96 @@ void TestSoundLibrary::timingCheck()
       // 30: silent everywhere
       QCOMPARE(r[4].pitch, -1);
       QVERIFY(steps >= 5 * 4);
+      }
+
+//---------------------------------------------------------
+//   restCheck
+//    ArticulationCheck::rest (the owner, 2026-10-01: "measure everything left"): a sound across its range, repeated
+//    (the test synth's round robins: ±6 % gain), under a control ("Tone": the level times 0.2 + 0.8 tone), a legato's
+//    slurs at every velocity and interval
+//---------------------------------------------------------
+
+void TestSoundLibrary::restCheck()
+      {
+      using AC = ArticulationCheck;
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->setOffline(true));
+      AC::Settings s;
+      s.pitch = 67;
+      s.minPitch = 40;
+      s.maxPitch = 100;
+      const long tone = p->parameterId("Tone");
+      QVERIFY(tone >= 0);
+      const double own = p->parameter(unsigned(tone));
+      AC::SetControl set = [&](int c, double v) {
+            if (c != 0)
+                  return false;
+            p->setParameter(unsigned(tone), v < 0 ? own : v);
+            return true;
+            };
+      auto within = [](double x, double want, double tolerance, const char* what) {
+            if (std::fabs(x - want) > tolerance)
+                  qWarning() << what << x << "expected" << want;
+            return std::fabs(x - want) <= tolerance;
+            };
+      int steps = 0;
+      auto progress = [&](int, int) { ++steps; return true; };
+
+      // 1: held; range 64-70 (the synth plays every key: the range's ends stop it), 6 repeats, Tone at 0 / 0.5 / 1
+      AC::RestSettings rs;
+      rs.low = 64;
+      rs.high = 70;
+      rs.repeatCount = 6;
+      rs.controlValues = { 0, 0.5, 1 };
+      rs.legato = false;
+      const AC::RestResult r = AC::rest(p.get(), 1, 67, false, 1, set, s, rs, progress);
+      QCOMPARE(r.pitch, 67);
+      QCOMPARE(int(r.range.size()), 7 * 3);
+      for (size_t i = 0; i < r.range.size(); ++i) {
+            QCOMPARE(r.range[i].pitch, 64 + int(i / 3));
+            QCOMPARE(r.range[i].level, i % 3 == 0 ? 32 : i % 3 == 1 ? 80 : 112);
+            QVERIFY(r.range[i].sounds);
+            QVERIFY(r.range[i].startMs >= 0 && r.range[i].startMs <= 5);
+            }
+      // (pp to ff: the level is velocity * CC)
+      QVERIFY(within(r.range[11].loudDb - r.range[9].loudDb, 40 * std::log10(112.0 / 32.0), 2, "pp to ff"));
+      // mf: held to its release, which is at once
+      QVERIFY(r.range[10].sustains);
+      QVERIFY(within(r.range[10].bodyMs, 1000 * AC::MF_SECONDS, 10, "mf body"));
+      QVERIFY(within(r.range[10].releaseMs, 0, 10, "mf release"));
+      QCOMPARE(int(r.repeats.size()), 6);
+      double lo = 200, hi = -200;
+      for (const auto& n : r.repeats) {
+            lo = std::min(lo, n.loudDb);
+            hi = std::max(hi, n.loudDb);
+            }
+      qInfo("repeats within %.2f dB", hi - lo);
+      QVERIFY(hi - lo > 0.2 && hi - lo < 1.5);            // (±6 %: about 1 dB)
+      QCOMPARE(int(r.controls.size()), 3);
+      QVERIFY(within(r.controls[0].note.loudDb - r.controls[2].note.loudDb, 20 * std::log10(0.2), 1.5, "Tone 0 against 1"));
+      QVERIFY(within(r.controls[1].note.loudDb - r.controls[2].note.loudDb, 20 * std::log10(0.6), 1.5, "Tone 0.5 against 1"));
+      QVERIFY(within(p->parameter(unsigned(tone)), own, 1e-6, "Tone back"));
+
+      // 24: a legato, 9 velocities × 14 intervals (the glide: 300 / 150 / 60 ms by velocity)
+      AC::RestSettings lg;
+      lg.range = lg.repeats = lg.controls = false;
+      lg.low = 50;
+      lg.high = 90;
+      const AC::RestResult l = AC::rest(p.get(), 24, 67, true, 0, nullptr, s, lg, progress);
+      QCOMPARE(l.pitch, 67);
+      QCOMPARE(int(l.legato.size()), 9 * 14);
+      for (const auto& x : l.legato) {
+            QVERIFY2(x.leaveMs >= 0 && x.arriveMs >= x.leaveMs,
+                     qPrintable(QString("velocity %1, %2: leaves %3, arrives %4").arg(x.velocity).arg(x.interval).arg(x.leaveMs).arg(x.arriveMs)));
+            // (arrived: within 35 cents of the second note, so a semitone's glide arrives at 65 % of its time)
+            const double glide = x.velocity < 40 ? 300 : x.velocity < 100 ? 150 : 60;
+            QVERIFY(within(x.arriveMs, glide * (1 - 35.0 / (100 * std::abs(x.interval))), 60, "24 arrival"));
+            }
+      // 30: silent everywhere
+      QCOMPARE(AC::rest(p.get(), 30, 67, false, 1, set, s, rs, progress).pitch, -1);
+      QVERIFY(steps > 21 + 6 + 3 + 126);
       }
 
 //---------------------------------------------------------

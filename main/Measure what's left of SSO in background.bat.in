@@ -1,11 +1,13 @@
 @echo off
-rem Measure what is left of Spitfire Symphony Orchestra, in the background: the dynamics, then the timing, of
-rem every sound, each leaving out the patches earlier runs measured (their folders in Documents\MuseScore Sound
+rem Measure what is left of Spitfire Symphony Orchestra, in the background: the dynamics, then the timing, then
+rem the rest (each sound across its range, repeated, under each control, a legato's slurs at every velocity and
+rem interval) of every sound, each leaving out the patches earlier runs measured (their folders in Documents\MuseScore Sound
 rem Library Check). What is done ends at once; set MS_EXTRACT_REDO=1 to measure everything again.
 rem
-rem Double-click this file. It runs this MuseScore with no window, twice, one after the other:
+rem Double-click this file. It runs this MuseScore with no window, three times, one after the other:
 rem   MuseScore --extract-library ... --check-dynamics --all-sounds --extract-patches all
 rem   MuseScore --extract-library ... --check-timing --all-sounds --extract-patches all
+rem   MuseScore --extract-library ... --check-rest --extract-patches all
 rem Every patch of the library (the 700, not only the ones MuseScore plays), every articulation (also the
 rem ones no notation plays), each percussion hit on its own key, and a one-sound patch's sound. A crash or a
 rem hang is caught and the run goes on in a new MuseScore; a patch that fails twice is left out. Start it
@@ -13,17 +15,19 @@ rem again after a stop (or closing it) and it carries on where it was. It uses c
 rem MuseScore's own folders, except the dynamics curves of what a notation plays (as the dynamics check).
 rem
 rem Progress: Documents\MuseScore Sound Library Check\background dynamics check.log, then
-rem           Documents\MuseScore Sound Library Check\background timing check.log
-rem When both are done, hand back every "Spitfire Symphony Orchestra <date>.zip" they made.
-rem This window stays open (minimised) until both are done; closing it stops what hasn't started yet.
+rem           Documents\MuseScore Sound Library Check\background timing check.log, then
+rem           Documents\MuseScore Sound Library Check\background rest check.log (the longest: hours)
+rem When all are done, hand back every "Spitfire Symphony Orchestra <date>.zip" they made.
+rem This window stays open (minimised) until all are done; closing it stops what hasn't started yet.
 
 setlocal
 if not "%~1"=="run" (
   start "Measuring what is left of SSO (leave open)" /min cmd /c ""%~f0" run"
-  echo Measuring what is left of SSO in the background: dynamics first, then timing; what is done is skipped.
+  echo Measuring what is left of SSO in the background: dynamics, then timing, then the rest; what is done is skipped.
   echo Progress: %USERPROFILE%\Documents\MuseScore Sound Library Check\background dynamics check.log
   timeout /t 15
   exit /b
 )
 start "" /wait "%~dp0@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --check-dynamics --all-sounds --extract-patches all
 start "" /wait "%~dp0@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --check-timing --all-sounds --extract-patches all
+start "" /wait "%~dp0@MSCORE_OUTPUT_NAME@.exe" --extract-library "Spitfire Symphony Orchestra" --check-rest --extract-patches all

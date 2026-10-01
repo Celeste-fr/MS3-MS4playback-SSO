@@ -14,6 +14,10 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <deque>
+#include <future>
+#include <map>
+#include <thread>
 
 #include "pluginextract.h"
 #include "vst3plugin.h"
@@ -680,6 +684,12 @@ struct Player {
             c.features = ArticulationCheck::features(clip, frames(s.note), s.sampleRate);
             return c;
             }
+
+      // a note at velocity = dynamics CC = level, held seconds, then its tail: until it is 50 dB under its loudest
+      // (and under the level before the release), at most tailMax seconds. offFrame: where the release is;
+      // residualDb: the level just before the note-on (what is left of the last note's tail)
+      std::vector<float> held(int value, int pitch, int level, double seconds, double tailMax, size_t* offFrame,
+                              double* residualDb = nullptr);
       };
 
 } // namespace
@@ -852,6 +862,117 @@ std::vector<double> ArticulationCheck::envelope(const std::vector<float>& clip, 
       return env;
       }
 
+std::vector<float> Player::held(int value, int pitch, int level, double seconds, double tailMax, size_t* offFrame, double* residualDb)
+      {
+      const double sr = s.sampleRate;
+      settle();
+      s.dynamicsValue = level;
+      arm(-1, value);
+      if (residualDb) {             // (arm's last 0.1 s)
+            double peak = 0;
+            for (float x : buffer)
+                  peak = std::max(peak, double(std::fabs(x)));
+            *residualDb = db(peak * peak);
+            }
+      lastPitch = pitch;
+      p->midi(ME_NOTEON, s.channel, pitch, qBound(1, level, 127));
+      std::vector<float> clip = render(frames(seconds));
+      p->midi(ME_NOTEON, s.channel, pitch, 0);
+      if (offFrame)
+            *offFrame = clip.size() / 2;
+      const std::vector<double> heldEnv = ArticulationCheck::envelope(clip, sr);
+      double loudest = -200;
+      for (double e : heldEnv)
+            loudest = std::max(loudest, e);
+      const size_t k = heldEnv.size() > 20 ? heldEnv.size() - 20 : 0;       // (the 100 ms before the release)
+      double before = -200;
+      for (size_t i = k; i < heldEnv.size(); ++i)
+            before = std::max(before, heldEnv[i]);
+      const double floorDb = std::max(-95.0, std::min(loudest - 50, before - 40));
+      const int block = frames(0.1);
+      for (double t = 0; t < tailMax; t += 0.1) {
+            const std::vector<float>& b = render(block);
+            clip.insert(clip.end(), b.begin(), b.end());
+            double peak = 0;
+            for (float x : b)
+                  peak = std::max(peak, double(std::fabs(x)));
+            if (db(peak * peak) < floorDb)
+                  break;
+            }
+      lastLoudDb = loudest;
+      return clip;
+      }
+
+//---------------------------------------------------------
+//   legatoPair
+//    two notes slurred as MuseScore plays them (the second starts, the first ends LEGATO_OVERLAP_MS later)
+//    at velocity, a then b: when the pitch leaves the first, arrives at the second, the level's dip
+//    (ArticulationCheck::timing, ::rest)
+//---------------------------------------------------------
+
+static ArticulationCheck::TimingResult::Legato legatoPair(Player& player, int value, int a, int b, int velocity)
+      {
+      const double sr = player.s.sampleRate;
+      const size_t hop = size_t(sr * 0.010);
+      const size_t frame = size_t(sr * 0.080);
+      ArticulationCheck::TimingResult::Legato l;
+      l.velocity = velocity;
+      l.interval = b - a;
+      const int interval = b - a;
+      player.settle();
+      player.s.dynamicsValue = 80;
+      player.arm(-1, value);
+      player.p->midi(ME_NOTEON, player.s.channel, a, velocity);
+      const std::vector<float> first = player.render(player.frames(1.2));
+      player.p->midi(ME_NOTEON, player.s.channel, b, velocity);
+      std::vector<float> second = player.render(player.frames(ArticulationCheck::LEGATO_OVERLAP_MS / 1000.0));
+      player.p->midi(ME_NOTEON, player.s.channel, a, 0);
+      const std::vector<float>& rest = player.render(player.frames(1.4));
+      second.insert(second.end(), rest.begin(), rest.end());
+      player.p->midi(ME_NOTEON, player.s.channel, b, 0);
+      player.lastPitch = b;
+      // the first note's pitch: 0.6 to 1.1 s of it
+      const std::vector<float> reference(first.begin() + 2 * player.frames(0.6), first.begin() + 2 * player.frames(1.1));
+      const std::vector<double> referenceSpectrum = PluginExtract::pitchSpectrum(reference, sr);
+      // frames centred 0 … 800 ms after the second note-on (the first 40 ms from before it)
+      std::vector<float> joined(first.end() - 2 * std::ptrdiff_t(frame / 2), first.end());
+      joined.insert(joined.end(), second.begin(), second.end());
+      int arrivedRun = 0;
+      for (size_t c = 0; 2 * (c * hop + frame) <= joined.size() && c * 10 <= 800; ++c) {
+            const std::vector<float> f(joined.begin() + 2 * std::ptrdiff_t(c * hop),
+                                       joined.begin() + 2 * std::ptrdiff_t(c * hop + frame));
+            double confidence = 0;
+            const double cents = PluginExtract::centsShift(referenceSpectrum, f, sr, 1300, &confidence);
+            if (confidence < 0.3)
+                  continue;
+            const int t = int(c * 10);
+            l.cents.push_back({ t, std::round(cents) });
+            if (l.leaveMs < 0 && std::fabs(cents) > 35)
+                  l.leaveMs = t;
+            if (l.arriveMs < 0) {
+                  if (std::fabs(cents - 100.0 * interval) < 35) {
+                        if (++arrivedRun == 3)
+                              l.arriveMs = t - 20;
+                        }
+                  else
+                        arrivedRun = 0;
+                  }
+            }
+      // the dip: the quietest 5 ms in the first 600 ms against the second note after 800 ms
+      const std::vector<double> e = ArticulationCheck::envelope(second, sr);
+      double dip = 200, own = -200;
+      for (size_t k = 0; k < e.size(); ++k) {
+            const double t = k * WINDOW_MS;
+            if (t < 600)
+                  dip = std::min(dip, e[k]);
+            else if (t >= 800 && t < 1200)
+                  own = std::max(own, e[k]);
+            }
+      if (own > SILENT_DB)
+            l.dipDb = std::min(0.0, std::round((dip - own) * 10) / 10);
+      return l;
+      }
+
 namespace {
 
 // the loudest window, and the windows from the note-on to 30 dB, 6 dB under it and to it
@@ -909,39 +1030,8 @@ std::vector<ArticulationCheck::TimingResult> ArticulationCheck::timing(Vst3Plugi
             ++done;
             return !progress || progress(done, std::max(total, done));
             };
-      // a note at velocity = dynamics CC = level, held seconds, then its tail: until it is 50 dB under its loudest
-      // (and under the level before the release), at most tailMax seconds. offFrame: where the release is
       auto note = [&](int value, int pitch, int level, double seconds, double tailMax, size_t* offFrame) {
-            player.settle();
-            player.s.dynamicsValue = level;
-            player.arm(-1, value);
-            player.lastPitch = pitch;
-            plugin->midi(ME_NOTEON, settings.channel, pitch, qBound(1, level, 127));
-            std::vector<float> clip = player.render(player.frames(seconds));
-            plugin->midi(ME_NOTEON, settings.channel, pitch, 0);
-            if (offFrame)
-                  *offFrame = clip.size() / 2;
-            const std::vector<double> held = envelope(clip, sr);
-            double loudest = -200;
-            for (double e : held)
-                  loudest = std::max(loudest, e);
-            const size_t k = held.size() > 20 ? held.size() - 20 : 0;       // (the 100 ms before the release)
-            double before = -200;
-            for (size_t i = k; i < held.size(); ++i)
-                  before = std::max(before, held[i]);
-            const double floorDb = std::max(-95.0, std::min(loudest - 50, before - 40));
-            const int block = player.frames(0.1);
-            for (double t = 0; t < tailMax; t += 0.1) {
-                  const std::vector<float>& b = player.render(block);
-                  clip.insert(clip.end(), b.begin(), b.end());
-                  double peak = 0;
-                  for (float x : b)
-                        peak = std::max(peak, double(std::fabs(x)));
-                  if (db(peak * peak) < floorDb)
-                        break;
-                  }
-            player.lastLoudDb = loudest;
-            return clip;
+            return player.held(value, pitch, level, seconds, tailMax, offFrame);
             };
 
       for (int i = 0; i < n; ++i) {
@@ -1016,71 +1106,17 @@ std::vector<ArticulationCheck::TimingResult> ArticulationCheck::timing(Vst3Plugi
             }
             // legato: two slurred notes
             if (legato[size_t(i)]) {
-                  const size_t hop = size_t(sr * 0.010);
-                  const size_t frame = size_t(sr * 0.080);
                   for (int velocity : LEGATO_VELOCITIES) {
                         for (int interval : LEGATO_INTERVALS) {
-                              TimingResult::Legato l;
-                              l.velocity = velocity;
-                              l.interval = interval;
                               const int a = r.pitch, b = r.pitch + interval;
                               if (b < settings.minPitch || b > settings.maxPitch || b < 0 || b > 127) {
                                     if (!step())
                                           return out;
                                     continue;
                                     }
-                              player.settle();
-                              player.s.dynamicsValue = 80;
-                              player.arm(-1, r.value);
-                              plugin->midi(ME_NOTEON, settings.channel, a, velocity);
-                              const std::vector<float> first = player.render(player.frames(1.2));
-                              plugin->midi(ME_NOTEON, settings.channel, b, velocity);
-                              std::vector<float> second = player.render(player.frames(LEGATO_OVERLAP_MS / 1000.0));
-                              plugin->midi(ME_NOTEON, settings.channel, a, 0);
-                              const std::vector<float>& rest = player.render(player.frames(1.4));
-                              second.insert(second.end(), rest.begin(), rest.end());
-                              plugin->midi(ME_NOTEON, settings.channel, b, 0);
-                              player.lastPitch = b;
+                              const TimingResult::Legato l = legatoPair(player, r.value, a, b, velocity);
                               if (!step())
                                     return out;
-                              // the first note's pitch: 0.6 to 1.1 s of it
-                              const std::vector<float> reference(first.begin() + 2 * player.frames(0.6), first.begin() + 2 * player.frames(1.1));
-                              // frames centred 0 … 800 ms after the second note-on (the first 40 ms from before it)
-                              std::vector<float> joined(first.end() - 2 * std::ptrdiff_t(frame / 2), first.end());
-                              joined.insert(joined.end(), second.begin(), second.end());
-                              int arrivedRun = 0;
-                              for (size_t c = 0; 2 * (c * hop + frame) <= joined.size() && c * 10 <= 800; ++c) {
-                                    const std::vector<float> f(joined.begin() + 2 * std::ptrdiff_t(c * hop),
-                                                               joined.begin() + 2 * std::ptrdiff_t(c * hop + frame));
-                                    double confidence = 0;
-                                    const double cents = PluginExtract::centsShift(reference, f, sr, 1300, &confidence);
-                                    if (confidence < 0.3)
-                                          continue;
-                                    const int t = int(c * 10);
-                                    l.cents.push_back({ t, std::round(cents) });
-                                    if (l.leaveMs < 0 && std::fabs(cents) > 35)
-                                          l.leaveMs = t;
-                                    if (l.arriveMs < 0) {
-                                          if (std::fabs(cents - 100.0 * interval) < 35) {
-                                                if (++arrivedRun == 3)
-                                                      l.arriveMs = t - 20;
-                                                }
-                                          else
-                                                arrivedRun = 0;
-                                          }
-                                    }
-                              // the dip: the quietest 5 ms in the first 600 ms against the second note after 800 ms
-                              const std::vector<double> e = envelope(second, sr);
-                              double dip = 200, own = -200;
-                              for (size_t k = 0; k < e.size(); ++k) {
-                                    const double t = k * WINDOW_MS;
-                                    if (t < 600)
-                                          dip = std::min(dip, e[k]);
-                                    else if (t >= 800 && t < 1200)
-                                          own = std::max(own, e[k]);
-                                    }
-                              if (own > SILENT_DB)
-                                    l.dipDb = std::min(0.0, std::round((dip - own) * 10) / 10);
                               r.legato.push_back(l);
                               }
                         }
@@ -1089,6 +1125,209 @@ std::vector<ArticulationCheck::TimingResult> ArticulationCheck::timing(Vst3Plugi
             }
       player.settle();
       return out;
+      }
+
+//---------------------------------------------------------
+//   rest
+//---------------------------------------------------------
+
+constexpr double ArticulationCheck::MF_SECONDS;
+constexpr double ArticulationCheck::PP_FF_SECONDS;
+constexpr int ArticulationCheck::REST_LEGATO_VELOCITIES[9];
+constexpr int ArticulationCheck::REST_LEGATO_INTERVALS[14];
+
+ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int value, int pitch, bool legato, int controls,
+                                                      SetControl setControl, const Settings& settings, const RestSettings& rs,
+                                                      Progress progress)
+      {
+      RestResult r;
+      r.value = value;
+      if (!plugin)
+            return r;
+      Player player { plugin, settings, {} };
+      player.relativeSettle = true;
+      const double sr = settings.sampleRate;
+      auto ms = [](int windows) { return windows < 0 ? -1.0 : windows * WINDOW_MS; };
+      int done = 0;
+      auto step = [&]() {
+            ++done;
+            return !progress || progress(done, 0);
+            };
+      // the notes (a deque: they stay where they are), their perceived loudness and attack worked out on other threads
+      // while the plug-in plays the next ones (half the time of a note; the owner's VM has 4 processors)
+      std::deque<NoteStats> notes;
+      std::deque<std::future<void>> pending;
+      const size_t workers = std::max(1u, std::thread::hardware_concurrency() > 1 ? std::thread::hardware_concurrency() - 1 : 1u);
+      auto finish = [&]() {
+            for (std::future<void>& f : pending)
+                  f.wait();
+            pending.clear();
+            };
+      // one note: held seconds, at mf with its tail (how long it sounds, its release), else a short one
+      auto measure = [&](int p, int level, bool mf, NoteStats** out) {
+            notes.emplace_back();
+            NoteStats* n = &notes.back();
+            *out = n;
+            n->pitch = p;
+            n->level = level;
+            size_t off = 0;
+            double residual = -200;
+            std::vector<float> clip = player.held(value, p, level, mf ? MF_SECONDS : PP_FF_SECONDS, mf ? TAIL_SECONDS : 0.3,
+                                                  &off, &residual);
+            const std::vector<double> env = envelope(clip, sr);
+            const Onset o = onset(env, env.size());
+            n->sounds = o.peakDb > SILENT_DB && o.peakDb > residual + 10;
+            if (n->sounds) {
+                  const size_t win = size_t(2 * player.frames(0.05));
+                  double loudest = 0;
+                  for (size_t from = 0; win > 0 && from + win <= clip.size(); from += win / 2) {
+                        double sum = 0;
+                        for (size_t i = from; i < from + win; ++i)
+                              sum += double(clip[i]) * clip[i];
+                        loudest = std::max(loudest, sum / win);
+                        }
+                  n->loudDb = db(loudest);
+                  n->startMs = ms(o.start);
+                  n->fullMs = ms(o.full);
+                  n->peakMs = ms(o.peak);
+                  if (mf) {
+                        const size_t offWindow = size_t(double(off) / (sr * WINDOW_MS / 1000.0));
+                        double before = -200;
+                        for (size_t k = offWindow > 20 ? offWindow - 20 : 0; k < offWindow && k < env.size(); ++k)
+                              before = std::max(before, env[k]);
+                        n->sustains = before >= o.peakDb - 20;
+                        n->bodyMs = ms(lastAbove(env, 0, env.size(), o.peakDb - 20) + 1);
+                        if (n->sustains) {
+                              const int rel = lastAbove(env, offWindow, env.size(), before - 30);
+                              if (rel + 1 < int(env.size()))
+                                    n->releaseMs = ms(std::max(0, rel + 1 - int(offWindow)));
+                              }
+                        }
+                  // (perceived loudness and attack on the note and 0.3 s, as the dynamics' clips: the tail adds nothing)
+                  clip.resize(std::min(clip.size(), 2 * off + 2 * size_t(player.frames(0.3))));
+                  if (pending.size() >= workers) {
+                        pending.front().wait();
+                        pending.pop_front();
+                        }
+                  pending.push_back(std::async(std::launch::async, [n, sr](std::vector<float> head) {
+                        n->perceivedDb = perceivedLoudnessDb(head, sr);
+                        const Attack a = attackSalience(head, sr);
+                        n->salienceDb = a.salienceDb;
+                        n->riseMs = a.riseMs;
+                        }, std::move(clip)));
+                  }
+            return step();
+            };
+      auto avoided = [&](int p) {
+            return p < rs.low || p > rs.high || p < 0 || p > 127 || std::find(rs.avoid.begin(), rs.avoid.end(), p) != rs.avoid.end();
+            };
+      // (the notes' numbers, once every analysis is done; and on a stop)
+      std::vector<NoteStats*> range, repeats;
+      std::vector<std::pair<std::pair<int, double>, NoteStats*>> controlPoints;
+      auto result = [&]() {
+            finish();
+            for (NoteStats* n : range)
+                  r.range.push_back(*n);
+            for (NoteStats* n : repeats)
+                  r.repeats.push_back(*n);
+            for (const auto& c : controlPoints) {
+                  RestResult::ControlPoint pt;
+                  pt.control = c.first.first;
+                  pt.value = c.first.second;
+                  pt.note = *c.second;
+                  r.controls.push_back(pt);
+                  }
+            return r;
+            };
+
+      // the test pitch: where it sounds at mf (as timing: another pitch where the given one is silent)
+      NoteStats* home = nullptr;
+      for (int shift : { 0, 12, -12, 7, -5, 24 }) {
+            const int p = pitch + shift;
+            if (avoided(p) || (shift && (p < settings.minPitch || p > settings.maxPitch)))
+                  continue;
+            NoteStats* n;
+            if (!measure(p, 80, true, &n))
+                  return result();
+            if (n->sounds) {
+                  r.pitch = p;
+                  home = n;
+                  break;
+                  }
+            }
+      if (r.pitch < 0)
+            return result();
+
+      if (rs.range) {
+            std::map<int, std::array<NoteStats*, 3>> byPitch;
+            for (int direction : { -1, 1 }) {
+                  int silentRun = 0;
+                  for (int p = direction < 0 ? r.pitch : r.pitch + 1; !avoided(p) && silentRun < rs.silenceRun; p += direction) {
+                        std::array<NoteStats*, 3> n { nullptr, nullptr, nullptr };
+                        if (p == r.pitch)
+                              n[1] = home;
+                        else if (!measure(p, 80, true, &n[1]))
+                              return result();
+                        byPitch[p] = n;
+                        if (!n[1]->sounds) {
+                              ++silentRun;
+                              continue;
+                              }
+                        silentRun = 0;
+                        if (!measure(p, 32, false, &n[0]) || !measure(p, 112, false, &n[2]))
+                              return result();
+                        byPitch[p] = n;
+                        }
+                  }
+            // (by pitch; pp / mf / ff, a silent pitch: mf only)
+            for (const auto& b : byPitch)
+                  for (NoteStats* n : b.second)
+                        if (n)
+                              range.push_back(n);
+            }
+      if (rs.repeats) {
+            for (int k = 0; k < rs.repeatCount; ++k) {
+                  NoteStats* n;
+                  if (!measure(r.pitch, 80, true, &n))
+                        return result();
+                  repeats.push_back(n);
+                  }
+            }
+      if (rs.legato && legato) {
+            for (int velocity : REST_LEGATO_VELOCITIES) {
+                  for (int interval : REST_LEGATO_INTERVALS) {
+                        const int b = r.pitch + interval;
+                        if (avoided(b))
+                              continue;
+                        r.legato.push_back(legatoPair(player, value, r.pitch, b, velocity));
+                        if (!step())
+                              return result();
+                        }
+                  }
+            }
+      if (rs.controls && setControl) {
+            for (int c = 0; c < controls; ++c) {
+                  for (double v : rs.controlValues) {
+                        player.settle();
+                        if (!setControl(c, v))
+                              return result();
+                        player.render(player.frames(0.3));      // (the patch's script takes it)
+                        NoteStats* n;
+                        const bool go = measure(r.pitch, 80, true, &n);
+                        controlPoints.push_back({ { c, v }, n });
+                        if (!go) {
+                              setControl(c, -1);
+                              return result();
+                              }
+                        }
+                  player.settle();
+                  if (!setControl(c, -1))
+                        return result();
+                  player.render(player.frames(0.3));
+                  }
+            }
+      player.settle();
+      return result();
       }
 
 //---------------------------------------------------------

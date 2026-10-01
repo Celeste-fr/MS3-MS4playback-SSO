@@ -554,6 +554,28 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   after 25 ms, bodies 740 ms. Legato measured on the 42 Performance patches (84 transitions per velocity, as before);
   not on Horn Solo / Horns a2 - Legato and Oboe Principal - Total Performance (no map articulation named legato: their
   one sound was timed, not a slur).
+  **The rest of every sound** (the owner, 2026-10-01: "measure everything left in the VM, I'm sick of doing everything
+  manually"; HANDOFF's "Not measured" items 1-5): `--check-rest [--rest-parts range,repeats,controls,legato]`
+  (`checkRestMode`, supervised and resumable like the timing check: `restBefore`, `REST_VERSION`; log `background rest
+  check.log`; the third step of `Measure what's left of SSO in background.bat`). `ArticulationCheckDialog::measureRest`,
+  `ArticulationCheck::rest`, per sound of every patch (`soundsToMeasure(…, true)`): **range**: every semitone from the
+  test pitch down and up until 4 in a row are silent (a note "sounds" 10 dB over what was left of the last one; a
+  keyswitched patch never plays its keys or under the highest; a drum hit: its key only), pp / mf / ff (velocity = CC1 =
+  32 / 80 / 112; mf held `MF_SECONDS` 1.5 s with its tail, pp and ff 1 s): loudest 50 ms, perceived loudness, attack
+  salience and rise, start / full / peak, and at mf body, sustains, release; **repeats**: the test pitch at mf 8 times
+  (round robins); **controls**: every control the map names anywhere (a `<Patch>` lists none) that the loaded patch has
+  (`parameterId`), at 0 / 0.25 / 0.5 / 0.75 / 1, then back at its own value (read first); **legato** (a sound whose
+  first technique is legato, or with no techniques in a patch named "Legato" / "Total Performance": Horn Solo /
+  Horns a2 - Legato, Oboe Principal): slurs at velocity 1, 16 … 127 (9) × -12, -7, -5 … +5, +7, +12 (14), as timing's
+  (`legatoPair`, now shared). results.json `rest` (per sound: `range`, `repeats`, `controls` [control, value, note],
+  `legato`; a note is an array in `restFields` order), `controls` (id, title, its own value). A note's perceived
+  loudness and attack are worked out on other threads while Kontakt plays the next ones. `PluginExtract::centsShift`
+  takes the reference's `pitchSpectrum` computed once (it was recomputed for every 10 ms frame: ~86 % of a slur's
+  analysis). Test `restCheck`. Tried here headless with the test synth (a CC patch with a slow, a short and a silent
+  articulation and a Tone control, a legato extra, two drum hits, a one-sound `<Patch>`): all measured in 6 minutes,
+  the silent one reported, the zip as the timing check's. **Tests here run in the build's mount namespace**:
+  `TESTSYNTH` is the build directory's absolute path, so a copied build directory (`../ninja-cray.sh`) loads the
+  other worktree's test synth when run outside it (`../run-cray.sh`): timingCheck "failed" that way.
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

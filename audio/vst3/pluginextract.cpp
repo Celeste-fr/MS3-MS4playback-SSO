@@ -290,13 +290,31 @@ static std::vector<double> logSpectrum(const std::vector<float>& stereo, double 
       return spec;
       }
 
+static const double SHIFT_STEP = 5.0;                                            // cents a bin
+static const int SHIFT_BINS = int(std::log2(5000.0 / 40.0) * 1200.0 / SHIFT_STEP);
+
+std::vector<double> PluginExtract::pitchSpectrum(const std::vector<float>& clip, double sampleRate)
+      {
+      return logSpectrum(clip, sampleRate, SHIFT_STEP, SHIFT_BINS);
+      }
+
 double PluginExtract::centsShift(const std::vector<float>& reference, const std::vector<float>& shifted,
                                  double sampleRate, double maxCents, double* confidence)
       {
-      const double step = 5.0;                  // cents a bin
-      const int bins = int(std::log2(5000.0 / 40.0) * 1200.0 / step);
-      const std::vector<double> a = logSpectrum(reference, sampleRate, step, bins);
+      return centsShift(pitchSpectrum(reference, sampleRate), shifted, sampleRate, maxCents, confidence);
+      }
+
+double PluginExtract::centsShift(const std::vector<double>& a, const std::vector<float>& shifted,
+                                 double sampleRate, double maxCents, double* confidence)
+      {
+      const double step = SHIFT_STEP;
+      const int bins = SHIFT_BINS;
       const std::vector<double> b = logSpectrum(shifted, sampleRate, step, bins);
+      if (int(a.size()) != bins) {
+            if (confidence)
+                  *confidence = 0;
+            return 0;
+            }
       const int maxShift = int(maxCents / step);
       std::vector<double> score(size_t(2 * maxShift + 1), -1.0);
       int best = 0;

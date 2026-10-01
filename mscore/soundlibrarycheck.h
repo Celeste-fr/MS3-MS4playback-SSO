@@ -96,6 +96,12 @@ class ArticulationCheckDialog : public QDialog {
       // into out["timing"]; lines for the summary
       void measureTiming(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
                          QJsonObject& out, QStringList& lines);
+      // the rest of every sound (ArticulationCheck::rest): across its range, repeated, under each control, a legato's
+      // slurs at every velocity and interval; into out["rest"] (a note: an array of restFields()), lines for the summary
+      void measureRest(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
+                       QJsonObject& out, QStringList& lines);
+      bool _restOnly { false };     // setRest: dynamicsPatch measures the rest instead (every sound)
+      QString _restParts;           // "range,repeats,controls,legato" (setRest)
       bool _timingOnly { false };   // runHeadless(…, timing): dynamicsPatch measures the timing instead
       bool _everything { false };   // runHeadless(…, everything): every patch's every sound (soundsToMeasure)
       QPushButton* _add;
@@ -171,6 +177,9 @@ class ArticulationCheckDialog : public QDialog {
       // what is left. Set: the extract doesn't open its folder at the end (the supervisor does)
       static void setProgressFile(const QString& path);
       static QString runFile(const QString& root, const QString& what);
+      // the rest instead of dynamics or timing (runHeadless): parts "range,repeats,controls,legato" (any of them)
+      void setRest(const QString& parts) { _restOnly = true; _restParts = parts; }
+      static QJsonArray restFields();     // the order of a note's numbers in out["rest"]
       static void setRunPrefix(const QString& prefix);          // runFile's names: "<prefix> <what>.txt" (default "background extract")   // superviseExtract's files: step, skip, finished, crash
       static QString zip(const QString& folder);
       // a plan (MuseScore --extract-plan <file>): per patch what is still to measure, one a line,
@@ -187,7 +196,8 @@ class ArticulationCheckDialog : public QDialog {
       static void setPlanFile(const QString& path);
       static const PlanEntry* planFor(const QString& patch);        // null: no plan, or not in it
       static bool hasPlan();
-      QSet<QString> timedBefore(bool timing = true, bool everything = false) const;   // patches an earlier timing (dynamics) run did
+      QSet<QString> timedBefore(bool timing = true, bool everything = false) const;
+      QSet<QString> restBefore() const;   // patches an earlier rest run did (with these parts)   // patches an earlier timing (dynamics) run did
       QSet<QString> linkedBefore() const;                           // patches an earlier links run did
       QSet<QString> measuredBefore(bool pitchBend) const;         // patches an earlier controller extract measured completely
       int librarySwitchCC() const;                                 // the CC the library switches articulations on (-1: none)                  // the folder zipped next to it (its path; empty: failed)

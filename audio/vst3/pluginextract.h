@@ -133,6 +133,10 @@ class PluginExtract {
 
       static double centsShift(const std::vector<float>& reference, const std::vector<float>& shifted,
                                double sampleRate, double maxCents = 2600, double* confidence = nullptr);
+      // the same against a reference's pitchSpectrum (computed once for many frames: a legato's analysis)
+      static std::vector<double> pitchSpectrum(const std::vector<float>& clip, double sampleRate);
+      static double centsShift(const std::vector<double>& referenceSpectrum, const std::vector<float>& shifted,
+                               double sampleRate, double maxCents = 2600, double* confidence = nullptr);
       };
 
 } // namespace Ms
