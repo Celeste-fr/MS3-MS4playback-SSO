@@ -401,5 +401,19 @@ test("the lanes kept in the set: a long value over several stores, put together 
       assert.strictEqual(u.hub.call("keptStatus").indexOf("too many"), 0);
       });
 
+test("the blob as Create Live Set writes it (livesetwriter.cpp linkBlob, tst_liveintegration): the set plays its lanes", () => {
+      // Max's dictionary as in the set; Max gives each store's list to [pattr], which outputs it as "lanes k …"
+      const blob = '{\r\n\t"Port" : [ 9001 ],\r\n\t"Lanes" : [ "msl-lanes", 1, 47975, 0, 1, 8, 1, "0:1", 4243, 1, ' +
+                   '"Vibrato", 1, 2, 0, 0.5, 3840, 1 ]\r\n}\r\n';
+      const d = JSON.parse(blob);
+      const t = setUp();
+      t.shared.musescore_link["p" + t.vln.id] = undefined;
+      t.hub.message("lanes", [0].concat(d.Lanes));
+      t.live.settle();
+      const vib = buf(t, "001mslp0");
+      assert.ok(near(vib.data[0], 0.5) && near(vib.data[499], 0.5) && near(vib.data[500], 1));
+      assert.strictEqual(vib.size, 4001);                         // the song: 8 beats at 120 bpm
+      });
+
 console.log(failures ? failures + " failed" : "all passed");
 process.exitCode = failures ? 1 : 0;

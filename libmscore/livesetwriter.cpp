@@ -340,7 +340,7 @@ class Writer {
 //   the devices
 //---------------------------------------------------------
 
-void linkDevice(Writer& w, const LinkDevice& link, int listId)
+void linkDevice(Writer& w, const LinkDevice& link, int listId, const Track& t)
       {
       w.open("MxDeviceMidiEffect", "Id=\"" + QByteArray::number(listId) + "\"");
       w.deviceHeader(true, true);
@@ -383,7 +383,7 @@ void linkDevice(Writer& w, const LinkDevice& link, int listId)
       w.open("BlobSlot");
       w.open("Value");
       w.open("MxDBlob", "Id=\"1\"");
-      w.hex("Blob", linkBlob(link.port));
+      w.hex("Blob", linkBlob(link.port, &t));
       w.value("HasData", true);
       w.close("MxDBlob");
       w.close("Value");
@@ -556,7 +556,7 @@ void midiTrack(Writer& w, const Track& t, int trackId, const LinkDevice& link)
             w.open("Devices");
             int n = 0;
             if (t.link && link.valid())
-                  linkDevice(w, link, n++);
+                  linkDevice(w, link, n++, t);
             if (t.hasPlugin)
                   pluginDevice(w, t.plugin, n++);
             w.close("Devices");
@@ -1318,9 +1318,64 @@ quint16 fileCrc(const QByteArray& data)
       return crc;
       }
 
-QByteArray linkBlob(int port)
+static QByteArray jsonString(const QString& s)
       {
-      return QByteArray("{\r\n\t\"Port\" : [ ") + QByteArray::number(port) + " ]\r\n}\r\n" + QByteArray(1, '\0');
+      QByteArray out = "\"";
+      for (const QChar c : s) {
+            if (c == '"' || c == '\\')
+                  out += '\\';
+            if (c.unicode() < 0x20)
+                  out += QString("\\u%1").arg(int(c.unicode()), 4, 16, QChar('0')).toUtf8();
+            else
+                  out += QString(c).toUtf8();
+            }
+      return out + "\"";
+      }
+
+static QByteArray jsonNumber(double v)
+      {
+      if (v == std::floor(v) && std::fabs(v) < 1e15)
+            return QByteArray::number(qint64(v));
+      return QByteArray::number(v, 'g', 9);
+      }
+
+QByteArray linkBlob(int port, const Track* track, bool* lanesKept)
+      {
+      QByteArray out = QByteArray("{\r\n\t\"Port\" : [ ") + QByteArray::number(port) + " ]";
+      if (lanesKept)
+            *lanesKept = true;
+      if (track && !track->linkLanes.empty()) {
+            // the value as MuseScoreLink.js encodeSaved, without its "msl-lanes 1": <length> <routes> then the route
+            std::vector<QByteArray> data { jsonNumber(track->linkLength), "1", jsonString(track->routeKey),
+                                           QByteArray::number(qint32(track->linkHash)),
+                                           QByteArray::number(int(track->linkLanes.size())) };
+            for (const Track::LinkLane& l : track->linkLanes) {
+                  data.push_back(jsonString(l.title));
+                  data.push_back(QByteArray::number(qint64(l.id)));
+                  data.push_back(QByteArray::number(int(l.events.size())));
+                  for (const auto& e : l.events) {
+                        data.push_back(QByteArray::number(e.first));
+                        data.push_back(jsonNumber(double(e.second)));
+                        }
+                  }
+            const size_t per = LINK_STORE_ATOMS - 5;
+            const size_t parts = std::max<size_t>(1, (data.size() + per - 1) / per);
+            if (parts > size_t(LINK_STORES)) {
+                  if (lanesKept)
+                        *lanesKept = false;
+                  }
+            else {
+                  const QByteArray stamp = QByteArray::number(qHash(track->routeKey) % 1000000000u);
+                  for (size_t k = 0; k < parts; ++k) {
+                        out += ",\r\n\t\"" + QByteArray(k ? "Lanes" + QByteArray::number(int(k + 1)) : "Lanes") + "\" : [ \"msl-lanes\", 1, "
+                               + stamp + ", " + QByteArray::number(int(k)) + ", " + QByteArray::number(int(parts));
+                        for (size_t i = k * per; i < std::min(data.size(), (k + 1) * per); ++i)
+                              out += ", " + data[i];
+                        out += " ]";
+                        }
+                  }
+            }
+      return out + "\r\n}\r\n" + QByteArray(1, '\0');
       }
 
 QString trackName(const QString& part, const QString& patch, bool mainPatch, int lane)

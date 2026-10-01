@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include <QtTest/QtTest>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <zlib.h>
@@ -1659,6 +1660,32 @@ void TestLiveIntegration::liveSetWrite()
       QCOMPARE(fileCrc(big), fileCrc(big.left(16384)));  // (the first 16 KiB)
       QVERIFY(fileCrc(big) != fileCrc(big.left(16383)));
       QCOMPARE(linkBlob(9001).toHex().toUpper(), QByteArray("7B0D0A0922506F727422203A205B2039303031205D0D0A7D0D0A00"));
+      // the track's lanes in the device's stores (MuseScoreLink.js decodes the same: test_params.js "the blob as
+      // Create Live Set writes it")
+      {
+      Track t;
+      t.routeKey = "0:1";
+      t.linkHash = 4243;
+      t.linkLength = 8;
+      t.linkLanes.push_back({ "Vib \"x\"", 1, { { 0, 0.5f }, { 3840, 1.0f } } });
+      bool kept = false;
+      const QByteArray blob = linkBlob(9001, &t, &kept);
+      QVERIFY(kept);
+      const QRegularExpression re("^\\{\r\n\t\"Port\" : \\[ 9001 \\],\r\n\t\"Lanes\" : \\[ \"msl-lanes\", 1, \\d+, 0, 1, 8, 1, "
+                                  "\"0:1\", 4243, 1, \"Vib \\\\\"x\\\\\"\", 1, 2, 0, 0.5, 3840, 1 \\]\r\n\\}\r\n$");
+      QVERIFY(blob.endsWith(QByteArray("}\r\n", 3) + QByteArray(1, '\0')));
+      QVERIFY2(re.match(QString::fromLatin1(blob.chopped(1))).hasMatch(), blob.constData());
+      // too many points for the 4 stores: no lanes kept, the port as before
+      for (int i = 0; i < 70000; ++i)
+            t.linkLanes[0].events.push_back({ 7680 + i, 0.25f });
+      const QByteArray huge = linkBlob(9001, &t, &kept);
+      QCOMPARE(huge, linkBlob(9001));
+      QVERIFY(!kept);
+      // over two stores: "Lanes" and "Lanes2", each at most LINK_STORE_ATOMS atoms
+      t.linkLanes[0].events.resize(20000);
+      const QByteArray two = linkBlob(9001, &t, &kept);
+      QVERIFY(kept && two.contains("\"Lanes2\" : [ \"msl-lanes\", 1, ") && !two.contains("\"Lanes3\""));
+      }
       // track names = the clips' without "MuseScore: " (the device's rule)
       for (bool main : { true, false })
             for (int lane : { 0, 1, 2 }) {

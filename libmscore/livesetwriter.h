@@ -101,6 +101,16 @@ struct Track {
       double volume { 1 };                // a linear gain (1 = 0 dB), Live's range 0.000316 (-70 dB) … 1.995 (+6 dB)
       double pan { 0 };                   // -1 (left) … 1 (right)
       bool active { true };               // the Track Activator: off for a muted part
+      // the route's plug-in parameter lanes as the MuseScore Link device keeps them in the set (its "Lanes" stores), so
+      // the set plays them without MuseScore: LiveClips::Track::params, paramsHash; empty: none
+      struct LinkLane {
+            QString title;
+            long id { -1 };
+            std::vector<std::pair<int, float>> events;      // (units, value 0-1)
+            };
+      std::vector<LinkLane> linkLanes;
+      quint32 linkHash { 0 };
+      double linkLength { 0 };            // the song's length in beats
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name
@@ -155,7 +165,12 @@ int timeSignatureId(int numerator, int denominator);
 // this is the one match at a round length; a single example, so unconfirmed (Live finds the file by its path first)
 quint16 fileCrc(const QByteArray& data);
 // the device's saved data (MxDBlob) with its port, as Max writes it
-QByteArray linkBlob(int port);
+// the device's saved data (Max's dictionary as JSON, as in the owner's set): its Port, and the track's lanes in its
+// stores "Lanes", "Lanes2" … (MuseScoreLink.js: msl-lanes 1 <stamp> <part> <parts> <length> <routes> …, at most
+// LINK_STORE_ATOMS atoms each, LINK_STORES of them); lanes too long for the stores are left out (*lanesKept false)
+constexpr int LINK_STORES = 4;
+constexpr int LINK_STORE_ATOMS = 30000;
+QByteArray linkBlob(int port, const Track* track = nullptr, bool* lanesKept = nullptr);
 
 // the name of a route's track, as the MuseScore Link device finds it (tools/live/MuseScoreLink.js,
 // findTrack): the part's name for its main patch; "<part> – <patch>" for another patch; " (n)" added for

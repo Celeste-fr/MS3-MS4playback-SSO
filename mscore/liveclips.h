@@ -136,6 +136,10 @@ class LiveClipsLink : public QObject {
       LiveClipsLink();
       ~LiveClipsLink();
       static LiveClipsLink* instance();
+      // the score's clips (notes, carriers, parameter lanes with their plug-in ids) as this link sends them, at once
+      static std::vector<LiveClips::Track> renderTracks(MasterScore* score, const SoundLib::Library& library,
+                                                        const QStringList& portNames);
+      static void resolveParameterIds(std::vector<LiveClips::Track>* tracks, const SoundLib::Library& library);
 
       static bool enabledSetting();
       bool isOn() const { return _on; }             // the setting

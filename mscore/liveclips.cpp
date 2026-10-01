@@ -440,6 +440,43 @@ void LiveClipsLink::renderStep()
       _step->start();
       }
 
+// the parameters' plug-in ids as last seen on a loaded instance (Live names Kontakt's slots by number), in the hash
+void LiveClipsLink::resolveParameterIds(std::vector<LiveClips::Track>* tracks, const SoundLib::Library& library)
+      {
+      for (LiveClips::Track& t : *tracks) {
+            if (t.params.empty())
+                  continue;
+            for (LiveClips::Track::ParamLane& pl : t.params)
+                  pl.id = SoundLibraryHost::knownParameterId(library, t.patch, pl.title);
+            t.paramsHash ^= quint32(qHash(t.patch));
+            for (const LiveClips::Track::ParamLane& pl : t.params)
+                  t.paramsHash = t.paramsHash * 31u + quint32(pl.id + 1);
+            }
+      }
+
+// the score's clips as finish() makes them, rendered at once (Create Live Set: the lanes the device keeps in the set)
+std::vector<LiveClips::Track> LiveClipsLink::renderTracks(MasterScore* score, const SoundLib::Library& library,
+                                                          const QStringList& portNames)
+      {
+      EventMap events;
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      const SynthesizerState ss = mscore ? mscore->synthesizerState() : SynthesizerState();
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      ctx.renderHarmony = true;
+      for (int utick = 0;;) {
+            const MidiRenderer::Chunk c = r.getChunkAt(utick);
+            if (!c)
+                  break;
+            r.renderChunk(c, &events, ctx);
+            utick = c.utick2();
+            }
+      std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, library, events, portNames, LiveClips::timeline(score));
+      resolveParameterIds(&tracks, library);
+      return tracks;
+      }
+
 void LiveClipsLink::finish()
       {
       QElapsedTimer took;
@@ -451,16 +488,8 @@ void LiveClipsLink::finish()
       std::vector<LiveClips::Track> tracks;
       if (library && _score)
             tracks = LiveClips::tracks(_score, *library, _events, _portNames, _timeline);
-      // the parameters' plug-in ids as last seen on a loaded instance (Live names Kontakt's slots by number)
-      for (LiveClips::Track& t : tracks) {
-            if (t.params.empty())
-                  continue;
-            for (LiveClips::Track::ParamLane& pl : t.params)
-                  pl.id = SoundLibraryHost::knownParameterId(*library, t.patch, pl.title);
-            t.paramsHash ^= quint32(qHash(t.patch));
-            for (const LiveClips::Track::ParamLane& pl : t.params)
-                  t.paramsHash = t.paramsHash * 31u + quint32(pl.id + 1);
-            }
+      if (library)
+            resolveParameterIds(&tracks, *library);
       _events.clear();
 
       sendMode();

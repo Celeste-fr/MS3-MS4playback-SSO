@@ -366,6 +366,36 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
 #else
       plan->notes << QObject::tr("This MuseScore was built without plug-in hosting: the tracks have no plug-in.");
 #endif
+      // the lanes MuseScore plays in Live, kept in each track's MuseScore Link device (its "Lanes" stores): the set plays
+      // them without MuseScore (MuseScore's own, once it connects, replace them). Lanes now marked as Live's (from a
+      // linked set) are not in it: MuseScore sends them when it connects
+      if (plan->spec.link.valid()) {
+            const std::vector<LiveClips::Track> clips = LiveClipsLink::renderTracks(score, library, ports);
+            const LiveClips::Song song = LiveClips::song(score, LiveClips::timeline(score));
+            int kept = 0;
+            for (LiveSetWriter::Track& t : tracks) {
+                  for (const LiveClips::Track& c : clips) {
+                        if (c.key != t.routeKey || c.params.empty())
+                              continue;
+                        t.linkHash = c.paramsHash;
+                        t.linkLength = double(song.length) / LiveClips::UNITS_PER_BEAT;
+                        for (const LiveClips::Track::ParamLane& pl : c.params)
+                              t.linkLanes.push_back({ pl.title, pl.id, pl.events });
+                        bool fits = true;
+                        LiveSetWriter::linkBlob(plan->spec.link.port, &t, &fits);
+                        if (fits)
+                              ++kept;
+                        else {
+                              plan->notes << QObject::tr("%1: its automation lanes have too many points to keep in the set "
+                                                         "(they play while MuseScore runs).").arg(t.name);
+                              t.linkLanes.clear();
+                              }
+                        }
+                  }
+            if (kept)
+                  plan->notes << QObject::tr("%n track(s) keep their automation lanes in the MuseScore Link device: the set plays "
+                                             "them without MuseScore.", "", kept);
+            }
       plan->spec.tracks = tracks;
       return true;
       }
