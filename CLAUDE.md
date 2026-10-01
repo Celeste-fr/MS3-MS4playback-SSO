@@ -99,6 +99,18 @@ RemoveRedundantSig plugin for it). `Score::cmdRemoveTimeSig`, test `tst_timesig:
 (fails without the fix). `tst_timesig::timesig05` fails since 5f65a1d (fermatas' MS4 default
 time stretch is written into the file: `<timeStretch>2</timeStretch>`), not from this.
 
+Note input by scale degree (the owner, 2026-10-01): numpad 1-7 (`note-degree-1` … `-7`, pitched staves, as the letter
+keys) enter the key's degrees: `Score::scaleDegreeStep` counts letters from the tonic of the staff's key signature where
+notes go (as written; its mode picks the tonic: C minor's 1 is C, A minor's A; no mode counts as major, so three flats
+is E flat), then `cmdAddPitch` as for that letter (key signature accidentals, nearest octave). No raised leading note in
+minor. `chord-degree-n` / `insert-degree-n` have no default keys (Ctrl+digits are tuplets; Shift / Alt with the numpad are
+taken on Windows); *Add › Notes › Scale Degree*. A user's own shortcuts.xml saved before an action existed now gives that
+action its default keys where the file doesn't bind them elsewhere (`Shortcut::load`). Qt on Linux (xcb) matches
+shortcuts without the keypad modifier, so a `NumPad+n` binding never wins there over the plain digit's (durations);
+`ScoreView::event` takes numpad 1-7 itself when a degree action holds that key and is enabled (`numpadDegreeAction`).
+Tried in the GUI under Xvfb: C minor, numpad 1-7 gave C D E♭ F G A♭ B♭; an old user shortcuts.xml binding numpad 3
+elsewhere left Degree 3 without a key, the others got theirs. Not tried on Windows. Test `tst_keysig::scaleDegrees`.
+
 ## Layout of the fork-specific code
 
 MS4 playback (see the header comment of each file):

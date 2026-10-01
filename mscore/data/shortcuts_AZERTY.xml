@@ -201,6 +201,34 @@
     <seq>G</seq>
     </SC>
   <SC>
+    <key>note-degree-1</key>
+    <seq>NumPad+1</seq>
+    </SC>
+  <SC>
+    <key>note-degree-2</key>
+    <seq>NumPad+2</seq>
+    </SC>
+  <SC>
+    <key>note-degree-3</key>
+    <seq>NumPad+3</seq>
+    </SC>
+  <SC>
+    <key>note-degree-4</key>
+    <seq>NumPad+4</seq>
+    </SC>
+  <SC>
+    <key>note-degree-5</key>
+    <seq>NumPad+5</seq>
+    </SC>
+  <SC>
+    <key>note-degree-6</key>
+    <seq>NumPad+6</seq>
+    </SC>
+  <SC>
+    <key>note-degree-7</key>
+    <seq>NumPad+7</seq>
+    </SC>
+  <SC>
     <key>chord-a</key>
     <seq>Shift+A</seq>
     </SC>

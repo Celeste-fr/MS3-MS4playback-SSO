@@ -14,6 +14,7 @@
 #include "musescore.h"
 #include "scoreview.h"
 #include "seq.h"
+#include "shortcut.h"
 #include "texttools.h"
 #include "zoombox.h"
 
@@ -34,6 +35,31 @@
 namespace Ms {
 
 //---------------------------------------------------------
+//   numpadDegreeAction
+//    numpad 1-7 bound to a scale degree (note-degree-n, or whichever degree action has that numpad key): its
+//    action when enabled. Qt on Linux matches shortcuts without the keypad modifier, so a numpad key there would
+//    play the plain digit's shortcut (a duration); the view takes such a key itself
+//---------------------------------------------------------
+
+static QAction* numpadDegreeAction(const QKeyEvent* ke)
+      {
+      if (ke->modifiers() != Qt::KeypadModifier || ke->key() < Qt::Key_1 || ke->key() > Qt::Key_7)
+            return nullptr;
+      const QKeySequence seq(int(Qt::KeypadModifier) | ke->key());
+      for (const char* kind : { "note", "chord", "insert" }) {
+            for (int degree = 1; degree <= 7; ++degree) {
+                  const QByteArray name = QByteArray(kind) + "-degree-" + QByteArray::number(degree);
+                  const Shortcut* sc = Shortcut::getShortcut(name.constData());
+                  if (!sc || !sc->keys().contains(seq))
+                        continue;
+                  QAction* a = getAction(name.constData());
+                  return a && a->isEnabled() ? a : nullptr;
+                  }
+            }
+      return nullptr;
+      }
+
+//---------------------------------------------------------
 //   event
 //---------------------------------------------------------
 
@@ -43,6 +69,12 @@ bool ScoreView::event(QEvent* event)
             case QEvent::KeyPress: {
                   QKeyEvent* ke = static_cast<QKeyEvent*>(event);
                   const int key = ke->key();
+                  if (!textEditMode()) {
+                        if (QAction* a = numpadDegreeAction(ke)) {
+                              a->trigger();
+                              return true;
+                              }
+                        }
                   if (key != Qt::Key_Tab && key != Qt::Key_Backtab)
                         break;
 
@@ -64,6 +96,10 @@ bool ScoreView::event(QEvent* event)
                   break;
             case QEvent::ShortcutOverride: {
                   QKeyEvent* ke = static_cast<QKeyEvent*>(event);
+                  if (!textEditMode() && numpadDegreeAction(ke)) {
+                        ke->accept();           // (the key press follows: see KeyPress)
+                        return true;
+                        }
                   switch (ke->key()) {
                         case Qt::Key_Left:
                         case Qt::Key_Right:
