@@ -347,8 +347,9 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   (`sso_legato_grid_pitches.json`, the rest check's legatopitches part, timed by harmonics; `legatoDelayFromPitches`):
   per interval the median 50 % time over the starting pitches (the crossing the sweep's arrival measures; strings
   210-240 ms, woodwinds 120-130, brass 130). Octaves are not usable (+12 reads 375-760, the first note's room; -12
-  70-160): both take the patch's median of its -7, -5, +5, +7 (the sweep of 3f0cda5 heard octave slurs 86-121 ms early
-  on them, winds and brass still 84-111 early on the measured -12). And
+  70-160): -12 the measured one (the sweeps of e6f44e6 / c27da62, slurs after notes of 0.5 s and longer taken back to
+  their note-on, put -12 within +4 / +9 / +20 ms of it for strings / woodwinds / brass), +12 the patch's median of -7,
+  -5, +5, +7 plus 60 / 45 / 95 ms; Oboe Solo +60 and Violins 2 +45 ms on every interval (the sweeps' median lateness). And
   `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
   transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
@@ -390,8 +391,8 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   (`articulationKind`, brass apart), the measured patches' median of onset / mf full-level time times the patch's own
   full-level time (Long 0.39, Legato 0.31 (brass 0.22), Sul Tasto 0.57, Super Sul Tasto 0.87, Flautando 0.66, Harmonics
   0.48), the family fit only where no kind has 20 measured semitones. Sul tasto / flautando / harmonics (swells,
-  varying note to note): the -15 dB time per semitone, never more than its neighbours' (a minimum over ±1 semitone),
-  table pairs within 15 ms, rounded down: err late. (696341d took the -10 dB time for still-rising swells: the sweep of
+  varying note to note): each semitone's own -15 dB time, table pairs within 15 ms (checked on both sweeps' 30
+  notes: heard a median 59 ms after the beat, 21-259, none early; c27da62's minimum over ±1 semitone 180). (696341d took the -10 dB time for still-rising swells: the sweep of
   e6f44e6 heard Violins 2 sul tasto up to 399 ms early, Celli / Violas / Basses flautando 123-216 early; some, Violas sul
   tasto mid, Violins 1 flautando low, stay 250-570 late.) All 112 non-percussion map instruments
   measured since f8908f8 (2026-10-01);
