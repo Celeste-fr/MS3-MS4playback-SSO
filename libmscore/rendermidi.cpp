@@ -1296,8 +1296,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
                   // patch). Returns that note (nullptr: not a transition: a slur's first note, the note after its
-                  // end, the same key struck again) and the earliest utick the note may start: half way into
-                  // it, not before the chunk or the pass
+                  // end, the same key struck again) and the earliest utick the note may start: a quarter to half
+                  // way into it (below), not before the chunk or the pass
                   auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest) -> const Note* {
                         if (!c || c.base != "legato")
                               return nullptr;
@@ -1325,8 +1325,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.base != "legato" || pc.patch != c.patch)
                                     continue;
+                              // the note before loses at most a share of its length in time: a quarter up to
+                              // 250 ms, its length in seconds between, half from 500 ms. SSO plays faster
+                              // transitions in fast passages: a sixteenth at 110 (136 ms) under 4-note slurs,
+                              // shifted by half, lost half its length and the run's levels went uneven (the
+                              // owner's cellos, 2026-09-30); quarters at 120 (500 ms) are as slow as at 60
                               const int start = fc->tick().ticks() + tickOffset;
-                              *earliest = std::max({ start + (utick - start) / 2, libChunkStart, (*rs)->utick });
+                              const qreal t1 = score->utick2utime(utick);
+                              const qreal len = t1 - score->utick2utime(start);
+                              const int cap = score->utime2utick(t1 - qBound(0.25, len, 0.5) * len);
+                              *earliest = std::max({ start, cap, libChunkStart, (*rs)->utick });
                               return first;
                               }
                         return nullptr;

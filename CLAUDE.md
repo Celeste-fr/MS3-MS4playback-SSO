@@ -349,8 +349,15 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
   its track slurred into it (`slurGoesOn`) and legato on the same patch, in the same pass, no key struck again, no
   grace notes or arpeggio before) starts `delay × percent` earlier in time (`SndConfig::libEarly`, converted at the
-  tempo there with `utick2utime` / `utime2utick` in `collectNote`), not before half way into the note before
-  (`libEarliest`: fast runs), the chunk (`libChunkStart`) or the pass's start. Its note-off, the switches and the
+  tempo there with `utick2utime` / `utime2utick` in `collectNote`), not before the chunk (`libChunkStart`) or the
+  pass's start, and the note before loses at most a share of its length in time (`libEarliest`): a quarter up to
+  250 ms, its length in seconds between, half from 500 ms (`qBound(0.25, len, 0.5)`). **Fast runs (the owner,
+  2026-09-30)**: the cap was half; in "Whence" the cellos' sixteenths at 110 (136 ms) under 4-note slurs (Celli
+  Performance, delay above a sixteenth) all got the full half: as played 68 / 136 / 136 / 205 ms, levels −46.3 /
+  −44.8 / −40.5 / −44.9 dB (on the beat: 136 ms each, −43.8 / −43.1 / −43.6 / −44.2) -- a slur's first note squeezed,
+  the third ~4 dB louder. SSO plays faster transitions in fast passages, so a quarter there (a slur's first keeps
+  75 %); the measured quarters at 120 (500 ms) were as late as at 60, so they keep the half (full correction).
+  Test `legatoEarlyFastRun` (legato-fast.musicxml). Its note-off, the switches and the
   controllers stay; the previous note still overlaps it. A chunk doesn't end where a library part's slur goes on
   (`libSlurAcross`), so a transition is never a chunk's first note. The glide of its tuning lane moves with the note-on.
   Built-in playback untouched. The playback verify tool reads the notes from the same events (the reference too),
