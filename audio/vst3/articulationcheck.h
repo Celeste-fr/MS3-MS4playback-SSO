@@ -169,6 +169,10 @@ class ArticulationCheck {
                   double firstMs { 1200 };   // how long the first note was held before the second note-on
                   int start { -1 };          // the first note's pitch (legatoPitches)
                   double midMs { -1 };       // legatoPitches: half way from the first pitch to the second
+                  // legatoPitches, by templates (legatoHarmonic): the frame's spectrum as a + b times the two notes'
+                  // own spectra; when the second note's share of the power is first 10 / 50 / 90 % (an octave's
+                  // harmonics are the same partials, so this one, not midMs, times ±12)
+                  double tLeaveMs { -1 }, tMidMs { -1 }, tArriveMs { -1 };
                   std::vector<std::pair<int, double>> cents;    // ms after the second note-on, cents from the first note (confident frames)
                   };
             int value { -1 };

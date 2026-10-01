@@ -1070,8 +1070,6 @@ static ArticulationCheck::TimingResult::Legato legatoHarmonic(Player& player, in
             for (int h = 1; h <= 12 && h * hi < top; ++h)
                   shared.push_back(h * hi);         // (… against the shared ones)
             ownB = shared;
-            if (ownA.empty())
-                  return l;
             }
       const double binHz = sr / double(N);
       auto bandPower = [&](const std::vector<double>& power, const std::vector<double>& freqs) {
@@ -1102,6 +1100,89 @@ static ArticulationCheck::TimingResult::Legato legatoHarmonic(Player& player, in
             const double eb = bandPower(power, ownB), ea = bandPower(power, ownA);
             return 10 * std::log10(std::max(eb, 1e-30) / std::max(ea, 1e-30));
             };
+      // by templates: the first note's spectrum (0.5 to 0.1 s before the second note-on) and the second's (0.9 to
+      // 1.3 s after it), magnitudes 50 Hz to 8 kHz; each frame from 0.1 s before to 1 s after as a A + b B (least
+      // squares, a, b >= 0); the second note's share of the power b^2 |B|^2 / (a^2 |A|^2 + b^2 |B|^2). On synthetic
+      // slurs with a hall (-10 dB, 2 s) this times octaves within ~40 ms of the equal-power point, where the
+      // harmonic ratio above was 140-300 ms late for +12 (the old note's ring is in the shared partials)
+      {
+            const size_t k0 = size_t(50 / binHz) + 1, k1 = std::min(N / 2, size_t(8000 / binHz));
+            auto magnitudes = [&](size_t c) {
+                  for (size_t i = 0; i < N; ++i) {
+                        const std::ptrdiff_t j = std::ptrdiff_t(c) - std::ptrdiff_t(N / 2) + std::ptrdiff_t(i);
+                        const double x = (j >= 0 && size_t(j) < frames) ? 0.5 * (double(clip[2 * size_t(j)]) + double(clip[2 * size_t(j) + 1])) : 0.0;
+                        spec[i] = x * window[i];
+                        }
+                  fft(spec);
+                  std::vector<double> m(k1 - k0);
+                  for (size_t k = k0; k < k1; ++k)
+                        m[k - k0] = std::abs(spec[k]);
+                  return m;
+                  };
+            auto average = [&](double from, double to) {
+                  std::vector<double> sum(k1 - k0, 0.0);
+                  int n = 0;
+                  for (double t = from; t <= to + 1e-9; t += 0.01) {
+                        const std::ptrdiff_t c = std::ptrdiff_t(onB) + std::ptrdiff_t(t * sr);
+                        if (c < 0 || size_t(c) + N / 2 > frames)
+                              continue;
+                        const std::vector<double> m = magnitudes(size_t(c));
+                        for (size_t k = 0; k < m.size(); ++k)
+                              sum[k] += m[k] * m[k];
+                        ++n;
+                        }
+                  for (double& x : sum)
+                        x = n ? std::sqrt(x / n) : 0.0;
+                  return sum;
+                  };
+            const std::vector<double> A = average(-0.5, -0.1), B = average(0.9, 1.3);
+            double aa = 0, bb = 0, ab = 0;
+            for (size_t k = 0; k < A.size(); ++k) {
+                  aa += A[k] * A[k];
+                  bb += B[k] * B[k];
+                  ab += A[k] * B[k];
+                  }
+            const double det = aa * bb - ab * ab;
+            if (aa > 0 && bb > 0 && det > 1e-12 * aa * bb) {
+                  int tr[3] = { 0, 0, 0 };
+                  bool found[3] = { false, false, false };
+                  double* tout[3] = { &l.tLeaveMs, &l.tMidMs, &l.tArriveMs };
+                  const double tshares[3] = { 0.1, 0.5, 0.9 };
+                  for (double t = -0.1; t <= 1.0 + 1e-9; t += 0.01) {
+                        const std::ptrdiff_t c = std::ptrdiff_t(onB) + std::ptrdiff_t(t * sr);
+                        if (c < 0 || size_t(c) + N / 2 > frames)
+                              break;
+                        const std::vector<double> m = magnitudes(size_t(c));
+                        double am = 0, bm = 0;
+                        for (size_t k = 0; k < m.size(); ++k) {
+                              am += A[k] * m[k];
+                              bm += B[k] * m[k];
+                              }
+                        double a = (bb * am - ab * bm) / det, b = (aa * bm - ab * am) / det;
+                        if (a < 0) {
+                              a = 0;
+                              b = std::max(0.0, bm / bb);
+                              }
+                        else if (b < 0) {
+                              b = 0;
+                              a = std::max(0.0, am / aa);
+                              }
+                        const double ea = a * a * aa, eb = b * b * bb;
+                        const double share = eb / std::max(ea + eb, 1e-30);
+                        for (int k = 0; k < 3; ++k) {
+                              if (found[k])
+                                    continue;
+                              tr[k] = share >= tshares[k] ? tr[k] + 1 : 0;
+                              if (tr[k] == 3) {
+                                    found[k] = true;
+                                    *tout[k] = std::max(0L, std::lround(t * 1000) - 20);   // (0: at the note-on or before)
+                                    }
+                              }
+                        if (found[2])
+                              break;
+                        }
+                  }
+      }
       const size_t hop = size_t(sr * 0.010);
       auto median = [](std::vector<double> v) {
             std::sort(v.begin(), v.end());
@@ -1113,7 +1194,7 @@ static ArticulationCheck::TimingResult::Legato legatoHarmonic(Player& player, in
       for (size_t c = onB + size_t(sr * 1.0); c < onB + size_t(sr * 1.3) && c < frames; c += hop)
             after.push_back(dAt(c));
       const double d0 = median(before), d1 = median(after);
-      if (std::fabs(d1 - d0) < 6)
+      if (std::fabs(d1 - d0) < 6 || ownA.empty())
             return l;
       int run[3] = { 0, 0, 0 };
       double* out[3] = { &l.leaveMs, &l.midMs, &l.arriveMs };

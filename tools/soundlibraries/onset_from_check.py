@@ -28,7 +28,10 @@ note-on, -1: never (silent, or not within that many dB):
                             80, the first note held 1.2 s; timed by harmonics (legatoHarmonic: octaves too): the first
                             time the second pitch's own harmonics against the first's are 10 / 50 / 90 % of the way from
                             their level on the first note to that on the second (FFT frames' centres, ms after the second
-                            note-on; -1: not reached)
+                            note-on; -1: not reached); from c7338f4's successor on, three more: tLeave, tMid, tArrive =
+                            when the second note's share of the power is 10 / 50 / 90 % (each frame's spectrum fitted
+                            as a sum of the two notes' own spectra: right for octaves too, which the harmonic times
+                            are not)
 Prints a summary.
 """
 import argparse
@@ -92,7 +95,8 @@ def main():
             elif part == "legatopitches" and s.get("legatoPitches"):
                 pitches.setdefault(patch, {})[name] = {
                     "range": s.get("legatoRange"),
-                    "rows": [[l["start"], l["interval"], l["leaveMs"], l["midMs"], l["arriveMs"], l["dipDb"]] for l in s["legatoPitches"]]}
+                    "rows": [[l["start"], l["interval"], l["leaveMs"], l["midMs"], l["arriveMs"], l["dipDb"]]
+                             + ([l["tLeaveMs"], l["tMidMs"], l["tArriveMs"]] if "tMidMs" in l else []) for l in s["legatoPitches"]]}
             elif part == "legatolengths" and s.get("legatoLengths"):
                 legato.setdefault(patch, {})[name] = [[l["firstMs"], l["interval"], l["leaveMs"], l["arriveMs"], l["dipDb"]]
                                                       for l in s["legatoLengths"]]

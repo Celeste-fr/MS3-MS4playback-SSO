@@ -3468,6 +3468,8 @@ void TestSoundLibrary::restCheck()
       for (const auto& x : q.legatoPitches) {
             QVERIFY2(x.leaveMs >= 0 && x.midMs >= x.leaveMs && x.arriveMs >= x.midMs && x.arriveMs <= 260,
                      qPrintable(QString("from %1, %2: leaves %3, mid %4, arrives %5").arg(x.start).arg(x.interval).arg(x.leaveMs).arg(x.midMs).arg(x.arriveMs)));
+            QVERIFY2(x.tMidMs >= 0 && x.tMidMs <= 260 && x.tArriveMs >= x.tMidMs,
+                     qPrintable(QString("templates: from %1, %2: mid %3, arrives %4").arg(x.start).arg(x.interval).arg(x.tMidMs).arg(x.tArriveMs)));
             if (std::abs(x.interval) == 12)
                   ++octaves;
             }

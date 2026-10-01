@@ -1919,6 +1919,9 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
                   if (l.start >= 0) {
                         x["start"] = l.start;
                         x["midMs"] = l.midMs;
+                        x["tLeaveMs"] = l.tLeaveMs;
+                        x["tMidMs"] = l.tMidMs;
+                        x["tArriveMs"] = l.tArriveMs;
                         }
                   QJsonArray c;
                   for (const auto& pt : l.cents)
