@@ -4,6 +4,25 @@ Read `CLAUDE.md` first: it describes the architecture, the build and every run t
 messages on each branch explain each step in detail. The sections below the first three are older notes, kept for
 their history; where they disagree with "Start here", "Start here" is right.
 
+## Measurements for the legato-timing fixes (2026-10-01, measurement agent; the fixer works on branch `legato-timing`)
+
+The owner: a measuring agent and a fixing agent; this branch holds the measurement tools and data, `legato-timing`
+the playback changes (legato delay by interval, held notes early by their onset, shorts by real length, releases).
+- **New rest parts** (aff12be, Windows build https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36848821507,
+  on the VM as `C:\claude\MuseScore-soundlibrary-win64-aff12be`): `--rest-parts onset,shorts,legatolengths` (CLAUDE.md ›
+  "Onset, shorts' lengths, legato after short notes"); reader `tools/soundlibraries/onset_from_check.py` →
+  `sso_sound_onset.json`, `sso_short_lengths.json`, `sso_legato_lengths.json`.
+- **VM job** (task `claude-measure` → `C:\claude\measure\measure.cmd` → `job5.cmd`, log `job5-out.txt`): onset of the
+  string sections and solo winds / horn and their Performance patches (`onsetA.txt`), shorts for the fixer's set
+  (`shortsF.txt`), shorts of the rest of `onsetA.txt`, legato lengths on 6 Performance patches (`legL.txt`), then onset
+  and shorts of every other non-percussion map instrument (`onsetB.txt`) and legato lengths of the other Performance
+  patches (`legB.txt`).
+- **Regression sweeps** (6820405): `tools/playbackverify/make_sweep_scores.py` (16 instruments; convert to .mscx with
+  MuseScore 3.6, then `fix_sweep_ids.py`), rendered on the VM by task `claude-sweep` (`C:\claude\sweep\run.cmd` reads
+  `args.txt`: `<build sha> [score filter]`; outputs `C:\claude\sweep\out-<sha>\<score>`), read with
+  `tools/playbackverify/analyze_sweep.py <notes.json> <part library.wav>`.
+- Status and results: see below as they come in.
+
 ## Start here (2026-10-01: the cloud session ends, the work moves to the owner's Debian VM)
 
 - **Branch**: `claude/intelligent-cray-6pd4o1`, last commit e82a202, everything pushed, `main` merged in on
