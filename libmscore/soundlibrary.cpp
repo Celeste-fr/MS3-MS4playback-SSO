@@ -559,8 +559,10 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
                               continue;
                         // a short that lasts longer than the note (Short 0'5 for a fast eighth): not this one
                         // (measured: from where it sounds closer to the note's length than the next choice)
-                        const double from = a.fromSeconds > 0 ? a.fromSeconds : 0.9 * a.length;
-                        if (from > 0 && want.seconds > 0 && want.seconds < from)
+                        // (measured: from where it sounds closer to the note's meant length than the next choice;
+                        // else its sample's length against the written one)
+                        if (a.fromSeconds > 0 ? (want.soundSeconds > 0 && want.soundSeconds < a.fromSeconds)
+                                              : (a.length > 0 && want.seconds > 0 && want.seconds < 0.9 * a.length))
                               continue;
                         bool fits = true;
                         for (const QString& m : a.modifiers)
@@ -1657,6 +1659,10 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             };
       Want w;
       w.seconds = seconds;
+      // (the strings' factors: the measured from= are on string patches; staccato, staccatissimo and tenuto are
+      // the same in every family)
+      if (seconds > 0)
+            w.soundSeconds = seconds * Ms4::note(Ms4::Family::Strings, arts, 0, false).dur / double(Ms4::HUNDRED);
       w.modifiers = text.modifiers;
       if (has(Art::Mute) || has(Art::PalmMute)) {
             if (!w.modifiers.contains("muted"))

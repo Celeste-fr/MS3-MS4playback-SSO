@@ -216,10 +216,12 @@ switch value of each articulation. For example:
     Advanced Options…* ("Held notes early by", metaTag `soundLibraryOnsetEarly`); 0 plays them on the beat.
   - `length` on an `Articulation` (seconds): how long its sample is (SSO's Short 0.5 / Short 1.0): not
     chosen for a note whose written length is under 90 % of it; with `from` (seconds): not chosen for
-    a note under that instead. SSO's `from` is measured: the written length from which the short's
-    sounding length (the last time it is within 10 dB of its peak; the note-off hardly cuts them) is
-    closer to the note's than what would play otherwise (Spiccato for Short 0.5, Short 0.5 for Short
-    1.0): Violins 1 0.43 / 0.71 s, Violas 0.61 / 1.06, Basses 0.73 / 1.07.
+    a note meant to sound shorter than that instead: its written length times MS4's duration factor
+    for its articulations (staccato 50 %, staccatissimo 25 %, tenuto 99 %, portato 74.5 %). SSO's
+    `from` is measured: the meant length from which the short's sounding length (the last time it is
+    within 10 dB of its peak; the note-off hardly cuts them) is closer to it than what would play
+    otherwise (Spiccato for Short 0.5, Short 0.5 for Short 1.0): Violins 1 0.43 / 0.71 s (a staccato
+    from 0.86 s written, a portato from 0.95 s), Violas 0.61 / 1.06, Basses 0.73 / 1.07.
   - `release` on an `Articulation` (ms): how long a sustained note rings after its note-off. A
     tuning copy (below) is retuned only after its notes' end plus the longer of `tail` and this.
     SSO's: the longest over the articulation's range (the rest check measured every semitone; neighbouring

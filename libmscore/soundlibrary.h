@@ -173,6 +173,9 @@ struct Want {
       QStringList bases;                  // in order of preference
       QStringList modifiers;
       double seconds { -1 };              // the note's written length (noteSeconds); -1: unknown
+      double soundSeconds { -1 };         // how long it is meant to sound: seconds times MS4's duration factor for its
+                                          // articulations (strings: staccato 50 %, staccatissimo 25 %, tenuto 99 %,
+                                          // portato their average 74.5 %); <Articulation from> is compared with this
       };
 
 //---------------------------------------------------------
