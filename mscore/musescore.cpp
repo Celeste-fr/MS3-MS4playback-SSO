@@ -9154,7 +9154,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                                           "its range, repeated, under each control, a legato's slurs at every velocity and interval) "
                                           "instead of extracting; under a supervisor like the extract"));
       parser.addOption(QCommandLineOption("rest-parts", "Use with --check-rest: which parts, any of range,repeats,controls,legato,"
-                                          "onset,shorts,legatolengths (the last three only when named) "
+                                          "onset,shorts,legatolengths,legatopitches (the last four only when named) "
                                           "(default: all)", "parts"));
       parser.addOption(QCommandLineOption("scan-keys", "Check articulations' key scan of a sound library's patches whose keys are not "
                                           "known yet, without a window, as a process of its own like --extract-library (listening "

@@ -1010,6 +1010,144 @@ static ArticulationCheck::TimingResult::Legato legatoPair(Player& player, int va
       return l;
       }
 
+//---------------------------------------------------------
+//   legatoHarmonic
+//    two notes slurred at velocity (= CC1), a then b, the first held 1.2 s, as legatoPair; timed by their harmonics
+//    instead of a free pitch search (which took octaves for each other): every 10 ms an FFT frame (4096 points,
+//    8192 under 120 Hz; its centre's time), d = the power of the harmonics only b has against those only a has, dB
+//    (an octave or twelfth: the lower pitch's own harmonics against the shared ones); its level on the first note
+//    (its last 300 ms) and on the second (1.0 to 1.3 s after its note-on): leave / mid / arrive = the first time d
+//    is 10 / 50 / 90 % of the way, for 30 ms. -1: not reached, or the two levels within 6 dB
+//---------------------------------------------------------
+
+// f's harmonics under top at least minHz and 3 % from any of other's (the FFT window's main lobe leaks further than 3 %)
+static std::vector<double> harmonicsOwn(double f, double other, double top, double minHz)
+      {
+      std::vector<double> own;
+      for (int h = 1; h <= 40 && h * f < top && own.size() < 12; ++h) {
+            bool shared = false;
+            for (int k = 1; k <= 80 && k * other < top * 1.1; ++k)
+                  if (std::fabs(h * f / (k * other) - 1) <= 0.03 || std::fabs(h * f - k * other) < minHz)
+                        shared = true;
+            if (!shared)
+                  own.push_back(h * f);
+            }
+      return own;
+      }
+
+static ArticulationCheck::TimingResult::Legato legatoHarmonic(Player& player, int value, int a, int b, int velocity)
+      {
+      const double sr = player.s.sampleRate;
+      ArticulationCheck::TimingResult::Legato l;
+      l.velocity = velocity;
+      l.interval = b - a;
+      l.start = a;
+      player.settle();
+      player.s.dynamicsValue = velocity;
+      player.arm(-1, value);
+      player.p->midi(ME_NOTEON, player.s.channel, a, velocity);
+      std::vector<float> clip = player.render(player.frames(1.2));
+      const size_t onB = clip.size() / 2;
+      player.p->midi(ME_NOTEON, player.s.channel, b, velocity);
+      const std::vector<float> overlap = player.render(player.frames(ArticulationCheck::LEGATO_OVERLAP_MS / 1000.0));
+      clip.insert(clip.end(), overlap.begin(), overlap.end());
+      player.p->midi(ME_NOTEON, player.s.channel, a, 0);
+      const std::vector<float> rest = player.render(player.frames(1.4));
+      clip.insert(clip.end(), rest.begin(), rest.end());
+      player.p->midi(ME_NOTEON, player.s.channel, b, 0);
+      player.lastPitch = b;
+
+      auto hz = [](int p) { return 440.0 * std::pow(2.0, (p - 69) / 12.0); };
+      const double fa = hz(a), fb = hz(b), top = std::min(8000.0, sr * 0.45);
+      const size_t N = std::min(fa, fb) < 120 ? 8192 : 4096;
+      const double lobe = 3.0 * sr / double(N);     // (Hann's main lobe is ±2 bins)
+      std::vector<double> ownB = harmonicsOwn(fb, fa, top, lobe), ownA = harmonicsOwn(fa, fb, top, lobe);
+      bool octave = ownA.empty() || ownB.empty();
+      std::vector<double> shared;
+      if (octave) {
+            const double lo = std::min(fa, fb), hi = std::max(fa, fb);
+            ownA = harmonicsOwn(lo, hi, top, lobe);       // (the lower one's own …)
+            for (int h = 1; h <= 12 && h * hi < top; ++h)
+                  shared.push_back(h * hi);         // (… against the shared ones)
+            ownB = shared;
+            if (ownA.empty())
+                  return l;
+            }
+      const double binHz = sr / double(N);
+      auto bandPower = [&](const std::vector<double>& power, const std::vector<double>& freqs) {
+            double sum = 0;
+            for (double f : freqs) {
+                  const int k0 = std::max(1, int(std::floor(f * 0.985 / binHz))), k1 = std::min(int(N / 2) - 1, int(std::ceil(f * 1.015 / binHz)));
+                  double m = 0;
+                  for (int k = k0; k <= k1; ++k)
+                        m = std::max(m, power[size_t(k)]);
+                  sum += m;
+                  }
+            return sum;
+            };
+      const std::vector<double> window = hann(N);
+      std::vector<std::complex<double>> spec(N);
+      std::vector<double> power(N / 2);
+      const size_t frames = clip.size() / 2;
+      // d at the frame centred on frame c (stereo mean)
+      auto dAt = [&](size_t c) {
+            for (size_t i = 0; i < N; ++i) {
+                  const std::ptrdiff_t j = std::ptrdiff_t(c) - std::ptrdiff_t(N / 2) + std::ptrdiff_t(i);
+                  const double x = (j >= 0 && size_t(j) < frames) ? 0.5 * (double(clip[2 * size_t(j)]) + double(clip[2 * size_t(j) + 1])) : 0.0;
+                  spec[i] = x * window[i];
+                  }
+            fft(spec);
+            for (size_t k = 0; k < N / 2; ++k)
+                  power[k] = std::norm(spec[k]);
+            const double eb = bandPower(power, ownB), ea = bandPower(power, ownA);
+            return 10 * std::log10(std::max(eb, 1e-30) / std::max(ea, 1e-30));
+            };
+      const size_t hop = size_t(sr * 0.010);
+      auto median = [](std::vector<double> v) {
+            std::sort(v.begin(), v.end());
+            return v.empty() ? 0.0 : v[v.size() / 2];
+            };
+      std::vector<double> before, after;
+      for (size_t c = onB - size_t(sr * 0.3); c < onB; c += hop)
+            before.push_back(dAt(c));
+      for (size_t c = onB + size_t(sr * 1.0); c < onB + size_t(sr * 1.3) && c < frames; c += hop)
+            after.push_back(dAt(c));
+      const double d0 = median(before), d1 = median(after);
+      if (std::fabs(d1 - d0) < 6)
+            return l;
+      int run[3] = { 0, 0, 0 };
+      double* out[3] = { &l.leaveMs, &l.midMs, &l.arriveMs };
+      const double shares[3] = { 0.1, 0.5, 0.9 };
+      for (size_t c = onB; c < onB + size_t(sr * 1.0) && c < frames; c += hop) {
+            const double share = (dAt(c) - d0) / (d1 - d0);
+            const int t = int(std::lround((double(c) - double(onB)) * 1000 / sr));
+            for (int k = 0; k < 3; ++k) {
+                  if (*out[k] >= 0)
+                        continue;
+                  run[k] = share >= shares[k] ? run[k] + 1 : 0;
+                  if (run[k] == 3)
+                        *out[k] = t - 20;
+                  }
+            if (l.arriveMs >= 0)
+                  break;
+            }
+      // the dip, as legatoPair's
+      const std::vector<float> second(clip.begin() + 2 * std::ptrdiff_t(onB), clip.end());
+      const std::vector<double> e = ArticulationCheck::envelope(second, sr);
+      double dip = 200, own = -200;
+      for (size_t k = 0; k < e.size(); ++k) {
+            const double t = k * WINDOW_MS;
+            if (t < 600)
+                  dip = std::min(dip, e[k]);
+            else if (t >= 800 && t < 1200)
+                  own = std::max(own, e[k]);
+            }
+      if (own > SILENT_DB)
+            l.dipDb = std::min(0.0, std::round((dip - own) * 10) / 10);
+      (void)octave;
+      return l;
+      }
+
 namespace {
 
 // the loudest window, and the windows from the note-on to 30 dB, 6 dB under it and to it
@@ -1178,6 +1316,8 @@ constexpr double ArticulationCheck::SHORT_SECONDS[6];
 constexpr double ArticulationCheck::DECAY_DROPS[4];
 constexpr double ArticulationCheck::LEGATO_FIRST_SECONDS[5];
 constexpr int ArticulationCheck::LEGATO_LENGTH_INTERVALS[6];
+constexpr double ArticulationCheck::LEGATO_START_SHARES[5];
+constexpr int ArticulationCheck::LEGATO_PITCH_INTERVALS[12];
 
 namespace {
 
@@ -1454,6 +1594,46 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
                               continue;
                         bool sounds = false;
                         if (!shortNote(p, seconds, &sounds))
+                              return result();
+                        }
+                  }
+            }
+      if (rs.legatoPitches && legato) {
+            // the range: probes every 3 semitones out from the test pitch (0.4 s at mf) until 2 in a row are silent
+            int lo = r.pitch, hi = r.pitch;
+            for (int direction : { -1, 1 }) {
+                  int silent = 0;
+                  for (int p = r.pitch + 3 * direction; !avoided(p) && silent < 2; p += 3 * direction) {
+                        double residual = -200;
+                        size_t off = 0;
+                        const std::vector<float> c = player.held(value, p, 80, 0.4, 0.3, &off, &residual);
+                        const std::vector<double> env = envelope(c, sr);
+                        const Onset o = onset(env, env.size());
+                        if (o.peakDb > SILENT_DB && o.peakDb > residual + 10) {
+                              silent = 0;
+                              (direction < 0 ? lo : hi) = p;
+                              }
+                        else
+                              ++silent;
+                        if (!step())
+                              return result();
+                        }
+                  }
+            r.low = lo;
+            r.high = hi;
+            std::vector<int> starts;
+            for (double share : LEGATO_START_SHARES) {
+                  const int p = lo + int(std::lround(share * (hi - lo)));
+                  if (std::find(starts.begin(), starts.end(), p) == starts.end())
+                        starts.push_back(p);
+                  }
+            for (int a : starts) {
+                  for (int interval : LEGATO_PITCH_INTERVALS) {
+                        const int b = a + interval;
+                        if (b < lo || b > hi || avoided(b))
+                              continue;
+                        r.legatoPitches.push_back(legatoHarmonic(player, value, a, b, 80));
+                        if (!step())
                               return result();
                         }
                   }

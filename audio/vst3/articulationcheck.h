@@ -167,6 +167,8 @@ class ArticulationCheck {
                   double arriveMs { -1 };    // -1: never arrived within 800 ms
                   double dipDb { 0 };
                   double firstMs { 1200 };   // how long the first note was held before the second note-on
+                  int start { -1 };          // the first note's pitch (legatoPitches)
+                  double midMs { -1 };       // legatoPitches: half way from the first pitch to the second
                   std::vector<std::pair<int, double>> cents;    // ms after the second note-on, cents from the first note (confident frames)
                   };
             int value { -1 };
@@ -241,6 +243,12 @@ class ArticulationCheck {
       static constexpr double LEGATO_FIRST_SECONDS[5] = { 0.1, 0.2, 0.3, 0.5, 1.0 };
       static constexpr int LEGATO_LENGTH_INTERVALS[6] = { 2, 5, 7, 12, -5, -12 };
       static constexpr int LEGATO_LENGTH_VELOCITY = 64;
+      // legato from several starting pitches (2026-10-01, the owner: the grid from more than the test pitch, octaves
+      // usable): the legato sound's range found with short probes, LEGATO_START_SHARES of it, LEGATO_PITCH_INTERVALS
+      // at velocity = CC1 = 80, each slur timed by harmonics (legatoHarmonic: no octave errors): leave / mid / arrive
+      // = 10 / 50 / 90 % of the way from the first pitch's level to the second's
+      static constexpr double LEGATO_START_SHARES[5] = { 0.1, 0.3, 0.5, 0.7, 0.9 };
+      static constexpr int LEGATO_PITCH_INTERVALS[12] = { -12, -7, -5, -3, -2, -1, 1, 2, 3, 5, 7, 12 };
       struct RestSettings {
             bool range { true };
             bool repeats { true };
@@ -249,6 +257,7 @@ class ArticulationCheck {
             bool onset { false };           // the range's walk, pp / mf / ff each held ONSET_SECONDS: into onset
             bool shorts { false };
             bool legatoLengths { false };
+            bool legatoPitches { false };
             int silenceRun { 4 };
             int low { 0 };                  // the range's ends (a drum hit: its key)
             int high { 127 };
@@ -271,6 +280,8 @@ class ArticulationCheck {
             std::vector<NoteStats> onset;       // as range (onset)
             std::vector<ShortNote> shorts;
             std::vector<TimingResult::Legato> legatoLengths;
+            std::vector<TimingResult::Legato> legatoPitches;
+            int low { -1 }, high { -1 };        // legatoPitches: the range the probes found
             };
       // control i (0 … controls - 1) to a value 0-1; value < 0: back to its own. false: stop
       using SetControl = std::function<bool(int control, double value)>;

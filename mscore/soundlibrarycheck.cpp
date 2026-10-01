@@ -1836,6 +1836,7 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
       rs.onset = parts.contains("onset");
       rs.shorts = parts.contains("shorts");
       rs.legatoLengths = parts.contains("legatolengths");
+      rs.legatoPitches = parts.contains("legatopitches");
       // (a keyswitched patch: its keys are never played as notes, nor anything under the highest)
       if (s.switchIsKey) {
             for (const SoundLib::Articulation& a : ins.articulations)
@@ -1915,6 +1916,10 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
                   x["arriveMs"] = l.arriveMs;
                   x["dipDb"] = l.dipDb;
                   x["firstMs"] = l.firstMs;
+                  if (l.start >= 0) {
+                        x["start"] = l.start;
+                        x["midMs"] = l.midMs;
+                        }
                   QJsonArray c;
                   for (const auto& pt : l.cents)
                         c.append(QJsonArray({ pt.first, pt.second }));
@@ -1925,6 +1930,13 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
                   lg.append(slur(l));
             for (const auto& l : res.legatoLengths)
                   lgl.append(slur(l));
+            QJsonArray lgp;
+            for (const auto& l : res.legatoPitches)
+                  lgp.append(slur(l));
+            if (!lgp.isEmpty()) {
+                  o["legatoPitches"] = lgp;
+                  o["legatoRange"] = QJsonArray({ res.low, res.high });
+                  }
             for (const auto& n : res.onset) {
                   ons.append(restNote(n));
                   if (n.sounds && n.level == 80) {

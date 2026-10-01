@@ -3457,6 +3457,21 @@ void TestSoundLibrary::restCheck()
             QVERIFY(x.firstMs >= 100 && x.firstMs <= 1000);
             QVERIFY(within(x.arriveMs, 150 * (1 - 35.0 / (100 * std::abs(x.interval))), 60, "24 arrival after a short first note"));
             }
+      // 24 from several starting pitches, timed by harmonics: octaves too (a glide of 150 ms at velocity 80)
+      AC::RestSettings lp = ll;
+      lp.legatoLengths = false;
+      lp.legatoPitches = true;
+      const AC::RestResult q = AC::rest(p.get(), 24, 67, true, 0, nullptr, s, lp, progress);
+      QVERIFY(q.low <= 52 && q.high >= 88);
+      QVERIFY(int(q.legatoPitches.size()) >= 5 * 10);
+      int octaves = 0;
+      for (const auto& x : q.legatoPitches) {
+            QVERIFY2(x.leaveMs >= 0 && x.midMs >= x.leaveMs && x.arriveMs >= x.midMs && x.arriveMs <= 260,
+                     qPrintable(QString("from %1, %2: leaves %3, mid %4, arrives %5").arg(x.start).arg(x.interval).arg(x.leaveMs).arg(x.midMs).arg(x.arriveMs)));
+            if (std::abs(x.interval) == 12)
+                  ++octaves;
+            }
+      QVERIFY(octaves >= 6);
       // 30: silent everywhere
       QCOMPARE(AC::rest(p.get(), 30, 67, false, 1, set, s, rs, progress).pitch, -1);
       QVERIFY(steps > 21 + 6 + 3 + 126);

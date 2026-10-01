@@ -22,6 +22,13 @@ note-on, -1: never (silent, or not within that many dB):
   sso_legato_lengths.json   per legato sound: [[firstMs, interval, leaveMs, arriveMs, dipDb], ...]: two notes slurred
                             (velocity 64, 30 ms overlap), the first held 100 / 200 / 300 / 500 / 1000 ms before the second
                             note-on; leave / arrive: as sso_legato_grid.json (from the second note-on)
+  sso_legato_grid_pitches.json  per legato sound: "range": [low, high] (probes every 3 semitones at mf), "rows":
+                            [[startPitch, interval, leaveMs, midMs, arriveMs, dipDb], ...]: from 5 starting pitches (10 /
+                            30 / 50 / 70 / 90 % of the range), intervals -12 -7 -5 -3 -2 -1 1 2 3 5 7 12, velocity = CC1 =
+                            80, the first note held 1.2 s; timed by harmonics (legatoHarmonic: octaves too): the first
+                            time the second pitch's own harmonics against the first's are 10 / 50 / 90 % of the way from
+                            their level on the first note to that on the second (FFT frames' centres, ms after the second
+                            note-on; -1: not reached)
 Prints a summary.
 """
 import argparse
@@ -67,12 +74,12 @@ def main():
             for p in r.get("patches", []):
                 if not p.get("restOnly") or "rest" not in p:
                     continue
-                for part in ("onset", "shorts", "legatolengths"):
+                for part in ("onset", "shorts", "legatolengths", "legatopitches"):
                     if part in p.get("restParts", "").split(","):
                         k = (p["patch"], part)
                         if k not in newest or date > newest[k][0]:
                             newest[k] = (date, p)
-    onset, shorts, legato = {}, {}, {}
+    onset, shorts, legato, pitches = {}, {}, {}, {}
     for (patch, part), (_, p) in newest.items():
         fields = p.get("restFields")
         for s in p.get("rest", []):
@@ -82,10 +89,15 @@ def main():
             elif part == "shorts" and s.get("shorts"):
                 shorts.setdefault(patch, {})[name] = sorted([[x[0], x[1], x[4], x[5], x[6], x[2]] for x in s["shorts"]],
                                                             key=lambda r: (r[0], r[1]))
+            elif part == "legatopitches" and s.get("legatoPitches"):
+                pitches.setdefault(patch, {})[name] = {
+                    "range": s.get("legatoRange"),
+                    "rows": [[l["start"], l["interval"], l["leaveMs"], l["midMs"], l["arriveMs"], l["dipDb"]] for l in s["legatoPitches"]]}
             elif part == "legatolengths" and s.get("legatoLengths"):
                 legato.setdefault(patch, {})[name] = [[l["firstMs"], l["interval"], l["leaveMs"], l["arriveMs"], l["dipDb"]]
                                                       for l in s["legatoLengths"]]
-    for f, d in (("sso_sound_onset.json", onset), ("sso_short_lengths.json", shorts), ("sso_legato_lengths.json", legato)):
+    for f, d in (("sso_sound_onset.json", onset), ("sso_short_lengths.json", shorts), ("sso_legato_lengths.json", legato),
+                 ("sso_legato_grid_pitches.json", pitches)):
         if d:
             write(os.path.join(a.dir, f), d)
 
@@ -100,6 +112,14 @@ def main():
         for name, rows in sorted(per.items()):
             line = " ".join(f"{r[1]:.0f}:{r[3][1]:.0f}" for r in rows if r[0] == rows[0][0])
             print(f"short {patch} / {name}: held:perceived -10 dB end {line}")
+    for patch, per in sorted(pitches.items()):
+        for name, v in per.items():
+            by = {}
+            for start, interval, leave, mid, arr, dip in v["rows"]:
+                if mid >= 0:
+                    by.setdefault(start, []).append(mid)
+            print(f"legato from pitches {patch} / {name}: range {v['range']}, mid " +
+                  ", ".join(f"from {p}: {statistics.median(x):.0f}" for p, x in sorted(by.items())))
     for patch, per in sorted(legato.items()):
         for name, rows in per.items():
             by = {}

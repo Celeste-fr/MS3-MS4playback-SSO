@@ -591,6 +591,11 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   → `sso_sound_onset.json`, `sso_short_lengths.json`, `sso_legato_lengths.json`; `rest_from_check.py` leaves these
   runs out. Test `restCheck` (the test synth's 14: power within 20 / 10 dB at 20 / 63 ms of its 200 ms linear attack,
   perceived -10 dB ~100 ms; 1 held: sounds as long as held; 24's glide the same after every first-note length).
+  **legatopitches** (the owner: the grid from several pitches, octaves usable): the legato sound's range by probes
+  every 3 semitones, slurs from 10 / 30 / 50 / 70 / 90 % of it, -12 … +12 (12 intervals) at mf, timed by harmonics
+  (`legatoHarmonic`; the old `centsShift` search took octaves for each other: the grid's ±12 arrivals were up to
+  ~700 ms): leave / mid / arrive = 10 / 50 / 90 % of the way between the two pitches' harmonic levels; results
+  `legatoPitches`, `legatoRange` → `sso_legato_grid_pitches.json`.
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

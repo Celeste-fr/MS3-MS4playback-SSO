@@ -57,17 +57,19 @@ def end_of(env, first, peak_t, peak, t1, drops=(10, 15)):
     return out
 
 
-def unique_harmonics(f, other, top):
+def unique_harmonics(f, other, top, min_hz=0.0):
+    """f's harmonics at least 3 % and min_hz (the window's main lobe) from any of other's"""
     hs = [h * f for h in range(1, 41) if h * f < top]
     os_ = [h * other for h in range(1, 81) if h * other < top * 1.1]
-    return [x for x in hs if all(abs(x / o - 1) > 0.03 for o in os_)][:12]
+    return [x for x in hs if all(abs(x / o - 1) > 0.03 and abs(x - o) >= min_hz for o in os_)][:12]
 
 
 def arrival(x, sr, t_written, f_old, f_new, t_from, t_to):
     N = 8192 if min(f_old, f_new) < 120 else 4096
     hop = int(sr * 0.005)
     top = min(8000.0, sr * 0.45)
-    hn, ho = unique_harmonics(f_new, f_old, top), unique_harmonics(f_old, f_new, top)
+    lobe = 3.0 * sr / N
+    hn, ho = unique_harmonics(f_new, f_old, top, lobe), unique_harmonics(f_old, f_new, top, lobe)
     freqs = np.fft.rfftfreq(N, 1 / sr)
     def bins(hs):
         return [np.nonzero(np.abs(freqs / h - 1) <= 0.015)[0] for h in hs]
@@ -80,7 +82,7 @@ def arrival(x, sr, t_written, f_old, f_new, t_from, t_to):
         # those both share, in dB: from its level under the old note to that under the new one, the crossing of
         # the midpoint (for 20 ms)
         low, high = (f_old, f_new) if f_old < f_new else (f_new, f_old)
-        own = bins(unique_harmonics(low, high, top))
+        own = bins(unique_harmonics(low, high, top, lobe))
         shared = bins([h * high for h in range(1, 13) if h * high < top])
         if not own or not shared:
             return None
