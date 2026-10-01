@@ -173,14 +173,15 @@ static std::vector<Controller> mergeControllers(const std::vector<Controller>& l
       return all;
       }
 
-// setup="$iooxo=3;$name=value": the script values a made setup sets
+// setup="$iooxo=3;$name=value;%array=48 52 0": the script values a made setup sets, each value
+// exactly as written (the bytes Kontakt saves: an array's elements separated by single spaces)
 static std::vector<std::pair<QString, QString>> readSetupValues(const QString& text)
       {
       std::vector<std::pair<QString, QString>> values;
       for (const QString& item : text.split(';', QString::SkipEmptyParts)) {
             const int eq = item.indexOf('=');
             if (eq > 0)
-                  values.emplace_back(item.left(eq).trimmed(), item.mid(eq + 1).trimmed());
+                  values.emplace_back(item.left(eq).trimmed(), item.mid(eq + 1));
             }
       return values;
       }

@@ -97,6 +97,7 @@ class TestSoundLibrary : public QObject, public MTest
       void liveMidiControllers();
       void kontaktSetup();
       void kontaktScriptValues();
+      void kontaktScriptValueLengths();
       void kontaktSetupReal();
       void vst3Plugin();
       void vst3LoadTimes();
@@ -290,10 +291,11 @@ void TestSoundLibrary::spitfireMap()
             values += p.scan == "values";
             keys += p.scan == "keys" && p.keyScan;
             }
-      QCOMPARE(int(lib->otherPatches.size()), 541);
+      QCOMPARE(int(lib->otherPatches.size()), 541 + 9);    // (+ 4 kits and 5 ensembles with every technique on)
       QCOMPARE(values, 0);                                  // (every values patch's values are known)
       QCOMPARE(keys, 7);
       int scanned = 0;
+      int allOn = 0;
       for (const SoundLib::LibInstrument& p : lib->otherPatches) {
             if (p.name == "Basses - Core techniques")
                   QCOMPARE(p.testPitch, 39);                    // (its samples' keys: 24-78; 60 has none)
@@ -334,6 +336,29 @@ void TestSoundLibrary::spitfireMap()
                   QVERIFY(off > 0);
                   QCOMPARE(toms3to5, 3);                // (Toms 3-5 share E2 at its defaults)
                   }
+            // a kit with every technique switched on (measured, never chosen): the kit's .nki, Kickstart's
+            // arrays set whole (each value as written: an array's elements separated by spaces), every hit
+            // with a key, an off one on a free key (Bass Drum Roll, technique 3, on key 1)
+            if (p.name.endsWith(" (all on)")) {
+                  ++allOn;
+                  QCOMPARE(int(p.setupValues.size()), 2);
+                  QCOMPARE(p.setupValues[0].first, QString("%c2lsa"));
+                  QCOMPARE(p.setupValues[1].first, QString("%4jwcn"));
+                  QVERIFY(!p.setupValues[1].second.contains("  ") && p.setupValues[1].second.endsWith(" 0"));
+                  QCOMPARE(int(p.setupValues[0].second.split(' ').size()), int(p.drums.size()) + 1);
+                  for (const SoundLib::DrumKey& d : p.drums) {
+                        QVERIFY(d.key > 0 && !d.offByDefault);
+                        QCOMPARE(d.pitch, -1);
+                        }
+                  }
+            if (p.name == "Drums - Low (all on)") {
+                  QCOMPARE(p.nki, QString("Instruments/Symphonic Percussion/Drums - Low.nki"));
+                  QVERIFY(p.setupValues[1].second.startsWith("84 86 88 1 89 2 3 48 50 52 53 4 "));
+                  QCOMPARE(int(p.drums.size()), 39);
+                  QCOMPARE(p.drums[3].name, QString("Bass Drum Roll"));
+                  QCOMPARE(p.drums[3].key, 1);
+                  QVERIFY(p.scan.isEmpty() && !p.keyScan);
+                  }
             // a keyswitch patch: Harp glissandi's scales on keys 0-5 (the owner's reviewed pictures)
             if (p.name == "Other - Harp glissandi") {
                   QVERIFY(p.switchType == SoundLib::SwitchType::KEYSWITCH);
@@ -344,6 +369,7 @@ void TestSoundLibrary::spitfireMap()
                   }
             }
       QCOMPARE(scanned, 4);
+      QCOMPARE(allOn, 9);
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);
@@ -1271,11 +1297,11 @@ void TestSoundLibrary::kontaktSetup()
       QCOMPARE(programName(nkiProgram(nki, nullptr)), QString("Violins 2 - All techniques"));
       QCOMPARE(scriptValues(nkiProgram(nki, nullptr)).at("$iooxo"), QByteArray("0"));
 
-      // $iooxo set (same length); $stgrp not (its value is longer); a name the script lacks: nothing
+      // $iooxo set (same length); a name the script lacks: nothing (another length: kontaktScriptValueLengths)
       QString error;
       int set = 0;
       const QByteArray state = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings",
-                                         { { "$iooxo", "3" }, { "$stgrp", "99" }, { "$none", "1" } }, &error, &set);
+                                         { { "$iooxo", "3" }, { "$none", "1" } }, &error, &set);
       QVERIFY2(!state.isEmpty(), qPrintable(error));
       QCOMPARE(set, 1);
       const QByteArray program = slotProgram(state, &error);
@@ -1326,9 +1352,9 @@ void TestSoundLibrary::kontaktScriptValues()
       QCOMPARE(sampleListVersion(QByteArray("not a state")), -1);
 
       int set = 0;
-      const QByteArray changed = withScriptValues(made, { { "$zdiqz", "1" }, { "$stgrp", "1" }, { "$none", "1" } }, &error, &set);
+      const QByteArray changed = withScriptValues(made, { { "$zdiqz", "1" }, { "$none", "1" } }, &error, &set);
       QVERIFY2(!changed.isEmpty(), qPrintable(error));
-      QCOMPARE(set, 1);                                       // ($stgrp is 3 long, $none isn't there)
+      QCOMPARE(set, 1);                                       // ($none isn't there)
       const QByteArray program = slotProgram(changed, &error);
       QCOMPARE(programName(program), QString("Violins 2 - All techniques"));
       std::map<QString, QByteArray> values = scriptValues(program);
@@ -1349,6 +1375,115 @@ void TestSoundLibrary::kontaktScriptValues()
       QCOMPARE(set, 0);
       QVERIFY(withScriptValues(empty, { { "$zdiqz", "1" } }, &error).isEmpty());
       QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
+//   kontaktScriptValueLengths
+//    a script value set with another length than the saved one (a Kickstart percussion patch's
+//    technique arrays, %4jwcn keys / %c2lsa on-off, made longer to switch techniques on): the
+//    entry's length is rewritten, the chunks around it sized again, its neighbours kept; a value
+//    longer than 400 bytes is read; set back, the program is the .nki's byte for byte
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktScriptValueLengths()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      const QString folder = "D:/Libs/SSO/Instruments/Symphonic Strings";
+      QString error;
+      const QByteArray plain = fromEmpty(empty, nki, folder, {}, &error);
+      QVERIFY2(!plain.isEmpty(), qPrintable(error));
+      const QByteArray program0 = slotProgram(plain, &error);
+      QCOMPARE(scriptValues(program0).at("$name"), QByteArray("short"));
+
+      // an array as Kontakt saves one: elements separated by single spaces, a 0 after the last
+      // non-zero one; 160 elements, over 400 bytes
+      QByteArray array;
+      for (int i = 0; i < 159; ++i)
+            array += QByteArray::number(36 + i % 92) + " ";
+      array += "0";
+      QVERIFY(array.size() > 400);
+
+      // longer ($name 5 → 400+ bytes), shorter ($stgrp "127" → "99") and the same length ($iooxo) at once
+      int set = 0;
+      const QByteArray longer = fromEmpty(empty, nki, folder, { { "$name", array }, { "$stgrp", "99" }, { "$iooxo", "3" } },
+                                          &error, &set);
+      QVERIFY2(!longer.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 3);
+      const QByteArray program1 = slotProgram(longer, &error);
+      QVERIFY2(!program1.isEmpty(), qPrintable(error));
+      QCOMPARE(programName(program1), QString("Violins 2 - All techniques"));
+      std::map<QString, QByteArray> values = scriptValues(program1);
+      QCOMPARE(values.at("$name"), array);
+      QCOMPARE(values.at("$stgrp"), QByteArray("99"));
+      QCOMPARE(values.at("$iooxo"), QByteArray("3"));
+      QCOMPARE(values.at("$slhsl"), QByteArray("1"));         // (the neighbours as they were)
+      QCOMPARE(values.at("$zdiqz"), QByteArray("0"));
+      QCOMPARE(program1.size(), program0.size() + (array.size() - 5) + (2 - 3));
+      QCOMPARE(samplePaths(longer, &error), samplePaths(plain, &error));
+      QCOMPARE(presetTail(longer), presetTail(plain));
+
+      // shorter again, in the state (withScriptValues): the 400+ bytes back to 3
+      const QByteArray shorter = withScriptValues(longer, { { "$name", "1 0" } }, &error, &set);
+      QVERIFY2(!shorter.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 1);
+      const QByteArray program2 = slotProgram(shorter, &error);
+      values = scriptValues(program2);
+      QCOMPARE(values.at("$name"), QByteArray("1 0"));
+      QCOMPARE(values.at("$stgrp"), QByteArray("99"));
+      QCOMPARE(values.at("$iooxo"), QByteArray("3"));
+      QCOMPARE(program2.size(), program0.size() + (3 - 5) + (2 - 3));
+
+      // round trip: every value back, the .nki's program byte for byte
+      const QByteArray back = withScriptValues(shorter, { { "$name", "short" }, { "$stgrp", "127" }, { "$iooxo", "0" } },
+                                               &error, &set);
+      QCOMPARE(set, 3);
+      QCOMPARE(slotProgram(back, nullptr), program0);
+      QCOMPARE(slotProgram(withScriptValues(longer, { { "$name", "short" }, { "$stgrp", "127" }, { "$iooxo", "0" } }, &error),
+                           nullptr), program0);
+      // an empty value: the entry holds the name and its space only
+      const QByteArray none = withScriptValues(plain, { { "$name", "" } }, &error, &set);
+      QCOMPARE(set, 1);
+      values = scriptValues(slotProgram(none, nullptr));
+      QCOMPARE(values.at("$name"), QByteArray());
+      QCOMPARE(values.at("$stgrp"), QByteArray("127"));
+
+      // with a Kickstart patch's .nki (SSO_KICKSTART_NKI, e.g. Drums - Low.nki; skipped without): its arrays
+      // made longer, every technique on (keys 1, 2 … where off); everything else as it was
+      const QString kitPath = qEnvironmentVariable("SSO_KICKSTART_NKI");
+      if (kitPath.isEmpty())
+            return;
+      QFile kitFile(kitPath);
+      QVERIFY2(kitFile.open(QIODevice::ReadOnly), qPrintable(kitPath));
+      const QByteArray kit = kitFile.readAll();
+      const std::map<QString, QByteArray> kitValues = scriptValues(nkiProgram(kit, nullptr));
+      QVERIFY(kitValues.count("%4jwcn") && kitValues.count("%c2lsa") && kitValues.count("%Share__Settings"));
+      QList<QByteArray> keys = kitValues.at("%4jwcn").split(' ');
+      int next = 1;
+      for (QByteArray& k : keys)
+            if (k == "0")
+                  k = QByteArray::number(next++);
+      keys += QByteArray::number(next++);                    // (and longer: one technique more, then the 0)
+      keys += "0";
+      const QByteArray allKeys = keys.join(' ');
+      const QByteArray allOn = QByteArray("1 ").repeated(keys.size() - 1) + "0";
+      const QByteArray kitState = fromEmpty(empty, kit, "D:/Libs/SSO/Instruments/Symphonic Percussion",
+                                            { { "%4jwcn", allKeys }, { "%c2lsa", allOn } }, &error, &set);
+      QVERIFY2(!kitState.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 2);
+      std::map<QString, QByteArray> after = scriptValues(slotProgram(kitState, nullptr));
+      QCOMPARE(after.at("%4jwcn"), allKeys);
+      QCOMPARE(after.at("%c2lsa"), allOn);
+      after["%4jwcn"] = kitValues.at("%4jwcn");
+      after["%c2lsa"] = kitValues.at("%c2lsa");
+      QVERIFY(after == kitValues);
+      QCOMPARE(slotProgram(kitState, nullptr).size(), slotProgram(fromEmpty(empty, kit, "D:/x", {}, &error), nullptr).size()
+               + (allKeys.size() - kitValues.at("%4jwcn").size()) + (allOn.size() - kitValues.at("%c2lsa").size()));
       }
 
 //---------------------------------------------------------
