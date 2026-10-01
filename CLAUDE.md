@@ -343,15 +343,12 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   every interval when there is no grid; the interval is from the nearest note of the chord before that goes on legato
   on the patch. Medians over the 45 patches -12: 210, -7: 230, -5: 190, -1: 170, +1: 150, +2: 160, +7: 230, +12: 360;
   per patch 60-690; velocity changes nothing, median 190 at each. Before, one number per patch, the median of the
-  timing check's six transitions, +2 / -5 only: leaps of a fourth or more stayed 100-280 ms late). **The 8 string
-  Performance patches from 5 starting pitches** (`sso_legato_grid_pitches.json`, the rest check's legatopitches part,
-  timed by harmonics; `legatoDelayFromPitches`): per interval the median 50 % time over the starting pitches (the
-  crossing the sweep's arrival measures), -12 … +7; +12 (405-680, the first note's room) takes -12's 110-205, where the
-  sweep of 3f0cda5 put octave slurs (+12 121 ms early, -12 86 early on the ±7 delay). Basses 70-160 (were 210-300),
-  Violins 2 140-175 (230-280): the sweep's early half notes there. The other 35 Performance patches: the grid above,
-  octaves on ±7 still (not measured from several pitches yet; the single-pitch grid has no common offset to correct
-  by: against the 5-pitch 50 % time it reads a median 95-98 ms long on Basses / Violins 2, 58 on Violas, -25 … +30 on
-  the others, so it stays until `legatopitches` measures those 35; HANDOFF.md › Legato and onset timing). And
+  timing check's six transitions, +2 / -5 only: leaps of a fourth or more stayed 100-280 ms late). **All 43 Performance patches from 5 starting pitches**
+  (`sso_legato_grid_pitches.json`, the rest check's legatopitches part, timed by harmonics; `legatoDelayFromPitches`):
+  per interval the median 50 % time over the starting pitches (the crossing the sweep's arrival measures; strings
+  210-240 ms, woodwinds 120-130, brass 130). Octaves are not usable (+12 reads 375-760, the first note's room; -12
+  70-160): both take the patch's median of its -7, -5, +5, +7 (the sweep of 3f0cda5 heard octave slurs 86-121 ms early
+  on them, winds and brass still 84-111 early on the measured -12). And
   `<Legato early="…"/>` (percent; per score metaTag `soundLibraryLegatoEarly`, *Mixer › Advanced Options…* "Legato
   transitions early by", `SoundLibraryOptions::_legatoEarly`; `SoundLib::legatoEarly`): a transition (the
   `legatoTransition` lambda in `collectMeasureEventsMs4`: legato on a patch with a delay, the chord just before on
@@ -392,10 +389,11 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   build ed3a294 heard sul tasto 240-600 ms and flautando 145-255 ms late); unmeasured sounds: per articulation kind
   (`articulationKind`, brass apart), the measured patches' median of onset / mf full-level time times the patch's own
   full-level time (Long 0.39, Legato 0.31 (brass 0.22), Sul Tasto 0.57, Super Sul Tasto 0.87, Flautando 0.66, Harmonics
-  0.48), the family fit only where no kind has 20 measured semitones; a sul tasto / flautando / harmonics semitone
-  whose mf peak is at 1.3 s or later (still rising at the check's 1.5 s end: 40-86 % of theirs, no other sound's) takes
-  the -10 dB time, since its full level is ~5 dB higher (the sweep of 3f0cda5, its peak up to ~2 s after the note-on,
-  heard those 123-223 ms late; -10 comes 130-177 ms after -15; `onsetMs`). All 112 non-percussion map instruments
+  0.48), the family fit only where no kind has 20 measured semitones. Sul tasto / flautando / harmonics (swells,
+  varying note to note): the -15 dB time per semitone, never more than its neighbours' (a minimum over ±1 semitone),
+  table pairs within 15 ms, rounded down: err late. (696341d took the -10 dB time for still-rising swells: the sweep of
+  e6f44e6 heard Violins 2 sul tasto up to 399 ms early, Celli / Violas / Basses flautando 123-216 early; some, Violas sul
+  tasto mid, Violins 1 flautando low, stay 250-570 late.) All 112 non-percussion map instruments
   measured since f8908f8 (2026-10-01);
   metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
   Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
