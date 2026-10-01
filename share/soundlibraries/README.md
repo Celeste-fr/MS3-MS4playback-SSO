@@ -185,9 +185,9 @@ switch value of each articulation. For example:
     after its note-on (SSO's Performance patches: 70–430 ms, median 180). A slurred note that is a
     transition (its note before, on the same patch, is slurred into it) starts early by this times
     `<Legato early>` percent, so the new pitch lands near the beat. The note before loses at most
-    a share of its length: a quarter up to 250 ms, its length in seconds between, half from 500 ms
-    (fast runs, where SSO's transitions are faster, stay even); it is also capped at the chunk's or
-    the repeat's start; its note-off, the
+    a share of its length: none up to 125 ms, rising linearly to half at 250 ms and longer (fast
+    runs, where SSO's transitions are faster, stay even); it is also capped at the chunk's or the
+    repeat's start; its note-off, the
     controllers and the switches stay where they were. The first note of a slur, the note after
     it and a repeated key are not moved.
   - `<Legato early="100"/>` (top level): that percent (SSO: 100, measured: the new pitch then fully arrives a
