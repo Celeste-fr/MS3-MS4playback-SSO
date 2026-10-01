@@ -3414,6 +3414,49 @@ void TestSoundLibrary::restCheck()
             const double glide = x.velocity < 40 ? 300 : x.velocity < 100 ? 150 : 60;
             QVERIFY(within(x.arriveMs, glide * (1 - 35.0 / (100 * std::abs(x.interval))), 60, "24 arrival"));
             }
+      // the perceptual onset (onset), shorts' lengths (shorts), legato after first notes of each length (legatoLengths)
+      // 14: a 200 ms linear attack: power within 20 dB at 20 ms (amplitude 0.1), 10 dB at 63 ms
+      AC::RestSettings on;
+      on.range = on.repeats = on.controls = on.legato = false;
+      on.onset = true;
+      on.low = 66;
+      on.high = 68;
+      const AC::RestResult o = AC::rest(p.get(), 14, 67, false, 0, nullptr, s, on, progress);
+      QCOMPARE(int(o.onset.size()), 3 * 3);
+      for (const auto& n : o.onset) {
+            QVERIFY(n.sounds);
+            QVERIFY(within(n.energyOnsetMs[0], 20, 10, "14 power -20 dB"));
+            QVERIFY(within(n.energyOnsetMs[3], 63, 10, "14 power -10 dB"));
+            for (int k = 0; k < 3; ++k)
+                  QVERIFY(n.onsetMs[k] >= 0 && n.onsetMs[k] <= n.onsetMs[k + 1]);
+            // (perceived: the window's centre and the 22 ms smoothing come after the power)
+            QVERIFY(within(n.onsetMs[3], 100, 50, "14 perceived -10 dB"));
+            QVERIFY(n.perceivedPeakMs >= 180);
+            }
+      // 1: held, released at once: it sounds as long as it is held (the window and smoothing add a little)
+      AC::RestSettings sh = on;
+      sh.onset = false;
+      sh.shorts = true;
+      sh.low = 50;
+      sh.high = 90;
+      const AC::RestResult h = AC::rest(p.get(), 1, 67, false, 0, nullptr, s, sh, progress);
+      QCOMPARE(int(h.shorts.size()), 3 * 6);     // 67, 55, 79
+      for (const auto& n : h.shorts) {
+            QVERIFY(within(n.energyLastMs[0], 1000 * n.seconds, 10, "1 power -6 dB"));
+            QVERIFY(within(n.perceivedLastMs[1], 1000 * n.seconds + 30, 40, "1 perceived -10 dB"));
+            }
+      // 24: the glide doesn't depend on the first note's length (velocity 64: 150 ms)
+      AC::RestSettings ll = on;
+      ll.onset = false;
+      ll.legatoLengths = true;
+      ll.low = 50;
+      ll.high = 90;
+      const AC::RestResult g = AC::rest(p.get(), 24, 67, true, 0, nullptr, s, ll, progress);
+      QCOMPARE(int(g.legatoLengths.size()), 6 * 5);
+      for (const auto& x : g.legatoLengths) {
+            QVERIFY(x.firstMs >= 100 && x.firstMs <= 1000);
+            QVERIFY(within(x.arriveMs, 150 * (1 - 35.0 / (100 * std::abs(x.interval))), 60, "24 arrival after a short first note"));
+            }
       // 30: silent everywhere
       QCOMPARE(AC::rest(p.get(), 30, 67, false, 1, set, s, rs, progress).pitch, -1);
       QVERIFY(steps > 21 + 6 + 3 + 126);

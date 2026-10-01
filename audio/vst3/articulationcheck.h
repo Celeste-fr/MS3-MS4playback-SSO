@@ -166,6 +166,7 @@ class ArticulationCheck {
                   double leaveMs { -1 };     // -1: the pitch never left the first note's (or silent)
                   double arriveMs { -1 };    // -1: never arrived within 800 ms
                   double dipDb { 0 };
+                  double firstMs { 1200 };   // how long the first note was held before the second note-on
                   std::vector<std::pair<int, double>> cents;    // ms after the second note-on, cents from the first note (confident frames)
                   };
             int value { -1 };
@@ -211,12 +212,43 @@ class ArticulationCheck {
             double bodyMs { -1 };           // to 20 dB under the peak (mf only, else -1)
             bool sustains { false };
             double releaseMs { -1 };        // a sustaining note's release (mf only; -1: none or longer than the tail)
+            // the perceptual onset (2026-10-01, for starting slow attacks early by when they are heard, not by when
+            // the bow's swell is done): on perceivedEnvelope, its peak within the first ONSET_SECONDS, the time of
+            // the peak and the first time it is within ONSET_DROPS dB of it; the same on the 5 ms power windows
+            // (envelope). ms from the note-on (perceived: the 2048-point window's centre); -1: silent
+            double perceivedPeakMs { -1 };
+            double onsetMs[4] { -1, -1, -1, -1 };
+            double energyOnsetMs[4] { -1, -1, -1, -1 };
             };
+      static constexpr double ONSET_SECONDS = 1.5;
+      static constexpr double ONSET_DROPS[4] = { 20, 15, 12, 10 };
+      // a short note's length (2026-10-01, for choosing a short by how long it really sounds): mf, held each of
+      // SHORT_SECONDS at the test pitch and an octave (else a fifth) under and over it, with its tail: its peak and
+      // the last time it is within DECAY_DROPS dB of it, perceived (perceivedEnvelope) and power (envelope)
+      static constexpr double SHORT_SECONDS[6] = { 0.05, 0.1, 0.25, 0.5, 1.0, 2.0 };
+      static constexpr double DECAY_DROPS[4] = { 6, 10, 15, 20 };
+      struct ShortNote {
+            int pitch { -1 };
+            double seconds { 0 };           // held (the note-off)
+            double loudDb { -200 };         // the loudest 50 ms
+            double perceivedPeakDb { -200 };
+            double perceivedPeakMs { -1 };
+            double perceivedLastMs[4] { -1, -1, -1, -1 };
+            double energyLastMs[4] { -1, -1, -1, -1 };
+            };
+      // legato after a first note of each LEGATO_FIRST_SECONDS (2026-10-01: does SSO's transition depend on how long
+      // the note before was held?): slurred pairs at LEGATO_LENGTH_VELOCITY, LEGATO_LENGTH_INTERVALS from the test pitch
+      static constexpr double LEGATO_FIRST_SECONDS[5] = { 0.1, 0.2, 0.3, 0.5, 1.0 };
+      static constexpr int LEGATO_LENGTH_INTERVALS[6] = { 2, 5, 7, 12, -5, -12 };
+      static constexpr int LEGATO_LENGTH_VELOCITY = 64;
       struct RestSettings {
             bool range { true };
             bool repeats { true };
             bool controls { true };
             bool legato { true };
+            bool onset { false };           // the range's walk, pp / mf / ff each held ONSET_SECONDS: into onset
+            bool shorts { false };
+            bool legatoLengths { false };
             int silenceRun { 4 };
             int low { 0 };                  // the range's ends (a drum hit: its key)
             int high { 127 };
@@ -236,6 +268,9 @@ class ArticulationCheck {
             std::vector<NoteStats> repeats;
             std::vector<ControlPoint> controls;
             std::vector<TimingResult::Legato> legato;
+            std::vector<NoteStats> onset;       // as range (onset)
+            std::vector<ShortNote> shorts;
+            std::vector<TimingResult::Legato> legatoLengths;
             };
       // control i (0 … controls - 1) to a value 0-1; value < 0: back to its own. false: stop
       using SetControl = std::function<bool(int control, double value)>;
@@ -270,6 +305,9 @@ class ArticulationCheck {
       // (10 dB = twice as loud) summed, smoothed in time (attack 22 ms, release 50 ms); its peak, as
       // phon-like dB (33.2 log10 of the sum). Only differences mean anything
       static double perceivedLoudnessDb(const std::vector<float>& clip, double sampleRate);
+      // its short-term loudness every 5 ms (the same dB; -200: nothing), value i at the 2048-point window's centre:
+      // firstMs + 5 i ms from the clip's start
+      static std::vector<double> perceivedEnvelope(const std::vector<float>& clip, double sampleRate, double* firstMs = nullptr);
       // how much a clip's onset stands out (the owner, 2026-09-28: at one loudness a short's bright bow
       // attack stands out more than the held note it matches): its loudness as the ear resolves it in
       // time (Glasberg & Moore 2002's instantaneous loudness from a gammatone filterbank, every 1 ms,

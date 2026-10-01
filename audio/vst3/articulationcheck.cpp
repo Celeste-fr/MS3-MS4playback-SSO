@@ -188,11 +188,14 @@ static double specificLoudness(double e)
 //   perceivedLoudnessDb
 //---------------------------------------------------------
 
-double ArticulationCheck::perceivedLoudnessDb(const std::vector<float>& clip, double sampleRate)
+std::vector<double> ArticulationCheck::perceivedEnvelope(const std::vector<float>& clip, double sampleRate, double* firstMs)
       {
+      std::vector<double> out;
       const size_t frames = clip.size() / 2;
+      if (firstMs)
+            *firstMs = sampleRate > 0 ? 1024 * 1000.0 / sampleRate : 0;
       if (frames == 0 || sampleRate <= 0)
-            return -200;
+            return out;
       const std::vector<double> x = kWeighted(clip, sampleRate);
       // (2048 at 48 kHz: 23 Hz bins; 43 ms, short enough for a short note)
       const size_t N = 2048;
@@ -208,7 +211,7 @@ double ArticulationCheck::perceivedLoudnessDb(const std::vector<float>& clip, do
             }
       std::vector<std::complex<double>> spec(N);
       std::vector<double> power(N / 2);
-      double stl = 0, peak = 0;
+      double stl = 0;
       for (size_t start = 0; start + N <= frames + N / 2; start += hop) {
             for (size_t i = 0; i < N; ++i) {
                   const size_t j = start + i;
@@ -225,9 +228,17 @@ double ArticulationCheck::perceivedLoudnessDb(const std::vector<float>& clip, do
                   loud += specificLoudness(e);
                   }
             stl += (loud > stl ? attack : release) * (loud - stl);
-            peak = std::max(peak, stl);
+            out.push_back(stl > 0 ? 33.2 * std::log10(stl) : -200);
             }
-      return peak > 0 ? 33.2 * std::log10(peak) : -200;
+      return out;
+      }
+
+double ArticulationCheck::perceivedLoudnessDb(const std::vector<float>& clip, double sampleRate)
+      {
+      double peak = -200;
+      for (double x : perceivedEnvelope(clip, sampleRate))
+            peak = std::max(peak, x);
+      return peak;
       }
 
 //---------------------------------------------------------
@@ -910,7 +921,25 @@ std::vector<float> Player::held(int value, int pitch, int level, double seconds,
 //    (ArticulationCheck::timing, ::rest)
 //---------------------------------------------------------
 
-static ArticulationCheck::TimingResult::Legato legatoPair(Player& player, int value, int a, int b, int velocity)
+// the pitch spectrum of a note of a at velocity held 1.2 s, 0.6 to 1.1 s of it (legatoPair's reference)
+static std::vector<double> referenceSpectrum(Player& player, int value, int a, int velocity)
+      {
+      const double sr = player.s.sampleRate;
+      player.settle();
+      player.s.dynamicsValue = 80;
+      player.arm(-1, value);
+      player.p->midi(ME_NOTEON, player.s.channel, a, velocity);
+      const std::vector<float> note = player.render(player.frames(1.2));
+      player.p->midi(ME_NOTEON, player.s.channel, a, 0);
+      player.lastPitch = a;
+      const std::vector<float> reference(note.begin() + 2 * player.frames(0.6), note.begin() + 2 * player.frames(1.1));
+      return PluginExtract::pitchSpectrum(reference, sr);
+      }
+
+// firstSeconds: how long the first note is held before the second note-on (shorter than 1.1 s: reference, the
+// first note's spectrum from referenceSpectrum)
+static ArticulationCheck::TimingResult::Legato legatoPair(Player& player, int value, int a, int b, int velocity,
+                                                          double firstSeconds = 1.2, const std::vector<double>* reference = nullptr)
       {
       const double sr = player.s.sampleRate;
       const size_t hop = size_t(sr * 0.010);
@@ -918,12 +947,13 @@ static ArticulationCheck::TimingResult::Legato legatoPair(Player& player, int va
       ArticulationCheck::TimingResult::Legato l;
       l.velocity = velocity;
       l.interval = b - a;
+      l.firstMs = std::round(firstSeconds * 1000);
       const int interval = b - a;
       player.settle();
       player.s.dynamicsValue = 80;
       player.arm(-1, value);
       player.p->midi(ME_NOTEON, player.s.channel, a, velocity);
-      const std::vector<float> first = player.render(player.frames(1.2));
+      const std::vector<float> first = player.render(player.frames(firstSeconds));
       player.p->midi(ME_NOTEON, player.s.channel, b, velocity);
       std::vector<float> second = player.render(player.frames(ArticulationCheck::LEGATO_OVERLAP_MS / 1000.0));
       player.p->midi(ME_NOTEON, player.s.channel, a, 0);
@@ -932,8 +962,15 @@ static ArticulationCheck::TimingResult::Legato legatoPair(Player& player, int va
       player.p->midi(ME_NOTEON, player.s.channel, b, 0);
       player.lastPitch = b;
       // the first note's pitch: 0.6 to 1.1 s of it
-      const std::vector<float> reference(first.begin() + 2 * player.frames(0.6), first.begin() + 2 * player.frames(1.1));
-      const std::vector<double> referenceSpectrum = PluginExtract::pitchSpectrum(reference, sr);
+      std::vector<double> referenceSpectrum;
+      if (reference)
+            referenceSpectrum = *reference;
+      else if (firstSeconds >= 1.1) {
+            const std::vector<float> ref(first.begin() + 2 * player.frames(0.6), first.begin() + 2 * player.frames(1.1));
+            referenceSpectrum = PluginExtract::pitchSpectrum(ref, sr);
+            }
+      if (referenceSpectrum.empty())
+            return l;
       // frames centred 0 … 800 ms after the second note-on (the first 40 ms from before it)
       std::vector<float> joined(first.end() - 2 * std::ptrdiff_t(frame / 2), first.end());
       joined.insert(joined.end(), second.begin(), second.end());
@@ -1135,6 +1172,62 @@ constexpr double ArticulationCheck::MF_SECONDS;
 constexpr double ArticulationCheck::PP_FF_SECONDS;
 constexpr int ArticulationCheck::REST_LEGATO_VELOCITIES[9];
 constexpr int ArticulationCheck::REST_LEGATO_INTERVALS[14];
+constexpr double ArticulationCheck::ONSET_SECONDS;
+constexpr double ArticulationCheck::ONSET_DROPS[4];
+constexpr double ArticulationCheck::SHORT_SECONDS[6];
+constexpr double ArticulationCheck::DECAY_DROPS[4];
+constexpr double ArticulationCheck::LEGATO_FIRST_SECONDS[5];
+constexpr int ArticulationCheck::LEGATO_LENGTH_INTERVALS[6];
+
+namespace {
+
+// the peak of env (values every 5 ms from firstMs) up to untilMs, its time and the first times within drops dB of it
+void onsetTimes(const std::vector<double>& env, double firstMs, double untilMs, const double (&drops)[4], double* peakMs,
+                double (&times)[4])
+      {
+      double peak = -200;
+      int at = -1;
+      for (size_t i = 0; i < env.size() && firstMs + 5.0 * i <= untilMs; ++i)
+            if (env[i] > peak) {
+                  peak = env[i];
+                  at = int(i);
+                  }
+      if (at < 0 || peak <= -199)
+            return;
+      if (peakMs)
+            *peakMs = firstMs + 5.0 * at;
+      for (int k = 0; k < 4; ++k)
+            for (int i = 0; i <= at; ++i)
+                  if (env[size_t(i)] >= peak - drops[k]) {
+                        times[k] = firstMs + 5.0 * i;
+                        break;
+                        }
+      }
+
+// the peak of env and the last times within drops dB of it (the window after: until then it sounded)
+double decayTimes(const std::vector<double>& env, double firstMs, const double (&drops)[4], double* peakMs, double (&times)[4])
+      {
+      double peak = -200;
+      int at = -1;
+      for (size_t i = 0; i < env.size(); ++i)
+            if (env[i] > peak) {
+                  peak = env[i];
+                  at = int(i);
+                  }
+      if (at < 0 || peak <= -199)
+            return peak;
+      if (peakMs)
+            *peakMs = firstMs + 5.0 * at;
+      for (int k = 0; k < 4; ++k)
+            for (int i = int(env.size()) - 1; i >= at; --i)
+                  if (env[size_t(i)] >= peak - drops[k]) {
+                        times[k] = firstMs + 5.0 * (i + 1);
+                        break;
+                        }
+      return peak;
+      }
+
+} // namespace
 
 ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int value, int pitch, bool legato, int controls,
                                                       SetControl setControl, const Settings& settings, const RestSettings& rs,
@@ -1164,7 +1257,7 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
             pending.clear();
             };
       // one note: held seconds, at mf with its tail (how long it sounds, its release), else a short one
-      auto measure = [&](int p, int level, bool mf, NoteStats** out) {
+      auto measure = [&](int p, int level, bool mf, NoteStats** out, double seconds = -1) {
             notes.emplace_back();
             NoteStats* n = &notes.back();
             *out = n;
@@ -1172,8 +1265,8 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
             n->level = level;
             size_t off = 0;
             double residual = -200;
-            std::vector<float> clip = player.held(value, p, level, mf ? MF_SECONDS : PP_FF_SECONDS, mf ? TAIL_SECONDS : 0.3,
-                                                  &off, &residual);
+            std::vector<float> clip = player.held(value, p, level, seconds > 0 ? seconds : mf ? MF_SECONDS : PP_FF_SECONDS,
+                                                  mf ? TAIL_SECONDS : 0.3, &off, &residual);
             const std::vector<double> env = envelope(clip, sr);
             const Onset o = onset(env, env.size());
             n->sounds = o.peakDb > SILENT_DB && o.peakDb > residual + 10;
@@ -1190,6 +1283,7 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
                   n->startMs = ms(o.start);
                   n->fullMs = ms(o.full);
                   n->peakMs = ms(o.peak);
+                  onsetTimes(env, 0, ONSET_SECONDS * 1000, ONSET_DROPS, nullptr, n->energyOnsetMs);
                   if (mf) {
                         const size_t offWindow = size_t(double(off) / (sr * WINDOW_MS / 1000.0));
                         double before = -200;
@@ -1210,7 +1304,11 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
                         pending.pop_front();
                         }
                   pending.push_back(std::async(std::launch::async, [n, sr](std::vector<float> head) {
-                        n->perceivedDb = perceivedLoudnessDb(head, sr);
+                        double first = 0;
+                        const std::vector<double> pe = perceivedEnvelope(head, sr, &first);
+                        for (double x : pe)
+                              n->perceivedDb = std::max(n->perceivedDb, x);
+                        onsetTimes(pe, first, ONSET_SECONDS * 1000, ONSET_DROPS, &n->perceivedPeakMs, n->onsetMs);
                         const Attack a = attackSalience(head, sr);
                         n->salienceDb = a.salienceDb;
                         n->riseMs = a.riseMs;
@@ -1222,7 +1320,8 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
             return p < rs.low || p > rs.high || p < 0 || p > 127 || std::find(rs.avoid.begin(), rs.avoid.end(), p) != rs.avoid.end();
             };
       // (the notes' numbers, once every analysis is done; and on a stop)
-      std::vector<NoteStats*> range, repeats;
+      std::vector<NoteStats*> range, repeats, onsetNotes;
+      std::deque<ShortNote> shortNotes;
       std::vector<std::pair<std::pair<int, double>, NoteStats*>> controlPoints;
       auto result = [&]() {
             finish();
@@ -1230,6 +1329,10 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
                   r.range.push_back(*n);
             for (NoteStats* n : repeats)
                   r.repeats.push_back(*n);
+            for (NoteStats* n : onsetNotes)
+                  r.onset.push_back(*n);
+            for (const ShortNote& n : shortNotes)
+                  r.shorts.push_back(n);
             for (const auto& c : controlPoints) {
                   RestResult::ControlPoint pt;
                   pt.control = c.first.first;
@@ -1258,24 +1361,26 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
       if (r.pitch < 0)
             return result();
 
-      if (rs.range) {
+      // every semitone from the test pitch down and up until silenceRun in a row are silent, pp / mf / ff; seconds > 0:
+      // each held that long (onset), else as range
+      auto walk = [&](std::vector<NoteStats*>& into, double seconds) {
             std::map<int, std::array<NoteStats*, 3>> byPitch;
             for (int direction : { -1, 1 }) {
                   int silentRun = 0;
                   for (int p = direction < 0 ? r.pitch : r.pitch + 1; !avoided(p) && silentRun < rs.silenceRun; p += direction) {
                         std::array<NoteStats*, 3> n { nullptr, nullptr, nullptr };
-                        if (p == r.pitch)
+                        if (p == r.pitch && seconds <= 0)
                               n[1] = home;
-                        else if (!measure(p, 80, true, &n[1]))
-                              return result();
+                        else if (!measure(p, 80, true, &n[1], seconds))
+                              return false;
                         byPitch[p] = n;
                         if (!n[1]->sounds) {
                               ++silentRun;
                               continue;
                               }
                         silentRun = 0;
-                        if (!measure(p, 32, false, &n[0]) || !measure(p, 112, false, &n[2]))
-                              return result();
+                        if (!measure(p, 32, false, &n[0], seconds) || !measure(p, 112, false, &n[2], seconds))
+                              return false;
                         byPitch[p] = n;
                         }
                   }
@@ -1283,7 +1388,88 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
             for (const auto& b : byPitch)
                   for (NoteStats* n : b.second)
                         if (n)
-                              range.push_back(n);
+                              into.push_back(n);
+            return true;
+            };
+      if (rs.range && !walk(range, -1))
+            return result();
+      if (rs.onset && !walk(onsetNotes, ONSET_SECONDS))
+            return result();
+      if (rs.shorts) {
+            // the test pitch, an octave (else a fifth) under and over it, where it sounds
+            auto shortNote = [&](int p, double seconds, bool* sounds) {
+                  size_t off = 0;
+                  double residual = -200;
+                  std::vector<float> clip = player.held(value, p, 80, seconds, TAIL_SECONDS, &off, &residual);
+                  const std::vector<double> env = envelope(clip, sr);
+                  const Onset o = onset(env, env.size());
+                  *sounds = o.peakDb > SILENT_DB && o.peakDb > residual + 10;
+                  if (!*sounds)
+                        return step();
+                  shortNotes.emplace_back();
+                  ShortNote* n = &shortNotes.back();
+                  n->pitch = p;
+                  n->seconds = seconds;
+                  const size_t win = size_t(2 * player.frames(0.05));
+                  double loudest = 0;
+                  for (size_t from = 0; win > 0 && from + win <= clip.size(); from += win / 2) {
+                        double sum = 0;
+                        for (size_t i = from; i < from + win; ++i)
+                              sum += double(clip[i]) * clip[i];
+                        loudest = std::max(loudest, sum / win);
+                        }
+                  n->loudDb = db(loudest);
+                  double unused = -1;
+                  decayTimes(env, 0, DECAY_DROPS, &unused, n->energyLastMs);
+                  if (pending.size() >= workers) {
+                        pending.front().wait();
+                        pending.pop_front();
+                        }
+                  pending.push_back(std::async(std::launch::async, [n, sr](std::vector<float> c) {
+                        double first = 0;
+                        const std::vector<double> pe = perceivedEnvelope(c, sr, &first);
+                        n->perceivedPeakDb = decayTimes(pe, first, DECAY_DROPS, &n->perceivedPeakMs, n->perceivedLastMs);
+                        }, std::move(clip)));
+                  return step();
+                  };
+            std::vector<int> pitches { r.pitch };
+            for (const std::vector<int>& tries : { std::vector<int>{ -12, -7 }, std::vector<int>{ 12, 7 } }) {
+                  for (int shift : tries) {
+                        const int p = r.pitch + shift;
+                        if (avoided(p) || p < settings.minPitch || p > settings.maxPitch)
+                              continue;
+                        bool sounds = false;
+                        if (!shortNote(p, SHORT_SECONDS[2], &sounds))
+                              return result();
+                        if (sounds) {
+                              pitches.push_back(p);
+                              break;
+                              }
+                        }
+                  }
+            // (the probe notes above are 0.25 s ones of their pitch: kept, the rest added)
+            for (int p : pitches) {
+                  for (double seconds : SHORT_SECONDS) {
+                        if (p != r.pitch && seconds == SHORT_SECONDS[2])
+                              continue;
+                        bool sounds = false;
+                        if (!shortNote(p, seconds, &sounds))
+                              return result();
+                        }
+                  }
+            }
+      if (rs.legatoLengths && legato) {
+            const std::vector<double> reference = referenceSpectrum(player, value, r.pitch, LEGATO_LENGTH_VELOCITY);
+            for (int interval : LEGATO_LENGTH_INTERVALS) {
+                  const int b = r.pitch + interval;
+                  if (avoided(b))
+                        continue;
+                  for (double first : LEGATO_FIRST_SECONDS) {
+                        r.legatoLengths.push_back(legatoPair(player, value, r.pitch, b, LEGATO_LENGTH_VELOCITY, first, &reference));
+                        if (!step())
+                              return result();
+                        }
+                  }
             }
       if (rs.repeats) {
             for (int k = 0; k < rs.repeatCount; ++k) {

@@ -576,6 +576,21 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   the silent one reported, the zip as the timing check's. **Tests here run in the build's mount namespace**:
   `TESTSYNTH` is the build directory's absolute path, so a copied build directory (`../ninja-cray.sh`) loads the
   other worktree's test synth when run outside it (`../run-cray.sh`): timingCheck "failed" that way.
+  **Onset, shorts' lengths, legato after short notes** (2026-10-01, the measurements the legato-timing fixes asked for:
+  slow attacks shifted by when they are heard, shorts chosen by how long they really sound, legato speed after short
+  notes): three more rest parts, only when named (`--rest-parts onset,shorts,legatolengths`; `RestSettings::onset`,
+  `shorts`, `legatoLengths`). **onset**: the range's walk again with pp / mf / ff each held `ONSET_SECONDS` 1.5 s
+  (results `onset`); every note (the range's too) now has `perceivedPeakMs`, `onset20Ms` … `onset10Ms` (the first
+  time the short-term perceived loudness, `perceivedEnvelope`: perceivedLoudnessDb's 22 / 50 ms smoothed loudness
+  every 5 ms, its window's centre, is within 20 / 15 / 12 / 10 dB of its peak in the first 1.5 s) and
+  `energyOnset20Ms` … (the same on the 5 ms power windows), appended to `restFields`. **shorts**: mf held 0.05 / 0.1 /
+  0.25 / 0.5 / 1 / 2 s at the test pitch and an octave (else a fifth) under and over it, each with its tail: the
+  last time within 6 / 10 / 15 / 20 dB of its peak, perceived and power (results `shorts`). **legatolengths**: slurs
+  at velocity 64, +2 +5 +7 +12 -5 -12, the first note held 0.1 / 0.2 / 0.3 / 0.5 / 1 s (its pitch reference from a
+  separate 1.2 s note; results `legatoLengths`, each with `firstMs`). Reader `tools/soundlibraries/onset_from_check.py`
+  → `sso_sound_onset.json`, `sso_short_lengths.json`, `sso_legato_lengths.json`; `rest_from_check.py` leaves these
+  runs out. Test `restCheck` (the test synth's 14: power within 20 / 10 dB at 20 / 63 ms of its 200 ms linear attack,
+  perceived -10 dB ~100 ms; 1 held: sounds as long as held; 24's glide the same after every first-note length).
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,

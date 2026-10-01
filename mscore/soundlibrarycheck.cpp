@@ -1742,7 +1742,10 @@ void ArticulationCheckDialog::measureTiming(const SoundLib::LibInstrument& ins, 
 
 // a note's numbers in results.json: an array in REST_FIELDS' order (a silent note: its first three)
 static const char* const REST_FIELDS[] = { "pitch", "level", "sounds", "loudDb", "perceivedDb", "salienceDb", "riseMs",
-                                           "startMs", "fullMs", "peakMs", "bodyMs", "sustains", "releaseMs" };
+                                           "startMs", "fullMs", "peakMs", "bodyMs", "sustains", "releaseMs",
+                                           // (2026-10-01, the perceptual onset: NoteStats)
+                                           "perceivedPeakMs", "onset20Ms", "onset15Ms", "onset12Ms", "onset10Ms",
+                                           "energyOnset20Ms", "energyOnset15Ms", "energyOnset12Ms", "energyOnset10Ms" };
 
 static QJsonArray restNote(const ArticulationCheck::NoteStats& n)
       {
@@ -1750,7 +1753,8 @@ static QJsonArray restNote(const ArticulationCheck::NoteStats& n)
       QJsonArray a { n.pitch, n.level, n.sounds ? 1 : 0 };
       if (n.sounds)
             for (double x : { n.loudDb, n.perceivedDb, n.salienceDb, n.riseMs, n.startMs, n.fullMs, n.peakMs, n.bodyMs,
-                              n.sustains ? 1.0 : 0.0, n.releaseMs })
+                              n.sustains ? 1.0 : 0.0, n.releaseMs, n.perceivedPeakMs, n.onsetMs[0], n.onsetMs[1], n.onsetMs[2],
+                              n.onsetMs[3], n.energyOnsetMs[0], n.energyOnsetMs[1], n.energyOnsetMs[2], n.energyOnsetMs[3] })
                   a.append(r1(x));
       return a;
       }
@@ -1824,10 +1828,14 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
       out["controls"] = controlList;
 
       ArticulationCheck::RestSettings rs;
-      rs.range = _restParts.contains("range");
-      rs.repeats = _restParts.contains("repeats");
-      rs.controls = _restParts.contains("controls");
-      rs.legato = _restParts.contains("legato");
+      const QStringList parts = _restParts.split(',', QString::SkipEmptyParts);
+      rs.range = parts.contains("range");
+      rs.repeats = parts.contains("repeats");
+      rs.controls = parts.contains("controls");
+      rs.legato = parts.contains("legato");
+      rs.onset = parts.contains("onset");
+      rs.shorts = parts.contains("shorts");
+      rs.legatoLengths = parts.contains("legatolengths");
       // (a keyswitched patch: its keys are never played as notes, nor anything under the highest)
       if (s.switchIsKey) {
             for (const SoundLib::Articulation& a : ins.articulations)
@@ -1886,7 +1894,7 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
                   lines << QString("%1: silent at every pitch tried").arg(sd.label);
                   continue;
                   }
-            QJsonArray range, repeats, ctl, lg;
+            QJsonArray range, repeats, ctl, lg, ons, shorts, lgl;
             int low = 128, high = -1;
             for (const auto& n : res.range) {
                   range.append(restNote(n));
@@ -1899,18 +1907,39 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
                   repeats.append(restNote(n));
             for (const auto& c : res.controls)
                   ctl.append(QJsonArray({ c.control, c.value, restNote(c.note) }));
-            for (const auto& l : res.legato) {
+            auto slur = [](const ArticulationCheck::TimingResult::Legato& l) {
                   QJsonObject x;
                   x["velocity"] = l.velocity;
                   x["interval"] = l.interval;
                   x["leaveMs"] = l.leaveMs;
                   x["arriveMs"] = l.arriveMs;
                   x["dipDb"] = l.dipDb;
+                  x["firstMs"] = l.firstMs;
                   QJsonArray c;
                   for (const auto& pt : l.cents)
                         c.append(QJsonArray({ pt.first, pt.second }));
                   x["cents"] = c;
-                  lg.append(x);
+                  return x;
+                  };
+            for (const auto& l : res.legato)
+                  lg.append(slur(l));
+            for (const auto& l : res.legatoLengths)
+                  lgl.append(slur(l));
+            for (const auto& n : res.onset) {
+                  ons.append(restNote(n));
+                  if (n.sounds && n.level == 80) {
+                        low = std::min(low, n.pitch);
+                        high = std::max(high, n.pitch);
+                        }
+                  }
+            for (const auto& n : res.shorts) {
+                  auto r1 = [](double x) { return std::round(x * 10) / 10; };
+                  QJsonArray pl, el;
+                  for (int k = 0; k < 4; ++k) {
+                        pl.append(r1(n.perceivedLastMs[k]));
+                        el.append(r1(n.energyLastMs[k]));
+                        }
+                  shorts.append(QJsonArray({ n.pitch, r1(n.seconds * 1000), r1(n.loudDb), r1(n.perceivedPeakDb), r1(n.perceivedPeakMs), pl, el }));
                   }
             if (!range.isEmpty())
                   o["range"] = range;
@@ -1920,6 +1949,12 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
                   o["controls"] = ctl;
             if (!lg.isEmpty())
                   o["legato"] = lg;
+            if (!ons.isEmpty())
+                  o["onset"] = ons;
+            if (!shorts.isEmpty())
+                  o["shorts"] = shorts;   // [pitch, held ms, loudDb, perceived peak dB, its ms, [last ms within 6, 10, 15, 20 dB perceived], [… power]]
+            if (!lgl.isEmpty())
+                  o["legatoLengths"] = lgl;
             o["seconds"] = std::round(took.elapsed() / 100.0) / 10;
             rest.append(o);
             // the repeats' spread: loudest minus quietest
@@ -1933,7 +1968,8 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
                .arg(high >= 0 ? QString::number(low) : QString("?")).arg(high >= 0 ? QString::number(high) : QString("?")).arg(res.pitch)
                .arg(hi >= lo ? QString(", repeats within %1 dB").arg(std::round((hi - lo) * 10) / 10) : QString())
                .arg(!res.controls.empty() ? QString(", %1 control points").arg(res.controls.size()) : QString())
-               .arg(!res.legato.empty() ? QString(", %1 slurs").arg(res.legato.size()) : QString())
+               .arg(!res.legato.empty() || !res.legatoLengths.empty() ? QString(", %1 slurs").arg(res.legato.size() + res.legatoLengths.size())
+                    : !res.shorts.empty() ? QString(", %1 shorts").arg(res.shorts.size()) : QString())
                .arg(notes).arg(took.elapsed() / 1000);
             lines << line;
             say(QString("%1: %2 of %3: %4").arg(ins.name).arg(k).arg(sounds.size()).arg(line));    // (the supervisor's sign of life)
