@@ -21,7 +21,20 @@ the playback changes (legato delay by interval, held notes early by their onset,
   MuseScore 3.6, then `fix_sweep_ids.py`), rendered on the VM by task `claude-sweep` (`C:\claude\sweep\run.cmd` reads
   `args.txt`: `<build sha> [score filter]`; outputs `C:\claude\sweep\out-<sha>\<score>`), read with
   `tools/playbackverify/analyze_sweep.py <notes.json> <part library.wav>`.
-- Status and results: see below as they come in.
+- **Data so far** (aef45b6): `sso_sound_onset.json` 20 patches, `sso_short_lengths.json` 24, `sso_legato_lengths.json` 6
+  (no dependence of SSO's transition on the first note's length). The note-off barely shortens SSO shorts (Spiccato
+  ~280 ms, Short 0.5 ~500-700, Short 1.0 ~500 at 0.05-0.25 s, ~950-1250 from 1 s).
+- **sso_legato_grid.json's ±12 arrivals are wrong** (centsShift's free search takes an octave for the unison: up to
+  ~700 ms). c7338f4 adds `--rest-parts legatopitches` (harmonic timing, 5 start pitches, mf, octaves usable; build
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36875559985) → `sso_legato_grid_pitches.json`.
+- **Sweep ed3a294 (fixes 1, 2, 4 + shorts by length) vs aff12be (none)**, 13 of 16 instruments (Oboe, Solo Violin,
+  Violins 1 lost: their renders were deleted before analysis): slurred pitch arrival from +86..+293 ms late to
+  -86..+89 (intervals 1-7 pooled -26..+19) but octaves 120-176 ms early (the grid's ±12); ≥ 0.5 s notes 16-56 ms
+  early overall (the grid's arrive = end of the step); held mf onsets 20-112 → -1..+67 ms; sul tasto (Long Super
+  Sul Tasto) still 240-600 ms late, flautando 145-255 (fixer then switched onsets to perceived t15). Per-note results:
+  `~/.claude/jobs/ed934dfd/tmp/cray/sweepres/<sha>/` (not in the repository); compare with `compare_sweeps.py`.
+- **VM IP** changed to 172.29.253.109 (2026-10-01 host reboot). Disk is tight: `sweep/fetch.sh` deletes each render's
+  audio once analysed; keep VM outputs under ~2 GB.
 
 ## Start here (2026-10-01: the cloud session ends, the work moves to the owner's Debian VM)
 
