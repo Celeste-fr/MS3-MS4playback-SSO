@@ -49,6 +49,7 @@ class SysStaff {
       qreal _yPos   { 0.0 };        // y position of bbox after System::layout2
       qreal _height { 0.0 };        // height of bbox after System::layout2
       qreal _continuousDist { -1.0 }; // distance for continuous mode
+      qreal _lanesY { -1.0 };         // the automation editor's lanes under this staff (its part's last), system y; -1: none
       bool _show  { true };         // derived from Staff or false if empty
                                     // staff is hidden
    public:
@@ -67,6 +68,8 @@ class SysStaff {
       void restoreLayout();
 
       qreal continuousDist() const      { return _continuousDist;  }
+      qreal lanesY() const              { return _lanesY; }
+      void setLanesY(qreal v)           { _lanesY = v; }
       void setContinuousDist(qreal val) { _continuousDist = val;   }
 
       bool show() const             { return _show; }

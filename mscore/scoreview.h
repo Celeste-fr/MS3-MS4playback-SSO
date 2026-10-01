@@ -46,6 +46,7 @@ class Staff;
 class OmrView;
 class PositionCursor;
 class ContinuousPanel;
+class AutomationLanes;
 class Tuplet;
 class FretDiagram;
 class Bend;
@@ -217,6 +218,7 @@ class ScoreView : public QWidget, public MuseScoreView {
 
       // Continuous panel
       ContinuousPanel* _continuousPanel;
+      AutomationLanes* _lanes;                // the automation editor's lanes (automationlanes.h)
 
       Lasso* lasso;           ///< temporarily drawn lasso selection
       FotoLasso* _foto;
@@ -445,6 +447,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       virtual void setDropTarget(const Element*) override;
       void setDropAnchorLines(const QVector<QLineF> &anchorList);
       const QTransform& matrix() const  { return _matrix; }
+      AutomationLanes* automationLanes() const { return _lanes; }
 
       ZoomIndex zoomIndex() const { return _zoomIndex; }
       qreal logicalZoomLevel() const;

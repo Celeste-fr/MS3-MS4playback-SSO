@@ -691,11 +691,30 @@ void System::layout2()
             return;
             }
 
+      // the automation editor's lanes (Continuous View): room under a part's last visible staff
+      const std::map<const Part*, qreal>& laneSpace = score()->automationSpace();
+      qreal lastLanes = 0.0;
+      auto lanesAfter = [&](auto it, SysStaff* ss, Staff* staff, qreal y) -> qreal {
+            ss->setLanesY(-1.0);
+            if (!score()->lineMode() || laneSpace.empty())
+                  return 0.0;
+            auto next = it + 1;
+            if (next != visibleStaves.end() && score()->staff(next->first)->part() == staff->part())
+                  return 0.0;
+            auto sp = laneSpace.find(staff->part());
+            if (sp == laneSpace.end() || sp->second <= 0.0)
+                  return 0.0;
+            const qreal below = qMax(staff->height(), ss->skyline().south().max());
+            ss->setLanesY(y + below + _spatium);
+            return sp->second * _spatium + below - staff->height() + 2.5 * _spatium;
+            };
+
       for (auto i = visibleStaves.begin();; ++i) {
             SysStaff* ss  = i->second;
             int si1       = i->first;
             Staff* staff  = score()->staff(si1);
             auto ni       = i + 1;
+            const qreal lanes = lanesAfter(i, ss, staff, y);
 
             qreal dist = staff->height();
             qreal yOffset;
@@ -713,6 +732,7 @@ void System::layout2()
                   ss->setYOff(yOffset);
                   ss->bbox().setRect(_leftMargin, y - yOffset, width() - _leftMargin, h);
                   ss->saveLayout();
+                  lastLanes = lanes;
                   break;
                   }
 
@@ -831,13 +851,13 @@ void System::layout2()
             ss->setYOff(yOffset);
             ss->bbox().setRect(_leftMargin, y - yOffset, width() - _leftMargin, h);
             ss->saveLayout();
-            y += dist;
+            y += dist + lanes;
             }
 
-      _systemHeight = staff(visibleStaves.back().first)->bbox().bottom();
+      _systemHeight = staff(visibleStaves.back().first)->bbox().bottom() + lastLanes;
       setHeight(_systemHeight);
 
-      setMeasureHeight(_systemHeight);
+      setMeasureHeight(_systemHeight - lastLanes);
 
       //---------------------------------------------------
       //  layout brackets vertical position

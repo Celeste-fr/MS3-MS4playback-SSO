@@ -1,0 +1,202 @@
+//=============================================================================
+//  MuseScore
+//  Music Composition & Notation
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 2
+//  as published by the Free Software Foundation and appearing in
+//  the file LICENCE.GPL
+//=============================================================================
+
+#ifndef __AUTOMATIONLANES_H__
+#define __AUTOMATIONLANES_H__
+
+//---------------------------------------------------------
+//   The automation editor (the owner, 2026-09-30: "when you select a MIDI track, MuseScore lets you edit
+//   the notes AND show you automation tracks for every possible parameter in SSO, in which you can draw
+//   automation curves just like you can in Ableton").
+//
+//   In Continuous View, a part the sound library plays shows its automation lanes under its staves when
+//   it is selected (any element of it): a header row, then one lane per controller, on the score's own
+//   time axis (each tick where its notes are). The notes stay editable as always. Room for them is made
+//   by the layout (Score::setAutomationSpace: the view's state, never saved; System::layout2).
+//   What a lane shows and edits: libmscore/automation.h (Automation::Lane, Automation::Edit), stored in
+//   the score's metaTag "automation", one undoable step per gesture.
+//
+//   Lanes (Automation::Lane::target): Dynamics (the library's dynamics CC: it takes the notation's place
+//   from its first point) and Expression (CC11), then every controller of the part's patches (the map's:
+//   SSO's named controls, Vibrato, Release, Tightness, Mic 1-5 … as Kontakt parameters or CCs). Shown: the
+//   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
+//   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes.
+//
+//   Editing, as in Live 12 (manual 25.5.1-2):
+//     click: a breakpoint (on the envelope's line: on it; elsewhere: at the mouse's value), snapped to the
+//       grid (it follows the zoom: the finest of bar … 1/64 at least 10 px apart); Alt: no snap;
+//     drag a breakpoint: moves it (and the other selected ones); points passed over are removed; Shift: fine
+//       vertical, time kept; Ctrl-click: add to / remove from the selection; drag on the background: a
+//       rubber band selects;
+//     double-click a breakpoint, or Delete / Backspace: removes it (them);
+//     Alt-drag a segment: curves it (Live's curve: a cubic Bézier, the same control points Live keeps);
+//       Alt-double-click: straight again;
+//     Draw Mode (the header's pencil): dragging draws steps as wide as the grid;
+//     Ctrl+C / Ctrl+X: the selected points; Ctrl+V: at the mouse's time in the lane under it (another
+//       parameter too, as Live allows), else after the copied ones; Ctrl+D: duplicated after themselves;
+//     right-click: Edit Value…, Delete, Step / Linear, Straight, Clear Lane, Hide Lane.
+//   Values are shown 0-127 (the map's controller scale; SSO's controls are 0-127).
+//   A lane Live's set has as it is (Automation::Lane::playedByLive) is marked "Live"; editing it here makes
+//   MuseScore's the newer one (automation.h).
+//---------------------------------------------------------
+
+#include <map>
+#include <set>
+#include <vector>
+#include <QObject>
+#include <QPointF>
+#include <QRectF>
+#include <QString>
+
+#include "libmscore/automation.h"
+
+class QContextMenuEvent;
+class QKeyEvent;
+class QMouseEvent;
+class QPainter;
+
+namespace Ms {
+
+class Part;
+class Score;
+class ScoreView;
+
+class AutomationLanes : public QObject {
+      Q_OBJECT
+
+   public:
+      struct Target {
+            QString id;             // Automation::Lane::target
+            QString name;
+            bool param { false };   // a plug-in parameter (else a MIDI controller)
+            };
+      struct Row {
+            const Part* part { nullptr };       // the view score's
+            const Part* master { nullptr };     // the master score's (the lanes are stored by it)
+            QString target;                     // empty: the part's header row
+            QString name;
+            bool param { false };
+            QRectF rect;                        // canvas
+            };
+
+      AutomationLanes(ScoreView* view);
+
+      static bool enabled();
+      static void setEnabled(bool on);
+
+      // the view's score changed (another score, undo / redo, a reload): selection and caches dropped
+      void scoreChanged();
+      void selectionChanged();
+      void layoutChanged();
+      // room for the shown lanes: Score::setAutomationSpace, laid out again when it changed
+      void updateSpace();
+
+      void paint(QPainter& p, const QRect& viewport);
+
+      bool mousePress(QMouseEvent* ev);
+      bool mouseMove(QMouseEvent* ev);
+      bool mouseRelease(QMouseEvent* ev);
+      bool mouseDoubleClick(QMouseEvent* ev);
+      bool contextMenu(const QPoint& pos, const QPoint& globalPos);
+      bool wantsKey(const QKeyEvent* ev) const;
+      bool keyPress(QKeyEvent* ev);
+      bool hasFocus() const { return _focus; }
+      void hover(const QPoint& pos);
+
+      // for tests and the GUI checks: the rows as last laid out, the tick and x of a canvas position
+      std::vector<Row> rows() const;
+      std::vector<Target> targets(const Part* part) const;
+      double tickToX(int tick) const;
+      int xToTick(double x) const;
+      void unfold(const Part* part, bool on = true);
+      void showLane(const Part* part, const QString& target, bool on = true);
+      void setDrawMode(bool on) { _drawMode = on; }
+
+   private:
+      enum class Drag : signed char { NONE, PENDING, MOVE, CURVE, RUBBER, DRAW };
+
+      ScoreView* _view;
+      std::set<const Part*> _unfolded;                         // view parts
+      const Part* _lastSelected { nullptr };
+      std::map<const Part*, std::set<QString>> _added;         // master part -> empty lanes shown
+      std::map<const Part*, std::set<QString>> _hidden;
+      std::set<const Part*> _showAll;
+      bool _drawMode { false };
+
+      // the lanes: as stored (cached by the metaTag's text), or the working copy during a gesture
+      mutable QString _cachedTag;
+      mutable std::map<const Part*, Automation::PartLanes> _cached;
+      std::map<const Part*, Automation::PartLanes> _work;
+      bool _working { false };
+
+      // the selection: points of one lane
+      bool _focus { false };
+      const Part* _selPart { nullptr };       // master
+      QString _selTarget;
+      std::vector<int> _sel;
+
+      // the gesture
+      Drag _drag { Drag::NONE };
+      Row _dragRow;
+      QPointF _pressPos;                      // canvas
+      QPoint _pressPixel;
+      int _grab { -1 };                       // the point pressed
+      int _segment { -1 };                    // the segment curved
+      double _k0 { 0 };
+      Automation::Lane _before;               // the lane at the press
+      std::vector<int> _beforeSel;
+      QRectF _rubber;
+      int _drawCell { -1 };
+      bool _nearLine { false };
+      QPointF _hover { -1, -1 };              // canvas
+      QString _hoverText;
+      // a point added by a click, kept by the double-click that follows it
+      int _lastAddedTick { -1 };
+      qint64 _lastAddedAt { 0 };
+
+      static std::vector<Automation::Point> _clipboard;
+
+      // the tick <-> x anchors of the laid out system (canvas)
+      mutable std::vector<Row> _rows;
+      mutable bool _rowsValid { false };
+      mutable std::map<const Part*, std::vector<Target>> _targets;
+      std::vector<Row> computeRows() const;
+      std::vector<Target> computeTargets(const Part* part) const;
+      mutable std::vector<std::pair<int, double>> _anchors;
+      mutable bool _anchorsValid { false };
+      void buildAnchors() const;
+
+      Score* score() const;
+      const std::map<const Part*, Automation::PartLanes>& lanes() const;
+      Automation::Lane lane(const Part* master, const QString& target) const;
+      void setLane(const Part* master, const Automation::Lane& lane);       // the working copy
+      void commit(const QString& what);
+      std::vector<QString> shownTargets(const Part* master, const std::vector<Target>& all) const;
+      double pixel() const;                                                  // a screen pixel in canvas units
+      int gridTicks(int tick) const;
+      int snap(int tick, bool fine) const;
+      double valueAtY(const Row& r, double y) const;
+      double yOfValue(const Row& r, double v) const;
+      QRectF valueRect(const Row& r) const;
+      const Row* rowAt(const QPointF& canvas) const;
+      int pointAt(const Row& r, const Automation::Lane& l, const QPointF& p) const;
+      int segmentAt(const Automation::Lane& l, int tick) const;
+      bool headerClick(const QPoint& pixel);
+      void paintLane(QPainter& p, const Row& r, const QRectF& visible) const;
+      void paintHeader(QPainter& p, const Row& r) const;
+      QRectF headerRect(const Row& r) const;                                 // viewport
+      QString valueText(double v) const;
+      void select(const Row& r, const std::vector<int>& sel);
+      void dropFocus();
+      void addLaneMenu(const Row& r, const QPoint& globalPos);
+      };
+
+}     // namespace Ms
+#endif

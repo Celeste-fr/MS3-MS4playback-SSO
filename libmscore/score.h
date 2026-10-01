@@ -570,6 +570,7 @@ class Score : public QObject, public ScoreElement {
    protected:
       int _fileDivision; ///< division of current loading *.msc file
       LayoutMode _layoutMode { LayoutMode::PAGE };
+      std::map<const Part*, qreal> _automationSpace;           // (setAutomationSpace)
       SynthesizerState _synthesizerState;
 
       void createPlayEvents(Chord*);
@@ -1146,6 +1147,10 @@ class Score : public QObject, public ScoreElement {
       bool doublePageMode() const           { return layoutMode() == LayoutMode::DOUBLE_PAGE; }
       bool paginatedMode() const            { return pageMode() || doublePageMode(); }
       bool lineMode() const                 { return layoutMode() == LayoutMode::LINE; }
+      // the automation editor (mscore/automationlanes.h): room under a part's staves for its lanes, in spatium,
+      // Continuous View only; not saved (the view's state)
+      void setAutomationSpace(const std::map<const Part*, qreal>& m) { _automationSpace = m; }
+      const std::map<const Part*, qreal>& automationSpace() const    { return _automationSpace; }
       bool systemMode() const               { return layoutMode() == LayoutMode::SYSTEM; }
 
       Tuplet* searchTuplet(XmlReader& e, int id);

@@ -209,7 +209,7 @@ add_library(mscoreapp STATIC
       abstractdialog.h accessibletoolbutton.h albummanager.h
       analyse.h articulationprop.h
       bendcanvas.h breaksdialog.h
-      chordview.h click.h clickableLabel.h continuouspanel.h debuglog.h downloadUtils.h
+      chordview.h click.h clickableLabel.h continuouspanel.h automationlanes.h debuglog.h downloadUtils.h
       drumroll.h drumtools.h drumview.h easeinoutcanvas.h editdrumset.h
       editinstrument.h editpitch.h editraster.h editstaff.h
       editstafftype.h editstringdata.h editstyle.h enableplayforwidget.h
@@ -295,7 +295,7 @@ add_library(mscoreapp STATIC
       palette/palettelistview.cpp
       scorecmp/scorecmp.cpp scorecmp/scorediffmodel.cpp scorecmp/scorelistmodel.cpp
       resourceManager.cpp downloadUtils.cpp
-      textcursor.cpp continuouspanel.cpp accessibletoolbutton.cpp scoreaccessibility.cpp
+      textcursor.cpp continuouspanel.cpp automationlanes.cpp accessibletoolbutton.cpp scoreaccessibility.cpp
       startcenter.cpp scoreBrowser.cpp scorePreview.cpp scoreInfo.cpp templateBrowser.cpp
       breaksdialog.cpp searchComboBox.cpp
       help.cpp help.h

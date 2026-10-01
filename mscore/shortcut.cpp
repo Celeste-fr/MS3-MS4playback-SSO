@@ -2296,6 +2296,13 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
+         "toggle-automation-lanes",
+         QT_TRANSLATE_NOOP("action","Automation Lanes"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Automation Lanes' (Continuous View: a selected part's automation under its staves)")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-playability-open-strings",
          QT_TRANSLATE_NOOP("action","Mark Open Strings"),
          QT_TRANSLATE_NOOP("action","Toggle 'Mark Open Strings'")

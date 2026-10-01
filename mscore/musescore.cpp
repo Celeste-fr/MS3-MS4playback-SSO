@@ -60,6 +60,7 @@
 #include "scoreaccessibility.h"
 #include "scoretab.h"
 #include "scoreview.h"
+#include "automationlanes.h"
 #include "searchComboBox.h"
 #include "selectdialog.h"
 #include "selectionwindow.h"
@@ -2217,6 +2218,11 @@ MuseScore::MuseScore()
             }
       getAction("toggle-playability")->setChecked(Playability::enabled);
       getAction("toggle-playability-open-strings")->setChecked(Playability::openStringMarks);
+      // the automation editor (automationlanes.h)
+      a = getAction("toggle-automation-lanes");
+      a->setCheckable(true);
+      a->setChecked(AutomationLanes::enabled());
+      menuView->addAction(a);
       menuView->addSeparator();
 
       a = getAction("fullscreen");
@@ -3097,6 +3103,8 @@ void MuseScore::selectionChanged(SelState selectionState)
             }
       if (_inspector)
             updateInspector();
+      if (cv && cv->automationLanes())
+            cv->automationLanes()->selectionChanged();
       }
 
 //---------------------------------------------------------
@@ -7544,6 +7552,13 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                         cs->endCmd();
                         }
                   a->setChecked(cs && cs->scordaturaView());
+                  }
+            else if (cmd == "toggle-automation-lanes") {
+                  AutomationLanes::setEnabled(a->isChecked());
+                  if (cv && cv->automationLanes()) {
+                        cv->automationLanes()->scoreChanged();
+                        cv->automationLanes()->updateSpace();
+                        }
                   }
             else if (cmd == "toggle-playability" || cmd == "toggle-playability-open-strings") {
                   bool check = cmd == "toggle-playability";

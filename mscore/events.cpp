@@ -13,6 +13,7 @@
 #include "fotomode.h"
 #include "musescore.h"
 #include "scoreview.h"
+#include "automationlanes.h"
 #include "seq.h"
 #include "texttools.h"
 #include "zoombox.h"
@@ -64,6 +65,11 @@ bool ScoreView::event(QEvent* event)
                   break;
             case QEvent::ShortcutOverride: {
                   QKeyEvent* ke = static_cast<QKeyEvent*>(event);
+                  // the automation lanes' keys (Delete, Ctrl+C / X / V / D …) while a lane has the focus
+                  if (_lanes->wantsKey(ke)) {
+                        ke->accept();
+                        return true;
+                        }
                   switch (ke->key()) {
                         case Qt::Key_Left:
                         case Qt::Key_Right:
@@ -318,6 +324,10 @@ bool ScoreView::startTextEditingOnMouseRelease(QMouseEvent* mouseEvent)
 
 void ScoreView::mouseReleaseEvent(QMouseEvent* mouseEvent)
       {
+      if (_lanes->mouseRelease(mouseEvent)) {
+            editData.buttons = Qt::NoButton;
+            return;
+            }
       editData.buttons = Qt::NoButton;
       if (seq)
             seq->stopNoteTimer();
@@ -499,6 +509,9 @@ void ScoreView::mousePressEvent(QMouseEvent* ev)
                   }
             }
 
+      if (state == ViewState::NORMAL && _lanes->mousePress(ev))
+            return;
+
       editData.startMovePixel = ev->pos();
       editData.startMove = toLogical(ev->pos());
       editData.lastPos   = editData.startMove;
@@ -658,6 +671,8 @@ void ScoreView::adjustCursorForTextEditing(QMouseEvent* mouseEvent)
 
 void ScoreView::mouseMoveEvent(QMouseEvent* me)
       {
+      if (_lanes->mouseMove(me))
+            return;
       adjustCursorForTextEditing(me);
 
       if (state != ViewState::NOTE_ENTRY && editData.buttons == Qt::NoButton)
@@ -773,6 +788,8 @@ void ScoreView::mouseDoubleClickEvent(QMouseEvent* mouseEvent)
 
       if (state != ViewState::NORMAL)
             return;
+      if (_lanes->mouseDoubleClick(mouseEvent))
+            return;
 
       Element* clickedElement = elementNear(toLogical(mouseEvent->pos()));
 
@@ -825,6 +842,8 @@ class ScoreViewCmdContext {
 
 void ScoreView::keyPressEvent(QKeyEvent* ev)
       {
+      if (state != ViewState::EDIT && _lanes->keyPress(ev))
+            return;
       editData.key       = ev->key();
       editData.modifiers = ev->modifiers();
       editData.s         = ev->text();
@@ -1013,6 +1032,8 @@ void ScoreView::contextMenuEvent(QContextMenuEvent* ev)
             fotoContextPopup(ev);
             return;
             }
+      if (state == ViewState::NORMAL && ev->reason() != QContextMenuEvent::Keyboard && _lanes->contextMenu(ev->pos(), ev->globalPos()))
+            return;
       QPoint gp          = ev->globalPos();
       editData.startMove = toLogical(ev->pos());
       editData.buttons   = Qt::NoButton;

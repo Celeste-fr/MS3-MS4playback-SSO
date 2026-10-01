@@ -12,6 +12,7 @@
 
 #include "breaksdialog.h"
 #include "continuouspanel.h"
+#include "automationlanes.h"
 #include "drumroll.h"
 #include "editdrumset.h"
 #include "editstaff.h"
@@ -158,6 +159,7 @@ ScoreView::ScoreView(QWidget* parent)
 
       _continuousPanel = new ContinuousPanel(this);
       _continuousPanel->setActive(true);
+      _lanes = new AutomationLanes(this);
 
       shadowNote  = 0;
 
@@ -237,6 +239,7 @@ void ScoreView::setScore(Score* s)
             shadowNote->setScore(_score);
       lasso->setScore(s);
       _continuousPanel->setScore(_score);
+      _lanes->scoreChanged();
 
       if (_score) {
             _curLoopIn->move(s->pos(POS::LEFT));
@@ -1118,6 +1121,8 @@ void ScoreView::paintEvent(QPaintEvent* ev)
 
       if (_score->layoutMode() == LayoutMode::LINE)
             _continuousPanel->paint(ev->rect(), vp);
+      if (_score->layoutMode() == LayoutMode::LINE)
+            _lanes->paint(vp, ev->rect());
 
       if (!lasso->bbox().isEmpty())
             lasso->draw(&vp);
@@ -4249,6 +4254,7 @@ ScoreState ScoreView::mscoreState() const
 void ScoreView::startUndoRedo(bool undo)
       {
       _score->undoRedo(undo, state == ViewState::EDIT ? &editData : 0);
+      _lanes->scoreChanged();
 
       if (_score->inputState().segment())
             mscore->setPos(_score->inputState().tick());
@@ -5432,6 +5438,7 @@ void ScoreView::gotoMeasure(Measure* measure)
 
 void ScoreView::layoutChanged()
       {
+      _lanes->layoutChanged();
       if (mscore->navigator())
             mscore->navigator()->layoutChanged();
       _curLoopIn->move(_score->pos(POS::LEFT));
