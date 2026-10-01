@@ -439,7 +439,11 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   of -7 -5 +5 +7 (both measured octaves unusable).
   a289780 (calibrated on the sweeps of e6f44e6 and c27da62): swells each semitone's own -15 dB time (predicted median
   +59 ms, none early); -12 the measured one, +12 the fourths' and fifths' median + 60 / 45 / 95 ms; Oboe Solo and
-  Violins 2 legato +60 / +45. All 112 non-percussion map instruments
+  Violins 2 legato +60 / +45.
+  2de0b27: Violins 2 halved to +25. 34cb6c4: both legato octaves from the template-fit timing (tMidMs, the measurement
+  branch's 42c6117: each frame a mix of the two notes' spectra, the new note's 50 % power share; synthetic check
+  within -40 ... +60 ms), the +45 / +60 / +95 stand-ins gone; family +12 / -12 strings 350 / 210, woodwinds 125 / 170,
+  brass 130 / 140 ms. All 112 non-percussion map instruments
   measured since f8908f8 (2026-10-01);
   metaTag `soundLibraryOnsetEarly`, *Mixer › Advanced Options…* "Held notes early by"; `SoundLib::onsetEarly`).
   Renderer (`collect` in `collectMeasureEventsMs4`): a library note that is not a legato transition, not tied into, with
