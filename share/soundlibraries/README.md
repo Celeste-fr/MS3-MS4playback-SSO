@@ -216,6 +216,8 @@ switch value of each articulation. For example:
     Advanced Options…* ("Held notes early by", metaTag `soundLibraryOnsetEarly`); 0 plays them on the beat.
   - `release` on an `Articulation` (ms): how long a sustained note rings after its note-off. A
     tuning copy (below) is retuned only after its notes' end plus the longer of `tail` and this.
+    SSO's: the longest over the articulation's range (the rest check measured every semitone; neighbouring
+    semitones can ring twice as long as the rest: Violins 1 - Performance 855 ms at its test pitch, 2180 at D4).
   - `bend` on an `Instrument` (cents): the patch bends its pitch this far either way at full pitch
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
 

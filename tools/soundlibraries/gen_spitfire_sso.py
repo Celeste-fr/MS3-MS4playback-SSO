@@ -826,9 +826,9 @@ assert not measuredMissing, measuredMissing         # (every map patch was in th
 # Measured timing (the owner's background timing run with SSO, 2026-09-29/30; tools/soundlibraries/
 # sso_articulation_timing.json, timing_from_check.py; patch -> articulation name -> {value, releaseMs,
 # legato: [[velocity, interval, leaveMs, arriveMs, dipDb], ...]}):
-# - release= (ms): a sustained articulation's ring after the note-off (to 30 dB under its level). A tuning
-#   lane stays busy until a note's end plus the longer of the tail and this (SoundLib::lanes): a lane
-#   retuned while a release rings would move the ringing pitch (Flautando 2.9 s, tail 1.5 s).
+# - release= (ms): a sustained articulation's ring after the note-off (to 30 dB under its level; the longest over its
+#   range, below). A tuning lane stays busy until a note's end plus the longer of the tail and this
+#   (SoundLib::lanes): a lane retuned while a release rings would move the ringing pitch (Flautando 3.5 s, tail 1.5 s).
 # - legatoDelay= (ms): a legato articulation (the Performance patches): when the second of two slurred
 #   notes reaches its pitch after its note-on, by interval: "interval:ms" pairs from the legato grid
 #   (sso_legato_grid.json, the rest check, 2026-10-01: slurs from the patch's test pitch at 9 velocities
@@ -933,6 +933,19 @@ def onset(patch, sound):
     if all(abs(m - mid) <= tolerance for m in smooth):
         return str(int(5 * round(mid / 5)))
     return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, tolerance))
+# - release= (ms), by register: the rest check measured each semitone's release at mf (sso_sound_range.json, to 30 dB
+#   under its level before the note-off). It differs by pitch far more than by articulation: pairs of neighbouring
+#   semitones ring twice as long as the rest (Violins 1 - Performance Legato 855 at the test pitch, 2180 / 2055 at
+#   62 / 63; Basses - Performance 965-2955; Violins 1 Long Flautando 775-3480), most likely the recordings' open
+#   strings and room. A lane must stay busy while any of its notes rings, so the articulation's longest over its
+#   range (240 articulations: a median 1.3 times the test pitch's, 46 over 1.5 s and 30 % above it, up to 3.5 s);
+#   a release over 6 s (-1) is left out; no range data: the timing check's, at the test pitch.
+def release(patch, sound, t):
+    rows = RANGE.get(patch, {}).get(sound, {}).get('range')
+    rel = [r[9] for r in rows or [] if r[9] is not None and r[9] > 0]
+    if rel:
+        return int(max(rel))
+    return int(t['releaseMs']) if t.get('releaseMs', -1) > 0 else None
 onsetCount = 0
 current = None
 legatoGridUsed = set()
@@ -957,8 +970,10 @@ for i, line in enumerate(out):
         continue
     sound, t = t[0]
     extra = ''
-    if t.get('sustains') and t.get('releaseMs'):
-        extra += f' release="{int(t["releaseMs"])}"'
+    if t.get('sustains'):
+        r = release(current, sound, t)
+        if r:
+            extra += f' release="{r}"'
     delay = legatoDelay(current, sound, t) if t.get('legato') else None
     if delay:
         extra += f' legatoDelay="{delay}"'

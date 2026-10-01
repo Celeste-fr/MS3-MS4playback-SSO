@@ -651,9 +651,13 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
     note stays on its previous note's lane (the legato transition needs one instrument; it glides), else a
     lane at its tuning (within the tolerance, cents; the note then plays at the lane's tuning, `Lanes::cents`,
     `libLaneCents`, so nothing sounding on it moves; 0.5 merges rounding only, not HEJI's 1.95-cent schisma), else a lane silent by then (its notes' end plus the
-    tail, seconds, or the note's articulation's measured release if longer: `<Articulation release>` ms, SSO's
-    releases 0.4-2.9 s, median 855, Flautando 2.9 s; retuning a lane while a release rings moved its pitch;
-    `legato-timing`), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
+    tail, seconds, or the note's articulation's measured release if longer: `<Articulation release>` ms;
+    retuning a lane while a release rings moved its pitch; `legato-timing`. SSO's, since 2026-10-01, the longest
+    over the articulation's range from the rest check's per-semitone releases, `sso_sound_range.json`: they differ by
+    pitch far more than by articulation, pairs of neighbouring semitones ringing twice as long, e.g. Violins 1 -
+    Performance 855 ms at the test pitch, 2180 at D4; 287 articulations, median 1120 ms, 77 over the 1.5 s tail, up to
+    3.5 s on strings' flautando and 4.7-6.1 s on timpani rolls and tubular bells; was the test pitch's only, 241
+    articulations, median 855, 12 over 1.5 s), retuned, else a new lane; past maxLanes (memory) the lane quiet longest is retuned.
     Tied notes follow their first note, grace notes their chord. `routes()` gives each patch one route
     per lane (`Route::lane`), so each lane is an instance with the same setup; the renderer
     (`libLanes`, `finishLibraryEvents`) sends a note's events to its lane and the part's switches and
