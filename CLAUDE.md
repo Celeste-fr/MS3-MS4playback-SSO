@@ -848,6 +848,8 @@ macOS.
   state (getState), kept only when it has the same program, the program marker and the script values
   (`"resaved": true` in `made setups.json`; the record's other fields still say when to make it again). So a
   patch's first load stays slow, later ones should be like the hand-made setups': run 119's `load times.log` (the owner, 4 solo strings): made 92-106 ms, first load 0.3-2.4 s (from the .nki), resaved 60-88 ms (386 → 298 KB), next load 92-109 ms (Kontakt's own state), about 20 times faster. setState's time only: Kontakt may still stream samples after it returns.
+  A Kickstart percussion patch whose values switch techniques, drums or mics on gets their samples loaded too
+  (`KontaktSetup::unpurgeSwitchedOn`, see Kits › Techniques switched on in a setup).
   `load times.log` (setups folder) records making, loading ("made from the .nki" / "Kontakt's own state") and
   resaving per patch, since qDebug doesn't show on Windows. Every part gets its instance, with or without notes
   (the owner, 2026-09-27: "just load everything at score open"; loading only parts with notes, and a part once it
@@ -1667,6 +1669,30 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     has no key, is an entry too: `<Drum name default="off"/>` with no key and no pitch (never played; the check and
     the key scan skip it), in the one-drum patches, the ensembles and the kits (the kits' others, named only as the
     kit shows them, in a comment). Test `spitfireMap`.
+    **Techniques switched on in a setup** (branch `sso-kit-unpurge`, 2026-09-30): the map's nine `"<patch> (all on)"`
+    `<Patch>`es (gen_spitfire_sso.py) set Kickstart's arrays whole (`%c2lsa` on, `%4jwcn` keys; KontaktSetup writes
+    values of another length), but what they switched on was silent: Kickstart loads only the samples it plays, and
+    switching a technique on in its window calls `purge_group` for its groups; Kontakt saves each group's purge flag,
+    and a loaded state never purges or loads again. Found by diffing Kontakt's states before and after switching
+    Drums - Low's Bass Drum Roll on in the window (kthost's editor on the VM): only `%c2lsa[3]`, `$fqm41` and the
+    flags of the tree mic's Roll / Roll HS groups (and their zones) changed. `KontaktSetup::unpurgeSwitchedOn`
+    (kontaktsetup.cpp has the layout: group private byte len-55, zone private byte 47; each group's Kickstart
+    metadata, the floats from 1e-6 in its private data: mic, hit, drum) applies Kickstart's own purge rule (a hit
+    group is purged when its drum is off, `%x4jsr`, its mic is off for its drum, bit mic-1 of `%nvmxz`, or its
+    technique is off, `%c2lsa`; it gives every hit group's flag in all nine kits and ensembles at their defaults,
+    else the program is left alone) with the values set: `fromEmpty` loads the purged groups it now plays. Nothing
+    else changes; a patch whose values switch nothing on is byte for byte as before. `madeFrom` records
+    `kickstartUnpurge` for a patch whose values set `%c2lsa` (part of what it is made from: these are made again,
+    and Kontakt's own states resaved before, silent, are never imported). Also found: Kickstart's round-robin
+    reset keyswitches (`$nd5ia` on, from `$bcqbk` 24, one key per round robin of the technique with the most that
+    is on) grew over 24-38 once the cymbals' Brush or Rain Sheet were on (13-15 round robins), so the ensembles'
+    own keys 36-37 played nothing (Metal Clangs and Traditional Orchestra "(all on)" played nothing at their test
+    key 36); and a drum off at the defaults (`%x4jsr`: Traditional Orchestra's Cymbal Med, Unpitched - Metal's two
+    triangles) never plays. The "(all on)" setups now also set `%x4jsr` all on and `$nd5ia=0`. Verified with kthost
+    offline renders on the VM: the nine setups made by this code, every key 0-127 after an all-sound-off (CC120): all
+    477 `<Drum>` keys start a sound out of silence (peaks -0 … -70 dB; the quietest are slow FX, bows and swells),
+    the switched-on ones (silent before) included, and 36-37 again. Test `kontaktKickstartUnpurge`
+    (a synthetic program; with `SSO_KICKSTART_NKI` a real kit, Drums - Low: exactly the window's groups 104-121).
     Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
     the owner: "OCR correct"): 0 Whole (selected at load, label "KEYSWITCH C0"; from the order), 1 Minor H., 2 Minor
     M., 3 Major, 4 Pentatonic, 5 Diminished; 102-103 no change (a ring). In the map (`SCANNED_KEYS`; a `<Patch>` now
