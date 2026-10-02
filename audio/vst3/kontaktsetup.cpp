@@ -13,8 +13,10 @@
 #include <functional>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <memory>
+#include <set>
 #include <vector>
 
 #include <QRegularExpression>
@@ -424,10 +426,17 @@ struct Struct {
 
 //---------------------------------------------------------
 //   script values: after a PAR_SCRIPT's code, "<u32 length><name value>" entries
+//    (after the code a header ending in the u32 number of entries, then the entries back to
+//    back; no total size anywhere, so an entry can change length: the chunks around it are
+//    sized again when joined). The length counts the name, its space and the value. A number
+//    is its digits; an array (a Kickstart percussion patch's %4jwcn keys, %c2lsa on / off …)
+//    its elements separated by single spaces, no trailing space, saved up to its last non-zero
+//    element and one 0 after it ("48 52 55 61 59 72 41 0")
 //---------------------------------------------------------
 
 struct ScriptValue {
-      int offset;                   // of the value, in the script's public data
+      int entry;                    // of the entry (its u32 length), in the script's public data
+      int offset;                   // of the value
       QByteArray value;
       };
 
@@ -451,10 +460,12 @@ std::map<QString, ScriptValue> values(const QByteArray& pub)
             const int end = m.capturedEnd();
             if (s >= 4) {
                   const quint32 length = get32(pub, s - 4);
-                  if (length > 0 && length <= 400 && s + int(length) <= pub.size()) {
+                  // (no limit but the data's end: Kickstart's arrays and Spitfire's settings strings
+                  // take 400-650 bytes; once 400, which left those out)
+                  if (length > 0 && length <= quint32(pub.size() - s) && s + int(length) >= end) {
                         const QString key = text.mid(s, end - s - 1);
                         if (!out.count(key))
-                              out[key] = { end, pub.mid(end, s + int(length) - end) };
+                              out[key] = { s - 4, end, pub.mid(end, s + int(length) - end) };
                         p = s + int(length);
                         continue;
                         }
@@ -485,12 +496,25 @@ QByteArray applyValues(const QByteArray& program, const std::map<QString, QByteA
       for (int i : scripts) {
             QByteArray pub = kids[i].body.mid(1);
             const std::map<QString, ScriptValue> have = values(pub);
-            bool changed = false;
+            // (from the last entry back: the offsets of those still to set stay right)
+            std::vector<std::pair<const ScriptValue*, QByteArray>> todo;
             for (const auto& v : set) {
                   auto h = have.find(v.first);
-                  if (h == have.end() || h->second.value.size() != v.second.size())
-                        continue;
-                  pub.replace(h->second.offset, v.second.size(), v.second);
+                  if (h != have.end())
+                        todo.emplace_back(&h->second, v.second);
+                  }
+            std::sort(todo.begin(), todo.end(), [](const std::pair<const ScriptValue*, QByteArray>& a,
+                                                   const std::pair<const ScriptValue*, QByteArray>& b) {
+                  return a.first->offset > b.first->offset;
+                  });
+            bool changed = false;
+            for (const auto& t : todo) {
+                  const ScriptValue& h = *t.first;
+                  const QByteArray& value = t.second;
+                  // another length (a Kickstart array made longer or shorter): the entry's length too
+                  if (value.size() != h.value.size())
+                        pub.replace(h.entry, 4, le32(get32(pub, h.entry) - quint32(h.value.size()) + quint32(value.size())));
+                  pub.replace(h.offset, h.value.size(), value);
                   changed = true;
                   ++*count;
                   }
@@ -498,6 +522,240 @@ QByteArray applyValues(const QByteArray& program, const std::map<QString, QByteA
                   kids[i].body = QByteArray(1, 0) + pub;
             }
       st.kids = join(kids);
+      return st.body();
+      }
+
+//---------------------------------------------------------
+//   Kickstart's purged groups
+//    (found 2026-09-30 by switching Drums - Low's Bass Drum Roll on in Kickstart's window and diffing
+//    Kontakt's states; CLAUDE.md › Kits) Spitfire's Kickstart script (every SSO percussion patch's)
+//    loads only the samples it plays: switching a technique on in its window calls purge_group for the
+//    technique's groups, and Kontakt saves whether each group is purged. Loading a state never purges or
+//    loads anything again, so a technique switched on by the script's arrays alone stays silent; its
+//    groups have to be loaded in the state as well, as the window does.
+//    - the program's GROUP_LIST (0x33): u32 count, then each group's structured body; the byte 55
+//      before its private data's end: 1 purged, 0 loaded. ZONE_LIST (0x34): u32 count, then each
+//      zone's u32 group index and structured body; its private byte 47 copies its group's
+//    - what a group is: Kickstart writes it into a bypassed filter insert of each group, read with
+//      get_engine_par (an integer: the float parameter * 1e6): in the private data, eight floats from the
+//      first one that is 1e-6 (bytes bd 37 86 35): [1] & 15 the mic (1 close, 2 tree, 3 ambient; 0
+//      none), [2] & 127 the hit within its drum (0: not a hit), [6] & 16383 the drum. The script numbers
+//      the drums (%x4jsr, %nvmxz) by their first group, the techniques (%c2lsa, %4jwcn) by the (drum, hit)
+//      pairs, in group order
+//    - Kickstart's rule (its purge loop): a hit group is purged when its drum is off (%x4jsr 0), its mic
+//      is off for its drum (bit mic - 1 of %nvmxz) or its technique is off (%c2lsa 0). It gives every hit
+//      group's flag in all 9 SSO kits and ensembles at their defaults; a program where it doesn't is left
+//      as it is. With the values set, the hit groups the rule now loads that are purged are loaded, and
+//      their zones; nothing is purged; lengths unchanged
+//---------------------------------------------------------
+
+const int GROUP_PURGED_FROM_END = 55;
+const int ZONE_PURGED = 47;
+
+// a structured body's private data at p: its offset and size; the body's end; false if not one
+bool structAt(const QByteArray& d, int p, int* privAt, int* privSize, int* end)
+      {
+      if (p < 0 || p + 3 > d.size() || d.at(p) != 1)
+            return false;
+      int q = p + 3;
+      for (int part = 0; part < 3; ++part) {
+            if (q + 4 > d.size())
+                  return false;
+            const quint32 n = get32(d, q);
+            if (n > quint32(d.size() - q - 4))
+                  return false;
+            if (part == 0) {
+                  *privAt = q + 4;
+                  *privSize = int(n);
+                  }
+            q += 4 + int(n);
+            }
+      *end = q;
+      return true;
+      }
+
+// a saved array's elements (missing ones are 0: Kontakt saves an array up to its last non-zero element)
+struct KickstartArray {
+      std::vector<int> v;
+      KickstartArray() {}
+      explicit KickstartArray(const QByteArray& text)
+            {
+            for (const QByteArray& e : text.split(' '))
+                  if (!e.isEmpty())
+                        v.push_back(e.toInt());
+            }
+      int at(int i) const { return i >= 0 && i < int(v.size()) ? v[i] : 0; }
+      int size() const { return int(v.size()); }
+      };
+
+struct KickstartValues {
+      KickstartArray on;            // %c2lsa, per technique
+      KickstartArray active;        // %x4jsr, per drum
+      KickstartArray micsOff;       // %nvmxz, per drum: bit mic - 1
+
+      explicit KickstartValues(const std::map<QString, QByteArray>& values)
+            {
+            auto get = [&](const char* name) {
+                  auto i = values.find(name);
+                  return i == values.end() ? KickstartArray() : KickstartArray(i->second);
+                  };
+            on = get("%c2lsa");
+            active = get("%x4jsr");
+            micsOff = get("%nvmxz");
+            }
+      // anything switched on against before: a technique, a drum, a drum's mic
+      bool switchesOn(const KickstartValues& before) const
+            {
+            for (int i = 0; i < on.size(); ++i)
+                  if (on.at(i) && !before.on.at(i))
+                        return true;
+            for (int i = 0; i < active.size(); ++i)
+                  if (active.at(i) && !before.active.at(i))
+                        return true;
+            for (int i = 0; i < std::max(micsOff.size(), before.micsOff.size()); ++i)
+                  if (before.micsOff.at(i) & ~micsOff.at(i))
+                        return true;
+            return false;
+            }
+      bool purges(int drum, int technique, int mic) const
+            {
+            return !active.at(drum) || (mic > 0 && ((micsOff.at(drum) >> (mic - 1)) & 1)) || !on.at(technique);
+            }
+      };
+
+// the program (its values set) with the hit groups loaded that Kickstart's rule loads with its values
+// but not with defaults (the .nki's values) and were purged; groups: how many were loaded. The program as
+// it is when it isn't Kickstart's (no %c2lsa, no group or zone list, no group with the marker, the rule
+// not giving the defaults' flags) or nothing is switched on
+QByteArray unpurge(const QByteArray& program, const std::map<QString, QByteArray>& defaults, int* groups)
+      {
+      *groups = 0;
+      const std::map<QString, QByteArray> now = scriptValues(program);
+      if (!now.count("%c2lsa") || !defaults.count("%c2lsa"))
+            return program;
+      const KickstartValues before(defaults);
+      const KickstartValues after(now);
+      if (!after.switchesOn(before))
+            return program;
+      Struct st;
+      std::vector<PChunk> kids;
+      if (!st.read(program) || !chunks(st.kids, kids))
+            return program;
+      int groupList = -1, zoneList = -1;
+      for (int i = 0; i < int(kids.size()); ++i) {
+            if (kids[i].id == 0x33)
+                  groupList = groupList == -1 ? i : -2;
+            else if (kids[i].id == 0x34)
+                  zoneList = zoneList == -1 ? i : -2;
+            }
+      if (groupList < 0 || zoneList < 0)
+            return program;
+
+      struct Group {
+            int purgedAt { -1 };          // in the group list's bytes
+            int drum { -1 }, hit { 0 }, mic { 0 };
+            bool purged { false };
+            };
+      QByteArray gl = kids[groupList].body;
+      if (gl.size() < 4)
+            return program;
+      const quint32 groupCount = get32(gl, 0);
+      if (groupCount > quint32(gl.size()))
+            return program;
+      std::vector<Group> gs(groupCount);
+      static const QByteArray marker = QByteArray::fromHex("bd378635");      // 1e-6f
+      int p = 4;
+      for (Group& g : gs) {
+            int privAt, privSize, end;
+            if (!structAt(gl, p, &privAt, &privSize, &end) || privSize < GROUP_PURGED_FROM_END)
+                  return program;
+            g.purgedAt = privAt + privSize - GROUP_PURGED_FROM_END;
+            const char flag = gl.at(g.purgedAt);
+            if (flag != 0 && flag != 1)
+                  return program;
+            g.purged = flag == 1;
+            const int m = gl.indexOf(marker, privAt);
+            if (m >= 0 && m + 32 <= privAt + privSize) {
+                  auto param = [&](int k) {
+                        float f;
+                        const quint32 bits = get32(gl, m + 4 * k);
+                        std::memcpy(&f, &bits, 4);
+                        return int(std::lround(double(f) * 1e6));
+                        };
+                  g.mic = param(1) & 15;
+                  g.hit = param(2) & 127;
+                  g.drum = param(6) & 16383;
+                  }
+            p = end;
+            }
+      if (p != gl.size())
+            return program;
+
+      // the drums and techniques in the script's order; the rule against the defaults' flags
+      std::vector<int> drums;
+      std::vector<std::pair<int, int>> techniques;
+      struct Hit { int group, drum, technique, mic; };
+      std::vector<Hit> hits;
+      for (int i = 0; i < int(gs.size()); ++i) {
+            const Group& g = gs[i];
+            if (g.drum <= 0)
+                  continue;
+            auto d = std::find(drums.begin(), drums.end(), g.drum);
+            if (d == drums.end())
+                  d = drums.insert(drums.end(), g.drum);
+            if (!g.hit)
+                  continue;
+            const std::pair<int, int> t { g.drum, g.hit };
+            auto ti = std::find(techniques.begin(), techniques.end(), t);
+            if (ti == techniques.end())
+                  ti = techniques.insert(techniques.end(), t);
+            hits.push_back({ i, int(d - drums.begin()), int(ti - techniques.begin()), g.mic });
+            }
+      if (hits.empty())
+            return program;
+      std::set<int> load;
+      for (const Hit& h : hits) {
+            if (before.purges(h.drum, h.technique, h.mic) != gs[h.group].purged)
+                  return program;                   // (not the rule this was made for)
+            if (gs[h.group].purged && !after.purges(h.drum, h.technique, h.mic))
+                  load.insert(h.group);
+            }
+      if (load.empty())
+            return program;
+
+      QByteArray zl = kids[zoneList].body;
+      if (zl.size() < 4)
+            return program;
+      const quint32 zoneCount = get32(zl, 0);
+      if (zoneCount > quint32(zl.size()))
+            return program;
+      std::vector<int> zoneFlags;
+      p = 4;
+      for (quint32 z = 0; z < zoneCount; ++z) {
+            if (p + 4 > zl.size())
+                  return program;
+            const quint32 group = get32(zl, p);
+            int privAt, privSize, end;
+            if (!structAt(zl, p + 4, &privAt, &privSize, &end))
+                  return program;
+            if (load.count(int(group))) {
+                  if (privSize <= ZONE_PURGED || (zl.at(privAt + ZONE_PURGED) != 0 && zl.at(privAt + ZONE_PURGED) != 1))
+                        return program;
+                  zoneFlags.push_back(privAt + ZONE_PURGED);
+                  }
+            p = end;
+            }
+      if (p != zl.size())
+            return program;
+
+      for (int i : load)
+            gl[gs[i].purgedAt] = 0;
+      for (int at : zoneFlags)
+            zl[at] = 0;
+      kids[groupList].body = gl;
+      kids[zoneList].body = zl;
+      st.kids = join(kids);
+      *groups = int(load.size());
       return st.body();
       }
 
@@ -892,7 +1150,7 @@ QByteArray fastlzCompress(const QByteArray& data)
 //---------------------------------------------------------
 
 QByteArray fromEmpty(const QByteArray& emptyComponent, const QByteArray& nki, const QString& nkiFolder,
-                     const std::map<QString, QByteArray>& set, QString* error, int* valuesSet)
+                     const std::map<QString, QByteArray>& set, QString* error, int* valuesSet, int* groupsLoaded)
       {
       QString dummy;
       if (!error)
@@ -906,10 +1164,17 @@ QByteArray fromEmpty(const QByteArray& emptyComponent, const QByteArray& nki, co
       if (!nkiParts(nkiRoot, &program, &files, error, &nkiTail))
             return QByteArray();
       int count = 0;
-      if (!set.empty())
+      int loaded = 0;
+      if (!set.empty()) {
+            const std::map<QString, QByteArray> defaults = scriptValues(program);
             program = applyValues(program, set, &count);
+            // Kickstart techniques (drums, mics) switched on: their samples loaded too (unpurgeSwitchedOn)
+            program = unpurge(program, defaults, &loaded);
+            }
       if (valuesSet)
             *valuesSet = count;
+      if (groupsLoaded)
+            *groupsLoaded = loaded;
       if (!files.isEmpty() && !absoluteList(files, nkiFolder, &files)) {
             *error = "the .nki's sample list could not be read";
             return QByteArray();
@@ -1254,6 +1519,39 @@ QStringList samplePaths(const QByteArray& component, QString* error)
                   return listPaths(t.body);
       *error = "no sample list";
       return QStringList();
+      }
+
+QByteArray unpurgeSwitchedOn(const QByteArray& program, const std::map<QString, QByteArray>& defaults, int* groups)
+      {
+      int n = 0;
+      const QByteArray out = unpurge(program, defaults, &n);
+      if (groups)
+            *groups = n;
+      return out;
+      }
+
+std::vector<int> purgedGroups(const QByteArray& program)
+      {
+      std::vector<int> out;
+      Struct st;
+      std::vector<PChunk> kids;
+      if (!st.read(program) || !chunks(st.kids, kids))
+            return out;
+      for (const PChunk& k : kids) {
+            if (k.id != 0x33 || k.body.size() < 4)
+                  continue;
+            const quint32 n = get32(k.body, 0);
+            int p = 4;
+            for (quint32 i = 0; i < n; ++i) {
+                  int privAt, privSize, end;
+                  if (!structAt(k.body, p, &privAt, &privSize, &end) || privSize < GROUP_PURGED_FROM_END)
+                        return std::vector<int>();
+                  if (k.body.at(privAt + privSize - GROUP_PURGED_FROM_END) == 1)
+                        out.push_back(int(i));
+                  p = end;
+                  }
+            }
+      return out;
       }
 
 } // namespace KontaktSetup

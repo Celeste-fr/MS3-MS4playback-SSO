@@ -43,12 +43,15 @@
 #ifndef __SOUNDLIBRARYCHECK_H__
 #define __SOUNDLIBRARYCHECK_H__
 
+#include <map>
 #include <memory>
+#include <vector>
 
 #include <QDialog>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QPoint>
 
 #include "libmscore/soundlibrary.h"
 #include "audio/vst3/articulationcheck.h"
@@ -89,6 +92,18 @@ class ArticulationCheckDialog : public QDialog {
       // and out["dynamics"]; lines for the summary
       void measureDynamics(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
                            QJsonObject& out, QStringList& lines);
+      // the timing of a loaded patch's articulations (those a notation chooses; a legato one's transitions too)
+      // into out["timing"]; lines for the summary
+      void measureTiming(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
+                         QJsonObject& out, QStringList& lines);
+      // the rest of every sound (ArticulationCheck::rest): across its range, repeated, under each control, a legato's
+      // slurs at every velocity and interval; into out["rest"] (a note: an array of restFields()), lines for the summary
+      void measureRest(const SoundLib::LibInstrument& ins, Vst3Plugin* p, int pitch, const ArticulationCheck::Settings& s,
+                       QJsonObject& out, QStringList& lines);
+      bool _restOnly { false };     // setRest: dynamicsPatch measures the rest instead (every sound)
+      QString _restParts;           // "range,repeats,controls,legato" (setRest)
+      bool _timingOnly { false };   // runHeadless(…, timing): dynamicsPatch measures the timing instead
+      bool _everything { false };   // runHeadless(…, everything): every patch's every sound (soundsToMeasure)
       QPushButton* _add;
       QPushButton* _extract;
       QTableWidget* _table;
@@ -122,6 +137,8 @@ class ArticulationCheckDialog : public QDialog {
       // Dynamics only: the patch loaded and measured, no articulation check
       bool dynamicsPatch(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
       bool checkKeys(int index, const QString& pluginPath, const QString& folder, QJsonArray& results, QString& summary);
+      bool picturePatch(int index, const QString& pluginPath, const QString& folder, std::unique_ptr<Vst3Plugin>& instance,
+                        QJsonArray& results, QString& summary);
       QString recordsFile() const;
       QString addedFile() const;
       void loadAdded();
@@ -149,12 +166,50 @@ class ArticulationCheckDialog : public QDialog {
       // Extract plug-in data without the dialog (MuseScore --extract-library): patches "all" (every
       // patch with a setup), "mapped" (the map's own) or a file with one patch name a line; the zip's
       // path in zip. false: nothing to do, or no plug-in
-      bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false);   // dynamics: Dynamics only instead of the extract
+      bool runHeadless(const QString& patches, bool pitchBend, QString* zip, bool dynamics = false,   // dynamics: Dynamics only instead of the extract
+                       bool controllers = false,   // controllers: every controller tried too (offline, no window: sound and parameters)
+                       bool timing = false,         // timing: each articulation's timing instead (as Dynamics only)
+                       bool everything = false);    // with dynamics or timing: every articulation, drum hit, one-sound patch
       static void setBackgroundLog(const QString& fileName);      // in Documents/MuseScore Sound Library Check (default "background extract.log")
+      // an extract under a supervisor (MuseScore --extract-library without --extract-child starts one per round):
+      // at each patch's start, the patch and those after it, one a line, in this file; removed when the run ends
+      // normally. Left behind, it tells the supervisor where a crash or a hang was (the first line, skipped) and
+      // what is left. Set: the extract doesn't open its folder at the end (the supervisor does)
+      static void setProgressFile(const QString& path);
+      static QString runFile(const QString& root, const QString& what);
+      // the rest instead of dynamics or timing (runHeadless): parts "range,repeats,controls,legato" (any of them)
+      void setRest(const QString& parts) { _restOnly = true; _restParts = parts; }
+      static QJsonArray restFields();     // the order of a note's numbers in out["rest"]
+      static void setRunPrefix(const QString& prefix);          // runFile's names: "<prefix> <what>.txt" (default "background extract")   // superviseExtract's files: step, skip, finished, crash
+      static QString zip(const QString& folder);
+      // a plan (MuseScore --extract-plan <file>): per patch what is still to measure, one a line,
+      // "<patch>\tall" (everything) or "<patch>\tpitch=60\tcc=1:98,7:102\tparams=Dynamics;Vibrato" (which
+      // named control each listed controller moves: only those tried, each put back at its value from an
+      // earlier run, only those parameters; no pitch bend, no switches). tools/soundlibraries/links_plan.py
+      struct PlanEntry {
+            bool all { true };
+            int pitch { -1 };
+            std::vector<int> controllers;
+            std::map<int, int> values;
+            QStringList parameters;
+            };
+      static void setPlanFile(const QString& path);
+      static const PlanEntry* planFor(const QString& patch);        // null: no plan, or not in it
+      static bool hasPlan();
+      QSet<QString> timedBefore(bool timing = true, bool everything = false) const;   // patches an earlier timing (dynamics) run did
+      QSet<QString> restBefore() const;                             // patches an earlier rest run did (with these parts)
+      QSet<QString> linkedBefore() const;                           // patches an earlier links run did
+      QSet<QString> measuredBefore(bool pitchBend) const;         // patches an earlier controller extract measured completely
+      int librarySwitchCC() const;                                 // the CC the library switches articulations on (-1: none)                  // the folder zipped next to it (its path; empty: failed)
       // Check articulations without the dialog (MuseScore --scan-keys) on the patches to scan
       // (toScanNow), or on those a file lists (one patch name a line); listening only, no window
       bool runHeadlessKeyScan(const QString& patches, QString* zip);
       static bool toScanNow(const SoundLib::LibInstrument& instrument, bool added);
+      // each percussion patch's window (isPicturePatch, or those a file lists), as loaded and with each drum
+      // icon clicked, off the screen (MuseScore --window-pictures)
+      bool runHeadlessPictures(const QString& patches, QString* zip);
+      static bool isPicturePatch(const SoundLib::LibInstrument& instrument);
+      static bool isPictureWindow(quintptr window);                   // one of runHeadlessPictures' (the watchdog leaves it)
       QString brokenOn() const     { return _broken; }
       QStringList patchesLeft() const { return _left; }
       // a line of the background extract's log: stderr and Documents/MuseScore Sound Library Check/

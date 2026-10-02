@@ -82,9 +82,25 @@ if (MINGW OR MSVC)
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Measure SSO dynamics in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO dynamics in background.bat" @ONLY NEWLINE_STYLE CRLF)
       install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO dynamics in background.bat" DESTINATION bin)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Measure SSO timing in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO timing in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO timing in background.bat" DESTINATION bin)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Measure what's left of SSO in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Measure what's left of SSO in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Measure what's left of SSO in background.bat" DESTINATION bin)
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Scan SSO drum keys in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Scan SSO drum keys in background.bat" @ONLY NEWLINE_STYLE CRLF)
       install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Scan SSO drum keys in background.bat" DESTINATION bin)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Take SSO percussion pictures in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Take SSO percussion pictures in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Take SSO percussion pictures in background.bat" DESTINATION bin)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Measure SSO controllers in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO controllers in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO controllers in background.bat" DESTINATION bin)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Link SSO controllers in background.bat.in"
+                     "${CMAKE_CURRENT_BINARY_DIR}/Link SSO controllers in background.bat" @ONLY NEWLINE_STYLE CRLF)
+      install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Link SSO controllers in background.bat" DESTINATION bin)
+      install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/SSO controller links plan.txt" DESTINATION bin)
       # (MuseScore --measure-load-times; the owner, 2026-09-28: "optimize load times of the SSO plugin")
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Measure SSO load times in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Measure SSO load times in background.bat" @ONLY NEWLINE_STYLE CRLF)

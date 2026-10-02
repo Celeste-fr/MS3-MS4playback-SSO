@@ -15,6 +15,9 @@
 //    62            short with a sharp bright attack: a 6 ms click of high harmonics, then as 40-60
 //    25            like a harmonics patch: -66 dB under pitch 72 (no sample there)
 //    26            very soft (-40 dB), like a super sul tasto
+//    14            a slow long: 200 ms linear attack, a release ringing 300 ms (exponential) after the note-off
+//    24            a legato (one voice): a note while another 24 sounds takes its place and glides from its
+//                  pitch, over 300 ms at velocity under 40, 150 ms under 100, else 60 ms (Spitfire's legato speed)
 //    30            plays nothing
 //    85-89         not in the patch: articulation 1 (a default)
 //    90-127        not in the patch: ignored, the articulation stays
@@ -72,6 +75,9 @@ struct Voice {
       double gain { 1 };            // the round robin
       int roundRobin { 0 };
       long t { 0 };                 // samples played
+      long released { -1 };         // 14: t at the note-off (it rings), else -1
+      double glide { 0 };           // 24: semitones from the note it slurred from, at its start
+      double glideSeconds { 0 };
       bool silent { false };        // started while the "samples" were still loading (MSTESTSYNTH_STREAM_MS)
       long release { -1 };          // samples left of its release (a note-off fades it out in 10 ms, as a
                                     // sampler's release: a voice stopped at once clicks, and the click
@@ -117,6 +123,11 @@ static float timbre(const Voice& v, double sampleRate)
             s *= 0.0005;
       if (v.articulation == 26)
             s *= 0.01;
+      if (v.articulation == 14) {
+            s *= std::min(1.0, t / 0.2);
+            if (v.released >= 0)
+                  s *= std::exp(-double(v.t - v.released) / sampleRate / 0.3 * 2.302585);   // (-20 dB each 300 ms)
+            }
       if (v.articulation >= 40 && v.articulation <= 60)
             s *= std::exp(-t / 0.1);
       else if (v.articulation == 62) {
@@ -251,13 +262,30 @@ class Processor : public AudioEffect {
                               v.tuning = e.noteOn.tuning;
                               v.roundRobin = roundRobin % 4;
                               v.gain = 1.0 + 0.06 * ((roundRobin++ % 3) - 1);
+                              if (current == 24) {
+                                    for (auto it = voices.begin(); it != voices.end(); ) {
+                                          if (it->second.articulation == 24 && it->first != v.pitch) {
+                                                const Voice& from = it->second;
+                                                const double t = from.glideSeconds > 0 ? std::min(1.0, from.t / processSetup.sampleRate / from.glideSeconds) : 1.0;
+                                                v.glide = (it->first + from.glide * (1 - t)) - v.pitch;
+                                                v.glideSeconds = v.velocity < 40.f / 127 ? 0.3 : v.velocity < 100.f / 127 ? 0.15 : 0.06;
+                                                v.phase = from.phase;
+                                                it = voices.erase(it);
+                                                }
+                                          else
+                                                ++it;
+                                          }
+                                    }
                               v.silent = streaming;
                               voices[e.noteOn.pitch] = v;
                               }
                         else if (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent) {
-                              auto v = voices.find(e.type == Event::kNoteOnEvent ? e.noteOn.pitch : e.noteOff.pitch);
-                              if (v != voices.end() && v->second.release < 0)
-                                    v->second.release = releaseSamples();
+                              const int pitch = e.type == Event::kNoteOnEvent ? e.noteOn.pitch : e.noteOff.pitch;
+                              auto it = voices.find(pitch);
+                              if (it != voices.end() && it->second.articulation == 14 && it->second.released < 0)
+                                    it->second.released = it->second.t;
+                              else if (it != voices.end() && it->second.released < 0 && it->second.release < 0)
+                                    it->second.release = releaseSamples();
                               }
                         }
                   }
@@ -276,9 +304,12 @@ class Processor : public AudioEffect {
                   l[i] = r[i] = 0.f;
             for (auto& v : voices) {
                   const long fade = releaseSamples();
-                  const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + v.second.tuning / 100.0 + (bend - 0.5) * 4.0) / 12.0) / processSetup.sampleRate;
                   Voice& vc = v.second;
                   for (int32 i = 0; i < data.numSamples; ++i) {
+                        double glide = 0;
+                        if (vc.glideSeconds > 0)
+                              glide = vc.glide * std::max(0.0, 1 - vc.t / processSetup.sampleRate / vc.glideSeconds);
+                        const double inc = 2 * M_PI * 440.0 * std::pow(2.0, (v.first - 69 + glide + vc.tuning / 100.0 + (bend - 0.5) * 4.0) / 12.0) / processSetup.sampleRate;
                         float s = vc.silent ? 0.f : timbre(vc, processSetup.sampleRate) * vc.velocity * float(level) * float(0.2 + 0.8 * tone);
                         if (vc.release >= 0) {
                               s *= float(std::max(0L, vc.release)) / float(fade);
@@ -291,8 +322,13 @@ class Processor : public AudioEffect {
                         ++vc.t;
                         }
                   }
-            for (auto v = voices.begin(); v != voices.end();)
-                  v = v->second.release == 0 ? voices.erase(v) : std::next(v);
+            // (a note's release faded out; 14's ring once 60 dB down)
+            for (auto it = voices.begin(); it != voices.end(); )
+                  if (it->second.release == 0
+                      || (it->second.released >= 0 && it->second.t - it->second.released > long(0.9 * processSetup.sampleRate)))
+                        it = voices.erase(it);
+                  else
+                        ++it;
             data.outputs[0].silenceFlags = voices.empty() ? 3 : 0;
             return kResultOk;
             }

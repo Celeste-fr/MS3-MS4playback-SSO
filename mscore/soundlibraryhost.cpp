@@ -258,6 +258,8 @@ bool SoundLibraryHost::hasSetup(const SoundLib::Library& library, const QString&
 
 // raise it when a change to the making makes the setups made before stale
 static const int MAKER_VERSION = 2;       // 2: the preset marker of a loaded program (run 107)
+// raise it when a change to KontaktSetup::unpurgeSwitchedOn makes the Kickstart setups made with it stale
+static const int KICKSTART_UNPURGE_VERSION = 1;
 
 bool SoundLibraryHost::makesSetups(const SoundLib::Library& library)
       {
@@ -355,6 +357,13 @@ static QJsonObject madeFrom(const SoundLib::Library& library, const SoundLib::Li
       o["modified"] = fi.lastModified().toUTC().toString(Qt::ISODate);
       o["values"] = valuesText(li);
       o["maker"] = MAKER_VERSION;
+      // a Kickstart patch with techniques set on or off (%c2lsa): made with their samples loaded
+      // (KontaktSetup::unpurgeSwitchedOn, 2026-09-30); its setups made or resaved before were silent on
+      // the techniques switched on, so this is part of what it is made from (only these patches are made
+      // again, and no state of theirs resaved before is taken from another setups folder)
+      for (const auto& v : li.setupValues)
+            if (v.first == "%c2lsa")
+                  o["kickstartUnpurge"] = KICKSTART_UNPURGE_VERSION;
       return o;
       }
 
@@ -677,8 +686,10 @@ QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, c
       QElapsedTimer t;
       t.start();
       int set = 0;
+      int loaded = 0;
       QString err;
-      const QByteArray patched = KontaktSetup::fromEmpty(component, nf.readAll(), QFileInfo(nki).absolutePath(), values, &err, &set);
+      const QByteArray patched = KontaktSetup::fromEmpty(component, nf.readAll(), QFileInfo(nki).absolutePath(), values, &err, &set,
+                                                         &loaded);
       if (patched.isEmpty()) {
             *error = tr("The setup of %1 could not be made from %2: %3").arg(patch, QDir::toNativeSeparators(nki), err);
             return QByteArray();
@@ -695,7 +706,8 @@ QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, c
       made[patch] = from;
       writeFile(madeFile(library), QJsonDocument(made).toJson());
       qDebug("Sound library: made the setup of %s in %lld ms", qPrintable(patch), t.elapsed());
-      logTime(library, QString("%1: setup made in %2 ms").arg(patch).arg(t.elapsed()));
+      logTime(library, QString("%1: setup made in %2 ms%3").arg(patch).arg(t.elapsed())
+              .arg(loaded ? QString(" (%1 sample groups of Kickstart techniques switched on loaded)").arg(loaded) : QString()));
       return state;
       }
 

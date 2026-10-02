@@ -47,11 +47,11 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
 
 - `main` is the default branch. **A session works on its own branch only**: no merging into or pushing to `main`
   (the owner decides). Check `git log` of `main` and your branch first.
-- Branch chain (each contains the previous): `live-set-export` (live-integration, live-clip-edit,
-  piano-v37-fixes, legato-timing, the SSO timing of `claude/intelligent-volta-gx7gmw`) → `automation-editor`
-  (drawn automation lanes; `automation-live-research` merges into it). Side branches:
-  `claude/intelligent-cray-6pd4o1` (SSO measurements, VM measurement tools), `playability-checker`
-  (PLAYABILITY.md). Older feature branches are merged into these.
+- Since 2026-10-02 `main` contains every feature branch: the chain `live-set-export` (live-integration,
+  live-clip-edit, piano-v37-fixes, legato-timing, the SSO timing of `claude/intelligent-volta-gx7gmw`) →
+  `automation-editor` (drawn automation lanes, `automation-live-research`), and the side branches
+  `claude/intelligent-cray-6pd4o1` (SSO measurements, VM measurement tools) and `playability-checker`
+  (PLAYABILITY.md). The branches are kept; new work branches from `main`.
 - CI runs by hand only. Windows: `test_soundlibrary_windows.yml` (*Run workflow*, or `[windows-build]` in the last
   commit message of a push to `main` / a `claude/` branch): MSVC build (cached, ~15 min), `tst_soundlibrary`,
   artifact `MuseScore-soundlibrary-win64`. On MSVC `mtest/` is its own solution (built by vcxproj).
@@ -120,6 +120,12 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   (Continuous View, lanes under a selected library part, Live's gestures; header lists them), model
   `Automation::Edit`, one undo step per gesture (`undoWrite`); a Dynamics lane replaces the notation's CC1 from its
   first point.
+- Percussion: `<Drum key name>` lists every hit of SSO's kits, one-drum patches and ensembles
+  (`tools/soundlibraries/sso_percussion_hits.json`, from the owner's window pictures); a technique off at the
+  defaults is `<Drum name default="off"/>` (no key, never played). The nine `"<patch> (all on)"` `<Patch>`es set
+  Kickstart's arrays whole (`%c2lsa`, `%4jwcn`, `%x4jsr`, `$nd5ia=0`); `KontaktSetup::unpurgeSwitchedOn` loads the
+  sample groups they switch on (Kickstart's purge rule; test `kontaktKickstartUnpurge`). Script values may change
+  length (`kontaktScriptValueLengths`). Mics on 3-mic patches are Close, Tree, Ambient.
 - Microtones: Kontakt ignores VST 3 note tuning. **Tuning lanes** (patch copies per tuning, metaTag
   `soundLibraryLanes`) play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends
   cleanly (`<Instrument bend>`; varispeed can't reach Live).
@@ -137,6 +143,12 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   doesn't show on Windows).
 - Background jobs (own setups copy, lock, log; `.bat` files in `bin`): `--check-dynamics`, `--scan-keys`,
   `--measure-load-times`, `--verify-playback`, `--live-equivalence`, `--create-live-set`, `--live-set-readback`.
+- Measurement runs (supervised: `superviseExtract`, a hang or crash retried then left out; resumable: a start
+  skips what earlier runs of the same version did): `--extract-library … --extract-controllers
+  --extract-pitch-bend`, `--check-timing`, `--check-rest [--rest-parts range,repeats,controls,legato,onset,shorts,
+  legatolengths,legatopitches]`, `--all-sounds` (every sound, not only notated ones), `--window-pictures`
+  (percussion windows). Readers → `tools/soundlibraries/sso_*.json`: `timing_from_check.py`,
+  `dynamics_from_check.py`, `rest_from_check.py`, `onset_from_check.py`, `nki_articulation_details.py`.
 - Checks and extracts: `audio/vst3/articulationcheck.*` + `mscore/soundlibrarycheck.*` (*Check articulations…*);
   `audio/vst3/pluginextract.*`; `tools/soundlibraries/` readers (`read_check_names.py`, `read_loaded_patches.py`,
   `*_from_check.py`, `read_plugin_data.py`) and `extract_library_files.py` (decrypts nothing, copies no script).

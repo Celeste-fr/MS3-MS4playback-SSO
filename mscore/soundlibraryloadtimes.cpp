@@ -746,7 +746,7 @@ void Run::phaseProbe(const Route& r)
             int count = 0;
             const QByteArray component = KontaktSetup::withScriptValues(component0, { { name, now } }, &err, &count);
             if (component.isEmpty() || !count) {
-                  rep.line(QString("%1 | not set (%2)").arg(name, err.isEmpty() ? QString("not in the setup's program with that length") : err));
+                  rep.line(QString("%1 | not set (%2)").arg(name, err.isEmpty() ? QString("not in the setup's program") : err));
                   continue;
                   }
             qint64 mem = 0;

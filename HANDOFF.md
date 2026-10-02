@@ -5,26 +5,46 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
-## Where things are (2026-10-01)
+## Where things are (2026-10-02)
 
-- Tip of the sound-library work: `live-set-export` (has `claude/intelligent-volta-gx7gmw` merged), then
-  `automation-editor` on top. Measurements and the Windows-VM tools: `claude/intelligent-cray-6pd4o1` (its own
-  HANDOFF.md, "Measurements for the legato-timing fixes", has the VM jobs, sweep tools and results). Playability:
-  `playability-checker`. None of these is in `main` yet; the owner decides the merge.
+- `main` has everything: `live-set-export` / `claude/intelligent-volta-gx7gmw`, `automation-editor`, the
+  measurement branch `claude/intelligent-cray-6pd4o1` and `playability-checker` were merged on 2026-10-02 (the
+  branches are kept). Work on a branch; the owner decides what goes to `main`.
 - Windows test builds come from a branch on request (CLAUDE.md › Branches and CI). The Windows VM with Kontakt 8
-  and SSO is reachable for agents (VERIFY.md › With the real library; access in the agents' own notes).
+  and SSO is reachable for agents (VERIFY.md › With the real library; access in the agents' own notes). VM
+  measurement jobs (task `claude-measure`, `C:\claude\measure\job*.cmd`) and regression sweeps (task
+  `claude-sweep`; `tools/playbackverify/make_sweep_scores.py`, `fix_sweep_ids.py`, `analyze_sweep.py`,
+  `compare_sweeps.py`): docs/HISTORY.md Part 3 › Measurements for the legato-timing fixes. Keep VM outputs under
+  ~2 GB; delete renders once analysed.
+
+## Measurements: open items (from the measurement branch; background in docs/HISTORY.md Part 3)
+
+- Not measured: parameters only in 5 steps (0-1) and at the test pitch only; the rest check's legato grid from the
+  test pitch only; links for Vibraphone and Curated Tutti - Low Wood String Stab (none found).
+- Octaves: the template times (`tLeaveMs` / `tMidMs` / `tArriveMs` in `sso_legato_grid_pitches.json`, f0bef96) are
+  the reliable ±12; the harmonic times are not (reverb, the lower note's harmonics).
+- Velocity barely changes SSO's legato speed (20 / 64 / 110 alike on most patches): the renderer's reason for
+  keeping MS4's legato velocity doesn't hold for SSO; unused so far.
+- Sounds that play nothing where the map might send notes: Long Sul G / Sul C in Violins 1 / 2 and Celli All
+  techniques and Core (`noSamples`), Rain Sheet Swell mp; Low Ensemble's Toms 3-5 and Field Drum Rim / X Stick share
+  keys (the owner: a real conflict; set them in Kontakt when a part needs them).
+- Kit techniques off at the defaults: the owner's plan is to switch one on in the kit patch (and give it a key)
+  when a score needs it; the "(all on)" patches and `unpurgeSwitchedOn` are the measurement-only start of that.
+- Controller links (`sso_patch_measurements.json` `links`: CC 16 Mute, 17 Release, 18 Variation, 21 / 104 Vibrato,
+  22-25 mics, 40-46 Harp pedals): the map drives these as parameters by title; CCs would also work.
+- Tam Tam FX Scrape and Wind Gong FX Bow (slow swells) missed the rest check's 10 dB "sounds" test though they sound.
 
 ## Legato and onset timing (2026-10-01, branch `claude/intelligent-volta-gx7gmw`)
 
 On top of `legato-timing` (3f0cda5): 696341d takes the measurement branch's data (f8908f8 on
-`claude/intelligent-cray-6pd4o1`; its HANDOFF.md, "Measurements for the legato-timing fixes", has the VM jobs, the
+`claude/intelligent-cray-6pd4o1`; docs/HISTORY.md Part 3, "Measurements for the legato-timing fixes", has the VM jobs, the
 sweep tools and the sweep results of ed3a294 and 3f0cda5). Not heard or swept with SSO yet: the next step is the VM
 sweep (`make_sweep_scores.py`, task `claude-sweep`) on a Windows build of this branch against 3f0cda5's.
 Open, deliberately not changed (no data here supports a change):
 - **Octave slurs of the other 35 Performance patches** (winds, brass, Solo Cello and the Sul G / Sul C Performance patches) still use
   their ±7 delay. Only the 8 string Performance patches have the 5-pitch grid (`sso_legato_grid_pitches.json`);
   `sso_legato_grid.json`'s ±12 are octave errors. Needs the rest check's `legatopitches` part on those 35 (VM, build
-  c7338f4; the measurement HANDOFF's "Resume"). The single-pitch grid can't be corrected by a rule: on the 8 string
+  c7338f4; docs/HISTORY.md Part 3 › "Resume"). The single-pitch grid can't be corrected by a rule: on the 8 string
   patches its arrival is above the 5-pitch 50 % time by a median 95 ms (Basses), 98 (Violins 2), 58 (Violas), 25-30
   (Celli, Violins 1), -25…+5 (the three solo strings), per interval -150…+190: no common offset to carry to the winds.
 - **Long slurred notes early** (sweep of 3f0cda5: ≥ 0.5 s notes to -156 ms in Basses, Horn, Violas, Violins 2 -51…-76):

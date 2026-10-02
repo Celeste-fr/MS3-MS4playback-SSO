@@ -366,7 +366,9 @@ BRASS = ['Horn Solo', 'Horns a2', 'Horns a6', 'Trumpet Solo', 'Trumpets a2', 'Tr
 # no family guesses any more: the solo strings have Vibrato and 3 mics, some woodwinds Tightness,
 # the Curated Ensembles Reverb, the harp its 7 pedals. Dynamics, Expression and Articulation
 # Controller are MuseScore's own (CC1, CC11, UACC). Mics named Close … Leader where a patch has 4 or 5
-# (the owner saw them in Kontakt); with 3, unnamed (which three isn't known).
+# (the owner saw them in Kontakt); with 3 (148 patches), Close, Tree, Ambient: each of those patches' .nki
+# has samples under exactly these three mic headers ("####### Close #######" …; the Curated Ensembles list
+# an Outrigger header with no zones under it; the owner's library-files extract of 2026-09-27).
 MEASURED = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_patch_controls.json'),
                           encoding='utf-8'))
 NOT_SET = {'Dynamics', 'Expression', 'Articulation Controller'}
@@ -379,7 +381,7 @@ def measuredControllers(name):
     out = [_p(IDS.get(t, re.sub(r'[^a-z0-9]', '', t.lower())), NAMES.get(t, t), t) for t in other]
     if 'Mic Mix Distance' in titles:
         out += MIX                              # (first: it sets every mic level; a mic ticked wins)
-    return out + mics(len(mic), named=len(mic) >= 4)
+    return out + mics(len(mic))
 
 # What Check articulations hears on the owner's Kontakt where it isn't "switches", and why that is
 # right (eighth run, 2026-09-26; each one looked at in the pictures): the check counts these as
@@ -468,8 +470,7 @@ PERCUSSION = ['Drums - High', 'Drums - Low', 'Unpitched - Metal', 'Unpitched - W
 # are off in Kickstart until given a key. The owner (2026-09-27): setups are made by MuseScore at the
 # library's defaults, and what a kit patch has off comes from the drum's own patch (SINGLES), so an
 # entry on a key HITS marks off is left out of the map (Snare 1 x stick and roll, Snare 2 roll,
-# Triangle 1: until their patches' keys are known, the snares' rolls play the tremolo's hits, the
-# side stick plays the Field Drum's x stick, and the triangle the built-in synthesizer).
+# Triangle 1: they play on the Snare 1 / 2 and Triangle 1 patches, SINGLE_DRUMS).
 # Guesses to confirm by ear: Tom 1 is the high tom, Conga 1 the high conga, Block 1 the high block.
 DRUMS = {
  'Drums - High': [
@@ -616,6 +617,8 @@ HITS = {
   (83, 'Agogo Low', 1), (84, 'Agogo High', 1),
   ],
  }
+# The owner (2026-09-28): a technique a kit patch has off will one day be switched on in the kit patch and given a
+# key when a score needs it (a system to build); until then it isn't played, not even from the drum's own patch.
 # Techniques off in the owner's setup too (no key; Kickstart shows such a technique on C-2 = 0): each kit
 # can't give every technique a key; they come from the drum's own patch (SINGLES).
 STILL_OFF = {
@@ -653,8 +656,9 @@ for name in PERCUSSION:
     for key, (n, on) in sorted(hits.items()):
         if key not in used and on:
             out.append(f'    <Drum key="{key}" name={q(n)}/>')
-    off = '; '.join(x for x in (', '.join(offNames), STILL_OFF[name]) if x)
-    out.append(f'    <!-- off in Kickstart by default (from the drum\'s own patch): {off} -->')
+    for n in offNames:                  # (off at the defaults, no key: the key the owner had given it is in HITS)
+        out.append(f'    <Drum name={q(n)} default="off"/>')
+    out.append(f'    <!-- also off in Kickstart by default, no key (names as the kit shows them): {STILL_OFF[name]} -->')
     out.append('  </Instrument>')
 # One patch per drum (the owner's folder, 2026-09-27: "Percussion - <kit> - <drum>.nki"). A kit patch's
 # keyboard can't hold every technique of all its drums; the drum's own patch can. Extras of the kit
@@ -672,25 +676,71 @@ SINGLES = {
                        'Wind Gong'],
  'Unpitched - Wood': ['Claves', 'Temple Blocks', 'Woodblocks'],
  }
+# The owner's Kickstart screenshots of the patches at their defaults (2026-09-28, reviewed on
+# https://claude.ai/artifact/CNocqS6mHvhGiJB6A4R1qw, "hit and key columns are correct"); every key sounded in
+# the owner's key scan of 01:46 (sso_drum_keys_sounding.json). Not the kits' layout: Snare 1's hit is 48 here.
+_SNARE = [(41, 'Swell mf', 1), (43, 'Swell f', 1), (48, 'Hit', 1), (49, 'Flam', 1), (52, 'Edge', 1),
+          (55, 'Rim', 1), (59, 'X Stick', 1), (61, 'Roll', 1)]
+_TRIANGLE = [(48, 'Open Hit 1', 1), (49, 'Closed Hit', 1), (53, 'Open Hit 2', 1), (59, 'Open Hit 3', 1),
+             (64, 'Open Hit 4', 1)]    # ("Roll on high vel." ticked)
+SINGLE_HITS_SCREENSHOTS = {
+ 'Percussion - Drums - High - Snare 1': [(k, 'Snare 1 ' + n, on) for k, n, on in _SNARE],
+ 'Percussion - Drums - High - Snare 2': sorted([(k, 'Snare 2 ' + n, on) for k, n, on in _SNARE]
+                                               + [(56, 'Snare 2 Brush', 1), (63, 'Snare 2 Brush Roll', 1)]),
+ 'Percussion - Unpitched - Metal - Triangle 1': [(k, 'Triangle 1 ' + n, on) for k, n, on in _TRIANGLE],
+ 'Percussion - Unpitched - Metal - Triangle 2': [(k, 'Triangle 2 ' + n, on) for k, n, on in _TRIANGLE],
+ }
+# Every percussion patch's hit list (the owner's picture run of 2026-09-28 05:02, MuseScore --window-pictures: each
+# patch's window at its defaults with each drum icon clicked; OCR checked by eye, reviewed on
+# https://claude.ai/artifact/CKcFbayqAj3iPi9h3irUFK, the owner: correct; sso_percussion_hits.json). The owner: every
+# list goes in the map, the ensembles' too, used now or not ("make sure the map (and reference files) is 100%
+# complete whether used or not"). A hit with no key is off at the patch's defaults (Kickstart gives it none):
+# <Drum name default="off"/> with no key. Keys two hits share (Low Ensemble's
+# Toms 3-5, Trash Metals Scafold 2 / Spring Coil …) are listed as Kickstart shows them.
+PERCUSSION_HITS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_percussion_hits.json'),
+                                 encoding='utf-8'))['patches']
+def _hitName(drum, hit):
+    return f'{drum} {hit}'
 SINGLE_HITS = {}
-# (MuseScore drum pitch, key, name, ids) as DRUMS, for a single patch's keys MuseScore sounds use
-SINGLE_DRUMS = {}
+for _patch, _e in PERCUSSION_HITS.items():
+    if _patch.startswith('Percussion - '):
+        (_d,) = _e['drums']
+        SINGLE_HITS[_patch] = [(h['key'], _hitName(_d['drum'], h['name']), 1) for h in _d['hits'] if h['key'] is not None]
+# (the screenshots of Snare 1 / 2 and Triangle 1 / 2 agree with the picture run)
+for _patch, _hits in SINGLE_HITS_SCREENSHOTS.items():
+    assert sorted(SINGLE_HITS[_patch]) == sorted(_hits), (_patch, sorted(SINGLE_HITS[_patch]), sorted(_hits))
+# (MuseScore drum pitch, key, name, ids) as DRUMS, for a single patch's keys MuseScore sounds use: what the
+# kit patches have off at their defaults (the snares' rolls, Snare 1's x stick for a snare's side stick,
+# the triangle). The rest of these patches' keys are listed (checked, never chosen): the kits play them.
+SINGLE_DRUMS = {
+ 'Percussion - Drums - High - Snare 1': [(38, 61, 'Snare 1 Roll', None),
+                                         (37, 59, 'Snare 1 X Stick', 'snare-drum drumset percussion')],
+ 'Percussion - Drums - High - Snare 2': [(40, 61, 'Snare 2 Roll', None)],
+ 'Percussion - Unpitched - Metal - Triangle 1': [(81, 48, 'Triangle 1 Open Hit 1', 'triangle drumset percussion'),
+                                                (80, 49, 'Triangle 1 Closed Hit', 'triangle drumset percussion')],
+ }
+for _name in list(SINGLE_DRUMS):
+    assert any(_name == f'Percussion - {k} - {d}' for k in SINGLES for d in SINGLES[k]), _name
 for kit in PERCUSSION:
     for drum in SINGLES[kit]:
         name = f'Percussion - {kit} - {drum}'
-        hits = {k: (n, on) for k, n, on in SINGLE_HITS.get(name, [])}
+        assert name in SINGLE_HITS, name                 # (every one-drum patch's list is known)
+        hits = SINGLE_HITS[name]
         drums = SINGLE_DRUMS.get(name, [])
         out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
         out.append('    <Switch type="none"/>')
         for pitch, key, n, ids in drums:
-            assert key in hits and hits[key][0] == n, (name, key, n)
+            assert (key, n, 1) in hits, (name, key, n)
             roll = ' technique="roll"' if n.endswith(' Roll') else ''
-            off = '' if hits[key][1] else ' default="off"'
-            out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + off + '/>')
-        used = {key for _, key, _, _ in drums}
-        for key, (n, on) in sorted(hits.items()):
-            if key not in used:
+            out.append(f'    <Drum pitch="{pitch}" key="{key}" name={q(n)}' + (f' ids={q(ids)}' if ids else '') + roll + '/>')
+        used = {(key, n) for _, key, n, _ in drums}
+        for key, n, on in sorted(hits):
+            if (key, n) not in used:
                 out.append(f'    <Drum key="{key}" name={q(n)}' + ('' if on else ' default="off"') + '/>')
+        for d in PERCUSSION_HITS[name]['drums']:
+            for h in d['hits']:
+                if h['key'] is None:            # (off at its defaults, no key: reference)
+                    out.append(f'    <Drum name={q(_hitName(d["drum"], h["name"]))} default="off"/>')
         out.append('  </Instrument>')
 # Setups made by MuseScore (the owner, 2026-09-27: every patch at the library's defaults, no manual
 # set-up; audio/vst3/kontaktsetup.h): each patch's .nki (sso_nki_files.txt, the owner's library; the
@@ -787,6 +837,15 @@ SCANNED = {
     'Ensembles - Core techniques': [(1, 'Long'), (7, 'Long CS'), (8, 'Long Flautando'), (9, 'Marcato Attack'), (10, 'Long Harmonics'), (42, 'Spiccato'), (47, 'Spiccato CS'), (48, 'Short Brushed'), (50, "Short 0'5"), (56, 'Pizzicato'), (57, 'Pizzicato Bartok'), (58, 'Col Legno'), (61, 'Short Harm'), (62, 'Short Brushed CS')],
     'Ensembles - Decorative techniques': [(5, 'Long CS Blend'), (11, 'Tremolo'), (12, 'Trem CS'), (13, 'Trem Sul Pont'), (18, 'Long Sul Pont'), (70, 'Trill (Minor 2nd)'), (71, 'Trill (Major 2nd)'), (112, 'Long Sul String'), (114, 'Long Super Sul Tasto')],
 }
+# Keyswitch patches with their keys known (key, name): Harp glissandi's scales, from the pictures of the
+# owner's key scan of 2026-09-27 20:15 (each key's picture shows its scale's button lit; reviewed on
+# https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD, the owner: "OCR correct", 2026-09-28). Whole is selected
+# at load (its label "KEYSWITCH C0"): key 0 from the order, the scan couldn't see it switch. Its other groups
+# (gliss up / down, fast, swirls) are played by the keys, not switched
+SCANNED_KEYS = {
+    'Other - Harp glissandi': [(0, 'Whole'), (1, 'Minor H.'), (2, 'Minor M.'), (3, 'Major'), (4, 'Pentatonic'),
+                               (5, 'Diminished')],
+}
 # selected and shown, but they play nothing: as in the All techniques patches (SILENT above)
 SCANNED_SILENT = {('Violins 1 - Core techniques', 112), ('Violins 2 - Core techniques', 112),
                   ('Celli - Core techniques', 112)}
@@ -815,10 +874,141 @@ for nki in NKI_FILES:
             silent = ' expect="silent"' if (name, value) in SCANNED_SILENT else ''
             out.append(f'    <Articulation name={q(a)} value="{value}"{silent}/>')
         out.append('  </Patch>')
+    elif name in PERCUSSION_HITS:
+        # a percussion ensemble: each drum's hits (the owner: the map complete, used or not; no MuseScore
+        # instrument plays an ensemble)
+        scannedUsed.add(name)
+        out.append(head + scan + pitch + '>')
+        for d in PERCUSSION_HITS[name]['drums']:
+            for h in d['hits']:
+                n = _hitName(d['drum'], h['name'])
+                out.append(f'    <Drum key="{h["key"]}" name={q(n)}/>' if h['key'] is not None
+                           else f'    <Drum name={q(n)} default="off"/>')
+        out.append('  </Patch>')
+    elif name in SCANNED_KEYS:
+        known = SCANNED_KEYS[name]
+        assert all(a in arts for _, a in known), name
+        scannedUsed.add(name)
+        out.append(head + scan + pitch + '>')
+        out.append('    <Switch type="keyswitch"/>')
+        for key, a in known:
+            out.append(f'    <Articulation name={q(a)} value="{key}"/>')
+        out.append('  </Patch>')
     else:
         out.append(head + scan + pitch + '/>')
+# Techniques off at a percussion patch's defaults, switched on for measuring (the owner, 2026-10-01: "measure
+# everything left"; HANDOFF item 6). Kickstart (every percussion .nki's main script, slot 20) keeps each
+# technique's key in the persistent array %4jwcn and whether it is on in %c2lsa (1 / 0), one element per technique:
+# the patch's drums in its group order (sso_nki_groups.json), each drum's techniques in its own order. A technique
+# is off where its key is 0; Kontakt saves an array up to its last non-zero element and one 0. So "<patch> (all on)"
+# is the same .nki with both arrays set whole (setup=, KontaktSetup resizes the entries): every technique on, an
+# off one (or one on at key 0: Toys' Ratchet Long, Metal's Rivet Cymbal Roll) on the next free key, 1-35 then
+# 97-127 (no kit plays there; Kickstart itself gives a technique switched on a key at the ends of the keyboard),
+# never a key the patch uses. Each hit is a <Drum> with its key, so measuring every sound measures them all.
+# A <Patch>: never chosen by notation. %yknvz (also per technique in the kits, differs between a kit and the
+# one-drum patch, no clear meaning) is left as it is.
+# Also (2026-09-30, Ensembles - Metal Clangs / Traditional Orchestra (all on) "played nothing": their test key 36,
+# on at the defaults, was silent): every drum on, %x4jsr (per drum; Traditional Orchestra's Cymbal Med and Unpitched
+# - Metal's two triangles are off at the defaults, so their techniques never play; Kontakt keeps 16 elements, the
+# kits' all 1), and Kickstart's round-robin reset keyswitches off, $nd5ia 0 (on at the defaults: keys from $bcqbk, 24,
+# one per round robin of the technique with the most that is on: 13-15 with the cymbals' Brush or Rain Sheet on,
+# so 24-38 reset round robins and play nothing, the drums' own keys 36-37 among them). KontaktSetup loads the
+# samples of what this switches on (unpurgeSwitchedOn).
+#
+# A drum's technique order is its hit list's in sso_percussion_hits.json, but for a list of more than 11 (Toms,
+# Bongos, Timbales) the window showed it from technique 11 on, wrapping round: index 0 is the list's len - 11th.
+def techniqueOrder(hits):
+    s = len(hits) - 11 if len(hits) > 11 else 0
+    return hits[s:] + hits[:s]
+# The kits' arrays at their defaults (%4jwcn, %c2lsa), read from the owner's .nki files (2026-10-01): the check that
+# the order above is the script's (every element's key is the kit's key of the hit of that name, HITS) and what
+# is on at key 0. Unpitched - Wood: every technique on at its defaults (its one-drum patches' lists), no patch.
+KIT_ARRAYS = {
+ 'Drums - High': ('48 50 52 53 55 57 59 0 0 0 0 0 0 0 0 0 0 60 62 64 65 0 0 0 0 0 0 67 69 71 65 0 0 0 0 0 84 86 88 89 91 '
+                  '0 0 0 0 0 36 38 40 0 0 0 0 0 41 43 0 0 0 0 0 0 0 0 45 72 74 76 0 0 77 79 81 0',
+                  '1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 1 1 1 1 1 0 0 0 0 0 1 1 1 0 '
+                  '0 0 0 0 1 1 0 0 0 0 0 0 0 0 1 1 1 1 0 0 1 1 1 0'),
+ 'Drums - Low': ('84 86 88 0 89 0 0 48 50 52 53 0 0 0 0 36 38 0 0 0 60 62 64 65 67 0 0 0 0 0 0 0 0 0 0 72 74 76 77 0',
+                 '1 1 1 0 1 0 0 1 1 1 1 0 0 0 0 1 1 0 0 0 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0'),
+ 'Other - Toys': ('83 84 89 91 93 95 96 47 48 50 0 52 53 55 57 59 60 36 38 40 41 69 71 72 74 86 88 62 0 64 65 67 79 81 '
+                  '76 77 0 0 43 45 0',
+                  '1 1 1 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 1 1 0'),
+ 'Unpitched - Metal': ('65 67 69 71 72 0 0 0 0 74 76 77 79 81 83 84 0 0 0 86 88 89 91 93 95 96 43 45 47 0 0 0 0 0 48 50 '
+                       '52 0 0 0 53 55 57 0 0 0 0 0 59 0 0 0 0 40 41 0 0 0 0 0 60 0 0 36 38 0 0 0 0 0 62 64 0',
+                       '1 1 1 1 1 0 0 0 0 1 1 1 1 1 1 1 0 0 0 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 1 1 1 0 0 0 1 1 1 0 0 0 0 0 1 '
+                       '0 0 0 0 1 1 0 0 0 0 0 1 1 0 1 1 0 0 0 0 0 1 1 0'),
+}
+# the one-drum patches' own arrays (the owner's .nki files): the order above, checked
+ONE_DRUM_KEYS = {
+ 'Percussion - Drums - Low - Bass Drum': [48, 52, 55, 61, 59, 72, 41],
+ 'Percussion - Drums - Low - Field Drum': [48, 52, 55, 59, 49, 66, 41, 43],
+ 'Percussion - Drums - Low - Toms': [48, 53, 59, 64, 69, 84, 86, 88, 89, 91, 96, 98, 100, 101, 103],
+ 'Percussion - Unpitched - Metal - Tam Tam': [48, 50, 61, 41, 43, 72, 89],
+}
+for _p, _keys in ONE_DRUM_KEYS.items():
+    (_d,) = PERCUSSION_HITS[_p]['drums']
+    assert [h['key'] for h in techniqueOrder(_d['hits'])] == _keys, _p
+NKI_GROUPS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_nki_groups.json'),
+                            encoding='utf-8'))
+def groupOrder(patch):
+    tops = []
+    for g in NKI_GROUPS[patch]:
+        if not g[0].startswith((' ', '@')) and g[0] not in tops:
+            tops.append(g[0])
+    return tops
+def techniques(drums):
+    """[(drum, [hits in the script's order])] -> [(name, key or None)], one per array element"""
+    return [(_hitName(d, h['name']), h['key']) for d, hits in drums for h in techniqueOrder(hits)]
+allOn = []                                  # (patch name, .nki, [(name, key at the defaults or None)])
+for kit in PERCUSSION:
+    if kit not in KIT_ARRAYS:
+        for drum in SINGLES[kit]:            # (nothing off: nothing to switch on)
+            assert all(h['key'] is not None for h in PERCUSSION_HITS[f'Percussion - {kit} - {drum}']['drums'][0]['hits'])
+        continue
+    single = {d.lower(): d for d in SINGLES[kit]}
+    drums = []
+    for g in groupOrder(kit):
+        d = single[g.lower()]
+        (e,) = PERCUSSION_HITS[f'Percussion - {kit} - {d}']['drums']
+        drums.append((e['drum'], e['hits']))
+    assert len(drums) == len(SINGLES[kit]), kit
+    t = techniques(drums)
+    keys = [int(k) for k in KIT_ARRAYS[kit][0].split()]
+    on = [int(k) for k in KIT_ARRAYS[kit][1].split()]
+    assert len(keys) == len(on) and keys[-1] == 0 and on[-1] == 0 and len(keys) <= len(t) + 1, kit
+    keys += [0] * (len(t) + 1 - len(keys))
+    on += [0] * (len(t) + 1 - len(on))
+    assert not any(keys[len(t):]) and not any(on[len(t):]), kit
+    # (on where it has a key; on at key 0 twice; the keys those of HITS's on hits)
+    assert all(bool(k) <= bool(o) for k, o in zip(keys, on)), kit
+    assert {k for k in keys if k} == {k for k, _, o in HITS[kit] if o}, (kit, sorted({k for k in keys if k} ^ {k for k, _, o in HITS[kit] if o}))
+    allOn.append((kit, nkiByName[kit.lower()], [(n, keys[i] or None) for i, (n, _) in enumerate(t)], len(drums)))
+for name in sorted(p for p in PERCUSSION_HITS if p.startswith('Ensembles - ')):
+    drums = [(d['drum'], d['hits']) for d in PERCUSSION_HITS[name]['drums']]
+    assert [d for d, _ in drums] == groupOrder(name), name
+    t = techniques(drums)
+    if all(k is not None for _, k in t):
+        continue                            # (Snare ensemble: every technique on)
+    allOn.append((name, nkiByName[name.lower()], t, len(drums)))
+out.append('  <!-- every technique switched on (off ones on free keys), to measure them: not chosen by notation -->')
+for name, nki, t, drumCount in allOn:
+    used = {k for _, k in t if k}
+    free = [k for k in list(range(1, 36)) + list(range(97, 128)) if k not in used]
+    assert len(free) >= sum(1 for _, k in t if not k), name
+    free.reverse()
+    keys = [k if k else free.pop() for _, k in t]
+    setup = ('%c2lsa=' + ' '.join(['1'] * len(t) + ['0']) + ';%4jwcn=' + ' '.join(str(k) for k in keys + [0])
+             + ';%x4jsr=' + ' '.join(['1'] * max(16, drumCount) + ['0']) + ';$nd5ia=0')
+    pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
+    out.append(f'  <Patch name={q(name + " (all on)")} nki={q(nki)} setup={q(setup)}{pitch}>')
+    out.append(f'    <!-- {sum(1 for _, k in t if not k)} of {len(t)} techniques switched on: '
+               + ', '.join(f'{n} {k}' for (n, d), k in zip(t, keys) if not d) + ' -->')
+    for (n, _), k in zip(t, keys):
+        out.append(f'    <Drum key="{k}" name={q(n)}/>')
+    out.append('  </Patch>')
 out.append('</SoundLibrary>')
-assert scannedUsed == set(SCANNED), set(SCANNED) - scannedUsed
+_ensembles = {p for p in PERCUSSION_HITS if p.startswith('Ensembles - ')}
+assert scannedUsed == set(SCANNED) | set(SCANNED_KEYS) | _ensembles, (set(SCANNED) | set(SCANNED_KEYS) | _ensembles) - scannedUsed
 assert expectUsed == set(EXPECT), set(EXPECT) - expectUsed
 assert set(PATCH_CONTROLLERS) <= patchControllersUsed, set(PATCH_CONTROLLERS) - patchControllersUsed
 assert not measuredMissing, measuredMissing         # (every map patch was in the extract)

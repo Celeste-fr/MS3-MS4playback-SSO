@@ -13,6 +13,8 @@
 #include <atomic>
 
 #include <cmath>
+#include <cstring>
+#include <QtEndian>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
 #include <QJsonArray>
@@ -83,6 +85,8 @@ class TestSoundLibrary : public QObject, public MTest
       void salienceFit();
       void heldOnPerformance();
       void dynamicsCheck();
+      void timingCheck();
+      void restCheck();
       void shortsFollowDynamics();
       void evenDynamicSteps();
       void pedalChangeAfterChord();
@@ -111,6 +115,8 @@ class TestSoundLibrary : public QObject, public MTest
       void kontaktSetup();
       void kontaktScriptValues();
       void kontaktMaxVoices();
+      void kontaktScriptValueLengths();
+      void kontaktKickstartUnpurge();
       void kontaktSetupReal();
       void vst3Plugin();
       void vst3LoadTimes();
@@ -119,6 +125,8 @@ class TestSoundLibrary : public QObject, public MTest
       void vst3Settle();
       void articulationCheck();
       void scanPictures();
+      void drumIcons();
+      void controlsMoved();
       void pluginDescribe();
       void pluginExtract();
       void pitchShift();
@@ -304,10 +312,11 @@ void TestSoundLibrary::spitfireMap()
             values += p.scan == "values";
             keys += p.scan == "keys" && p.keyScan;
             }
-      QCOMPARE(int(lib->otherPatches.size()), 541);
+      QCOMPARE(int(lib->otherPatches.size()), 541 + 9);    // (+ 4 kits and 5 ensembles with every technique on)
       QCOMPARE(values, 0);                                  // (every values patch's values are known)
       QCOMPARE(keys, 7);
       int scanned = 0;
+      int allOn = 0;
       for (const SoundLib::LibInstrument& p : lib->otherPatches) {
             if (p.name == "Basses - Core techniques")
                   QCOMPARE(p.testPitch, 39);                    // (its samples' keys: 24-78; 60 has none)
@@ -337,8 +346,55 @@ void TestSoundLibrary::spitfireMap()
                   }
             if (p.name == "Violins 2 - Decorative techniques")
                   QCOMPARE(int(p.articulations.size()), 12);
+            // a percussion ensemble: each drum's hits, those off at the defaults with no key (reference)
+            if (p.name == "Ensembles - Low Ensemble") {
+                  int off = 0, toms3to5 = 0;
+                  for (const SoundLib::DrumKey& d : p.drums) {
+                        off += d.key < 0 && d.offByDefault;
+                        toms3to5 += d.key == 52 && d.name.startsWith("Toms Tom ");
+                        QCOMPARE(d.pitch, -1);
+                        }
+                  QVERIFY(off > 0);
+                  QCOMPARE(toms3to5, 3);                // (Toms 3-5 share E2 at its defaults)
+                  }
+            // a kit with every technique switched on (measured, never chosen): the kit's .nki, Kickstart's
+            // arrays set whole (each value as written: an array's elements separated by spaces), every hit
+            // with a key, an off one on a free key (Bass Drum Roll, technique 3, on key 1); every drum on
+            // (%x4jsr) and Kickstart's round-robin reset keyswitches off ($nd5ia, else keys from 24 play nothing)
+            if (p.name.endsWith(" (all on)")) {
+                  ++allOn;
+                  QCOMPARE(int(p.setupValues.size()), 4);
+                  QCOMPARE(p.setupValues[0].first, QString("%c2lsa"));
+                  QCOMPARE(p.setupValues[1].first, QString("%4jwcn"));
+                  QCOMPARE(p.setupValues[2].first, QString("%x4jsr"));
+                  QVERIFY(p.setupValues[2].second.startsWith("1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 ") && !p.setupValues[2].second.contains(" 0 "));
+                  QCOMPARE(p.setupValues[3], std::make_pair(QString("$nd5ia"), QString("0")));
+                  QVERIFY(!p.setupValues[1].second.contains("  ") && p.setupValues[1].second.endsWith(" 0"));
+                  QCOMPARE(int(p.setupValues[0].second.split(' ').size()), int(p.drums.size()) + 1);
+                  for (const SoundLib::DrumKey& d : p.drums) {
+                        QVERIFY(d.key > 0 && !d.offByDefault);
+                        QCOMPARE(d.pitch, -1);
+                        }
+                  }
+            if (p.name == "Drums - Low (all on)") {
+                  QCOMPARE(p.nki, QString("Instruments/Symphonic Percussion/Drums - Low.nki"));
+                  QVERIFY(p.setupValues[1].second.startsWith("84 86 88 1 89 2 3 48 50 52 53 4 "));
+                  QCOMPARE(int(p.drums.size()), 39);
+                  QCOMPARE(p.drums[3].name, QString("Bass Drum Roll"));
+                  QCOMPARE(p.drums[3].key, 1);
+                  QVERIFY(p.scan.isEmpty() && !p.keyScan);
+                  }
+            // a keyswitch patch: Harp glissandi's scales on keys 0-5 (the owner's reviewed pictures)
+            if (p.name == "Other - Harp glissandi") {
+                  QVERIFY(p.switchType == SoundLib::SwitchType::KEYSWITCH);
+                  QCOMPARE(int(p.articulations.size()), 6);
+                  QCOMPARE(p.articulations[3].name, QString("Major"));
+                  QCOMPARE(p.articulations[3].value, 3);
+                  QVERIFY(p.keyScan);
+                  }
             }
       QCOMPARE(scanned, 4);
+      QCOMPARE(allOn, 9);
 
       auto nameFor = [&](const QString& id, const QString& partName) {
             Instrument instr(id);
@@ -361,6 +417,76 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(nameFor("piano", "Piano"), QString("Grand Piano"));
       QCOMPARE(nameFor("timpani", "Timpani"), QString("Timpani"));
       QCOMPARE(nameFor("drumset", "Drumset"), QString("Percussion"));      // the kit
+
+      // a patch with three mic faders: Close, Tree, Ambient (its .nki's mic headers with samples)
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            if (li.name != "Solo Violin 1")
+                  continue;
+            QStringList mic;
+            for (const SoundLib::Controller& c : li.allControllers)
+                  if (c.param.startsWith("Mic ") && c.param.endsWith(" level"))
+                        mic << c.name;
+            QCOMPARE(mic.join(", "), QString("Mic 1 (Close), Mic 2 (Tree), Mic 3 (Ambient)"));
+            }
+
+      // the kit: a sound the kit patches have at their defaults plays there; the snares' rolls, a snare's
+      // side stick and the triangle (off in the kit patches) on the drum's own patch (the owner's
+      // screenshots, 2026-09-28)
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            if (li.name != "Percussion")
+                  continue;
+            const std::vector<const SoundLib::LibInstrument*> kit = li.patches();
+            auto play = [&](int pitch, const QString& id, const QString& technique = QString()) {
+                  const SoundLib::DrumChoice d = SoundLib::drum(kit, pitch, id, technique);
+                  return d.patch < 0 ? QString() : QString("%1 %2").arg(kit[d.patch]->name).arg(d.key->key);
+                  };
+            QCOMPARE(play(38, "snare-drum"), QString("Drums - High 36"));
+            QCOMPARE(play(38, "snare-drum", "roll"), QString("Percussion - Drums - High - Snare 1 61"));
+            QCOMPARE(play(40, "drumset", "roll"), QString("Percussion - Drums - High - Snare 2 61"));
+            QCOMPARE(play(37, "snare-drum"), QString("Percussion - Drums - High - Snare 1 59"));
+            QCOMPARE(play(37, "military-drum"), QString("Drums - Low 53"));      // the Field Drum's own
+            QCOMPARE(play(81, "triangle"), QString("Percussion - Unpitched - Metal - Triangle 1 48"));
+            QCOMPARE(play(80, "triangle"), QString("Percussion - Unpitched - Metal - Triangle 1 49"));
+            QCOMPARE(play(81, "finger-cymbals"), QString());                     // (81 is theirs too)
+            // every one-drum patch lists its hits at its defaults (the owner's picture run of 2026-09-28): keys two
+            // hits share are both there
+            for (const SoundLib::LibInstrument* x : kit) {
+                  if (!x->name.startsWith("Percussion - "))
+                        continue;
+                  QVERIFY2(!x->drums.empty(), qPrintable(x->name));
+                  for (const SoundLib::DrumKey& d : x->drums)
+                        QVERIFY(d.key >= 0 || (d.offByDefault && d.pitch < 0));
+                  if (x->name == "Percussion - Drums - Low - Toms")
+                        QCOMPARE(int(x->drums.size()), 15);
+                  if (x->name == "Percussion - Unpitched - Metal - Trash Metals") {
+                        QStringList onF3;
+                        for (const SoundLib::DrumKey& d : x->drums)
+                              if (d.key == 65)
+                                    onF3 << d.name;
+                        onF3.sort();
+                        QCOMPARE(onF3.join(", "), QString("Trash Metals Scafold 2, Trash Metals Spring Coil"));
+                        }
+                  }
+            // every one-drum patch lists its hits at its defaults (the owner's picture run of 2026-09-28): keys two
+            // hits share are both there
+            for (const SoundLib::LibInstrument* x : kit) {
+                  if (!x->name.startsWith("Percussion - "))
+                        continue;
+                  QVERIFY2(!x->drums.empty(), qPrintable(x->name));
+                  for (const SoundLib::DrumKey& d : x->drums)
+                        QVERIFY(d.key >= 0 || (d.offByDefault && d.pitch < 0));
+                  if (x->name == "Percussion - Drums - Low - Toms")
+                        QCOMPARE(int(x->drums.size()), 15);
+                  if (x->name == "Percussion - Unpitched - Metal - Trash Metals") {
+                        QStringList onF3;
+                        for (const SoundLib::DrumKey& d : x->drums)
+                              if (d.key == 65)
+                                    onF3 << d.name;
+                        onF3.sort();
+                        QCOMPARE(onF3.join(", "), QString("Trash Metals Scafold 2, Trash Metals Spring Coil"));
+                        }
+                  }
+            }
 
       // every main patch can play a note without marks
       for (const SoundLib::LibInstrument& li : lib->instruments)
@@ -1760,11 +1886,11 @@ void TestSoundLibrary::kontaktSetup()
       QCOMPARE(programName(nkiProgram(nki, nullptr)), QString("Violins 2 - All techniques"));
       QCOMPARE(scriptValues(nkiProgram(nki, nullptr)).at("$iooxo"), QByteArray("0"));
 
-      // $iooxo set (same length); $stgrp not (its value is longer); a name the script lacks: nothing
+      // $iooxo set (same length); a name the script lacks: nothing (another length: kontaktScriptValueLengths)
       QString error;
       int set = 0;
       const QByteArray state = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings",
-                                         { { "$iooxo", "3" }, { "$stgrp", "99" }, { "$none", "1" } }, &error, &set);
+                                         { { "$iooxo", "3" }, { "$none", "1" } }, &error, &set);
       QVERIFY2(!state.isEmpty(), qPrintable(error));
       QCOMPARE(set, 1);
       const QByteArray program = slotProgram(state, &error);
@@ -1815,9 +1941,9 @@ void TestSoundLibrary::kontaktScriptValues()
       QCOMPARE(sampleListVersion(QByteArray("not a state")), -1);
 
       int set = 0;
-      const QByteArray changed = withScriptValues(made, { { "$zdiqz", "1" }, { "$stgrp", "1" }, { "$none", "1" } }, &error, &set);
+      const QByteArray changed = withScriptValues(made, { { "$zdiqz", "1" }, { "$none", "1" } }, &error, &set);
       QVERIFY2(!changed.isEmpty(), qPrintable(error));
-      QCOMPARE(set, 1);                                       // ($stgrp is 3 long, $none isn't there)
+      QCOMPARE(set, 1);                                       // ($none isn't there)
       const QByteArray program = slotProgram(changed, &error);
       QCOMPARE(programName(program), QString("Violins 2 - All techniques"));
       std::map<QString, QByteArray> values = scriptValues(program);
@@ -1880,6 +2006,323 @@ void TestSoundLibrary::kontaktMaxVoices()
       // no program in the first slot: an error
       QVERIFY(withMaxVoices(empty, 512, &error).isEmpty());
       QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
+//   kontaktScriptValueLengths
+//    a script value set with another length than the saved one (a Kickstart percussion patch's
+//    technique arrays, %4jwcn keys / %c2lsa on-off, made longer to switch techniques on): the
+//    entry's length is rewritten, the chunks around it sized again, its neighbours kept; a value
+//    longer than 400 bytes is read; set back, the program is the .nki's byte for byte
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktScriptValueLengths()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      const QString folder = "D:/Libs/SSO/Instruments/Symphonic Strings";
+      QString error;
+      const QByteArray plain = fromEmpty(empty, nki, folder, {}, &error);
+      QVERIFY2(!plain.isEmpty(), qPrintable(error));
+      const QByteArray program0 = slotProgram(plain, &error);
+      QCOMPARE(scriptValues(program0).at("$name"), QByteArray("short"));
+
+      // an array as Kontakt saves one: elements separated by single spaces, a 0 after the last
+      // non-zero one; 160 elements, over 400 bytes
+      QByteArray array;
+      for (int i = 0; i < 159; ++i)
+            array += QByteArray::number(36 + i % 92) + " ";
+      array += "0";
+      QVERIFY(array.size() > 400);
+
+      // longer ($name 5 → 400+ bytes), shorter ($stgrp "127" → "99") and the same length ($iooxo) at once
+      int set = 0;
+      const QByteArray longer = fromEmpty(empty, nki, folder, { { "$name", array }, { "$stgrp", "99" }, { "$iooxo", "3" } },
+                                          &error, &set);
+      QVERIFY2(!longer.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 3);
+      const QByteArray program1 = slotProgram(longer, &error);
+      QVERIFY2(!program1.isEmpty(), qPrintable(error));
+      QCOMPARE(programName(program1), QString("Violins 2 - All techniques"));
+      std::map<QString, QByteArray> values = scriptValues(program1);
+      QCOMPARE(values.at("$name"), array);
+      QCOMPARE(values.at("$stgrp"), QByteArray("99"));
+      QCOMPARE(values.at("$iooxo"), QByteArray("3"));
+      QCOMPARE(values.at("$slhsl"), QByteArray("1"));         // (the neighbours as they were)
+      QCOMPARE(values.at("$zdiqz"), QByteArray("0"));
+      QCOMPARE(program1.size(), program0.size() + (array.size() - 5) + (2 - 3));
+      QCOMPARE(samplePaths(longer, &error), samplePaths(plain, &error));
+      QCOMPARE(presetTail(longer), presetTail(plain));
+
+      // shorter again, in the state (withScriptValues): the 400+ bytes back to 3
+      const QByteArray shorter = withScriptValues(longer, { { "$name", "1 0" } }, &error, &set);
+      QVERIFY2(!shorter.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 1);
+      const QByteArray program2 = slotProgram(shorter, &error);
+      values = scriptValues(program2);
+      QCOMPARE(values.at("$name"), QByteArray("1 0"));
+      QCOMPARE(values.at("$stgrp"), QByteArray("99"));
+      QCOMPARE(values.at("$iooxo"), QByteArray("3"));
+      QCOMPARE(program2.size(), program0.size() + (3 - 5) + (2 - 3));
+
+      // round trip: every value back, the .nki's program byte for byte
+      const QByteArray back = withScriptValues(shorter, { { "$name", "short" }, { "$stgrp", "127" }, { "$iooxo", "0" } },
+                                               &error, &set);
+      QCOMPARE(set, 3);
+      QCOMPARE(slotProgram(back, nullptr), program0);
+      QCOMPARE(slotProgram(withScriptValues(longer, { { "$name", "short" }, { "$stgrp", "127" }, { "$iooxo", "0" } }, &error),
+                           nullptr), program0);
+      // an empty value: the entry holds the name and its space only
+      const QByteArray none = withScriptValues(plain, { { "$name", "" } }, &error, &set);
+      QCOMPARE(set, 1);
+      values = scriptValues(slotProgram(none, nullptr));
+      QCOMPARE(values.at("$name"), QByteArray());
+      QCOMPARE(values.at("$stgrp"), QByteArray("127"));
+
+      // with a Kickstart patch's .nki (SSO_KICKSTART_NKI, e.g. Drums - Low.nki; skipped without): its arrays
+      // made longer, every technique on (keys 1, 2 … where off); everything else as it was
+      const QString kitPath = qEnvironmentVariable("SSO_KICKSTART_NKI");
+      if (kitPath.isEmpty())
+            return;
+      QFile kitFile(kitPath);
+      QVERIFY2(kitFile.open(QIODevice::ReadOnly), qPrintable(kitPath));
+      const QByteArray kit = kitFile.readAll();
+      const std::map<QString, QByteArray> kitValues = scriptValues(nkiProgram(kit, nullptr));
+      QVERIFY(kitValues.count("%4jwcn") && kitValues.count("%c2lsa") && kitValues.count("%Share__Settings"));
+      QList<QByteArray> keys = kitValues.at("%4jwcn").split(' ');
+      int next = 1;
+      for (QByteArray& k : keys)
+            if (k == "0")
+                  k = QByteArray::number(next++);
+      keys += QByteArray::number(next++);                    // (and longer: one technique more, then the 0)
+      keys += "0";
+      const QByteArray allKeys = keys.join(' ');
+      const QByteArray allOn = QByteArray("1 ").repeated(keys.size() - 1) + "0";
+      const QByteArray kitState = fromEmpty(empty, kit, "D:/Libs/SSO/Instruments/Symphonic Percussion",
+                                            { { "%4jwcn", allKeys }, { "%c2lsa", allOn } }, &error, &set);
+      QVERIFY2(!kitState.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 2);
+      std::map<QString, QByteArray> after = scriptValues(slotProgram(kitState, nullptr));
+      QCOMPARE(after.at("%4jwcn"), allKeys);
+      QCOMPARE(after.at("%c2lsa"), allOn);
+      after["%4jwcn"] = kitValues.at("%4jwcn");
+      after["%c2lsa"] = kitValues.at("%c2lsa");
+      QVERIFY(after == kitValues);
+      QCOMPARE(slotProgram(kitState, nullptr).size(), slotProgram(fromEmpty(empty, kit, "D:/x", {}, &error), nullptr).size()
+               + (allKeys.size() - kitValues.at("%4jwcn").size()) + (allOn.size() - kitValues.at("%c2lsa").size()));
+      }
+
+//---------------------------------------------------------
+//   kontaktKickstartUnpurge
+//    a Kickstart percussion patch's techniques (drums, mics) switched on: their sample groups loaded too,
+//    as Kickstart's window does (a technique switched on by the arrays alone stayed silent, its groups
+//    purged). A synthetic program: a script with the values, groups with Kickstart's metadata (eight
+//    floats from 1e-6: [1] mic, [2] hit, [6] drum) and purge flags (55 bytes before the private data's
+//    end), zones with theirs (private byte 47); with SSO_KICKSTART_NKI (e.g. Drums - Low.nki) the real kit
+//---------------------------------------------------------
+
+static QByteArray le32Bytes(quint32 v)
+      {
+      char b[4];
+      qToLittleEndian<quint32>(v, reinterpret_cast<uchar*>(b));
+      return QByteArray(b, 4);
+      }
+
+static QByteArray structBody(quint16 version, const QByteArray& priv, const QByteArray& pub, const QByteArray& kids)
+      {
+      char v[2];
+      qToLittleEndian<quint16>(version, reinterpret_cast<uchar*>(v));
+      return QByteArray(1, 1) + QByteArray(v, 2) + le32Bytes(priv.size()) + priv + le32Bytes(pub.size()) + pub
+             + le32Bytes(kids.size()) + kids;
+      }
+
+static QByteArray pchunk(quint16 id, const QByteArray& body)
+      {
+      char b[2];
+      qToLittleEndian<quint16>(id, reinterpret_cast<uchar*>(b));
+      return QByteArray(b, 2) + le32Bytes(body.size()) + body;
+      }
+
+// a group: drum < 0 for one without Kickstart's metadata (a mic header)
+static QByteArray kickstartGroup(int drum, int hit, int mic, bool purged)
+      {
+      QByteArray priv(120, '\x07');
+      if (drum >= 0) {
+            const int values[8] = { 1, 0x2000 | mic, hit, 0, 47104, 0, 50152 - 1000 + drum, 100352 };
+            QByteArray floats;
+            for (int v : values) {
+                  const float f = float(v / 1e6);
+                  quint32 bits;
+                  std::memcpy(&bits, &f, 4);
+                  floats += le32Bytes(bits);
+                  }
+            priv.replace(20, 32, floats);
+            }
+      priv[priv.size() - 55] = purged ? 1 : 0;
+      return structBody(150, priv, QByteArray("name"), QByteArray());
+      }
+
+static QByteArray kickstartZone(int group, bool purged)
+      {
+      QByteArray priv(87, '\x05');
+      priv[47] = purged ? 1 : 0;
+      return le32Bytes(group) + structBody(156, priv, QByteArray(82, '\x03'), QByteArray());
+      }
+
+// a PAR_SCRIPT chunk: its code, then the saved values
+static QByteArray kickstartScript(const std::map<QString, QByteArray>& values)
+      {
+      const QByteArray code("on init\nend on\n");
+      QByteArray pub = QByteArray(2, '\0') + le32Bytes(code.size()) + code + le32Bytes(quint32(values.size()));
+      for (const auto& v : values) {
+            const QByteArray entry = v.first.toLatin1() + " " + v.second;
+            pub += le32Bytes(entry.size()) + entry;
+            }
+      return pchunk(0x06, QByteArray(1, '\0') + pub);
+      }
+
+void TestSoundLibrary::kontaktKickstartUnpurge()
+      {
+      using namespace KontaktSetup;
+      // drums 1000 (on; mic 3 off) and 1001 (off); techniques (1000, 1) on, (1000, 2) off in two tree
+      // groups and one on mic 3, (1001, 1) on, (1000, 3) off
+      struct G { int drum, hit, mic; bool purged; };
+      const std::vector<G> gs = { { -1, 0, 0, true }, { 1000, 0, 2, true }, { 1000, 1, 2, false }, { 1000, 2, 2, true },
+                                  { 1000, 2, 2, true }, { 1000, 2, 3, true }, { 1001, 1, 2, true }, { 1000, 3, 2, true } };
+      QByteArray groups = le32Bytes(quint32(gs.size()));
+      for (const G& g : gs)
+            groups += kickstartGroup(g.drum, g.hit, g.mic, g.purged);
+      const std::vector<int> zoneGroups = { 2, 3, 3, 4, 5, 6, 7 };
+      QByteArray zones = le32Bytes(quint32(zoneGroups.size()));
+      for (int g : zoneGroups)
+            zones += kickstartZone(g, gs[g].purged);
+      const std::map<QString, QByteArray> defaults = { { "%c2lsa", "1 0 1 0 0" }, { "%x4jsr", "1 0" }, { "%nvmxz", "4 4 0" },
+                                                       { "$other", "3" } };
+      auto program = [&](const std::map<QString, QByteArray>& set, const QByteArray& groupList, bool withZones = true) {
+            std::map<QString, QByteArray> values = defaults;
+            for (const auto& v : set)
+                  values[v.first] = v.second;
+            return structBody(181, QByteArray(10, '\x01'), QByteArray(8, '\x02'), pchunk(0x3A, "abc") + kickstartScript(values)
+                              + pchunk(0x33, groupList) + (withZones ? pchunk(0x34, zones) : QByteArray()) + pchunk(0x32, "x"));
+            };
+      const QByteArray plain = program({}, groups);
+      QCOMPARE(scriptValues(plain).at("%c2lsa"), QByteArray("1 0 1 0 0"));
+      QCOMPARE(purgedGroups(plain), std::vector<int>({ 0, 1, 3, 4, 5, 6, 7 }));
+
+      int n = -1;
+      // the technique (1000, 2): its tree groups, not the one on mic 3 (off for its drum)
+      const QByteArray on = program({ { "%c2lsa", "1 1 1 0 0" } }, groups);
+      const QByteArray loaded = unpurgeSwitchedOn(on, defaults, &n);
+      QCOMPARE(n, 2);
+      QCOMPARE(loaded.size(), on.size());
+      QCOMPARE(purgedGroups(loaded), std::vector<int>({ 0, 1, 5, 6, 7 }));
+      std::vector<int> differ;
+      for (int i = 0; i < on.size(); ++i)
+            if (on.at(i) != loaded.at(i))
+                  differ.push_back(i);
+      QCOMPARE(int(differ.size()), 2 + 3);              // two groups' flags, their three zones' flags
+      for (int i : differ)
+            QVERIFY(on.at(i) == 1 && loaded.at(i) == 0);
+      const int zonesAt = loaded.indexOf(zones.left(64));
+      QVERIFY(zonesAt > 0);
+      for (int z = 0; z < int(zoneGroups.size()); ++z) {
+            const int at = zonesAt + 4 + z * (4 + 3 + 4 + 87 + 4 + 82 + 4) + 4 + 3 + 4 + 47;
+            const bool nowLoaded = zoneGroups[z] == 3 || zoneGroups[z] == 4;
+            QCOMPARE(int(loaded.at(at)), nowLoaded ? 0 : int(gs[zoneGroups[z]].purged));
+            }
+      // and mic 3 on for drum 1000: its group too
+      QCOMPARE(purgedGroups(unpurgeSwitchedOn(program({ { "%c2lsa", "1 1 1 0 0" }, { "%nvmxz", "0 4 0" } }, groups), defaults, &n)),
+               std::vector<int>({ 0, 1, 6, 7 }));
+      QCOMPARE(n, 3);
+      // drum 1001 on: its technique, on at the defaults
+      QCOMPARE(purgedGroups(unpurgeSwitchedOn(program({ { "%x4jsr", "1 1 0" } }, groups), defaults, &n)),
+               std::vector<int>({ 0, 1, 3, 4, 5, 7 }));
+      QCOMPARE(n, 1);
+      // the 4th technique (1000, 3)
+      QCOMPARE(purgedGroups(unpurgeSwitchedOn(program({ { "%c2lsa", "1 0 1 1 0" } }, groups), defaults, &n)),
+               std::vector<int>({ 0, 1, 3, 4, 5, 6 }));
+      QCOMPARE(n, 1);
+      // nothing switched on (the same values, a technique switched off, a mic off): the very bytes
+      QCOMPARE(unpurgeSwitchedOn(plain, defaults, &n), plain);
+      QCOMPARE(n, 0);
+      const QByteArray off = program({ { "%c2lsa", "0 0 1 0 0" }, { "%nvmxz", "6 4 0" } }, groups);
+      QCOMPARE(unpurgeSwitchedOn(off, defaults, &n), off);
+      // not what the rule was made for: defaults whose rule doesn't give the flags ((1000, 2) on but purged)
+      std::map<QString, QByteArray> wrong = defaults;
+      wrong["%c2lsa"] = "1 1 1 0 0";
+      const QByteArray more = program({ { "%c2lsa", "1 1 1 1 0" } }, groups);
+      QCOMPARE(unpurgeSwitchedOn(more, wrong, &n), more);
+      // not Kickstart's: no %c2lsa, no metadata, no zone list, a flag that isn't 0 / 1, a list cut short
+      QCOMPARE(unpurgeSwitchedOn(on, { { "$other", "3" } }, &n), on);
+      const QByteArray plainGroups = le32Bytes(2) + kickstartGroup(-1, 0, 0, true) + kickstartGroup(-1, 0, 0, false);
+      const QByteArray noMarker = program({ { "%c2lsa", "1 1 1 0 0" } }, plainGroups);
+      QCOMPARE(unpurgeSwitchedOn(noMarker, defaults, &n), noMarker);
+      const QByteArray noZones = program({ { "%c2lsa", "1 1 1 0 0" } }, groups, false);
+      QCOMPARE(unpurgeSwitchedOn(noZones, defaults, &n), noZones);
+      QByteArray odd = groups;
+      odd[4 + 7 + 120 - 55] = 2;                      // the first group's flag
+      const QByteArray oddProgram = program({ { "%c2lsa", "1 1 1 0 0" } }, odd);
+      QCOMPARE(unpurgeSwitchedOn(oddProgram, defaults, &n), oddProgram);
+      const QByteArray cut = program({ { "%c2lsa", "1 1 1 0 0" } }, groups.left(groups.size() - 3));
+      QCOMPARE(unpurgeSwitchedOn(cut, defaults, &n), cut);
+      QCOMPARE(unpurgeSwitchedOn(QByteArray("not a program"), defaults, &n), QByteArray("not a program"));
+      QCOMPARE(n, 0);
+
+      // with a Kickstart patch's .nki (SSO_KICKSTART_NKI; skipped without): every technique and drum switched
+      // on loads only groups purged at the defaults; values that switch nothing on leave the program as made
+      // before; Drums - Low's Bass Drum Roll (the 4th technique) loads exactly the groups Kickstart's window
+      // loaded (2026-09-30: the tree's Roll and Roll HS groups, 104-121)
+      const QString kitPath = qEnvironmentVariable("SSO_KICKSTART_NKI");
+      if (kitPath.isEmpty())
+            return;
+      QFile kitFile(kitPath);
+      QVERIFY2(kitFile.open(QIODevice::ReadOnly), qPrintable(kitPath));
+      const QByteArray kit = kitFile.readAll();
+      QFile emptyFile(root + "/" + DIR + "kontakt/empty.bin");
+      QVERIFY(emptyFile.open(QIODevice::ReadOnly));
+      const QByteArray empty = emptyFile.readAll();
+      QString error;
+      const QByteArray kitProgram = nkiProgram(kit, &error);
+      const std::vector<int> before = purgedGroups(kitProgram);
+      QVERIFY(!before.empty());
+      const std::map<QString, QByteArray> kitValues = scriptValues(kitProgram);
+      auto allOnes = [](const QByteArray& v, int atLeast) {
+            QList<QByteArray> e = v.split(' ');
+            while (e.size() < atLeast)
+                  e.append("0");
+            for (QByteArray& x : e)
+                  x = "1";
+            e.last() = "0";
+            return e.join(' ');
+            };
+      int set = 0, loadedGroups = 0;
+      const QByteArray state = fromEmpty(empty, kit, "D:/x", { { "%c2lsa", allOnes(kitValues.at("%c2lsa"), 0) },
+                                                               { "%x4jsr", allOnes(kitValues.at("%x4jsr"), 17) } },
+                                         &error, &set, &loadedGroups);
+      QVERIFY2(!state.isEmpty(), qPrintable(error));
+      const std::vector<int> after = purgedGroups(slotProgram(state, nullptr));
+      QVERIFY(loadedGroups > 0);
+      QCOMPARE(int(before.size() - after.size()), loadedGroups);
+      QVERIFY(std::includes(before.begin(), before.end(), after.begin(), after.end()));
+      const QByteArray same = fromEmpty(empty, kit, "D:/x", { { "%c2lsa", kitValues.at("%c2lsa") } }, &error, &set, &loadedGroups);
+      QCOMPARE(loadedGroups, 0);
+      QCOMPARE(slotProgram(same, nullptr), slotProgram(fromEmpty(empty, kit, "D:/x", {}, &error), nullptr));
+      if (QFileInfo(kitPath).fileName() == "Drums - Low.nki") {
+            QList<QByteArray> roll = kitValues.at("%c2lsa").split(' ');
+            roll[3] = "1";
+            const QByteArray rollState = fromEmpty(empty, kit, "D:/x", { { "%c2lsa", roll.join(' ') } }, &error, &set, &loadedGroups);
+            QCOMPARE(loadedGroups, 18);
+            std::vector<int> expect;
+            for (int g : before)
+                  if (g < 104 || g > 121)
+                        expect.push_back(g);
+            QCOMPARE(purgedGroups(slotProgram(rollState, nullptr)), expect);
+            }
       }
 
 //---------------------------------------------------------
@@ -2768,6 +3211,119 @@ void TestSoundLibrary::articulationCheck()
       }
 
 //---------------------------------------------------------
+//   controlsMoved
+//    which named control a controller moves, from the window: a Kontakt-like window whose meters at the top change
+//    with every note and whose five sliders each move with one parameter; the controllers move sliders 1, 3 and 4.
+//    The old box-based matching took the meters in and matched every controller to the same slider (the owner's
+//    links run of 2026-09-28)
+//---------------------------------------------------------
+
+void TestSoundLibrary::controlsMoved()
+      {
+      int frame = 0;
+      auto window = [&](int slider, int value, bool meter = false) {
+            QImage img(1024, 656, QImage::Format_RGB32);
+            img.fill(QColor(40, 40, 40));
+            QPainter p(&img);
+            // the meters: another reading each time
+            p.fillRect(QRect(300, 4, 40 + (frame * 37) % 300, 12), QColor(200, 200, 60));
+            ++frame;
+            // an output meter in the header that follows the level: up with slider 4 (Mic 1 level) and with the
+            // controller that moves slider 3 (Kontakt's, run 236: CC 23 -> Mic 1 level on the tuba)
+            if (meter && value == 127)
+                  p.fillRect(QRect(100, 0, 900, 48), QColor(60, 200, 60));
+            // the sliders: 5 at y 150 … 550, each 700 px long; the one moved at value, the others at the middle
+            for (int k = 0; k < 5; ++k) {
+                  const int v = k == slider ? value : 64;
+                  p.fillRect(QRect(300, 150 + k * 100, 700, 20), QColor(80, 80, 80));
+                  p.fillRect(QRect(300, 150 + k * 100, 700 * v / 127, 20), QColor(90, 160, 220));
+                  }
+            return img;
+            };
+      QJsonObject controllers, parameters;
+      controllers["noiseCells"] = PluginExtract::changedCells(window(-1, 0), window(-1, 0));
+      parameters["noiseCells"] = PluginExtract::changedCells(window(-1, 0), window(-1, 0));
+      QJsonArray pe;
+      const char* titles[5] = { "Dynamics", "Vibrato", "Release", "Tightness", "Mic 1 level" };
+      for (int k = 0; k < 5; ++k) {
+            const QImage lo = window(k, 0, k == 4), hi = window(k, 127, k == 4);
+            QRect box = PluginExtract::changedRect(lo, hi);
+            QVERIFY(box.top() < 20);                  // (the meters are in every box)
+            QJsonObject e;
+            e["id"] = k;
+            e["title"] = titles[k];
+            e["cells"] = PluginExtract::changedCells(lo, hi);
+            e["region"] = QJsonArray { box.x(), box.y(), box.width(), box.height() };
+            pe.append(e);
+            }
+      parameters["effects"] = pe;
+      QJsonArray ce;
+      const int moves[4][2] = { { 1, 0 }, { 21, 1 }, { 23, 4 }, { 24, 3 } };      // cc, slider
+      for (const auto& m : moves) {
+            QJsonObject e;
+            e["cc"] = m[0];
+            e["cells"] = PluginExtract::changedCells(window(m[1], 0, m[0] == 24), window(m[1], 127, m[0] == 24));
+            ce.append(e);
+            }
+      QJsonObject noWindow;                     // a controller that changes only the sound
+      noWindow["cc"] = 7;
+      ce.append(noWindow);
+      controllers["effects"] = ce;
+      controllers["windowSize"] = QJsonArray { 1024, 656 };
+      controllers["cellSize"] = PluginExtract::CELL;
+      // without the frame, the header meter (in 2 of 9 tries: not noise) ties CC 24 to Mic 1 level
+      QCOMPARE(PluginExtract::controlsMoved(controllers, parameters)[3].toObject().value("control").toString(), QString("Mic 1 level"));
+      controllers["frame"] = QJsonArray { 48, 0 };
+      const QJsonArray links = PluginExtract::controlsMoved(controllers, parameters);
+      QCOMPARE(links.size(), 5);
+      QCOMPARE(links[0].toObject().value("control").toString(), QString("Dynamics"));
+      QCOMPARE(links[1].toObject().value("control").toString(), QString("Vibrato"));
+      QCOMPARE(links[2].toObject().value("control").toString(), QString("Mic 1 level"));
+      QCOMPARE(links[3].toObject().value("control").toString(), QString("Tightness"));
+      QVERIFY(links[4].toObject().value("control").isNull());
+      }
+
+//---------------------------------------------------------
+//   drumIcons
+//    a Kickstart window's drum row (as SSO's percussion ensembles show it): icons right-aligned on a
+//    100-pixel grid, a light name under each; the icons found right to left, at any window scale
+//---------------------------------------------------------
+
+void TestSoundLibrary::drumIcons()
+      {
+      for (double scale : { 1.0, 1.5 }) {
+            QImage w(int(1377 * scale), int(679 * scale), QImage::Format_RGB32);
+            w.fill(qRgb(30, 30, 30));
+            QPainter painter(&w);
+            painter.scale(scale, scale);
+            painter.fillRect(360, 345, 1017, 130, QColor(72, 72, 72));               // the row
+            painter.fillRect(383, 360, 220, 14, QColor(230, 230, 230));              // the patch's title
+            for (int k = 0; k < 4; ++k) {
+                  const int cx = 1303 - 100 * k;
+                  painter.setBrush(QColor(190, 190, 190));
+                  painter.setPen(Qt::NoPen);
+                  painter.drawEllipse(QPoint(cx, 400), 26, 26);                       // the drum
+                  painter.fillRect(cx - 25, 446, 50, 8, QColor(215, 215, 215));       // its name
+                  }
+            painter.end();
+            const std::vector<QPoint> icons = ArticulationCheck::drumIcons(w);
+            QCOMPARE(int(icons.size()), 4);
+            for (int k = 0; k < 4; ++k) {
+                  QVERIFY(std::abs(icons[k].x() - (1303 - 100 * k) * scale) <= 2);
+                  QVERIFY(std::abs(icons[k].y() - 400 * scale) <= 2);
+                  }
+            }
+      // Kontakt's window before it has its size (1010 x 647): none
+      QImage early(1010, 647, QImage::Format_RGB32);
+      early.fill(qRgb(190, 190, 190));
+      QVERIFY(ArticulationCheck::drumIcons(early).empty());
+      // a window with no drum row (an orchestral patch): none
+      QImage plain(1377, 679, QImage::Format_RGB32);
+      plain.fill(qRgb(30, 30, 30));
+      QVERIFY(ArticulationCheck::drumIcons(plain).empty());
+      }
+
+//---------------------------------------------------------
 //   scanPictures
 //    a scan's pictures, drawn like SSO's window: the articulation's name, or "None" for a
 //    value the patch lacks, a meter that moves in every picture, and a memory display that
@@ -3567,6 +4123,229 @@ void TestSoundLibrary::dynamicsCheck()
       QCOMPARE(int(r2[0].curve.size()), 8);
       QCOMPARE(r2[1].pitch, -1);
       QVERIFY(r2[1].curve.empty());
+      }
+
+//---------------------------------------------------------
+//   timingCheck
+//    ArticulationCheck::timing on the test synth: 1 starts at once and stops at its release; 14 speaks
+//    over 200 ms and rings -20 dB each 300 ms after it (30 dB: 450 ms); 42 a short, -40 dB after 0.46 s;
+//    24 a legato that glides from the note before, slower at a soft velocity
+//---------------------------------------------------------
+
+void TestSoundLibrary::timingCheck()
+      {
+      using AC = ArticulationCheck;
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->setOffline(true));
+      AC::Settings s;
+      s.pitch = 67;
+      s.minPitch = 40;
+      s.maxPitch = 100;
+      int steps = 0;
+      const std::vector<AC::TimingResult> r = AC::timing(p.get(), { 1, 14, 42, 24, 30 }, { 67, 67, 67, 67, 67 },
+                                                         { false, false, false, true, false }, s,
+                                                         [&](int, int) { ++steps; return true; });
+      QCOMPARE(int(r.size()), 5);
+      // (not "near": a macro in Windows' headers)
+      auto within = [](double x, double want, double tolerance, const char* what) {
+            if (std::fabs(x - want) > tolerance)
+                  qWarning() << what << x << "expected" << want;
+            return std::fabs(x - want) <= tolerance;
+            };
+      // 1: at once, held, stops at its release
+      QCOMPARE(r[0].pitch, 67);
+      QVERIFY(r[0].startMs[1] <= 5 && r[0].fullMs[1] <= 5);
+      QVERIFY(r[0].sustains);
+      QVERIFY(within(r[0].releaseMs, 0, 10, "1 release"));
+      QVERIFY(within(r[0].shortNoteMs, 100, 10, "1 a 0.1 s note"));
+      QVERIFY(within(r[0].shortNoteBodyMs, 100, 10, "1 a 0.1 s note, body"));
+      QVERIFY(within(r[0].bodyMs, 2500, 10, "1 body: to its release"));
+      QVERIFY(within(r[0].shortNoteBodyMs, 100, 10, "1 a 0.1 s note, body"));
+      QVERIFY(within(r[0].bodyMs, 2500, 10, "1 body: to its release"));
+      // 14: -30 dB at 3 % of 200 ms (6 ms), -6 dB at 50 % (100 ms), full at 200 ms; release 30 dB at 450 ms
+      for (int k = 0; k < 3; ++k) {
+            QVERIFY(within(r[1].startMs[k], 5, 6, "14 start"));
+            QVERIFY(within(r[1].fullMs[k], 100, 10, "14 full"));
+            }
+      QVERIFY(r[1].sustains);
+      QVERIFY(within(r[1].releaseMs, 450, 20, "14 release"));
+      // 42: decays -40 dB in 0.46 s whether held or not
+      QVERIFY(!r[2].sustains);
+      QVERIFY(within(r[2].lengthMs, 460, 20, "42 length"));
+      QVERIFY(within(r[2].bodyMs, 230, 15, "42 body (20 dB)"));
+      QVERIFY(within(r[2].bodyMs, 230, 15, "42 body (20 dB)"));
+      QVERIFY(within(r[2].shortNoteMs, 100, 10, "42 a 0.1 s note (cut at the note-off)"));
+      // pp / mf / ff: velocity = CC = 32 / 80 / 112, the level velocity * CC
+      QVERIFY(within(r[0].peakDb[2] - r[0].peakDb[0], 40 * std::log10(112.0 / 32.0), 2, "1 pp to ff"));
+      // 24: 6 transitions (3 velocities, +2 and -5), glides of 300 / 150 / 60 ms: the pitch leaves before it arrives,
+      // slower at velocity 20
+      QCOMPARE(int(r[3].legato.size()), 6);
+      // (a glide shorter than the 80 ms frames: it leaves and arrives in the same frame)
+      for (const auto& l : r[3].legato) {
+            qInfo("legato velocity %d, %+d: leaves %g, arrives %g, dip %g dB", l.velocity, l.interval, l.leaveMs, l.arriveMs, l.dipDb);
+            QVERIFY2(l.leaveMs >= 0 && l.arriveMs >= l.leaveMs,
+                     qPrintable(QString("velocity %1, %2: leaves %3, arrives %4").arg(l.velocity).arg(l.interval).arg(l.leaveMs).arg(l.arriveMs)));
+            const double glide = l.velocity < 40 ? 300 : l.velocity < 100 ? 150 : 60;
+            QVERIFY(within(l.arriveMs, glide, 60, "24 arrival"));
+            QVERIFY(l.dipDb > -3);                // (one voice, no gap)
+            QVERIFY(!l.cents.empty());
+            }
+      QVERIFY(r[3].legato[0].arriveMs > r[3].legato[4].arriveMs);
+      // 30: silent everywhere
+      QCOMPARE(r[4].pitch, -1);
+      QVERIFY(steps >= 5 * 4);
+      }
+
+//---------------------------------------------------------
+//   restCheck
+//    ArticulationCheck::rest (the owner, 2026-10-01: "measure everything left"): a sound across its range, repeated
+//    (the test synth's round robins: ±6 % gain), under a control ("Tone": the level times 0.2 + 0.8 tone), a legato's
+//    slurs at every velocity and interval
+//---------------------------------------------------------
+
+void TestSoundLibrary::restCheck()
+      {
+      using AC = ArticulationCheck;
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY(p->setOffline(true));
+      AC::Settings s;
+      s.pitch = 67;
+      s.minPitch = 40;
+      s.maxPitch = 100;
+      const long tone = p->parameterId("Tone");
+      QVERIFY(tone >= 0);
+      const double own = p->parameter(unsigned(tone));
+      AC::SetControl set = [&](int c, double v) {
+            if (c != 0)
+                  return false;
+            p->setParameter(unsigned(tone), v < 0 ? own : v);
+            return true;
+            };
+      auto within = [](double x, double want, double tolerance, const char* what) {
+            if (std::fabs(x - want) > tolerance)
+                  qWarning() << what << x << "expected" << want;
+            return std::fabs(x - want) <= tolerance;
+            };
+      int steps = 0;
+      auto progress = [&](int, int) { ++steps; return true; };
+
+      // 1: held; range 64-70 (the synth plays every key: the range's ends stop it), 6 repeats, Tone at 0 / 0.5 / 1
+      AC::RestSettings rs;
+      rs.low = 64;
+      rs.high = 70;
+      rs.repeatCount = 6;
+      rs.controlValues = { 0, 0.5, 1 };
+      rs.legato = false;
+      const AC::RestResult r = AC::rest(p.get(), 1, 67, false, 1, set, s, rs, progress);
+      QCOMPARE(r.pitch, 67);
+      QCOMPARE(int(r.range.size()), 7 * 3);
+      for (size_t i = 0; i < r.range.size(); ++i) {
+            QCOMPARE(r.range[i].pitch, 64 + int(i / 3));
+            QCOMPARE(r.range[i].level, i % 3 == 0 ? 32 : i % 3 == 1 ? 80 : 112);
+            QVERIFY(r.range[i].sounds);
+            QVERIFY(r.range[i].startMs >= 0 && r.range[i].startMs <= 5);
+            }
+      // (pp to ff: the level is velocity * CC)
+      QVERIFY(within(r.range[11].loudDb - r.range[9].loudDb, 40 * std::log10(112.0 / 32.0), 2, "pp to ff"));
+      // mf: held to its release, which is at once
+      QVERIFY(r.range[10].sustains);
+      QVERIFY(within(r.range[10].bodyMs, 1000 * AC::MF_SECONDS, 10, "mf body"));
+      QVERIFY(within(r.range[10].releaseMs, 0, 10, "mf release"));
+      QCOMPARE(int(r.repeats.size()), 6);
+      double lo = 200, hi = -200;
+      for (const auto& n : r.repeats) {
+            lo = std::min(lo, n.loudDb);
+            hi = std::max(hi, n.loudDb);
+            }
+      qInfo("repeats within %.2f dB", hi - lo);
+      QVERIFY(hi - lo > 0.2 && hi - lo < 1.5);            // (±6 %: about 1 dB)
+      QCOMPARE(int(r.controls.size()), 3);
+      QVERIFY(within(r.controls[0].note.loudDb - r.controls[2].note.loudDb, 20 * std::log10(0.2), 1.5, "Tone 0 against 1"));
+      QVERIFY(within(r.controls[1].note.loudDb - r.controls[2].note.loudDb, 20 * std::log10(0.6), 1.5, "Tone 0.5 against 1"));
+      QVERIFY(within(p->parameter(unsigned(tone)), own, 1e-6, "Tone back"));
+
+      // 24: a legato, 9 velocities × 14 intervals (the glide: 300 / 150 / 60 ms by velocity)
+      AC::RestSettings lg;
+      lg.range = lg.repeats = lg.controls = false;
+      lg.low = 50;
+      lg.high = 90;
+      const AC::RestResult l = AC::rest(p.get(), 24, 67, true, 0, nullptr, s, lg, progress);
+      QCOMPARE(l.pitch, 67);
+      QCOMPARE(int(l.legato.size()), 9 * 14);
+      for (const auto& x : l.legato) {
+            QVERIFY2(x.leaveMs >= 0 && x.arriveMs >= x.leaveMs,
+                     qPrintable(QString("velocity %1, %2: leaves %3, arrives %4").arg(x.velocity).arg(x.interval).arg(x.leaveMs).arg(x.arriveMs)));
+            // (arrived: within 35 cents of the second note, so a semitone's glide arrives at 65 % of its time)
+            const double glide = x.velocity < 40 ? 300 : x.velocity < 100 ? 150 : 60;
+            QVERIFY(within(x.arriveMs, glide * (1 - 35.0 / (100 * std::abs(x.interval))), 60, "24 arrival"));
+            }
+      // the perceptual onset (onset), shorts' lengths (shorts), legato after first notes of each length (legatoLengths)
+      // 14: a 200 ms linear attack: power within 20 dB at 20 ms (amplitude 0.1), 10 dB at 63 ms
+      AC::RestSettings on;
+      on.range = on.repeats = on.controls = on.legato = false;
+      on.onset = true;
+      on.low = 66;
+      on.high = 68;
+      const AC::RestResult o = AC::rest(p.get(), 14, 67, false, 0, nullptr, s, on, progress);
+      QCOMPARE(int(o.onset.size()), 3 * 3);
+      for (const auto& n : o.onset) {
+            QVERIFY(n.sounds);
+            QVERIFY(within(n.energyOnsetMs[0], 20, 10, "14 power -20 dB"));
+            QVERIFY(within(n.energyOnsetMs[3], 63, 10, "14 power -10 dB"));
+            for (int k = 0; k < 3; ++k)
+                  QVERIFY(n.onsetMs[k] >= 0 && n.onsetMs[k] <= n.onsetMs[k + 1]);
+            // (perceived: the window's centre and the 22 ms smoothing come after the power)
+            QVERIFY(within(n.onsetMs[3], 100, 50, "14 perceived -10 dB"));
+            QVERIFY(n.perceivedPeakMs >= 180);
+            }
+      // 1: held, released at once: it sounds as long as it is held (the window and smoothing add a little)
+      AC::RestSettings sh = on;
+      sh.onset = false;
+      sh.shorts = true;
+      sh.low = 50;
+      sh.high = 90;
+      const AC::RestResult h = AC::rest(p.get(), 1, 67, false, 0, nullptr, s, sh, progress);
+      QCOMPARE(int(h.shorts.size()), 3 * 6);     // 67, 55, 79
+      for (const auto& n : h.shorts) {
+            QVERIFY(within(n.energyLastMs[0], 1000 * n.seconds, 10, "1 power -6 dB"));
+            QVERIFY(within(n.perceivedLastMs[1], 1000 * n.seconds + 30, 40, "1 perceived -10 dB"));
+            }
+      // 24: the glide doesn't depend on the first note's length (velocity 64: 150 ms)
+      AC::RestSettings ll = on;
+      ll.onset = false;
+      ll.legatoLengths = true;
+      ll.low = 50;
+      ll.high = 90;
+      const AC::RestResult g = AC::rest(p.get(), 24, 67, true, 0, nullptr, s, ll, progress);
+      QCOMPARE(int(g.legatoLengths.size()), 6 * 5);
+      for (const auto& x : g.legatoLengths) {
+            QVERIFY(x.firstMs >= 100 && x.firstMs <= 1000);
+            QVERIFY(within(x.arriveMs, 150 * (1 - 35.0 / (100 * std::abs(x.interval))), 60, "24 arrival after a short first note"));
+            }
+      // 24 from several starting pitches, timed by harmonics: octaves too (a glide of 150 ms at velocity 80)
+      AC::RestSettings lp = ll;
+      lp.legatoLengths = false;
+      lp.legatoPitches = true;
+      const AC::RestResult q = AC::rest(p.get(), 24, 67, true, 0, nullptr, s, lp, progress);
+      QVERIFY(q.low <= 52 && q.high >= 88);
+      QVERIFY(int(q.legatoPitches.size()) >= 5 * 10);
+      int octaves = 0;
+      for (const auto& x : q.legatoPitches) {
+            QVERIFY2(x.leaveMs >= 0 && x.midMs >= x.leaveMs && x.arriveMs >= x.midMs && x.arriveMs <= 260,
+                     qPrintable(QString("from %1, %2: leaves %3, mid %4, arrives %5").arg(x.start).arg(x.interval).arg(x.leaveMs).arg(x.midMs).arg(x.arriveMs)));
+            QVERIFY2(x.tMidMs >= 0 && x.tMidMs <= 260 && x.tArriveMs >= x.tMidMs,
+                     qPrintable(QString("templates: from %1, %2: mid %3, arrives %4").arg(x.start).arg(x.interval).arg(x.tMidMs).arg(x.tArriveMs)));
+            if (std::abs(x.interval) == 12)
+                  ++octaves;
+            }
+      QVERIFY(octaves >= 6);
+      // 30: silent everywhere
+      QCOMPARE(AC::rest(p.get(), 30, 67, false, 1, set, s, rs, progress).pitch, -1);
+      QVERIFY(steps > 21 + 6 + 3 + 126);
       }
 
 //---------------------------------------------------------

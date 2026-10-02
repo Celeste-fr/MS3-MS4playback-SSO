@@ -144,6 +144,9 @@ def main():
             for p in r.get("patches", []):
                 if not p.get("restOnly") or "rest" not in p:
                     continue
+                # (a run of only the later parts, onset / shorts / legatolengths: onset_from_check.py)
+                if not set(p.get("restParts", "range").split(",")) & {"range", "repeats", "controls", "legato"}:
+                    continue
                 key = (p.get("restVersion", 1), len(p.get("restParts", "").split(",")), date)
                 if p["patch"] not in newest or key > newest[p["patch"]][0]:
                     newest[p["patch"]] = (key, p)

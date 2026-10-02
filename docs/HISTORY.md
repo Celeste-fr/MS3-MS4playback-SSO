@@ -14,6 +14,7 @@ long narratives, a dated section appended here).
 Contents:
 - Part 1: the former CLAUDE.md (architecture in full detail, the owner's runs, measurements, CI history)
 - Part 2: the former HANDOFF.md (dated work logs since 2026-09-25)
+- Part 3: the measurement branch's HANDOFF.md additions (VM measurements, sweeps, extraction state; merged 2026-10-02)
 
 # Part 1: the former CLAUDE.md
 
@@ -658,6 +659,129 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   flag: on velocity but not listed (add it), on the controller only but listed (not needed), neither, or a
   pp -> ff span more than 6 dB off the patch's controller articulations' median. results.json `dynamics`.
   Round robins move a note ±1-2 dB. Test `dynamicsCheck` (test synth: velocity * CC1).
+  **Timing, in the background** (the owner, 2026-09-29: "yes, build", the timing and legato run after the
+  controller links): `Measure SSO timing in background.bat` starts `--extract-library … --check-timing`
+  (`checkTimingMode`, as `--check-dynamics`: no supervisor, its own setups copy, lock and log `background timing
+  check.log`; `runHeadless(…, timing)`, `_timingOnly`: `dynamicsPatch` calls `measureTiming`). Every mapped
+  patch, each articulation a notation chooses, offline (`ArticulationCheck::timing`, 5 ms windows of the note's
+  power against its own peak): start (30 dB under the peak), full (6 dB under) and peak at pp / mf / ff (velocity
+  = CC1 = 32 / 80 / 112); mf held 2.5 s: how long it sounds (a short's own length) or, sustained, its release (to
+  30 dB under its level before the note-off, tail up to 6 s); how long a 0.1 s note sounds; a legato articulation
+  (the Performance patches): two notes slurred as MuseScore plays them (30 ms overlap) at velocity 20 / 64 / 110,
+  +2 and -5 semitones, the pitch every 10 ms in 80 ms frames against the first note's
+  (`PluginExtract::centsShift`): when it leaves the first note (35 cents), when it arrives (within 35 cents for 3
+  frames), the level's dip. results.json `timing`; `tools/soundlibraries/timing_from_check.py <zips>` keeps the
+  derived numbers as `sso_articulation_timing.json` and prints medians. Test `timingCheck` (the test synth's new
+  14, a 200 ms attack and 300 ms ring, and 24, a one-voice legato gliding 300 / 150 / 60 ms by velocity: found
+  250-280 / 130-140 / 50-60 ms; a glide under the 80 ms frame leaves and arrives in one frame). Tried here headless
+  with the test synth (a map with a patch and its Performance extra, the synth's state as setups): 2 patches in 30 s,
+  the unused articulation left out, summary, results.json and zip, read back by `timing_from_check.py`; a legato
+  articulation's pitch analysis takes about 26 s of processor time. Untried with Kontakt; estimated about an hour
+  for the ~160 patches, as the dynamics run. Not yet used by playback (early
+  note starts, shorts by length, legato overlap by speed would use it).
+  **The owner's first run (build 249, 2026-09-29 18:17) hung** on its 20th patch (the log's last line "Clarinets a2:
+  loading"; MuseScore still in Task Manager). Its 19 patches: longs at full level after 100-1000 ms (Flautando and
+  Sul Tasto slowest), shorts 35-155 ms, releases 0.6-2.9 s; but a short's "length" to 40 dB was the room's ring (Spiccato
+  2 s) and the All techniques' Long (`techniques="long legato"`) was measured as a legato (retriggers, the same at
+  every velocity). Now (`TIMING_VERSION` 2): `bodyMs` / `shortNoteBodyMs` (to 20 dB under the peak: the note) beside
+  the 40 dB lengths; sustains = within 20 dB of its peak just before the release; legato only on an articulation whose
+  first technique is "legato" (the Performance patches). The run is supervised like the extract (`superviseExtract(root,
+  "background timing check")`: rounds, `background timing check current.txt / round n.txt / crash.txt`, a hang after 15
+  minutes without a log line tried once more, then left out; a crash twice), and a start leaves out the patches an
+  earlier run of this version timed (`timedBefore`), so the owner's 19 are timed again once. Test switches
+  `MS_EXTRACT_TEST_CRASH` / `MS_EXTRACT_TEST_HANG=<patch>` now in `check()` too. Tried here with the test synth: a patch
+  hanging every time (`MS_EXTRACT_HANG_MINUTES=1`) stopped twice and left out, the rest done, a second start timing only
+  it.
+  **The owner's second run (build 254, 2026-09-30 07:29-07:47, 17 minutes, no hang)**: 96 patches timed (the other 63 are
+  kits, percussion and patches no notation plays), kept as `tools/soundlibraries/sso_articulation_timing.json`
+  (`timing_from_check.py`). Kontakt offline renders a patch's notes in about a second; the first run's minutes were the
+  legato analysis on patches without legato. Repeatable: Violins 1's numbers are the first run's to the 5 ms. Found:
+  held notes at full level after 175 ms (median; 20-1540: Violas 305, Flautando / Sul Tasto up to 1 s), brass and
+  woodwinds 60-120 ms; releases 855 ms (median); shorts' bodies (20 dB) 265-2670 ms, median 1 s (the hall's ring is in
+  the recordings). **Legato (the 42 Performance patches): the second note's pitch arrives 70-430 ms after its note-on
+  (median 185), mostly in one step (a recorded slur, not a glide), with a 4-22 dB dip; velocity 20 / 64 / 110 makes
+  little or no difference in most patches** (Basses, Celli, Solo Violin 2, Flute Solo the exceptions). So a slurred
+  note sounds its pitch that late: playing slurred notes earlier by about that much (per patch) would put them in time;
+  not done. MuseScore crashed as it closed (c000000d, after the zip; the supervisor logs it and goes on).
+  **Every sound** (the owner, 2026-09-30, "yes", after the list of what dynamics and timing hadn't covered; no other
+  branch had it: main's dynamics check, with attack salience, still skips kits and keyswitched patches):
+  `Measure what's left of SSO in background.bat` (was "Measure every SSO sound …" until 2026-09-30: each step leaves out
+  the patches earlier runs did, so the same .bat measures only what is left) runs `--check-dynamics --all-sounds
+  --extract-patches all`, then
+  `--check-timing --all-sounds …` (`allSoundsMode`; `runHeadless(…, everything)`, `_everything`). Every patch of the
+  library (the 541 `<Patch>` too), every articulation (also those no notation plays), each drum hit with a key on its
+  own key (no switch, no other key tried: `soundsToMeasure`, `drumSettings`; results `drum`, `key`, value -1), a
+  keyswitched patch switched by its key (`Settings::switchIsKey`: the key 50 ms before the note; tuned percussion, Harp
+  glissandi), a patch with neither its one sound (value -1, no switch, "(its sound)"). The calibration still gets only
+  what a notation plays; the rest is in results.json only (`"everything": true`). Both runs supervised
+  (`supervisedCheck()`: the dynamics check too with `--all-sounds`) and resumable (`timedBefore(timing, everything)`: an
+  error counts as done). A second run in the same minute gets its own folder (" (2)"; the two runs had shared one).
+  Readers: `timing_from_check.py` (now with `key`) and `dynamics_from_check.py` → `sso_sound_dynamics.json`. Tried
+  here with the test synth (a patch with an unplayed articulation, a keyswitched one, a drum patch with two hits and one
+  off, a one-sound `<Patch>`): every sound measured, drums at their keys, 4 curves into the calibration (the notated
+  ones), a second start leaving all out.
+  **The owner's dynamics run (build 261, 2026-09-30 10:42-11:34, 52 minutes, no crash or hang)**: all 700 patches, 1804
+  sounds (782 articulations, 504 drum hits: every keyed `<Drum>` of the map's 53 drum patches, 518 one-sound patches), kept
+  as `tools/soundlibraries/sso_sound_dynamics.json` (`dynamics_from_check.py`). Driven by velocity 887, the controller 717,
+  both 120, neither 75 (swells, falls, rips, FX, rolls: recorded at one dynamic). Silent at every pitch: Violins 2 Long
+  Sul G, the Core patches' Long Sul G / C, Tenor Trombones a2 Fx Glissandi; Violins 1 Long Sul G and Celli Long Sul C
+  "sound" only at CC 32 (-66 / -78 dB, then -100: the previous note's tail), so silent too. Some velocity curves aren't
+  monotonic (Alto Flute Marcato 48 under 32: velocity layers and round robins). 492 curves went into the working
+  `dynamics.json` (the notated ones). Timing, the second half, was stopped by the owner after 87 patches (it looked stuck:
+  a Performance patch takes 12-14 s); `results.json` is rewritten after each patch, so a restart goes on from there.
+  **Again with the merged build (run 267, 2026-09-30 15:27-16:05, 37 minutes)**: the Documents folder had been emptied,
+  so every patch was measured again; the same 1804 sounds, every curve point the same to 0.0 dB (Kontakt offline, each
+  patch freshly loaded, is exactly repeatable), now with each note's attack salience and rise (`attack`, `riseMs`, kept
+  in `sso_sound_dynamics.json`). A resume needs the earlier runs' folders in Documents/MuseScore Sound Library Check.
+  **Timing of every sound (run 267 build, 2026-09-30 16:05-16:41, 36 minutes, no crash or hang)**: all 700 patches,
+  1804 sounds, kept as `sso_articulation_timing.json` (was 96 patches). The 96 timed before came out the same (median
+  0 ms, 90 % 0 ms, at most 170 ms). Silent: the same 7 as in the dynamics. Held notes at full level after 220 ms
+  (median; strings 150-300, woodwinds and brass 70-145), releases 890 ms, shorts' bodies 850 ms (75-4250), drum hits full
+  after 25 ms, bodies 740 ms. Legato measured on the 42 Performance patches (84 transitions per velocity, as before);
+  not on Horn Solo / Horns a2 - Legato and Oboe Principal - Total Performance (no map articulation named legato: their
+  one sound was timed, not a slur).
+  **The rest of every sound** (the owner, 2026-10-01: "measure everything left in the VM, I'm sick of doing everything
+  manually"; HANDOFF's "Not measured" items 1-5): `--check-rest [--rest-parts range,repeats,controls,legato]`
+  (`checkRestMode`, supervised and resumable like the timing check: `restBefore`, `REST_VERSION`; log `background rest
+  check.log`; the third step of `Measure what's left of SSO in background.bat`). `ArticulationCheckDialog::measureRest`,
+  `ArticulationCheck::rest`, per sound of every patch (`soundsToMeasure(…, true)`): **range**: every semitone from the
+  test pitch down and up until 4 in a row are silent (a note "sounds" 10 dB over what was left of the last one; a
+  keyswitched patch never plays its keys or under the highest; a drum hit: its key only), pp / mf / ff (velocity = CC1 =
+  32 / 80 / 112; mf held `MF_SECONDS` 1.5 s with its tail, pp and ff 1 s): loudest 50 ms, perceived loudness, attack
+  salience and rise, start / full / peak, and at mf body, sustains, release; **repeats**: the test pitch at mf 8 times
+  (round robins); **controls**: every control the map names anywhere (a `<Patch>` lists none) that the loaded patch has
+  (`parameterId`), at 0 / 0.25 / 0.5 / 0.75 / 1, then back at its own value (read first); **legato** (a sound whose
+  first technique is legato, or with no techniques in a patch named "Legato" / "Total Performance": Horn Solo /
+  Horns a2 - Legato, Oboe Principal): slurs at velocity 1, 16 … 127 (9) × -12, -7, -5 … +5, +7, +12 (14), as timing's
+  (`legatoPair`, now shared). results.json `rest` (per sound: `range`, `repeats`, `controls` [control, value, note],
+  `legato`; a note is an array in `restFields` order), `controls` (id, title, its own value). A note's perceived
+  loudness and attack are worked out on other threads while Kontakt plays the next ones. `PluginExtract::centsShift`
+  takes the reference's `pitchSpectrum` computed once (it was recomputed for every 10 ms frame: ~86 % of a slur's
+  analysis). Test `restCheck`. Tried here headless with the test synth (a CC patch with a slow, a short and a silent
+  articulation and a Tone control, a legato extra, two drum hits, a one-sound `<Patch>`): all measured in 6 minutes,
+  the silent one reported, the zip as the timing check's. **Tests here run in the build's mount namespace**:
+  `TESTSYNTH` is the build directory's absolute path, so a copied build directory (`../ninja-cray.sh`) loads the
+  other worktree's test synth when run outside it (`../run-cray.sh`): timingCheck "failed" that way.
+  **Onset, shorts' lengths, legato after short notes** (2026-10-01, the measurements the legato-timing fixes asked for:
+  slow attacks shifted by when they are heard, shorts chosen by how long they really sound, legato speed after short
+  notes): three more rest parts, only when named (`--rest-parts onset,shorts,legatolengths`; `RestSettings::onset`,
+  `shorts`, `legatoLengths`). **onset**: the range's walk again with pp / mf / ff each held `ONSET_SECONDS` 1.5 s
+  (results `onset`); every note (the range's too) now has `perceivedPeakMs`, `onset20Ms` … `onset10Ms` (the first
+  time the short-term perceived loudness, `perceivedEnvelope`: perceivedLoudnessDb's 22 / 50 ms smoothed loudness
+  every 5 ms, its window's centre, is within 20 / 15 / 12 / 10 dB of its peak in the first 1.5 s) and
+  `energyOnset20Ms` … (the same on the 5 ms power windows), appended to `restFields`. **shorts**: mf held 0.05 / 0.1 /
+  0.25 / 0.5 / 1 / 2 s at the test pitch and an octave (else a fifth) under and over it, each with its tail: the
+  last time within 6 / 10 / 15 / 20 dB of its peak, perceived and power (results `shorts`). **legatolengths**: slurs
+  at velocity 64, +2 +5 +7 +12 -5 -12, the first note held 0.1 / 0.2 / 0.3 / 0.5 / 1 s (its pitch reference from a
+  separate 1.2 s note; results `legatoLengths`, each with `firstMs`). Reader `tools/soundlibraries/onset_from_check.py`
+  → `sso_sound_onset.json`, `sso_short_lengths.json`, `sso_legato_lengths.json`; `rest_from_check.py` leaves these
+  runs out. Test `restCheck` (the test synth's 14: power within 20 / 10 dB at 20 / 63 ms of its 200 ms linear attack,
+  perceived -10 dB ~100 ms; 1 held: sounds as long as held; 24's glide the same after every first-note length).
+  **legatopitches** (the owner: the grid from several pitches, octaves usable): the legato sound's range by probes
+  every 3 semitones, slurs from 10 / 30 / 50 / 70 / 90 % of it, -12 … +12 (12 intervals) at mf, timed by harmonics
+  (`legatoHarmonic`; the old `centsShift` search took octaves for each other: the grid's ±12 arrivals were up to
+  ~700 ms): leave / mid / arrive = 10 / 50 / 90 % of the way between the two pitches' harmonic levels; results
+  `legatoPitches`, `legatoRange` → `sso_legato_grid_pitches.json`.
 - Controllers (the way extracted plug-in data reaches playback; README › Controllers):
   `SoundLib::Controller` (map `<Controller>`, library-wide or per `Instrument`, merged into
   `LibInstrument::allControllers` by id) is a MIDI CC or a plug-in parameter by title, 0-127,
@@ -703,7 +827,7 @@ Sound libraries (`libmscore/soundlibrary.h` explains the design):
   some woodwinds Tightness, Performance strings Mute, 4 patches "Bow Emph.", the Curated Ensembles Reverb, some
   Speed, the Harp Releases and Harp Pedal 1-7, the Grand Piano Pedal Vol / Pedal Dyn, the kits Releases,
   Variation, 3 mics. Not Dynamics, Expression (MuseScore's CC1 / CC11) nor Articulation Controller (UACC). Mics
-  named Close … Leader where a patch has 4 or 5, unnamed where it has 3 (which three isn't known). No defaults
+  named Close … Leader where a patch has 4 or 5; where it has 3 (148 patches: solo strings, Curated, percussion …) Close, Tree, Ambient (2026-09-28: each such `.nki` has samples under exactly those three mic headers; the Curated Ensembles' Outrigger header has no zones). No defaults
   (the patch keeps its own until a part has a value). `Vst3Plugin::parameterId` matches titles loosely (case,
   spacing, punctuation, a slot number in front), and the Controllers window lists the controls of all the
   part's patches and says "not in <patch>" for a loaded patch without that title. Tried by the owner on run 91
@@ -1014,6 +1138,8 @@ macOS.
   state (getState), kept only when it has the same program, the program marker and the script values
   (`"resaved": true` in `made setups.json`; the record's other fields still say when to make it again). So a
   patch's first load stays slow, later ones should be like the hand-made setups': run 119's `load times.log` (the owner, 4 solo strings): made 92-106 ms, first load 0.3-2.4 s (from the .nki), resaved 60-88 ms (386 → 298 KB), next load 92-109 ms (Kontakt's own state), about 20 times faster. setState's time only: Kontakt may still stream samples after it returns.
+  A Kickstart percussion patch whose values switch techniques, drums or mics on gets their samples loaded too
+  (`KontaktSetup::unpurgeSwitchedOn`, see Kits › Techniques switched on in a setup).
   `load times.log` (setups folder) records making, loading ("made from the .nki" / "Kontakt's own state") and
   resaving per patch, since qDebug doesn't show on Windows. Every part gets its instance, with or without notes
   (the owner, 2026-09-27: "just load everything at score open"; loading only parts with notes, and a part once it
@@ -1306,6 +1432,177 @@ data possible from the SSO plugin, I need way more control of the plugin"):
   Progress in `Documents/MuseScore Sound Library Check/background extract.log` (`logBackground`), the folder
   opens when done. Tried here headless with the test synth, alone and beside a running MuseScore: 3 patches in
   10 s, only the copy, the log and the extract written; a second start while one runs stops at once.
+  **Every controller and pitch bend on all 700, in the background** (the owner, 2026-09-28: "let's do that", after
+  *Try every controller* had run on Violins 1 only and pitch bend on four patches): `Measure SSO controllers in
+  background.bat` starts `--extract-library … --extract-patches all --extract-controllers --extract-pitch-bend`
+  (`extractControllers`, passed on to a new process when Kontakt breaks; `runHeadless(…, controllers)`). In a
+  background run with controllers or pitch bend, `extractPatch` plays the patch offline (`setOffline(true)`, back
+  to real time after the patch) and `Pump::fast` renders without waiting for the clock; no window is opened, so
+  each controller's effect is its sound (level, brightness, balance) and Kontakt's parameters, with Quick's reload
+  after each one that did something; which named control it moves ("controllersToControls") needs the window's
+  pictures and stays "?". In real time with the window this would be about 7 minutes a patch (80 hours); offline
+  it's estimated at 1-2 minutes a patch with Kontakt (not timed yet; Kontakt maps all 128 controllers on every
+  channel). Tried here with the test synth: 2 patches in 9 s, pitch bend ±200 cents exactly, CC 1 and the "Tone"
+  parameter found.
+  **The owner's first run (build b903d9a, 2026-09-28 08:06) crashed** 16 s into Violins 1, patch 1: an access
+  violation in `Kontakt 8.vst3` (Windows' Application Error record); no extract written. It had been switched
+  offline right after its setup and rendered flat out while it still loaded the patch. Now, as in Check
+  articulations (offline with Kontakt since run 3), the patch first sounds in real time, then goes offline and
+  must sound again; the log names each step (sounds / pitch bend / every controller) and the current one at
+  least once a minute. Tried here with the test synth only.
+  **The second run (build fe5d050, run 211, 08:54):** Violins 1 and 2 done (about 12 s a patch offline), then a crash
+  on Violas' controllers. Its data showed a fault of that build: each controller was put back to the value Kontakt
+  reported for its parameter, which is 0 for a CC it never received, so CC 7 (volume) at 0 silenced the patch and
+  every later controller and parameter read "no effect". Gone: a background run searches each controller's own value
+  by sound, as the dialog did before Quick (offline that is quick), and `controllers()` compares the patch at the end
+  with the start (JSON `endDistanceDb`; summary "the patch after them against before", "!" when not put back).
+  **A supervisor** (`superviseExtract`, musescore.cpp): `--extract-library` without `--extract-child` starts the
+  extract as child processes one round after another. Each writes at every patch's start that patch and those after
+  it to `background extract current.txt` (`ArticulationCheckDialog::setProgressFile`), removed at a normal end. A round
+  that leaves it (a crash, Kontakt broken, or nothing in the log for 15 minutes: killed) has that patch left out, its
+  folder zipped as it is, and the next round goes on with the rest (at most 100 rounds; the log names every patch left
+  out). The children don't open a "stopped working" window (SetErrorMode). Tried here with the test synth and
+  `MS_EXTRACT_TEST_CRASH=<patch>` (the child aborts on that patch): 3 patches, the 2nd left out, two zips; the hang
+  timeout (`MS_EXTRACT_HANG_MINUTES`) not tried.
+  **The third run (build a9c2251, 09:31), 2 hours in:** 11 access violations (Violas, Strings Ensemble, Flute Solo,
+  Oboe Solo, Oboes a2, Clarinet Solo, Contrabass Clarinet, Horn Solo, Trumpet Solo, Trumpets a2, Timpani), each a few
+  seconds into "every controller" offline, those patches left out; six low or high patches (Basses, Piccolo,
+  Contrabassoon, Contrabass Trombone, Cimbassi a2, Contrabass Tuba) silent at their test pitch (this branch's map had
+  no `pitch=` yet: merged from main, 273e186), 2 minutes waiting then 6 in real time each; the estimate started over
+  in every round (180 → 3081 → 181 min). Now:
+  - a silent patch tries the pitches around its test pitch (±12, 7, −5, ±24; 8 s each after 20 s), keeps the one that
+    sounds (JSON `mapPitch` when it moved; log "silent at …, sounds at …");
+  - each step is written before it is tried to `background extract step.txt` ("<patch>\t<step>": load, until it
+    sounds, offline, describe, pitch bend, controllers: baseline, cc N, parameters: baseline, parameter <id>, switch
+    N, controllers: end), and on Windows the fault's module and offset to `background extract crash.txt`
+    (`SetUnhandledExceptionFilter` in the child); the supervisor logs both ("… crashed (exit code c0000005;
+    exception C0000005 in Kontakt 8.vst3 +0x…) on Violas at cc 32");
+  - a crash at a controller, parameter, switch value or pitch bend: the patch once more without that step
+    (`background extract skip.txt`; `PluginExtract::Settings::step/skip`, JSON `skippedAfterCrash`), up to 3 tries;
+    elsewhere once more as it was; then left out;
+  - the time left from the run's start over every round (`MS_EXTRACT_RUN_START` from the supervisor, patches
+    finished in `background extract finished.txt`).
+  Test: `MS_EXTRACT_TEST_CRASH_STEP="<patch>\t<step>"` aborts the child at that step.
+  **What the third run measured** (the owner stopped it at 11:27 after 108 patches; its 15 zips): 44 patches complete
+  (every controller put back, pitch bend, parameters). 50 were left silent: CC 32, SSO's UACC, was tried on patches
+  that take no switching (Performance, single techniques) and left them on "None", so everything after it measured
+  silence; a patch's controller run now never touches the library's switch CC (`librarySwitchCC`). 14 were silent at
+  their test note (fixed above). Found: **the Performance patches bend the pitch**, +97 to +105 cents at full bend
+  (all 35 measured; the All techniques patches don't: 0-17 cents, round robins), the Kickstart percussion +195.
+  A controller run now leaves out patches an earlier extract of the library measured completely
+  (`measuredBefore`: an extract folder's JSON that sounded, has `endDistanceDb` within the patch's noise, parameters,
+  and pitch bend when asked; `MS_EXTRACT_REDO=1` measures them again). Percussion with decaying round robins (Toys,
+  Bongos, Wood, Xylophone, Marimba, Snare 1) show nearly every CC as "sound" and may never count as put back.
+  **The fourth run (build d966da4, 13:09):** the 44 left out as meant; in 9 minutes 20 patches and 5 crashes, all in
+  Kontakt 8.vst3 at +0x84AC98, +0x84DB9C or +0x8E5873, at cc 23 (Basses, Contrabass Trombone), parameter 8 (Horn Solo),
+  parameter 2048 (Contrabass Trombone again, once cc 23 was left out) and parameter 5 (Timpani); each patch went through
+  without its step. Violas, Strings Ensemble, Flute Solo, Oboe Solo and the others that crashed in the third run went
+  through. So the crashes come and go rather than follow a step: now the first crash at a step is tried again as it
+  was, and a step is left out only at a second crash there (4 tries); a patch measured with a step left out
+  (`skippedAfterCrash` in its controllers, parameters or switches) is measured again by the next run.
+  Its first 92 minutes (81 patches): 74 took about 30 s each; 7 percussion patches (Bongos, Congas, Snare 3,
+  Timbales, Toys, Wood) 7.6 minutes each, silent at their map `pitch=` (the one-drum patches' samples sit on keys
+  0-31; Spitfire's script lays the hits out higher), so 2 minutes of waiting and every controller in real time on
+  silence. Now a patch with `<Drum key>` entries is tested on a hit's key (else its first key; `testPitch`), and a
+  patch that played nothing at any pitch tried is described only (`controllers.notMeasured`).
+  Kontakt's own crash notice (the owner, 15:22: "Kontakt 8 has encountered a major problem and has been terminated",
+  a `.nicrash` in Documents/Native Instruments/Kontakt 8/Crashlogs) is a message box in the crashed process waiting for
+  OK, so the child's own DialogWatch can't close it; the supervisor now looks every 2 s for a window of the child with
+  that text (`childHasCrashNotice`, Windows only) and ends the child, a crash like any other.
+  **The owner's `.nicrash` (15:22, build 46d8b0d) is a minidump**: the access violation is on the main thread, in
+  Kontakt 8.vst3 +0x8e5944 reading address 0x2b8 (a field of a null object), with Kontakt frames (sqlite3.dll among
+  them) over Qt's event dispatch (Qt5Core / Qt5Widgets) over MuseScore3Evo.exe: Kontakt handling one of its own window
+  messages while `Pump::run` let Qt process events between blocks, on 'Brass - Bass Trombone Solo - Long Cuivre' at
+  cc 26; not in `process()` nor in a parameter change. The background controller run had never opened Kontakt's
+  window; every run with the window open (Check articulations, the dialog's extract, the pictures run) went without a
+  crash. So the controller run now opens the window off the screen, not activated, a Tool window marked as the run's
+  own for `DialogWatch` (`markOwnWindow`), as the pictures run does, and the controllers' window changes are measured
+  too (which named control each moves, `controllersToControls`). A guess from one dump; untried with Kontakt. (The
+  owner's WER folders are the working MuseScore's ntdll c000000d fail-fasts, builds 6aba63d9 / 6aba99ca, no dumps.)
+  **The fifth run finished** (the owner, 2026-09-28 13:09-18:48, restarted twice on newer builds, d966da4 then
+  7b2623f / 46d8b0d; not run 222's off-screen window, so whether the window helps is still unknown): 121 crashes, all in
+  Kontakt 8.vst3 (+0x84DB9C 53, +0x84AC98 38, +0x8E5873 9, +0x8E5944 8, +0x85729A 6, +0x84ACC8 4, +0x8663BF 1), at cc 23
+  (58), a parameter (43) or cc 22-26; one Kontakt crash notice (15:22, before the supervisor closed them); no hang. With
+  the third run's data, **695 of the 700 patches measured**: 663 complete, 6 with cc 23 left out after two crashes there
+  (Bass Trombone Solo / Bass Trombones a2 - Long, Harp - Slid CPU-friendly, Celli / Violins 1 - Trill (Minor 2nd),
+  Clarinet Solo - Long Flutter), 26 not put back within their noise (decaying percussion round robins, the Fanfares,
+  Multitongue, Flutter, Toys: sounds that differ note to note; the data is there). Missing: Cimbassi a2 - Long (crashed
+  5 times at 3 steps: left out); Curated Woodwind Ensembles, Bass Trombone Solo - Fall, Field Drum and Cimbassi a2 - Long
+  Alt were measured in two rounds a restart cut off, whose folders weren't zipped (so a later run counted them done).
+  The derived numbers are kept as `tools/soundlibraries/sso_patch_measurements.json` (`measurements_from_extract.py
+  <folders or zips>`: per patch status, test pitch, pitch bend down / up, each controller and parameter that changes
+  the sound with its levels, brightness and balance; 0.8 MB). Found:
+  - **Pitch bend, linear** (the cents at bends 4096 … 12288 on a straight line): every Performance patch (43) and Horn
+    Solo / Horns a2 - Legato **±100 cents** (98-105); the Kickstart percussion (tuned, drums, ensembles), Solo Cello
+    (All techniques and Long) and the solo strings' Long Harmonics ±195; the rest none (within their round robins, ±25).
+    So the held and slurred notes, which play the Performance patches, could be tuned by pitch bend within a semitone
+    (the owner's first choice, 2026-09-27) instead of varispeed; not done.
+  - Controllers that change the sound: CC 7, 10, 11, 111 on every patch, 23 on 678, 1 and 103 on about 380, 22 and 24
+    on about 315, 64 on 232, 25 on 196; parameters Expression 687, Articulation Controller 563, Mic 2 level 487, Mic
+    Mix Distance 441, Dynamics 377, Mic 1 level 304, Mic 3 level 275 (a parameter set to 0 and 1 on one held note;
+    "no effect" can mean the mic mix hides it). Which named control each CC moves needs the window (run 222 on).
+  The last round's MuseScore crashed as it closed, after its last patch, and the supervisor logged "ended before its
+  first patch; stopped": the progress file is now emptied at a normal end, not removed, and such a crash is logged as
+  one on closing.
+  **Links run: only what is still needed** (the owner, 2026-09-29: "make a version that only extracts data we still
+  need"). `Link SSO controllers in background.bat` starts `--extract-library … --extract-plan "SSO controller links
+  plan.txt" --extract-pitch-bend` (the plan installed next to it from `main/`, made by `tools/soundlibraries/links_plan.py`
+  from `sso_patch_measurements.json` and `sso_patch_controls.json`; `ArticulationCheckDialog::setPlanFile` /
+  `PlanEntry`; `--extract-plan` implies `--extract-controllers`, is the patch list unless `--extract-patches` is given,
+  and is passed on to every round). A line `<patch>\tall`: everything, as before (the 11 patches left incomplete). A
+  line `<patch>\tpitch=…\tcc=1:98,7:102…\tparams=Dynamics;…` (689 patches): the window open off the screen, only the
+  controllers that changed the sound (about 12, not 122; `Settings::onlyControllers`), each put back at the value the
+  earlier run found (`patchValues`, no search), only the patch's named parameters (`onlyParameters`), at the pitch that
+  sounded; no pitch bend, no switches; the JSON says `"plan": "links"` and has `controllersToControls`. Offline, the
+  window is drawn by Kontakt's own timers, so each picture first gets 250 ms of real time (`REAL_GRAB_MS`; the fast
+  pump's pictures were of before the change). Patches a links run did (`linkedBefore`) or, for "all", measured
+  completely are left out, so a stopped run can start again. `measurements_from_extract.py` adds each patch's `links`
+  (cc -> named control) to the measurements. Tried here with the test synth (a links patch tried its 3 listed
+  controllers, CC 1 put back at the plan's value, no pitch bend; an "all" patch as before; a restart left both out; a
+  crash test went on in 4 rounds with the plan); the test synth has no window, so the links themselves, the real-time
+  pictures and the time (estimated 3-5 hours for 700) are untried with Kontakt. `sso_patch_controls.json`'s 58 trill and
+  measured-tremolo keys were cut at the bracket ("… Trill (Major 2nd) (… Trill"): fixed (the map didn't use them).
+  The supervisor's "try n of m" said 4 / 2 where 5 / 3 tries are made: fixed.
+  **Two patches a group** (the owner's run on build 226, 2026-09-28 20:14: about 25 s a patch, so 700 about 5 hours;
+  "this'll take forever"): which control a controller moves is Spitfire's script's, and patches share scripts, so
+  `links_plan.py` groups them (`groups()`: the same named controls in the same folder family, the `.nki`'s folder under
+  Instruments, "Individual techniques" by the name's first part: 64 groups) and plans 2 of each (`--per-group`, spread
+  by name; `--all`: every patch): 113 patches plus the 11 in full, about an hour. `measurements_from_extract.py` gives
+  a group's other patches the links its measured ones agree on, for the controllers each changes (`linksFrom`), and
+  lists a group whose patches disagree ("links differ": measure it with `--all`). The plan is a file next to the .bat:
+  a new one needs no new build. Tried with made-up links JSONs only.
+  **The owner's links run (build 226, 2026-09-28 20:14 - 09-29 01:00, all 700 on the first plan): 2 crashes in 4 hours**
+  (121 in the fifth run, without the window): so Kontakt's window open is what keeps it from crashing, as the minidump
+  suggested. The 11 "all" patches came out complete (now 668 complete, 28 not put back, 4 with cc 23 left out). **Its
+  links were wrong**: 83 % of the changed regions started at the window's top, Kontakt's CPU and voice meters, which move
+  with every note, so every box was most of the window and the matching said CC 1 -> Mic 5 level, CC 23 -> Mic 1 level.
+  Now each change is kept as its 16-pixel cells (`PluginExtract::changedCells`, JSON `cells`, `noiseCells` from the
+  baselines, `cellSize`, `windowSize`), and `PluginExtract::controlsMoved` (was `controllersToControls` in
+  soundlibrarycheck.cpp) leaves out the cells that change by themselves (the baselines', and any cell more than 40 % of
+  a patch's tries changed) and matches by the cells' overlap. `linkedBefore` counts only JSONs with `noiseCells`, and
+  `measurements_from_extract.py` takes links only from them. Test `controlsMoved` (a Kontakt-like window: meters that
+  change every time, five sliders). Untried with Kontakt: the next links run (2 a group) is its first try.
+  **First look at that run (build 236; a folder of 53 patches the owner sent, 2026-09-29):** the cells work, but CC 23
+  came out as Mic 1 level on the Contrabass Tuba and a few others: Kontakt's own frame moves too, its header's output
+  meter (y 32-47, with the level: a mic fader changes it) and its instrument rack's slot meter (x 304, with every note),
+  and those cells aren't in 40 % of the tries. So Kontakt's frame (top 48, left 352 pixels; the window is 1377 x 679 in
+  all 53) is left out too: `controllers.frame`, written for Kontakt (`KONTAKT_FRAME_TOP/LEFT`), read by `controlsMoved`,
+  and `measurements_from_extract.py` recomputes every patch's links from its cells (`controls_moved`, the frame taken
+  as Kontakt's when a JSON has none), so build 236's data needs no new run. On the 53: CC 1 Dynamics, 11 Expression,
+  16 Mute, 17 Release, 18 Variation, 21 (and 104 on the Performance patches) Vibrato, 22-25 Mic 1-4 level, 40-46 Harp
+  Pedal 1-7; CC 7, 10, 64, 66, 103, 111 and pitch bend change the sound but no named control. Test `controlsMoved`
+  has a header meter that follows one mic: wrong without the frame, right with it.
+  **The links run finished** (build 236, 2026-09-29 06:16-07:08, 117 patches in 51 minutes, 1 Kontakt crash, retried):
+  with the earlier runs, **698 of 700 patches have their links** (113 measured, 585 from their group; no group's
+  patches disagree), kept in `sso_patch_measurements.json` (`links`, `linksFrom`): CC 1 Dynamics, 11 Expression, 16 Mute,
+  17 Release, 18 Variation (Tightness on 2 patches that have no Variation), 21 Vibrato (104 too on the Performance
+  patches), 22-25 Mic 1-4 level (fader columns x 416 / 480 / 544 / 608), 40-46 Harp Pedal 1-7. Vibraphone and Curated
+  Ensembles - Tutti - Low Wood String Stab got none. A patch's own "Mic n level" parameter sometimes changed nothing
+  (already at the value tried), and the controller then matched Mic Mix Distance (it moves faders 1 and 3): a control
+  whose cells strictly contain the controller's is no longer a match (`controlsMoved`, `controls_moved`), so the group
+  gives the mic. The 4 patches with cc 23 left out after crashes (Bass Trombone Solo / Bass Trombones a2 - Long, Celli -
+  Trill (Minor 2nd), Clarinet Solo - Long Flutter) take it from a later run of theirs that measured it though it
+  wasn't put back within its noise (`fromOtherRun`): now **672 complete, 28 not put back**.
   **When the owner hands it back**, run
   `tools/soundlibraries/read_plugin_data.py <folder or zip> [--full]`: it prints (and writes report.txt)
   the plug-in, its parameters by family, the mapping, programs, what each patch changed against the empty
@@ -1571,7 +1868,11 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
   SSO's one-drum patches ("Percussion - <kit> - <drum>", 42,
   the owner's folder of 2026-09-27; `SINGLES`): extras of the kit after the five kit patches, so a sound
   both have plays on the kit patch and only a technique the kit lacks loads the drum's own patch. Their
-  keys (`SINGLE_HITS` / `SINGLE_DRUMS`, at their defaults) are not known yet. Kickstart shows a technique with no key on C-2 (0). None of it heard in
+  keys (`SINGLE_HITS` / `SINGLE_DRUMS`, at their defaults): Snare 1 / 2 and Triangle 1 / 2 since 2026-09-28 (the
+  owner's screenshots, reviewed on https://claude.ai/artifact/CNocqS6mHvhGiJB6A4R1qw: snare Swell mf 41, Swell f 43,
+  Hit 48, Flam 49, Edge 52, Rim 55, X Stick 59, Roll 61, Snare 2 also Brush 56, Brush Roll 63; triangle Open Hit
+  1-4 48 / 53 / 59 / 64, Closed Hit 49), so a snare roll plays Snare 1 / 2's Roll, a snare's side stick Snare 1's X
+  Stick, the triangle (open / muted) Triangle 1 (test `spitfireMap`); the other 38 not yet. Kickstart shows a technique with no key on C-2 (0). None of it heard in
   Kontakt yet.
   - **Articulations from the files** (2026-09-28; the owner: scan faster without missing anything): each
     `.nki`'s top-level sample-group names under the first mic are its articulations (variants, round robins,
@@ -1582,6 +1883,15 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     Ensembles, the 12 Core / Decorative techniques) or `scan="keys"` (the 6 percussion ensembles, Harp
     glissandi; `keyScan`); *Check articulations* › *Tick the patches to scan* ticks them. The files give the
     names only: which switch value plays which is in Spitfire's script, so Kontakt still scans those 23.
+    **Per articulation, from the same files** (2026-09-29, `tools/soundlibraries/nki_articulation_details.py <library.json>`
+    → `sso_nki_articulation_details.json`, by map name, 700 patches, 1457 articulations): keys its zones cover,
+    recorded notes, variants (Vib, Non Vib, Alt Attack …), round robins, dynamic layers named in its groups (the
+    longs': crossfaded on CC1 by the script), velocity layers in its zones (the shorts' dynamics), release samples,
+    looped, median recorded length and lead-in skipped (`startMs`, ~100 ms). The same names as
+    `sso_nki_articulations.json` but the instrument-name headers (Timpani's "Timpani"), Harp glissandi's sections
+    ("Scale gliss Upwards / Fast") and `noSamples` for Long Sul G / C in the All techniques and Core patches (their
+    groups map nothing: Voices 0, as the owner heard). `sso_nki_groups.json`: each patch's raw group list under the
+    first mic (name, zones, key and velocity range) for the trees this reading doesn't cover. Names and numbers only.
     The owner's scan of 2026-09-27 20:15 (run 165) gave the 4 Curated Ensembles' values: their names in
     alphabetical order, 1 … n (reviewed on https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR; Tutti 5 = Long
     confirmed by the owner in Kontakt). They are in the map as `<Articulation>` children of their `<Patch>`
@@ -1629,6 +1939,77 @@ Violins 1 ("Violins 1 - All techniques", set to "UACC & UI only").**
     it listens only: which keys sound, no sheet. Tried here with the test synth (a map with two drum patches
     without keys and one with): the two scanned, 2.6 min each, log, summary and zip as the extract's; so about
     2 hours for the 42.
+    **The owner's run (2026-09-28 01:46, run 182, 112 min, all 42):** every patch sounds; the keys that sound and
+    their peaks are kept in `tools/soundlibraries/sso_drum_keys_sounding.json` (keys around -45 … -60 dB next to
+    loud ones are most likely the previous key still ringing). The one-drum patches do **not** follow the kits'
+    white-key layout: Snare 1 sounds on 41-53 chromatic (41-47 rising 27 → 10 dB, a ramp), then 55, 57, 59-61;
+    Triangle 1 on 48-51, 53, 55, 59-60, 64-65. So the keys can't be named from the file's order: which key plays
+    which hit needs the patch's hit list (the owner's Kickstart screenshots, as for the kits). What playback
+    needs from them: Snare 1 / 2 roll and x stick, Triangle 1 / 2 (the rest the kits already play). Now in the map (above).
+    **Pictures of the percussion windows, in the background** (the owner, 2026-09-28: "let's close off these
+    gaps"): Kickstart shows a drum's hits and keys in its window only (a one-drum patch as it loads, a patch with
+    several drums once its icon is clicked; the six ensembles' rows are 4-8 drums, Contemporary's 8th off the row's
+    left end). `Take SSO percussion pictures in background.bat` starts `MuseScore3Evo.exe --window-pictures
+    "Spitfire Symphony Orchestra"` (`[--extract-patches <file>]`; `picturesMode`, extractMode's process rules, log
+    `background extract.log`): `ArticulationCheckDialog::runHeadlessPictures` takes every keyScan patch named
+    "Percussion - …" or "Ensembles - …" (`isPicturePatch`, 48), loads it on one instance, waits until it sounds, opens
+    its window off the screen (-20000, not activated, a Tool window; `DialogWatch` leaves it: `isPictureWindow`),
+    grabs it (PrintWindow; if that is blank, a moment in the screen's corner), then clicks each drum icon
+    (`ArticulationCheck::drumIcons`: a name under each slot of a 100-pixel grid from the right, Kontakt's whole window
+    only; `pluginMouse`: WM_LBUTTONDOWN/UP posted to the plug-in's window under the point, Windows only), each picture
+    once the window has settled (`settled`: the same twice, the drum row drawn; up to 30 s). **The owner's first run
+    (2026-09-28 04:41, run 194, 6 min):** the clicks work off the screen (Traditional Orchestra's Toms: Tom 1-5 on C3
+    E3 G3 B3 D4), but the pictures were taken 3 s after opening, while Kontakt still drew its window at 1010 x 647, so
+    46 of 48 had no row and no icon; hence `settled`. Every ensemble's row shows all its drums (4, 5, 6, 8, 8, 9: as
+    many as each file has), so the wheel step was dropped. `<library> windows <date>/`: `<patch>.png`, `<patch> - n.png` (icon n from the right), pictures.json,
+    summary.txt, zip. Tried here only with the test synth (no editor: "the plug-in has no window"); the window,
+    the off-screen grab and the clicks are untried with Kontakt. Test `drumIcons`.
+    **The owner's second run (2026-09-28 05:02, run 198, 8.8 min):** all 48 patches, every drum clicked (4-9 icons per
+    ensemble). 82 hit lists, 519 hits, read by OCR and checked by eye (8 keys corrected), reviewed on
+    https://claude.ai/artifact/CKcFbayqAj3iPi9h3irUFK (the owner: correct), kept in
+    `tools/soundlibraries/sso_percussion_hits.json` (per patch and drum: hit names and keys, null = off) with its
+    notes: every technique of a one-drum patch is on at its defaults with a key (rolls, swells, FX), 395 of their 397
+    keys sounded in the 01:46 scan; Rain Sheet Swell mp plays nothing (Voices 0; its zones are like Swell mf's, so
+    it's Spitfire's script; it plays in the Unpitched - Metal kit once switched on there, the owner), Cymbal Hi Choked Hit sounds though the scan heard nothing; in the ensembles many
+    techniques are off, with no key at all, and Low Ensemble's Toms 3-5 share E2 and its Field Drum Rim / X Stick A2
+    (the owner: a real conflict; set them in Kontakt when a part needs them). The owner's decisions (2026-09-28): (a) every one-drum
+    patch's list is in the map (`SINGLE_HITS` from the JSON, `<Drum key name>` for reference; "save all the data we can
+    so future work will be easier"; the screenshots of Snare 1 / 2 and Triangle 1 / 2 checked against it); (b) not now:
+    the rolls (and other techniques) the kit patches have off are not played from the drum's own patch; **a future
+    system is to switch an off technique on in the kit patch and give it a key when a score needs it**; (c) the six
+    ensembles' lists are in the map too, as `<Drum key name>` children of their `<Patch>` (the owner: "make sure the
+    map (and reference files) is 100% complete whether used or not"). Every technique off at a patch's defaults, which
+    has no key, is an entry too: `<Drum name default="off"/>` with no key and no pitch (never played; the check and
+    the key scan skip it), in the one-drum patches, the ensembles and the kits (the kits' others, named only as the
+    kit shows them, in a comment). Test `spitfireMap`.
+    **Techniques switched on in a setup** (branch `sso-kit-unpurge`, 2026-09-30): the map's nine `"<patch> (all on)"`
+    `<Patch>`es (gen_spitfire_sso.py) set Kickstart's arrays whole (`%c2lsa` on, `%4jwcn` keys; KontaktSetup writes
+    values of another length), but what they switched on was silent: Kickstart loads only the samples it plays, and
+    switching a technique on in its window calls `purge_group` for its groups; Kontakt saves each group's purge flag,
+    and a loaded state never purges or loads again. Found by diffing Kontakt's states before and after switching
+    Drums - Low's Bass Drum Roll on in the window (kthost's editor on the VM): only `%c2lsa[3]`, `$fqm41` and the
+    flags of the tree mic's Roll / Roll HS groups (and their zones) changed. `KontaktSetup::unpurgeSwitchedOn`
+    (kontaktsetup.cpp has the layout: group private byte len-55, zone private byte 47; each group's Kickstart
+    metadata, the floats from 1e-6 in its private data: mic, hit, drum) applies Kickstart's own purge rule (a hit
+    group is purged when its drum is off, `%x4jsr`, its mic is off for its drum, bit mic-1 of `%nvmxz`, or its
+    technique is off, `%c2lsa`; it gives every hit group's flag in all nine kits and ensembles at their defaults,
+    else the program is left alone) with the values set: `fromEmpty` loads the purged groups it now plays. Nothing
+    else changes; a patch whose values switch nothing on is byte for byte as before. `madeFrom` records
+    `kickstartUnpurge` for a patch whose values set `%c2lsa` (part of what it is made from: these are made again,
+    and Kontakt's own states resaved before, silent, are never imported). Also found: Kickstart's round-robin
+    reset keyswitches (`$nd5ia` on, from `$bcqbk` 24, one key per round robin of the technique with the most that
+    is on) grew over 24-38 once the cymbals' Brush or Rain Sheet were on (13-15 round robins), so the ensembles'
+    own keys 36-37 played nothing (Metal Clangs and Traditional Orchestra "(all on)" played nothing at their test
+    key 36); and a drum off at the defaults (`%x4jsr`: Traditional Orchestra's Cymbal Med, Unpitched - Metal's two
+    triangles) never plays. The "(all on)" setups now also set `%x4jsr` all on and `$nd5ia=0`. Verified with kthost
+    offline renders on the VM: the nine setups made by this code, every key 0-127 after an all-sound-off (CC120): all
+    477 `<Drum>` keys start a sound out of silence (peaks -0 … -70 dB; the quietest are slow FX, bows and swells),
+    the switched-on ones (silent before) included, and 36-37 again. Test `kontaktKickstartUnpurge`
+    (a synthetic program; with `SSO_KICKSTART_NKI` a real kit, Drums - Low: exactly the window's groups 104-121).
+    Harp glissandi's keyswitches from the 20:15 pictures (review page https://claude.ai/artifact/DDuuuj2uqZhxb1CjgumQtD,
+    the owner: "OCR correct"): 0 Whole (selected at load, label "KEYSWITCH C0"; from the order), 1 Minor H., 2 Minor
+    M., 3 Major, 4 Pentatonic, 5 Diminished; 102-103 no change (a ring). In the map (`SCANNED_KEYS`; a `<Patch>` now
+    takes a `<Switch>` child).
     The owner's scan of the 23 (2026-09-27 20:15, run 165, with Win+D: the pictures came out, PrintWindow draws
     windows hidden that way) did the 4 Curated Ensembles (values in their names' alphabetical order: Brass 9,
     Strings 16, Tutti 13, Woodwinds 9; review page https://claude.ai/artifact/RLjhTuv28WtqGNcsF1kVMR), the 6
@@ -2121,3 +2502,171 @@ faults (all detectable faults found, nothing else flagged) and on the owner's pi
   the next starts): with the test synth that cuts the new note; with Kontakt unknown;
 - the self-hosted runner workflow is there but optional; the owner is wary of it (2026-09-28).
 
+# Part 3: the measurement branch's HANDOFF.md (merged 2026-10-02)
+
+Added verbatim when `claude/intelligent-cray-6pd4o1` (the measurement branch: VM measurements, Kickstart unpurge,
+percussion hit lists, controller / timing / rest runs) was merged into `main` on 2026-10-02. Its additions to the
+former CLAUDE.md are in Part 1, each in its section. Below: the sections it added to the former HANDOFF.md (headings
+one level deeper), then the lines it changed in older sections. "Start here" describes that branch on 2026-10-01.
+
+### Measurements for the legato-timing fixes (2026-10-01, measurement agent; the fixer works on branch `legato-timing`)
+
+The owner: a measuring agent and a fixing agent; this branch holds the measurement tools and data, `legato-timing`
+the playback changes (legato delay by interval, held notes early by their onset, shorts by real length, releases).
+- **New rest parts** (aff12be, Windows build https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36848821507,
+  on the VM as `C:\claude\MuseScore-soundlibrary-win64-aff12be`): `--rest-parts onset,shorts,legatolengths` (CLAUDE.md ›
+  "Onset, shorts' lengths, legato after short notes"); reader `tools/soundlibraries/onset_from_check.py` →
+  `sso_sound_onset.json`, `sso_short_lengths.json`, `sso_legato_lengths.json`.
+- **VM job** (task `claude-measure` → `C:\claude\measure\measure.cmd` → `job5.cmd`, log `job5-out.txt`): onset of the
+  string sections and solo winds / horn and their Performance patches (`onsetA.txt`), shorts for the fixer's set
+  (`shortsF.txt`), shorts of the rest of `onsetA.txt`, legato lengths on 6 Performance patches (`legL.txt`), then onset
+  and shorts of every other non-percussion map instrument (`onsetB.txt`) and legato lengths of the other Performance
+  patches (`legB.txt`).
+- **Regression sweeps** (6820405): `tools/playbackverify/make_sweep_scores.py` (16 instruments; convert to .mscx with
+  MuseScore 3.6, then `fix_sweep_ids.py`), rendered on the VM by task `claude-sweep` (`C:\claude\sweep\run.cmd` reads
+  `args.txt`: `<build sha> [score filter]`; outputs `C:\claude\sweep\out-<sha>\<score>`), read with
+  `tools/playbackverify/analyze_sweep.py <notes.json> <part library.wav>`.
+- **Data so far** (aef45b6): `sso_sound_onset.json` 20 patches, `sso_short_lengths.json` 24, `sso_legato_lengths.json` 6
+  (no dependence of SSO's transition on the first note's length). The note-off barely shortens SSO shorts (Spiccato
+  ~280 ms, Short 0.5 ~500-700, Short 1.0 ~500 at 0.05-0.25 s, ~950-1250 from 1 s).
+- **sso_legato_grid.json's ±12 arrivals are wrong** (centsShift's free search takes an octave for the unison: up to
+  ~700 ms). c7338f4 adds `--rest-parts legatopitches` (harmonic timing, 5 start pitches, mf, octaves usable; build
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36875559985) → `sso_legato_grid_pitches.json`.
+- **Sweep ed3a294 (fixes 1, 2, 4 + shorts by length) vs aff12be (none)**, 13 of 16 instruments (Oboe, Solo Violin,
+  Violins 1 lost: their renders were deleted before analysis): slurred pitch arrival from +86..+293 ms late to
+  -86..+89 (intervals 1-7 pooled -26..+19) but octaves 120-176 ms early (the grid's ±12); ≥ 0.5 s notes 16-56 ms
+  early overall (the grid's arrive = end of the step); held mf onsets 20-112 → -1..+67 ms; sul tasto (Long Super
+  Sul Tasto) still 240-600 ms late, flautando 145-255 (fixer then switched onsets to perceived t15). Per-note results:
+  `~/.claude/jobs/ed934dfd/tmp/cray/sweepres/<sha>/` (not in the repository); compare with `compare_sweeps.py`.
+- **Paused by the owner (2026-10-01 ~08:15 VM time).** Measured and committed: `sso_sound_onset.json` 112 patches
+  (every non-percussion map instrument), `sso_short_lengths.json` 24, `sso_legato_lengths.json` 6,
+  `sso_legato_grid_pitches.json` 8 (the string Performance patches; -12…+7 usable, mid 160-245 ms; **+12 still
+  unreliable**, median 540: the old note's reverb keeps the lower pitch's odd harmonics).
+  **Done 2026-10-01 after the resume** (build c7338f4, `job7.cmd`): `sso_legato_grid_pitches.json` 43 Performance
+  patches, `sso_short_lengths.json` 112, `sso_legato_lengths.json` 43. Grid mid times, family medians: strings 210-240,
+  woodwinds 120-130, brass 130 ms; **octaves still not trustworthy** (+12: 375-550, the reverb; -12: 70-160, the new
+  lower note's own harmonics rise before the step): use each patch's other intervals for ±12.
+  **Resume**: on the VM, `C:\claude\measure\job6.cmd` with its onsetB step removed (restBefore skips what is done;
+  use build c7338f4 for every step, aff12be is deleted), task `claude-measure`; read every results folder since
+  2026-10-01 0329 in `Documents\MuseScore Sound Library Check` with `onset_from_check.py`.
+- **Sweep 3f0cda5 vs aff12be** (all 16): held mf onsets -14..+57 ms; sul tasto 45-185 (Violins 1 123, Violas 185),
+  flautando -39..+223 (Violins 1 223, Violas 160); slurs -7…+7 pooled within -16..+9 but octaves still early (-12:
+  -86, +12: -121); strings' sixteenths +59..+84 late, ≥ 0.5 s notes early in Basses (to -156), Horn, Violas,
+  Violins 2 (-51..-76). Rerun: `make_sweep_scores.py`, convert, `fix_sweep_ids.py`, copy to `C:\claude\sweep\scores`,
+  `args.txt` = build shas one per line, `schtasks /Run /TN claude-sweep`, then `sweep/fetch.sh <sha>` (in the job
+  tmp `~/.claude/jobs/ed934dfd/tmp/cray/`; it deletes each render's audio once analysed) and `compare_sweeps.py`.
+- **Sweep e6f44e6 (claude/intelligent-volta-gx7gmw: onsets from the 112, string grid) vs 3f0cda5**: slurs 1-7 pooled
+  -6..+19; string octaves -86 → -8, winds -84 and brass -111 unchanged (no grid then); Basses / Violas / Violins 2
+  long slurred notes no longer early (Violins 2 now +32..+52 late at every length); strings' sixteenths +19..+62;
+  slurred sixteenths' level spread 4.5-12.4 dB in every instrument, unchanged; sul tasto / flautando -10 dB time
+  median 253 → 149 ms but over-shifted in places (Violins 2 sul tasto high -399 at -15 dB, Celli flautando -189 /
+  -216) and still late in others (Violas sul tasto mid 567, Violins 1 flautando low 536 at -10 dB).
+- **Octaves timed by templates** (f0bef96; the coordinator: a reliable +12): each frame fitted as a A + b B of the two
+  notes' own spectra, the second note's share of the power at 10 / 50 / 90 % (`tLeaveMs` / `tMidMs` / `tArriveMs`, appended
+  to `sso_legato_grid_pitches.json`'s rows; `arriveTMs` in the sweep analysis). Synthetic slurs with a known answer
+  (`tools/playbackverify/octave_synth_check.py`): -40..+60 ms for every interval and hall level, where the harmonic
+  ratio was +75..+320 late for +12 and 60-70 early for -12. On real SSO it agrees with the harmonic times for
+  non-octaves (grid: median +10 ms; sweep: +1, 80 % within ±50). Grid mid by templates: brass +12 130 / -12 140 /
+  others 140; woodwinds 125 / 170 / 140; strings 350 / 210 / 240 (string upward octaves really are ~100 ms slower).
+  The a289780 sweep re-read with templates: octaves strings +12 +60 / -12 +40, woodwinds -50 / +60, brass -70 / +90.
+- **VM IP** changed to 172.29.253.109 (2026-10-01 host reboot). Disk is tight: `sweep/fetch.sh` deletes each render's
+  audio once analysed; keep VM outputs under ~2 GB.
+
+### Start here (2026-10-01: the cloud session ends, the work moves to the owner's Debian VM)
+
+- **Branch**: `claude/intelligent-cray-6pd4o1`, last commit e82a202, everything pushed, `main` merged in on
+  2026-09-30 (341aa78). Work on your own branch; the owner decides what goes to `main` (CLAUDE.md › Branches).
+  To continue this session's conversation itself: `claude --teleport session_01DpUCQZEy2ysGW5HaKShRvm` in a clean
+  clone (same claude.ai account).
+- **Latest Windows build**: run 267, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/36783186961
+  (artifact `MuseScore-soundlibrary-win64-eddd1bc`). Windows builds come from `[windows-build]` in a pushed commit
+  message on the branch (`.github/workflows/test_soundlibrary_windows.yml`). Name builds by run number and link.
+- **What runs where**: Kontakt and SSO run only on the owner's Windows PC. The VM (like the cloud container before)
+  can build MuseScore, run the tests with the test synth (`mtest/libmscore/soundlibrary/testsynth`) and read the
+  zips the owner sends back; it can't play SSO. Build steps: CLAUDE.md › Building (Linux container); headless runs
+  with the test synth: CLAUDE.md › Load times (isolated `HOME`, `~/.vst3/mstestsynth.vst3` linked, …).
+- **The owner's direction (2026-09-30)**: "your job is only to collect data". The extraction is done (below); the
+  playback problems it found are listed for whoever builds playback next, not fixed.
+- **Background runs on Windows** (bat files next to the exe, each with its own log in Documents/MuseScore Sound
+  Library Check, supervised: a crash or hang is retried, then that patch left out): `Measure what's left of SSO in
+  background.bat` (dynamics, then timing, of every sound; skips what earlier runs did, as long as their folders are
+  still in Documents/MuseScore Sound Library Check). A run that looks stuck usually isn't: Performance patches take
+  12-16 s each. Hand-backs are zips; read them with `tools/soundlibraries/dynamics_from_check.py` and
+  `timing_from_check.py` (derived numbers only go into the repository: it is public).
+- **Gotcha**: a `.bat.in` line inside `if ( … )` must not contain parentheses (an `echo` with "(…)" closed the block
+  and the window vanished at once, run 266).
+- **Measured on the Windows test VM (2026-09-30/10-01; the owner: "measure everything left in the VM, I'm sick of
+  doing everything manually")**: the VM (see the memory note / CLAUDE.md) runs Kontakt + SSO itself now; scheduled task
+  `claude-measure` → `C:\claude\measure\job.cmd`. What the old "Not measured" list had:
+  1-5. `--check-rest` (CLAUDE.md › The rest of every sound): every sound of all 700 patches across its range at pp / mf /
+     ff, 8 repeats (round robins), every control at 0-1 in 5 steps, a 9 × 14 legato grid on 45 patches (Horn Solo /
+     Horns a2 - Legato and Oboe Principal included) → `sso_sound_range.json`, `sso_sound_repeats.json`,
+     `sso_sound_controls.json`, `sso_legato_grid.json` (`rest_from_check.py`).
+  6. Percussion techniques off at the defaults: Kickstart's `%c2lsa` / `%4jwcn` (+ `%x4jsr`, `$nd5ia`) and the groups'
+     purge flags (`KontaktSetup::unpurgeSwitchedOn`); 9 measurement-only "(all on)" `<Patch>`es switch every off
+     technique on at a free key; their dynamics, timing and rest measured with build 0e9f0c4: all 258 switched-on techniques sound (in the rest check Tam Tam FX Scrape and Wind Gong FX Bow, slow swells, missed its 10 dB "sounds" test).
+  7. Vibraphone: links as its group's (CC 11 Expression, CC 23 Mic 2 level; Kickstart doesn't redraw offline). Low Wood
+     String Stab: no CC moves a named control (only Kontakt's volume / pan and CC 111). `sso_patch_measurements.json`.
+  Still not measured: parameters only in 5 steps; legato from the test pitch only; the controls' effect at the test
+  pitch only.
+
+### For the next agent: playback problems the extraction found (2026-09-30; not fixed, the owner: "your job is only to collect data")
+
+All numbers are in `tools/soundlibraries/` (see CLAUDE.md for how each was measured). Ask the owner before building any.
+1. **Slurred notes sound late.** On the 42 Performance patches the second note of a slur reaches its pitch 70-430 ms
+   after its note-on (median 185; `sso_articulation_timing.json`, `legato`), in one step, with a 4-22 dB dip. Starting
+   slurred notes earlier by the patch's own delay would put them in time.
+2. **Velocity barely changes SSO's legato speed** (20 / 64 / 110 give the same transition on most patches). The renderer
+   keeps MS4's velocity for legato "because Spitfire's legato speed is on velocity" (CLAUDE.md, Shorts): that reason
+   doesn't hold for SSO; velocity can be used for something else or left.
+3. **Slow attacks.** Held notes reach full level 175 ms after the note-on (median), Violas ~300 ms, Flautando / Sul Tasto
+   / Harmonics up to 1 s; brass and woodwinds 60-120 ms (`fullMs`). Same remedy as 1, per articulation.
+4. **Shorts ring on.** A short's body (to 20 dB under its peak) is 265-2670 ms, median ~1 s, the hall in the recording;
+   a 0.1 s note sounds 370-1000 ms (`bodyMs`, `shortNoteBodyMs`). Matters for choosing Short 0.5 / 1.0 by length
+   (`<Articulation length>` uses Spitfire's nominal 0.5 / 1.0 s).
+5. **Releases** ring 0.6-2.9 s after the note-off (`releaseMs`, median 855 ms); a lane (tuning copy) is reused after
+   `tail` 1.5 s, shorter than some releases (Flautando 2.9 s, Sul Tasto 2 s, Super Sul Tasto 2.4 s).
+6. **Microtones by pitch bend**: the Performance patches and Horn Solo / Horns a2 - Legato bend ±100 cents linearly,
+   Kickstart percussion and some solo strings ±195 (`sso_patch_measurements.json`, `pitchBend`). The owner's first choice
+   (2026-09-27) was pitch bend; varispeed was built because the All techniques patches don't bend.
+7. **Controller links** (`sso_patch_measurements.json`, `links`): CC 16 Mute, 17 Release, 18 Variation (Tightness on 2),
+   21 (and 104 on Performance) Vibrato, 22-25 Mic 1-4 level, 40-46 Harp Pedal 1-7, besides CC 1 / 11. The map drives
+   these as Kontakt parameters by title; CCs would also work.
+8. **Patches that play nothing where the map might send notes**: Long Sul G / Sul C in Violins 1 / 2 and Celli All
+   techniques and Core (`noSamples` in `sso_nki_articulation_details.json`); Rain Sheet Swell mp; Low Ensemble's Toms 3-5
+   and Field Drum Rim / X Stick share keys (the owner: a real conflict).
+9. **Kit techniques that are off** at the kits' defaults (rolls, swells …) are only in the one-drum patches; the owner's
+   plan: switch one on in the kit when a score needs it (CLAUDE.md, Kits).
+
+### How complete the extraction is (2026-09-30)
+
+- **From the files (all 700 `.nki`)**: every patch's groups, zones, key and velocity ranges, articulation names, round
+  robins, dynamic / velocity layers, release groups, loops, lengths; the 279 archives' 432,829 sample names. Done.
+- **Switching**: every map value checked by picture and ear; the 12 Core / Decorative and 4 Curated patches scanned;
+  Harp glissandi keyswitches; every percussion hit list (82 lists, 519 hits). Done.
+- **Named controls** of all 700 patches; **controllers and parameters** measured on all 700 (672 put back within their
+  noise, 28 measured but not put back: round-robin percussion, Fanfares, Flutter); **links** on 698 (Vibraphone and Curated
+  Tutti - Low Wood String Stab have none); **pitch bend** on all 700. Done, apart from those 2 links.
+- **Dynamics curves**: every sound of all 700 patches (1804: articulations, 504 drum hits, one-sound patches;
+  `sso_sound_dynamics.json`, build 261's run, 2026-09-30). Done.
+- **Timing and legato**: every sound of all 700 patches (`sso_articulation_timing.json`, run 267's build, 2026-09-30).
+  Done, but for the slur transitions of Horn Solo - Legato, Horns a2 - Legato and Oboe Principal - Total Performance
+  (timed as one sound: the run measures a slur only on an articulation whose first technique is legato).
+- **Parameters** measured at 0 and 1 only, not the curve between.
+
+### Where things were (2026-09-25; superseded by "Start here")
+
+- Branch then: `main`; latest Windows build then: run 11 (6bc3a62).
+
+### Lines the measurement branch changed in older HANDOFF.md sections
+
+In "Tuning and Ethanol bar 14", the kits' item became:
+
+- the kits' hit lists: done (2026-09-26, the owner's screenshots); the 42 one-drum patches: scanned in the
+  background (2026-09-28 01:46, which keys sound: `sso_drum_keys_sounding.json`); they don't follow the `.nki` group
+  order, so keys are named from the owner's hit-list screenshots. Snare 1 / 2 and Triangle 1 / 2 are in the map (the
+  sounds the kit patches lack at their defaults); the other 38 and the 6 ensembles: read from the owner's picture run of 2026-09-28 05:02 and confirmed, in `tools/soundlibraries/sso_percussion_hits.json` (with notes on conflicts and techniques that are off); the 42 one-drum lists and the 6 ensembles' are in the map (reference), with every technique that is off as a key-less entry; next, when a score needs a technique a kit patch has off (the rolls of bongos, congas, bass drum, field drum, cymbals, tam-tam, thunder sheet, tambourine, sleigh bells, castanets; Rain Sheet Swell mp …): a system that switches it on in the kit patch and gives it a key (the owner, 2026-09-28: to be built later); Harp glissandi's modes: in the map (reviewed); the three-mic patches' mics: done (Close, Tree, Ambient);
+
+In "Things only the cloud session could do", added:
+
+- Every controller and pitch bend on all 700 patches: `Measure SSO controllers in background.bat` (offline, no window; the owner to run it and hand back the extract zips; read with `read_plugin_data.py`). The first run (build b903d9a) crashed in Kontakt 16 s into Violins 1: it went offline while the patch still loaded; now only after the patch sounds in real time. The second (build fe5d050) crashed on Violas and put CC 7 back to 0 (silence, so later controllers read nothing); now each controller's own value is searched and a supervisor process restarts the run after a crash or hang, leaving that patch out (see CLAUDE.md). **Done (2026-09-28 18:48): 695 of 700 measured**, kept as `tools/soundlibraries/sso_patch_measurements.json`; the 5 then missing (Cimbassi a2 - Long, Curated Woodwind Ensembles, Bass Trombone Solo - Fall, Field Drum, Cimbassi a2 - Long Alt) came in later runs: all 700 are in `sso_patch_measurements.json` (672 complete, 28 not put back). Done (2026-09-29): 698 of 700 patches' controller links in `sso_patch_measurements.json` (see CLAUDE.md › The links run finished); the 4 with cc 23 left out now take it from a later run (672 complete, 28 not put back); per-articulation key ranges, round robins, dynamic / velocity layers, releases and lengths from the `.nki` files in `sso_nki_articulation_details.json` (CLAUDE.md › Articulations from the files). Timing per articulation and legato transitions: built (2026-09-29), `Measure SSO timing in background.bat` (CLAUDE.md › Timing, in the background); done (build 254, 2026-09-30: 96 patches in 17 minutes; the first run on build 249 had hung, now supervised and resumable); kept as `sso_articulation_timing.json`. Not yet used by playback: slurred notes on the Performance patches sound their pitch 70-430 ms after the note-on (median 185; velocity barely changes it), so starting them earlier per patch would put them in time; attacks of 100-1000 ms likewise (ask the owner first). Optional, not built: parameters between 0 and 1, loudness curves beyond the ~160 patches. Before that (run 226's links were wrong, box-based): the owner ran `Link SSO controllers in background.bat` again on the build with window cells (which named control each controller moves on 2 patches of each of 64 groups, 113, everything on the 11 left incomplete; see CLAUDE.md › Links run, › Two patches a group) and hands back the extract folders and the log; then `measurements_from_extract.py` on them and the earlier ones. Open: the Performance patches bend ±100 cents linearly, so their microtones could use pitch bend instead of varispeed (the owner's first choice); ask before building it.

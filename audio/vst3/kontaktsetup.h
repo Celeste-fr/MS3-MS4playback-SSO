@@ -32,6 +32,7 @@
 #define __KONTAKTSETUP_H__
 
 #include <map>
+#include <vector>
 
 #include <QByteArray>
 #include <QString>
@@ -45,10 +46,26 @@ QByteArray fastlzDecompress(const QByteArray& src, int size, bool* ok);
 QByteArray fastlzCompress(const QByteArray& data);
 
 // Kontakt's state with the .nki's patch loaded, from Kontakt's state with nothing loaded;
-// values: script values to set (name -> value; only where the patch's script has that name with
-// a value of the same length); valuesSet: how many were set
+// values: script values to set (name -> value, as Kontakt saves it: an array's elements separated
+// by single spaces; where the patch's script has that name, of any length: a value longer or
+// shorter than the saved one, as a Kickstart array with techniques switched on, resizes its
+// entry); valuesSet: how many were set
+// A Kickstart percussion patch's techniques, drums or mics switched on by values (%c2lsa, %x4jsr, %nvmxz
+// against the .nki's): their sample groups loaded too (unpurgeSwitchedOn); groupsLoaded: how many
 QByteArray fromEmpty(const QByteArray& emptyComponent, const QByteArray& nki, const QString& nkiFolder,
-                     const std::map<QString, QByteArray>& values, QString* error, int* valuesSet = nullptr);
+                     const std::map<QString, QByteArray>& values, QString* error, int* valuesSet = nullptr,
+                     int* groupsLoaded = nullptr);
+
+// Kickstart (the script of every SSO percussion patch) loads only the samples it plays, and a state keeps
+// which groups are purged: a program (a PROGRAM body, its script values set) with the hit groups loaded
+// that Kickstart's own rule loads with its values (technique on: %c2lsa, drum on: %x4jsr, the drum's mic
+// on: %nvmxz) but not with defaults (the .nki's values) and that are purged; their zones too; every length
+// unchanged. The program as it was when it isn't Kickstart's (or the rule doesn't give its flags at the
+// defaults) or nothing is switched on. groups: how many groups were loaded
+QByteArray unpurgeSwitchedOn(const QByteArray& program, const std::map<QString, QByteArray>& defaults,
+                             int* groups = nullptr);
+// a program's purged groups (their indexes in its group list)
+std::vector<int> purgedGroups(const QByteArray& program);
 
 // what is in a state or an .nki (for checks and tests)
 QByteArray slotProgram(const QByteArray& component, QString* error);   // a state's first slot's program
@@ -61,8 +78,8 @@ QByteArray presetTail(const QByteArray& data);  // what follows a state's or an 
 // as Kontakt 8 writes it (its own state, which it loads about 20 times faster); -1: none, unreadable
 int sampleListVersion(const QByteArray& component);
 
-// a state with its first slot's script values set (as fromEmpty sets them in an .nki's program: only
-// where the patch's script has that name with a value of the same length), everything else kept (so
+// a state with its first slot's script values set (as fromEmpty sets them in an .nki's program: where
+// the patch's script has that name, of any length), everything else kept (so
 // Kontakt's own state stays its own: its sample list, its program as it saved it). For the load
 // times measurement's probe of the patch's saved script values (which ones unload samples)
 QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& values, QString* error,

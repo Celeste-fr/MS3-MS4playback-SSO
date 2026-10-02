@@ -79,6 +79,130 @@ QRect PluginExtract::changedRect(const QImage& a, const QImage& b)
       return r.isNull() ? r : r.adjusted(-16, -16, 16, 16) & x.rect();
       }
 
+// the cells (CELL x CELL pixels, numbered by row: row * columns + column) where a and b differ: where a change is,
+// pixel by pixel, not one box around all of it (Kontakt's CPU and voice meters at the window's top move with every
+// note, and a box around them and a slider takes in most of the window: the owner's links run of 2026-09-28)
+QJsonArray PluginExtract::changedCells(const QImage& a, const QImage& b)
+      {
+      QJsonArray cells;
+      if (a.isNull() || b.isNull() || a.size() != b.size())
+            return cells;
+      const QImage x = a.convertToFormat(QImage::Format_RGB32);
+      const QImage y = b.convertToFormat(QImage::Format_RGB32);
+      const int columns = (x.width() + CELL - 1) / CELL;
+      std::vector<char> changed(size_t(columns * ((x.height() + CELL - 1) / CELL)), 0);
+      for (int row = 0; row < x.height(); ++row) {
+            const QRgb* p = reinterpret_cast<const QRgb*>(x.constScanLine(row));
+            const QRgb* q = reinterpret_cast<const QRgb*>(y.constScanLine(row));
+            for (int col = 0; col < x.width(); ++col)
+                  if (pixelDiffers(p[col], q[col]))
+                        changed[size_t((row / CELL) * columns + col / CELL)] = 1;
+            }
+      for (size_t i = 0; i < changed.size(); ++i)
+            if (changed[i])
+                  cells.append(int(i));
+      return cells;
+      }
+
+//---------------------------------------------------------
+//   controlsMoved
+//    which named control each controller moves: the window cells a controller's 0 -> 127 changed against those each
+//    parameter's 0 -> 1 changed (PluginExtract::changedCells), without the cells that change by themselves (the
+//    baselines' noiseCells, and any cell more than 40 % of the tries changed: Kontakt's CPU and voice meters move with
+//    every note), the most overlap (intersection over union) over 0.3; or a parameter the controller's own try changed.
+//    (It compared one box around each change until 2026-09-29: the meters made every box most of the window, and the
+//    owner's links run matched nonsense, CC 1 -> Mic 5 level). The cells of the host plug-in's own frame are left out
+//    too (controllers' "frame": [top, left] in pixels; Kontakt's header, whose output meter moves with a mic's level,
+//    and its instrument rack, whose slot meter moves with every note: run 236's CC 23 -> Mic 1 level on the tuba)
+//---------------------------------------------------------
+
+QJsonArray PluginExtract::controlsMoved(const QJsonObject& controllers, const QJsonObject& parameters)
+      {
+      const QJsonArray frame = controllers.value("frame").toArray();
+      const int frameTop = frame.size() == 2 ? frame[0].toInt() : 0;
+      const int frameLeft = frame.size() == 2 ? frame[1].toInt() : 0;
+      const QJsonArray size = controllers.value("windowSize").toArray();
+      const int cell = controllers.value("cellSize").toInt(CELL);
+      const int columns = size.size() == 2 ? (size[0].toInt() + cell - 1) / cell : 0;
+      auto inFrame = [&](int x) {
+            return columns > 0 && ((x / columns) * cell < frameTop || (x % columns) * cell < frameLeft);
+            };
+      auto cellsOf = [](const QJsonObject& e) {
+            std::set<int> c;
+            for (const QJsonValue& v : e.value("cells").toArray())
+                  c.insert(v.toInt());
+            return c;
+            };
+      const QJsonArray ce = controllers.value("effects").toArray();
+      const QJsonArray pe = parameters.value("effects").toArray();
+      std::set<int> noise;
+      for (const QJsonObject* o : { &controllers, &parameters })
+            for (const QJsonValue& v : o->value("noiseCells").toArray())
+                  noise.insert(v.toInt());
+      std::map<int, int> seen;
+      int tries = 0;
+      for (const QJsonArray* list : { &ce, &pe })
+            for (const QJsonValue& v : *list) {
+                  const std::set<int> c = cellsOf(v.toObject());
+                  tries += !c.empty();
+                  for (int x : c)
+                        ++seen[x];
+                  }
+      if (tries >= 5)
+            for (const auto& s : seen)
+                  if (s.second * 10 > tries * 4)
+                        noise.insert(s.first);
+      auto clean = [&](const QJsonObject& e) {
+            std::set<int> c;
+            for (int x : cellsOf(e))
+                  if (!noise.count(x) && !inFrame(x))
+                        c.insert(x);
+            return c;
+            };
+      QJsonArray out;
+      for (const QJsonValue& cv : ce) {
+            const QJsonObject c = cv.toObject();
+            const std::set<int> cc = clean(c);
+            QJsonObject m;
+            m["cc"] = c.value("cc");
+            double best = 0;
+            for (const QJsonValue& pv : pe) {
+                  const QJsonObject p = pv.toObject();
+                  // (a parameter that the controller's own try changed: that is the answer)
+                  for (const char* key : { "parametersLowToHigh", "parametersBeforeToLow" })
+                        for (const QJsonValue& x : c.value(key).toArray())
+                              if (x.toObject().value("id") == p.value("id")) {
+                                    best = 2;
+                                    m["control"] = p.value("title");
+                                    m["id"] = p.value("id");
+                                    m["by"] = "parameter";
+                                    }
+                  const std::set<int> pc = clean(p);
+                  if (cc.empty() || pc.empty())
+                        continue;
+                  // (a control that moves more than the controller does, Mic Mix Distance's faders against one mic's, isn't
+                  // what it moves: the patch's own mic parameter shows nothing when it was already at the value tried)
+                  if (pc.size() > cc.size() && std::includes(pc.begin(), pc.end(), cc.begin(), cc.end()))
+                        continue;
+                  int inter = 0;
+                  for (int x : cc)
+                        inter += pc.count(x);
+                  const double iou = double(inter) / double(cc.size() + pc.size() - inter);
+                  if (iou > 0.3 && iou > best) {
+                        best = iou;
+                        m["control"] = p.value("title");
+                        m["id"] = p.value("id");
+                        m["by"] = QString("window cells %1").arg(std::round(iou * 100) / 100);
+                        }
+                  }
+            if (!m.contains("control"))
+                  m["control"] = QJsonValue();
+            m["cells"] = int(cc.size());
+            out.append(m);
+            }
+      return out;
+      }
+
 //---------------------------------------------------------
 //   level
 //---------------------------------------------------------
@@ -166,13 +290,31 @@ static std::vector<double> logSpectrum(const std::vector<float>& stereo, double 
       return spec;
       }
 
+static const double SHIFT_STEP = 5.0;                                            // cents a bin
+static const int SHIFT_BINS = int(std::log2(5000.0 / 40.0) * 1200.0 / SHIFT_STEP);
+
+std::vector<double> PluginExtract::pitchSpectrum(const std::vector<float>& clip, double sampleRate)
+      {
+      return logSpectrum(clip, sampleRate, SHIFT_STEP, SHIFT_BINS);
+      }
+
 double PluginExtract::centsShift(const std::vector<float>& reference, const std::vector<float>& shifted,
                                  double sampleRate, double maxCents, double* confidence)
       {
-      const double step = 5.0;                  // cents a bin
-      const int bins = int(std::log2(5000.0 / 40.0) * 1200.0 / step);
-      const std::vector<double> a = logSpectrum(reference, sampleRate, step, bins);
+      return centsShift(pitchSpectrum(reference, sampleRate), shifted, sampleRate, maxCents, confidence);
+      }
+
+double PluginExtract::centsShift(const std::vector<double>& a, const std::vector<float>& shifted,
+                                 double sampleRate, double maxCents, double* confidence)
+      {
+      const double step = SHIFT_STEP;
+      const int bins = SHIFT_BINS;
       const std::vector<double> b = logSpectrum(shifted, sampleRate, step, bins);
+      if (int(a.size()) != bins) {
+            if (confidence)
+                  *confidence = 0;
+            return 0;
+            }
       const int maxShift = int(maxCents / step);
       std::vector<double> score(size_t(2 * maxShift + 1), -1.0);
       int best = 0;
@@ -398,6 +540,18 @@ bool restartNote(Vst3Plugin* p, const PluginExtract::Settings& s, PluginExtract:
       return run(400, nullptr);
       }
 
+// a background run's step: its key noted (a crash names it), or false when it is to be left out
+bool stepAllowed(const PluginExtract::Settings& s, const QString& key, QJsonArray* skipped)
+      {
+      if (s.skip && s.skip(key)) {
+            skipped->append(key);
+            return false;
+            }
+      if (s.step)
+            s.step(key);
+      return true;
+      }
+
 double levelDistance(const PluginExtract::Level& a, const PluginExtract::Level& b)
       {
       const bool both = a.db > -90 && b.db > -90;
@@ -415,6 +569,9 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
       QJsonObject out;
       Context c = makeContext(p, s, run, grab);
       auto stop = [&]() { if (cancelled) *cancelled = true; out["cancelled"] = true; return out; };
+      QJsonArray skippedAfterCrash;
+      if (s.step)
+            s.step("controllers: baseline");
 
       // what changes by itself: the window (meters …) and the sound (vibrato, round robins)
       Level a, b;
@@ -426,6 +583,11 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
       const QImage g2 = grab();
       const int pixelNoise = g1.isNull() ? 0 : differingPixels(g1, g2);
       const int pixelThreshold = std::max(30, 3 * pixelNoise);
+      if (!g1.isNull()) {
+            out["windowSize"] = QJsonArray { g1.width(), g1.height() };
+            out["cellSize"] = CELL;
+            out["noiseCells"] = changedCells(g1, g2);
+            }
       const double soundNoise = levelDistance(a, b);
       const double soundThreshold = std::max(1.5, 3 * soundNoise);
       // a sound averaged over some notes (round robins differ in level): the patch as it is (a
@@ -457,11 +619,19 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             out["warning"] = "the held note made no sound: the sound column means nothing";
 
       std::vector<int> ccs;
-      for (int cc = 0; cc < 120; ++cc)
-            if (cc != s.switchCC)
-                  ccs.push_back(cc);
-      ccs.push_back(AFTERTOUCH);
-      ccs.push_back(PITCHBEND);
+      if (!s.onlyControllers.empty()) {
+            for (int cc : s.onlyControllers)
+                  if (cc != s.switchCC)
+                        ccs.push_back(cc);
+            out["onlyControllers"] = int(ccs.size());
+            }
+      else {
+            for (int cc = 0; cc < 120; ++cc)
+                  if (cc != s.switchCC)
+                        ccs.push_back(cc);
+            ccs.push_back(AFTERTOUCH);
+            ccs.push_back(PITCHBEND);
+            }
 
       QJsonArray effects;
       QJsonArray none;
@@ -474,6 +644,8 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                   notMapped.append(cc);
                   continue;
                   }
+            if (!stepAllowed(s, QString("cc %1").arg(cc), &skippedAfterCrash))
+                  continue;
             const QString name = controllerName(cc);
             if (status)
                   status(QString("controller %1%2 (%3 of %4)").arg(cc < 128 ? QString("CC %1").arg(cc) : name)
@@ -486,7 +658,9 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             Level l0, lLow, lHigh;
             if (!run(s.listen, &l0))
                   return stop();
-            const QImage g0 = grab();
+            // (its own value known from an earlier run: no search, so no picture of it as it was)
+            const auto known = s.patchValues.find(cc);
+            const QImage g0 = known == s.patchValues.end() ? grab() : QImage();
 
             // each value on a new note, measured as long after its start as l0 (a decaying
             // sample would otherwise sound softer at every try)
@@ -541,6 +715,8 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             const QRect r = window ? changedRect(gLow, gHigh) : QRect();
             if (!r.isNull())
                   e["region"] = QJsonArray { r.x(), r.y(), r.width(), r.height() };
+            if (window)
+                  e["cells"] = changedCells(gLow, gHigh);
             e["levelDb"] = QJsonArray { round1(l0.db), round1(lLow.db), round1(lHigh.db) };
             e["brightnessDb"] = QJsonArray { round1(l0.brightness), round1(lLow.brightness), round1(lHigh.brightness) };
             e["balanceDb"] = QJsonArray { round1(l0.balance), round1(lLow.balance), round1(lHigh.balance) };
@@ -577,7 +753,11 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
             // back to the patch's own value: the one that looks (else sounds) most like before
             int best = -1;
             double bestDistance = 0;
-            if (cc == PITCHBEND)
+            if (known != s.patchValues.end()) {
+                  best = known->second;
+                  e["patchValueMatch"] = "an earlier run's";
+                  }
+            else if (cc == PITCHBEND)
                   best = 64;
             else if (window || sound) {
                   std::map<int, double> tried;
@@ -655,11 +835,23 @@ QJsonObject PluginExtract::controllers(Vst3Plugin* p, const Settings& s, Run run
                                      gLow.copy(r), gHigh.copy(r) });
                   }
             }
+      // the patch as it was at the start? (each controller went back to the value that sounds or looks
+      // like before; the value its parameter had can be one Kontakt never received: CC 7 at 0 is silence,
+      // the owner's background run of 2026-09-28 08:54 measured every later controller on a silent patch)
+      if (s.step)
+            s.step("controllers: end");
+      Level end;
+      if (!listen(6, &end))
+            return stop();
+      out["endDb"] = QJsonArray { round1(end.db), round1(end.brightness), round1(end.balance) };
+      out["endDistanceDb"] = round1(levelDistance(end, baseline));
       p->midi(ME_NOTEON, s.channel, s.pitch, 0);
       run(300, nullptr);
       out["effects"] = effects;
       out["noEffect"] = none;
       out["notMapped"] = notMapped;
+      if (!skippedAfterCrash.isEmpty())
+            out["skippedAfterCrash"] = skippedAfterCrash;
       return out;
       }
 
@@ -696,6 +888,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
       for (const Vst3Plugin::Parameter& par : all) {
             if (c.controllerParams.count(par.id) || families[family(par.title)] > 8)
                   continue;
+            if (!s.onlyParameters.isEmpty() && !s.onlyParameters.contains(par.title.trimmed(), Qt::CaseInsensitive))
+                  continue;
             if (par.flags & (READ_ONLY | PROGRAM_CHANGE | BYPASS)) {
                   skipped.append(QString("%1 %2 (%3)").arg(par.id).arg(par.title)
                                  .arg(par.flags & READ_ONLY ? "read only" : par.flags & PROGRAM_CHANGE ? "program change" : "bypass"));
@@ -709,6 +903,9 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
             tried.resize(200);
             }
 
+      QJsonArray skippedAfterCrash;
+      if (s.step)
+            s.step("parameters: baseline");
       Level a, b;
       QImage g1;
       if (!c.learnSelfChanging([&]() {
@@ -719,7 +916,10 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
                   }))
             return stop();
       out["selfChangingParameters"] = c.selfChangingList();
-      const int pixelThreshold = std::max(30, 3 * (g1.isNull() ? 0 : differingPixels(g1, grab())));
+      const QImage g2 = g1.isNull() ? QImage() : grab();
+      const int pixelThreshold = std::max(30, 3 * (g1.isNull() ? 0 : differingPixels(g1, g2)));
+      if (!g1.isNull())
+            out["noiseCells"] = changedCells(g1, g2);
       const double soundThreshold = std::max(1.5, 3 * levelDistance(a, b));
 
       QJsonArray effects;
@@ -727,6 +927,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
       int done = 0;
       for (const Vst3Plugin::Parameter& par : tried) {
             ++done;
+            if (!stepAllowed(s, QString("parameter %1").arg(par.id), &skippedAfterCrash))
+                  continue;
             if (status)
                   status(QString("parameter %1 \"%2\" (%3 of %4)").arg(par.id).arg(par.title).arg(done).arg(tried.size()));
             std::set<unsigned> skip { par.id };
@@ -781,6 +983,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
             const QRect r = window ? changedRect(gLow, gHigh) : QRect();
             if (!r.isNull())
                   e["region"] = QJsonArray { r.x(), r.y(), r.width(), r.height() };
+            if (window)
+                  e["cells"] = changedCells(gLow, gHigh);
             e["levelDb"] = QJsonArray { round1(lLow.db), round1(lHigh.db) };
             e["brightnessDb"] = QJsonArray { round1(lLow.brightness), round1(lHigh.brightness) };
             e["balanceDb"] = QJsonArray { round1(lLow.balance), round1(lHigh.balance) };
@@ -797,6 +1001,8 @@ QJsonObject PluginExtract::parameters(Vst3Plugin* p, const Settings& s, Run run,
       run(300, nullptr);
       out["effects"] = effects;
       out["noEffect"] = none;
+      if (!skippedAfterCrash.isEmpty())
+            out["skippedAfterCrash"] = skippedAfterCrash;
       return out;
       }
 
@@ -829,8 +1035,11 @@ QJsonObject PluginExtract::switches(Vst3Plugin* p, const Settings& s, Run run, S
       c.reported(skip);
       Snapshot last = c.snapshot();
       QJsonObject changes;
+      QJsonArray skippedAfterCrash;
       int any = 0;
       for (int value : s.switchValues) {
+            if (!stepAllowed(s, QString("switch %1").arg(value), &skippedAfterCrash))
+                  continue;
             if (status)
                   status(QString("switch value %1").arg(value));
             p->midi(ME_CONTROLLER, s.channel, s.switchCC, value);
@@ -854,6 +1063,8 @@ QJsonObject PluginExtract::switches(Vst3Plugin* p, const Settings& s, Run run, S
             }
       out["values"] = changes;
       out["valuesChangingParameters"] = any;
+      if (!skippedAfterCrash.isEmpty())
+            out["skippedAfterCrash"] = skippedAfterCrash;
       p->midi(ME_CONTROLLER, s.channel, s.switchCC, s.switchValues.front());
       run(300, nullptr);
       return out;

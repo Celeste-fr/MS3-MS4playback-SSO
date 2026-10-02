@@ -147,7 +147,7 @@ switch value of each articulation. For example:
   patches: never chosen by notation, but set up and checked by *Check articulations*. `scan`
   (`values` or `keys`) marks one whose switch values or keys are still to be found (*Tick the
   patches to scan*); `pitch` is its test note. Once they are known, they are listed as
-  `<Articulation name value/>` children (no techniques: for reference). See `audio/vst3/kontaktsetup.h` for how a setup is made.
+  `<Articulation name value/>` children (no techniques: for reference), with a `<Switch>` child when the patch switches otherwise than the library (Harp glissandi: `type="keyswitch"`, values are keys). A percussion `<Patch>` (SSO's ensembles) lists its drums' hits as `<Drum key name/>` (no pitch: reference). See `audio/vst3/kontaktsetup.h` for how a setup is made.
 - `techniques` lists what the articulation can play (an empty list: no notation asks for it; it
   is listed for reference and checked by *Check articulations*, but never chosen): `long legato short staccatissimo spiccato
   tenuto marcato longmarcato pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
@@ -255,8 +255,9 @@ switch value of each articulation. For example:
   patch has plays on the built-in synthesizer. A `<Drum>` without `pitch` is a key no MuseScore
   sound plays: listed (and checked) so the map has every key of the patch, never chosen.
   `default="off"` marks a technique the patch has switched off until it is given a key
-  (Spitfire's Kickstart): a setup made elsewhere, in a DAW, must switch it on too. (SSO's map leaves such
-  keys out: MuseScore sets patches up at the library's defaults.) `technique="roll"` marks the sound's roll key: a
+  (Spitfire's Kickstart): a setup made elsewhere, in a DAW, must switch it on too. Without `key` (and without
+  `pitch`) it names a technique that is off at the patch's defaults and has no key at all: SSO's map lists every
+  one (reference; never played, not checked) so the map is complete. `technique="roll"` marks the sound's roll key: a
   note with a single-note tremolo or a buzz roll plays it once, held for the note (a crescendo
   over it swells through the dynamics controller); a sound with no roll key plays the tremolo
   as repeated hits. `keyScan="1"` makes *Check articulations* play

@@ -40,12 +40,15 @@
 #define __PLUGINEXTRACT_H__
 
 #include <functional>
+#include <map>
 #include <vector>
 
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QRect>
 #include <QString>
+#include <QStringList>
 
 namespace Ms {
 
@@ -78,6 +81,19 @@ class PluginExtract {
             // Quick (set: controllers() puts the patch back with it, reloading its state, instead
             // of searching each controller's own value; false: it failed)
             std::function<bool()> restore;
+            // a background run (ArticulationCheckDialog::extractPatch, superviseExtract): each step's key
+            // before it is tried ("cc 7", "parameter 1234", "switch 5", "controllers: baseline" …), and
+            // the keys not to try (they crashed the plug-in in an earlier round; listed in the JSON as
+            // "skippedAfterCrash")
+            std::function<void(const QString&)> step;
+            std::function<bool(const QString&)> skip;
+            // a links run (--extract-plan: which named control each controller moves, the rest measured
+            // before): only these controllers are tried (empty: every one), each put back at its own
+            // value from the earlier run (patchValues; no search), and of the parameters only those
+            // titled in onlyParameters (empty: every one)
+            std::vector<int> onlyControllers;
+            std::map<int, int> patchValues;
+            QStringList onlyParameters;
             };
 
       // something that changed the window: its pictures at the low and the high value (the
@@ -95,6 +111,11 @@ class PluginExtract {
       // for the tests and the sheets
       static int differingPixels(const QImage& a, const QImage& b);
       static QRect changedRect(const QImage& a, const QImage& b);
+      static const int CELL = 16;         // changedCells' cell, pixels
+      static QJsonArray changedCells(const QImage& a, const QImage& b);
+      // which named control each controller moves: [{cc, control (null: none), id, by, cells}] from controllers()'
+      // and parameters()' results (their window cells, without those that change by themselves)
+      static QJsonArray controlsMoved(const QJsonObject& controllers, const QJsonObject& parameters);
       static Level level(const std::vector<float>& interleavedStereo);
 
       // how far the pitch of "shifted" is from "reference" (both interleaved stereo, the same
@@ -111,6 +132,10 @@ class PluginExtract {
                                    std::function<void()> prepare, std::function<void(const QString&)> status);
 
       static double centsShift(const std::vector<float>& reference, const std::vector<float>& shifted,
+                               double sampleRate, double maxCents = 2600, double* confidence = nullptr);
+      // the same against a reference's pitchSpectrum (computed once for many frames: a legato's analysis)
+      static std::vector<double> pitchSpectrum(const std::vector<float>& clip, double sampleRate);
+      static double centsShift(const std::vector<double>& referenceSpectrum, const std::vector<float>& shifted,
                                double sampleRate, double maxCents = 2600, double* confidence = nullptr);
       };
 
