@@ -83,6 +83,9 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: a copy also waits for its notes' measured release (<Articulation release>) before it is retuned", true },
       { "tuning/pitchBend", 1, 0, 1, "on/off",
         "1: patches that bend cleanly (<Instrument bend>) are tuned by pitch bend; 0: by varispeed", true },
+      { "tuning/bendAtArrival", 1, 0, 1, "on/off",
+        "1: a legato transition's pitch bend glides when the transition arrives (note-on plus the measured legato delay), "
+        "so the note before keeps its tuning while it sounds; 0: at the note-on", true },
       // [dynamics]
       { "dynamics/evenSteps", 0, 0, 1, "on/off",
         "1: the Advanced Options' even dynamic steps act (off since 2026-09-28; MS_EVEN_DYNAMIC_STEPS turns it on too)", true },
@@ -372,7 +375,7 @@ bool hasOwnMetaTag(const char* id)
       {
       const QString s = id;
       return s == "legato/early" || s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
-             && s != "tuning/pitchBend";
+             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival";
       }
 
 static bool ownMetaTagValue(const char* id, const Score* score, double* v)

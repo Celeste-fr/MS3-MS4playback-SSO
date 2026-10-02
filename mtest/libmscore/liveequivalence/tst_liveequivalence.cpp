@@ -73,6 +73,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void initTestCase() { qputenv("MS_EVEN_DYNAMIC_STEPS", "1"); initMTest(); }
       void cleanup() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); SoundLib::setAvailable(nullptr); }
       void liveSetControllersAndMix();
+      void liveClipsBend_data();
       void liveClipsBend();
       void liveClipsLegatoEarly();
       void liveClipsLegatoOctave();
@@ -362,21 +363,31 @@ void TestLiveEquivalence::liveSetControllersAndMix()
 //    the renderer's pitch bends (a patch with bend=, tuningBend) reach the clips as carriers on keys 115 (upper 7
 //    bits) and 114 (lower 7), the value as the velocity (LiveClips::carrierVelocity), each half written when it
 //    changes, before the note at its tick;
-//    a legato glide's steps as successive carriers. Played back as the device plays them (LiveEquivalence::
+//    a legato glide's steps as successive carriers, at the note-on or when the transition arrives (row "at
+//    arrival": tuning/bendAtArrival). Played back as the device plays them (LiveEquivalence::
 //    deviceMidi), the bend in force at every note-on is the renderer's, and the sequence of bends the same
 //---------------------------------------------------------
 
+void TestLiveEquivalence::liveClipsBend_data()
+      {
+      QTest::addColumn<QString>("legato");
+      QTest::newRow("at note-on") << QString();
+      // (a legato transition's glide when it arrives: tuning/bendAtArrival, 200 ms after the early note-on)
+      QTest::newRow("at arrival") << QString(" legatoDelay='200'");
+      }
+
 void TestLiveEquivalence::liveClipsBend()
       {
+      QFETCH(QString, legato);
       QCOMPARE(LiveClips::BEND_MSB, 115);
       QCOMPARE(LiveClips::BEND_LSB, 114);
       QCOMPARE(LiveClips::CARRIER_LOW, 114);
       QCOMPARE(LiveClips::carrierPitch(68), 116);
       auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
          "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
          "<Instrument name='Violin' ids='violin' bend='200'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Long' value='1' techniques='long legato'" + legato + "/>"
          "</Instrument></SoundLibrary>");
       QVERIFY(lib);
       SoundLib::setCurrent(lib);

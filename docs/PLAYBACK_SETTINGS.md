@@ -75,6 +75,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Tuning copies: tolerance, tail, max copies | map: 0.5 cents, 1.5 s, 4 | `SoundLib::lanes` | `[tuning] tolerance`, `tail`, `maxLanes`; score: `soundLibraryLanes` |
 | A copy waits for its notes' measured release | on (map `release`) | `SoundLib::lanes` | `[tuning] waitForRelease` |
 | Pitch bend instead of varispeed where the patch bends | on (map `bend`) | `updateState` (`libBend`) | `[tuning] pitchBend` |
+| A legato transition's pitch bend glides when the transition arrives (note-on + the full measured legato delay for the interval / start pitch), ending `glideMs` later, at the latest by the lane's next note-on; fresh attacks and slur starts bend at the note-on. The bend is the channel's: at the note-on it retuned the note before while it still sounded (SSO, Whence on 49b00a0, 2026-10-02: violas 65-83 % retuned 10-30 ms after the note-on, the new note heard ~90-130 ms after it) | on | `libraryPitchBends` (`libGlideDelayMs`) | `[tuning] bendAtArrival` (0: at the note-on) |
 | Automation ramps sent every … | 30 ticks | `renderMs4Dynamics` (lanes) | `[automation] stepTicks` |
 | Live clips: controller carrier spacing | 2 units (EPSILON) | `LiveClips::clipNotes` | `[live] carrierEpsilon` |
 | Kontakt voices per patch | 512 | `SoundLibraryHost::kontaktMaxVoices` (also the Live Set) | `[hosting] maxVoices` (`MS_KONTAKT_MAX_VOICES` wins) |
@@ -103,4 +104,4 @@ the map is generated; change them in `gen_spitfire_sso.py` (its comments hold th
 per patch in playback.ini.
 
 Tests: `tst_soundlibrary::playbackSettingsIni` (generation, parsing, unknown keys, clamping, reload) and
-`playbackSettingsLayers` (default / ini / score for rendered effects); `tst_liveequivalence::playbackSettingsWidget` (the table, per-score edits). Octaves by start pitch: `tst_soundlibrary::legatoOctaveByStartPitch`, `tst_liveequivalence::liveClipsLegatoOctave` / `liveEquivalenceOctave` (Live identical).
+`playbackSettingsLayers` (default / ini / score for rendered effects); `tst_liveequivalence::playbackSettingsWidget` (the table, per-score edits). Octaves by start pitch: `tst_soundlibrary::legatoOctaveByStartPitch`, `tst_liveequivalence::liveClipsLegatoOctave` / `liveEquivalenceOctave` (Live identical). Bend at arrival: `tst_soundlibrary::tuningBendAtArrival` (transition, fresh attack, clamp, layers), `tst_liveequivalence::liveClipsBend` (row "at arrival": Live identical).
