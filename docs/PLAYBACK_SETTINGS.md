@@ -56,7 +56,11 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Legato delay per patch and interval | map `legatoDelay` (5-pitch grid; octaves by template fit) | `Articulation::legatoDelayAt` | `[legato.delay]` table |
 | Octave slurs (±12) by start pitch (16 patches, measured at ~16-30 starts each; 2026-10-02, option C) | map `octaveUp` / `octaveDown` (start MIDI pitch:ms; failed fits left out); unmeasured start: the nearest measured one, a tie (one-semitone gap) to the side whose run of like values (±50 ms, adjacent) is shorter, else the lower; unknown start: the table's median; patches without them: `legatoDelay`'s ±12 | `SoundLib::octaveDelayAt` via `legatoDelayAt(interval, fromPitch)` | `[legato.delay]` offset (adds) or table (its ±12 replaces) |
 | Oboe Solo +60 (not its +12 per-start octave values), Violins 2 +25 ms legato corrections | map (generator `SWEEP_LEGATO_CORRECTION`, `OCTAVE_NO_SWEEP_CORRECTION`) | map data | `[legato.delay]` offset |
-| Fast-note ramp: what an early start may take from the note before | none to 125 ms, linear to 50 % at 250 ms | `libRampShare` (transitions and held notes) | `[legato] rampFromMs`, `rampToMs`, `rampMaxShare` |
+| An early start leaves the note before at least this much of its length as played (it may have started early itself) | 40 ms | `legatoTransition`, `onsetEarliest` (`libPlayedOn`) | `[legato] keepMs` |
+| A transition after a short note starts early by a share of the measured delay: 65 % after a very short note, rising linearly to all of it after an 800 ms note | 65 %, 800 ms | `libFastDelay` | `[legato] fastShare`, `fastFullMs` (0: always all) |
+| A slur's first note right after a note too short for the transition (same patch, no rest) starts as early as that transition | on | `collect` (held-note branch) | `[legato] fastFirsts` |
+| Fast technique: a slurred note after a note shorter than its transition plays its own attack on the same patch (the note before ends there) instead of a legato transition | off (measured about as on time as the default with its notes as early; the owner decides by ear) | `collect` (`libRetrigger`) | `[legato] fastTechnique`; "too short": `fastBelowShare` (100 % of the transition's delay; also used by fastFirsts) |
+| A transition's note before ends `overlapTicks` after the transition's start as played (not the written one): one note overlaps the next | always | `finishLibraryEvents` (`libLegatoOffs`) | fixed (the overlap itself: `overlapTicks`) |
 | Legato glide of a tuning copy (pitch bend steps; varispeed glide) | 30 ms | `libraryPitchBends`, `Vst3Synth::play` | `[legato] glideMs` |
 | Held notes start early by their measured onset | 100 % (map `<Onset early>`) | `collect` / `onsetEarliest`, `finishLibraryEvents` | `[heldNotes] early`; score: old metaTag |
 | Onset per patch and pitch (-15 dB perceived; swells per semitone) | map `onset` | `Articulation::onsetAt` | `[heldNotes.onset]` table; definition: generator |
@@ -81,6 +85,17 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Live controls (Controllers window live, LiveOverrides) | always | `PartControllers::liveChanges` | not a number: no setting |
 | Chunks don't end before a slurred or library note (live playback) | always | `libSlurAcross`, `libNoteAfter` | fixed (correctness: an early start can't cross a chunk) |
 | Background loading pauses | 0 ms | `SoundLibraryHost` `INPUT_PAUSE_MS`, `PRELOAD_GAP_MS` | fixed (the owner chose 0) |
+
+**Fast slurs (2026-10-02, the owner: "I want fast slurs to not sound late"; replaces the fast-note ramp of
+2026-09-30, whose keys `rampFromMs`, `rampToMs`, `rampMaxShare` are now reported as no longer used):** SSO's
+Performance patches sound a slurred sixteenth's pitch 100-170 ms after its note-on (strings; woodwinds and brass
+60-130) at 100-200 bpm, longer than the note itself; the ramp left them 90-125 ms late (median). Now every note of a
+fast slurred run starts early by about that much (the cascade: each note before keeps its played length, only a run's
+first note gives up time), and a slur's first note inside a run as well. Measured on the Windows VM (13 Performance
+patches, 4- and 8-note slurs of sixteenths at 100/130/160/200 bpm, rendered offline through Kontakt with the
+renderer's events; tools/playbackverify/make_fastrun_scores.py, analyze_fastruns.py): transitions' median arrival
++125 / +89 / +109 ms (strings / woodwinds / brass) before, about 0-20 after; level spread over slur positions
+unchanged (1.3-2.2 dB). Numbers per setting: HANDOFF.md › Legato and onset timing.
 
 Not settings: the measurement definitions behind the map data (the -15 dB onset threshold, the swell rule, the
 legato grid's 50 % crossing, octaves by template fit, the release as the longest over the range) are applied when

@@ -108,8 +108,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   copies controllers to every patch ahead of the notes, applies early starts, lanes and bends. Dynamics on CC1;
   listed shorts take velocity (calibrated from `dynamics.json`). Slurred notes overlap; **legato transitions** and
   **held notes start early** by measured delays (`<Articulation legatoDelay>` by interval, `<Articulation onset>`
-  by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`), capped by the note before (none up to
-  125 ms, half from 250 ms). HANDOFF.md has the open timing items.
+  by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`); the note before keeps `keepMs` of its
+  length as played, so a fast slurred run starts early as a whole (after a short note a transition takes 65-100 % of
+  its delay: `libFastDelay`; a slur's first in a fast run starts like a transition: `fastFirsts`; optional fast
+  technique: own attacks instead of transitions). HANDOFF.md has the open timing items.
 - **Playback adjustments are configurable** (`libmscore/playbacksettings.*`; **docs/PLAYBACK_SETTINGS.md** is the
   inventory): built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older early / lanes metaTags). Read a

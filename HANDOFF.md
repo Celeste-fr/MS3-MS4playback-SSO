@@ -52,8 +52,23 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   120 → 15, Tuba +12 70 → 15, Piccolo −12 80 → 5); controls unchanged. Oboe Solo +12 was −60: its +60
   sweep correction no longer applies to its +12 octave values (owner 2026-10-02; −12 keeps it; re-sweep to confirm). Open: Violins 2 ±12 −30.
   Violins 1 flautando low register still +256 ms.
-- Kept by the owner's choice: strings' slurred sixteenths 50-80 ms late (the fast-note ramp keeps fast runs even;
-  Whence cellos 0.9 dB spread).
+- **Fast slurs on time (the owner, 2026-10-02: "I want fast slurs to not sound late"; replaces the earlier acceptance of
+  slurred sixteenths arriving late, and the fast-note ramp; branch `fast-slurs-on-time`).** SSO's Performance patches
+  sound a slurred sixteenth's pitch 100-170 ms after its note-on (strings; woodwinds / brass 60-130) at 100-200 bpm,
+  whatever the note's own length; the ramp gave a 136 ms note 6 ms, so they were heard 90-125 ms late (median), and a
+  slur's first note inside a run (its own attack right after the note before) 100-160 ms late. Now: the note before
+  keeps `keepMs` (40) of its length as played (not a share of the written one), so every note of a run starts early
+  by about the same and keeps its length; after a short note a transition takes 65 % of its measured delay rising to
+  all of it at 800 ms (`fastShare`, `fastFullMs`: fitted to 2666 measured transitions, each patch's median within 11
+  ms); a slur's first note in a fast run starts as early as a transition would (`fastFirsts`); a transition's note
+  before ends `overlapTicks` after the new start as played. Measured (Windows VM, kthost re-timing the renderer's events
+  offline through Kontakt; 13 Performance patches; `tools/playbackverify/make_fastrun_scores.py`,
+  `analyze_fastruns.py`): transitions' median arrival +4 / +11 / +19 ms (strings / woodwinds / brass; before +125 /
+  +89 / +109), slur firsts +34 / +32 / +16 (before +160 / +104 / +114), level spread over slur positions 1.5 / 1.8 /
+  1.9 dB (before 1.3 / 1.9 / 2.0); Whence cellos bars 1-4 +3 ms, firsts +28, 0.7 dB (before +138, +163, 1.2). Per note
+  the spread stays wide (10-90 %: -60 … +100 ms; SSO's transition time differs by interval). The fast technique
+  (`fastTechnique=1`: own attacks on the same patch, as early) measured about the same (strings +10, Whence cellos +28,
+  2.5 dB); with only the onset as lead it was 40-85 ms late. Owner to judge by ear: default vs `fastTechnique=1`.
 
 ## Waiting for the owner (built, not yet confirmed on Windows / by ear)
 
