@@ -34,26 +34,20 @@ a section there when you need the background of that topic. Commit messages desc
   22-25 mics, 40-46 Harp pedals): the map drives these as parameters by title; CCs would also work.
 - Tam Tam FX Scrape and Wind Gong FX Bow (slow swells) missed the rest check's 10 dB "sounds" test though they sound.
 
-## Legato and onset timing (2026-10-01, branch `claude/intelligent-volta-gx7gmw`)
+## Legato and onset timing (state 2026-10-02, after the VM sweeps)
 
-On top of `legato-timing` (3f0cda5): 696341d takes the measurement branch's data (f8908f8 on
-`claude/intelligent-cray-6pd4o1`; docs/HISTORY.md Part 3, "Measurements for the legato-timing fixes", has the VM jobs, the
-sweep tools and the sweep results of ed3a294 and 3f0cda5). Not heard or swept with SSO yet: the next step is the VM
-sweep (`make_sweep_scores.py`, task `claude-sweep`) on a Windows build of this branch against 3f0cda5's.
-Open, deliberately not changed (no data here supports a change):
-- **Octave slurs of the other 35 Performance patches** (winds, brass, Solo Cello and the Sul G / Sul C Performance patches) still use
-  their ±7 delay. Only the 8 string Performance patches have the 5-pitch grid (`sso_legato_grid_pitches.json`);
-  `sso_legato_grid.json`'s ±12 are octave errors. Needs the rest check's `legatopitches` part on those 35 (VM, build
-  c7338f4; docs/HISTORY.md Part 3 › "Resume"). The single-pitch grid can't be corrected by a rule: on the 8 string
-  patches its arrival is above the 5-pitch 50 % time by a median 95 ms (Basses), 98 (Violins 2), 58 (Violas), 25-30
-  (Celli, Violins 1), -25…+5 (the three solo strings), per interval -150…+190: no common offset to carry to the winds.
-- **Long slurred notes early** (sweep of 3f0cda5: ≥ 0.5 s notes to -156 ms in Basses, Horn, Violas, Violins 2 -51…-76):
-  Basses, Violas and Violins 2 now use the 5-pitch grid, which is exactly where the single-pitch grid read 58-98 ms too
-  long (above); whether that closes it needs the sweep. Horn Solo - Performance is still on the single-pitch grid
-  (no 5-pitch data): leave it until `legatopitches` measures it.
-- **Strings' slurred sixteenths 59-84 ms late**: the price of the `legatoTransition` cap (none up to 125 ms, half from
-  250; docs/HISTORY.md › Fast runs), chosen on the VM for even levels in fast runs (a quarter's shift: 4.2 dB spread). Not
-  changed: undoing it needs a measurement that shows even levels with a larger shift.
+Measured on SSO (sweeps of builds e6f44e6, c27da62, a289780, 47b872f; tools in tools/playbackverify, history in
+docs/HISTORY.md Part 3). Settings and their sources: docs/PLAYBACK_SETTINGS.md (owner's page:
+https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
+- Done: the 5-pitch legato grid covers all 43 Performance patches; octaves (±12) come from the template fit (the
+  harmonic method was wrong by 75-320 ms); per-family medians now: strings +5 / −10 ms (+12 / −12), woodwinds +5 / 0,
+  brass −45 / +20; other intervals 0…+10. Sul tasto / flautando / harmonics: per-semitone onset at −12 dB clamped to the
+  neighbours, median +58 ms, none early. Oboe +60 and Violins 2 +25 ms corrections.
+- Open: per-instrument octave outliers from only 2-4 octaves each (Horn +12 late 140-300 ms, Tuba +12 −120, Oboe −12
+  −40…−130, Violins 2 −12 −20…−130; Basses / Trombone / Piccolo single notes at −300…−450 look like analysis outliers):
+  measure more octaves per patch before correcting. Violins 1 flautando low register still +256 ms.
+- Kept by the owner's choice: strings' slurred sixteenths 50-80 ms late (the fast-note ramp keeps fast runs even;
+  Whence cellos 0.9 dB spread).
 
 ## Waiting for the owner (built, not yet confirmed on Windows / by ear)
 
