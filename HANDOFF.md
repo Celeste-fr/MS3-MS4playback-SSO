@@ -9,7 +9,7 @@ a section there when you need the background of that topic. Commit messages desc
 
 - `main` has everything: `live-set-export` / `claude/intelligent-volta-gx7gmw`, `automation-editor`, the
   measurement branch `claude/intelligent-cray-6pd4o1` and `playability-checker` were merged on 2026-10-02 (the
-  branches are kept). Work on a branch; the owner decides what goes to `main`.
+  branches are kept). Work on a branch; finished work by Claude and its subagents is merged into `main` without asking (the owner, 2026-10-02), anything incomplete or changing an owner-decided value waits for the owner.
 - Windows test builds come from a branch on request (CLAUDE.md › Branches and CI). The Windows VM with Kontakt 8
   and SSO is reachable for agents (VERIFY.md › With the real library; access in the agents' own notes). VM
   measurement jobs (task `claude-measure`, `C:\claude\measure\job*.cmd`) and regression sweeps (task
