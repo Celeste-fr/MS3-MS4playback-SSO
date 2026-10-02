@@ -16,6 +16,7 @@
 #include <string>
 
 #include "audio/midi/event.h"
+#include "libmscore/playbacksettings.h"
 
 namespace Ms {
 
@@ -226,7 +227,7 @@ void Vst3Synth::deliver(const PlayEvent& event)
             bool any = false;
             for (unsigned char n : sounding)
                   any = any || n > 0;
-            _slots[slot]->setPitch(event.tuning(), any ? LEGATO_GLIDE : 0.0);
+            _slots[slot]->setPitch(event.tuning(), any ? Playback::value("legato/glideMs") / 1000.0 : 0.0);   // (playback settings)
             }
       // automation of a plug-in parameter (not MIDI): the controller's parameter on this slot's instance
       if (event.type() == ME_PARAMETER) {
@@ -292,7 +293,7 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       if (_scratch.size() < size_t(2 * frames))
             _scratch.resize(size_t(2 * frames));
       const float rate = _sampleRate > 0 ? float(_sampleRate) : 44100.f;
-      const float a = 1.f - std::exp(-1.f / (float(MIX_SMOOTHING) * rate));
+      const float a = 1.f - std::exp(-1.f / (float(std::max(0.0001, Playback::value("hosting/mixSmoothingMs") / 1000.0)) * rate));
       for (int k = 0; k < int(_slots.size()); ++k) {
             Vst3Plugin* p = _slots[size_t(k)].get();
             if (!p)

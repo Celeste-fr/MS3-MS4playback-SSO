@@ -105,6 +105,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   **held notes start early** by measured delays (`<Articulation legatoDelay>` by interval, `<Articulation onset>`
   by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`), capped by the note before (none up to
   125 ms, half from 250 ms). HANDOFF.md has the open timing items.
+- **Playback adjustments are configurable** (`libmscore/playbacksettings.*`; **docs/PLAYBACK_SETTINGS.md** is the
+  inventory): built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
+  Playback Settings) → the score (metaTag `playbackSettings`, plus the older early / lanes metaTags). Read a
+  setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
+  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`).
 - Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; per-family
   balance, Recommended, even steps (metaTag `soundLibraryEvenSteps`). Only shorts are calibrated (the owner).
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
@@ -188,9 +193,9 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 53 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-01); the skips need inputs
+- `tst_soundlibrary`: 58 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-01); the skips need inputs
   (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the owner's files).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 8 passed, `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 9 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31 passed, `tst_keysig` 8 passed
   (2026-10-01). `tst_tuning` (13), `tst_tempochange`, `tst_phrasemark`, `tst_playability`,
   `tst_timesig::removeRedundant`: passed when last run on their branches.

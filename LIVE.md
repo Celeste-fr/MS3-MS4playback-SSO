@@ -546,6 +546,12 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
+- **Host-only playback settings** (docs/PLAYBACK_SETTINGS.md; playback.ini `[hosting]`): `settleSeconds` (how long a
+  freshly loaded patch runs before MuseScore sets its controllers) and `mixSmoothingMs` (the Mixer's gain glide) act
+  in MuseScore's own hosting only; Live loads and mixes the plug-ins itself. The varispeed side of `[legato]
+  glideMs` too (varispeed can't reach Live); its pitch-bend glides are rendered and reach the clips. Every other
+  playback setting acts in the renderer (the clips' events) or, `[hosting] maxVoices`, in the Kontakt states the Live
+  Set carries, so Live gets it identically.
 - **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): MuseScore
   plays them by varispeed on copies of the patch; a clip can't carry that, so in Live they play 12-TET. (The
   Performance patches, Solo Cello and the tuned percussion bend: those match.)

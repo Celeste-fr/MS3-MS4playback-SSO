@@ -625,6 +625,7 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       void mixerPreferencesChanged(bool showMidiControls);
       void checkForUpdates();
       void startPreferenceDialog();
+      void reloadPlaybackSettings();     // playback.ini read again, every score rendered again
       void restartAudioEngine();
 
    public:

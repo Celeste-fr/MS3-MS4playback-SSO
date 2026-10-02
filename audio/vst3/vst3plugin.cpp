@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "vst3plugin.h"
+#include "libmscore/playbacksettings.h"
 
 #include <QRegularExpression>
 
@@ -1007,6 +1008,8 @@ bool Vst3Plugin::setState(const QByteArray& state)
 
 void Vst3Plugin::settle(double seconds)
       {
+      if (seconds < 0)
+            seconds = Playback::value("hosting/settleSeconds");
       if (!d->active || d->sampleRate <= 0)
             return;
       const long long target = (long long)(seconds * d->sampleRate);

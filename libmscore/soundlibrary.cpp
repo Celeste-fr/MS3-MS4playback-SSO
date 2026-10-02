@@ -10,6 +10,7 @@
 
 #include "soundlibrary.h"
 #include "partplayback.h"
+#include "playbacksettings.h"
 
 #include <algorithm>
 #include <atomic>
@@ -558,11 +559,14 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
                         if (!a.techniques.contains(base))
                               continue;
                         // a short that lasts longer than the note (Short 0'5 for a fast eighth): not this one
-                        // (measured: from where it sounds closer to the note's length than the next choice)
                         // (measured: from where it sounds closer to the note's meant length than the next choice;
                         // else its sample's length against the written one)
-                        if (a.fromSeconds > 0 ? (want.soundSeconds > 0 && want.soundSeconds < a.fromSeconds)
-                                              : (a.length > 0 && want.seconds > 0 && want.seconds < 0.9 * a.length))
+                        // (playback.ini [shorts.from] by patch|articulation: an offset or its own number)
+                        const double from = a.fromSeconds > 0
+                              ? Playback::adjust("shorts.from", patches[p]->name, a.name, 0, a.fromSeconds) : -1;
+                        const double meant = want.byMeantLength ? want.soundSeconds : want.seconds;
+                        if (from > 0 ? (meant > 0 && meant < from)
+                                     : (a.length > 0 && want.seconds > 0 && want.seconds < want.nominalShare * a.length))
                               continue;
                         bool fits = true;
                         for (const QString& m : a.modifiers)
@@ -1040,8 +1044,8 @@ bool evenStepsEnabled()
       {
       // (the owner, 2026-09-28: "just disable this option for now" -- Spitfire's own pp -> ff shape may be
       // meant; the code stays, off unless MS_EVEN_DYNAMIC_STEPS is set)
-      static const bool enabled = qEnvironmentVariableIsSet("MS_EVEN_DYNAMIC_STEPS");
-      return enabled;
+      static const bool env = qEnvironmentVariableIsSet("MS_EVEN_DYNAMIC_STEPS");
+      return env || Playback::on("dynamics/evenSteps");      // (playback.ini [dynamics] evenSteps)
       }
 
 EvenSteps evenSteps(const Score* score)
@@ -1257,10 +1261,11 @@ const char* laneSettingsMetaTag = "soundLibraryLanes";
 
 LaneSettings libraryLaneSettings(const Library& library)
       {
+      // (the map's, unless playback.ini [tuning] sets its own)
       LaneSettings s;
-      s.tolerance = library.laneTolerance;
-      s.tail = library.laneTail;
-      s.maxLanes = library.maxLanes;
+      s.tolerance = Playback::value("tuning/tolerance", nullptr, library.laneTolerance);
+      s.tail = Playback::value("tuning/tail", nullptr, library.laneTail);
+      s.maxLanes = int(Playback::value("tuning/maxLanes", nullptr, library.maxLanes));
       return s;
       }
 
@@ -1290,26 +1295,15 @@ const char* legatoEarlyMetaTag = "soundLibraryLegatoEarly";
 
 int legatoEarly(const Score* score, const Library& library)
       {
-      if (score) {
-            bool ok = false;
-            const int v = score->masterScore()->metaTag(legatoEarlyMetaTag).trimmed().toInt(&ok);
-            if (ok && v >= 0)
-                  return std::min(v, 200);
-            }
-      return library.legatoEarly;
+      // (the score's metaTag, else playback.ini's [legato] early, else the map's: Playback::value)
+      return int(std::lround(Playback::value("legato/early", score, library.legatoEarly)));
       }
 
 const char* onsetEarlyMetaTag = "soundLibraryOnsetEarly";
 
 int onsetEarly(const Score* score, const Library& library)
       {
-      if (score) {
-            bool ok = false;
-            const int v = score->masterScore()->metaTag(onsetEarlyMetaTag).trimmed().toInt(&ok);
-            if (ok && v >= 0)
-                  return std::min(v, 200);
-            }
-      return library.onsetEarly;
+      return int(std::lround(Playback::value("heldNotes/early", score, library.onsetEarly)));
       }
 
 int bendValue(double cents, double bendCents)
@@ -1373,7 +1367,7 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                         for (const Ms4::ArtRef& a : arts)
                               if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
                                     trill = trillSemitones(note);
-                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill));
+                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
                         if (c)
                               used[c.patch] = true;
                         }
@@ -1395,6 +1389,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             return out;
       Score* sc = const_cast<Score*>(score);
       const ScoreTuningScope tuningScope(sc);
+      const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
       Ms4::Dynamics dynamics;
       dynamics.build(sc, const_cast<Part*>(part));
       TextTechniques text;
@@ -1440,8 +1435,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                               if (a.art == Ms4::Art::Legato)
                                     slurred = true;
                               }
-                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill));
-                        const double release = c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
+                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
+                        const double release = waitForRelease && c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
                         items.push_back({ note, c ? c.patch : 0, on, off, release, playbackTuning(note), slurred, track });
                         };
                   for (const Chord* g : chord->graceNotes())
@@ -1648,7 +1643,7 @@ std::map<int, int> controllerTexts(Score* score, const Part* part, const Control
 //   want
 //---------------------------------------------------------
 
-Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double seconds, int trillSemitones)
+Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double seconds, int trillSemitones, const Score* score)
       {
       using Ms4::Art;
       auto has = [&arts](Art a) {
@@ -1661,8 +1656,18 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
       w.seconds = seconds;
       // (the strings' factors: the measured from= are on string patches; staccato, staccatissimo and tenuto are
       // the same in every family)
-      if (seconds > 0)
-            w.soundSeconds = seconds * Ms4::note(Ms4::Family::Strings, arts, 0, false).dur / double(Ms4::HUNDRED);
+      // (playback settings [shorts]: a factor set in playback.ini or the score replaces MS4's for its articulation)
+      w.byMeantLength = Playback::on("shorts/byMeantLength", score);
+      w.nominalShare = Playback::value("shorts/nominalShare", score) / 100.0;
+      if (seconds > 0) {
+            double factor = Ms4::note(Ms4::Family::Strings, arts, 0, false).dur / double(Ms4::HUNDRED);
+            const bool stacc = has(Art::Staccato), ten = has(Art::Tenuto);
+            const char* id = stacc && ten ? "shorts/portato" : has(Art::Staccatissimo) ? "shorts/staccatissimo"
+                             : stacc ? "shorts/staccato" : ten ? "shorts/tenuto" : nullptr;
+            if (id && Playback::source(id, score) != Playback::Source::DEFAULT)
+                  factor = Playback::value(id, score) / 100.0;
+            w.soundSeconds = seconds * factor;
+            }
       w.modifiers = text.modifiers;
       if (has(Art::Mute) || has(Art::PalmMute)) {
             if (!w.modifiers.contains("muted"))

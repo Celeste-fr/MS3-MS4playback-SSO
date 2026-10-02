@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "liveclips.h"
+#include "playbacksettings.h"
 #include <cstring>
 
 #include <algorithm>
@@ -130,6 +131,7 @@ int bendOf(const NPlayEvent& e)
 
 std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, int endUtick)
       {
+      const int eps = int(Playback::value("live/carrierEpsilon"));     // (playback settings [live]; EPSILON)
       std::map<int, std::vector<Item>> byRoute;
       for (const auto& te : events)
             if (te.second.isExternal())
@@ -238,10 +240,10 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                   // places: before the note, as far as the clip's start allows; the note after them
                   // (with no note at the tick, the last of them at the tick itself: a glide's step, a dynamics change
                   // under a sounding note, as near MuseScore's time as the order allows)
-                  int first = at - int(beforeX.size() - (noteSeen || beforeX.empty() ? 0 : 1)) * EPSILON;
+                  int first = at - int(beforeX.size() - (noteSeen || beforeX.empty() ? 0 : 1)) * eps;
                   if (first < 0)
                         first = 0;
-                  int noteAt = std::max(at, first + int(beforeX.size()) * EPSILON);
+                  int noteAt = std::max(at, first + int(beforeX.size()) * eps);
                   auto place = [&](const std::pair<const NPlayEvent*, std::pair<int, int>>& x, int start) {
                         const NPlayEvent* e = x.first;
                         Control c;
@@ -276,9 +278,9 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                               }
                         };
                   for (size_t k = 0; k < beforeX.size(); ++k)
-                        place(beforeX[k], first + int(k) * EPSILON);
+                        place(beforeX[k], first + int(k) * eps);
                   for (size_t k = 0; k < afterX.size(); ++k)
-                        place(afterX[k], noteAt + int(k + 1) * EPSILON);
+                        place(afterX[k], noteAt + int(k + 1) * eps);
                   // the notes and note-offs, in order
                   for (size_t k = i; k < j; ++k) {
                         const NPlayEvent& e = *items[k].e;

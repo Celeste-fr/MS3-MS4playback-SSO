@@ -66,6 +66,8 @@
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/partplayback.h"
+#include "libmscore/playbacksettings.h"
+#include "playbacksettingswidget.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
 #include "libmscore/undo.h"
@@ -586,7 +588,7 @@ int SoundLibraryHost::kontaktMaxVoices()
       {
       if (qEnvironmentVariableIsSet("MS_KONTAKT_MAX_VOICES"))
             return qEnvironmentVariableIntValue("MS_KONTAKT_MAX_VOICES");
-      return KONTAKT_MAX_VOICES;
+      return int(Playback::value("hosting/maxVoices"));      // (playback.ini [hosting]; default KONTAKT_MAX_VOICES, 512)
       }
 
 QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
@@ -2712,6 +2714,15 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             }
       }
       layout->addWidget(scoreBox);
+
+      // every playback adjustment (libmscore/playbacksettings.h): default, playback.ini, this score
+      QGroupBox* adjustBox = new QGroupBox(tr("Playback adjustments (this score over playback.ini over the defaults)"), this);
+      QVBoxLayout* adjust = new QVBoxLayout(adjustBox);
+      PlaybackSettingsWidget* adjustments = new PlaybackSettingsWidget(score, _library,
+            [this](const char* tag, const QString& value) { setMetaTag(tag, value); }, adjustBox);
+      adjust->addWidget(adjustments);
+      connect(adjustments, &PlaybackSettingsWidget::changed, this, [this]() { load(); });
+      layout->addWidget(adjustBox);
 
       // Ableton Live (liveintegration.h, LIVE.md): the automation drawn in Live (editable here too: automation.h)
       {

@@ -41,6 +41,10 @@
 #include "mscore/livesetexport.h"
 #include "mscore/preferences.h"
 #include "mscore/soundlibraryhost.h"
+#include "mscore/playbacksettingswidget.h"
+#include "libmscore/playbacksettings.h"
+#include <QDoubleSpinBox>
+#include <QTreeWidget>
 #include "mtest/testutils.h"
 
 #define DIR QString("libmscore/soundlibrary/")
@@ -75,6 +79,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveEquivalenceLegato();
       void liveEquivalenceAutomation();
       void dumpEvents();
+      void playbackSettingsWidget();
       };
 
 static double rms(const std::vector<float>& b, int side)
@@ -765,4 +770,55 @@ void TestLiveEquivalence::dumpEvents()
       }
 
 QTEST_MAIN(TestLiveEquivalence)
+//---------------------------------------------------------
+//   playbackSettingsWidget
+//    Mixer › Advanced Options… › Playback adjustments: a row per setting, grouped as in playback.ini; editing
+//    a value writes the score's metaTag (playbackSettings, or the older one of legato/early); global
+//    settings can't be edited per score
+//---------------------------------------------------------
+
+void TestLiveEquivalence::playbackSettingsWidget()
+      {
+      auto lib = loadMap("<SoundLibrary name='t'><Legato early='100'/><Instrument name='V' ids='violin'>"
+                         "<Articulation name='Long' value='1' techniques='long'/></Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      std::vector<std::pair<QString, QString>> writes;
+      PlaybackSettingsWidget w(score, lib, [&](const char* tag, const QString& v) {
+            writes.push_back({ tag, v });
+            score->setMetaTag(tag, v);
+            });
+      QTreeWidget* tree = w.findChild<QTreeWidget*>();
+      QVERIFY(tree);
+      int rows = 0;
+      std::map<QString, QDoubleSpinBox*> boxes;
+      for (int g = 0; g < tree->topLevelItemCount(); ++g) {
+            for (int c = 0; c < tree->topLevelItem(g)->childCount(); ++c) {
+                  QTreeWidgetItem* it = tree->topLevelItem(g)->child(c);
+                  boxes[it->data(0, Qt::UserRole).toString()] = qobject_cast<QDoubleSpinBox*>(tree->itemWidget(it, 1));
+                  ++rows;
+                  }
+            }
+      QCOMPARE(rows, int(Playback::definitions().size()));
+      QCOMPARE(boxes["legato/early"]->value(), 100.0);            // (the map's)
+      QVERIFY(!boxes["hosting/maxVoices"]->isEnabled());
+      boxes["pedal/upAfterMs"]->setValue(60);
+      QCOMPARE(writes.back().first, QString(Playback::metaTag));
+      QCOMPARE(writes.back().second, QString("pedal/upAfterMs=60"));
+      QCOMPARE(Playback::value("pedal/upAfterMs", score), 60.0);
+      // (the widget refilled the tree: the boxes are new)
+      for (int g = 0; g < tree->topLevelItemCount(); ++g)
+            for (int c = 0; c < tree->topLevelItem(g)->childCount(); ++c) {
+                  QTreeWidgetItem* it = tree->topLevelItem(g)->child(c);
+                  boxes[it->data(0, Qt::UserRole).toString()] = qobject_cast<QDoubleSpinBox*>(tree->itemWidget(it, 1));
+                  }
+      boxes["legato/early"]->setValue(50);
+      QCOMPARE(writes.back().first, QString(SoundLib::legatoEarlyMetaTag));
+      QCOMPARE(writes.back().second, QString("50"));
+      QCOMPARE(SoundLib::legatoEarly(score, *lib), 50);
+      delete score;
+      }
+
 #include "tst_liveequivalence.moc"
+

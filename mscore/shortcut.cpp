@@ -3168,6 +3168,16 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+         "reload-playback-settings",
+         QT_TRANSLATE_NOOP("action","Reload Playback Settings"),
+         0,
+         QT_TRANSLATE_NOOP("action","Read playback.ini again (the playback adjustments) and render the scores again"),
+         Icons::Invalid_ICON,
+         Qt::ApplicationShortcut
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
          "playback-ms3",
          QT_TRANSLATE_NOOP("action","MuseScore 3"),
          QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 3"),

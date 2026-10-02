@@ -54,6 +54,7 @@
 #include "vibrato.h"
 #include "partcontrollers.h"
 #include "partplayback.h"
+#include "playbacksettings.h"
 #include "tuning.h"
 #include "volta.h"
 
@@ -1299,7 +1300,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return false;
                         };
                   auto libOverlap = [&](const SoundLib::Choice& c, const Note* note) {
-                        return c && c.base == "legato" && slurGoesOn(note) ? DIVISION / 16 : 0;
+                        // (playback settings [legato] overlapTicks, slurEndOverlap)
+                        return c && c.base == "legato" && (libSlurEndOverlap || slurGoesOn(note)) ? libOverlapTicks : 0;
                         };
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
@@ -1347,7 +1349,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const int start = fc->tick().ticks() + tickOffset;
                               const qreal t1 = score->utick2utime(utick);
                               const qreal len = t1 - score->utick2utime(start);
-                              const int cap = score->utime2utick(t1 - qBound(0.0, (len - 0.125) / 0.25, 0.5) * len);
+                              const int cap = score->utime2utick(t1 - libRampShare(len) * len);
                               *earliest = std::max({ start, cap, libChunkStart, (*rs)->utick });
                               *interval = note->ppitch() - pn->ppitch();
                               return first;
@@ -1386,7 +1388,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const int start = fc->tick().ticks() + tickOffset;
                               const qreal t1 = score->utick2utime(utick);
                               const qreal len = t1 - score->utick2utime(start);
-                              const int cap = score->utime2utick(t1 - qBound(0.0, (len - 0.125) / 0.25, 0.5) * len);
+                              const int cap = score->utime2utick(t1 - libRampShare(len) * len);
                               return std::max({ earliest, start, cap });
                               }
                         return earliest;
@@ -1512,7 +1514,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const Note* from = legatoTransition(note, libChoice, &earliest, &interval);
                               if (from) {
                                     libGlideFrom[note] = from;
-                                    const double delayMs = libChoice.articulation->legatoDelayAt(interval);
+                                    // (playback.ini [legato.delay] by patch: an offset or its own table)
+                                    const double delayMs = Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
+                                                                            libChoice.articulation->name, interval,
+                                                                            libChoice.articulation->legatoDelayAt(interval));
                                     if (offset == 0 && libLegatoEarly > 0 && delayMs > 0) {
                                           config.libEarly = delayMs * libLegatoEarly / 100.0 / 1000.0;
                                           config.libEarliest = earliest;
@@ -1526,7 +1531,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     double onsetMs = 0;
                                     for (const Note* n : note->chord()->notes())
                                           if (n->play())
-                                                onsetMs = std::max(onsetMs, libChoice.articulation->onsetAt(n->ppitch()));
+                                                onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
+                                                                   libPatches[libChoice.patch]->name, libChoice.articulation->name,
+                                                                   n->ppitch(), libChoice.articulation->onsetAt(n->ppitch())));
                                     const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
                                     if (earliest >= 0) {
                                           config.libEarly = onsetMs * libOnsetEarly / 100.0 / 1000.0;
@@ -1955,7 +1962,8 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                   // (a MIDI controller to 1/127, a plug-in parameter to 1/1000, every 30 ticks along a ramp)
                   for (const LibPart::Auto& a : lp->automation) {
                         const bool param = a.param >= 0;
-                        for (const auto& tv : a.lane.events(tick1, tick2, 30, param ? 0.001 : 1.0 / 127)) {
+                        for (const auto& tv : a.lane.events(tick1, tick2, int(Playback::value("automation/stepTicks", score)),
+                                                            param ? 0.001 : 1.0 / 127)) {
                               for (const auto& ip : *part->instruments()) {
                                     if (!libraryPlays(ip.second))
                                           continue;
@@ -2085,7 +2093,7 @@ SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::
       // its written length (not the Play Panel's speed), with the notes tied to it
       const int tied = note->tieFor() && !note->tieBack() ? note->playTicks() - note->chord()->actualTicks().ticks() : 0;
       const double seconds = score->tempomap()->writtenTime(tick, tick + qMax(0, ticks) + qMax(0, tied));
-      return SoundLib::choose(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill));
+      return SoundLib::choose(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill, score));
       }
 
 //---------------------------------------------------------
@@ -2182,7 +2190,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       // note (the owner, 2026-09-29: Piano v3.7 bars 68-69, the bass's A2 struck again 27 ticks before the
       // last one's note off, cut at once; 164 such keys in the piece). From a little before the chunk: a note
       // of the chunk before may still sound into it
-      {
+      if (Playback::on("notes/sameKeyEndsFirst", score)) {           // (playback settings [notes])
             std::map<std::tuple<int, int, int>, int> sounding;      // channel, patch, key -> notes on
             for (auto i = events->lower_bound(std::max(0, chunk.utick1() - 8 * DIVISION)); i != events->end(); ++i) {
                   const NPlayEvent& ev = i->second;
@@ -2322,7 +2330,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
       const int utick1 = chunk.utick1();
       const int utick2 = chunk.utick2();
       const double STEP = 0.003;
-      const int GLIDE_STEPS = std::max(1, int(std::lround(0.03 / STEP)));       // Vst3Synth::LEGATO_GLIDE
+      const int GLIDE_STEPS = std::max(1, int(std::lround(Playback::value("legato/glideMs", score) / 1000.0 / STEP)));   // (as Vst3Synth's glide)
       struct Bend { int tick; int value; int glideStart; };          // glideStart -1: not a glide's step
       std::map<std::pair<int, int>, std::vector<Bend>> byRoute;                  // (port, channel) -> bends
       std::map<std::pair<int, int>, std::vector<int>> noteOns;                   // (port, channel) -> note-on ticks
@@ -2674,7 +2682,8 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                                     next = o.second;
                               }
                         if (prev)
-                              down = from + std::min(after(from, 90), std::max(1, (to - from) / 2));
+                              down = from + std::min(after(from, Playback::value("pedal/downAfterMs", score)),
+                                                     std::max(1, int((to - from) * Playback::value("pedal/downMaxShare", score) / 100.0)));
                         // the chord it goes up with: the next pedal's, else one of the part's starting where
                         // this one ends (up to 5 ticks on; the owner, 2026-09-28: a chord where a pedal ended,
                         // not a change, was missing too, the pedal up at its tick)
@@ -2691,7 +2700,8 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               }
                         if (chordTick >= 0) {
                               const int nextLength = next ? pc->second.dynamics.spannerStop(next) - chordTick : 1 << 30;
-                              up = chordTick + std::min(after(chordTick, 40), std::max(0, nextLength / 4));
+                              up = chordTick + std::min(after(chordTick, Playback::value("pedal/upAfterMs", score)),
+                                                        std::max(0, int(nextLength * Playback::value("pedal/upMaxShare", score) / 100.0)));
                               }
                         }
                   auto put = [&](int tick, int value) {
@@ -4060,6 +4070,11 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libChunkStart = chunk.utick1();
       libLegatoEarly = library ? SoundLib::legatoEarly(score, *library) : 0;
       libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
+      libOverlapTicks = int(Playback::value("legato/overlapTicks", score));
+      libSlurEndOverlap = Playback::on("legato/slurEndOverlap", score);
+      libRampFrom = Playback::value("legato/rampFromMs", score) / 1000.0;
+      libRampTo = Playback::value("legato/rampToMs", score) / 1000.0;
+      libRampMax = Playback::value("legato/rampMaxShare", score) / 100.0;
       libShifts.clear();
 
       // create note & other events
@@ -4123,10 +4138,14 @@ void MidiRenderer::updateState()
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
       const QString controllers = score->masterScore()->metaTag(PartControllers::metaTag);
       const QString automation = score->masterScore()->metaTag(Automation::metaTag);
+      const QString settings = score->masterScore()->metaTag(Playback::metaTag);
       if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
-          || controllers != partControllers || automation != partAutomation)
+          || controllers != partControllers || automation != partAutomation || settings != playbackSettingsTag
+          || Playback::generation() != playbackGeneration)
             needUpdate = true;
       if (needUpdate) {
+            playbackSettingsTag = settings;
+            playbackGeneration = Playback::generation();
             partModes = modes;
             partControllers = controllers;
             partAutomation = automation;
@@ -4231,8 +4250,9 @@ void MidiRenderer::updateState()
                               // pitch bend instead of varispeed where the patch bends (libraryPitchBends)
                               if (li == r.instrument && tuned) {
                                     std::vector<double> bends;
+                                    const bool bend = Playback::on("tuning/pitchBend", score);   // (playback settings [tuning])
                                     for (const SoundLib::LibInstrument* p : lp.patches)
-                                          bends.push_back(p->bendCents);
+                                          bends.push_back(bend ? p->bendCents : 0.0);
                                     libBend[ip.second->channel(0)->channel()] = bends;
                                     }
                               }
@@ -4321,6 +4341,19 @@ bool MidiRenderer::libSlurAcross(const Measure* last) const
                   return true;
             }
       return false;
+      }
+
+//---------------------------------------------------------
+//   MidiRenderer::libRampShare
+//    the share of a note (len seconds) an early start after it may take: none up to rampFrom, rising linearly
+//    to rampMax at rampTo (playback settings [legato]; measured: 125 ms, 250 ms, half)
+//---------------------------------------------------------
+
+double MidiRenderer::libRampShare(double len) const
+      {
+      if (libRampTo <= libRampFrom)
+            return len >= libRampTo ? libRampMax : 0.0;
+      return qBound(0.0, (len - libRampFrom) / (libRampTo - libRampFrom), 1.0) * libRampMax;
       }
 
 //---------------------------------------------------------

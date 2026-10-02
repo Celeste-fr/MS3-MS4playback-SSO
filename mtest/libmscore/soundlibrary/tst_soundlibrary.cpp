@@ -31,6 +31,7 @@
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/liveset.h"
+#include "libmscore/playbacksettings.h"
 #include "libmscore/livesetwriter.h"
 #include "libmscore/synthesizerstate.h"
 #include "mtest/testutils.h"
@@ -94,6 +95,8 @@ class TestSoundLibrary : public QObject, public MTest
       void legatoEarlyFastRun();
       void legatoEarlyByInterval();
       void onsetEarly();
+      void playbackSettingsIni();
+      void playbackSettingsLayers();
       void renderKit();
       void renderKitRoll();
       void controllers();
@@ -1099,6 +1102,157 @@ void TestSoundLibrary::onsetEarly()
       QCOMPARE(notes[1].on, Q - 96);
       QVERIFY(notes[7].off > 8 * Q - 48);                       // (B4 keeps its end)
       score->setMetaTag(SoundLib::onsetEarlyMetaTag, "");
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   playbackSettingsIni
+//    playback.ini (libmscore/playbacksettings.h): written with every key and its default when missing, read
+//    back as the defaults, never overwritten; unknown keys, bad values and values out of range warned (the
+//    last clamped); reload reads the file again and changes the generation; per-patch tables
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackSettingsIni()
+      {
+      QTemporaryDir dir;
+      const QString path = dir.path() + "/sub/playback.ini";
+      const int g0 = Playback::generation();
+      Playback::setIniPath(path);
+      QVERIFY(QFileInfo::exists(path));
+      QVERIFY(Playback::generation() != g0);
+      QVERIFY2(Playback::warnings().isEmpty(), qPrintable(Playback::warnings().join("; ")));
+      QFile f(path);
+      QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
+      const QString text = QString::fromUtf8(f.readAll());
+      f.close();
+      for (const Playback::Definition& d : Playback::definitions()) {
+            const QString key = QString(d.id).section('/', 1);
+            QVERIFY2(text.contains("\n" + key + "="), d.id);
+            QVERIFY(Playback::source(d.id) == Playback::Source::DEFAULT);   // (written as the defaults: the defaults)
+            }
+      QVERIFY(text.contains("[legato]") && text.contains("[hosting]") && text.contains("[legato.delay]"));
+      QCOMPARE(Playback::value("legato/overlapTicks"), 30.0);
+      QCOMPARE(Playback::source("legato/overlapTicks"), Playback::Source::DEFAULT);
+      // edited by hand: an override, a bad value, an unknown key, one out of range, a table
+      QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+      f.write("; edited\n[legato]\noverlapTicks=60\nrampToMs=abc\nbogus=1\n[pedal]\nupAfterMs=5000\n"
+              "[legato.delay]\nViolins 2 - Performance=+25\nCelli - Performance|Legato=-12:300 +12:500\n");
+      f.close();
+      const int g1 = Playback::generation();
+      Playback::reload();
+      QVERIFY(Playback::generation() != g1);
+      QCOMPARE(Playback::value("legato/overlapTicks"), 60.0);
+      QCOMPARE(Playback::source("legato/overlapTicks"), Playback::Source::INI);
+      QCOMPARE(Playback::value("legato/rampToMs"), 250.0);    // (not a number: the default)
+      QCOMPARE(Playback::value("pedal/upAfterMs"), 1000.0);   // (clamped)
+      QCOMPARE(Playback::warnings().size(), 3);
+      QVERIFY(Playback::warnings().join(" ").contains("legato/bogus"));
+      QCOMPARE(Playback::adjust("legato.delay", "Violins 2 - Performance", "Legato", 2, 200), 225.0);
+      QCOMPARE(Playback::adjust("legato.delay", "Celli - Performance", "Legato", 0, 200), 400.0);   // (its own table)
+      QCOMPARE(Playback::adjust("legato.delay", "Violas - Performance", "Legato", 2, 200), 200.0);
+      // a start never overwrites the user's file
+      Playback::setIniPath(path);
+      QCOMPARE(Playback::value("legato/overlapTicks"), 60.0);
+      Playback::setIniValuesForTest({});
+      QCOMPARE(Playback::value("legato/overlapTicks"), 30.0);
+      // the score layer's text: only what is set, in the definitions' order; read back clamped
+      QCOMPARE(Playback::writeScoreValues({}), QString());
+      QCOMPARE(Playback::writeScoreValues({ { "pedal/upAfterMs", 60 }, { "legato/overlapTicks", 40 } }),
+               QString("legato/overlapTicks=40;pedal/upAfterMs=60"));
+      }
+
+//---------------------------------------------------------
+//   playbackSettingsLayers
+//    a setting's effect at each layer (built-in default, playback.ini, the score's metaTag), rendered:
+//    the legato overlap, a legato delay table, a pedal-free piece's same notes; and the shorts' meant
+//    length; a score without overrides gets no metaTag
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackSettingsLayers()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='0'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QVERIFY(score->metaTag(Playback::metaTag).isEmpty());
+      struct N { int on; int off; int pitch; };
+      auto render = [score]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
+                        continue;
+                  if (ev.velo() > 0)
+                        notes.push_back({ te.first, -1, ev.pitch() });
+                  else
+                        for (N& n : notes)
+                              if (n.pitch == ev.pitch() && n.off < 0)
+                                    n.off = te.first;
+                  }
+            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
+            return notes;
+            };
+      const int Q = DIVISION;
+      // C5 (slurred into D5) lasts overlapTicks past its end into D5: default 30, ini 60, the score's 90
+      // (C5's own end is MS4's 99 % of it, 5 ticks before D5)
+      std::vector<N> n = render();
+      const int base = n[0].off - n[1].on - 30;
+      QCOMPARE(base, -5);
+      Playback::setIniValuesForTest({ { "legato/overlapTicks", "60" } });
+      n = render();
+      QCOMPARE(n[0].off - n[1].on, base + 60);
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "legato/overlapTicks", 90 } }));
+      QCOMPARE(Playback::source("legato/overlapTicks", score), Playback::Source::SCORE);
+      n = render();
+      QCOMPARE(n[0].off - n[1].on, base + 90);
+      score->setMetaTag(Playback::metaTag, "");
+      // legato early: the map's 0 %, the ini's 100 % with a table for the patch (+2: 300 ms, 144 ticks at 60 bpm),
+      // the score's 50 % (the older metaTag)
+      QCOMPARE(n.size() > 3, true);
+      Playback::setIniValuesForTest({ { "legato/early", "100" }, { "legato.delay/Violin Legato", "+2:300 +1:100" } });
+      QCOMPARE(SoundLib::legatoEarly(score, *lib), 100);
+      n = render();
+      QVERIFY2(qAbs(n[1].on - (Q - 144)) <= 1, qPrintable(QString::number(n[1].on)));
+      QVERIFY2(qAbs(n[3].on - (3 * Q - 48)) <= 1, qPrintable(QString::number(n[3].on)));     // (+1: 100 ms)
+      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "50");
+      QCOMPARE(Playback::source("legato/early", score, lib->legatoEarly), Playback::Source::SCORE);
+      n = render();
+      QVERIFY2(qAbs(n[1].on - (Q - 72)) <= 1, qPrintable(QString::number(n[1].on)));
+      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
+      // the ramp: a sixteenth at 120 (125 ms) moves with rampFromMs 50 (it didn't at 125)
+      Playback::setIniValuesForTest({ { "legato/early", "100" }, { "legato/rampFromMs", "50" } });
+      n = render();
+      QVERIFY(n[13].on < 12 * Q + DIVISION / 4);
+      // shorts: a staccato's meant length by layer
+      std::vector<Ms4::ArtRef> stacc { { Ms4::Art::Staccato, false } };
+      Playback::setIniValuesForTest({});
+      QCOMPARE(SoundLib::want(stacc, SoundLib::TextState(), 1.0, 0, score).soundSeconds, 0.5);
+      Playback::setIniValuesForTest({ { "shorts/staccato", "80" } });
+      QCOMPARE(SoundLib::want(stacc, SoundLib::TextState(), 1.0, 0, score).soundSeconds, 0.8);
+      score->setMetaTag(Playback::metaTag, "shorts/staccato=30");
+      QCOMPARE(SoundLib::want(stacc, SoundLib::TextState(), 1.0, 0, score).soundSeconds, 0.3);
+      Playback::setIniValuesForTest({ { "shorts/byMeantLength", "0" } });
+      score->setMetaTag(Playback::metaTag, "");
+      QVERIFY(!SoundLib::want(stacc, SoundLib::TextState(), 1.0, 0, score).byMeantLength);
+      // global settings ignore the score layer
+      score->setMetaTag(Playback::metaTag, "hosting/maxVoices=64");
+      QCOMPARE(Playback::value("hosting/maxVoices", score), 512.0);
+      score->setMetaTag(Playback::metaTag, "");
+      Playback::setIniValuesForTest({});
       delete score;
       }
 

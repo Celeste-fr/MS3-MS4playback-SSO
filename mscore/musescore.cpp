@@ -133,6 +133,7 @@
 #include "libmscore/staff.h"
 #include "libmscore/style.h"
 #include "libmscore/soundlibrary.h"
+#include "libmscore/playbacksettings.h"
 #include "soundlibraryhost.h"
 #include "liveintegration.h"
 #include "liveclips.h"
@@ -2065,6 +2066,7 @@ MuseScore::MuseScore()
             }
 
       menuEdit->addSeparator();
+      menuEdit->addAction(getAction("reload-playback-settings"));
       pref = new QAction("", 0);
       connect(pref, SIGNAL(triggered()), this, SLOT(startPreferenceDialog()));
       menuEdit->addAction(pref);
@@ -7192,6 +7194,24 @@ void MuseScore::realizeChordSymbols()
 
 
 //---------------------------------------------------------
+//   reloadPlaybackSettings
+//    playback.ini read again (libmscore/playbacksettings.h); the renderer renders every score again
+//    (Playback::generation), playback stopped first
+//---------------------------------------------------------
+
+void MuseScore::reloadPlaybackSettings()
+      {
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      Playback::reload();
+      for (MasterScore* ms : qAsConst(scoreList))
+            ms->setPlaylistDirty();
+      const QStringList warn = Playback::warnings();
+      showMessage(warn.isEmpty() ? tr("Playback settings read from %1").arg(Playback::iniPath())
+                                 : tr("Playback settings read, %1 warning(s): %2").arg(warn.size()).arg(warn.join("; ")), 8000);
+      }
+
+//---------------------------------------------------------
 //   cmd
 //---------------------------------------------------------
 
@@ -7647,6 +7667,8 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             setPlaybackMode(PlaybackMode::MS4);
       else if (cmd == "playback-library")
             setPlaybackMode(PlaybackMode::LIBRARY);
+      else if (cmd == "reload-playback-settings")
+            reloadPlaybackSettings();
       else if (cmd == "sound-library") {
             // one window, shown and closed by the View menu's check mark
             static QPointer<SoundLibraryDialog> dialog;
@@ -9401,6 +9423,9 @@ void MuseScore::init(QStringList& argv)
       if (dataPath.isEmpty())
             dataPath = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
 #endif
+      // the playback adjustments (libmscore/playbacksettings.h): <dataPath>/playback.ini, written with the
+      // defaults when missing (Windows: %LOCALAPPDATA%\MuseScore\MuseScore3Evo\playback.ini)
+      Playback::setIniPath(dataPath + "/playback.ini");
 
       if (useFactorySettings) {
             if (deletePreferences)

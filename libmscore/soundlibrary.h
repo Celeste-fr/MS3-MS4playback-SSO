@@ -173,6 +173,8 @@ struct Want {
       QStringList bases;                  // in order of preference
       QStringList modifiers;
       double seconds { -1 };              // the note's written length (noteSeconds); -1: unknown
+      bool byMeantLength { true };        // playback setting shorts/byMeantLength: from= against soundSeconds (else seconds)
+      double nominalShare { 0.9 };        // shorts/nominalShare: a nominal length= is skipped for a note under this share
       double soundSeconds { -1 };         // how long it is meant to sound: seconds times MS4's duration factor for its
                                           // articulations (strings: staccato 50 %, staccatissimo 25 %, tenuto 99 %,
                                           // portato their average 74.5 %); <Articulation from> is compared with this
@@ -554,7 +556,8 @@ std::map<int, int> controllerTexts(Score* score, const Part* part, const Control
 //    for a trill, the interval to the upper note in semitones
 //---------------------------------------------------------
 
-Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double seconds, int trillSemitones);
+Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double seconds, int trillSemitones,
+          const Score* score = nullptr);   // (score: its playback settings, Playback::value)
 int trillSemitones(const Note* note);
 
 } // namespace SoundLib

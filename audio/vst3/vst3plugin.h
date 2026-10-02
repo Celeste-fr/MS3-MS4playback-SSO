@@ -102,7 +102,7 @@ class Vst3Plugin {
       // before the instance is in a Vst3Synth slot, or the exporting thread). secondsSinceState: how
       // much it has run (any thread)
       static constexpr double SETTLE_SECONDS = 1.0;
-      void settle(double seconds = SETTLE_SECONDS);
+      void settle(double seconds = -1);        // -1: playback setting hosting/settleSeconds (SETTLE_SECONDS)
       double secondsSinceState() const;
 
       // how long the last load() and setState() took, by step, in ms (load times.log, the load
