@@ -91,8 +91,17 @@ struct Articulation {
                                           // By interval (legatoDelay="-12:210 … +12:360"): their median
       std::vector<std::pair<int, double>> legatoDelays;   // interval (semitones, the new note minus the one before)
                                           // -> ms, sorted by interval; empty: legatoDelayMs for every interval
-      double legatoDelayAt(int interval) const;   // the delay for that interval: interpolated linearly between
-                                          // the measured ones, beyond the widest the widest's (-1: unknown)
+      // octave slurs (+12 / -12) by the pitch they start from (<Articulation octaveUp="36:180 37:140 …"
+      // octaveDown="…">: start MIDI pitch -> ms, measured at ~16-30 starts per patch, 2026-10-02): SSO's octave
+      // transitions follow its sample zones (Piccolo -12: ~370 ms from D#6 to A#6, ~175 from B6 up), so one number
+      // per patch misses many by 100-200 ms. Empty: the octave's entry in legatoDelays as for any other interval
+      std::vector<std::pair<int, double>> octaveUp;
+      std::vector<std::pair<int, double>> octaveDown;
+      double octaveUpMs { -1 };           // their medians (the fallback when the start pitch is unknown)
+      double octaveDownMs { -1 };
+      double legatoDelayAt(int interval, int fromPitch = -1) const;   // the delay for that interval: interpolated
+                                          // linearly between the measured ones, beyond the widest the widest's
+                                          // (-1: unknown); an octave from fromPitch: octaveDelayAt()
       // a sustained note's attack: it is heard (its level 15 dB under its peak) this long after its note-on
       // (<Articulation onset>: one number or "pitch:ms" pairs by played pitch): a note that is not a legato
       // transition starts early by it (the renderer, onsetEarly()); -1: unknown / not shifted
@@ -100,6 +109,13 @@ struct Articulation {
       std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
       double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
       };
+
+// an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;
+// an unmeasured start (a failed fit, beyond the measured ones) the nearest measured start's; equally near two
+// (a one-semitone gap), the one whose run of like values (adjacent starts within 50 ms of it, SSO's sample zones of
+// 2-4 semitones) is shorter: the zone missing a member, so the start stays on its side of the zone break (a tie:
+// the lower). Unknown start (fromPitch < 0): fallback (the table's median). Empty table: fallback
+double octaveDelayAt(const std::vector<std::pair<int, double>>& table, double fallback, int fromPitch);
 
 struct DrumKey {
       int pitch { -1 };                   // the MuseScore drum sound (the note's pitch), -1: none (reference)

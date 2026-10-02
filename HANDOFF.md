@@ -43,9 +43,11 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   harmonic method was wrong by 75-320 ms); per-family medians now: strings +5 / −10 ms (+12 / −12), woodwinds +5 / 0,
   brass −45 / +20; other intervals 0…+10. Sul tasto / flautando / harmonics: per-semitone onset at −12 dB clamped to the
   neighbours, median +58 ms, none early. Oboe +60 and Violins 2 +25 ms corrections.
-- Open: per-instrument octave outliers from only 2-4 octaves each (Horn +12 late 140-300 ms, Tuba +12 −120, Oboe −12
-  −40…−130, Violins 2 −12 −20…−130; Basses / Trombone / Piccolo single notes at −300…−450 look like analysis outliers):
-  measure more octaves per patch before correcting. Violins 1 flautando low register still +256 ms.
+- Octaves by start pitch (branch `octave-per-pitch`, owner's option C, 2026-10-02): the 16 patches measured at
+  ~16-30 starts (branch octave-measure, `tools/soundlibraries/octave_measure/`) time each ±12 slur by its start
+  pitch's own value (map `octaveUp` / `octaveDown`; rule in docs/PLAYBACK_SETTINGS.md); the others keep one ±12 value.
+  Not used: Violins 2 - Sul G (4 starts, inconclusive), Oboe Principal (plays no notated legato).
+  Violins 1 flautando low register still +256 ms.
 - Kept by the owner's choice: strings' slurred sixteenths 50-80 ms late (the fast-note ramp keeps fast runs even;
   Whence cellos 0.9 dB spread).
 
