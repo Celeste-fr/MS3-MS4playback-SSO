@@ -50,8 +50,9 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
 
 ## Branches and CI
 
-- `main` is the default branch. **A session works on its own branch only**: no merging into or pushing to `main`
-  (the owner decides). Check `git log` of `main` and your branch first.
+- `main` is the default branch. **Work on a branch**; the coordinating session merges finished, tested work by
+  itself and its subagents into `main` without asking (the owner, 2026-10-02); a subagent never merges into `main`
+  itself. Anything incomplete or changing an owner-decided value waits for the owner. Check `git log` first.
 - Since 2026-10-02 `main` contains every feature branch: the chain `live-set-export` (live-integration,
   live-clip-edit, piano-v37-fixes, legato-timing, the SSO timing of `claude/intelligent-volta-gx7gmw`) →
   `automation-editor` (drawn automation lanes, `automation-live-research`), and the side branches
