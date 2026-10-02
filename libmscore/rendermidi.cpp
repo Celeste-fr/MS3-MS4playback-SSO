@@ -1369,9 +1369,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
 
                   // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
                   // articulation with a measured onset: how early it may start (utick). As for a transition, the note
-                  // just before on its track, when it plays on the same patch, keeps keepMs of its length as played;
-                  // not before the chunk or the pass; -1: not at all (grace notes or an arpeggio before it)
-                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c) -> int {
+                  // just before on its track, when it plays on the same patch, keeps keepMs of its length as played
+                  // (that note and its written length in before / lenBefore); not before the chunk or the pass; -1: not
+                  // at all (grace notes or an arpeggio before it)
+                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, const Note** before, double* lenBefore) -> int {
                         Chord* ch = note->chord();
                         if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
                               return -1;
@@ -1395,6 +1396,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!pc || pc.patch != c.patch)
                                     continue;
                               const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep);
+                              *before = pn;
+                              *lenBefore = score->utick2utime(utick) - score->utick2utime(fc->tick().ticks() + tickOffset);
                               return std::max(earliest, cap);
                               }
                         return earliest;
@@ -1558,9 +1561,26 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
                                                                    libPatches[libChoice.patch]->name, libChoice.articulation->name,
                                                                    n->ppitch(), libChoice.articulation->onsetAt(n->ppitch())));
-                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
-                                    if (earliest >= 0) {
-                                          config.libEarly = onsetMs * libOnsetEarly / 100.0 / 1000.0;
+                                    const Note* before = nullptr;
+                                    double lenB = 0;
+                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice, &before, &lenB) : -1;
+                                    double earlyMs = onsetMs * libOnsetEarly / 100.0;
+                                    // in a fast run (the note just before on the same patch shorter than the transition
+                                    // into this note would take): as early as that transition ([legato] fastFirsts).
+                                    // Measured (2026-10-02): SSO's Performance strings sound a slur's first note after a
+                                    // sixteenth 140-200 ms after its note-on, like a transition, not 45-75 ms (the onset
+                                    // from silence)
+                                    if (before && libFastFirsts && libLegatoEarly > 0) {
+                                          const int iv = note->ppitch() - before->ppitch();
+                                          const double d = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
+                                                                                         libChoice.articulation->name, iv,
+                                                                                         libChoice.articulation->legatoDelayAt(iv, before->ppitch())),
+                                                                        lenB);
+                                          if (lenB * 1000.0 < d * libFastBelow)
+                                                earlyMs = std::max(earlyMs, d * libLegatoEarly / 100.0);
+                                          }
+                                    if (earliest >= 0 && earlyMs > 0) {
+                                          config.libEarly = earlyMs / 1000.0;
                                           config.libEarliest = earliest;
                                           config.libOn = &libShiftOn;
                                           config.libWrittenOn = &libShiftWritten;
@@ -4127,6 +4147,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libSlurEndOverlap = Playback::on("legato/slurEndOverlap", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libFastTechnique = Playback::on("legato/fastTechnique", score);
+      libFastFirsts = Playback::on("legato/fastFirsts", score);
       libFastBelow = Playback::value("legato/fastBelowShare", score) / 100.0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;

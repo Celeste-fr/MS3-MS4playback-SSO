@@ -133,6 +133,7 @@ class MidiRenderer {
       // the fast technique ([legato] fastTechnique, fastBelowShare): a slurred note after a note shorter than this share
       // of its transition's delay plays its own attack (no legato transition)
       bool libFastTechnique = false;
+      bool libFastFirsts = true;          // [legato] fastFirsts: a slur's first note in a fast run starts as early as a transition
       double libFastBelow = 1.0;
       double libFastDelay(double delayMs, double lenBefore) const;
       // a library note's start as played (note, tickOffset -> utick), this chunk: what an early start after it may take
