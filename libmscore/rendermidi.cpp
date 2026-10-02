@@ -1510,6 +1510,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4Once = once;
                         config.libPatch = libChoice.patch;
                         config.libOverlap = libOverlap(libChoice, note);
+                        const Note* libTransitionFrom = nullptr;      // a legato transition started early: from this note
+                        const Note* libRetrigger = nullptr;           // the fast technique: its own attack after this note
                         if (li && !libNote.builtIn && !li->kit) {
                               // a legato transition (SSO's Performance patches reach the new pitch 60-690 ms after the
                               // note-on, median 190, by patch and interval: the legato grid) starts early by the patch's
@@ -1519,15 +1521,27 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               int interval = 0;
                               double lenBefore = 0;
                               const Note* from = legatoTransition(note, libChoice, &earliest, &interval, &lenBefore);
+                              double delayMs = 0;
                               if (from) {
-                                    libGlideFrom[note] = from;
                                     // (an octave by the pitch it starts from, where measured: octaveUp / octaveDown;
                                     // playback.ini [legato.delay] by patch: an offset or its own table); after a short
-                                    // note SSO's transition is quicker ([legato] fastBaseMs, fastSlope)
-                                    const double delayMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
-                                                                                         libChoice.articulation->name, interval,
-                                                                                         libChoice.articulation->legatoDelayAt(interval, from->ppitch())),
-                                                                        lenBefore);
+                                    // note SSO's transition is quicker ([legato] fastShare, fastFullMs)
+                                    delayMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
+                                                                            libChoice.articulation->name, interval,
+                                                                            libChoice.articulation->legatoDelayAt(interval, from->ppitch())),
+                                                           lenBefore);
+                                    // the fast technique ([legato] fastTechnique, fastBelowShare): after a note shorter than
+                                    // the transition, the slurred note plays its own attack on the same patch (early by its
+                                    // onset; the note before ends there, no overlap) instead of a transition that would be
+                                    // heard after the beat (SSO: strings 100-170 ms, a sixteenth at 110 is 136)
+                                    if (offset == 0 && libFastTechnique && lenBefore * 1000.0 < delayMs * libFastBelow) {
+                                          libRetrigger = from;
+                                          from = nullptr;
+                                          }
+                                    }
+                              if (from) {
+                                    libGlideFrom[note] = from;
+                                    libTransitionFrom = from;
                                     if (offset == 0 && libLegatoEarly > 0 && delayMs > 0) {
                                           config.libEarly = delayMs * libLegatoEarly / 100.0 / 1000.0;
                                           config.libEarliest = earliest;
@@ -1564,9 +1578,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
                         if (played >= 0) {
                               libPlayedOn[{ note, tickOffset }] = played;
-                              auto g = libGlideFrom.find(note);
-                              if (config.libEarly > 0 && g != libGlideFrom.end() && played < note->chord()->tick().ticks() + tickOffset)
-                                    libLegatoOffs.push_back({ g->second, noteChannel, played });
+                              if (libTransitionFrom && played < note->chord()->tick().ticks() + tickOffset)
+                                    libLegatoOffs.push_back({ libTransitionFrom, noteChannel, played, false });
+                              else if (libRetrigger)
+                                    libLegatoOffs.push_back({ libRetrigger, noteChannel, played, true });
                               }
                         if (config.libOn && libShiftOn >= 0 && libShiftOn < libShiftWritten)
                               libShifts.push_back({ noteChannel, libChoice.patch, libShiftOn, libShiftWritten,
@@ -2207,15 +2222,16 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       // overlapTicks after the written start) ends overlapTicks after the new start as played. In a fast run whose
       // notes start early by more than a note's length, it would else still sound when the next one or two start
       // (SSO's legato is monophonic: the key let go then)
+      // A slurred note played by the fast technique (its own attack): the note before ends where it starts, before it
       for (const LibLegatoOff& l : libLegatoOffs) {
-            const int at = l.on + libOverlapTicks;
+            const int at = l.cut ? l.on : l.on + libOverlapTicks;
             for (auto i = events->upper_bound(at); i != events->end(); ++i) {
                   const NPlayEvent& ev = i->second;
                   if (ev.type() == ME_NOTEON && ev.velo() == 0 && ev.note() == l.from && ev.channel() == l.channel
                       && !ev.librarySwitch()) {
                         NPlayEvent off(ev);
                         events->erase(i);
-                        events->insert(std::make_pair(at, off));
+                        events->insert(events->lower_bound(at), std::make_pair(at, off));
                         break;
                         }
                   }
@@ -4110,8 +4126,10 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libOverlapTicks = int(Playback::value("legato/overlapTicks", score));
       libSlurEndOverlap = Playback::on("legato/slurEndOverlap", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
-      libFastBase = Playback::value("legato/fastBaseMs", score) / 1000.0;
-      libFastSlope = Playback::value("legato/fastSlope", score) / 100.0;
+      libFastTechnique = Playback::on("legato/fastTechnique", score);
+      libFastBelow = Playback::value("legato/fastBelowShare", score) / 100.0;
+      libFastShare = Playback::value("legato/fastShare", score) / 100.0;
+      libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();
       libPlayedOn.clear();
       libLegatoOffs.clear();
@@ -4384,14 +4402,18 @@ bool MidiRenderer::libSlurAcross(const Measure* last) const
 
 //---------------------------------------------------------
 //   MidiRenderer::libFastDelay
-//    a legato transition's delay (ms) after a note lenBefore seconds long: at most fastBase + fastSlope times that
-//    length (playback settings [legato] fastBaseMs, fastSlope; SSO plays quicker transitions in fast passages than
-//    the legato grid's, measured from long notes)
+//    a legato transition's delay (ms) after a note lenBefore seconds long: SSO's transitions are quicker after short
+//    notes than the legato grid's (measured from long notes): fastShare of it after a very short note, rising
+//    linearly to all of it after a note fastFullMs long (playback settings [legato] fastShare, fastFullMs). Measured
+//    (2026-10-02, 13 Performance patches, slurred sixteenths at 100-200 bpm, 2666 transitions): 65 % and 800 ms
+//    predict each patch's median at each tempo within 11 ms (median; 90 % within 40)
 //---------------------------------------------------------
 
 double MidiRenderer::libFastDelay(double delayMs, double lenBefore) const
       {
-      return std::min(delayMs, (libFastBase + libFastSlope * lenBefore) * 1000.0);
+      if (libFastFull <= 0)
+            return delayMs;
+      return delayMs * std::min(1.0, libFastShare + (1.0 - libFastShare) * lenBefore / libFastFull);
       }
 
 //---------------------------------------------------------

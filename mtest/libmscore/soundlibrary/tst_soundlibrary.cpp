@@ -963,28 +963,33 @@ void TestSoundLibrary::legatoEarly()
             return notes;
             };
       const int Q = DIVISION, S = DIVISION / 4;
-      // the written starts, and how early each plays at 75 % of 200 ms: 150 ms is 72 ticks at 60 bpm,
-      // 144 at 120 (a quarter at 120, 500 ms, may lose half: 250 ms); a sixteenth at 120 (125 ms) not at all
+      // the written starts, and how early each plays at 75 % of 200 ms: 150 ms is 72 ticks at 60 bpm; after a quarter
+      // at 120 (500 ms) the delay is 65 % + 35 % * 500 / 800 of it (fastShare, fastFullMs): 173.75 ms, 75 % of it
+      // 125 ticks at 120. The sixteenths at 120 (125 ms): shorter than their transition (200 * 0.70 = 141 ms): the fast
+      // technique, their own attacks on the beat (this map has no onset)
       const std::vector<std::pair<int, int>> written = {
             { 0, 0 }, { Q, 72 }, { 2 * Q, 72 }, { 3 * Q, 72 },                       // m1: the slur's first on the beat
             { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 72 },                 // m2: after the slur, its first, A4 again, B4
-            { 8 * Q, 0 }, { 9 * Q, 144 }, { 10 * Q, 144 }, { 11 * Q, 144 },          // m3 at 120
+            { 8 * Q, 0 }, { 9 * Q, 125 }, { 10 * Q, 125 }, { 11 * Q, 125 },          // m3 at 120
             };
       std::vector<N> notes = render();
       QCOMPARE(int(notes.size()), 12 + 8);
       for (size_t i = 0; i < written.size(); ++i)
-            QVERIFY2(notes[i].on == written[i].first - written[i].second,
+            QVERIFY2(qAbs(notes[i].on - (written[i].first - written[i].second)) <= 1,
                      qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(notes[i].pitch)
                                 .arg(notes[i].on).arg(written[i].first - written[i].second)));
       QCOMPARE(notes[12].on, 12 * Q);                           // the run: its first on the beat
-      for (int i = 1; i < 8; ++i)
+      for (int i = 1; i < 8; ++i) {
             QCOMPARE(notes[size_t(12 + i)].on, 12 * Q + i * S);
-      // the legato patch plays the slurred notes; each (but a slur's last) still overlaps the next, whose
-      // note-off is where it was
+            QCOMPARE(notes[size_t(12 + i - 1)].off, notes[size_t(12 + i)].on);   // (no overlap: each its own attack)
+            }
+      // the legato patch plays the slurred notes; each (but a slur's last) overlaps the next: 30 ticks after the
+      // next one's start as played
       QCOMPARE(notes[1].channel, 1);
       QVERIFY(notes[1].off > notes[2].on);
       QVERIFY(notes[0].off > notes[1].on);
       QCOMPARE(notes[4].channel, 0);                            // (G5: unslurred, the main patch)
+      const std::set<size_t> beforeTransition = { 0, 1, 2, 6, 8, 9, 10 };
       std::vector<N> onBeat;
       {
             score->setMetaTag(SoundLib::legatoEarlyMetaTag, "0");
@@ -993,15 +998,19 @@ void TestSoundLibrary::legatoEarly()
             QCOMPARE(int(onBeat.size()), 20);
             for (size_t i = 0; i < written.size(); ++i)
                   QCOMPARE(onBeat[i].on, written[i].first);
-            for (size_t i = 0; i < notes.size(); ++i)
-                  QCOMPARE(notes[i].off, onBeat[i].off);        // (the note-offs don't move)
+            for (size_t i = 0; i < notes.size(); ++i) {
+                  if (beforeTransition.count(i))
+                        QCOMPARE(notes[i].off, notes[i + 1].on + 30);
+                  else
+                        QCOMPARE(notes[i].off, onBeat[i].off);
+                  }
       }
-      // the score's own percent: 50 % of 200 ms at 60 bpm is 48 ticks, at 120 96
+      // the score's own percent: 50 % of 200 ms at 60 bpm is 48 ticks, of 173.75 at 120 83
       score->setMetaTag(SoundLib::legatoEarlyMetaTag, "50");
       notes = render();
       QCOMPARE(notes[1].on, Q - 48);
       QCOMPARE(notes[7].on, 7 * Q - 48);
-      QCOMPARE(notes[9].on, 9 * Q - 96);
+      QVERIFY(qAbs(notes[9].on - (9 * Q - 83)) <= 1);
       QCOMPARE(notes[0].on, 0);
       score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
       QCOMPARE(SoundLib::legatoEarly(score, *lib), 75);
@@ -1010,57 +1019,96 @@ void TestSoundLibrary::legatoEarly()
 
 //---------------------------------------------------------
 //   legatoEarlyFastRun
-//    a fast run under short slurs: a transition may take a share of the note before rising from none at
-//    125 ms to half at 250 ms (the owner's cellos: sixteenths at 110 bpm, 4-note slurs, a 160 ms delay;
-//    capped at half, a slur's first note lost half its length and the run's levels went uneven).
-//    legato-fast.musicxml: sixteen sixteenths at 110 in four 4-note slurs, then a whole note
+//    a fast run under short slurs (the owner's cellos in "Whence": sixteenths at 110, 136 ms, in 4-note slurs; the owner,
+//    2026-10-02: "I want fast slurs to not sound late"). legato-fast.musicxml: sixteen sixteenths at 110 in four 4-note
+//    slurs, then a whole note. A transition after a short note starts early by fastShare (65 %) rising to all of its
+//    delay after a note fastFullMs (800 ms) long; the note before keeps keepMs (40 ms) as played; a slurred note after a
+//    note shorter than its transition plays its own attack (fastTechnique)
 //---------------------------------------------------------
 
 void TestSoundLibrary::legatoEarlyFastRun()
       {
-      auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
-         "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long'/>"
-         "</Instrument>"
-         "<Instrument name='Violin Legato' with='Violin'>"
-         "<Switch type='none'/>"
-         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='160' release='900'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib);
-      SoundLib::setCurrent(lib);
-      MasterScore* score = readScore(DIR + "legato-fast.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      EventMap events;
-      SynthesizerState ss;
-      score->renderMidi(&events, false, true, ss);
-      std::vector<int> ons;
-      for (const auto& te : events) {
-            const NPlayEvent& ev = te.second;
-            if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0)
-                  ons.push_back(te.first);
-            }
-      std::sort(ons.begin(), ons.end());
-      QCOMPARE(int(ons.size()), 17);
-      const int S = DIVISION / 4;                     // (136 ms at 110)
+      struct N { int on; int off; };
+      auto render = [this](int delayMs) {
+            auto lib = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long'/>"
+               "</Instrument>"
+               "<Instrument name='Violin Legato' with='Violin'>"
+               "<Switch type='none'/>"
+               "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='%1' release='900'/>"
+               "</Instrument></SoundLibrary>").arg(delayMs));
+            SoundLib::setCurrent(lib);
+            MasterScore* score = readScore(DIR + "legato-fast.musicxml");
+            score->rebuildMidiMapping();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
+                        continue;
+                  if (ev.velo() > 0)
+                        notes.push_back({ te.first, -1 });
+                  else {
+                        // (each note's own off: the earliest of its pitch still open; here the pitches of
+                        // neighbours differ)
+                        for (N& n : notes)
+                              if (n.off < 0 && n.on <= te.first) {
+                                    n.off = te.first;
+                                    break;
+                                    }
+                        }
+                  }
+            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
+            delete score;
+            return notes;
+            };
+      const int S = DIVISION / 4;                     // (136 ms at 110: 0.88 ticks a ms)
+      // 160 ms: after a sixteenth 160 * (0.65 + 0.35 * 136 / 800) = 113.5 ms, 100 ticks; shorter than the sixteenth:
+      // legato transitions. A slur's first on the beat (this map has no onset), its second 40 ms (35 ticks) after it
+      // (the first keeps keepMs), the others 100 ticks early: every note of the slur after the second keeps its length
+      std::vector<N> n = render(160);
+      QCOMPARE(int(n.size()), 17);
       for (int i = 0; i < 16; ++i) {
-            const int written = i * S;
-            // a slur's first note on the beat, a transition hardly early: (136 - 125) / 250 of 136 ms, 6 ms
-            // of 160 (5 ticks at 110)
-            const int early = (i % 4) ? 5 : 0;
-            QVERIFY2(qAbs(ons[size_t(i)] - (written - early)) <= 1,
-                     qPrintable(QString("note %1 starts at %2, expected %3").arg(i).arg(ons[size_t(i)]).arg(written - early)));
+            const int b = (i / 4) * 4 * S;
+            const int expected = i % 4 == 0 ? b : i % 4 == 1 ? b + 35 : b + (i % 4) * S - 100;
+            QVERIFY2(qAbs(n[size_t(i)].on - expected) <= 1,
+                     qPrintable(QString("note %1 starts at %2, expected %3").arg(i).arg(n[size_t(i)].on).arg(expected)));
             }
-      // as played (note-on to the next): none loses or gains more than a quarter (a slur's first, on the
-      // beat with the next early, keeps 75 %; a slur's last, the next on the beat)
       for (int i = 0; i < 16; ++i) {
-            const int played = ons[size_t(i + 1)] - ons[size_t(i)];
-            QVERIFY2(played >= S * 3 / 4 - 1 && played <= S * 5 / 4 + 1,
-                     qPrintable(QString("note %1 plays %2 ticks of %3").arg(i).arg(played).arg(S)));
+            // a transition's note before ends 30 ticks after its start as played (one note overlaps the next); a slur's
+            // last ends on time, the next slur's first on the beat
+            if (i % 4 != 3)
+                  QVERIFY2(qAbs(n[size_t(i)].off - (n[size_t(i + 1)].on + 30)) <= 1,
+                           qPrintable(QString("note %1 ends at %2, the next starts at %3").arg(i).arg(n[size_t(i)].off).arg(n[size_t(i + 1)].on)));
+            else
+                  QVERIFY(qAbs(n[size_t(i)].off - (i + 1) * S) <= 3);         // (MS4's 99 %)
             }
-      QVERIFY(ons[1] - ons[0] >= S * 3 / 4 - 1);
-      delete score;
+      // 200 ms: after a sixteenth 141.9 ms, longer than it: the fast technique, every note its own attack on the beat,
+      // the note before ending there
+      n = render(200);
+      QCOMPARE(int(n.size()), 17);
+      for (int i = 0; i < 16; ++i) {
+            QCOMPARE(n[size_t(i)].on, i * S);
+            if (i % 4 != 3)
+                  QCOMPARE(n[size_t(i)].off, n[size_t(i + 1)].on);
+            else
+                  QVERIFY(qAbs(n[size_t(i)].off - n[size_t(i + 1)].on) <= 3);     // (a slur's last: MS4's 99 %)
+            }
+      // the fast technique off (playback.ini [legato] fastTechnique=0): transitions 125 ticks early, the second of a
+      // slur 35 ticks after its first
+      Playback::setIniValuesForTest({ { "legato/fastTechnique", "0" } });
+      n = render(200);
+      Playback::setIniValuesForTest({});
+      for (int i = 0; i < 16; ++i) {
+            const int b = (i / 4) * 4 * S;
+            const int expected = i % 4 == 0 ? b : i % 4 == 1 ? b + 35 : b + (i % 4) * S - 125;
+            QVERIFY2(qAbs(n[size_t(i)].on - expected) <= 1,
+                     qPrintable(QString("note %1 starts at %2, expected %3").arg(i).arg(n[size_t(i)].on).arg(expected)));
+            }
       }
 
 //---------------------------------------------------------
@@ -1114,11 +1162,13 @@ void TestSoundLibrary::legatoEarlyByInterval()
       std::stable_sort(ons.begin(), ons.end());
       QCOMPARE(int(ons.size()), 20);
       const int Q = DIVISION;
-      // early by: at 60 bpm 0.48 ticks a ms, at 120 0.96 (a quarter at 120 may lose 250 ms: none is capped)
+      // early by: at 60 bpm 0.48 ticks a ms, at 120 0.96; after a quarter at 120 (500 ms) 65 % + 35 % * 500 / 800 of
+      // the delay (fastShare, fastFullMs)
+      const double f = 0.65 + 0.35 * 500 / 800.0;
       const std::vector<std::pair<int, double>> written = {
             { 0, 0 }, { Q, 200 * 0.48 }, { 2 * Q, 200 * 0.48 }, { 3 * Q, 100 * 0.48 },     // C D E F: +2 +2 +1
             { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 200 * 0.48 },             // G, A A (struck again) B: +2
-            { 8 * Q, 0 }, { 9 * Q, 190 * 0.96 }, { 10 * Q, 150 * 0.96 }, { 11 * Q, 230 * 0.96 },   // C E G C: +4 +3 +5
+            { 8 * Q, 0 }, { 9 * Q, 190 * f * 0.96 }, { 10 * Q, 150 * f * 0.96 }, { 11 * Q, 230 * f * 0.96 },   // C E G C: +4 +3 +5
             };
       for (size_t i = 0; i < written.size(); ++i) {
             const double expected = written[i].first - written[i].second;
@@ -1301,13 +1351,13 @@ void TestSoundLibrary::onsetEarly()
             };
       const int Q = DIVISION, S = DIVISION / 4;
       // at 60 bpm 0.48 ticks a ms, at 120 0.96. G5 (79) on the main patch: 50 + 100 * 7 / 12 ms; the legato
-      // patch's fresh notes 100 ms; transitions 200 ms (a quarter at 120 may lose 250 ms)
+      // patch's fresh notes 100 ms; transitions 200 ms, after a quarter at 120 (500 ms) 173.75 (fastShare, fastFullMs)
       const double g5 = (50 + 100 * 7 / 12.0) * 0.48;
       const std::vector<std::pair<int, double>> written = {
             { 0, 0 }, { Q, 96 }, { 2 * Q, 96 }, { 3 * Q, 96 },         // the slur's first at the score's start: not earlier
             { 4 * Q, g5 }, { 5 * Q, 48 }, { 6 * Q, 48 }, { 7 * Q, 96 },  // G5 unslurred, A4 a slur's first, A4 again, B4
             { 8 * Q, 48 },                                              // C5 at 120, a slur's first: its 100 ms are at 60 bpm
-            { 9 * Q, 192 }, { 10 * Q, 192 }, { 11 * Q, 192 },
+            { 9 * Q, 167 }, { 10 * Q, 167 }, { 11 * Q, 167 },
             { 12 * Q, 96 },                                             // the run's first: a slur's first
             };
       std::vector<N> notes = render();
@@ -1318,8 +1368,12 @@ void TestSoundLibrary::onsetEarly()
                      qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(notes[i].pitch)
                                 .arg(notes[i].on).arg(expected)));
             }
-      for (int i = 1; i < 8; ++i)
-            QCOMPARE(notes[size_t(12 + i)].on, 12 * Q + i * S);       // (the run's transitions: 125 ms, not moved)
+      // the run's sixteenths (125 ms) are shorter than their transition (200 * 0.70 = 141 ms): the fast technique, each
+      // its own attack early by its onset (100 ms, 96 ticks), the note before ending there
+      for (int i = 1; i < 8; ++i) {
+            QCOMPARE(notes[size_t(12 + i)].on, 12 * Q + i * S - 96);
+            QCOMPARE(notes[size_t(12 + i - 1)].off, notes[size_t(12 + i)].on);
+            }
       // G5's switch to Long goes with it, before it; the B4 before C5 (same patch, no overlap: the slur ended)
       // ends where C5 now starts; F5 before G5 (another patch) keeps its end
       QVERIFY(std::find(switches.begin(), switches.end(), notes[4].on) != switches.end());
@@ -1370,7 +1424,7 @@ void TestSoundLibrary::playbackSettingsIni()
       QCOMPARE(Playback::source("legato/overlapTicks"), Playback::Source::DEFAULT);
       // edited by hand: an override, a bad value, an unknown key, one out of range, a table
       QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
-      f.write("; edited\n[legato]\noverlapTicks=60\nrampToMs=abc\nbogus=1\n[pedal]\nupAfterMs=5000\n"
+      f.write("; edited\n[legato]\noverlapTicks=60\nkeepMs=abc\nrampToMs=250\nbogus=1\n[pedal]\nupAfterMs=5000\n"
               "[legato.delay]\nViolins 2 - Performance=+25\nCelli - Performance|Legato=-12:300 +12:500\n");
       f.close();
       const int g1 = Playback::generation();
@@ -1378,10 +1432,12 @@ void TestSoundLibrary::playbackSettingsIni()
       QVERIFY(Playback::generation() != g1);
       QCOMPARE(Playback::value("legato/overlapTicks"), 60.0);
       QCOMPARE(Playback::source("legato/overlapTicks"), Playback::Source::INI);
-      QCOMPARE(Playback::value("legato/rampToMs"), 250.0);    // (not a number: the default)
+      QCOMPARE(Playback::value("legato/keepMs"), 40.0);       // (not a number: the default)
       QCOMPARE(Playback::value("pedal/upAfterMs"), 1000.0);   // (clamped)
-      QCOMPARE(Playback::warnings().size(), 3);
+      QCOMPARE(Playback::warnings().size(), 4);
       QVERIFY(Playback::warnings().join(" ").contains("legato/bogus"));
+      // (the fast-note ramp's keys, gone since 2026-10-02: said so)
+      QVERIFY(Playback::warnings().join(" ").contains("legato/rampToMs is no longer used"));
       QCOMPARE(Playback::adjust("legato.delay", "Violins 2 - Performance", "Legato", 2, 200), 225.0);
       QCOMPARE(Playback::adjust("legato.delay", "Celli - Performance", "Legato", 0, 200), 400.0);   // (its own table)
       QCOMPARE(Playback::adjust("legato.delay", "Violas - Performance", "Legato", 2, 200), 200.0);
@@ -1468,10 +1524,18 @@ void TestSoundLibrary::playbackSettingsLayers()
       n = render();
       QVERIFY2(qAbs(n[1].on - (Q - 72)) <= 1, qPrintable(QString::number(n[1].on)));
       score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
-      // the ramp: a sixteenth at 120 (125 ms) moves with rampFromMs 50 (it didn't at 125)
-      Playback::setIniValuesForTest({ { "legato/early", "100" }, { "legato/rampFromMs", "50" } });
+      // the fast technique: the run's sixteenths at 120 (125 ms) play their own attacks on the beat; off
+      // (fastTechnique=0) they are legato transitions, early
+      Playback::setIniValuesForTest({ { "legato/early", "100" } });
+      n = render();
+      QCOMPARE(n[13].on, 12 * Q + DIVISION / 4);
+      Playback::setIniValuesForTest({ { "legato/early", "100" }, { "legato/fastTechnique", "0" } });
       n = render();
       QVERIFY(n[13].on < 12 * Q + DIVISION / 4);
+      score->setMetaTag(Playback::metaTag, "legato/fastTechnique=1");
+      n = render();
+      QCOMPARE(n[13].on, 12 * Q + DIVISION / 4);
+      score->setMetaTag(Playback::metaTag, "");
       // shorts: a staccato's meant length by layer
       std::vector<Ms4::ArtRef> stacc { { Ms4::Art::Staccato, false } };
       Playback::setIniValuesForTest({});

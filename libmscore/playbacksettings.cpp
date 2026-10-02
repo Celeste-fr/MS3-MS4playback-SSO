@@ -41,10 +41,13 @@ static const std::vector<Definition> DEFINITIONS = {
         "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
       { "legato/keepMs", 40, 0, 1000, "ms",
         "a note before a transition (or before a held note started early) on the same patch keeps at least this much of its length as played", true },
-      { "legato/fastBaseMs", 100, 0, 2000, "ms",
-        "a transition after a short note: its delay is at most this ...", true },
-      { "legato/fastSlope", 30, 0, 1000, "%",
-        "... plus this share of the note before's length (SSO's transitions are quicker in fast passages)", true },
+      { "legato/fastShare", 65, 0, 100, "%",
+        "after a very short note a transition starts early by this share of its measured delay (SSO is quicker in fast passages) ...", true },
+      { "legato/fastFullMs", 800, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
+      { "legato/fastTechnique", 1, 0, 1, "on/off",
+        "1: a slurred note after a note too short for the transition into it plays its own attack (on the beat) instead of a legato transition", true },
+      { "legato/fastBelowShare", 100, 0, 400, "%",
+        "too short: shorter than this share of the transition's delay (the patch's measured delay, after fastShare / fastFullMs)", true },
       { "legato/glideMs", 30, 0, 500, "ms",
         "a slurred note on a tuning copy glides from the note before's tuning over this long (pitch bend and varispeed)", true },
       // [heldNotes]
@@ -173,9 +176,9 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
       const QString id = group + "/" + key;
       const Definition* d = definition(id);
       if (!d) {
-            // (the fast-note ramp, replaced on 2026-10-02 by keepMs and fastBaseMs / fastSlope: fast slurs on time)
+            // (the fast-note ramp, replaced on 2026-10-02 by keepMs, fastShare / fastFullMs and fastTechnique: fast slurs on time)
             if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastBaseMs, fastSlope; delete the line)").arg(id);
+                  i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs, fastTechnique; delete the line)").arg(id);
             else
                   i.warnings << QString("unknown key %1 (ignored)").arg(id);
             return;

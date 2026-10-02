@@ -127,9 +127,13 @@ class MidiRenderer {
       int libOverlapTicks = 30;
       bool libSlurEndOverlap = false;
       // an early start (a legato transition, a held note's onset) after a note on the same patch: that note keeps at
-      // least libKeep seconds as played ([legato] keepMs); a transition after a short note uses at most libFastBase +
-      // libFastSlope times that note's length as its delay ([legato] fastBaseMs, fastSlope)
-      double libKeep = 0.04, libFastBase = 0.1, libFastSlope = 0.3;
+      // least libKeep seconds as played ([legato] keepMs); a transition after a short note: libFastDelay ([legato]
+      // fastShare, fastFullMs)
+      double libKeep = 0.04, libFastShare = 0.65, libFastFull = 0.8;
+      // the fast technique ([legato] fastTechnique, fastBelowShare): a slurred note after a note shorter than this share
+      // of its transition's delay plays its own attack (no legato transition)
+      bool libFastTechnique = false;
+      double libFastBelow = 1.0;
       double libFastDelay(double delayMs, double lenBefore) const;
       // a library note's start as played (note, tickOffset -> utick), this chunk: what an early start after it may take
       std::map<std::pair<const Note*, int>, int> libPlayedOn;
@@ -140,8 +144,9 @@ class MidiRenderer {
       struct LibShift { int channel; int patch; int on; int written; int chordTick; };
       std::vector<LibShift> libShifts;
       // legato transitions started early (this chunk): the note before ends overlapTicks after the new start as
-      // played, not after the written one, so that only one note overlaps the next (finishLibraryEvents)
-      struct LibLegatoOff { const Note* from; int channel; int on; };
+      // played, not after the written one, so that only one note overlaps the next; a slurred note played by the
+      // fast technique (cut): the note before ends at its start (finishLibraryEvents)
+      struct LibLegatoOff { const Note* from; int channel; int on; bool cut; };
       std::vector<LibLegatoOff> libLegatoOffs;
       int minChunkSize = 0;
 

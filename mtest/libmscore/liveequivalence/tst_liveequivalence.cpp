@@ -521,6 +521,36 @@ void TestLiveEquivalence::liveClipsLegatoEarly()
                         fromClips.insert({ c.key, n.pitch, n.start <= wait ? 0 : n.start });
       QCOMPARE(int(fromClips.size()), 20);
       QVERIFY(fromClips == fromEvents);
+      // and their ends: a transition's note before ends 30 ticks after its start as played, the fast technique's (the
+      // sixteenths at 120) where the next starts (fast slurs on time, 2026-10-02)
+      {
+            std::multiset<std::tuple<QString, int, int>> endsEvents, endsClips;      // (route, pitch, end units)
+            std::map<std::tuple<int, int, int>, std::vector<int>> open;               // (port, channel, pitch) -> starts
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.type() != ME_NOTEON || e.librarySwitch())
+                        continue;
+                  const auto k = std::make_tuple(e.extPort(), e.extChannel(), e.pitch());
+                  if (e.velo() > 0)
+                        open[k].push_back(te.first);
+                  else if (!open[k].empty()) {
+                        open[k].erase(open[k].begin());
+                        endsEvents.insert({ QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1), e.pitch(), tl.units(te.first) });
+                        }
+                  }
+            for (const LiveClips::Track& c : clips)
+                  for (const LiveClips::Note& n : c.notes)
+                        if (n.pitch < LiveClips::CARRIER_LOW)
+                              endsClips.insert({ c.key, n.pitch, n.start + n.length });
+            int same = 0;
+            for (const auto& e : endsEvents)
+                  for (const auto& c : endsClips)
+                        if (std::get<0>(e) == std::get<0>(c) && std::get<1>(e) == std::get<1>(c) && std::abs(std::get<2>(e) - std::get<2>(c)) <= 1) {
+                              ++same;
+                              break;
+                              }
+            QVERIFY2(same == int(endsEvents.size()) && same == 20, qPrintable(QString("%1 of %2").arg(same).arg(endsEvents.size())));
+      }
       // m1's second note (written on beat 2, at 60 bpm = beat 1 in Live) 150 ms early: 72 ticks = 0.15 beat
       const int beat = LiveClips::UNITS_PER_BEAT;
       int early = 0;
