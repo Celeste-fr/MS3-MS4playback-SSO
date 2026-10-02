@@ -516,7 +516,7 @@ What Live 12.2 offers, checked in the running program (`dir()` of its Python cla
 ### Open questions for the owner
 
 - Edit-in-MuseScore clip tabs: lanes drawn there play in MuseScore only. Writing them back as the clip's envelopes
-  needs Live's Python API (a Control Surface script; session clips only) or Live 12.4's `create_event`. Wanted?
+  needs Live's Python API (a Control Surface script; session clips only) (Live 12.4's `create_event` is ruled out: Live 12.2 is the target, CLAUDE.md › Rules). Wanted?
 
 ## Live against MuseScore
 

@@ -28,6 +28,10 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
   source picture (or crop) next to the reading and its use, before it changes code or the map. Symbols in
   Bravura (subset `fonts/bravura/Bravura.otf` with `pyftsubset`, embedded); say what couldn't be read; open with
   a "What to check" list. Example: https://claude.ai/artifact/CPfVu3qdHzMr5xPKiJFD2Y.
+- **Live 12.2 is the target** (the owner, 2026-10-02: "make sure that we don't build any features that can't be
+  run on 12.2"): nothing may need a later Live (no 12.3+ Live Object Model calls such as `Envelope.create_event`, no
+  later devices or Max features); sets Create Live Set writes stay 12.2's format (`livesetwriter.h`). The test VM
+  runs a Live 12.4.6 trial: a set it saves won't open in 12.2, so never keep one as a test file or give it to the owner.
 - **Live and MuseScore sound alike** (the owner, 2026-09-30): any change to SSO playback (renderer, hosting,
   Mixer, Controllers, tuning) must reach the Live path: clips (`libmscore/liveclips.*`), the set Create Live Set
   writes (`mscore/livesetexport.*`, `libmscore/livesetwriter.*`) or the MuseScore Link device (`tools/live/`).
