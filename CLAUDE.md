@@ -28,6 +28,11 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
   source picture (or crop) next to the reading and its use, before it changes code or the map. Symbols in
   Bravura (subset `fonts/bravura/Bravura.otf` with `pyftsubset`, embedded); say what couldn't be read; open with
   a "What to check" list. Example: https://claude.ai/artifact/CPfVu3qdHzMr5xPKiJFD2Y.
+- **Live 12.4 is the target** (the owner, 2026-10-02: first "make sure that we don't build any features that can't
+  be run on 12.2", then "I updated my Ableton version across all devices to 12.4"): nothing may need a Live later
+  than 12.4; 12.4's Live Object Model (e.g. `Envelope.create_event`) may be used. Create Live Set still writes 12.2's
+  format (`livesetwriter.h`), which 12.4 opens; move it to 12.4's only for a reason. The test VM runs a Live 12.4.6
+  trial (from 2026-10-02, 30 days), the owner's version.
 - **Live and MuseScore sound alike** (the owner, 2026-09-30): any change to SSO playback (renderer, hosting,
   Mixer, Controllers, tuning) must reach the Live path: clips (`libmscore/liveclips.*`), the set Create Live Set
   writes (`mscore/livesetexport.*`, `libmscore/livesetwriter.*`) or the MuseScore Link device (`tools/live/`).
