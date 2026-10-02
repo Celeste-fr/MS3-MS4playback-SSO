@@ -1044,6 +1044,9 @@ LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file
 GRID_PITCHES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid_pitches.json'),
                               encoding='utf-8'))
 SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performance': 25}
+# (patch, octave direction) whose per-start octave values do NOT take the correction (owner 2026-10-02: the VM sweep
+# heard Oboe Solo +12 ~60 ms early with it, -12 on time with it)
+OCTAVE_NO_SWEEP_CORRECTION = {('Oboe Solo - Performance', 12)}
 def legatoDelayFromPitches(patch, sound):
     rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
     if not rows:
@@ -1084,7 +1087,7 @@ def legatoDelayFromPitches(patch, sound):
 # median per patch (legatoDelay's +-12, kept for patches without these and as the fallback) is 100-200 ms off at
 # many starts. tMidMs 0 (a failed fit) is left out: such a start takes the nearest measured one's (the renderer,
 # SoundLib::octaveDelayAt). Violins 2 - Sul G: 4 starts, inconclusive, not used. SWEEP_LEGATO_CORRECTION applies as
-# to the patch's other intervals.
+# to the patch's other intervals (except OCTAVE_NO_SWEEP_CORRECTION: Oboe Solo +12).
 OCTAVE_MEASURE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'octave_measure',
                                              'octave_measure.json'), encoding='utf-8'))
 OCTAVE_SKIP = {'Violins 2 - Sul G - Performance'}
@@ -1093,8 +1096,8 @@ def octaveDelays(patch):
     m = OCTAVE_MEASURE.get(patch)
     if not m or patch in OCTAVE_SKIP:
         return None, None
-    corr = SWEEP_LEGATO_CORRECTION.get(patch, 0)
     def text(d):
+        corr = 0 if (patch, int(d)) in OCTAVE_NO_SWEEP_CORRECTION else SWEEP_LEGATO_CORRECTION.get(patch, 0)
         by = {int(k): v for k, v in m.get(d, {}).get('byStart', {}).items() if v and v > 0}
         return ' '.join(f'{k}:{int(round(v + corr))}' for k, v in sorted(by.items())) or None
     return text('12'), text('-12')

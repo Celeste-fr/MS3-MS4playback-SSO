@@ -1185,6 +1185,26 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
       QCOMPARE(plain.legatoDelayAt(12, 72), 800.0);
       QCOMPARE(plain.legatoDelayAt(-12, 84), 400.0);
 
+      // the shipped map: Oboe Solo's +12 per-start values carry no sweep correction (raw 160 at 58), its -12 do (raw
+      // 110 at 70 + 60)
+      {
+      QString err;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
+      QVERIFY2(sso, qPrintable(err));
+      bool found = false;
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            if (li.name != "Oboe Solo - Performance")
+                  continue;
+            for (const SoundLib::Articulation& oa : li.articulations) {
+                  if (oa.octaveUp.empty())
+                        continue;
+                  found = true;
+                  QCOMPARE(oa.legatoDelayAt(12, 58), 160.0);
+                  QCOMPARE(oa.legatoDelayAt(-12, 70), 170.0);
+                  }
+            }
+      QVERIFY(found);
+      }
       // the renderer passes the start pitch
       SoundLib::setCurrent(lib);
       MasterScore* score = readScore(DIR + "legato-octave.musicxml");
