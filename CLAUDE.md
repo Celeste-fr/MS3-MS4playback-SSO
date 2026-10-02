@@ -89,7 +89,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 `microtonalTuning`. The Microtonal Tuner plugin is frozen: update or drop `tst_tuning::pluginParity` when needed.
 
 **Playability** (PLAYABILITY.md): `libmscore/playabilityrules.*`, `playability.*`, `playabilitydiagram.*`,
-`mscore/playabilitypanel.*`. Later work is on `playability-checker`.
+`mscore/playabilitypanel.*`.
 
 **Sound libraries** (`libmscore/soundlibrary.h`; map format `share/soundlibraries/README.md`)
 - `SoundLib`: loads maps, matches instruments by `Instrument::getId()`, builds the `Want` from MS4 articulations and
