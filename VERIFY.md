@@ -16,10 +16,12 @@ background.bat.in`, `tools/playbackverify/`.
 
 1. Get the MuseScore to check (a run of *Test: Sound library on Windows*, as for any test build),
    unzip it where you like.
-2. Double-click **`Verify SSO playback in background.bat`** in its `bin` folder. With nothing
-   dropped on it, it checks the test scores that come with MuseScore (`verifyplayback`: piano chords
-   at pedal changes, strings with legato, staccato, pizzicato …). To check your own scores, drag
-   scores, or a folder of scores, onto the `.bat`.
+2. Start the check from a command prompt in its `bin` folder:
+   `MuseScore3Evo.exe --verify-library "Spitfire Symphony Orchestra" --verify-playback default`
+   (`default`: the test scores that come with MuseScore, `verifyplayback`: piano chords at pedal changes,
+   strings with legato, staccato, pizzicato …; or give score files / folders instead). The double-click
+   `Verify SSO playback in background.bat` is no longer in the builds (2026-10-02); a build configured with
+   `-DMSCORE_INSTALL_MEASUREMENT_SCRIPTS=ON` still has it (`main/Verify SSO playback in background.bat.in`).
 3. Keep working: it has no window, runs at below-normal priority, uses a copy of your setups
    (`Documents\MuseScore Sound Library Check\background verify setups`) and changes nothing of your
    MuseScore. Progress: `Documents\MuseScore Sound Library Check\background playback verify.log`.
@@ -121,7 +123,7 @@ here). What was learned there about checking playback:
 
 ## Optional: a GitHub runner on your PC
 
-Not needed: the `.bat` does the same with one double-click. A runner only saves you starting it and
+Not needed: the command above does the same. A runner only saves you starting it and
 sending the zip: an agent starts the check and downloads the report itself
 (`.github/workflows/verify_playback_owner_pc.yml`).
 

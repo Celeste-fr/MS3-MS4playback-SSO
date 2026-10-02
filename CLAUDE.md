@@ -141,7 +141,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `<patch>.vst3state`, `Kontakt empty.vst3state`, `made setups.json` (`MAKER_VERSION`), `checks.json` (raise
   `CHECK_VERSION` in soundlibrarycheck.cpp when old results go stale), `dynamics.json`, `load times.log` (qDebug
   doesn't show on Windows).
-- Background jobs (own setups copy, lock, log; `.bat` files in `bin`): `--check-dynamics`, `--scan-keys`,
+- Background jobs (own setups copy, lock, log; their `.bat` files in `bin` only with `-DMSCORE_INSTALL_MEASUREMENT_SCRIPTS=ON`, off since 2026-10-02): `--check-dynamics`, `--scan-keys`,
   `--measure-load-times`, `--verify-playback`, `--live-equivalence`, `--create-live-set`, `--live-set-readback`.
 - Measurement runs (supervised: `superviseExtract`, a hang or crash retried then left out; resumable: a start
   skips what earlier runs of the same version did): `--extract-library … --extract-controllers
