@@ -120,6 +120,7 @@ class MidiRenderer {
       // channel -> per patch: its pitch bend range in cents (SoundLib::LibInstrument::bendCents; 0: none)
       std::map<int, std::vector<double>> libBend;
       std::map<const Note*, const Note*> libGlideFrom;            // a legato transition's note before (its lane glides)
+      std::map<const Note*, double> libGlideDelayMs;              // its measured legato delay, ms (the bend glides then)
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libLegatoEarly = 0;                                     // SoundLib::legatoEarly, percent (this chunk)
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
