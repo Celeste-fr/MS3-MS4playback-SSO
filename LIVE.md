@@ -469,9 +469,22 @@ save writes), the 10-minute data included; five lane updates 0.3 s apart were st
 the value before them. While MuseScore is connected its lanes win: after a Live *Undo* of the stores the device stores
 MuseScore's lanes again 2 s later (another undo step). Found on the way: the `v8` box as a Blob parameter
 (`getvalueof`/`notifyclients`) is restored from the set but Live never takes its later values (a copy got the old one), so
-the store is `[pattr]`; one `[pattr]` set to 34 010 atoms crashed Live (24 010 were fine). Not tried (Live there can't
-save): reopening a set Live saved. **Owner test** (2 min): play a score with a lane in Live (*Live plays the score*),
-save the set, quit MuseScore, reopen the set: the device says "1 plug-in parameter driven" and the parameter moves.
+the store is `[pattr]`; one `[pattr]` set to 34 010 atoms crashed Live (24 010 were fine). Reopening a set Live saved was
+tried on 2026-10-02 (below).
+
+**Owner test, done 2026-10-02 (Live 12.4.6 trial, the Windows VM, build 49b00a0, Kontakt 8 with SSO): PASS.** A violin
+part with one note tied over 8 bars at 120 bpm and a *Vibrato* lane stepping 0 / 127 every bar (the score's
+`automation` tag); *Create Live Set* (2 tracks, "Violin" and "Violin – Solo Violin - Performance", the report says
+"2 track(s) keep their automation lanes in the MuseScore Link device"); the set opened in Live, MuseScore (window, *Live
+plays the score*) wrote its clips, *File › Save Live Set* (12.4.6 insists on a Project folder: "Save As…"), MuseScore
+killed, Live quit, the saved set reopened in a new Live with MuseScore not running: **both devices say "MuseScore Link:
+1 plug-in parameter driven"**. Played from 0 (the transport started over the device's OSC, the track's *Vibrato*
+parameter read through the LOM about every 0.27 s together with the song time, `start_playing`/`get`/`set` only): 0
+until 1.92 s, 1 at 2.19 s, 1 until 3.83 s, 0 at 4.08 s, 0 until 6.01 s, 1 at 6.28 s, 1 until 7.64 s, then 0 at 8.48 s, 1
+at 10.10 s, 0 at 12.04 s, 1 at 14.19 s and held (the last point): every switch between the two samples around its bar
+line (2, 4, … 14 s), nothing in between, i.e. within the 0.27 s of reading spacing. Nothing seen is 12.4-specific
+(only LOM `get`/`set`/`start_playing` were used), but **this set was saved by 12.4.6, which
+12.2 can't open: it is not kept (VM only), and Create Live Set's output stays 12.2-openable**.
 
 ### Live's export and freeze (2026-10-01)
 
@@ -486,10 +499,34 @@ Operator on a MIDI track), level edges found in the audio:
   buffers, 90 and 120 bpm; the notes themselves on time). The same with the position made from `phasor~` plus
   `[plugphasor~]` (+17 / -0.2 ms in two takes), so it isn't the coarse phasor; `[plugsync~]` outputs nothing in a
   device. Cause not found; for vibrato, mic or release changes 0-50 ms is inaudible, for anything sharp it would not be.
-- **Export Audio/Video** can't be tried there (unauthorized). Freeze renders the same way, so it should match.
-  **Owner test** (2-3 min): a violin part with one long note over 8 bars and a *Vibrato* lane 0 / 127 alternating every
-  bar; *Create Live Set*, quit MuseScore, open the set, *File › Export Audio/Video* (the Violin track, 8 bars); send the
-  WAV: the vibrato must switch at the bar lines (the VM analysis script measures it).
+- **Export Audio/Video** can't be tried in 12.2 unauthorized. Freeze renders the same way, so it should match.
+  **Owner test, done 2026-10-02 (Live 12.4.6 trial, build 49b00a0): PASS, within what the instrument allows.** The
+  score and set of the lanes test above (one note over 8 bars, *Vibrato* 0 / 127 every bar, 120 bpm); MuseScore quit;
+  *File › Export Audio/Video*, render start 1.1.1, length 8 bars (16.000 s), WAV 16 bit. The "Violin" track
+  (Solo Violin 1) exported **silence** (peak 0.000; in Live its meter stayed at zero too: the "Violin – Solo Violin -
+  Performance" track made the sound; why the Violin route is silent was not investigated), so the Performance
+  track's export was analysed (a Freeze of the same track as well, its file 18.3 s long). Method: the E5 (659 Hz)
+  band-passed, every upward zero crossing's period → the pitch every 1.5 ms; clicks dropped (a 100 ms burst of
+  647-676 Hz at 5.80-5.90 s, before bar line 6); the pitch spread = its sd over 200 ms. **Spread per bar (Hz): 0.64
+  5.68 0.58 5.41 0.59 7.97 0.96 6.37** (0.2-1.0 where the lane is 0, 5.4-8.0 where it is 127: the lane is played,
+  bars 1-8 in order). Each switch's time = the change point of the squared pitch deviation (two levels, best split
+  within ±0.9 s of the bar line), offset from the bar line in ms:
+
+  | bar line (s) | 2 | 4 | 6 | 8 | 10 | 12 | 14 |
+  |---|---|---|---|---|---|---|---|
+  | switch | on | off | on | off | on | off | on |
+  | **Export** | +260 | +30 | +635 | +65 | +625 | +25 | +220 |
+  | **Freeze** | +165 | +25 | -185 | +105 | +625 | +95 | +210 |
+
+  The *off* switches are the usable ones: **export +25 to +65 ms (mean +40), freeze +25
+  to +105 ms (mean +75)**, the same within the method's noise. The *on* switches are not: SSO's vibrato builds up over
+  a few hundred ms and starts at a random LFO phase, so they land +165 to +635 ms after the bar line (one -185 ms comes
+  from the click above); two renders of the same lane differ by up to 0.4 s there, so only "at the bar line to within
+  the vibrato's own rise" can be said. The lane itself was read exactly in the first test (the parameter flips at the
+  bar line, ±0.27 s of sampling). A sharper check of the offset needs a parameter that acts at once (Operator's
+  *Volume*, the 2026-10-01 freeze test: ±1.5 ms). Seen in 12.4.6 on the way: Save asks for a Project folder
+  (Save As…), the export dialog offers that folder, a Freeze lands in its `Samples/Processed/Freeze`; none of it is
+  needed from the set MuseScore writes.
 
 ### Writing Live's own automation (option B, 2026-10-01)
 
