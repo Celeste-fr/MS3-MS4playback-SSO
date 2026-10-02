@@ -1542,6 +1542,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           from = nullptr;
                                           }
                                     }
+                              if (!from) {
+                                    // (no transition, e.g. the fast technique's own attack: its bend is set at its
+                                    // note-on, no glide; an earlier render's entries go)
+                                    libGlideFrom.erase(note);
+                                    libGlideDelayMs.erase(note);
+                                    }
                               if (from) {
                                     libGlideFrom[note] = from;
                                     libTransitionFrom = from;
