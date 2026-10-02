@@ -205,12 +205,14 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 58 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-01); the skips need inputs
-  (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the owner's files).
+- `tst_soundlibrary`: 64 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-02, main after the merges);
+  the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
+  owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 9 passed, `dumpEvents` skipped (a
-  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31 passed, `tst_keysig` 8 passed
-  (2026-10-01). `tst_tuning` (13), `tst_tempochange`, `tst_phrasemark`, `tst_playability`,
-  `tst_timesig::removeRedundant`: passed when last run on their branches.
+  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31, `tst_keysig` 8, `tst_tuning` 17,
+  `tst_phrasemark` 8, `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
+  `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in
+  `tools/live/test` and the Python tests in `tools/soundlibraries` pass.
 - `tst_midi`: **68 of 73 fail, and did before** the sound-library work (references predate the MS4 note model;
   same-tick order varies, `ms4Parts` keyed by pointer). Compare with the previous commit's build instead.
   `tst_timesig::timesig05` fails since 5f65a1d (fermata `<timeStretch>`).
