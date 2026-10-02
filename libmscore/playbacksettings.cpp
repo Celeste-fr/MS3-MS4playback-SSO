@@ -86,6 +86,10 @@ static const std::vector<Definition> DEFINITIONS = {
       { "tuning/bendAtArrival", 1, 0, 1, "on/off",
         "1: a legato transition's pitch bend glides when the transition arrives (note-on plus the measured legato delay), "
         "so the note before keeps its tuning while it sounds; 0: at the note-on", true },
+      { "tuning/oneInstance", 0, 0, 2, "mode",
+        "on a patch tuned by pitch bend, fewer copies (less memory): the bend may retune a copy once its notes' measured release "
+        "has rung out (1: safe) or once they have ended (2: aggressive, a detached note's tail is bent to the next note's tuning), "
+        "so a line plays its tunings on one instance; notes sounding together at different tunings still use copies; 0: off", true },
       // [dynamics]
       { "dynamics/evenSteps", 0, 0, 1, "on/off",
         "1: the Advanced Options' even dynamic steps act (off since 2026-09-28; MS_EVEN_DYNAMIC_STEPS turns it on too)", true },
@@ -375,7 +379,7 @@ bool hasOwnMetaTag(const char* id)
       {
       const QString s = id;
       return s == "legato/early" || s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
-             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival";
+             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival" && s != "tuning/oneInstance";
       }
 
 static bool ownMetaTagValue(const char* id, const Score* score, double* v)

@@ -1442,8 +1442,13 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
 //   lanes
 //---------------------------------------------------------
 
+OneInstance oneInstance(const Score* score)
+      {
+      return OneInstance(qBound(0, int(std::lround(Playback::value("tuning/oneInstance", score))), 2));
+      }
+
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
-            double toleranceCents, double tailSeconds, int maxLanes)
+            double toleranceCents, double tailSeconds, int maxLanes, OneInstance mode)
       {
       Lanes out;
       out.count.assign(patches.size(), patches.empty() ? 0 : 1);
@@ -1452,6 +1457,9 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
       Score* sc = const_cast<Score*>(score);
       const ScoreTuningScope tuningScope(sc);
       const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
+      if (mode == OneInstance::SETTING)
+            mode = oneInstance(score);
+      const bool bendOn = Playback::on("tuning/pitchBend", score);
       Ms4::Dynamics dynamics;
       dynamics.build(sc, const_cast<Part*>(part));
       TextTechniques text;
@@ -1462,7 +1470,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             const Note* note;
             int patch;
             double on, off;               // seconds
-            double release;               // its articulation's ring after the end (seconds, 0: unknown)
+            double release;               // its articulation's ring after the end (seconds, 0: unknown or not waited for)
+            double measured;              // the same, whatever waitForRelease
             double cents;
             bool slurred;                 // under a slur: legato from the note before on its track
             int track;
@@ -1498,8 +1507,9 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                                     slurred = true;
                               }
                         const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
-                        const double release = waitForRelease && c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
-                        items.push_back({ note, c ? c.patch : 0, on, off, release, playbackTuning(note), slurred, track });
+                        const double measured = c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
+                        items.push_back({ note, c ? c.patch : 0, on, off, waitForRelease ? measured : 0.0, measured,
+                                          playbackTuning(note), slurred, track });
                         };
                   for (const Chord* g : chord->graceNotes())
                         for (const Note* n : g->notes())
@@ -1514,6 +1524,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             double cents { 0 };
             bool tuned { false };         // (a new lane takes any tuning)
             double busyUntil { -1 };      // its notes' end plus the tail (or their release, if longer)
+            double bendFreeAt { -1 };     // one instance: when a note bent to its tuning may retune it
             double lastOn { -1 };         // its last note's start and end
             double lastEnd { -1 };
             int lastTrack { -1 };
@@ -1535,8 +1546,11 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                         chosen = l;
             if (chosen >= 0 && lanes[chosen].tuned && std::fabs(lanes[chosen].cents - it.cents) <= toleranceCents)
                   cents = lanes[chosen].cents;
+            // one instance: a note its patch bends to its tuning may retune a lane sooner
+            const LibInstrument* pi = patches[size_t(it.patch)];
+            const bool bent = mode != OneInstance::OFF && bendOn && pi->bendCents > 0 && bendValue(it.cents, pi->bendCents) >= 0;
             for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)       // silent by then
-                  if (lanes[l].busyUntil <= it.on)
+                  if ((bent ? lanes[l].bendFreeAt : lanes[l].busyUntil) <= it.on)
                         chosen = l;
             if (chosen < 0 && int(lanes.size()) >= maxLanes) {                // (memory: the lane quiet longest)
                   chosen = 0;
@@ -1553,6 +1567,11 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             lane.tuned = true;
             // (a release rings up to 2.9 s, SSO's Flautando: retuning the lane before would move its pitch)
             lane.busyUntil = std::max(lane.busyUntil, it.off + std::max(tailSeconds, it.release));
+            // (one instance: its notes ended, or their measured release rung out; a note not bent: as busyUntil)
+            const double freeAt = !bent ? it.off + std::max(tailSeconds, it.release)
+                                  : mode == OneInstance::AGGRESSIVE ? it.off
+                                  : it.off + (it.measured > 0 ? it.measured : tailSeconds);
+            lane.bendFreeAt = std::max(lane.bendFreeAt, freeAt);
             lane.lastOn = it.on;
             lane.lastEnd = it.off;
             lane.lastTrack = it.track;

@@ -74,6 +74,7 @@ class TestSoundLibrary : public QObject, public MTest
       void choose();
       void spitfireMap();
       void routesTiming();
+      void oneInstanceCounts();
       void automation();
       void automationCurves();
       void automationEditing();
@@ -134,6 +135,7 @@ class TestSoundLibrary : public QObject, public MTest
       void tuningLanes();
       void tuningBend();
       void tuningBendAtArrival();
+      void tuningOneInstance();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -298,6 +300,57 @@ void TestSoundLibrary::routesTiming()
             lanes += t.nsecsElapsed() / 1e6;
             }
       qDebug("usedPatches %.1f ms, lanes %.1f ms", used, lanes);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   oneInstanceCounts
+//    a measurement, not a check (MS_ROUTES_SCORE, skipped when unset): the instances (routes) each part
+//    of a score needs with SSO's map, every extra available, for [tuning] oneInstance off / safe /
+//    aggressive, per patch; and, for comparison only, as if every patch bent (SSO's All techniques
+//    patches don't: they keep their copies)
+//---------------------------------------------------------
+
+void TestSoundLibrary::oneInstanceCounts()
+      {
+      const QString file = qEnvironmentVariable("MS_ROUTES_SCORE");
+      if (file.isEmpty())
+            QSKIP("MS_ROUTES_SCORE not set");
+      QString error;
+      auto lib = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      auto allBend = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(allBend, qPrintable(error));
+      for (SoundLib::LibInstrument& i : allBend->instruments)
+            if (!i.kit && i.bendCents <= 0)
+                  i.bendCents = 100;
+      MasterScore* score = readCreatedScore(file);
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      // part -> patch -> instances, by column: off, safe, aggressive, all bending (aggressive)
+      std::map<QString, std::map<QString, std::array<int, 4>>> table;
+      std::array<int, 4> total { { 0, 0, 0, 0 } };
+      for (int column = 0; column < 4; ++column) {
+            SoundLib::setCurrent(column == 3 ? std::shared_ptr<const SoundLib::Library>(allBend) : std::shared_ptr<const SoundLib::Library>(lib));
+            Playback::setIniValuesForTest({ { "tuning/oneInstance", QString::number(column == 3 ? 2 : column) } });
+            for (const SoundLib::Route& r : SoundLib::routes(score, column == 3 ? *allBend : *lib)) {
+                  ++table[r.part->partName()][r.instrument->name][size_t(column)];
+                  ++total[size_t(column)];
+                  }
+            }
+      Playback::setIniValuesForTest({});
+      for (const auto& part : table) {
+            std::array<int, 4> sum { { 0, 0, 0, 0 } };
+            for (const auto& patch : part.second) {
+                  qDebug("ONEINSTANCE patch\t%s\t%s\t%d\t%d\t%d\t%d", qPrintable(part.first), qPrintable(patch.first),
+                         patch.second[0], patch.second[1], patch.second[2], patch.second[3]);
+                  for (size_t c = 0; c < 4; ++c)
+                        sum[c] += patch.second[c];
+                  }
+            qDebug("ONEINSTANCE part\t%s\t%d\t%d\t%d\t%d", qPrintable(part.first), sum[0], sum[1], sum[2], sum[3]);
+            }
+      qDebug("ONEINSTANCE total\t%d\t%d\t%d\t%d", total[0], total[1], total[2], total[3]);
+      SoundLib::setCurrent(nullptr);
       delete score;
       }
 
@@ -3203,6 +3256,122 @@ void TestSoundLibrary::tuningBendAtArrival()
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "tuning/bendAtArrival", 0 } }));
       QVERIFY(glideStart() <= ticksOf(4));
       score->setMetaTag(Playback::metaTag, "");
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   tuningOneInstance
+//    [tuning] oneInstance on a patch that bends (SoundLib::lanes): a line plays its tunings on one instance,
+//    the bend retuning it; safe (1) only once the note before's measured release (here 300 ms) has rung out,
+//    aggressive (2) once it has ended; a chord with two tunings still takes a copy. quartertones-line.musicxml
+//    at 120: C5 (0-0.5 s), C5+ (1.0), E5- (2.0), D5+ (3.0) and F5 (3.5) right after it, C5 + E5- together (4.0).
+//    Off: the copies as before (tail 1.5 s). The setting by layer, pitchBend off or a patch that doesn't bend:
+//    as off; rendered: each note on its lane's channel, the bend in force at its note-on its own tuning's
+//---------------------------------------------------------
+
+void TestSoundLibrary::tuningOneInstance()
+      {
+      auto mapWith = [&](const QString& bend) {
+            return loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='0.5' tail='1.5'/>"
+               "<Instrument name='Violin' ids='violin'" + bend + ">"
+               "<Articulation name='Long' value='1' techniques='long legato' release='300'/>"
+               "</Instrument></SoundLibrary>");
+            };
+      auto lib = mapWith(" bend='200'");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "quartertones-line.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      std::vector<const Note*> notes;               // in order, a chord's bottom up
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  for (const Note* n : toChord(s->element(0))->notes())
+                        notes.push_back(n);
+      QCOMPARE(int(notes.size()), 7);
+      const std::vector<double> cents = { 0, 50, -50, 50, 0, 0, -50 };
+      auto lanesOf = [&](const SoundLib::LibInstrument* patch, SoundLib::OneInstance mode) {
+            const SoundLib::Lanes l = SoundLib::lanes(score, score->parts()[0], { patch }, 0.5, 1.5, 4, mode);
+            std::vector<int> got;
+            for (const Note* n : notes) {
+                  got.push_back(l.lane.at(n));
+                  if (std::fabs(l.cents.at(n) - cents[got.size() - 1]) > 0.01)
+                        got.back() = -1;
+                  }
+            got.push_back(l.count[0]);                // (the count last)
+            return got;
+            };
+      auto text = [](const std::vector<int>& v) {
+            QStringList s;
+            for (int x : v)
+                  s << QString::number(x);
+            return s.join(' ');
+            };
+      const std::vector<int> off = { 0, 1, 0, 1, 2, 2, 0, 3 };
+      const std::vector<int> safe = { 0, 0, 0, 0, 1, 1, 0, 2 };         // (F5 right after D5+: within its release)
+      const std::vector<int> aggressive = { 0, 0, 0, 0, 0, 0, 1, 2 };   // (the chord's E5-: a copy)
+      const SoundLib::LibInstrument* violin = &lib->instruments[0];
+      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::OFF) == off, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::OFF))));
+      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SAFE) == safe, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SAFE))));
+      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE) == aggressive, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE))));
+      // safe: the gaps of 0.5 s after the detached notes are more than the release; a release over them (600 ms)
+      // keeps a copy for C5+, D5+ joins it, F5 retunes lane 0 (E5-'s release over), the chord's E5- a third
+      {
+            auto longer = loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='0.5' tail='1.5'/>"
+               "<Instrument name='Violin' ids='violin' bend='200'>"
+               "<Articulation name='Long' value='1' techniques='long legato' release='600'/>"
+               "</Instrument></SoundLibrary>");
+            QVERIFY2(lanesOf(&longer->instruments[0], SoundLib::OneInstance::SAFE) == (std::vector<int> { 0, 1, 0, 1, 0, 0, 2, 3 }), qPrintable(text(lanesOf(&longer->instruments[0], SoundLib::OneInstance::SAFE))));
+            QVERIFY2(lanesOf(&longer->instruments[0], SoundLib::OneInstance::AGGRESSIVE) == aggressive, qPrintable(text(lanesOf(&longer->instruments[0], SoundLib::OneInstance::AGGRESSIVE))));
+      }
+      // a patch that doesn't bend, or the bend off: the copies as before
+      auto plain = mapWith("");
+      QVERIFY2(lanesOf(&plain->instruments[0], SoundLib::OneInstance::AGGRESSIVE) == off, qPrintable(text(lanesOf(&plain->instruments[0], SoundLib::OneInstance::AGGRESSIVE))));
+      Playback::setIniValuesForTest({ { "tuning/pitchBend", "0" } });
+      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE) == off, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE))));
+      // by layer: default off, the ini's, the score's
+      Playback::setIniValuesForTest({});
+      QCOMPARE(SoundLib::oneInstance(score), SoundLib::OneInstance::OFF);
+      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SETTING) == off, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SETTING))));
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 3);
+      Playback::setIniValuesForTest({ { "tuning/oneInstance", "2" } });
+      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SETTING) == aggressive, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SETTING))));
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
+      score->setMetaTag(Playback::metaTag, "tuning/oneInstance=1");
+      QCOMPARE(Playback::source("tuning/oneInstance", score), Playback::Source::SCORE);
+      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SETTING) == safe, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SETTING))));
+      QVERIFY(!Playback::hasOwnMetaTag("tuning/oneInstance"));
+
+      // rendered (safe, the score's): each note on its lane's channel, untuned, its own bend in force at its note-on
+      score->setPlaylistDirty();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      int found = 0;
+      for (auto i = events.begin(); i != events.end(); ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.type() != ME_NOTEON || ev.velo() == 0 || ev.librarySwitch() || !ev.note())
+                  continue;
+            const size_t k = size_t(std::find(notes.begin(), notes.end(), ev.note()) - notes.begin());
+            QVERIFY(k < notes.size());
+            QCOMPARE(ev.extChannel(), safe[k]);
+            QVERIFY(ev.tuning() == 0);
+            int last = -1;                    // (the bend in force: the last on its channel before it, in event order)
+            for (auto j = events.begin(); j != i; ++j)
+                  if (j->second.isExternal() && j->second.extChannel() == ev.extChannel() && j->second.type() == ME_PITCHBEND)
+                        last = j->second.dataA() | (j->second.dataB() << 7);
+            QVERIFY2(last == SoundLib::bendValue(cents[k], 200), qPrintable(QString("note %1: bend %2").arg(k).arg(last)));
+            ++found;
+            }
+      QCOMPARE(found, 7);
+      score->setMetaTag(Playback::metaTag, "");
+      Playback::setIniValuesForTest({});
       delete score;
       }
 

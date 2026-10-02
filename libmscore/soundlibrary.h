@@ -481,6 +481,14 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
 //    to a lane that is silent by then (its notes ended and their tail gone), retuned; else to a
 //    new lane. count: lanes per patch (1 where no note
 //    needs another), lane: each note's (0 when not listed)
+//    One instance ([tuning] oneInstance, off by default; the owner, 2026-10-02: fewer Kontakt
+//    instances for microtonal scores): on a patch tuned by pitch bend (bendCents, [tuning] pitchBend
+//    on) a lane may be retuned sooner, the bend retuning what still rings on it: 2 (aggressive) once
+//    its notes have ended (note-off), 1 (safe) once their measured release (<Articulation release>,
+//    the ring to 30 dB under the note's level, the longest over its range; else the tail) has rung
+//    out. So a single line plays all its tunings on one instance; only notes sounding together at
+//    different tunings (chords, divisi, overlaps) still need copies. A note beyond the bend range
+//    (varispeed plays it) and the patches that don't bend (SSO's All techniques) keep the rule above
 //---------------------------------------------------------
 
 struct Lanes {
@@ -490,8 +498,11 @@ struct Lanes {
       };
 // (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
 // releaseMs)
+// (oneInstance: SETTING the score's [tuning] oneInstance, else OFF, SAFE, AGGRESSIVE)
+enum class OneInstance : signed char { SETTING = -1, OFF = 0, SAFE = 1, AGGRESSIVE = 2 };
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
-            double toleranceCents, double tailSeconds, int maxLanes = 4);
+            double toleranceCents, double tailSeconds, int maxLanes = 4, OneInstance oneInstance = OneInstance::SETTING);
+OneInstance oneInstance(const Score* score);      // [tuning] oneInstance (playback settings, per score)
 
 //---------------------------------------------------------
 //   LaneSettings

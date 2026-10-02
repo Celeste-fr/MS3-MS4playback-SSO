@@ -365,20 +365,26 @@ void TestLiveEquivalence::liveSetControllersAndMix()
 //    changes, before the note at its tick;
 //    a legato glide's steps as successive carriers, at the note-on or when the transition arrives (row "at
 //    arrival": tuning/bendAtArrival). Played back as the device plays them (LiveEquivalence::
-//    deviceMidi), the bend in force at every note-on is the renderer's, and the sequence of bends the same
+//    deviceMidi), the bend in force at every note-on is the renderer's, and the sequence of bends the same.
+//    Row "one instance" (tuning/oneInstance 2): the line's tunings on lane 0, bent there; still a clip per
+//    route (the chord's E5- on a copy), the clips the routes Create Live Set makes tracks of
 //---------------------------------------------------------
 
 void TestLiveEquivalence::liveClipsBend_data()
       {
       QTest::addColumn<QString>("legato");
-      QTest::newRow("at note-on") << QString();
+      QTest::addColumn<QString>("oneInstance");
+      QTest::newRow("at note-on") << QString() << QString("0");
       // (a legato transition's glide when it arrives: tuning/bendAtArrival, 200 ms after the early note-on)
-      QTest::newRow("at arrival") << QString(" legatoDelay='200'");
+      QTest::newRow("at arrival") << QString(" legatoDelay='200'") << QString("0");
+      QTest::newRow("one instance") << QString(" legatoDelay='200'") << QString("2");
       }
 
 void TestLiveEquivalence::liveClipsBend()
       {
       QFETCH(QString, legato);
+      QFETCH(QString, oneInstance);
+      Playback::setIniValuesForTest({ { "tuning/oneInstance", oneInstance } });
       QCOMPARE(LiveClips::BEND_MSB, 115);
       QCOMPARE(LiveClips::BEND_LSB, 114);
       QCOMPARE(LiveClips::CARRIER_LOW, 114);
@@ -400,6 +406,14 @@ void TestLiveEquivalence::liveClipsBend()
       const LiveClips::Timeline tl = LiveClips::timeline(score);
       const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl);
       QCOMPARE(int(clips.size()), 2);                   // (two lanes)
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
+      if (oneInstance == "2") {                         // (C5+, then D5+ on lane 0: the bend retunes it)
+            const SoundLib::Lanes l = SoundLib::lanes(score, score->parts()[0], { &lib->instruments[0] }, 3, 0.5);
+            int onFirst = 0;
+            for (const auto& nc : l.cents)
+                  onFirst += std::fabs(nc.second) > 1 && l.lane.at(nc.first) == 0;
+            QCOMPARE(onFirst, 3);                       // (C5+, D5+ and m7's slurred D5+)
+            }
       int carried = 0;
       int expectedChanges = 0;
       for (const LiveClips::Track& c : clips) {
@@ -489,6 +503,7 @@ void TestLiveEquivalence::liveClipsBend()
       QCOMPARE(LiveClips::carrierValue(127, 2), 1);
       QCOMPARE(LiveClips::carrierVelocity(126, 127), 127);           // (CC1 127 exact)
       QCOMPARE(LiveClips::carrierValue(126, 127), 127);
+      Playback::setIniValuesForTest({});
       delete score;
       }
 

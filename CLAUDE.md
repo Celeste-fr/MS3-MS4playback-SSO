@@ -138,6 +138,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `soundLibraryLanes`) play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends
   cleanly (`<Instrument bend>`; varispeed can't reach Live). A legato transition's bend glides when the
   transition arrives (note-on + its measured delay, ending before the next note-on; `[tuning] bendAtArrival`).
+  `[tuning] oneInstance` (off by default) lets a bending patch's line retune one copy by the bend (fewer instances).
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
 
 **Hosting (VST 3)** (`BUILD_VST3`, on except macOS; preference `io/soundLibrary`)
@@ -214,10 +215,10 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 66 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-02, bend-at-arrival);
+- `tst_soundlibrary`: 67 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-02, bend-one-instance);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
-  owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 12 passed, `dumpEvents` skipped (a
+  owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 13 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31, `tst_keysig` 8, `tst_tuning` 17,
   `tst_phrasemark` 8, `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in
