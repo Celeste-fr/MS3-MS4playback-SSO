@@ -167,7 +167,7 @@ class TestMarcatoLevel : public QObject, public MTest
 //---------------------------------------------------------
 //   defaultUnchanged
 //    marcatos without a level play as before the setting existed: the events (built-in and SSO) of
-//    main 922a4849dc, kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
+//    main 922a4849dc (SSO's velocity marcatos regenerated 2026-10-02 without MS4's accent boost: mf 103 -> 80, f 123 -> 96), kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
 //    events there instead (to make the reference again after an intended playback change)
 //---------------------------------------------------------
 
@@ -412,27 +412,29 @@ void TestMarcatoLevel::velocityPath()
       QVERIFY(s);
       QCOMPARE(s->parts().at(1)->instrument()->getId(), QString("trumpet"));
       const std::vector<Ev> before = render(s, lib, 0, 1);
-      QCOMPARE(noteOn(before, 72), 103);                 // mf 80 with MS4's marcato boost
+      QCOMPARE(noteOn(before, 72), 80);                  // mf: the plain level, no MS4 accent boost
+      QCOMPARE(noteOn(render(s, lib, 0, 3), 48), 80);    // the tuba likewise (was 103)
+      QCOMPARE(noteOn(before, 79), 96);                  // marcato-tenuto at f: the plain f (was 123)
       setLevel(marcato(s, 1, 0), -6);
       const std::vector<Ev> after = render(s, lib, 0, 1);
-      QCOMPARE(noteOn(after, 72), 73);                   // the law: 103 * 10^(-6/40)
+      QCOMPARE(noteOn(after, 72), 57);                   // the law: 80 * 10^(-6/40)
       QCOMPARE(int(after.size()), int(before.size()));
       int changed = 0;
       for (size_t i = 0; i < before.size(); ++i)
             changed += before[i].tick != after[i].tick || !(before[i].e == after[i].e);
       QCOMPARE(changed, 1);
 
-      // measured (tools/soundlibraries/sso_sound_dynamics.json, Trumpet Solo's Marcato): -26.6 dB at 103,
-      // -6 dB from there (-32.6) at velocity 82
+      // measured (tools/soundlibraries/sso_sound_dynamics.json, Trumpet Solo's Marcato): -33.1 dB at 80,
+      // -6 dB from there (-39.1) at velocity 56
       auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
       SoundLib::DynamicsCurve c;
       c.drivenBy = "velocity";
       c.points = { { 16, -60.2 }, { 32, -46 }, { 48, -40.8 }, { 64, -37.2 }, { 80, -33.1 }, { 96, -27.6 }, { 112, -25.2 }, { 127, -21.3 } };
       cal->setCurve("Trumpet Solo", 52, c);
       SoundLib::setDynamicsCalibration(cal);
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 82);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 56);
       setLevel(marcato(s, 1, 0), 6);
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 127);     // -20.55 dB: over the curve (127: -21.3)
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 99);      // -27.1 dB
       delete s;
       }
 
