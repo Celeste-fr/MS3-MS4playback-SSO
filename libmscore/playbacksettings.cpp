@@ -52,6 +52,12 @@ static const std::vector<Definition> DEFINITIONS = {
         "too short: shorter than this share of the transition's delay (the patch's measured delay, after fastShare / fastFullMs)", true },
       { "legato/glideMs", 30, 0, 500, "ms",
         "a slurred note on a tuning copy glides from the note before's tuning over this long (pitch bend and varispeed)", true },
+      { "legato/levelBalance", 0, 0, 1, "on/off",
+        "1: a legato transition plays at its pitch's level (the map's measured legatoLevel: SSO's transitions alone arrive 2-6 dB louder or softer), by CC11 from its arrival; off: in runs the notes around a transition move its level as much (measured), so it didn't even them", true },
+      { "legato/levelMaxDb", 6, 0, 12, "dB",
+        "the level balance turns a transition down by at most this much (and up by at most levelHeadroomDb)", true },
+      { "legato/levelHeadroomDb", 0, 0, 12, "dB",
+        "a part with measured transition levels rests this much down on CC11, so that transitions arriving softer can be raised by up to it (the whole part is that much softer)", true },
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
         "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },

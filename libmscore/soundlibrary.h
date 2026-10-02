@@ -108,6 +108,18 @@ struct Articulation {
       double onsetMs { -1 };
       std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
       double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
+      // the level a legato transition arrives at, dB against what the patch plays at that pitch (<Articulation
+      // legatoLevel legatoLevelLong>: per interval, from its first start pitch up, one value per start pitch:
+      // "+1:49:-1.2,0.4,,2 -1:50:…", an empty value unmeasured), heard in a run of sixteenths (legatoLevel) and
+      // settled, half a second in (legatoLevelLong); SSO's transitions are recorded per start and interval and
+      // arrive 2-6 dB louder or softer than their neighbours (measured 2026-10-02, branch legato-level-balance).
+      // Empty: unknown (the renderer leaves the level). The renderer's [legato] levelBalance plays them even
+      using LevelTable = std::map<int, std::pair<int, std::vector<double>>>;   // interval -> first start, dB (NaN: none)
+      LevelTable legatoLevels;
+      LevelTable legatoLevelsLong;
+      // the transition's level (dB, NaN unknown) for a note lasting seconds as played: a run's (legatoLevel) up to
+      // 0.15 s, the settled one (legatoLevelLong) from 0.5 s, mixed linearly between; one table missing: the other
+      double legatoLevelAt(int interval, int fromPitch, double seconds) const;
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;

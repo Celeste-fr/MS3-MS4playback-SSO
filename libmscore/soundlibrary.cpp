@@ -77,7 +77,8 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
-//               [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]/>;
+//               [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
+//               [legatoLevel="+1:49:-1.2,0.4,… -1:50:…"] [legatoLevelLong="…"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -180,6 +181,56 @@ double Articulation::onsetAt(int pitch) const
       return keyedMsAt(onsets, onsetMs, pitch);
       }
 
+static double levelIn(const Articulation::LevelTable& t, int interval, int fromPitch)
+      {
+      auto i = t.find(interval);
+      if (i == t.end())
+            return std::nan("");
+      const int k = fromPitch - i->second.first;
+      return k >= 0 && k < int(i->second.second.size()) ? i->second.second[size_t(k)] : std::nan("");
+      }
+
+double Articulation::legatoLevelAt(int interval, int fromPitch, double seconds) const
+      {
+      const double run = levelIn(legatoLevels, interval, fromPitch);
+      const double settled = levelIn(legatoLevelsLong, interval, fromPitch);
+      if (std::isnan(run))
+            return settled;
+      if (std::isnan(settled))
+            return run;
+      const double w = qBound(0.0, (seconds - 0.15) / (0.5 - 0.15), 1.0);
+      return run * (1.0 - w) + settled * w;
+      }
+
+// legatoLevel / legatoLevelLong: "interval:firstStart:v,v,…" entries, space-separated (v in dB, empty: unmeasured)
+static bool readLevelTable(const QString& text, Articulation::LevelTable& table)
+      {
+      table.clear();
+      for (const QString& entry : text.split(' ', QString::SkipEmptyParts)) {
+            const QStringList parts = entry.split(':');
+            bool ok1 = false, ok2 = false;
+            if (parts.size() != 3)
+                  return false;
+            const int interval = parts[0].toInt(&ok1);
+            const int first = parts[1].toInt(&ok2);
+            if (!ok1 || !ok2 || first < 0 || first > 127)
+                  return false;
+            std::vector<double> values;
+            for (const QString& v : parts[2].split(',')) {
+                  if (v.isEmpty()) {
+                        values.push_back(std::nan(""));
+                        continue;
+                        }
+                  bool ok = false;
+                  values.push_back(v.toDouble(&ok));
+                  if (!ok)
+                        return false;
+                  }
+            table[interval] = { first, values };
+            }
+      return true;
+      }
+
 // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"] [technique="roll"]
 // [default="off"]/>; without pitch: a key no MuseScore sound plays (listed for reference and checked, never chosen);
 // without key (default="off", no pitch): a technique the patch has, off at its defaults, with no key (reference)
@@ -224,6 +275,10 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       if (a.hasAttribute("octaveUp") && !readKeyedMs(a.value("octaveUp").toString(), art.octaveUpMs, art.octaveUp))
             return false;
       if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))
+            return false;
+      if (a.hasAttribute("legatoLevel") && !readLevelTable(a.value("legatoLevel").toString(), art.legatoLevels))
+            return false;
+      if (a.hasAttribute("legatoLevelLong") && !readLevelTable(a.value("legatoLevelLong").toString(), art.legatoLevelsLong))
             return false;
       bool ok = false;
       art.value = a.value("value").toInt(&ok);

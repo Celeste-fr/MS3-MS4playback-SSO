@@ -83,6 +83,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveEquivalence();
       void liveEquivalenceLegato();
       void liveEquivalenceOctave();
+      void liveEquivalenceLegatoLevel();
       void liveEquivalenceAutomation();
       void liveMarcatoLevel();
       void dumpEvents();
@@ -750,6 +751,82 @@ void TestLiveEquivalence::liveEquivalenceOctave()
       MasterScore* score = readScore(DIR + "legato-octave.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
+      LiveEquivalence::Options o;
+      o.thresholds.roundRobins = false;
+      const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);
+      const QString report = LiveEquivalence::reportText(r, o.thresholds);
+      QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+      QVERIFY2(r.passed, qPrintable(report));
+      QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(report));
+      qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveEquivalenceLegatoLevel
+//    the legato level balance ([legato] levelBalance, levelHeadroomDb: CC11 on the legato patch's route from a
+//    transition's arrival, the part resting down) reaches Live's clips as MuseScore renders it (CC11 carriers, the
+//    same values in the same order on each route), and the whole chain matches (legato-octave.musicxml)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveEquivalenceLegatoLevel()
+      {
+      LiveHost host(this, "", { "Violin", "Violin Legato" },
+         "<SoundLibrary name='LiveT'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+12:800 -12:400 +2:200' release='900'"
+         " legatoLevelLong='+12:72:2 -12:84:-3 +2:72:1,,-2'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      MasterScore* score = readScore(DIR + "legato-octave.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      score->setMetaTag(Playback::metaTag, "legato/levelBalance=1;legato/levelHeadroomDb=3");
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *host.lib, events, { "MuseScore A" }, tl);
+      // per route: CC11's values in order (a tick's last)
+      std::map<QString, std::vector<std::pair<int, int>>> fromEvents, fromClips;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.type() != ME_CONTROLLER || e.controller() != CTRL_EXPRESSION)
+                  continue;
+            std::vector<std::pair<int, int>>& v = fromEvents[QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1)];
+            const int at = tl.units(te.first);
+            if (!v.empty() && v.back().first == at)
+                  v.back().second = e.value();
+            else
+                  v.push_back({ at, e.value() });
+            }
+      for (const LiveClips::Track& c : clips) {
+            std::vector<LiveClips::Note> notes = c.notes;
+            std::sort(notes.begin(), notes.end());
+            for (const LiveClips::Note& n : notes)
+                  if (n.pitch == LiveClips::carrierPitch(CTRL_EXPRESSION))
+                        fromClips[c.key].push_back({ n.start, LiveClips::carrierValue(n.pitch, n.velocity) });
+            }
+      auto values = [](const std::vector<std::pair<int, int>>& v) {
+            QStringList out;
+            for (const auto& p : v)
+                  if (out.isEmpty() || out.last() != QString::number(p.second))
+                        out << QString::number(p.second);
+            return out.join(' ');
+            };
+      QString all;
+      for (const auto& r : fromEvents) {
+            QCOMPARE(values(fromClips[r.first]), values(r.second));
+            all += r.first + ": " + values(r.second) + "\n";
+            }
+      // resting 3 dB down (90), C6 (+12 from 72, 2 dB loud) 2 dB down (71), C5 (-12 from 84, 3 dB soft) 3 dB up (127),
+      // D5 (+2 from 72, 1 dB loud) 1 dB down (80), the next slur's D5 at rest, D5 -> E5 (+2 from 74, 2 dB soft) 2 up (113)
+      QVERIFY2(all.contains("90 71 127 80 90"), qPrintable(all));
+      QVERIFY2(all.contains("113"), qPrintable(all));
+
       LiveEquivalence::Options o;
       o.thresholds.roundRobins = false;
       const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);

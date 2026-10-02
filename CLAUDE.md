@@ -113,7 +113,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`); the note before keeps `keepMs` of its
   length as played, so a fast slurred run starts early as a whole (after a short note a transition takes 65-100 % of
   its delay: `libFastDelay`; a slur's first in a fast run starts like a transition: `fastFirsts`; optional fast
-  technique: own attacks instead of transitions). HANDOFF.md has the open timing items.
+  technique: own attacks instead of transitions). HANDOFF.md has the open timing items. Per-note levels
+  (a marcato's; the legato level balance `[legato] levelBalance`, off, map `legatoLevel`) share one CC11 / CC1 schedule
+  per route, `libraryNoteLevels` (`libLevels`; dB add up).
 - **Playback adjustments are configurable** (`libmscore/playbacksettings.*`; **docs/PLAYBACK_SETTINGS.md** is the
   inventory): built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older early / lanes metaTags). Read a
@@ -216,10 +218,10 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 67 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-02, bend-one-instance);
+- `tst_soundlibrary`: 68 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-02, legato-level-balance);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 14 passed, `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31, `tst_keysig` 8, `tst_tuning` 17,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in

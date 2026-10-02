@@ -213,6 +213,18 @@ switch value of each articulation. For example:
     switch and the controllers sent at its tick move with it. SSO: 10-60 ms for most longs, 175-440 ms
     for sul tasto, flautando and harmonics (from the rest check's per-semitone full-level times by
     family; `gen_spitfire_sso.py`); not on tremolos, trills, shorts, harp, keyboards or percussion.
+  - `legatoLevel` / `legatoLevelLong` on a legato `Articulation` (dB): how much louder (+) or softer (-) each
+    transition arrives than the other transitions into the same pitch, heard in a run of sixteenths / settled half a
+    second in; per interval from its first start pitch up, one value per start pitch, empty unmeasured
+    (`legatoLevel="+1:49:-1.2,0.4,,2 -1:50:…"`). Played only with `[legato] levelBalance` (off): CC11 evens them
+    from the transition's arrival. SSO: the legato level scan (`tools/soundlibraries/legato_level_scan.py`,
+    `legato_levels_from_scan.py`, `sso_legato_levels.json`; `gen_spitfire_sso.py`).
+  - `legatoLevel` / `legatoLevelLong` on a legato `Articulation` (dB): how much louder (+) or softer (-) each
+    transition arrives than the other transitions into the same pitch, heard in a run of sixteenths / settled half a
+    second in; per interval from its first start pitch up, one value per start pitch, empty unmeasured
+    (`legatoLevel="+1:49:-1.2,0.4,,2 -1:50:…"`). Played only with `[legato] levelBalance` (off): CC11 evens them
+    from the transition's arrival. SSO: the legato level scan (`tools/soundlibraries/legato_level_scan.py`,
+    `legato_levels_from_scan.py`, `sso_legato_levels.json`; `gen_spitfire_sso.py`).
   - `<Onset early="100"/>` (top level): that percent (SSO: 100). A score can set its own in *Mixer ›
     Advanced Options…* ("Held notes early by", metaTag `soundLibraryOnsetEarly`); 0 plays them on the beat.
   - `length` on an `Articulation` (seconds): how long its sample is (SSO's Short 0.5 / Short 1.0): not

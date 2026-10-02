@@ -137,6 +137,11 @@ class MidiRenderer {
       bool libFastTechnique = false;
       bool libFastFirsts = true;          // [legato] fastFirsts: a slur's first note in a fast run starts as early as a transition
       double libFastBelow = 1.0;
+      // the legato level balance ([legato] levelBalance, levelMaxDb, levelHeadroomDb): a legato transition plays at
+      // its pitch's level (SoundLib::Articulation::legatoLevelAt, by CC11 from its arrival: libraryNoteLevels); the
+      // part's CC11 rests headroom dB down so that transitions arriving softer can be raised that much
+      bool libLevelBalance = false;
+      double libLevelMax = 6.0, libLevelHeadroom = 0.0;
       double libFastDelay(double delayMs, double lenBefore) const;
       // a library note's start as played (note, tickOffset -> utick), this chunk: what an early start after it may take
       std::map<std::pair<const Note*, int>, int> libPlayedOn;
@@ -152,11 +157,15 @@ class MidiRenderer {
       struct LibLegatoOff { const Note* from; int channel; int on; bool cut; };
       std::vector<LibLegatoOff> libLegatoOffs;
       // a note's own level on its route by a controller (this chunk; libraryNoteLevels): a marcato's level
-      // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller
+      // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller, and the legato level
+      // balance ([legato] levelBalance: volumeDb from its arrival). Several sources on one note add up in dB
+      // on CC11 (volumeDb on top of a CC11 map)
       struct LibLevel {
-            int controller;                   // CC11 (softer) or the dynamics CC (louder)
+            int controller { -1 };            // CC11 (softer) or the dynamics CC (louder); -1: none
             std::function<int(int)> map;      // the controller's value in force -> the note's
-            int fallback;                     // the value in force when the route has none before the note
+            int fallback { 127 };             // the value in force when the route has none before the note
+            double volumeDb { 0.0 };          // more on the expression CC (CC11, a plain volume: x 10^(dB / 20))
+            double atMs { 0.0 };              // from this long after the note-on (a legato transition's arrival)
             };
       std::map<const Note*, LibLevel> libLevels;
       int minChunkSize = 0;

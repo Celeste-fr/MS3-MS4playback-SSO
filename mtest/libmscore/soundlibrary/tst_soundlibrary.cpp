@@ -100,6 +100,7 @@ class TestSoundLibrary : public QObject, public MTest
       void legatoEarlyFastRun();
       void legatoEarlyByInterval();
       void legatoOctaveByStartPitch();
+      void legatoLevelBalance();
       void onsetEarly();
       void playbackSettingsIni();
       void playbackSettingsLayers();
@@ -1288,24 +1289,31 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
       QCOMPARE(plain.legatoDelayAt(-12, 84), 400.0);
 
       // the shipped map: Oboe Solo's +12 per-start values carry no sweep correction (raw 160 at 58), its -12 do (raw
-      // 110 at 70 + 60)
+      // 110 at 70 + 60); Violins 2's take the patch's +25 and the per-direction octave correction -30 / -30 (the
+      // octave sweep of 5698181 heard both directions 30 ms early): raw 360 at 56 up, 280 at 68 down, each -5
       {
       QString err;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
       QVERIFY2(sso, qPrintable(err));
-      bool found = false;
+      int found = 0;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
-            if (li.name != "Oboe Solo - Performance")
+            if (li.name != "Oboe Solo - Performance" && li.name != "Violins 2 - Performance")
                   continue;
             for (const SoundLib::Articulation& oa : li.articulations) {
                   if (oa.octaveUp.empty())
                         continue;
-                  found = true;
-                  QCOMPARE(oa.legatoDelayAt(12, 58), 160.0);
-                  QCOMPARE(oa.legatoDelayAt(-12, 70), 170.0);
+                  ++found;
+                  if (li.name == "Oboe Solo - Performance") {
+                        QCOMPARE(oa.legatoDelayAt(12, 58), 160.0);
+                        QCOMPARE(oa.legatoDelayAt(-12, 70), 170.0);
+                        }
+                  else {
+                        QCOMPARE(oa.legatoDelayAt(12, 56), 355.0);
+                        QCOMPARE(oa.legatoDelayAt(-12, 68), 275.0);
+                        }
                   }
             }
-      QVERIFY(found);
+      QCOMPARE(found, 2);
       }
       // the renderer passes the start pitch
       SoundLib::setCurrent(lib);
@@ -1337,6 +1345,113 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
                                 .arg(ons[i].first).arg(expected)));
             }
       delete score;
+      }
+
+//---------------------------------------------------------
+//   legatoLevelBalance
+//    [legato] levelBalance: a legato transition's measured level (<Articulation legatoLevel legatoLevelLong>, dB
+//    against the pitch's other transitions, by interval and start pitch) is evened out by CC11 on the note's route
+//    from its arrival (the note-on plus the full measured delay) until the route's next note-on; a run's table up
+//    to 0.15 s, the settled one from 0.5 s; up by at most levelHeadroomDb (the part's CC11 resting that much down),
+//    down by at most levelMaxDb; off (the default): CC11 untouched. legato-octave.musicxml (60 bpm quarters: C5 C6 C5 D5, D5 D6
+//    D5 E5, each four slurred)
+//---------------------------------------------------------
+
+void TestSoundLibrary::legatoLevelBalance()
+      {
+      auto mapWith = [&](const QString& levels) {
+            return loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long'/>"
+               "</Instrument>"
+               "<Instrument name='Violin Legato' with='Violin'>"
+               "<Switch type='none'/>"
+               "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' " + levels + "/>"
+               "</Instrument></SoundLibrary>");
+            };
+      // the tables
+      {
+      auto lib = mapWith("legatoLevel='+2:72:3,,-2 -1:60:1' legatoLevelLong='+2:72:1'");
+      QVERIFY(lib);
+      const SoundLib::Articulation& a = lib->instruments[1].articulations[0];
+      QCOMPARE(a.legatoLevelAt(2, 72, 0.1), 3.0);                     // a run's
+      QCOMPARE(a.legatoLevelAt(2, 72, 1.0), 1.0);                     // settled
+      QVERIFY(qAbs(a.legatoLevelAt(2, 72, 0.325) - 2.0) < 1e-9);      // half way
+      QVERIFY(std::isnan(a.legatoLevelAt(2, 73, 0.1)));               // unmeasured
+      QCOMPARE(a.legatoLevelAt(2, 74, 1.0), -2.0);                    // (no settled one: the run's)
+      QVERIFY(std::isnan(a.legatoLevelAt(5, 72, 0.1)));
+      QVERIFY(std::isnan(a.legatoLevelAt(-1, 59, 0.1)));
+      QVERIFY(!mapWith("legatoLevel='+2:72'"));
+      QVERIFY(!mapWith("legatoLevel='+2:72:1,x'"));
+      }
+      const int Q = DIVISION;
+      // the CC11 values on the legato patch's route (tick, value)
+      auto render = [&](const QString& levels, const QString& settings) {
+            std::vector<std::pair<int, int>> cc11;
+            auto lib = mapWith(levels);
+            if (!lib)
+                  return cc11;
+            SoundLib::setCurrent(lib);
+            MasterScore* score = readScore(DIR + "legato-octave.musicxml");
+            if (!score)
+                  return cc11;
+            score->setMetaTag(Playback::metaTag, settings);
+            score->rebuildMidiMapping();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal() && ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION && ev.libraryPatch() == 1)
+                        cc11.push_back({ te.first, ev.value() });
+                  }
+            delete score;
+            return cc11;
+            };
+      auto valueAt = [](const std::vector<std::pair<int, int>>& cc, int tick) {
+            int v = -1;
+            for (const auto& c : cc)
+                  if (c.first <= tick)
+                        v = c.second;
+            return v;
+            };
+      // C5 -> D5 (+2 from 72, a second each: settled, 1 dB loud) down 1 dB from its arrival, the written time (started
+      // 200 ms early, arriving 200 ms after its note-on); back at the next slur's first note (its note-on, 4Q)
+      {
+      const auto cc = render("legatoLevelLong='+2:72:1'", "legato/levelBalance=1");
+      QCOMPARE(valueAt(cc, 3 * Q - 1), 127);
+      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(127 * std::pow(10.0, -1 / 20.0))));
+      QCOMPARE(valueAt(cc, 4 * Q - 1), int(std::lround(127 * std::pow(10.0, -1 / 20.0))));
+      QCOMPARE(valueAt(cc, 4 * Q), 127);
+      QCOMPARE(valueAt(cc, 8 * Q), 127);                              // (D5 -> E5: +2 from 74, unmeasured)
+      }
+      // 2 dB soft: no headroom (the default), so nothing to raise; 6 dB headroom: the part rests 6 dB down, the
+      // note 4 dB down
+      {
+      const auto none = render("legatoLevelLong='+2:72:-2'", "legato/levelBalance=1");
+      QCOMPARE(valueAt(none, 3 * Q), 127);
+      const auto cc = render("legatoLevelLong='+2:72:-2'", "legato/levelBalance=1;legato/levelHeadroomDb=6");
+      const int rest = int(std::lround(127 * std::pow(10.0, -6 / 20.0)));
+      QCOMPARE(valueAt(cc, 0), rest);
+      QCOMPARE(valueAt(cc, 3 * Q - 1), rest);
+      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(rest * std::pow(10.0, 2 / 20.0))));
+      QCOMPARE(valueAt(cc, 4 * Q), rest);
+      }
+      // 9 dB loud: down by levelMaxDb (6); off (the default): untouched
+      {
+      const auto cc = render("legatoLevelLong='+2:72:9'", "legato/levelBalance=1");
+      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(127 * std::pow(10.0, -6 / 20.0))));
+      const auto off = render("legatoLevelLong='+2:72:9'", "");
+      for (const auto& c : off)
+            QCOMPARE(c.second, 127);
+      }
+      // the layers: playback.ini on, the score's off over it
+      Playback::setIniValuesForTest({ { "legato/levelBalance", "1" } });
+      QCOMPARE(valueAt(render("legatoLevelLong='+2:72:1'", ""), 3 * Q), int(std::lround(127 * std::pow(10.0, -1 / 20.0))));
+      for (const auto& c : render("legatoLevelLong='+2:72:1'", "legato/levelBalance=0"))
+            QCOMPARE(c.second, 127);
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------

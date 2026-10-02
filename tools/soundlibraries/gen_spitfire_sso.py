@@ -1047,6 +1047,10 @@ SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performan
 # (patch, octave direction) whose per-start octave values do NOT take the correction (owner 2026-10-02: the VM sweep
 # heard Oboe Solo +12 ~60 ms early with it, -12 on time with it)
 OCTAVE_NO_SWEEP_CORRECTION = {('Oboe Solo - Performance', 12)}
+# (patch, octave direction): ms added to its per-start octave values on top of the above, from the octave sweep
+# (make_octave_sweep_scores.py, every start, compare_octave_sweeps.py): build 5698181 heard Violins 2 - Performance's
+# octave slurs early in both directions, median -30 ms over 28 starts each (+12 and -12; median |offset| 35 ms)
+OCTAVE_SWEEP_CORRECTION = {('Violins 2 - Performance', 12): -30, ('Violins 2 - Performance', -12): -30}
 def legatoDelayFromPitches(patch, sound):
     rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
     if not rows:
@@ -1087,7 +1091,8 @@ def legatoDelayFromPitches(patch, sound):
 # median per patch (legatoDelay's +-12, kept for patches without these and as the fallback) is 100-200 ms off at
 # many starts. tMidMs 0 (a failed fit) is left out: such a start takes the nearest measured one's (the renderer,
 # SoundLib::octaveDelayAt). Violins 2 - Sul G: 4 starts, inconclusive, not used. SWEEP_LEGATO_CORRECTION applies as
-# to the patch's other intervals (except OCTAVE_NO_SWEEP_CORRECTION: Oboe Solo +12).
+# to the patch's other intervals (except OCTAVE_NO_SWEEP_CORRECTION: Oboe Solo +12); OCTAVE_SWEEP_CORRECTION adds a
+# per-direction correction (Violins 2 -30 / -30).
 OCTAVE_MEASURE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'octave_measure',
                                              'octave_measure.json'), encoding='utf-8'))
 OCTAVE_SKIP = {'Violins 2 - Sul G - Performance'}
@@ -1098,10 +1103,27 @@ def octaveDelays(patch):
         return None, None
     def text(d):
         corr = 0 if (patch, int(d)) in OCTAVE_NO_SWEEP_CORRECTION else SWEEP_LEGATO_CORRECTION.get(patch, 0)
+        corr += OCTAVE_SWEEP_CORRECTION.get((patch, int(d)), 0)
         by = {int(k): v for k, v in m.get(d, {}).get('byStart', {}).items() if v and v > 0}
         return ' '.join(f'{k}:{int(round(v + corr))}' for k, v in sorted(by.items())) or None
     return text('12'), text('-12')
 octaveCount = 0
+# The level each legato transition arrives at (legatoLevel= heard in a run of sixteenths, legatoLevelLong= settled):
+# sso_legato_levels.json (legato_levels_from_scan.py: the legato level scan, kthost renders of every start pitch x
+# interval +-1 2 3 5 7 12 per Performance patch at mf, 2026-10-02, branch legato-level-balance), dB against the
+# median of the transitions into the same pitch; the renderer's [legato] levelBalance plays each at that median
+LEGATO_LEVELS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_levels.json')
+LEGATO_LEVELS = json.load(open(LEGATO_LEVELS_PATH, encoding='utf-8')) if os.path.exists(LEGATO_LEVELS_PATH) else {}
+def legatoLevels(patch, which):
+    """the legatoLevel= / legatoLevelLong= text of a patch (None: not measured)"""
+    t = LEGATO_LEVELS.get(patch, {}).get(which)
+    if not t:
+        return None
+    def v(x):
+        return '' if x is None else f'{x:g}'
+    return ' '.join(f'{int(i):+d}:{first}:' + ','.join(v(x) for x in vals)
+                    for i, (first, vals) in sorted(t.items(), key=lambda kv: int(kv[0]))) or None
+legatoLevelCount = 0
 def legatoDelay(patch, sound, t):
     """the legatoDelay= text of a patch's legato sound (None: not measured)"""
     fromPitches = legatoDelayFromPitches(patch, sound)
@@ -1378,6 +1400,13 @@ for i, line in enumerate(out):
             extra += f' octaveDown="{down}"'
         if up or down:
             octaveCount += 1
+        run, settled = legatoLevels(current, 'run'), legatoLevels(current, 'settled')
+        if run:
+            extra += f' legatoLevel="{run}"'
+        if settled:
+            extra += f' legatoLevelLong="{settled}"'
+        if run or settled:
+            legatoLevelCount += 1
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
     f = shortFrom(current, sound)
     if f:
