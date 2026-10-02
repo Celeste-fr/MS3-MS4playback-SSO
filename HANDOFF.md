@@ -47,6 +47,10 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   ~16-30 starts (branch octave-measure, `tools/soundlibraries/octave_measure/`) time each ±12 slur by its start
   pitch's own value (map `octaveUp` / `octaveDown`; rule in docs/PLAYBACK_SETTINGS.md); the others keep one ±12 value.
   Not used: Violins 2 - Sul G (4 starts, inconclusive), Oboe Principal (plays no notated legato).
+  Sweep (make_octave_sweep_scores.py, every start, 15 patches) 49b00a0 → 5698181: median |offset| 40 → 20 ms,
+  within 50 ms 63 → 76 %, over 100 ms 129 → 60 of 690 slurs (Horn +12 170 → 10, Basses +12 155 → 20, Horns a2 +12
+  120 → 15, Tuba +12 70 → 15, Piccolo −12 80 → 5); controls unchanged. Open: Oboe Solo +12 still −60 (its +60
+  sweep correction looks wrong for template-fit octaves), Violins 2 ±12 −30.
   Violins 1 flautando low register still +256 ms.
 - Kept by the owner's choice: strings' slurred sixteenths 50-80 ms late (the fast-note ramp keeps fast runs even;
   Whence cellos 0.9 dB spread).
