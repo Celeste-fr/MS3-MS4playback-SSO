@@ -126,14 +126,23 @@ class MidiRenderer {
       // playback settings (libmscore/playbacksettings.h) for this chunk
       int libOverlapTicks = 30;
       bool libSlurEndOverlap = false;
-      double libRampFrom = 0.125, libRampTo = 0.25, libRampMax = 0.5;
-      double libRampShare(double len) const;
+      // an early start (a legato transition, a held note's onset) after a note on the same patch: that note keeps at
+      // least libKeep seconds as played ([legato] keepMs); a transition after a short note uses at most libFastBase +
+      // libFastSlope times that note's length as its delay ([legato] fastBaseMs, fastSlope)
+      double libKeep = 0.04, libFastBase = 0.1, libFastSlope = 0.3;
+      double libFastDelay(double delayMs, double lenBefore) const;
+      // a library note's start as played (note, tickOffset -> utick), this chunk: what an early start after it may take
+      std::map<std::pair<const Note*, int>, int> libPlayedOn;
       QString playbackSettingsTag;
       int playbackGeneration = -1;
       // held notes started early by their onset (this chunk): what ends on their patch between their new and
       // their written start ends at the new one, and their switch and controllers move with them (finishLibraryEvents)
       struct LibShift { int channel; int patch; int on; int written; int chordTick; };
       std::vector<LibShift> libShifts;
+      // legato transitions started early (this chunk): the note before ends overlapTicks after the new start as
+      // played, not after the written one, so that only one note overlaps the next (finishLibraryEvents)
+      struct LibLegatoOff { const Note* from; int channel; int on; };
+      std::vector<LibLegatoOff> libLegatoOffs;
       int minChunkSize = 0;
 
    public:

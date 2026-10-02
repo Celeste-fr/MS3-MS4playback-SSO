@@ -104,6 +104,7 @@ struct SndConfig {
       int libEarliest = 0;        // … but not before this utick
       int* libOn = nullptr;       // where the note starts, as written and as played (libEarly)
       int* libWrittenOn = nullptr;
+      int* libPlayed = nullptr;   // where a library note starts as played (any note, early or not)
       int libKey = -1;            // a library kit: the patch's key that plays the drum sound
                                   // (a sound library plays the trill / tremolo: SoundLib)
 
@@ -541,6 +542,8 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   }
             if (config.libOn)
                   *config.libOn = on;
+            if (config.libPlayed)
+                  *config.libPlayed = on;
             playNote(events, note, channel, p, qBound(1, config.ms4Velocity, 127), on, qMax(on, off), staffIdx, config.ms4Layer >= 0 ? config.ms4Layer : note->voice(), config.libPatch);
             nels = 0;                             // done; bends below still apply
             }
@@ -1303,13 +1306,21 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // (playback settings [legato] overlapTicks, slurEndOverlap)
                         return c && c.base == "legato" && (libSlurEndOverlap || slurGoesOn(note)) ? libOverlapTicks : 0;
                         };
+                  // where a note before (the first of its tie chain) starts as played: early or not (libPlayedOn),
+                  // else as written
+                  auto playedOn = [&](const Note* first) {
+                        auto it = libPlayedOn.find({ first, tickOffset });
+                        return it != libPlayedOn.end() ? it->second : first->chord()->tick().ticks() + tickOffset;
+                        };
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
                   // patch). Returns that note (nullptr: not a transition: a slur's first note, the note after its
-                  // end, the same key struck again), the earliest utick the note may start: up to half
-                  // way into it (below), not before the chunk or the pass, and the interval from it (semitones;
-                  // of a chord before, its nearest note that goes on legato)
-                  auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest, int* interval) -> const Note* {
+                  // end, the same key struck again), the earliest utick the note may start: the note before keeps
+                  // keepMs of its length as played (below), not before the chunk or the pass, the interval from it
+                  // (semitones; of a chord before, its nearest note that goes on legato) and its written length
+                  // (seconds)
+                  auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest, int* interval,
+                                              double* lenBefore) -> const Note* {
                         if (!c || c.base != "legato")
                               return nullptr;
                         Chord* ch = note->chord();
@@ -1340,18 +1351,17 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.base != "legato" || pc.patch != c.patch)
                                     continue;
-                              // the note before loses at most a share of its length in time: none up to 125 ms,
-                              // rising linearly to half at 250 ms and longer. Measured with SSO (2026-09-30): the
-                              // owner's cellos, sixteenths at 110 (136 ms) under 4-note slurs, went uneven when
-                              // shifted (half: a 5.9 dB spread over the slur's four notes, a quarter: 4.2, on the
-                              // beat: 1.1); eighths at 120 (250 ms) stay as even shifted by half as on the beat,
-                              // and their pitch lands 58 ms after the beat instead of 123 (a quarter) or 183
+                              // the note before keeps keepMs of its length as played (it may itself have started
+                              // early: in a fast slurred run every note starts early by about the same, so each
+                              // keeps its length). Measured with SSO (2026-10-02, branch fast-slurs-on-time): SSO's
+                              // strings reach a slurred sixteenth's pitch 120-160 ms after its note-on at 100-200
+                              // bpm, more than the note itself is long; the ramp before (none up to 125 ms, half
+                              // from 250) left them 100-150 ms late
                               const int start = fc->tick().ticks() + tickOffset;
-                              const qreal t1 = score->utick2utime(utick);
-                              const qreal len = t1 - score->utick2utime(start);
-                              const int cap = score->utime2utick(t1 - libRampShare(len) * len);
-                              *earliest = std::max({ start, cap, libChunkStart, (*rs)->utick });
+                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep);
+                              *earliest = std::max({ cap, libChunkStart, (*rs)->utick });
                               *interval = note->ppitch() - pn->ppitch();
+                              *lenBefore = score->utick2utime(utick) - score->utick2utime(start);
                               return first;
                               }
                         return nullptr;
@@ -1359,9 +1369,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
 
                   // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
                   // articulation with a measured onset: how early it may start (utick). As for a transition, the note
-                  // just before on its track, when it plays on the same patch, loses at most a share of its length
-                  // (none up to 125 ms, half from 250 ms); not before the chunk or the pass; -1: not at all (grace
-                  // notes or an arpeggio before it)
+                  // just before on its track, when it plays on the same patch, keeps keepMs of its length as played;
+                  // not before the chunk or the pass; -1: not at all (grace notes or an arpeggio before it)
                   auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c) -> int {
                         Chord* ch = note->chord();
                         if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
@@ -1385,11 +1394,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.patch != c.patch)
                                     continue;
-                              const int start = fc->tick().ticks() + tickOffset;
-                              const qreal t1 = score->utick2utime(utick);
-                              const qreal len = t1 - score->utick2utime(start);
-                              const int cap = score->utime2utick(t1 - libRampShare(len) * len);
-                              return std::max({ earliest, start, cap });
+                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep);
+                              return std::max(earliest, cap);
                               }
                         return earliest;
                         };
@@ -1511,13 +1517,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               // before (pitch bend)
                               int earliest = 0;
                               int interval = 0;
-                              const Note* from = legatoTransition(note, libChoice, &earliest, &interval);
+                              double lenBefore = 0;
+                              const Note* from = legatoTransition(note, libChoice, &earliest, &interval, &lenBefore);
                               if (from) {
                                     libGlideFrom[note] = from;
-                                    // (playback.ini [legato.delay] by patch: an offset or its own table)
-                                    const double delayMs = Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
-                                                                            libChoice.articulation->name, interval,
-                                                                            libChoice.articulation->legatoDelayAt(interval));
+                                    // (playback.ini [legato.delay] by patch: an offset or its own table); after a short
+                                    // note SSO's transition is quicker ([legato] fastBaseMs, fastSlope)
+                                    const double delayMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
+                                                                                         libChoice.articulation->name, interval,
+                                                                                         libChoice.articulation->legatoDelayAt(interval)),
+                                                                        lenBefore);
                                     if (offset == 0 && libLegatoEarly > 0 && delayMs > 0) {
                                           config.libEarly = delayMs * libLegatoEarly / 100.0 / 1000.0;
                                           config.libEarliest = earliest;
@@ -1548,7 +1557,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (libNote.velocity > 0)
                               config.ms4Velocity = libNote.velocity;
                         ms4Swing(note->chord(), config.ms4SwingOn, config.ms4SwingGate);
+                        int played = -1;
+                        if (li && !libNote.builtIn && offset == 0 && !note->tieBack())
+                              config.libPlayed = &played;
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
+                        if (played >= 0) {
+                              libPlayedOn[{ note, tickOffset }] = played;
+                              auto g = libGlideFrom.find(note);
+                              if (config.libEarly > 0 && g != libGlideFrom.end() && played < note->chord()->tick().ticks() + tickOffset)
+                                    libLegatoOffs.push_back({ g->second, noteChannel, played });
+                              }
                         if (config.libOn && libShiftOn >= 0 && libShiftOn < libShiftWritten)
                               libShifts.push_back({ noteChannel, libChoice.patch, libShiftOn, libShiftWritten,
                                                     note->chord()->tick().ticks() + tickOffset });
@@ -2182,6 +2200,24 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             const auto at = events->lower_bound(s.on);
             for (const NPlayEvent& ev : moved)
                   events->insert(at, std::make_pair(s.on, ev));
+            }
+
+      // a legato transition started early: the note before (still sounding: its note-off is where it was written,
+      // overlapTicks after the written start) ends overlapTicks after the new start as played. In a fast run whose
+      // notes start early by more than a note's length, it would else still sound when the next one or two start
+      // (SSO's legato is monophonic: the key let go then)
+      for (const LibLegatoOff& l : libLegatoOffs) {
+            const int at = l.on + libOverlapTicks;
+            for (auto i = events->upper_bound(at); i != events->end(); ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (ev.type() == ME_NOTEON && ev.velo() == 0 && ev.note() == l.from && ev.channel() == l.channel
+                      && !ev.librarySwitch()) {
+                        NPlayEvent off(ev);
+                        events->erase(i);
+                        events->insert(std::make_pair(at, off));
+                        break;
+                        }
+                  }
             }
 
       // a key struck again on the same patch while its last note still sounds (a legato overlap, a note
@@ -4072,10 +4108,12 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
       libOverlapTicks = int(Playback::value("legato/overlapTicks", score));
       libSlurEndOverlap = Playback::on("legato/slurEndOverlap", score);
-      libRampFrom = Playback::value("legato/rampFromMs", score) / 1000.0;
-      libRampTo = Playback::value("legato/rampToMs", score) / 1000.0;
-      libRampMax = Playback::value("legato/rampMaxShare", score) / 100.0;
+      libKeep = Playback::value("legato/keepMs", score) / 1000.0;
+      libFastBase = Playback::value("legato/fastBaseMs", score) / 1000.0;
+      libFastSlope = Playback::value("legato/fastSlope", score) / 100.0;
       libShifts.clear();
+      libPlayedOn.clear();
+      libLegatoOffs.clear();
 
       // create note & other events
       for (Staff*& st : score->staves()) {
@@ -4344,16 +4382,15 @@ bool MidiRenderer::libSlurAcross(const Measure* last) const
       }
 
 //---------------------------------------------------------
-//   MidiRenderer::libRampShare
-//    the share of a note (len seconds) an early start after it may take: none up to rampFrom, rising linearly
-//    to rampMax at rampTo (playback settings [legato]; measured: 125 ms, 250 ms, half)
+//   MidiRenderer::libFastDelay
+//    a legato transition's delay (ms) after a note lenBefore seconds long: at most fastBase + fastSlope times that
+//    length (playback settings [legato] fastBaseMs, fastSlope; SSO plays quicker transitions in fast passages than
+//    the legato grid's, measured from long notes)
 //---------------------------------------------------------
 
-double MidiRenderer::libRampShare(double len) const
+double MidiRenderer::libFastDelay(double delayMs, double lenBefore) const
       {
-      if (libRampTo <= libRampFrom)
-            return len >= libRampTo ? libRampMax : 0.0;
-      return qBound(0.0, (len - libRampFrom) / (libRampTo - libRampFrom), 1.0) * libRampMax;
+      return std::min(delayMs, (libFastBase + libFastSlope * lenBefore) * 1000.0);
       }
 
 //---------------------------------------------------------

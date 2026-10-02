@@ -39,12 +39,12 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: a slur's last note overlaps the note after it too (MuseScore 4); 0: it ends on time, so the next note gets its own attack", true },
       { "legato/early", MAP, 0, 200, "%",
         "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
-      { "legato/rampFromMs", 125, 0, 2000, "ms",
-        "a note before a transition (or before a held note started early) this short loses nothing to it", true },
-      { "legato/rampToMs", 250, 0, 4000, "ms",
-        "from this length on it may lose its full share (below); linear in between", true },
-      { "legato/rampMaxShare", 50, 0, 100, "%",
-        "the most of the note before that an early start may take", true },
+      { "legato/keepMs", 40, 0, 1000, "ms",
+        "a note before a transition (or before a held note started early) on the same patch keeps at least this much of its length as played", true },
+      { "legato/fastBaseMs", 100, 0, 2000, "ms",
+        "a transition after a short note: its delay is at most this ...", true },
+      { "legato/fastSlope", 30, 0, 1000, "%",
+        "... plus this share of the note before's length (SSO's transitions are quicker in fast passages)", true },
       { "legato/glideMs", 30, 0, 500, "ms",
         "a slurred note on a tuning copy glides from the note before's tuning over this long (pitch bend and varispeed)", true },
       // [heldNotes]
@@ -173,7 +173,11 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
       const QString id = group + "/" + key;
       const Definition* d = definition(id);
       if (!d) {
-            i.warnings << QString("unknown key %1 (ignored)").arg(id);
+            // (the fast-note ramp, replaced on 2026-10-02 by keepMs and fastBaseMs / fastSlope: fast slurs on time)
+            if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
+                  i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastBaseMs, fastSlope; delete the line)").arg(id);
+            else
+                  i.warnings << QString("unknown key %1 (ignored)").arg(id);
             return;
             }
       const QString t = text.trimmed();
