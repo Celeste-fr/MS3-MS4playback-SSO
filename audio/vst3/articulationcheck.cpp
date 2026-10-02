@@ -1702,14 +1702,28 @@ ArticulationCheck::RestResult ArticulationCheck::rest(Vst3Plugin* plugin, int va
                   }
             r.low = lo;
             r.high = hi;
+            // MS_EXTRACT_LEGATO_STARTS="0.05,0.15,..." / MS_EXTRACT_LEGATO_INTERVALS="-12,12" replace the defaults
+            // (octave-measure: many more start pitches for the octaves only)
+            std::vector<double> shares(std::begin(LEGATO_START_SHARES), std::end(LEGATO_START_SHARES));
+            std::vector<int> intervals(std::begin(LEGATO_PITCH_INTERVALS), std::end(LEGATO_PITCH_INTERVALS));
+            if (qEnvironmentVariableIsSet("MS_EXTRACT_LEGATO_STARTS")) {
+                  shares.clear();
+                  for (const QString& t : qEnvironmentVariable("MS_EXTRACT_LEGATO_STARTS").split(',', QString::SkipEmptyParts))
+                        shares.push_back(t.toDouble());
+                  }
+            if (qEnvironmentVariableIsSet("MS_EXTRACT_LEGATO_INTERVALS")) {
+                  intervals.clear();
+                  for (const QString& t : qEnvironmentVariable("MS_EXTRACT_LEGATO_INTERVALS").split(',', QString::SkipEmptyParts))
+                        intervals.push_back(t.toInt());
+                  }
             std::vector<int> starts;
-            for (double share : LEGATO_START_SHARES) {
+            for (double share : shares) {
                   const int p = lo + int(std::lround(share * (hi - lo)));
                   if (std::find(starts.begin(), starts.end(), p) == starts.end())
                         starts.push_back(p);
                   }
             for (int a : starts) {
-                  for (int interval : LEGATO_PITCH_INTERVALS) {
+                  for (int interval : intervals) {
                         const int b = a + interval;
                         if (b < lo || b > hi || avoided(b))
                               continue;

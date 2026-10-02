@@ -1044,6 +1044,9 @@ LEGATO_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file
 GRID_PITCHES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_grid_pitches.json'),
                               encoding='utf-8'))
 SWEEP_LEGATO_CORRECTION = {'Oboe Solo - Performance': 60, 'Violins 2 - Performance': 25}
+# (patch, octave direction) whose per-start octave values do NOT take the correction (owner 2026-10-02: the VM sweep
+# heard Oboe Solo +12 ~60 ms early with it, -12 on time with it)
+OCTAVE_NO_SWEEP_CORRECTION = {('Oboe Solo - Performance', 12)}
 def legatoDelayFromPitches(patch, sound):
     rows = GRID_PITCHES.get(patch, {}).get(sound, {}).get('rows')
     if not rows:
@@ -1077,6 +1080,28 @@ def legatoDelayFromPitches(patch, sound):
     corr = SWEEP_LEGATO_CORRECTION.get(patch, 0)
     ms = {i: m + corr for i, m in ms.items()}
     return ' '.join(f'{i:+d}:{int(round(m))}' for i, m in sorted(ms.items()))
+# Octave slurs by start pitch (octaveUp= / octaveDown=, start MIDI pitch:ms): octave_measure/octave_measure.json
+# (branch octave-measure 4a30a54, 2026-10-02: 10 runs x 17 Performance patches, tMidMs at ~16-30 starts per direction,
+# pooled with the 3-4 starts of sso_legato_grid_pitches.json). SSO's octave transitions follow its sample zones in
+# blocks of 2-4 semitones (Piccolo -12: ~370 ms for D#6-A#6, ~175 from B6 up; Tenor Trombones a2 +12 70-305), so one
+# median per patch (legatoDelay's +-12, kept for patches without these and as the fallback) is 100-200 ms off at
+# many starts. tMidMs 0 (a failed fit) is left out: such a start takes the nearest measured one's (the renderer,
+# SoundLib::octaveDelayAt). Violins 2 - Sul G: 4 starts, inconclusive, not used. SWEEP_LEGATO_CORRECTION applies as
+# to the patch's other intervals (except OCTAVE_NO_SWEEP_CORRECTION: Oboe Solo +12).
+OCTAVE_MEASURE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'octave_measure',
+                                             'octave_measure.json'), encoding='utf-8'))
+OCTAVE_SKIP = {'Violins 2 - Sul G - Performance'}
+def octaveDelays(patch):
+    """(octaveUp=, octaveDown=) texts of a patch (None: not measured by start pitch)"""
+    m = OCTAVE_MEASURE.get(patch)
+    if not m or patch in OCTAVE_SKIP:
+        return None, None
+    def text(d):
+        corr = 0 if (patch, int(d)) in OCTAVE_NO_SWEEP_CORRECTION else SWEEP_LEGATO_CORRECTION.get(patch, 0)
+        by = {int(k): v for k, v in m.get(d, {}).get('byStart', {}).items() if v and v > 0}
+        return ' '.join(f'{k}:{int(round(v + corr))}' for k, v in sorted(by.items())) or None
+    return text('12'), text('-12')
+octaveCount = 0
 def legatoDelay(patch, sound, t):
     """the legatoDelay= text of a patch's legato sound (None: not measured)"""
     fromPitches = legatoDelayFromPitches(patch, sound)
@@ -1346,6 +1371,13 @@ for i, line in enumerate(out):
     if delay:
         extra += f' legatoDelay="{delay}"'
         legatoGridUsed.add(current)
+        up, down = octaveDelays(current)
+        if up:
+            extra += f' octaveUp="{up}"'
+        if down:
+            extra += f' octaveDown="{down}"'
+        if up or down:
+            octaveCount += 1
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
     f = shortFrom(current, sound)
     if f:
