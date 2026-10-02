@@ -9,7 +9,7 @@ a section there when you need the background of that topic. Commit messages desc
 
 - `main` has everything: `live-set-export` / `claude/intelligent-volta-gx7gmw`, `automation-editor`, the
   measurement branch `claude/intelligent-cray-6pd4o1` and `playability-checker` were merged on 2026-10-02 (the
-  branches are kept). Work on a branch; the owner decides what goes to `main`.
+  branches are kept). Work on a branch; finished work by Claude and its subagents is merged into `main` without asking (the owner, 2026-10-02), anything incomplete or changing an owner-decided value waits for the owner.
 - Windows test builds come from a branch on request (CLAUDE.md › Branches and CI). The Windows VM with Kontakt 8
   and SSO is reachable for agents (VERIFY.md › With the real library; access in the agents' own notes). VM
   measurement jobs (task `claude-measure`, `C:\claude\measure\job*.cmd`) and regression sweeps (task
@@ -43,9 +43,15 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   harmonic method was wrong by 75-320 ms); per-family medians now: strings +5 / −10 ms (+12 / −12), woodwinds +5 / 0,
   brass −45 / +20; other intervals 0…+10. Sul tasto / flautando / harmonics: per-semitone onset at −12 dB clamped to the
   neighbours, median +58 ms, none early. Oboe +60 and Violins 2 +25 ms corrections.
-- Open: per-instrument octave outliers from only 2-4 octaves each (Horn +12 late 140-300 ms, Tuba +12 −120, Oboe −12
-  −40…−130, Violins 2 −12 −20…−130; Basses / Trombone / Piccolo single notes at −300…−450 look like analysis outliers):
-  measure more octaves per patch before correcting. Violins 1 flautando low register still +256 ms.
+- Octaves by start pitch (branch `octave-per-pitch`, owner's option C, 2026-10-02): the 16 patches measured at
+  ~16-30 starts (branch octave-measure, `tools/soundlibraries/octave_measure/`) time each ±12 slur by its start
+  pitch's own value (map `octaveUp` / `octaveDown`; rule in docs/PLAYBACK_SETTINGS.md); the others keep one ±12 value.
+  Not used: Violins 2 - Sul G (4 starts, inconclusive), Oboe Principal (plays no notated legato).
+  Sweep (make_octave_sweep_scores.py, every start, 15 patches) 49b00a0 → 5698181: median |offset| 40 → 20 ms,
+  within 50 ms 63 → 76 %, over 100 ms 129 → 60 of 690 slurs (Horn +12 170 → 10, Basses +12 155 → 20, Horns a2 +12
+  120 → 15, Tuba +12 70 → 15, Piccolo −12 80 → 5); controls unchanged. Oboe Solo +12 was −60: its +60
+  sweep correction no longer applies to its +12 octave values (owner 2026-10-02; −12 keeps it; re-sweep to confirm). Open: Violins 2 ±12 −30.
+  Violins 1 flautando low register still +256 ms.
 - Kept by the owner's choice: strings' slurred sixteenths 50-80 ms late (the fast-note ramp keeps fast runs even;
   Whence cellos 0.9 dB spread).
 

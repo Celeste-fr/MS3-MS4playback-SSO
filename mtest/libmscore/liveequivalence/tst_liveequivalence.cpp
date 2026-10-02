@@ -75,8 +75,10 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveSetControllersAndMix();
       void liveClipsBend();
       void liveClipsLegatoEarly();
+      void liveClipsLegatoOctave();
       void liveEquivalence();
       void liveEquivalenceLegato();
+      void liveEquivalenceOctave();
       void liveEquivalenceAutomation();
       void dumpEvents();
       void playbackSettingsWidget();
@@ -530,6 +532,59 @@ void TestLiveEquivalence::liveClipsLegatoEarly()
       }
 
 //---------------------------------------------------------
+//   liveClipsLegatoOctave
+//    octave slurs timed by their start pitch (octaveUp / octaveDown) reach the clips as rendered:
+//    legato-octave.musicxml (tst_soundlibrary::legatoOctaveByStartPitch), +12 from 72 300 ms early, from 74 500
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveClipsLegatoOctave()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+12:800 -12:400 +2:200' release='900'"
+         " octaveUp='72:300 73:500 75:100' octaveDown='84:150 90:250'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-octave.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl);
+      std::multiset<std::tuple<QString, int, int>> fromEvents, fromClips;     // (route, pitch, start units)
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (e.isExternal() && e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch())
+                  fromEvents.insert({ QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1), e.pitch(), tl.units(te.first) });
+            }
+      const int wait = 14 * LiveClips::EPSILON;
+      for (const LiveClips::Track& c : clips)
+            for (const LiveClips::Note& n : c.notes)
+                  if (n.pitch < LiveClips::CARRIER_LOW)
+                        fromClips.insert({ c.key, n.pitch, n.start <= wait ? 0 : n.start });
+      QCOMPARE(int(fromClips.size()), 8);
+      QVERIFY(fromClips == fromEvents);
+      // at 60 bpm: C6 (84) on beat 1 300 ms early, D6 (86) on beat 5 500 ms early
+      const int beat = LiveClips::UNITS_PER_BEAT;
+      int found = 0;
+      for (const auto& n : fromClips) {
+            if (std::get<1>(n) == 84 && std::abs(std::get<2>(n) - (beat - int(std::lround(0.3 * beat)))) <= 1)
+                  ++found;
+            if (std::get<1>(n) == 86 && std::abs(std::get<2>(n) - (5 * beat - int(std::lround(0.5 * beat)))) <= 1)
+                  ++found;
+            }
+      QVERIFY2(found == 2, qPrintable(QString::number(found)));
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   liveEquivalence
 //    the whole chain against MuseScore's own render (mscore/liveequivalence.h), on the test synth (deterministic:
 //    the strict thresholds): a violin with quarter tones by pitch bend (glides included), a plug-in Controller
@@ -608,6 +663,38 @@ void TestLiveEquivalence::liveEquivalenceLegato()
             }
       QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
       QCOMPARE(int(r.tracks.size()), 2);
+      QVERIFY2(r.passed, qPrintable(report));
+      QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(report));
+      qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveEquivalenceOctave
+//    the whole chain with octave slurs timed by their start pitch (legato-octave.musicxml)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveEquivalenceOctave()
+      {
+      LiveHost host(this, "", { "Violin", "Violin Legato" },
+         "<SoundLibrary name='LiveT'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+12:800 -12:400 +2:200' release='900'"
+         " octaveUp='72:300 73:500 75:100' octaveDown='84:150 90:250'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      MasterScore* score = readScore(DIR + "legato-octave.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      LiveEquivalence::Options o;
+      o.thresholds.roundRobins = false;
+      const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);
+      const QString report = LiveEquivalence::reportText(r, o.thresholds);
+      QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
       QVERIFY2(r.passed, qPrintable(report));
       QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(report));
       qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));

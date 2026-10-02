@@ -1521,11 +1521,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const Note* from = legatoTransition(note, libChoice, &earliest, &interval, &lenBefore);
                               if (from) {
                                     libGlideFrom[note] = from;
-                                    // (playback.ini [legato.delay] by patch: an offset or its own table); after a short
+                                    // (an octave by the pitch it starts from, where measured: octaveUp / octaveDown;
+                                    // playback.ini [legato.delay] by patch: an offset or its own table); after a short
                                     // note SSO's transition is quicker ([legato] fastBaseMs, fastSlope)
                                     const double delayMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
                                                                                          libChoice.articulation->name, interval,
-                                                                                         libChoice.articulation->legatoDelayAt(interval)),
+                                                                                         libChoice.articulation->legatoDelayAt(interval, from->ppitch())),
                                                                         lenBefore);
                                     if (offset == 0 && libLegatoEarly > 0 && delayMs > 0) {
                                           config.libEarly = delayMs * libLegatoEarly / 100.0 / 1000.0;

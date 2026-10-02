@@ -98,6 +98,7 @@ class TestSoundLibrary : public QObject, public MTest
       void legatoEarly();
       void legatoEarlyFastRun();
       void legatoEarlyByInterval();
+      void legatoOctaveByStartPitch();
       void onsetEarly();
       void playbackSettingsIni();
       void playbackSettingsLayers();
@@ -1118,6 +1119,114 @@ void TestSoundLibrary::legatoEarlyByInterval()
             { 0, 0 }, { Q, 200 * 0.48 }, { 2 * Q, 200 * 0.48 }, { 3 * Q, 100 * 0.48 },     // C D E F: +2 +2 +1
             { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 200 * 0.48 },             // G, A A (struck again) B: +2
             { 8 * Q, 0 }, { 9 * Q, 190 * 0.96 }, { 10 * Q, 150 * 0.96 }, { 11 * Q, 230 * 0.96 },   // C E G C: +4 +3 +5
+            };
+      for (size_t i = 0; i < written.size(); ++i) {
+            const double expected = written[i].first - written[i].second;
+            QVERIFY2(qAbs(ons[i].first - expected) <= 1.0,
+                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(ons[i].second)
+                                .arg(ons[i].first).arg(expected)));
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   legatoOctaveByStartPitch
+//    an octave slur's delay by the pitch it starts from (<Articulation octaveUp octaveDown>, SSO's octave
+//    transitions follow its sample zones): the start's own value, else the nearest measured start's (a tie: the
+//    side whose run of like values is shorter, else the lower), the tables' median for an unknown start; other
+//    intervals and patches without the tables as before. legato-octave.musicxml
+//---------------------------------------------------------
+
+void TestSoundLibrary::legatoOctaveByStartPitch()
+      {
+      // the lookup
+      const std::vector<std::pair<int, double>> t = { { 48, 150 }, { 49, 180 }, { 51, 140 }, { 53, 300 }, { 54, 290 }, { 55, 300 } };
+      QCOMPARE(SoundLib::octaveDelayAt(t, 222, 49), 180.0);    // exact
+      QCOMPARE(SoundLib::octaveDelayAt(t, 222, 40), 150.0);    // below the measured: the lowest
+      QCOMPARE(SoundLib::octaveDelayAt(t, 222, 70), 300.0);    // above: the highest
+      QCOMPARE(SoundLib::octaveDelayAt(t, 222, -1), 222.0);    // unknown start: the fallback
+      QCOMPARE(SoundLib::octaveDelayAt({}, 222, 49), 222.0);   // no table: the fallback
+      // 50: 49 and 51 equally near; 48-49 a run of two, 51 alone: 51's zone lacks it
+      QCOMPARE(SoundLib::octaveDelayAt(t, 222, 50), 140.0);
+      // 52: 51 alone, 53-55 a run of three: 51's
+      QCOMPARE(SoundLib::octaveDelayAt(t, 222, 52), 140.0);
+      const std::vector<std::pair<int, double>> u = { { 60, 100 }, { 62, 300 }, { 66, 200 } };
+      QCOMPARE(SoundLib::octaveDelayAt(u, 0, 61), 100.0);      // equal runs: the lower
+      QCOMPARE(SoundLib::octaveDelayAt(u, 0, 63), 300.0);      // nearest
+      QCOMPARE(SoundLib::octaveDelayAt(u, 0, 65), 200.0);
+
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='Legato' value='20' techniques='legato' octaveUp='60:x'/>"
+                       "</Instrument></SoundLibrary>"));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+12:800 -12:400 +2:200 +7:300'"
+         " octaveUp='72:300 73:500 75:100' octaveDown='84:150 90:250'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::Articulation& a = lib->instruments[1].articulations[0];
+      QCOMPARE(a.octaveUpMs, 300.0);                            // (the medians)
+      QCOMPARE(a.octaveDownMs, 200.0);
+      QCOMPARE(a.legatoDelayAt(12, 73), 500.0);
+      QCOMPARE(a.legatoDelayAt(12, 74), 500.0);                 // 73 and 75 equally near, equal runs: the lower
+      QCOMPARE(a.legatoDelayAt(-12, 86), 150.0);
+      QCOMPARE(a.legatoDelayAt(12), 300.0);                     // unknown start: the median
+      QCOMPARE(a.legatoDelayAt(7, 72), 300.0);                  // other intervals as before
+      QCOMPARE(a.legatoDelayAt(24, 72), 800.0);
+      QVERIFY(qAbs(a.legatoDelayAt(10, 72) - (300 + 500 * 3 / 5.0)) < 1e-9);
+      SoundLib::Articulation plain;                             // no tables: the octave's legatoDelay entry
+      plain.legatoDelayMs = 300;
+      plain.legatoDelays = { { -12, 400 }, { 2, 200 }, { 12, 800 } };
+      QCOMPARE(plain.legatoDelayAt(12, 72), 800.0);
+      QCOMPARE(plain.legatoDelayAt(-12, 84), 400.0);
+
+      // the shipped map: Oboe Solo's +12 per-start values carry no sweep correction (raw 160 at 58), its -12 do (raw
+      // 110 at 70 + 60)
+      {
+      QString err;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
+      QVERIFY2(sso, qPrintable(err));
+      bool found = false;
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            if (li.name != "Oboe Solo - Performance")
+                  continue;
+            for (const SoundLib::Articulation& oa : li.articulations) {
+                  if (oa.octaveUp.empty())
+                        continue;
+                  found = true;
+                  QCOMPARE(oa.legatoDelayAt(12, 58), 160.0);
+                  QCOMPARE(oa.legatoDelayAt(-12, 70), 170.0);
+                  }
+            }
+      QVERIFY(found);
+      }
+      // the renderer passes the start pitch
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-octave.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::vector<std::pair<int, int>> ons;                     // (on, pitch)
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0)
+                  ons.push_back({ te.first, ev.pitch() });
+            }
+      std::stable_sort(ons.begin(), ons.end());
+      QCOMPARE(int(ons.size()), 8);
+      const int Q = DIVISION;
+      // early by (60 bpm: 0.48 ticks a ms): C5 C6 C5 D5: +12 from 72 300, -12 from 84 150, +2 200;
+      // D5 D6 D5 E5: +12 from 74 (73 and 75 equally near: the lower) 500, -12 from 86 (nearest: 84) 150, +2 200
+      const std::vector<std::pair<int, double>> written = {
+            { 0, 0 }, { Q, 300 * 0.48 }, { 2 * Q, 150 * 0.48 }, { 3 * Q, 200 * 0.48 },
+            { 4 * Q, 0 }, { 5 * Q, 500 * 0.48 }, { 6 * Q, 150 * 0.48 }, { 7 * Q, 200 * 0.48 },
             };
       for (size_t i = 0; i < written.size(); ++i) {
             const double expected = written[i].first - written[i].second;

@@ -28,6 +28,11 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
   source picture (or crop) next to the reading and its use, before it changes code or the map. Symbols in
   Bravura (subset `fonts/bravura/Bravura.otf` with `pyftsubset`, embedded); say what couldn't be read; open with
   a "What to check" list. Example: https://claude.ai/artifact/CPfVu3qdHzMr5xPKiJFD2Y.
+- **Live 12.4 is the target** (the owner, 2026-10-02: first "make sure that we don't build any features that can't
+  be run on 12.2", then "I updated my Ableton version across all devices to 12.4"): nothing may need a Live later
+  than 12.4; 12.4's Live Object Model (e.g. `Envelope.create_event`) may be used. Create Live Set still writes 12.2's
+  format (`livesetwriter.h`), which 12.4 opens; move it to 12.4's only for a reason. The test VM runs a Live 12.4.6
+  trial (from 2026-10-02, 30 days), the owner's version.
 - **Live and MuseScore sound alike** (the owner, 2026-09-30): any change to SSO playback (renderer, hosting,
   Mixer, Controllers, tuning) must reach the Live path: clips (`libmscore/liveclips.*`), the set Create Live Set
   writes (`mscore/livesetexport.*`, `libmscore/livesetwriter.*`) or the MuseScore Link device (`tools/live/`).
@@ -141,7 +146,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `<patch>.vst3state`, `Kontakt empty.vst3state`, `made setups.json` (`MAKER_VERSION`), `checks.json` (raise
   `CHECK_VERSION` in soundlibrarycheck.cpp when old results go stale), `dynamics.json`, `load times.log` (qDebug
   doesn't show on Windows).
-- Background jobs (own setups copy, lock, log; `.bat` files in `bin`): `--check-dynamics`, `--scan-keys`,
+- Background jobs (own setups copy, lock, log; their `.bat` files in `bin` only with `-DMSCORE_INSTALL_MEASUREMENT_SCRIPTS=ON`, off since 2026-10-02): `--check-dynamics`, `--scan-keys`,
   `--measure-load-times`, `--verify-playback`, `--live-equivalence`, `--create-live-set`, `--live-set-readback`.
 - Measurement runs (supervised: `superviseExtract`, a hang or crash retried then left out; resumable: a start
   skips what earlier runs of the same version did): `--extract-library … --extract-controllers
@@ -205,10 +210,10 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 64 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-02, main after the merges);
+- `tst_soundlibrary`: 65 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-02, octave-per-pitch);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 9 passed, `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 11 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31, `tst_keysig` 8, `tst_tuning` 17,
   `tst_phrasemark` 8, `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in

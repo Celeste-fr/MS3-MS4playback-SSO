@@ -77,7 +77,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
-//               [onset="40" | onset="55:60 67:40 …"]/>;
+//               [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -131,8 +131,47 @@ static double keyedMsAt(const std::vector<std::pair<int, double>>& table, double
       return table.back().second;
       }
 
-double Articulation::legatoDelayAt(int interval) const
+double octaveDelayAt(const std::vector<std::pair<int, double>>& table, double fallback, int fromPitch)
       {
+      if (table.empty() || fromPitch < 0)
+            return fallback;
+      auto hi = std::lower_bound(table.begin(), table.end(), std::make_pair(fromPitch, -1e300));
+      if (hi != table.end() && hi->first == fromPitch)
+            return hi->second;
+      if (hi == table.begin())
+            return hi->second;
+      auto lo = hi - 1;
+      if (hi == table.end())
+            return lo->second;
+      const int dLo = fromPitch - lo->first;
+      const int dHi = hi->first - fromPitch;
+      if (dLo != dHi)
+            return dLo < dHi ? lo->second : hi->second;
+      // a tie: the shorter run of like values (its zone lacks this start)
+      static constexpr double LIKE_MS = 50;
+      int runLo = 1;
+      for (auto it = lo; it != table.begin(); --it) {
+            auto prev = it - 1;
+            if (prev->first != it->first - 1 || std::abs(prev->second - lo->second) >= LIKE_MS)
+                  break;
+            ++runLo;
+            }
+      int runHi = 1;
+      for (auto it = hi; it + 1 != table.end(); ++it) {
+            auto next = it + 1;
+            if (next->first != it->first + 1 || std::abs(next->second - hi->second) >= LIKE_MS)
+                  break;
+            ++runHi;
+            }
+      return runHi < runLo ? hi->second : lo->second;
+      }
+
+double Articulation::legatoDelayAt(int interval, int fromPitch) const
+      {
+      if (interval == 12 && !octaveUp.empty())
+            return octaveDelayAt(octaveUp, octaveUpMs, fromPitch);
+      if (interval == -12 && !octaveDown.empty())
+            return octaveDelayAt(octaveDown, octaveDownMs, fromPitch);
       return keyedMsAt(legatoDelays, legatoDelayMs, interval);
       }
 
@@ -181,6 +220,10 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       if (a.hasAttribute("legatoDelay") && !readKeyedMs(a.value("legatoDelay").toString(), art.legatoDelayMs, art.legatoDelays))
             return false;
       if (a.hasAttribute("onset") && !readKeyedMs(a.value("onset").toString(), art.onsetMs, art.onsets))
+            return false;
+      if (a.hasAttribute("octaveUp") && !readKeyedMs(a.value("octaveUp").toString(), art.octaveUpMs, art.octaveUp))
+            return false;
+      if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))
             return false;
       bool ok = false;
       art.value = a.value("value").toInt(&ok);

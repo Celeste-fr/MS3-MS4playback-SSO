@@ -54,7 +54,8 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Phrase marks: a slur that plays no legato | per slur | `slur.h` Phrase marks, metaTag `phraseMarks` | per slur (Alt+S, Inspector) |
 | Legato transitions start early by the patch's measured delay | 100 % (map `<Legato early>`) | `collect` / `legatoTransition` | `[legato] early`; score: old metaTag |
 | Legato delay per patch and interval | map `legatoDelay` (5-pitch grid; octaves by template fit) | `Articulation::legatoDelayAt` | `[legato.delay]` table |
-| Oboe Solo +60, Violins 2 +25 ms legato corrections | map (generator `SWEEP_LEGATO_CORRECTION`) | map data | `[legato.delay]` offset |
+| Octave slurs (±12) by start pitch (16 patches, measured at ~16-30 starts each; 2026-10-02, option C) | map `octaveUp` / `octaveDown` (start MIDI pitch:ms; failed fits left out); unmeasured start: the nearest measured one, a tie (one-semitone gap) to the side whose run of like values (±50 ms, adjacent) is shorter, else the lower; unknown start: the table's median; patches without them: `legatoDelay`'s ±12 | `SoundLib::octaveDelayAt` via `legatoDelayAt(interval, fromPitch)` | `[legato.delay]` offset (adds) or table (its ±12 replaces) |
+| Oboe Solo +60 (not its +12 per-start octave values), Violins 2 +25 ms legato corrections | map (generator `SWEEP_LEGATO_CORRECTION`, `OCTAVE_NO_SWEEP_CORRECTION`) | map data | `[legato.delay]` offset |
 | Fast-note ramp: what an early start may take from the note before | none to 125 ms, linear to 50 % at 250 ms | `libRampShare` (transitions and held notes) | `[legato] rampFromMs`, `rampToMs`, `rampMaxShare` |
 | Legato glide of a tuning copy (pitch bend steps; varispeed glide) | 30 ms | `libraryPitchBends`, `Vst3Synth::play` | `[legato] glideMs` |
 | Held notes start early by their measured onset | 100 % (map `<Onset early>`) | `collect` / `onsetEarliest`, `finishLibraryEvents` | `[heldNotes] early`; score: old metaTag |
@@ -87,4 +88,4 @@ the map is generated; change them in `gen_spitfire_sso.py` (its comments hold th
 per patch in playback.ini.
 
 Tests: `tst_soundlibrary::playbackSettingsIni` (generation, parsing, unknown keys, clamping, reload) and
-`playbackSettingsLayers` (default / ini / score for rendered effects); `tst_liveequivalence::playbackSettingsWidget` (the table, per-score edits).
+`playbackSettingsLayers` (default / ini / score for rendered effects); `tst_liveequivalence::playbackSettingsWidget` (the table, per-score edits). Octaves by start pitch: `tst_soundlibrary::legatoOctaveByStartPitch`, `tst_liveequivalence::liveClipsLegatoOctave` / `liveEquivalenceOctave` (Live identical).

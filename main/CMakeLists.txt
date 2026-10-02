@@ -72,9 +72,16 @@ if (MSCORE_OUTPUT_NAME)
       )
 endif (MSCORE_OUTPUT_NAME)
 
-# a double-click that runs Extract plug-in data on every SSO patch in the background
-# (MuseScore --extract-library; the owner, 2026-09-27)
+# the Max for Live device for "Live plays the score" (LIVE.md; tools/live/make_device.py writes it)
 if (MINGW OR MSVC)
+      install(FILES "${PROJECT_SOURCE_DIR}/tools/live/MuseScore Link.amxd" DESTINATION bin)
+endif (MINGW OR MSVC)
+
+# the measurement double-clicks (Extract / Measure / Scan / Verify SSO … in background.bat): not in the
+# builds since 2026-10-02 (the owner); -DMSCORE_INSTALL_MEASUREMENT_SCRIPTS=ON puts them back in bin
+option(MSCORE_INSTALL_MEASUREMENT_SCRIPTS "Install the SSO measurement .bat files (Windows)" OFF)
+if ((MINGW OR MSVC) AND MSCORE_INSTALL_MEASUREMENT_SCRIPTS)
+      # (MuseScore --extract-library; the owner, 2026-09-27)
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Extract SSO in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Extract SSO in background.bat" @ONLY NEWLINE_STYLE CRLF)
       install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Extract SSO in background.bat" DESTINATION bin)
@@ -109,9 +116,7 @@ if (MINGW OR MSVC)
       configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Verify SSO playback in background.bat.in"
                      "${CMAKE_CURRENT_BINARY_DIR}/Verify SSO playback in background.bat" @ONLY NEWLINE_STYLE CRLF)
       install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Verify SSO playback in background.bat" DESTINATION bin)
-      # the Max for Live device for "Live plays the score" (LIVE.md; tools/live/make_device.py writes it)
-      install(FILES "${PROJECT_SOURCE_DIR}/tools/live/MuseScore Link.amxd" DESTINATION bin)
-endif (MINGW OR MSVC)
+endif ((MINGW OR MSVC) AND MSCORE_INSTALL_MEASUREMENT_SCRIPTS)
 
 target_include_directories(mscore PRIVATE
       ${PROJECT_SOURCE_DIR}
