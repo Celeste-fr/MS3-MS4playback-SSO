@@ -64,6 +64,7 @@ class Articulation final : public Element {
       bool _up;
       MScore::OrnamentStyle _ornamentStyle;     // for use in ornaments such as trill
       bool _playArticulation;
+      double _marcatoLevel { 0.0 };             // dB; a marcato's level offset (MarcatoLevel below), 0: the library's
 
       void draw(QPainter*) const override;
 
@@ -129,6 +130,9 @@ class Articulation final : public Element {
       bool playArticulation() const { return _playArticulation;}
       void setPlayArticulation(bool val) { _playArticulation = val; }
 
+      double marcatoLevel() const           { return _marcatoLevel; }
+      void setMarcatoLevel(double db)       { _marcatoLevel = db; }
+
       QString channelName() const           { return _channelName; }
       void setChannelName(const QString& s) { _channelName = s;    }
 
@@ -145,6 +149,55 @@ class Articulation final : public Element {
       void doAutoplace();
       int vStaffIdx() const override { return chordRest()->vStaffIdx(); }
       };
+
+//---------------------------------------------------------
+//   MarcatoLevel
+//    the owner (2026-10-02): "make [the marcato level] configurable in the inspector when you select a
+//    marcato sign. default value: library default, no change of ours." A marcato (articMarcato*, with
+//    staccato or tenuto too) has a level offset in dB (Pid::MARCATO_LEVEL, Inspector › Articulation ›
+//    Marcato level, -24 … +24 in 0.5 dB steps, linked: a part's copy follows the score's); 0, the default,
+//    changes nothing (playback exactly as without the setting). SSO's marcato samples play -7 to +22 dB
+//    against the same instrument's plain held note at mf (median +4; tools/soundlibraries/
+//    sso_sound_dynamics.json), on top of MS4's accent velocity boost.
+//
+//    Playback (rendermidi.cpp), the note's chord's marcato level, of every note of the chord:
+//    - a sound library note whose velocity sets its level (SSO's "Marcato" on winds and brass: <Dynamics
+//      velocity>, or dynamics.json says "velocity"): another velocity, the one at which the articulation's
+//      measured curve (dynamics.json) is db louder or softer; without a curve by velocity(), below;
+//    - a sound library note on the dynamics controller (SSO's strings' "Marcato Attack"): a level of its own
+//      on its route (libraryNoteLevels: a channel-wide controller, from right before its note-on until
+//      right before the route's next note-on): softer by the expression controller (CC11, the plug-in's
+//      volume; the held note's measured expression curve, else velocity()'s law), louder by the dynamics
+//      controller (the articulation's own curve, else the law), as far as 127 goes;
+//    - the built-in synthesizer (MS4 and MS3 playback): the velocity by velocity()'s law, which is
+//      FluidSynth's (SoundFont 2's default velocity-to-attenuation curve: 40 log10(v / 127) dB).
+//    Live's clips are rendered by the same renderer: they play the same velocities and controllers.
+//
+//    Pid::MARCATO_LEVEL is not written in the articulation's XML (MuseScore 3.6 reads the file unchanged):
+//    the score's metaTag "marcatoLevels" (kept by 3.6 through a round trip) holds JSON
+//    [{"tick", "track", "grace", "sym", "db"}] ("grace": the grace chord's index, left out for the chord
+//    itself), written on save from the articulations (each score of the file its own: the master score and
+//    each part), left out when no marcato has a level; read after loading and applied to the articulations
+//    found (and their linked copies). Copy / paste keeps it (written in the clipboard's XML only).
+//---------------------------------------------------------
+
+class Chord;
+
+namespace MarcatoLevel {
+
+extern const char* const metaTag;
+constexpr double MIN_DB = -24.0;
+constexpr double MAX_DB = 24.0;
+
+// the level offset of a chord's marcato (0: none, or no marcato)
+double of(const Chord* chord);
+// velocity v played db louder or softer by SoundFont 2's default curve (40 log10(v / 127) dB), 1 … 127
+int velocity(int v, double db);
+// the metaTag: to the articulations after loading (and out of the tags), from them on saving; empty: none
+void read(Score* score);
+QString write(const Score* score);
+
+}     // namespace MarcatoLevel
 
 }     // namespace Ms
 #endif

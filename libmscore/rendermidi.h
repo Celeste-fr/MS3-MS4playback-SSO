@@ -28,6 +28,7 @@
 #include "ms4playback.h"
 #include "soundlibrary.h"
 #include "automation.h"
+#include <functional>
 #include <limits>
 
 namespace Ms {
@@ -150,6 +151,14 @@ class MidiRenderer {
       // fast technique (cut): the note before ends at its start (finishLibraryEvents)
       struct LibLegatoOff { const Note* from; int channel; int on; bool cut; };
       std::vector<LibLegatoOff> libLegatoOffs;
+      // a note's own level on its route by a controller (this chunk; libraryNoteLevels): a marcato's level
+      // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller
+      struct LibLevel {
+            int controller;                   // CC11 (softer) or the dynamics CC (louder)
+            std::function<int(int)> map;      // the controller's value in force -> the note's
+            int fallback;                     // the value in force when the route has none before the note
+            };
+      std::map<const Note*, LibLevel> libLevels;
       int minChunkSize = 0;
 
    public:
@@ -209,6 +218,7 @@ class MidiRenderer {
                                    const SoundLib::Choice& choice, int utick, int staffIdx);
       void finishLibraryEvents(const Chunk&, EventMap* events);
       void libraryPitchBends(const Chunk&, EventMap* events);
+      void libraryNoteLevels(const Chunk&, EventMap* events);
 
    public:
       explicit MidiRenderer(Score* s) : score(s) {}

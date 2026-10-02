@@ -761,13 +761,22 @@ InspectorArticulation::InspectorArticulation(QWidget* parent)
       if (sameTypes)
             ar.title->setText(el->isOrnament() ? tr("Ornament") : tr("Articulation"));
 
-      const std::vector<InspectorItem> iiList = {
+      std::vector<InspectorItem> iiList = {
             { Pid::ARTICULATION_ANCHOR, 0, ar.anchor,           ar.resetAnchor           },
             { Pid::DIRECTION,           0, ar.direction,        ar.resetDirection        },
             { Pid::TIME_STRETCH,        0, ar.timeStretch,      ar.resetTimeStretch      },
             { Pid::ORNAMENT_STYLE,      0, ar.ornamentStyle,    ar.resetOrnamentStyle    },
             { Pid::PLAY,                0, ar.playArticulation, ar.resetPlayArticulation }
             };
+      // marcatos only (every selected one): their level, 0 the library's (libmscore/articulation.h MarcatoLevel)
+      bool marcatos = true;
+      for (const auto& ee : *inspector->el())
+            marcatos = marcatos && ee->isArticulation() && toArticulation(ee)->isMarcato();
+      if (marcatos)
+            iiList.push_back({ Pid::MARCATO_LEVEL, 0, ar.marcatoLevel, ar.resetMarcatoLevel });
+      ar.marcatoLevelLabel->setVisible(marcatos);
+      ar.marcatoLevel->setVisible(marcatos);
+      ar.resetMarcatoLevel->setVisible(marcatos);
       const std::vector<InspectorPanel> ppList = { { ar.title, ar.panel } };
       mapSignals(iiList, ppList);
       connect(ar.properties, SIGNAL(clicked()), SLOT(propertiesClicked()));

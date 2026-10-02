@@ -368,6 +368,8 @@ enum class Pid : short {
 
       PHRASE_MARK,            // a slur drawn as a phrase mark: no legato (slur.h); not written in the element
 
+      MARCATO_LEVEL,          // a marcato's level offset in dB, 0: the library's (articulation.h MarcatoLevel); not written in the element
+
       END
       };
 

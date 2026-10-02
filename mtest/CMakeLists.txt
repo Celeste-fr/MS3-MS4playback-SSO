@@ -183,6 +183,7 @@ subdirs (
         libmscore/playability
         libmscore/tempochange
         libmscore/phrasemark
+        libmscore/marcatolevel
         libmscore/selectionfilter
         libmscore/selectionrangedelete
         libmscore/unrollrepeats

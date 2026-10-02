@@ -360,6 +360,8 @@ static constexpr PropertyMetaData propertyList[] = {
 
       { Pid::PHRASE_MARK,               P_TYPE::BOOL,           true,  "phraseMark",             DUMMY_QT_TRANSLATE_NOOP("propertyName", "phrase mark")                                   },
 
+      { Pid::MARCATO_LEVEL,             P_TYPE::REAL,           true,  "marcatoLevel",           DUMMY_QT_TRANSLATE_NOOP("propertyName", "marcato level")                                 },
+
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

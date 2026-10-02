@@ -22,6 +22,13 @@
 #include "barline.h"
 #include "sym.h"
 #include "xml.h"
+#include "chord.h"
+#include "segment.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <cmath>
 
 namespace Ms {
 
@@ -156,6 +163,8 @@ bool Articulation::readProperties(XmlReader& e)
             readProperty(e, Pid::ORNAMENT_STYLE);
       else if ( tag == "play")
             setPlayArticulation(e.readBool());
+      else if (tag == "marcatoLevel")           // (the clipboard's only: a file keeps it in the metaTag, MarcatoLevel)
+            _marcatoLevel = e.readDouble();
       else if (tag == "offset") {
             if (score()->mscVersion() > 114)
                   Element::readProperties(e);
@@ -184,6 +193,9 @@ void Articulation::write(XmlWriter& xml) const
       xml.tag("subtype", Sym::id2name(_symId));
       writeProperty(xml, Pid::PLAY);
       writeProperty(xml, Pid::ORNAMENT_STYLE);
+      // a marcato's level: in the clipboard only; a file keeps it in the metaTag (MarcatoLevel)
+      if (_marcatoLevel != 0.0 && xml.clipboardmode())
+            xml.tag("marcatoLevel", _marcatoLevel);
       for (const StyledProperty& spp : *styledProperties())
             writeProperty(xml, spp.pid);
       Element::writeProperties(xml);
@@ -314,6 +326,7 @@ QVariant Articulation::getProperty(Pid propertyId) const
             case Pid::ARTICULATION_ANCHOR: return int(anchor());
             case Pid::ORNAMENT_STYLE:      return int(ornamentStyle());
             case Pid::PLAY:                return playArticulation();
+            case Pid::MARCATO_LEVEL:       return _marcatoLevel;
             default:
                   return Element::getProperty(propertyId);
             }
@@ -341,6 +354,10 @@ bool Articulation::setProperty(Pid propertyId, const QVariant& v)
             case Pid::ORNAMENT_STYLE:
                   setOrnamentStyle(MScore::OrnamentStyle(v.toInt()));
                   break;
+            case Pid::MARCATO_LEVEL:
+                  _marcatoLevel = qBound(MarcatoLevel::MIN_DB, v.toDouble(), MarcatoLevel::MAX_DB);
+                  score()->setPlaylistDirty();        // (nothing to lay out)
+                  return true;
             default:
                   return Element::setProperty(propertyId, v);
             }
@@ -364,6 +381,9 @@ QVariant Articulation::propertyDefault(Pid propertyId) const
 
             case Pid::PLAY:
                   return true;
+
+            case Pid::MARCATO_LEVEL:
+                  return 0.0;
 
             default:
                   break;
@@ -730,5 +750,117 @@ void Articulation::doAutoplace()
             }
       setOffsetChanged(false);
       }
+
+//---------------------------------------------------------
+//   MarcatoLevel
+//---------------------------------------------------------
+
+namespace MarcatoLevel {
+
+const char* const metaTag = "marcatoLevels";
+
+double of(const Chord* chord)
+      {
+      if (!chord)
+            return 0.0;
+      for (const Articulation* a : chord->articulations())
+            if (a->isMarcato() && a->marcatoLevel() != 0.0)
+                  return a->marcatoLevel();
+      return 0.0;
+      }
+
+int velocity(int v, double db)
+      {
+      if (db == 0.0)
+            return v;
+      return qBound(1, int(std::lround(v * std::pow(10.0, db / 40.0))), 127);
+      }
+
+//---------------------------------------------------------
+//   read
+//    a marcato is found by its chord's tick and track (and grace index) and its symbol (else another
+//    marcato of the chord); one that MuseScore 3.6 moved or deleted has no level any more
+//---------------------------------------------------------
+
+void read(Score* score)
+      {
+      const QString tag = score->metaTag(metaTag);
+      if (tag.isEmpty())
+            return;
+      score->metaTags().remove(metaTag);        // written again from the articulations on saving
+      const QJsonArray list = QJsonDocument::fromJson(tag.toUtf8()).array();
+      for (const QJsonValue& v : list) {
+            const QJsonObject o = v.toObject();
+            const int tick = o.value("tick").toInt(-1);
+            const int track = o.value("track").toInt(-1);
+            const int grace = o.value("grace").toInt(-1);
+            const SymId sym = Sym::name2id(o.value("sym").toString());
+            const double db = o.value("db").toDouble(0.0);
+            if (tick < 0 || track < 0 || track >= score->ntracks() || db == 0.0)
+                  continue;
+            Segment* seg = score->tick2segment(Fraction::fromTicks(tick), true, SegmentType::ChordRest);
+            Element* e = seg ? seg->element(track) : nullptr;
+            if (!e || !e->isChord())
+                  continue;
+            Chord* chord = toChord(e);
+            if (grace >= 0)
+                  chord = grace < chord->graceNotes().size() ? chord->graceNotes()[grace] : nullptr;
+            if (!chord)
+                  continue;
+            Articulation* found = nullptr;
+            for (Articulation* a : chord->articulations()) {
+                  if (!a->isMarcato())
+                        continue;
+                  if (a->symId() == sym) {
+                        found = a;
+                        break;
+                        }
+                  if (!found)
+                        found = a;
+                  }
+            if (!found)
+                  continue;
+            for (ScoreElement* l : found->linkList())
+                  if (l->isArticulation())
+                        toArticulation(l)->setMarcatoLevel(qBound(MIN_DB, db, MAX_DB));
+            }
+      }
+
+//---------------------------------------------------------
+//   write
+//---------------------------------------------------------
+
+QString write(const Score* score)
+      {
+      QJsonArray list;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            for (int track = 0; track < score->ntracks(); ++track) {
+                  Element* e = s->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  const Chord* chord = toChord(e);
+                  auto add = [&](const Chord* c, int grace) {
+                        for (const Articulation* a : c->articulations()) {
+                              if (!a->isMarcato() || a->marcatoLevel() == 0.0)
+                                    continue;
+                              QJsonObject o;
+                              o["tick"] = s->tick().ticks();
+                              o["track"] = track;
+                              if (grace >= 0)
+                                    o["grace"] = grace;
+                              o["sym"] = QString(Sym::id2name(a->symId()));
+                              o["db"] = a->marcatoLevel();
+                              list.append(o);
+                              }
+                        };
+                  for (int g = 0; g < chord->graceNotes().size(); ++g)
+                        add(chord->graceNotes()[g], g);
+                  add(chord, -1);
+                  }
+            }
+      return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
+      }
+
+}     // namespace MarcatoLevel
 
 }

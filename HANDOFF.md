@@ -94,6 +94,10 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
   listens to Whence with 2 (aggressive: 19 → 15 instances; a detached note's tail is bent to the next note's tuning)
   and decides; 1 (safe) saves nothing on Whence. Only patches that bend (Performance) share; SSO's All techniques
   patches don't bend, so detached notes keep their copies (12 instances if they did).
+- Marcato level (branch `marcato-level`; Inspector › Articulation › *Marcato level*, per sign, metaTag
+  `marcatoLevels`; default "Library default" = no change): the owner tries it on SSO (velocity-driven Marcato on
+  winds / brass; Marcato Attack on strings by CC11 down / CC1 up) and says whether MS4's accent velocity boost on
+  library marcatos (mf 80 → 103) should go too (not changed: the level sits on top of it).
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
 

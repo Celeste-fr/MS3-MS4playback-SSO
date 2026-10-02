@@ -27,7 +27,10 @@
 #include "audio/midi/event.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
+#include "libmscore/articulation.h"
+#include "libmscore/chord.h"
 #include "libmscore/instrument.h"
+#include "libmscore/segment.h"
 #include "libmscore/liveclips.h"
 #include "libmscore/automation.h"
 #include "libmscore/rendermidi.h"
@@ -81,6 +84,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveEquivalenceLegato();
       void liveEquivalenceOctave();
       void liveEquivalenceAutomation();
+      void liveMarcatoLevel();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -841,6 +845,119 @@ void TestLiveEquivalence::liveEquivalenceAutomation()
       QVERIFY2(!f.passed, qPrintable(LiveEquivalence::reportText(f, o.thresholds)));
       qDebug("no-params: %s (correlation %.4f, residual %.1f dB)", qPrintable(f.failures.join("; ")), f.correlation, f.residualDb);
       qunsetenv("MS_LIVE_EQUIVALENCE_FAULT");
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveMarcatoLevel
+//    marcato levels (articulation.h MarcatoLevel) reach Live's clips as MuseScore renders them, and the whole
+//    chain matches on the test synth (velocity * CC1). libmscore/marcatolevel/marcatolevel.musicxml with a map
+//    whose short marcato plays on velocity ("Marcato") and long one on the dynamics CC ("Marcato Attack"): the
+//    violins' G4 (short) -6 dB by velocity, B4 (long) +6 dB by CC1, the trumpet's first note -6 dB by velocity,
+//    the tuba's E3 (long) -6 dB by CC11. Per route: the notes' velocities, the CC1 and CC11 values in order
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveMarcatoLevel()
+      {
+      LiveHost host(this, "", { "Violin" },
+         "<SoundLibrary name='LiveT'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='marcato'/>"
+         "<Instrument name='Violin' ids='strings violins violin trumpet tuba'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "<Articulation name='Marcato Attack' value='9' techniques='longmarcato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      MasterScore* score = readScore("libmscore/marcatolevel/marcatolevel.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto marcatoOf = [score](int part, int n) -> Articulation* {
+            const int track = score->parts().at(part)->startTrack();
+            int i = 0;
+            for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                  Element* e = s->element(track);
+                  if (!e || !e->isChord() || i++ != n)
+                        continue;
+                  for (Articulation* a : toChord(e)->articulations())
+                        if (a->isMarcato())
+                              return a;
+                  }
+            return nullptr;
+            };
+      const std::vector<std::tuple<int, int, double>> levels = { { 0, 0, -6 }, { 0, 2, 6 }, { 1, 0, -6 }, { 2, 2, -6 } };
+      for (const auto& l : levels) {
+            Articulation* a = marcatoOf(std::get<0>(l), std::get<1>(l));
+            QVERIFY(a);
+            a->setMarcatoLevel(std::get<2>(l));
+            }
+
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *host.lib, events, { "MuseScore A" }, tl);
+      // per route: "pitch velocity" of the notes, the values of CC1 and CC11 (a tick's last; repeats once)
+      std::map<QString, QStringList> fromEvents, fromClips;
+      std::map<std::pair<QString, int>, std::vector<std::pair<int, int>>> ccEvents;      // (route, cc) -> (units, value)
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch())
+                  continue;
+            const QString key = QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1);
+            if (e.type() == ME_NOTEON && e.velo() > 0)
+                  fromEvents[key] << QString("%1 %2").arg(e.pitch()).arg(e.velo());
+            else if (e.type() == ME_CONTROLLER && (e.controller() == 1 || e.controller() == 11)) {
+                  std::vector<std::pair<int, int>>& v = ccEvents[{ key, e.controller() }];
+                  const int at = tl.units(te.first);
+                  if (!v.empty() && v.back().first == at)
+                        v.back().second = e.value();
+                  else
+                        v.push_back({ at, e.value() });
+                  }
+            }
+      auto values = [](const std::vector<std::pair<int, int>>& v) {
+            QStringList out;
+            for (const auto& p : v)
+                  if (out.isEmpty() || out.last() != QString::number(p.second))
+                        out << QString::number(p.second);
+            return out.join(' ');
+            };
+      for (const auto& c : ccEvents)
+            fromEvents[c.first.first] << QString("cc%1: %2").arg(c.first.second).arg(values(c.second));
+      for (const LiveClips::Track& c : clips) {
+            std::map<int, std::vector<std::pair<int, int>>> carriers;
+            std::vector<LiveClips::Note> notes = c.notes;
+            std::sort(notes.begin(), notes.end());
+            for (const LiveClips::Note& n : notes) {
+                  if (n.pitch < LiveClips::CARRIER_LOW)
+                        fromClips[c.key] << QString("%1 %2").arg(n.pitch).arg(n.velocity);
+                  else if (n.pitch == LiveClips::carrierPitch(1) || n.pitch == LiveClips::carrierPitch(11))
+                        carriers[n.pitch == LiveClips::carrierPitch(1) ? 1 : 11].push_back({ n.start, LiveClips::carrierValue(n.pitch, n.velocity) });
+                  }
+            for (const auto& cc : carriers)
+                  fromClips[c.key] << QString("cc%1: %2").arg(cc.first).arg(values(cc.second));
+            }
+      for (auto& r : fromEvents)
+            r.second.sort();
+      for (auto& r : fromClips)
+            r.second.sort();
+      for (const auto& r : fromEvents)
+            QVERIFY2(fromClips[r.first] == r.second, qPrintable(r.first + ": MuseScore " + r.second.join(", ") + " / Live "
+                                                               + fromClips[r.first].join(", ")));
+      // the levels are there: the tuba's CC11 down to 90 and back, the violins' CC1 up to 113 (80 * 10^(6/40)) and on to f
+      QString all;
+      for (const auto& r : fromEvents)
+            all += r.first + ": " + r.second.join(", ") + "\n";
+      QVERIFY2(all.contains("cc11: 127 90 127"), qPrintable(all));
+      QVERIFY2(all.contains("cc1: 80 113 96"), qPrintable(all));         // (f at the next note)
+
+      // the whole chain, audio
+      LiveEquivalence::Options o;
+      o.thresholds.roundRobins = false;
+      const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);
+      const QString report = LiveEquivalence::reportText(r, o.thresholds);
+      QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+      QVERIFY2(r.passed, qPrintable(report));
+      QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(report));
+      qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));
       delete score;
       }
 

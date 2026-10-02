@@ -18,6 +18,7 @@
 #include "revisions.h"
 #include "score.h"
 #include "slur.h"
+#include "articulation.h"
 #include "tempochange.h"
 #include "scoreOrder.h"
 #include "sig.h"
@@ -368,9 +369,13 @@ bool MasterScore::read(XmlReader& e)
             return false;
       TempoChange::read(this);      // the rit. / accel. lines' settings (tempochange.h)
       PhraseMark::read(this);       // the slurs that are phrase marks (slur.h), with their parts' copies
-      for (Excerpt* ex : excerpts())      // and each part's own list (a part saved on its own has only that)
-            if (ex->partScore())
+      MarcatoLevel::read(this);     // the marcatos' levels (articulation.h), likewise
+      for (Excerpt* ex : excerpts()) {    // and each part's own lists (a part saved on its own has only those)
+            if (ex->partScore()) {
                   PhraseMark::read(ex->partScore());
+                  MarcatoLevel::read(ex->partScore());
+                  }
+            }
       for (Staff*& s : staves())
             s->updateOttava();
       setCreated(false);

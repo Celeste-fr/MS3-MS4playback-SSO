@@ -387,9 +387,10 @@ static void playNote(EventMap* events, const Note* note, int channel, int pitch,
       if (!note->play())
             return;
       // a note's own velocity (Inspector: user value / offset); MS4 mode (layer >= 0) plays none,
-      // as MuseScore 4 ignores MuseScore 3's note velocities when it reads a score
+      // as MuseScore 4 ignores MuseScore 3's note velocities when it reads a score; a marcato's level
+      // (articulation.h MarcatoLevel; MS4 mode: collectMeasureEventsMs4)
       if (layer < 0)
-            velo = note->customizeVelocity(velo);
+            velo = MarcatoLevel::velocity(note->customizeVelocity(velo), MarcatoLevel::of(note->chord()));
       NPlayEvent ev(ME_NOTEON, channel, pitch, velo);
       ev.setOriginatingStaff(staffIdx);
       ev.setLayer(layer);
@@ -1250,6 +1251,50 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         return lp->velocityDynamics.contains(c.base) ? r.levelVelocity : -1;
                         };
+                  // a marcato's level (articulation.h MarcatoLevel; 0: nothing changes). A note on velocity (velocity:
+                  // libVelocity's): the velocity at which its articulation's measured curve is db louder or softer
+                  // (SoundFont 2's law without one); else a level of its own on its route (libraryNoteLevels): softer
+                  // by the expression CC along the held note's measured expression curve, louder by the dynamics CC
+                  // along the articulation's own curve (the law without them)
+                  auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
+                        const double db = MarcatoLevel::of(note->chord());
+                        if (db == 0.0 || !c)
+                              return;
+                        const SoundLib::DynamicsCurve* own = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
+                        if (velocity > 0) {
+                              if (own && (own->drivenBy == "velocity" || own->drivenBy == "both") && own->points.size() >= 2) {
+                                    const int v = own->inverse(own->at(velocity) + db);
+                                    velocity = db < 0 ? qMin(v, velocity) : qMax(v, velocity);
+                                    }
+                              else
+                                    velocity = MarcatoLevel::velocity(velocity, db);
+                              return;
+                              }
+                        SoundLib::DynamicsCurve curve;
+                        LibLevel l;
+                        if (db < 0) {
+                              l.controller = CTRL_EXPRESSION;
+                              l.fallback = library->dynamicsCC == CTRL_EXPRESSION ? Ms4::expressionLevel(dynLevel) : library->expressionValue;
+                              const SoundLib::DynamicsCurve* held = cal ? SoundLib::heldCurve(*cal, libPatches) : nullptr;
+                              if (held && library->dynamicsCC != CTRL_EXPRESSION)
+                                    curve.points = held->expression;
+                              }
+                        else {
+                              if (library->dynamicsCC < 0)
+                                    return;
+                              l.controller = library->dynamicsCC;
+                              l.fallback = Ms4::expressionLevel(dynLevel);
+                              if (own && (own->drivenBy == "controller" || own->drivenBy == "both"))
+                                    curve.points = own->points;
+                              }
+                        l.map = [curve, db](int x) {
+                              if (x <= 0)
+                                    return x;
+                              int y = curve.points.size() >= 2 ? curve.inverse(curve.at(x) + db) : MarcatoLevel::velocity(x, db);
+                              return qBound(1, db < 0 ? qMin(y, x) : qMax(y, x), 127);
+                              };
+                        libLevels[note] = l;
+                        };
                   auto librarySwitch = [&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
                         if (c)
@@ -1492,6 +1537,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     const Chord* ch = note->chord();
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
                                     libNote.velocity = libVelocity(libChoice, r, level);
+                                    marcatoLevel(note, libChoice, libNote.velocity, level);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {
@@ -1503,7 +1549,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         SndConfig config;
                         config.ms4 = true;
                         config.method = DynamicsRenderMethod::MS4;
-                        config.ms4Velocity = r.velocity;
+                        // (the built-in synthesizer: a marcato's level by SoundFont 2's law, MarcatoLevel::velocity)
+                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, MarcatoLevel::of(note->chord()));
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
                         config.ms4Offset = offset;
@@ -1646,6 +1693,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!li->kit) {
                                     libChoice = librarySwitch(note, noteArts, start, length);
                                     libNote.velocity = libVelocity(libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {
@@ -1668,7 +1716,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               return;
                               }
                         playNote(events, note, noteChannel, libNote.key >= 0 ? libNote.key : qBound(0, note->ppitch() + pitchOffset, 127),
-                                 qBound(1, libNote.velocity > 0 ? libNote.velocity : r.velocity, 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
+                                 qBound(1, libNote.velocity > 0 ? libNote.velocity
+                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, MarcatoLevel::of(note->chord())), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
                         };
 
                   renderAtFn = [&](const Note* n, const std::vector<Ms4::ArtRef>& a, int st, int len, int po, int) { renderAt(n, a, st, len, po); };
@@ -2387,7 +2436,92 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                   ++at;
             events->insert(at, c);
             }
+      libraryNoteLevels(chunk, events);
       libraryPitchBends(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryNoteLevels
+//    a note's own level by a controller (libLevels: a marcato's level on a patch whose level is the dynamics
+//    controller, articulation.h MarcatoLevel). The controller is the route's (channel-wide), so the note's
+//    value goes right before its note-on, every value the route gets until right before its next note-on at
+//    a later tick is mapped too, and there (else at the chunk's end) the value in force goes again: the notes
+//    before and after keep theirs; what still rings of the note before at the note-on (its release) takes the
+//    note's level, and the note's own release the next note's. A chord's notes at one tick on one route: the
+//    first one's level. The one place that schedules such per-note controller values (a merge point for
+//    other per-note levels)
+//---------------------------------------------------------
+
+void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
+      {
+      if (libLevels.empty())
+            return;
+      const int utick1 = chunk.utick1();
+      const int utick2 = chunk.utick2();
+      auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
+      std::map<std::pair<int, int>, int> inForce;           // route, controller -> the value in force (as written)
+      // the value in force at it (from before the chunk, or fallback)
+      auto valueAt = [&](EventMap::iterator it, int route, int controller, int fallback) {
+            auto f = inForce.find({ route, controller });
+            if (f != inForce.end())
+                  return f->second;
+            int v = fallback;
+            while (it != events->begin()) {
+                  --it;
+                  const NPlayEvent& e = it->second;
+                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && e.controller() == controller
+                      && routeOf(e) == route) {
+                        v = e.value();
+                        break;
+                        }
+                  }
+            inForce[{ route, controller }] = v;
+            return v;
+            };
+      auto controllerEvent = [](const NPlayEvent& like, int controller, int value) {
+            NPlayEvent c(ME_CONTROLLER, like.channel(), controller, value);
+            c.setExternal(like.extPort(), like.extChannel());
+            c.setLibraryPatch(like.libraryPatch());
+            c.setOriginatingStaff(like.getOriginatingStaff());
+            return c;
+            };
+      struct Active { const LibLevel* level; int tick; NPlayEvent like; };
+      std::map<int, Active> active;                         // route -> the note level in force
+      for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.librarySwitch())
+                  continue;
+            const int route = routeOf(ev);
+            if (ev.type() == ME_CONTROLLER) {
+                  inForce[{ route, ev.controller() }] = ev.value();
+                  auto a = active.find(route);
+                  if (a != active.end() && a->second.level->controller == ev.controller())
+                        ev.setValue(a->second.level->map(ev.value()));
+                  continue;
+                  }
+            if (ev.type() != ME_NOTEON || ev.velo() == 0)
+                  continue;
+            auto a = active.find(route);
+            if (a != active.end()) {
+                  if (i->first == a->second.tick)
+                        continue;                         // (a chord's note: the first one's level)
+                  const int controller = a->second.level->controller;
+                  events->insert(i, std::make_pair(i->first, controllerEvent(ev, controller, inForce[{ route, controller }])));
+                  active.erase(a);
+                  }
+            auto l = ev.note() ? libLevels.find(ev.note()) : libLevels.end();
+            if (l == libLevels.end())
+                  continue;
+            const LibLevel& level = l->second;
+            const int v = valueAt(i, route, level.controller, level.fallback);
+            events->insert(i, std::make_pair(i->first, controllerEvent(ev, level.controller, level.map(v))));
+            active[route] = { &level, i->first, ev };
+            }
+      for (const auto& a : active) {
+            const int controller = a.second.level->controller;
+            events->insert(events->lower_bound(utick2),
+                           std::make_pair(utick2, controllerEvent(a.second.like, controller, inForce[{ a.first, controller }])));
+            }
       }
 
 //---------------------------------------------------------
@@ -4194,6 +4328,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libShifts.clear();
       libPlayedOn.clear();
       libLegatoOffs.clear();
+      libLevels.clear();
 
       // create note & other events
       for (Staff*& st : score->staves()) {

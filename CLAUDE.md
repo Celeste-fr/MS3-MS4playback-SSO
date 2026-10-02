@@ -81,7 +81,8 @@ difference: an MS3 hairpin with its own velocity change plays as in 3.6 (`ms3Hai
 `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT=1` disables, `ab/trace/regress.sh` sets it).
 `mscore/playbackmode.h` (MS3 / MS4 / library, all parts) and `libmscore/partplayback.h` (per part, metaTag
 `partPlayback`). `tempochange.h` (rit./accel. lines, metaTag `tempoChanges`). `slur.h` › Phrase marks (non-legato
-slurs, Alt+S, metaTag `phraseMarks`).
+slurs, Alt+S, metaTag `phraseMarks`). `articulation.h` › MarcatoLevel (a marcato's level in dB, Inspector, metaTag
+`marcatoLevels`; library: velocity by the measured curve or CC11 / CC1 per note, `libraryNoteLevels`).
 
 **Notation.** Custom key signatures follow each staff's clef (`KeySigEvent::forClef`, `Staff::keySigEventForClef`,
 *Tools › Adapt Key Signatures to Clefs*, `mscore/keyedit.cpp`). Deleting a restating time signature keeps the
@@ -218,9 +219,9 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_soundlibrary`: 67 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-02, bend-one-instance);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 13 passed, `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 14 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 31, `tst_keysig` 8, `tst_tuning` 17,
-  `tst_phrasemark` 8, `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
+  `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.
 - `tst_midi`: **68 of 73 fail, and did before** the sound-library work (references predate the MS4 note model;
