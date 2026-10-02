@@ -14,7 +14,7 @@ name: 'Optional: Verify playback on the owner''s PC (self-hosted, approved per r
 #     "Test: Sound library on Windows" built on GitHub's own machines, and runs it;
 #   - one run at a time; a report on the owner's own scores is uploaded without audio clips or note
 #     lists (--verify-shareable): artifacts of a public repository can be downloaded by anyone.
-# The simpler way needs none of this: "Verify SSO playback in background.bat", double-clicked.
+# The simpler way needs none of this: MuseScore3Evo.exe --verify-library "Spitfire Symphony Orchestra" --verify-playback default (VERIFY.md).
 
 on:
   workflow_dispatch:
