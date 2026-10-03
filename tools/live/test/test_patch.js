@@ -27,6 +27,9 @@ for (const l of patcher.lines) {
 
 const midiOut = [];
 const state = {};
+const forwardTarget = {};
+const receiveNames = {};
+const toScript = [];
 
 function emit(id, outlet, value) {
       for (const [dst, inlet] of wires[id + ":" + outlet] || [])
@@ -95,7 +98,7 @@ function receive(id, inlet, v) {
                   return;
             case "t": {                        // (trigger: right to left)
                   for (let k = args.length - 1; k >= 0; --k)
-                        emit(id, k, args[k] === "b" ? "bang" : list[0]);
+                        emit(id, k, args[k] === "b" ? "bang" : args[k] === "l" ? list : list[0]);
                   return;
                   }
             case "pack": {
@@ -134,6 +137,34 @@ function receive(id, inlet, v) {
                   }
             case "midiout":
                   midiOut.push(list[0]);
+                  return;
+            case "zl.slice": {                 // (right outlet first: the rest, then the first n)
+                  const n = args[0];
+                  emit(id, 1, list.slice(n));
+                  emit(id, 0, n === 1 ? list[0] : list.slice(0, n));
+                  return;
+                  }
+            case "sprintf":                    // (the one format the patcher has: %ld)
+                  emit(id, 0, String(args[0]).replace("%ld", String(Math.trunc(list[0]))));
+                  return;
+            case "forward":                    // "send name" sets the target; the rest goes to [receive name]
+                  if (list[0] === "send") {
+                        forwardTarget[id] = list[1];
+                        return;
+                        }
+                  for (const r of Object.keys(boxes))
+                        if (boxes[r].text === "receive" && receiveNames[r] === forwardTarget[id])
+                              emit(r, 0, list.length === 1 ? list[0] : list);
+                  return;
+            case "receive":                    // (unnamed: "set name" names it)
+                  if (list[0] === "set")
+                        receiveNames[id] = list[1];
+                  return;
+            case "deferlow":
+                  emit(id, 0, v);
+                  return;
+            case "v8":
+                  toScript.push(list);
                   return;
             default:
                   return;           // (the script's side)
@@ -270,7 +301,7 @@ test("parameter lanes: the song position in ms (phasor~ locked to Live's transpo
       const byText = (t) => patcher.boxes.filter((b) => b.box.text === t).map((b) => b.box.id);
       const has = (a, ao, b, bi) => (wires[a + ":" + ao] || []).some(([d, i]) => d === b && i === bi);
       const v8 = byText("v8")[0];
-      assert.strictEqual(boxes[v8].numoutlets, 7);
+      assert.strictEqual(boxes[v8].numoutlets, 8);
       const [phasor] = byText("phasor~ @frequency 7864320 ticks @lock 1");
       assert.strictEqual(7864320, 16384 * 480);
       const [ms] = byText("*~ 1.");
@@ -297,7 +328,7 @@ test("parameter lanes: the song position in ms (phasor~ locked to Live's transpo
       const [prefix] = byText("loadmess prefix ---mslp");
       assert.ok(prefix && has(prefix, 0, v8, 0));
       const [rcv] = byText("receive msl_params");
-      const [dl] = byText("deferlow");
+      const dl = byText("deferlow").find((d) => has(rcv, 0, d, 0));
       const [pre] = byText("prepend msl_params");
       assert.ok(has(rcv, 0, dl, 0) && has(dl, 0, pre, 0) && has(pre, 0, v8, 0));
       // the script's own outlets kept: OSC and udpsend's settings, the status
@@ -306,11 +337,29 @@ test("parameter lanes: the song position in ms (phasor~ locked to Live's transpo
       assert.ok(patcher.boxes.some((b) => b.box.maxclass === "comment" && has(v8, 2, b.box.id, 0)));
       });
 
+test("a clip tab's notes: /ms/midi from the hub's udpreceive reach the copy on that track's midiout, at once; the rest goes to the script", () => {
+      const into = patcher.boxes.find((b) => b.box.varname === "msl_in").box;
+      assert.strictEqual(into.text, "route /ms/midi");
+      const v8 = patcher.boxes.find((b) => b.box.text === "v8").box.id;
+      emit(v8, 7, ["set", "msl_m12"]);                  // (the script names its [receive] after its track, id 12)
+      const osc = (l) => { midiOut.length = 0; toScript.length = 0; receive(into.id, 0, l); return midiOut.slice(); };
+      assert.deepStrictEqual(osc(["/ms/midi", 12, 0x90, 60, 100]), [0x90, 60, 100]);
+      assert.deepStrictEqual(osc(["/ms/midi", 12, 0x80, 60, 0]), [0x80, 60, 0]);
+      assert.deepStrictEqual(osc(["/ms/midi", 12, 0xb0, 64, 127]), [0xb0, 64, 127]);
+      assert.deepStrictEqual(osc(["/ms/midi", 12, 0xe0, 0, 80]), [0xe0, 0, 80]);
+      assert.deepStrictEqual(toScript, []);             // (not through the script)
+      assert.deepStrictEqual(osc(["/ms/midi", 13, 0x90, 60, 100]), []);   // another track's copy
+      assert.deepStrictEqual(osc(["/ms/song", 1, 120]), []);
+      assert.deepStrictEqual(toScript, [["/ms/song", 1, 120]]);           // everything else: deferlow -> the script
+      // the carriers still work alongside
+      assert.deepStrictEqual(play([0x90, 126, 65]), [0xb0, 1, 65]);
+      });
+
 test("the script's constants agree with the patcher's", () => {
       const js = fs.readFileSync(path.join(dir, "MuseScoreLink.js"), "utf8");
       assert.ok(/var SLOTS = 16;/.test(js));
       assert.ok(/var PERIOD_QUARTERS = 16384;/.test(js));
-      assert.ok(/outlets = 7;/.test(js));
+      assert.ok(/outlets = 8;/.test(js));
       });
 
 if (failures) {

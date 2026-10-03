@@ -10,6 +10,11 @@
 // presses the device's Edit in MuseScore button then; --live-change-at <s> changes the clip in "Live" (the
 // first note's velocity), as the owner would while it is edited in MuseScore.
 //
+// A clip tab playing through its track: /ms/midi from MuseScore is passed on as the hub's patcher does (to the
+// copies on that track) and logged with its time ("MIDI" lines; the summary's "midi"); --no-copy puts the
+// edited clip on a track without the device. The link lost and back: --gone-at <s> (Live closed: nothing is
+// sent or heard), --back-at <s> (Live again, the same set: a new session, as a reloaded device).
+//
 // It prints every message from MuseScore, and at the end (Ctrl+C or --quit-at <s>) the clips
 // written, as JSON on stdout (lines starting with "CLIPS ").
 
@@ -19,6 +24,7 @@ const { FakeLive, loadDevice } = require("./fakelive");
 
 const argv = process.argv.slice(2);
 let port = 9001, playAt = -1, playFrom = 0, stopAt = -1, quitAt = -1, editAt = -1, liveChangeAt = -1;
+let goneAt = -1, backAt = -1, noCopy = false, gone = false;
 let editTrack = "";
 const names = [];
 for (let i = 0; i < argv.length; ++i) {
@@ -30,6 +36,9 @@ for (let i = 0; i < argv.length; ++i) {
       else if (argv[i] === "--edit-clip") editTrack = argv[++i];
       else if (argv[i] === "--edit-at") editAt = Number(argv[++i]);
       else if (argv[i] === "--live-change-at") liveChangeAt = Number(argv[++i]);
+      else if (argv[i] === "--gone-at") goneAt = Number(argv[++i]);
+      else if (argv[i] === "--back-at") backAt = Number(argv[++i]);
+      else if (argv[i] === "--no-copy") noCopy = true;
       else names.push(argv[i]);
       }
 
@@ -55,7 +64,13 @@ if (editTrack) {
       let t = live.song.tracks.map((id) => live.objects[id]).find((x) => x.name === editTrack);
       if (!t) {
             t = live.track(editTrack);
-            deviceIds.push(live.device(t, "MxDeviceMidiEffect", "MuseScore Link").id);
+            if (noCopy) {                     // (the device on another track: the hub)
+                  if (!deviceIds.length)
+                        deviceIds.push(live.device(live.track("Hub"), "MxDeviceMidiEffect", "MuseScore Link").id);
+                  }
+            else
+                  deviceIds.push(live.device(t, "MxDeviceMidiEffect", "MuseScore Link").id);
+            live.device(t, "InstrumentGroupDevice", "Synth Rack");
             }
       editClip = live.clip(t, "Idea", 16, 24);
       editClip.notes = [
@@ -114,10 +129,11 @@ function decode(buf) {
 
 const sock = dgram.createSocket("udp4");
 let sentOut = 0;
+const midi = [];                  // /ms/midi as the tracks' copies got them: [ms since start, track name, status, d1, d2]
 function flush() {
       for (; sentOut < dev.out.length; ++sentOut) {
             const m = dev.out[sentOut];
-            if (m[0] !== 0)
+            if (m[0] !== 0 || gone)
                   continue;
             sock.send(encode(m[1], m.slice(2)), port + 1, "127.0.0.1");
             if (m[1] !== "/live/transport" && m[1] !== "/live/hello" && m[1] !== "/live/clip/notes")
@@ -126,8 +142,18 @@ function flush() {
       }
 const received = {};
 sock.on("message", (buf) => {
+      if (gone)
+            return;
       const { address, args } = decode(buf);
       received[address] = (received[address] || 0) + 1;
+      if (address === "/ms/midi") {     // (the patcher's path: forward to msl_m<track> -> the copies there)
+            const t = live.objects[args[0]];
+            const name = t ? t.name : "?";
+            const copy = copies.some((c) => c.call("me.track") === args[0]);
+            midi.push([Date.now() - t0, name, args[1], args[2], args[3]]);
+            console.log(stamp() + "MIDI " + name + (copy ? "" : " (no copy there: not heard)") + " " + args.slice(1).join(" "));
+            return;
+            }
       if (address !== "/ms/notes" && address !== "/ms/cues")
             console.log(stamp() + "<- " + address + " " + JSON.stringify(args).slice(0, 200));
       dev.message(address, args);
@@ -157,6 +183,20 @@ setInterval(() => {
             console.log(stamp() + "== Edit in MuseScore pressed");
             dev.message("edit", []);
             }
+      if (goneAt >= 0 && s >= goneAt) {
+            goneAt = -1;
+            gone = true;
+            console.log(stamp() + "== Live gone (closed): nothing sent or heard");
+            }
+      if (backAt >= 0 && s >= backAt) {
+            backAt = -1;
+            gone = false;
+            sentOut = dev.out.length;
+            dev.call("becomeHub()");      // (the set opened again: the device loads, a new session)
+            console.log(stamp() + "== Live back (the device loaded again)");
+            }
+      if (gone)
+            return;
       if (liveChangeAt >= 0 && s >= liveChangeAt && editClip) {
             liveChangeAt = -1;
             editClip.notes[0].velocity = 64;
@@ -184,7 +224,7 @@ function quit() {
             }
       console.log("CLIPS " + JSON.stringify({ tempo: live.song.tempo, is_playing: live.song.is_playing,
                                                cues: live.song.cues.map((id) => [live.objects[id].time, live.objects[id].name]),
-                                               received: received, errors: live.errors, clips: clips }));
+                                               received: received, errors: live.errors, midi: midi, clips: clips }));
       process.exit(0);
       }
 process.on("SIGINT", quit);

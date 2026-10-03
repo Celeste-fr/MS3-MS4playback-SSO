@@ -46,6 +46,7 @@
 
 #include "audio/midi/event.h"
 #include "libmscore/liveclips.h"
+#include "liveclipmodel.h"
 
 class QTimer;
 class QUdpSocket;
@@ -112,7 +113,13 @@ class LiveClipsLink : public QObject {
       bool _startingFromLive { false };
       qint64 _startedAt { 0 };            // when MuseScore was started to follow Live (the sequencer's state follows later)
 
+      // the connection watch (LinkWatch)
+      QTimer* _watchTimer { nullptr };
+      LinkWatch _watch;
+      QString _lastNotice;
+
       void bindSocket();
+      void watch();
       void read();
       void received(const QString& address, const QVariantList& args);
       void transport(bool playing, double beat, double bpm);
@@ -157,6 +164,12 @@ class LiveClipsLink : public QObject {
       void updateSocket();
       void sendDatagram(const QByteArray& packet) { send(packet); }
       bool deviceAnswers() const;                   // a hello within 6 s (either feature)
+      int deviceProtocol() const { return _deviceProtocol; }
+      int port() const { return _port; }
+      LinkWatch::Uses uses() const;
+      // a notice: a yellow bar across the top of the score area (not a dialog), until dismissed; good: green, gone after 10 s
+      void notice(const QString& text, bool good = false);
+      QString lastNotice() const { return _lastNotice; }   // (tests)
       // the routes ("<port>:<channel>" keys) the device found no track for, for the score Live plays now;
       // *known: false unless the device answers for this score and has confirmed every route's clip
       QStringList keysWithoutTrack(const MasterScore* score, bool* known) const;

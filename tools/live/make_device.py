@@ -26,6 +26,8 @@ The MIDI path is plain Max objects in the scheduler thread (the script is never 
     the whole bend (status 224 = pitch bend on channel 1, lower, upper) -> iter -> midiout. Either half sends it
     with the other's last value, so a pair chased in any order ends right; note-offs dropped;
     any other note -> midiformat (with the rest of midiparse's messages and its channel) -> midiout.
+  A clip tab playing through its track: the hub's udpreceive -> route /ms/midi (msl_in) -> forward to
+    "msl_m<track id>" -> each copy's receive (named by the script) -> iter -> midiout; the rest -> deferlow -> the script.
 
 Plug-in parameter lanes (MuseScoreLink.js › Parameter lanes), in the signal domain:
   phasor~ @frequency <PERIOD_TICKS> ticks @lock 1 (phase-locked to Live's transport: the song position over the period)
@@ -141,9 +143,33 @@ def build(script):
     p.connect(fmt, 0, midiout, 0)
     p.connect(it, 0, midiout, 0)
 
+    # --- a clip tab plays through its track (MuseScoreLink.js; protocol 4): the hub's udpreceive (made by the
+    # script) goes into [route /ms/midi] (scripting name msl_in); "/ms/midi trackId status data1 data2" ->
+    # t l l: first the track id -> sprintf msl_m%ld -> prepend send -> forward (its target), then the message's
+    # bytes -> forward -> the [receive] of every copy on that track (named "msl_m<track id>" by the script's
+    # outlet 7) -> iter -> midiout, before the instrument. Everything else -> deferlow -> the script.
+    into = p.obj("route /ms/midi", 1, 2, 30, 560, w=100, varname="msl_in")
+    dl_in = p.obj("deferlow", 1, 1, 150, 590)
+    t_in = p.obj("t l l", 1, 2, 30, 590, outlettype=["", ""])
+    first = p.obj("zl.slice 1", 2, 2, 90, 620, outlettype=["", ""])
+    rest = p.obj("zl.slice 1", 2, 2, 30, 650, outlettype=["", ""])
+    name = p.obj("sprintf msl_m%ld", 1, 1, 90, 650)
+    pre_send = p.obj("prepend send", 1, 1, 90, 680)
+    fwd = p.obj("forward", 1, 0, 30, 710)
+    rcv_m = p.obj("receive", 1, 1, 420, 300, outlettype=[""])
+    p.connect(into, 0, t_in, 0)
+    p.connect(into, 1, dl_in, 0)
+    p.connect(t_in, 1, first, 0)
+    p.connect(first, 0, name, 0)
+    p.connect(name, 0, pre_send, 0)
+    p.connect(pre_send, 0, fwd, 0)
+    p.connect(t_in, 0, rest, 0)
+    p.connect(rest, 1, fwd, 0)
+    p.connect(rcv_m, 0, it, 0)
+
     # --- the script: the hub's work (clips, locators, transport), the status line
     dev = p.obj("live.thisdevice", 1, 3, 500, 30, outlettype=["bang", "int", "int"])
-    js = p.box("newobj", "v8", 1, 7, (500, 450, 120, 22), outlettype=["", "", "", "", "", "", ""],
+    js = p.box("newobj", "v8", 1, 8, (500, 450, 120, 22), outlettype=["", "", "", "", "", "", "", ""],
                saved_object_attributes={"parameter_enable": 0},
                textfile={"text": script, "filename": "none", "flags": 0, "embed": 1, "autowatch": 1})
     # the track's parameter lanes kept in the Live Set: a [pattr] that is a Live parameter of type Blob, Stored Only
@@ -168,6 +194,8 @@ def build(script):
         p.connect(st, 0, pre_st, 0)
         p.connect(pre_st, 0, js, 0)
     send = p.obj("udpsend 127.0.0.1 9002", 1, 0, 500, 500)
+    p.connect(js, 7, rcv_m, 0)              # ("set msl_m<track id>")
+    p.connect(dl_in, 0, js, 0)
     p.connect(dev, 0, js, 0)
     p.connect(js, 0, send, 0)
     p.connect(js, 1, send, 0)

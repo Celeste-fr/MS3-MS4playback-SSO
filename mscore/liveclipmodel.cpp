@@ -15,11 +15,13 @@
 #include <cmath>
 #include <map>
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QRegularExpression>
 #include <QTemporaryDir>
 
+#include "audio/midi/event.h"
 #include "importexport/midiimport/importmidi_operations.h"
 #include "libmscore/chord.h"
 #include "libmscore/instrtemplate.h"
@@ -30,6 +32,7 @@
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
 #include "libmscore/staff.h"
+#include "libmscore/tie.h"
 #include "libmscore/liveclips.h"
 
 namespace Ms {
@@ -94,6 +97,27 @@ std::vector<Sig> signatures(const Score* score, std::vector<Note*>* notes)
                   }
             }
       return out;
+      }
+
+int applyMutes(Baseline& base, Score* score)
+      {
+      std::vector<Note*> notes;
+      signatures(score, &notes);
+      if (notes.size() != base.entries.size())
+            return 0;
+      int n = 0;
+      for (size_t i = 0; i < notes.size(); ++i) {
+            Entry& e = base.entries[i];
+            if (e.live.empty() || !std::all_of(e.live.begin(), e.live.end(), [](const LiveNote& l) { return l.mute; }))
+                  continue;
+            for (Note* x = notes[i]; x; x = x->tieFor() ? x->tieFor()->endNote() : nullptr)
+                  x->setPlay(false);
+            e.sig.play = false;
+            ++n;
+            }
+      if (n)
+            score->setPlaylistDirty();
+      return n;
       }
 
 //---------------------------------------------------------
@@ -569,11 +593,13 @@ MasterScore* importClip(const Clip& clip, QString* error)
                   score->appendMeasures(more);
             }
 
-      // played by MuseScore's own sounds (MuseScore 4), never by the sound library: no Kontakt instance
-      // loaded for a quick edit, nothing sent to Live's tracks (LIVE.md)
+      // played by MuseScore 3's rendering, never by the sound library: each note's own velocity, which the
+      // import set from Live's (MuseScore 4's note model plays none: every note at the dynamic's 64), the
+      // clip's notes as written; through the clip's Live track (liveclipedit.h) or MuseScore's own sounds; no
+      // Kontakt instance loaded for a quick edit (LIVE.md)
       std::map<const Part*, PartPlayback> modes;
       for (const Part* p : score->parts())
-            modes[p] = PartPlayback::MS4;
+            modes[p] = PartPlayback::MS3;
       score->setMetaTag(PartPlaybackModes::metaTag, PartPlaybackModes::write(score, modes));
       score->setCreated(true);
       score->setSaved(false);
@@ -604,5 +630,145 @@ std::vector<QByteArray> writePackets(const QString& key, int write, const std::v
       return out;
       }
 
+//---------------------------------------------------------
+//   LiveMidi
+//---------------------------------------------------------
+
+void LiveMidi::reset()
+      {
+      for (unsigned char& c : _count)
+            c = 0;
+      for (int& p : _pedal)
+            p = 0;
+      _bend = 8192;
+      }
+
+bool LiveMidi::sounding() const
+      {
+      for (unsigned char c : _count)
+            if (c)
+                  return true;
+      return false;
+      }
+
+static void putMidi(MidiMsg* out, int& n, int s, int a, int b)
+      {
+      out[n].b[0] = (unsigned char)s;
+      out[n].b[1] = (unsigned char)(a & 0x7f);
+      out[n].b[2] = (unsigned char)(b & 0x7f);
+      ++n;
+      }
+
+int LiveMidi::allOff(MidiMsg* out)
+      {
+      static const int PEDALS[3] = { CTRL_SUSTAIN, 66, 67 };
+      int n = 0;
+      for (int p = 0; p < 128; ++p)
+            if (_count[p]) {
+                  _count[p] = 0;
+                  putMidi(out, n, ME_NOTEOFF, p, 0);
+                  }
+      for (int i = 0; i < 3; ++i)
+            if (_pedal[i]) {
+                  _pedal[i] = 0;
+                  putMidi(out, n, ME_CONTROLLER, PEDALS[i], 0);
+                  }
+      if (_bend != 8192) {
+            _bend = 8192;
+            putMidi(out, n, ME_PITCHBEND, 0, 64);
+            }
+      return n;
+      }
+
+int LiveMidi::accept(int type, int a, int b, MidiMsg* out)
+      {
+      int n = 0;
+      if (type == ME_NOTEON && b > 0 && a >= 0 && a < 128) {
+            if (_count[a] < 255)
+                  ++_count[a];
+            putMidi(out, n, ME_NOTEON, a, b);
+            }
+      else if ((type == ME_NOTEON || type == ME_NOTEOFF) && a >= 0 && a < 128) {
+            if (_count[a] && --_count[a] == 0)
+                  putMidi(out, n, ME_NOTEOFF, a, 0);
+            }
+      else if (type == ME_CONTROLLER) {
+            if (a == CTRL_ALL_NOTES_OFF || a == 120)
+                  return allOff(out);
+            const int i = a == CTRL_SUSTAIN ? 0 : a == 66 ? 1 : a == 67 ? 2 : -1;
+            if (i >= 0 && _pedal[i] != b) {
+                  _pedal[i] = b;
+                  putMidi(out, n, ME_CONTROLLER, a, b);
+                  }
+            }
+      else if (type == ME_PITCHBEND) {
+            const int v = (b & 0x7f) * 128 + (a & 0x7f);
+            if (v != _bend) {
+                  _bend = v;
+                  putMidi(out, n, ME_PITCHBEND, a, b);
+                  }
+            }
+      return n;
+      }
+
+QByteArray midiPacket(int trackId, const MidiMsg& m)
+      {
+      return LiveClips::osc("/ms/midi", { trackId, int(m.b[0]), int(m.b[1]), int(m.b[2]) });
+      }
+
 }     // namespace LiveClipEdit
+
+namespace LiveIntegration {
+
+//---------------------------------------------------------
+//   the connection watch
+//---------------------------------------------------------
+
+LinkWatch::Change LinkWatch::update(bool answers, bool inUse)
+      {
+      if (answers && !up) {
+            up = true;
+            const bool was = lost;
+            lost = false;
+            return was ? BACK : NONE;
+            }
+      if (!answers && up) {
+            up = false;
+            if (!inUse)
+                  return NONE;
+            lost = true;
+            return LOST;
+            }
+      return NONE;
+      }
+
+QString LinkWatch::lostText(const Uses& u)
+      {
+      auto tr = [](const char* s, int n = -1) { return QCoreApplication::translate("LiveClipsLink", s, nullptr, n); };
+      QStringList what;
+      if (u.clipTabs) {
+            what << tr("%n Live clip tab(s): edits stay here and are written to Live when it is back", u.clipTabs);
+            if (u.clipTabsThroughLive)
+                  what << tr("clip tabs play MuseScore's own sounds meanwhile");
+            }
+      if (u.livePlaysScore)
+            what << tr("Live plays the score: MuseScore's Play plays only its own parts meanwhile (the library parts are silent)");
+      if (u.playThroughLive)
+            what << tr("Play through Live: MuseScore keeps sending to the MIDI ports, but can't tell whether Live hears them");
+      QString text = tr("Lost the connection to Live (the MuseScore Link device, UDP port %1)").arg(u.port);
+      if (!what.isEmpty())
+            text += ": " + what.join("; ");
+      return text + ". " + tr("MuseScore reconnects by itself when the device answers again (Live open, the set with the "
+                              "device loaded, the same port).");
+      }
+
+QString LinkWatch::backText(const Uses& u)
+      {
+      QString text = QCoreApplication::translate("LiveClipsLink", "Connected to Live again (MuseScore Link).");
+      if (u.clipTabs)
+            text += " " + QCoreApplication::translate("LiveClipsLink", "The clip tabs are linked again.");
+      return text;
+      }
+
+}     // namespace LiveIntegration
 }     // namespace Ms

@@ -24,6 +24,7 @@
 #include "libmscore/undo.h"
 #include "liveclips.h"
 #include "musescore.h"
+#include "seq.h"
 
 namespace Ms {
 namespace LiveIntegration {
@@ -31,6 +32,7 @@ namespace LiveIntegration {
 using namespace LiveClipEdit;
 
 static const char* const SETTING = "liveIntegration/editClips";
+static const char* const PLAY_SETTING = "liveIntegration/clipTabsPlayLive";
 static constexpr int DEBOUNCE_MS  = 300;
 static constexpr int CONFIRM_MS   = 3000;
 static constexpr int MAX_TRIES    = 3;
@@ -59,6 +61,96 @@ void LiveClipEditor::setEnabledSetting(bool on)
       {
       QSettings().setValue(SETTING, on);
       LiveClipsLink::instance()->updateSocket();
+      }
+
+bool LiveClipEditor::playLiveSetting()
+      {
+      return QSettings().value(PLAY_SETTING, true).toBool();
+      }
+
+void LiveClipEditor::setPlayLiveSetting(bool on)
+      {
+      QSettings().setValue(PLAY_SETTING, on);
+      instance()->updateRouting();
+      instance()->updateStatus();
+      }
+
+//---------------------------------------------------------
+//   playback through the clip's Live track
+//---------------------------------------------------------
+
+int LiveClipEditor::liveTrack(const MasterScore* score) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      if (!s || !s->trackId || !s->copy || !playLiveSetting())
+            return 0;
+      const LiveClipsLink* link = LiveClipsLink::instance();
+      if (!link->deviceAnswers() || link->deviceProtocol() < MIDI_PROTOCOL)
+            return 0;
+      return s->trackId;
+      }
+
+void LiveClipEditor::updateRouting()
+      {
+      const int track = liveTrack(_current);
+      if (seq)
+            seq->setLiveTrack(track ? _current.data() : nullptr, track);
+      if (track != _routed) {
+            log(QString("playback: %1").arg(track ? QString("through Live track %1").arg(track) : QString("MuseScore's own sounds")));
+            _routed = track;
+            updateStatus();
+            }
+      }
+
+void LiveClipEditor::linkChanged()
+      {
+      if (LiveClipsLink::instance()->deviceAnswers()) {
+            for (auto& e : _sessions)           // (unanswered while the link was down: written again now)
+                  if (e.second.state == State::NO_ANSWER && e.second.score) {
+                        e.second.state = State::SYNC;
+                        e.second.inFlight = false;
+                        _dirty.insert(e.first);
+                        _debounce->start();
+                        }
+            }
+      updateRouting();
+      if (sessionOf(_current))
+            updateStatus();
+      }
+
+void LiveClipEditor::countTabs(int* tabs, int* throughLive) const
+      {
+      *tabs = 0;
+      *throughLive = 0;
+      for (const auto& s : _sessions) {
+            if (!s.second.score)
+                  continue;
+            ++*tabs;
+            if (s.second.trackId && s.second.copy && playLiveSetting())
+                  ++*throughLive;
+            }
+      }
+
+// a new hub (the copy that was it went): it gets each clip edited here, and what was edited meanwhile
+void LiveClipEditor::newDevice()
+      {
+      for (auto& e : _sessions) {
+            Session& s = e.second;
+            if (!s.score)
+                  continue;
+            send(LiveClips::osc("/ms/clip/adopt", { e.first, s.liveHash }));
+            log(QString("clip %1 handed to the new hub").arg(e.first));
+            if (s.state == State::SENDING || s.state == State::NO_ANSWER || s.state == State::GONE) {
+                  s.inFlight = false;
+                  s.state = State::SYNC;
+                  s.pending = Diff();
+                  }
+            if (s.state == State::SYNC) {
+                  _dirty.insert(e.first);
+                  _debounce->start();
+                  }
+            }
+      updateStatus();
       }
 
 LiveClipEditor::LiveClipEditor()
@@ -171,10 +263,39 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
       else if (address == "/live/clip/gone") {
             auto it = _sessions.find(key);
             if (it != _sessions.end()) {
+                  if (it->second.state != State::GONE)
+                        LiveClipsLink::instance()->notice(tr("The Live clip %1 › %2 is gone (deleted in Live): its tab is no "
+                                                             "longer linked; Save As keeps it as a score.")
+                                                          .arg(it->second.clip.track, it->second.clip.name));
                   it->second.state = State::GONE;
                   it->second.inFlight = false;
+                  it->second.copy = false;
+                  updateRouting();
                   updateStatus();
                   }
+            }
+      else if (address == "/live/clip/track") {
+            auto it = _sessions.find(key);
+            if (it == _sessions.end())
+                  return;
+            Session& s = it->second;
+            const int trackId = args.value(1).toInt();
+            const bool copy = args.value(2).toInt() != 0;
+            if (!args.value(3).toString().isEmpty())
+                  s.clip.track = args.value(3).toString();
+            if (s.copyWas && !copy && playLiveSetting())
+                  LiveClipsLink::instance()->notice(tr("MuseScore Link was removed from the Live track %1: the clip tab %2 plays "
+                                                       "MuseScore's own sounds until the device is on that track again.")
+                                                    .arg(s.clip.track, s.clip.name));
+            else if (!s.copyWas && copy && s.trackId == trackId && s.trackId && playLiveSetting())
+                  LiveClipsLink::instance()->notice(tr("The clip tab %1 now plays through the Live track %2.")
+                                                    .arg(s.clip.name, s.clip.track), true);
+            s.trackId = trackId;
+            s.copy = copy;
+            s.copyWas = copy;
+            log(QString("clip %1: track %2, %3").arg(key).arg(trackId).arg(copy ? "MuseScore Link on it" : "no MuseScore Link on it"));
+            updateRouting();
+            updateStatus();
             }
       }
 
@@ -206,9 +327,13 @@ void LiveClipEditor::opened(Clip clip)
       s.clip = clip;
       s.score = score;
       s.base = match(clip, score);
+      applyMutes(s.base, score);             // (Live's muted notes don't play here either)
       s.liveHash = clip.hash;
       if (it != _sessions.end()) {
             s.write = it->second.write;          // (write numbers go on: the device may remember the last)
+            s.trackId = it->second.trackId;      // (the device says it again after the notes)
+            s.copy = it->second.copy;
+            s.copyWas = it->second.copyWas;
             }
       _sessions[clip.key] = s;
       connect(score, &Score::playlistChanged, this, [this, score]() { scoreChanged(score); });
@@ -368,6 +493,7 @@ void LiveClipEditor::scoreClosed(MasterScore* score)
             }
       if (_current == score)
             _current = nullptr;
+      updateRouting();
       updateStatus();
       }
 
@@ -414,12 +540,27 @@ QString LiveClipEditor::statusText(const MasterScore* score) const
       QString text = what + ": " + state;
       if (s->base.unmatched || s->base.outside)
             text += " " + tr("(%n Live note(s) not shown here are left as they are)", "", s->base.unmatched + s->base.outside);
+      // playback
+      const LiveClipsLink* link = LiveClipsLink::instance();
+      if (!playLiveSetting())
+            return text;                        // (MuseScore's own sounds, as asked)
+      if (!link->deviceAnswers())
+            text += " · " + tr("the connection to Live is lost: MuseScore's own sounds (reconnects by itself)");
+      else if (liveTrack(score))
+            text += " · " + tr("plays through Live's track %1").arg(s->clip.track);
+      else if (link->deviceProtocol() < MIDI_PROTOCOL || !s->trackId)
+            text += " · " + tr("MuseScore's own sounds: the MuseScore Link device in Live is older (update it to play "
+                               "through the track)");
+      else if (!s->copy)
+            text += " · " + tr("add MuseScore Link to the Live track %1 to hear it there (MuseScore's own sounds meanwhile)")
+                    .arg(s->clip.track);
       return text;
       }
 
 void LiveClipEditor::setCurrentScore(MasterScore* score)
       {
       _current = score;
+      updateRouting();
       updateStatus();
       }
 

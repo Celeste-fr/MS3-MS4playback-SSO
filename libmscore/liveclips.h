@@ -74,6 +74,7 @@
 //       /ms/stop
 //     device -> MuseScore
 //       /live/hello     session:s protocol:i        (on load, then every 2 s)
+//       /live/bye       session:s                   (the hub copy goes: deleted, its set closed)
 //       /live/resync                                (send everything again)
 //       /live/applied   key:s hash:i status:s track:s   (key "song" for the tempo and locators)
 //       /live/papplied  key:s hash:i status:s track:s   (the parameter lanes: "ok", "missing: <titles>" …)
@@ -99,7 +100,7 @@ class Library;
 
 namespace LiveClips {
 
-constexpr int PROTOCOL           = 3;         // 2: editing Live clips (mscore/liveclipmodel.h); 3: parameter lanes
+constexpr int PROTOCOL           = 4;         // 2: editing Live clips (mscore/liveclipmodel.h); 3: parameter lanes; 4: clip tabs play through their track
 constexpr int PVALS_PER_PACKET   = 100;       // (time, value) pairs a /ms/pvals
 constexpr int UNITS_PER_BEAT     = 3840;
 constexpr int EPSILON            = 2;         // units: ~0.26 ms at 120 bpm

@@ -40,6 +40,7 @@
 #include "libmscore/tie.h"
 #include "libmscore/staff.h"
 #include "mscore/liveclipmodel.h"
+#include "audio/midi/event.h"
 #include "mtest/testutils.h"
 
 #define DIR QString("libmscore/liveintegration/")
@@ -80,6 +81,8 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEditInstrument();
       void clipEditOutside();
       void clipEditPackets();
+      void clipTabMidi();
+      void linkWatch();
       void liveSetWrite();
       void liveSetMissing();
       };
@@ -1176,6 +1179,40 @@ void TestLiveIntegration::clipEditVelocityAndMute()
       QVERIFY(d.ops[1].mute);
       QCOMPARE(liveOf(d.next, 101)->start, 0.013);
       delete score;
+
+      // a note muted in Live doesn't play here either (it plays through the Live track now), and nothing is written
+      // for it; played again in MuseScore: unmuted in Live
+      Clip muted = melody();
+      muted.notes[1].mute = true;
+      score = importClip(muted, nullptr);
+      QVERIFY(score);
+      Baseline mb = match(muted, score);
+      QCOMPARE(applyMutes(mb, score), 1);
+      Note* x = noteAt(score, 480, 69);
+      QVERIFY(x && !x->play());
+      QVERIFY(noteAt(score, 0, 67)->play());
+      QVERIFY(diff(mb, signatures(score)).empty());
+      // played as Live has them (MuseScore 3's rendering: each note's own velocity; the muted one not at all)
+      {
+      score->setPlaylistDirty();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      QList<int> played;
+      for (const auto& te : events)
+            if (te.second.type() == ME_NOTEON && te.second.velo() > 0)
+                  played << te.second.pitch() << te.second.velo();
+      QCOMPARE(played, QList<int>({ 67, 87, 71, 91, 72, 70, 74, 76, 76, 99 }));
+      }
+      score->startCmd();
+      x->undoChangeProperty(Pid::PLAY, true);
+      score->endCmd();
+      d = diff(mb, signatures(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(d.ops[0].id, 102);
+      QCOMPARE(d.ops[0].mask, int(MUTE));
+      QVERIFY(!d.ops[0].mute);
+      delete score;
       }
 
 void TestLiveIntegration::clipEditDeleteAndAdd()
@@ -1479,6 +1516,124 @@ void TestLiveIntegration::clipEditPackets()
       QCOMPARE(address, QString("/ms/clip/ops"));
       QCOMPARE(args.size(), 3 + 8 * 8);
       QCOMPARE(args[3 + 1].toInt(), 1032);
+      }
+
+//---------------------------------------------------------
+//   clipTabMidi
+//    a clip tab playing through its Live track (liveclipmodel.h LiveMidi): notes with their velocity on
+//    channel 1, the pedals and the bend once per change, the Mixer's controllers and programs left out, a
+//    stop (all notes off on every channel) releases the keys down once; the /ms/midi packet
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTabMidi()
+      {
+      LiveMidi m;
+      MidiMsg out[LiveMidi::MAX_OUT];
+      auto bytes = [&](int n) {
+            QList<int> l;
+            for (int i = 0; i < n; ++i)
+                  l << out[i].b[0] << out[i].b[1] << out[i].b[2];
+            return l;
+            };
+      QCOMPARE(bytes(m.accept(ME_NOTEON, 60, 87, out)), QList<int>({ 0x90, 60, 87 }));
+      QVERIFY(m.sounding());
+      QCOMPARE(bytes(m.accept(ME_NOTEON, 60, 0, out)), QList<int>({ 0x80, 60, 0 }));         // (note-on 0: off)
+      QVERIFY(!m.sounding());
+      QCOMPARE(m.accept(ME_NOTEOFF, 60, 0, out), 0);                                          // not down: nothing
+      // two notes on one key (two voices, channels): released with the last
+      m.accept(ME_NOTEON, 64, 90, out);
+      QCOMPARE(bytes(m.accept(ME_NOTEON, 64, 70, out)), QList<int>({ 0x90, 64, 70 }));
+      QCOMPARE(m.accept(ME_NOTEOFF, 64, 0, out), 0);
+      QCOMPARE(bytes(m.accept(ME_NOTEOFF, 64, 0, out)), QList<int>({ 0x80, 64, 0 }));
+      // the Mixer's and the instrument's controllers stay MuseScore's
+      for (int cc : std::initializer_list<int>{ CTRL_VOLUME, CTRL_PANPOT, CTRL_REVERB_SEND, CTRL_CHORUS_SEND, CTRL_EXPRESSION, CTRL_MODULATION, 0, 32 })
+            QCOMPARE(m.accept(ME_CONTROLLER, cc, 100, out), 0);
+      QCOMPARE(m.accept(ME_PROGRAM, 5, 0, out), 0);
+      // the pedals, once per change
+      QCOMPARE(m.accept(ME_CONTROLLER, CTRL_SUSTAIN, 0, out), 0);                             // (up already)
+      QCOMPARE(bytes(m.accept(ME_CONTROLLER, CTRL_SUSTAIN, 127, out)), QList<int>({ 0xb0, 64, 127 }));
+      QCOMPARE(m.accept(ME_CONTROLLER, CTRL_SUSTAIN, 127, out), 0);
+      QCOMPARE(bytes(m.accept(ME_CONTROLLER, 67, 100, out)), QList<int>({ 0xb0, 67, 100 }));
+      // the bend: lower, upper 7 bits; the centre left out until it changed
+      QCOMPARE(m.accept(ME_PITCHBEND, 0, 64, out), 0);
+      QCOMPARE(bytes(m.accept(ME_PITCHBEND, 57, 96, out)), QList<int>({ 0xe0, 57, 96 }));
+      // MuseScore's stop: sustain off, 128 note-offs and all notes off on each channel -> once what is down
+      m.accept(ME_NOTEON, 48, 80, out);
+      m.accept(ME_NOTEON, 52, 80, out);
+      int total = 0;
+      QList<int> stop;
+      for (int ch = 0; ch < 3; ++ch) {
+            int n = m.accept(ME_CONTROLLER, CTRL_SUSTAIN, 0, out);
+            stop << bytes(n);
+            total += n;
+            for (int p = 0; p < 128; ++p) {
+                  n = m.accept(ME_NOTEOFF, p, 0, out);
+                  stop << bytes(n);
+                  total += n;
+                  }
+            n = m.accept(ME_CONTROLLER, CTRL_ALL_NOTES_OFF, 0, out);
+            stop << bytes(n);
+            total += n;
+            n = m.accept(ME_PITCHBEND, 0, 64, out);
+            stop << bytes(n);
+            total += n;
+            }
+      QCOMPARE(stop, QList<int>({ 0xb0, 64, 0, 0x80, 48, 0, 0x80, 52, 0, 0xb0, 67, 0, 0xe0, 0, 64 }));
+      QCOMPARE(total, 5);
+      QVERIFY(!m.sounding());
+      // the packet: /ms/midi trackId status data1 data2
+      QString address;
+      QVariantList args;
+      MidiMsg on { { 0x90, 72, 101 } };
+      QVERIFY(LiveClips::parseOsc(midiPacket(12345, on), &address, &args));
+      QCOMPARE(address, QString("/ms/midi"));
+      QCOMPARE(args, QVariantList({ 12345, 0x90, 72, 101 }));
+      }
+
+//---------------------------------------------------------
+//   linkWatch
+//    the connection to Live lost and back (mscore/liveclips.h LinkWatch): one notice per loss, none
+//    while nothing used the link, one when it answers again; what the texts say
+//---------------------------------------------------------
+
+void TestLiveIntegration::linkWatch()
+      {
+      using LiveIntegration::LinkWatch;
+      LinkWatch w;
+      QCOMPARE(w.update(false, true), LinkWatch::NONE);           // never connected: nothing to lose
+      QCOMPARE(w.update(true, true), LinkWatch::NONE);            // the first hello: no notice
+      QCOMPARE(w.update(true, true), LinkWatch::NONE);
+      QCOMPARE(w.update(false, true), LinkWatch::LOST);           // lost: one notice
+      QCOMPARE(w.update(false, true), LinkWatch::NONE);           // (no repeats)
+      QCOMPARE(w.update(false, true), LinkWatch::NONE);
+      QCOMPARE(w.update(true, true), LinkWatch::BACK);            // back: one notice
+      QCOMPARE(w.update(true, true), LinkWatch::NONE);
+      QCOMPARE(w.update(false, false), LinkWatch::NONE);          // lost while nothing used it: quiet
+      QCOMPARE(w.update(true, false), LinkWatch::NONE);           // (and so no "back" either)
+      QCOMPARE(w.update(false, true), LinkWatch::LOST);
+      QCOMPARE(w.update(true, false), LinkWatch::BACK);           // (a loss announced is announced back)
+
+      LinkWatch::Uses u;
+      QVERIFY(!u.any());
+      u.clipTabs = 2;
+      u.clipTabsThroughLive = 1;
+      u.livePlaysScore = true;
+      u.playThroughLive = true;
+      u.port = 9101;
+      QVERIFY(u.any());
+      const QString lost = LinkWatch::lostText(u);
+      QVERIFY(lost.startsWith("Lost the connection to Live"));
+      QVERIFY(lost.contains("9101"));
+      QVERIFY(lost.contains("2 Live clip tab"));
+      QVERIFY(lost.contains("own sounds meanwhile"));
+      QVERIFY(lost.contains("Live plays the score"));
+      QVERIFY(lost.contains("Play through Live"));
+      QVERIFY(lost.contains("reconnects by itself"));
+      u.clipTabsThroughLive = 0;
+      u.livePlaysScore = false;
+      QVERIFY(!LinkWatch::lostText(u).contains("own sounds meanwhile"));
+      QVERIFY(!LinkWatch::lostText(u).contains("Live plays the score"));
+      QVERIFY(LinkWatch::backText(u).contains("clip tabs are linked again"));
       }
 
 //---------------------------------------------------------

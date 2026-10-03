@@ -29,8 +29,10 @@
 
 #include "audio/midi/event.h"
 #include "audiodrivers/driver.h"
+#include "liveclipmodel.h"
 
 #include <atomic>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <vector>
@@ -236,6 +238,13 @@ class Seq : public QObject, public Sequencer {
       MidiSync::Clock syncClock;
       bool syncStartPending { false };    // playing: start once the score (not the count-in) plays
       std::atomic<bool> _liveClips { false };   // Live plays the score (liveclips.h): no library events, no clock
+      // a clip tab plays through its Live track (livemidiout.h): that score's events go there, not to the synthesizer
+      std::atomic<int> _liveTrack { 0 };
+      std::atomic<const MasterScore*> _liveTrackScore { nullptr };
+      int _liveTrackSeen { 0 };                 // (realtime thread: the track the messages went to)
+      LiveClipEdit::LiveMidi _liveMidi;         // (realtime thread)
+      std::chrono::steady_clock::time_point _periodStart;   // (realtime thread: when this period's computing began)
+      bool playOnLiveTrack(const NPlayEvent& event, unsigned framePos);
       SyncOut syncOut[MAX_SYNC_OUT];
       int syncOutCount { 0 };
       int syncOutDone { 0 };
@@ -412,6 +421,10 @@ class Seq : public QObject, public Sequencer {
       // MIDI clock is sent (Live is the clock); MuseScore's own sounds still play
       void setLiveClips(bool on)   { _liveClips = on; }
       bool liveClips() const       { return _liveClips; }
+      // a Live clip edited here (liveclipedit.h): score's events go to the Live track trackId (its MuseScore Link
+      // copy), MuseScore's own synthesizer silent for them; (nullptr, 0): MuseScore's own sounds
+      void setLiveTrack(const MasterScore* score, int trackId) { _liveTrackScore = score; _liveTrack = score ? trackId : 0; }
+      int liveTrack() const        { return _liveTrack; }
       ScoreView* viewer() const { return cv; }
       void initInstruments(bool realTime = false);
 

@@ -52,6 +52,24 @@
 //       /ms/clip/reload key:s               (read the clip again: begin + notes)
 //       /ms/clip/close  key:s               (stop editing it)
 //       /ms/clip/edit                       (edit the clip in Live's Detail View: the device's button; the tests)
+//
+//   A clip tab plays through the clip's own Live track (PROTOCOL 4; the owner, 2026-10-02: "when I press playback
+//   in musescore, it plays through the live plugins, but doesn't affect the time cursor in live"). MuseScore keeps
+//   its own transport and cursor; Live's transport, song time and clips are never touched. The notes MuseScore
+//   plays for the clip score (LiveMidi below: notes, the pedals, the pitch bend; channel 1) go to the MuseScore
+//   Link copy on that track, whose patcher plays them into the track's chain (before the instrument: not recorded,
+//   no arming or monitoring needed); MuseScore's own synthesizer stays silent for them (mscore/livemidiout.h).
+//     device -> MuseScore
+//       /live/clip/track key:s trackId:i copy:i track:s  the clip's track (its LOM id), copy 1: a MuseScore Link copy
+//                                                        of protocol 4 or later is on it (sent after begin and when it
+//                                                        changes: a copy added or removed)
+//       /live/bye session:s                               the hub copy is going (deleted, its set closed)
+//     MuseScore -> device
+//       /ms/midi trackId:i status:i data1:i data2:i       one MIDI message, played at once into that track's chain
+//                                                        (the hub's patcher: route /ms/midi -> forward msl_m<trackId>;
+//                                                        each copy's [receive msl_m<its track>] -> midiout)
+//       /ms/clip/adopt key:s hash:i                       a new hub (the old one went): edit this clip again; hash: its
+//                                                        notes as MuseScore last knew them (another: a conflict)
 //---------------------------------------------------------
 
 #include <vector>
@@ -157,6 +175,9 @@ std::vector<Sig> signatures(const Score* score, std::vector<Note*>* notes = null
 // right after importClip: each notation note with the Live notes it came from
 Baseline match(const Clip& clip, const Score* score);
 Diff diff(const Baseline& base, const std::vector<Sig>& now);
+// right after match: a notation note whose Live notes are all muted doesn't play (the Inspector's Play off, no
+// undo step), as in Live; its baseline says so, so nothing is written for it. Returns how many
+int applyMutes(Baseline& base, Score* score);
 // the ids Live gave the added notes (in the order of the ADD ops) into d.next; false: count differs
 bool setAddedIds(Diff& d, const std::vector<int>& ids);
 
@@ -173,6 +194,71 @@ MasterScore* importClip(const Clip& clip, QString* error);
 
 std::vector<QByteArray> writePackets(const QString& key, int write, const std::vector<Op>& ops);
 
+//---------------------------------------------------------
+//   LiveMidi: MuseScore's play events for a clip tab -> the MIDI messages its Live track gets (audio thread;
+//   no allocation). Notes (velocity as played), sustain / sostenuto / soft pedal, the pitch bend; all on channel
+//   1, whatever MuseScore's channel. Nothing else: the Mixer's volume, pan, reverb and chorus, programs, banks
+//   and other controllers stay MuseScore's (Live's instrument keeps its own settings). A key held by two
+//   notes at once is released with the last; all notes off (CC 123, 120: MuseScore's stop) releases the keys
+//   still down and lifts the pedals; repeated values (a stop's per-channel pedal-up, the bend's centre) are
+//   left out.
+//---------------------------------------------------------
+
+constexpr int MIDI_PROTOCOL     = 4;            // the device's protocol from which clip tabs play through Live
+
+struct MidiMsg {
+      unsigned char b[3];
+      };
+
+class LiveMidi {
+      unsigned char _count[128];
+      int _pedal[3];                      // CC 64, 66, 67: the last value sent
+      int _bend;                          // the last 14-bit value sent
+
+   public:
+      static constexpr int MAX_OUT = 132; // room accept() and allOff() need
+      LiveMidi() { reset(); }
+      void reset();
+      // type, a, b as NPlayEvent has them (ME_NOTEON …, the pitch bend: a = lower, b = upper 7 bits); returns
+      // how many messages it wrote into out (MAX_OUT room)
+      int accept(int type, int a, int b, MidiMsg* out);
+      int allOff(MidiMsg* out);           // the keys still down released, the pedals up, the bend centred
+      bool sounding() const;
+      };
+
+QByteArray midiPacket(int trackId, const MidiMsg& m);
+
 }     // namespace LiveClipEdit
+
+namespace LiveIntegration {
+
+//---------------------------------------------------------
+//   LinkWatch: the connection to the MuseScore Link device lost and back (the owner, 2026-10-02: "musescore
+//   should notify you if a connection stopped"). The device says hello every 2 s; none for 6 s (Live or the set
+//   closed, the device deleted, its port changed), or its /live/bye (the hub copy deleted): lost. One notice per
+//   loss, only when something used the link (a clip tab, Live plays the score, Play through Live), and one when
+//   it answers again. Shown as a bar across the top of the score area until dismissed or back (LiveClipsLink::notice in
+//   liveclips.h), never a dialog. (Here, with the pure part, so the tests needn't link the window.)
+//---------------------------------------------------------
+
+struct LinkWatch {
+      enum Change { NONE, LOST, BACK };
+      struct Uses {
+            int clipTabs { 0 };           // Live clips open here
+            int clipTabsThroughLive { 0 };// of them playing through their Live track
+            bool livePlaysScore { false };
+            bool playThroughLive { false };
+            int port { 9001 };
+            bool any() const { return clipTabs || livePlaysScore || playThroughLive; }
+            };
+      bool up { false };
+      bool lost { false };                // a loss announced, not back yet
+      // answers: the device said hello lately; inUse: something uses the link now
+      Change update(bool answers, bool inUse);
+      static QString lostText(const Uses& u);
+      static QString backText(const Uses& u);
+      };
+
+}     // namespace LiveIntegration
 }     // namespace Ms
 #endif

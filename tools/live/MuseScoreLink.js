@@ -23,6 +23,13 @@
 //     with Live's own note data and only the edited fields changed, add_new_notes), checks the clip once
 //     a second and reports a change made in Live as a conflict (nothing more is written until MuseScore
 //     reads it again). LIVE.md › Editing Live clips in MuseScore; mscore/liveclipmodel.h.
+//   - a clip tab plays through its track (protocol 4; mscore/liveclipmodel.h): MuseScore sends what it plays as
+//     /ms/midi trackId status data1 data2; the hub's patcher (not this script) passes it on at once, in Max's
+//     scheduler: [route /ms/midi] -> [forward] to "msl_m<trackId>"; every copy's [receive] is named after its
+//     own track ("set msl_m<track id>" from outlet 7) -> iter -> midiout, into the track's chain before the
+//     instrument (nothing recorded, no arming). The hub tells MuseScore each edited clip's track and whether a
+//     copy of protocol 4+ is on it (/live/clip/track, again when that changes). Live's transport, song time and
+//     clips are never touched for it. /live/bye when the hub goes; /ms/clip/adopt: a new hub takes over a clip.
 //   - plug-in parameter lanes (MuseScore's automation of Kontakt's parameters): the LOM can't write clip
 //     envelopes or arrangement automation, so each copy drives its own track's plug-in parameters
 //     itself while Live plays. Below, "Parameter lanes".
@@ -65,11 +72,12 @@
 
 autowatch = 0;
 inlets = 1;
-outlets = 7;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text,
+outlets = 8;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text,
                   // 3: "k id n" to the slots' live.remote~ (route 0 … 15), 4: the ms factor ([*~]), 5: bang [snapshot~],
-                  // 6: the lanes to keep in the Live Set ([pattr Lanes])
+                  // 6: the lanes to keep in the Live Set ([pattr Lanes]),
+                  // 7: "set msl_m<track id>" to the [receive] that plays MuseScore's notes for a clip tab
 
-var PROTOCOL = 3;                       // 2: editing Live clips; 3: parameter lanes
+var PROTOCOL = 4;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 var HUB_STALE_MS = 5000;
@@ -210,8 +218,9 @@ function bang() {
       var tr = new LiveAPI("this_device canonical_parent");
       me.track = num(tr.id);
       var r = registry();
-      r[me.key] = { track: me.track, device: me.device, beat: now() };
+      r[me.key] = { track: me.track, device: me.device, beat: now(), protocol: PROTOCOL };
       saveRegistry(r);
+      outlet(7, "set", "msl_m" + me.track);         // (MuseScore's notes for a clip tab on this track)
       heartbeat = new Task(beat, this);
       heartbeat.interval = 1000;
       heartbeat.repeat();
@@ -271,12 +280,15 @@ function openPort() {
             return;
       if (receiver)
             p.remove(receiver);
-      if (!deferrer) {
+      // the patcher's [route /ms/midi] (MuseScore's notes, straight on to the tracks' copies; the rest through its
+      // [deferlow] to this script), else (an older patcher) a deferlow made here
+      var into = p.getnamed ? p.getnamed("msl_in") : null;
+      if (!into && !deferrer) {
             deferrer = p.newdefault(20, 600, "deferlow");
             p.connect(deferrer, 0, self.box, 0);
             }
       receiver = p.newdefault(20, 570, "udpreceive", udpPort);
-      p.connect(receiver, 0, deferrer, 0);
+      p.connect(receiver, 0, into || deferrer, 0);
       outlet(1, "host", "127.0.0.1");
       outlet(1, "port", udpPort + 1);
       }
@@ -303,6 +315,7 @@ function notifydeleted() {
       if (isHub) {
             g.hub = null;
             g.hubBeat = 0;
+            send("/live/bye", session);           // (MuseScore: the connection lost now, not in 6 s)
             }
       if (heartbeat) heartbeat.cancel();
       if (worker) worker.cancel();
@@ -445,6 +458,10 @@ function handle(address, a) {
             }
       else if (address === "/ms/clip/close")
             delete edits[str(a[0])];
+      else if (address === "/ms/clip/adopt")
+            adoptEdit(str(a[0]), num(a[1]));
+      else if (address === "/ms/midi")            // (only with an older patcher: its [route /ms/midi] passes them on)
+            messnamed("msl_m" + num(a[0]), num(a[1]), num(a[2]), num(a[3]));
       }
 
 // a packet of one lane's events: a chunk sent again replaces itself; another gen's are dropped
@@ -930,7 +947,48 @@ function sendClip(e) {
                   }
             send.apply(this, args);
             }
+      e.trackId = tr ? num(tr.id) : 0;
+      e.trackName = trackName;
+      e.copy = copyOn(e.trackId);
+      send("/live/clip/track", e.key, e.trackId, e.copy ? 1 : 0, trackName);
       status("MuseScore Link: " + clipName + " (" + trackName + ") sent to MuseScore");
+      }
+
+// a MuseScore Link copy of protocol 4+ (it plays MuseScore's notes) on the track, alive
+function copyOn(trackId) {
+      if (!trackId)
+            return false;
+      var r = registry();
+      for (var k in r)
+            if (r[k].track === trackId && (r[k].protocol || 0) >= 4 && now() - r[k].beat < HUB_STALE_MS)
+                  return true;
+      return false;
+      }
+
+// a new hub takes over a clip MuseScore edits (the copy that was the hub went): hash as MuseScore knows the notes
+function adoptEdit(key, hash) {
+      var e = edits[key];
+      if (!e) {
+            var id = Number(key.replace(/^c/, ""));
+            var clip = id > 0 ? new LiveAPI("id " + id) : null;
+            if (!clip || !(num(clip.id) > 0)) {
+                  send("/live/clip/gone", key);
+                  return;
+                  }
+            e = edits[key] = { key: key, clipId: id, notes: [], hash: 0, conflict: false, lastWrite: 0, reply: null,
+                               incoming: null };
+            e.notes = readNotes(clip);
+            e.hash = hashNotes(e.notes);
+            var tr = trackOf(clip);
+            e.trackId = tr ? num(tr.id) : 0;
+            e.trackName = tr ? str(tr.get("name")) : "";
+            }
+      if (e.hash !== hash) {
+            e.conflict = true;
+            send("/live/clip/conflict", key, e.hash);
+            }
+      e.copy = copyOn(e.trackId);
+      send("/live/clip/track", key, e.trackId, e.copy ? 1 : 0, e.trackName);
       }
 
 function reply(e, args) {
@@ -1028,6 +1086,11 @@ function applyWrite(e, w) {
 function checkEdits() {
       for (var key in edits) {
             var e = edits[key];
+            var copy = copyOn(e.trackId);                 // (a copy added to or removed from its track)
+            if (e.trackId && copy !== e.copy) {
+                  e.copy = copy;
+                  send("/live/clip/track", key, e.trackId, copy ? 1 : 0, e.trackName || "");
+                  }
             if (e.conflict)
                   continue;
             var clip = new LiveAPI("id " + e.clipId);

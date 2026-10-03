@@ -194,6 +194,19 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   not. One device (the first loaded) does the work for all tracks; any other copy takes over when it goes.
 - **Status:** Mixer › Advanced Options… › Ableton Live shows whether the device answers, when the last
   update was confirmed, and each route that found no track.
+- **The connection lost** (the owner, 2026-10-02: "musescore should notify you if a connection stopped"): the
+  device says hello every 2 s; none for 6 s (Live or the set closed, the device deleted, its port changed), or
+  its `/live/bye` (the hub copy deleted: at once), and MuseScore shows a yellow bar across the top of the
+  score area (over the tabs), once per loss and only while something uses the link (a clip tab, Live plays the score, Play
+  through Live): "Lost the connection to Live (the MuseScore Link device, UDP port 9001): …" with what stops
+  working and what MuseScore does meanwhile (clip tabs: edits stay here and are written when Live is back,
+  playback with MuseScore's own sounds; Live plays the score: MuseScore's Play plays only its own parts; Play
+  through Live: MIDI still goes to the ports, unchecked). It stays until dismissed (×) or the device answers
+  again, then a green "Connected to Live again" for 10 s. No dialog. A new hub (another copy took over, or the
+  set was opened again) gets the clip tabs' clips back (`/ms/clip/adopt`: in sync if their notes are as
+  MuseScore knew them, else a conflict), and their unwritten edits are written. Also notices: a clip tab's clip
+  deleted in Live; the MuseScore Link copy removed from (or added again to) a clip tab's track. Not detected:
+  the MIDI ports of Play through Live disappearing (loopMIDI closed) without the device.
 
 ### Setting it up
 
@@ -696,7 +709,13 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
 3. Press **Edit in MuseScore** on the device (any copy of it). A tab "<track> › <clip>" opens in Continuous View.
 4. Edit as usual. The status bar says "Editing Live clip <track> › <clip>: in sync (n note change(s) sent)".
    Each edit reaches the clip about 0.3 s later.
-5. Close the tab to stop. An unsaved clip score closes without asking (its edits are in Live already); *Save
+5. **Play** in MuseScore as usual: the notes sound through the clip's own Live track (its instrument and
+   effects: a synth rack, Kontakt …), as long as a MuseScore Link copy is on that track (put one before the
+   instrument; the status bar says "add MuseScore Link to the Live track … to hear it there" otherwise, and
+   MuseScore's own sounds play). MuseScore's Play, Stop and cursor stay MuseScore's: Live's transport, position
+   and clips are not touched, so Live may play or stand still meanwhile. Off: *Mixer › Advanced Options… ›
+   Ableton Live › Clip tabs play through Live (the clip's own track)* (on by default).
+6. Close the tab to stop. An unsaved clip score closes without asking (its edits are in Live already); *Save
    As* makes an ordinary score of it.
 
 ### How it works
@@ -720,9 +739,30 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   bass E2-G4). Change it in the Instruments dialog as usual. **Drums**: a Drum Rack (`DrumGroupDevice`) on
   the track, or a track named like drum / kit / perc / beat: channel 10 in the file, so the import uses
   MuseScore's drumset (GM pitches: a Drum Rack's C1 = 36 is the kick).
-- **Playback** while editing: MuseScore's own sounds (every part "This part plays: MuseScore 4"): no Kontakt
-  instance loaded for a quick edit, nothing sent to Live's tracks. Change it in the Mixer if wanted. The clip
-  score is never "the score Live plays" (`LiveClipsLink::setScore` skips it).
+- **Playback** while editing (the owner, 2026-10-02: "if I edit the clip, playback in musescore plays the
+  piano, not the synth", then "when I press playback in musescore, it plays through the live plugins, but
+  doesn't affect the time cursor in live"): through the clip's own track. MuseScore plays as always (its
+  transport, tempo, cursor, loop, count-in); what its sequencer would play for the clip score goes to Live
+  instead of its synthesizer (`Seq::playOnLiveTrack`): notes with their velocities, sustain / sostenuto / soft
+  pedal and the pitch bend, all on channel 1 (`LiveClipEdit::LiveMidi`; the Mixer's volume, pan, reverb,
+  programs and other controllers stay MuseScore's, so the Live instrument keeps its own settings). Each message
+  is timed (the period's start + its frame: `livemidiout.h`, a sender thread of its own, the audio thread never
+  touches the socket) and sent as `/ms/midi trackId status data1 data2` to the hub, whose **patcher** (not the
+  script) passes it on at once: `[route /ms/midi]` → `[forward msl_m<track id>]` → the `[receive]` of the copy
+  on that track (named by the script) → `[midiout]`, into the track's chain before the instrument. A MIDI
+  effect's output isn't recorded into clips and needs no arming or monitoring; the clip's notes and properties,
+  Live's transport, song time and clips are never touched. The hub tells MuseScore each edited clip's track and
+  whether a copy of protocol 4 is on it (`/live/clip/track`, after the notes and when it changes); without one
+  (or with the setting off, or the link lost) MuseScore's own sounds play and the status line says why. Every
+  part of a clip score is "This part plays: MuseScore 3" (since 2026-10-02; was MuseScore 4, whose note model
+  plays no note velocities: every note came at the dynamic's 64): each note plays the velocity the import took
+  from Live, and a note muted in Live doesn't play (`applyMutes`: the Inspector's *Play* off, no undo step;
+  turned on again in MuseScore it is unmuted in Live). Never the sound library. Live 12.3's `Track.insert_device` can't add it: "only native Live devices
+  can be inserted. Max for Live devices and plug-ins are not supported" (LOM reference). Notes clicked or
+  entered while editing go the same way. Latency: MuseScore sends each note when its own audio for that moment
+  is computed (ahead of its output by its buffer), Live plays it after the hop through Max (a few ms, not
+  measured in real Live) and its own output buffer; so the sound lags MuseScore's cursor by about Live's output
+  latency minus MuseScore's. The clip score is never "the score Live plays" (`LiveClipsLink::setScore` skips it).
 - **Marked as a clip editor** in `LiveClipEditor` only (a runtime property): nothing is written into the file.
 - **The round trip** (`LiveClipEdit::match`, `diff`): after the import each notation note (a tie chain, by its
   first note; grace notes left out) gets the Live note(s) it came from (same pitch, nearest start within a
@@ -764,7 +804,26 @@ Tested here:
   note (its tick, length, velocity 100); a shorter note (length only); a tie chain over the bar line (one Live
   note); a chord (only the edited note's id); added ids and undo (the added note removed by its id, a pitch edit
   undone goes back to Live's pitch); a drum clip (drumset, a snare changed to a clap); names → instruments and
-  the grand staff rule; notes outside the clip never touched; the write packets.
+  the grand staff rule; notes outside the clip never touched; the write packets. clipTabMidi: what the Live
+  track gets (notes, a key held twice released with the last, no Mixer controllers or programs, the pedals and
+  bend once per change, MuseScore's stop releasing only what is down) and the `/ms/midi` packet. linkWatch: one
+  notice per loss, none while nothing used the link, one when back; what the notices say.
+- `tools/live/test/test_cliptab.js` (stand-in Live): each copy names its `[receive]` after its track and says
+  protocol 4; the hub's udpreceive into the patcher's `[route /ms/midi]`; the clip's track and copy for an
+  arrangement clip, a session clip and a track without the device; a copy removed and added (said once each); an
+  older copy not counted; the hub deleted (`/live/bye`), another copy taking over, the clip adopted (in sync, a
+  conflict, gone) and written to; nothing touching Live's transport, song time, launching or the clip's markers.
+  `test_patch.js`: the patcher's path from `/ms/midi` to the track's `midiout` (another track's copy silent, the
+  rest still through `deferlow` to the script). clipEditVelocityAndMute: a muted Live note doesn't play and
+  nothing is written for it, played again → unmuted; the clip score renders Live's velocities.
+- End to end, clip tabs: a real MuseScore GUI build (Xvfb, PulseAudio null sink) against `fake_live_server.js
+  --edit-clip Synth --edit-at 5`, Play clicked: the stand-in's Synth track got each note as `/ms/midi` (first
+  19-22 ms after the click, then 500 ms apart at 120 bpm, Live's velocities 87 81 91 70 99, the muted note left
+  out); Stop at 1.7 s: the note sounding released (and CC 123) in 5 runs of 5 (one earlier run, before the
+  CC 123 safety, missed the release). Nothing else reached the stand-in (`/ms/midi` only: no transport, no song
+  time). `--no-copy`: no `/ms/midi`, MuseScore's own sounds. `--gone-at 9 --back-at 22`: "connection lost" 6 s
+  after (MuseScore's own sounds from then), back at the new session: the clip adopted, playback through the
+  track again; the yellow bar shown while lost (screenshot), the green one on return, each once.
 - `tools/live/test/test_clipedit.js` (stand-in Live, `fakelive.js` with note ids, `get_all_notes_extended`,
   `apply_note_modifications`, `remove_notes_by_id`, Song.View): the Detail View's clip with every field; the
   button on a copy that isn't the hub; a session clip in 7/8 on a Drum Rack track; no clip selected; a write by
@@ -786,15 +845,20 @@ Only real Live can show (to check first):
   an object) and `add_new_notes`' list of ids (read as an array, JSON or text; else found by matching);
 - that `apply_note_modifications` with a complete note dictionary leaves the note's MPE alone;
 - the device's new *Edit in MuseScore* button (`live.text`) sends once per click;
-- the hash staying the same between Live's own reads (no float noise), so no false conflicts.
+- the hash staying the same between Live's own reads (no float noise), so no false conflicts;
+- clip tabs through Live: `Patcher.getnamed("msl_in")` in `v8`, `[receive]` renamed by "set", `[forward]` to it
+  from another device, `[sprintf msl_m%ld]` + `[prepend send]` making "send msl_m<id>", `[midiout]` of a MIDI
+  effect reaching the instrument after it (not recorded), how soon notes arrive (the hop through Max), and no
+  stuck notes when MuseScore stops.
 
 ### Open questions for the owner
 
 - A moved note lands exactly on the notation's grid. The alternative: keep its humanized offset (move by the
   difference).
 - The instrument from the track's name, else piano; a drum clip by a Drum Rack or the track's name. Other rules?
-- Playback of the clip score with MuseScore's own sounds. Should it play through the Live track instead?
 - Notes added in MuseScore get velocity 100 when the note has none set.
+- A clip tab sends notes, pedals and the pitch bend to its Live track, not the score's dynamics as controllers
+  (CC 1 / 11 would change many synths' timbre) nor the Mixer's volume. Should it send any of them?
 
 ## What the owner's Live set confirmed, and what it didn't
 

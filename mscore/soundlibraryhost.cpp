@@ -2781,6 +2781,17 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                   LiveIntegration::LiveClipEditor::setEnabledSetting(on);
                   });
             v->addWidget(editClips);
+            QCheckBox* playClips = new QCheckBox(tr("Clip tabs play through Live (the clip's own track)"), liveBox);
+            playClips->setToolTip(tr("Playing a Live clip's tab in MuseScore sends its notes to the clip's Live track, so its "
+                                     "instrument and effects play them. MuseScore's Play, Stop and cursor stay MuseScore's; "
+                                     "Live's transport, position and clips are left alone, and nothing is recorded.\n"
+                                     "Needs the MuseScore Link device on that track (before the instrument).\n"
+                                     "Off: clip tabs play with MuseScore's own sounds."));
+            playClips->setChecked(LiveIntegration::LiveClipEditor::playLiveSetting());
+            connect(playClips, &QCheckBox::toggled, this, [](bool on) {
+                  LiveIntegration::LiveClipEditor::setPlayLiveSetting(on);
+                  });
+            v->addWidget(playClips);
             // the set itself (livesetexport.h): one track per route, the device and the patch on each
             QHBoxLayout* sets = new QHBoxLayout;
             QPushButton* create = new QPushButton(tr("Create Live Set…"), liveBox);

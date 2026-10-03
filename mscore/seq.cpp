@@ -53,6 +53,7 @@
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
 #include "liveclips.h"
+#include "livemidiout.h"
 #include "libmscore/tempo.h"
 #include "libmscore/tie.h"
 #include "libmscore/utils.h"
@@ -477,6 +478,13 @@ void Seq::stop()
       const bool seqStopped = (state == Transport::STOP);
       if (!seqStopped)
             LiveIntegration::LiveClipsLink::instance()->stopRequested();     // (Live plays the score: Live stops too)
+      // a clip tab playing through its Live track: all notes off there too, after the stop's own note-offs
+      // (a safety: the realtime thread releases the keys down when it stops)
+      if (!seqStopped && _liveTrack && cs == _liveTrackScore.load()) {
+            const LiveClipEdit::MidiMsg off { { ME_CONTROLLER, CTRL_ALL_NOTES_OFF, 0 } };
+            LiveIntegration::LiveMidiOut::instance()->post(_liveTrack, off,
+                                                          std::chrono::steady_clock::now() + std::chrono::milliseconds(60));
+            }
       const bool driverStopped = !_driver || _driver->getState() == Transport::STOP;
       if (seqStopped && driverStopped)
             return;
@@ -1090,6 +1098,7 @@ void Seq::addCountInClicks()
 
 void Seq::process(unsigned framesPerPeriod, float* buffer)
       {
+      _periodStart = std::chrono::steady_clock::now();
       unsigned framesRemain = framesPerPeriod; // the number of frames remaining to be processed by this call to Seq::process
       Transport driverState = _driver->getState();
       // Checking for the reposition from JACK Transport
@@ -2724,9 +2733,44 @@ SeqMsg SeqMsgFifo::dequeue()
 //   putEvent
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   playOnLiveTrack
+//    a Live clip edited here plays through its Live track (liveclipedit.h, livemidiout.h): true when
+//    the event went there (or is one the track doesn't get), so MuseScore's synthesizer stays silent
+//    realtime thread
+//---------------------------------------------------------
+
+bool Seq::playOnLiveTrack(const NPlayEvent& event, unsigned framePos)
+      {
+      const int track = _liveTrack.load();
+      const bool here = track && cs == _liveTrackScore.load();
+      LiveClipEdit::MidiMsg out[LiveClipEdit::LiveMidi::MAX_OUT];
+      if (track != _liveTrackSeen) {      // another track, or none: the old one's keys let go
+            if (_liveTrackSeen) {
+                  const int n = _liveMidi.allOff(out);
+                  for (int i = 0; i < n; ++i)
+                        LiveIntegration::LiveMidiOut::instance()->post(_liveTrackSeen, out[i], std::chrono::steady_clock::now());
+                  }
+            _liveMidi.reset();
+            _liveTrackSeen = track;
+            }
+      if (!here)
+            return false;
+      if (event.isExternal())
+            return true;
+      const double sr = MScore::sampleRate > 0 ? MScore::sampleRate : 48000.0;
+      const auto due = _periodStart + std::chrono::microseconds(qint64(framePos * 1e6 / sr));
+      const int n = _liveMidi.accept(event.type(), event.dataA(), event.dataB(), out);
+      for (int i = 0; i < n; ++i)
+            LiveIntegration::LiveMidiOut::instance()->post(track, out[i], due);
+      return true;
+      }
+
 void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
       {
       if (!cs)
+            return;
+      if (playOnLiveTrack(event, framePos))
             return;
       int channel = event.channel();
       if (channel >= int(cs->midiMapping().size())) {

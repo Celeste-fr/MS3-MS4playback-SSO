@@ -29,6 +29,15 @@
 //   - A change made in Live meanwhile (the device checks the clip's notes every second): nothing more
 //     is written; the status line says "conflict" and offers "Reload from Live" (the score is read
 //     again into a new tab that replaces this one; edits not yet sent are lost, and the owner decides).
+//   - Playback (the owner, 2026-10-02: "when I press playback in musescore, it plays through the live plugins,
+//     but doesn't affect the time cursor in live"): with "Clip tabs play through Live" on (QSettings
+//     liveIntegration/clipTabsPlayLive, default on), a MuseScore Link copy of protocol 4+ on the clip's track
+//     (/live/clip/track) and the device answering, the tab in front sends what MuseScore plays to that track
+//     (Seq::setLiveTrack, livemidiout.h); MuseScore's transport and cursor stay MuseScore's, Live's are never
+//     touched. Otherwise (no copy on the track, the setting off, the link lost) MuseScore's own sounds play;
+//     the status line says which, and a copy removed or the link lost is a notice (LiveClipsLink::notice).
+//   - A new hub (the old copy deleted; /live/hello with another session): each clip edited here is handed to it
+//     (/ms/clip/adopt with its last known hash), and edits made meanwhile are written.
 //---------------------------------------------------------
 
 #include <map>
@@ -76,6 +85,10 @@ class LiveClipEditor : public QObject {
             int writes { 0 };                   // confirmed writes
             int notesChanged { 0 };             // notes modified, removed and added in Live so far
             QString error;
+            // playback through the clip's Live track
+            int trackId { 0 };                  // the track's LOM id (0: not known yet: an older device)
+            bool copy { false };                // a MuseScore Link copy (protocol 4+) is on it
+            bool copyWas { false };             // (it was: its removal is a notice)
             };
 
       std::map<QString, Session> _sessions;     // by the device's clip key
@@ -98,6 +111,8 @@ class LiveClipEditor : public QObject {
       void poll();
       void send(const QByteArray& p);
       void updateStatus();
+      void updateRouting();
+      int _routed { -1 };                       // the track the sequencer was last given (-1: never)
 
    signals:
       void statusChanged();
@@ -108,6 +123,15 @@ class LiveClipEditor : public QObject {
 
       static bool enabledSetting();                 // QSettings liveIntegration/editClips (default on)
       static void setEnabledSetting(bool on);
+      static bool playLiveSetting();                // QSettings liveIntegration/clipTabsPlayLive (default on)
+      static void setPlayLiveSetting(bool on);
+
+      // the link (liveclips.h): checked each second and at each hello; a new hub got the clips
+      void linkChanged();
+      void newDevice();
+      void countTabs(int* tabs, int* throughLive) const;
+      // the Live track a clip score plays through now (0: MuseScore's own sounds)
+      int liveTrack(const MasterScore* score) const;
 
       bool isClipScore(const Score* score) const;
       bool unsavedClipScore(const MasterScore* score) const;  // closes without asking

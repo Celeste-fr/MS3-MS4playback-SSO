@@ -13,8 +13,15 @@
 
 #include <cmath>
 
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QEvent>
 #include <QElapsedTimer>
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QStatusBar>
+#include <QToolButton>
 #include <QSettings>
 #include <QTimer>
 #include <QUdpSocket>
@@ -26,6 +33,7 @@
 #include "libmscore/undo.h"
 #include "liveclipedit.h"
 #include "liveintegration.h"
+#include "livemidiout.h"
 #include "musescore.h"
 #include "preferences.h"
 #include "seq.h"
@@ -85,6 +93,98 @@ LiveClipsLink::LiveClipsLink()
       _poll = new QTimer(this);
       _poll->setInterval(1000);
       connect(_poll, &QTimer::timeout, this, &LiveClipsLink::poll);
+      _watchTimer = new QTimer(this);
+      _watchTimer->setInterval(1000);
+      connect(_watchTimer, &QTimer::timeout, this, &LiveClipsLink::watch);
+      }
+
+LinkWatch::Uses LiveClipsLink::uses() const
+      {
+      LinkWatch::Uses u;
+      LiveClipEditor::instance()->countTabs(&u.clipTabs, &u.clipTabsThroughLive);
+      u.livePlaysScore = _on;
+      u.playThroughLive = playingThroughMidi();
+      u.port = _port;
+      return u;
+      }
+
+void LiveClipsLink::watch()
+      {
+      const LinkWatch::Uses u = uses();
+      const LinkWatch::Change c = _watch.update(deviceAnswers(), u.any());
+      if (c == LinkWatch::LOST) {
+            log("the device doesn't answer: connection lost");
+            notice(LinkWatch::lostText(u));
+            }
+      else if (c == LinkWatch::BACK) {
+            log("the device answers again");
+            notice(LinkWatch::backText(u), true);
+            }
+      LiveClipEditor::instance()->linkChanged();
+      }
+
+void LiveClipsLink::notice(const QString& text, bool good)
+      {
+      _lastNotice = text;
+      emit statusChanged();
+      if (!mscore || MScore::noGui)
+            return;
+      // a bar over the top of the score area, the window's width (laid over it, not in a layout: the status bar
+      // and the docks stay as they are), until dismissed; a good one goes after 10 s
+      QWidget* host = mscore->centralWidget();
+      if (!host)
+            return;
+      // (a child of the main window, not of the central widget: a splitter would take it into its layout)
+      struct Follow : public QObject {          // (keeps the bar over the top of the central widget, its width)
+            QFrame* bar;
+            QWidget* host;
+            Follow(QFrame* b, QWidget* h) : QObject(b), bar(b), host(h) {}
+            void place() {
+                  const QRect r = host->geometry();
+                  const int hw = bar->layout()->heightForWidth(r.width());
+                  bar->setGeometry(r.x(), r.y(), r.width(), hw > 0 ? hw : bar->sizeHint().height());
+                  bar->raise();
+                  }
+            bool eventFilter(QObject*, QEvent* e) override {
+                  if (e->type() == QEvent::Resize || e->type() == QEvent::Move)
+                        place();
+                  return false;
+                  }
+            };
+      static QPointer<QFrame> bar;
+      static QLabel* label = nullptr;
+      static QTimer* hide = nullptr;
+      static Follow* follow = nullptr;
+      if (!bar) {
+            bar = new QFrame(mscore);
+            bar->setObjectName("liveNotice");
+            QHBoxLayout* h = new QHBoxLayout(bar);
+            h->setContentsMargins(10, 4, 4, 4);
+            label = new QLabel(bar);
+            label->setWordWrap(true);
+            QToolButton* close = new QToolButton(bar);
+            close->setText("×");
+            close->setAutoRaise(true);
+            close->setToolTip(tr("Hide this notice"));
+            h->addWidget(label, 1);
+            h->addWidget(close, 0, Qt::AlignTop);
+            hide = new QTimer(bar);
+            hide->setSingleShot(true);
+            connect(hide, &QTimer::timeout, bar.data(), &QWidget::hide);
+            connect(close, &QToolButton::clicked, bar.data(), &QWidget::hide);
+            follow = new Follow(bar, host);
+            host->installEventFilter(follow);
+            }
+      bar->setStyleSheet(good ? "QFrame#liveNotice { background: #c8ecc8; border-bottom: 1px solid #6a9f6a; } QLabel { color: #103010; }"
+                              : "QFrame#liveNotice { background: #ffd970; border-bottom: 1px solid #b08a20; } QLabel { color: #302000; }");
+      label->setText(text);
+      label->setToolTip(text);
+      bar->show();
+      follow->place();
+      if (good)
+            hide->start(10000);
+      else
+            hide->stop();
       }
 
 LiveClipsLink::~LiveClipsLink()
@@ -102,6 +202,8 @@ void LiveClipsLink::updateSocket()
             _socket = nullptr;
             _session.clear();
             _lastHello = 0;
+            _watchTimer->stop();
+            _watch = LinkWatch();         // (turned off here: not a lost connection)
             }
       }
 
@@ -178,6 +280,8 @@ void LiveClipsLink::bindSocket()
       if (!_socket->bind(QHostAddress::LocalHost, quint16(_port + 1)))
             qWarning("Live clips: cannot listen on UDP port %d: %s", _port + 1, qPrintable(_socket->errorString()));
       connect(_socket, &QUdpSocket::readyRead, this, &LiveClipsLink::read);
+      LiveMidiOut::instance()->setPort(_port);
+      _watchTimer->start();
       }
 
 void LiveClipsLink::setScore(MasterScore* score)
@@ -234,6 +338,15 @@ void LiveClipsLink::received(const QString& address, const QVariantList& args)
                   _session = session;
                   if (_on)
                         resync();
+                  LiveClipEditor::instance()->newDevice();      // (the clips edited here: to the new hub)
+                  }
+            watch();
+            }
+      else if (address == "/live/bye") {        // the hub copy goes (deleted, its set closed): lost at once
+            if (args.value(0).toString() == _session) {
+                  _session.clear();
+                  _lastHello = 0;
+                  watch();
                   }
             }
       else if (address == "/live/resync") {
