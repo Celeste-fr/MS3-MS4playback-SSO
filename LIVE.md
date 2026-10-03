@@ -640,7 +640,7 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 ### What still differs
 
 - **Host-only playback settings** (docs/PLAYBACK_SETTINGS.md; playback.ini `[hosting]`): `settleSeconds` (how long a
-  freshly loaded patch runs before MuseScore sets its controllers) and `mixSmoothingMs` (the Mixer's gain glide) act
+  freshly loaded patch runs before MuseScore sets its controllers) acts
   in MuseScore's own hosting only; Live loads and mixes the plug-ins itself. Varispeed's glides too (each frame
   within a cent; varispeed can't reach Live); the pitch-bend glides are rendered and reach the clips. Every other
   playback setting acts in the renderer (the clips' events) or, `[hosting] maxVoices`, in the Kontakt states the Live

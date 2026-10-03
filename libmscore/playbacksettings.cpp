@@ -121,7 +121,6 @@ static const std::vector<Definition> DEFINITIONS = {
       // offered, rounded up to 1 ms: Vst3Plugin::SETTLE_SECONDS, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
       { "hosting/settleSeconds", 0.047, 0, 10, "s",
         "a patch just loaded runs this long before its controllers are set (its script initialises)", false },
-      { "hosting/mixSmoothingMs", 5, 0, 100, "ms", "the Mixer's volume, pan and mute glide over this long (no clicks)", false },
       };
 
 const std::vector<Definition>& definitions()
@@ -216,6 +215,10 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
                   i.warnings << QString("%1 is no longer used (since 2026-10-03: every short with a length= has a measured from=; delete the line)").arg(id);
             // (a fixed ramp step, replaced on 2026-10-03: a ramp sends a value at each tick where it moves by one step of its
             // controller's resolution, Automation::Lane::events)
+            // (the Mixer's gain glide on library slots, 5 ms: no source; removed 2026-10-03, the owner: no mixer smoothing)
+            else if (id == "hosting/mixSmoothingMs")
+                  i.warnings << QString("%1 is no longer used (since 2026-10-03: the Mixer's volume, pan and mute apply at once; "
+                                        "delete the line)").arg(id);
             else if (id == "automation/stepTicks")
                   i.warnings << QString("%1 is no longer used (since 2026-10-03: a ramp sends each change of one MIDI step, or of a "
                                         "parameter's resolution, at the tick it happens; delete the line)").arg(id);

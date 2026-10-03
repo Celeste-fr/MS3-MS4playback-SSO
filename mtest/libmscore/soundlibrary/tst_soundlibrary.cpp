@@ -6146,8 +6146,8 @@ static double dB(double a, double b)
 //---------------------------------------------------------
 //   mixerSlot
 //    the Mixer on a hosted instance (Vst3Synth::setMix), in the host: volume on the General MIDI
-//    curve relative to 100, constant-power pan with 0 dB in the middle, mute, gliding (no step), an
-//    export's own values, and nothing changed at the defaults; all notes off ends a plug-in's notes
+//    curve relative to 100, constant-power pan with 0 dB in the middle, mute, each from the next block
+//    (no glide), an export's own values, and nothing changed at the defaults; all notes off ends a plug-in's notes
 //    even when it maps no CC123 (the test synth doesn't)
 //---------------------------------------------------------
 
@@ -6183,7 +6183,7 @@ void TestSoundLibrary::mixerSlot()
       const double l0 = rms(ref, 0);
       const double r0 = rms(ref, 1);
       QVERIFY(l0 > 0.01 && std::fabs(l0 - r0) < 1e-6);
-      auto settled = [&]() { run(vst, 4800); return run(vst, 4800); };   // 100 ms: the glide is over
+      auto settled = [&]() { return run(vst, 4800); };   // (a change applies from the next block)
 
       // volume: 50 is -12.04 dB, 127 +4.15 dB, 0 silent
       vst.setMix(0, 50, 64, false);
@@ -6212,22 +6212,18 @@ void TestSoundLibrary::mixerSlot()
       const double power = rms(b, 0) * rms(b, 0) + rms(b, 1) * rms(b, 1);
       QVERIFY(std::fabs(10 * std::log10(power / (l0 * l0 + r0 * r0))) < 0.01);
 
-      // mute: silent, gliding there (no click: the first samples barely change), and back
+      // mute: silent from the next block on, no glide (the owner, 2026-10-03), and back at once
       vst.setMix(0, 100, 64, false);
       settled();
       vst.setMix(0, 100, 64, true);
       b = run(vst, 4800);
-      double early = 0;                             // the first 110 frames (a period of A4): the gain 1 -> 0.6
-      for (int i = 0; i < 110; ++i)
-            early += double(b[2 * size_t(i)]) * b[2 * size_t(i)];
-      early = std::sqrt(early / 110);
-      QVERIFY2(early > 0.6 * l0 && early < 0.95 * l0, qPrintable(QString("%1 %2").arg(early).arg(l0)));
-      double tail = 0;
-      for (size_t i = b.size() - 960; i < b.size(); ++i)
-            tail = std::max(tail, double(std::fabs(b[i])));
-      QVERIFY(tail < 1e-4 * l0);
-      QCOMPARE(rms(run(vst, 4800), 0), 0.0);
+      double peak = 0;
+      for (float v : b)
+            peak = std::max(peak, double(std::fabs(v)));
+      QCOMPARE(peak, 0.0);
       vst.setMix(0, 100, 64, false);
+      b = run(vst, 256);
+      QVERIFY(std::fabs(dB(rms(b, 0), l0)) < 0.5);
       b = settled();
       QVERIFY(std::fabs(dB(rms(b, 0), l0)) < 0.01);
 

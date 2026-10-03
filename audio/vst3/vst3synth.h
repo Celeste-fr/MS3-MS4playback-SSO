@@ -43,18 +43,16 @@ class Vst3Synth : public Synthesizer {
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
                                                     // controller index (ME_PARAMETER events), -1: none
       std::atomic<bool> _varispeed { false };
-      // the Mixer, per slot: the target gains of the left and right output (volume × pan, 0 muted),
-      // live and for an export (its own: an export plays mute but not solo, as MuseScore's), and
-      // the gains now (the audio or exporting thread: they glide to the targets, MIX_SMOOTHING)
+      // the Mixer, per slot: the gains of the left and right output (volume × pan, 0 muted), live and
+      // for an export (its own: an export plays mute but not solo, as MuseScore's); a change applies
+      // from the next block on, with no glide (the owner, 2026-10-03: no mixer smoothing)
       struct Mix {
             std::atomic<float> left { 1.f };
             std::atomic<float> right { 1.f };
             };
       std::array<Mix, 64> _mix;
       std::array<Mix, 64> _exportMix;
-      std::vector<std::array<float, 2>> _gain;
       std::vector<float> _scratch;
-      void snapGains(const std::array<Mix, 64>& mix);
       // what the audio thread couldn't play while the GUI thread had the slots: played with the next
       // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
       std::mutex _pendingMutex;
@@ -122,7 +120,6 @@ class Vst3Synth : public Synthesizer {
       void setExportMix(int slot, int volume, int pan, bool muted);
       static float volumeGain(int volume);
       static void panGains(int pan, float* left, float* right);
-      static constexpr double MIX_SMOOTHING = 0.005;   // seconds: the gains' time constant (no clicks)
 
       // GUI thread
       Vst3Plugin* plugin(int slot) const;

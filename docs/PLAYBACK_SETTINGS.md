@@ -39,7 +39,7 @@ table that replaces it (`-12:240 -7:280 … +12:440`; one number for all):
 **Live**: every setting that acts in the renderer reaches Live's clips identically (LiveClipsLink renders with the
 same `MidiRenderer`). `hosting/maxVoices` reaches the Live Set (its Kontakt states come from
 `SoundLibraryHost::setupState`). Host-only (MuseScore's own plug-in hosting; LIVE.md › What still differs):
-`hosting/settleSeconds`, `hosting/mixSmoothingMs`, and varispeed's glide (varispeed can't reach Live; pitch-bend
+`hosting/settleSeconds` and varispeed's glide (varispeed can't reach Live; pitch-bend
 glides, one cent a tick, are rendered and do).
 
 ## Inventory
@@ -82,7 +82,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Live clips: controller carrier spacing (measured in Live 12.4.6: below) | 1 unit (EPSILON) | `LiveClips::clipNotes` | `[live] carrierEpsilon` |
 | Kontakt voices per patch | 512 | `SoundLibraryHost::kontaktMaxVoices` (also the Live Set) | `[hosting] maxVoices` (`MS_KONTAKT_MAX_VOICES` wins) |
 | Settle after setState before controllers (measured: below) | 0.047 s | `Vst3Plugin::settle` | `[hosting] settleSeconds` |
-| Mixer gain glide on library slots | 5 ms | `Vst3Synth::process` | `[hosting] mixSmoothingMs` |
+| Mixer volume, pan and mute on library slots apply from the next audio block, no glide (the owner, 2026-10-03: no mixer smoothing; the 5 ms glide had no source, `[hosting] mixSmoothingMs` is retired) | at once | `Vst3Synth::process` | — |
 | MS3 hairpin with its own velocity change plays as in 3.6 | on | `ms3HairpinVelocity()` | Preferences (Advanced) `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT` |
 | Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
 | Live controls (Controllers window live, LiveOverrides) | always | `PartControllers::liveChanges` | not a number: no setting |

@@ -16,7 +16,6 @@
 #include <string>
 
 #include "audio/midi/event.h"
-#include "libmscore/playbacksettings.h"
 
 namespace Ms {
 
@@ -90,7 +89,6 @@ Vst3Synth::Vst3Synth()
       _sounding.resize(MAX_SLOTS);
       for (auto& s : _sounding)
             s.fill(0);
-      _gain.assign(MAX_SLOTS, { 1.f, 1.f });
       _pending.reserve(4096);
       }
 
@@ -288,12 +286,10 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
                         ++i;
                   }
             }
-      // each slot into a buffer of its own, then added with its Mixer gains (gliding to the targets)
+      // each slot into a buffer of its own, then added with its Mixer gains
       const std::array<Mix, 64>& mix = _exporting ? _exportMix : _mix;
       if (_scratch.size() < size_t(2 * frames))
             _scratch.resize(size_t(2 * frames));
-      const float rate = _sampleRate > 0 ? float(_sampleRate) : 44100.f;
-      const float a = 1.f - std::exp(-1.f / (float(std::max(0.0001, Playback::value("hosting/mixSmoothingMs") / 1000.0)) * rate));
       for (int k = 0; k < int(_slots.size()); ++k) {
             Vst3Plugin* p = _slots[size_t(k)].get();
             if (!p)
@@ -301,33 +297,18 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
             float* b = _scratch.data();
             std::fill(b, b + 2 * frames, 0.f);
             p->process(int(frames), b);
-            const float tl = mix[size_t(k)].left.load(std::memory_order_relaxed);
-            const float tr = mix[size_t(k)].right.load(std::memory_order_relaxed);
-            float& gl = _gain[size_t(k)][0];
-            float& gr = _gain[size_t(k)][1];
-            if (gl == tl && gr == tr) {
-                  if (gl == 1.f && gr == 1.f) {
-                        for (unsigned i = 0; i < 2 * frames; ++i)
-                              out[i] += b[i];
-                        }
-                  else if (gl != 0.f || gr != 0.f) {
-                        for (unsigned i = 0; i < frames; ++i) {
-                              out[2 * i] += gl * b[2 * i];
-                              out[2 * i + 1] += gr * b[2 * i + 1];
-                              }
-                        }
-                  continue;
+            const float gl = mix[size_t(k)].left.load(std::memory_order_relaxed);
+            const float gr = mix[size_t(k)].right.load(std::memory_order_relaxed);
+            if (gl == 1.f && gr == 1.f) {
+                  for (unsigned i = 0; i < 2 * frames; ++i)
+                        out[i] += b[i];
                   }
-            for (unsigned i = 0; i < frames; ++i) {
-                  gl += (tl - gl) * a;
-                  gr += (tr - gr) * a;
-                  out[2 * i] += gl * b[2 * i];
-                  out[2 * i + 1] += gr * b[2 * i + 1];
+            else if (gl != 0.f || gr != 0.f) {
+                  for (unsigned i = 0; i < frames; ++i) {
+                        out[2 * i] += gl * b[2 * i];
+                        out[2 * i + 1] += gr * b[2 * i + 1];
+                        }
                   }
-            if (std::fabs(gl - tl) < 1e-5f)
-                  gl = tl;
-            if (std::fabs(gr - tr) < 1e-5f)
-                  gr = tr;
             }
       _clock += frames;
       }
@@ -391,16 +372,6 @@ void Vst3Synth::setExportMix(int slot, int volume, int pan, bool muted)
       _exportMix[size_t(slot)].right = r;
       }
 
-// (with _mutex held) the gains at the targets at once: an export starts (and live playback comes
-// back) at its values, not gliding from the others
-void Vst3Synth::snapGains(const std::array<Mix, 64>& mix)
-      {
-      for (size_t k = 0; k < _gain.size(); ++k) {
-            _gain[k][0] = mix[k].left;
-            _gain[k][1] = mix[k].right;
-            }
-      }
-
 void Vst3Synth::allSoundsOff(int slot)
       {
       allNotesOff(slot);
@@ -452,7 +423,6 @@ void Vst3Synth::setPlugin(int slot, std::unique_ptr<Vst3Plugin> plugin)
             old = std::move(_slots[slot]);
             _slots[slot] = std::move(plugin);
             _sounding[size_t(slot)].fill(0);
-            _gain[size_t(slot)] = { _mix[size_t(slot)].left, _mix[size_t(slot)].right };  // (it starts silent)
       }
       // old goes here, outside the lock: a plug-in can take its time to go
       }
@@ -494,7 +464,6 @@ void Vst3Synth::beginExport(float sampleRate)
       std::lock_guard<std::mutex> lock(_mutex);
       _exportThread = std::this_thread::get_id();
       _exporting = true;
-      snapGains(_exportMix);
       _clock = 0;                   // (an export's own time, for MS_VERIFY_FAULT)
       _clockRate = sampleRate;
       _cutoffs.clear();
@@ -522,7 +491,6 @@ void Vst3Synth::endExport()
                   p->setOffline(false);
                   }
             }
-      snapGains(_mix);
       _exporting = false;
       _clockRate = _sampleRate;
       _cutoffs.clear();
