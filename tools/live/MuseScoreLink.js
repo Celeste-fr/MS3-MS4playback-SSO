@@ -1738,15 +1738,19 @@ function encodeSaved(sv) {
       return a;
       }
 
-// a lane's events (time value …, as MuseScore sends them: a point, then a ramp's steps every 30 ticks as far as
-// the value moves by 0.001) in fewer atoms: an event "time value" (time >= 0), or a run of m >= 3 evenly spaced
+// a lane's events (time value …, as MuseScore sends them: a point, then along a ramp each tick where the value
+// reaches another step of the parameter's resolution, 1e-4: automation.h PARAM_RESOLUTION) in fewer atoms: an event "time value" (time >= 0), or a run of m >= 3 evenly spaced
 // steps "-m t1 v1 tm vm vh": step k (0 … m-1) at round(t1 + k (tm - t1) / (m - 1)), its value on the parabola
 // through v1 (k = 0), vh (k = h = floor((m - 1) / 2)) and vm (k = m - 1). A straight ramp is one run, a curved one
-// one or a few. A run is taken while each step's value is within PACK_DV of the original, and its time within 2
-// units (0.26 ms at 120 bpm) of it unless the step itself moves by no more than PACK_DV (a slow ramp's 0.001 steps
-// come at uneven times): what plays is MuseScore's staircase to within 0.0015.
+// one or a few. A run is taken while each step's value is within half of PACK_DV of the original (PACK_DV: one MIDI
+// step, 1/127 of the parameter's range: the owner's criterion for what Live plays of MuseScore's curves, 2026-10-03,
+// as the clip envelopes' straight pieces) and, where its time is more than PACK_DT (one tick, 8 units: the grid a lane's
+// events sit on) off the original's, MuseScore's staircase at the run's time is within the other half of it (a ramp
+// reaches its steps at uneven ticks): what the set plays without MuseScore is MuseScore's staircase to within one MIDI step and one tick (with MuseScore running, the copies
+// play the events as sent).
 // livesetwriter.cpp packLane does the same (Create Live Set)
-var PACK_DV = 0.0015;
+var PACK_DV = 1 / 127;
+var PACK_DT = 8;
 var PACK_MAX = 4096;                    // steps a run at most
 function runValue(k, m, v1, vh, vm) {
       var h = Math.floor((m - 1) / 2), e = m - 1;
@@ -1761,21 +1765,57 @@ function runFits(ev, i, j) {
       var v1 = num(ev[2 * i + 1]), vm = num(ev[2 * j + 1]), vh = num(ev[2 * (i + Math.floor((m - 1) / 2)) + 1]);
       for (var k = 1; k < m - 1; ++k) {
             var t = Math.round(t1 + k * (tm - t1) / (m - 1)), o = num(ev[2 * (i + k) + 1]);
-            if (Math.abs(runValue(k, m, v1, vh, vm) - o) > PACK_DV)
+            if (Math.abs(runValue(k, m, v1, vh, vm) - o) > PACK_DV / 2)
                   return false;
-            if (Math.abs(t - num(ev[2 * (i + k)])) > 2 && Math.abs(o - num(ev[2 * (i + k) - 1])) > PACK_DV)
+            if (Math.abs(t - num(ev[2 * (i + k)])) > PACK_DT && Math.abs(stairAt(ev, i, j, t) - o) > PACK_DV / 2)
                   return false;
             }
       return true;
       }
+// the staircase of events i … j at time t (t1 <= t): the value of the last event at or before it
+function stairAt(ev, i, j, t) {
+      var lo = i, hi = j;
+      while (lo < hi) {
+            var h = Math.ceil((lo + hi) / 2);
+            if (num(ev[2 * h]) <= t)
+                  lo = h;
+            else
+                  hi = h - 1;
+            }
+      return num(ev[2 * lo + 1]);
+      }
+// the longest run from step i: the largest j (i + 2 <= j < n, j - i < PACK_MAX) that fits, found by doubling the run
+// while it fits, then halving between the last that fit and the first that didn't (a ramp's steps come every tick:
+// trying each length would take the square of its length); -1: none
+function lastFit(ev, i, n) {
+      var limit = Math.min(n - 1, i + PACK_MAX - 1);
+      if (i + 2 > limit || !runFits(ev, i, i + 2))
+            return -1;
+      var good = i + 2, bad = limit + 1, step = 1;
+      while (good < limit) {
+            var c = Math.min(limit, good + step);
+            if (runFits(ev, i, c)) {
+                  good = c;
+                  step *= 2;
+                  }
+            else {
+                  bad = c;
+                  break;
+                  }
+            }
+      while (bad - good > 1) {
+            var h = Math.floor((good + bad) / 2);
+            if (runFits(ev, i, h))
+                  good = h;
+            else
+                  bad = h;
+            }
+      return good;
+      }
 function packLane(ev) {
       var n = Math.floor(ev.length / 2), out = [], i = 0;
       while (i < n) {
-            var j = i + 2, best = -1;
-            while (j < n && j - i < PACK_MAX && runFits(ev, i, j)) {
-                  best = j;
-                  ++j;
-                  }
+            var best = lastFit(ev, i, n);
             if (best >= 0) {
                   var m = best - i + 1;
                   out.push(-m, num(ev[2 * i]), num(ev[2 * i + 1]), num(ev[2 * best]), num(ev[2 * best + 1]),

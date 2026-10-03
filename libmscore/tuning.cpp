@@ -21,7 +21,9 @@
 #include "symbol.h"
 #include "tuningtables.h"
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -216,7 +218,7 @@ Temperament Temperament::fromJson(const QString& json, bool* ok)
       const QString quarter = o.value("quarterTones").toString();
       t.quarter = quarter == "half" ? Quarter::HALF : quarter == "33/32" ? Quarter::JUST : Quarter::FIXED;
       const QString persian = o.value("persian").toString();
-      t.persian = persian == "practice" ? Persian::PRACTICE : persian == "musescore36" ? Persian::MS36 : Persian::VAZIRI;
+      t.persian = persian == "practice" || persian == "musescore36" ? Persian::MS36 : Persian::VAZIRI;   // ("practice": see Persian)
       const QJsonArray a = o.value("offsets").toArray();
       if (a.size() == 12) {
             for (int i = 0; i < 12; ++i)
@@ -249,7 +251,7 @@ QString Temperament::toJson() const
       if (quarter != Quarter::FIXED)
             o["quarterTones"] = quarter == Quarter::HALF ? "half" : "33/32";
       if (persian != Persian::VAZIRI)
-            o["persian"] = persian == Persian::PRACTICE ? "practice" : "musescore36";
+            o["persian"] = "musescore36";
       return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
       }
 
@@ -625,6 +627,52 @@ bool ScoreTuning::looksLikeTunerValue(double t)
       }
 
 //---------------------------------------------------------
+//   smallestAccidentalGap
+//    every value an accidental can give a note (cents from the natural), as this file plays them: each
+//    accidental type and symbol accidentalCents / symbolCents value (MuseScore 3.6.2's table, the families
+//    with one definition, HEJI's arrows and prime modifiers), the score choices' sizes (quarter tones of just
+//    intonation 33/32 on a double flat … double sharp; koron and sori both ways) and the enharmonic tilde's
+//    schisma (stacked on a HEJI arrow). The half tuning-dependent quarter tones (Quarter::HALF) are left out:
+//    they follow the temperament, not a table. The smallest difference between two distinct values: half of it
+//    is the lanes' tolerance (SoundLib::defaultLaneTolerance: merging only rounding, never two accidentals;
+//    MuseScore 3.6's table is given to 0.1 cents, so its own rounding is at most 0.05 a value)
+//---------------------------------------------------------
+
+double ScoreTuning::smallestAccidentalGap()
+      {
+      static const double gap = [] {
+            std::vector<double> v;
+            bool valued;
+            for (int i = 0; i < int(AccidentalType::END); ++i) {
+                  const double c = accidentalCents(AccidentalType(i), &valued);
+                  if (valued)
+                        v.push_back(c);
+                  }
+            for (int i = 0; i < int(SymId::lastSym); ++i) {
+                  const double c = symbolCents(SymId(i), &valued);
+                  if (valued)
+                        v.push_back(c);
+                  }
+            const double just = 1200.0 * std::log2(33.0 / 32.0);
+            for (int sharps = -2; sharps <= 2; ++sharps)
+                  for (int q : { -1, 1 })
+                        v.push_back(100.0 * sharps + q * just);
+            for (double c : { 50.0, 33.0, -50.0, -67.0 })        // sori / koron (Temperament::Persian)
+                  v.push_back(c);
+            const double tilde = 1200.0 * std::log2(32805.0 / 32768.0);
+            v.push_back(tilde);
+            v.push_back(-tilde);
+            std::sort(v.begin(), v.end());
+            double g = 1e9;
+            for (size_t k = 1; k < v.size(); ++k)
+                  if (v[k] - v[k - 1] > 1e-9)                    // (distinct: not the same value twice)
+                        g = std::min(g, v[k] - v[k - 1]);
+            return g;
+            }();
+      return gap;
+      }
+
+//---------------------------------------------------------
 //   tuning
 //---------------------------------------------------------
 
@@ -744,8 +792,8 @@ void ScoreTuning::computeMeasure(const Measure* m, int staffIdx)
                         }
                   }
             else if (target.sym == SymId::accidentalSori || target.sym == SymId::accidentalKoron) {
-                  static const double sori[] = { 50.0, 40.0, 33.0 };         // Vaziri, practice, MuseScore 3.6
-                  static const double koron[] = { -50.0, -60.0, -67.0 };
+                  static const double sori[] = { 50.0, 33.0 };               // Vaziri, MuseScore 3.6 (Temperament::Persian)
+                  static const double koron[] = { -50.0, -67.0 };
                   const int p = int(_temperament.persian);
                   target.cents = target.sym == SymId::accidentalSori ? sori[p] : koron[p];
                   }

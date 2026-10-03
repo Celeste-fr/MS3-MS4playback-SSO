@@ -264,8 +264,9 @@ QByteArray midiPacket(int trackId, const MidiMsg& m);
 //     tools/live/MuseScoreEnvelopes (installed once in Live's User Library and chosen in Live's settings), and
 //     MuseScore talks to it directly on ENV_PORT; its protocol: tools/live/MuseScoreEnvelopes/core.py.
 //     A lane goes as breakpoints (envelopeEvents): each point; a step's value again just before the next point
-//     (two breakpoints at one time are a jump in Live); a curved ramp as ENV_CURVE_STEPS straight pieces (Live's
-//     create_event ignores a breakpoint's curve: tried in 12.4.6). Read back (lanePoints): each breakpoint a point,
+//     (two breakpoints at one time are a jump in Live); a curved ramp as straight pieces nowhere further than one
+//     MIDI step (1/127 of the parameter's range) from MuseScore's curve (Automation::flattenCurve; the owner's
+//     criterion, 2026-10-03), on the tick grid (Live's create_event ignores a breakpoint's curve: tried in 12.4.6). Read back (lanePoints): each breakpoint a point,
 //     a flat piece before a jump a step again. Before a lane's first point Live's envelope holds the first value
 //     (a MuseScore lane: the parameter's own value); after the last both hold it.
 //---------------------------------------------------------
@@ -273,7 +274,6 @@ QByteArray midiPacket(int trackId, const MidiMsg& m);
 constexpr int PARAMS_PROTOCOL   = 5;            // the device's protocol from which it sends the tracks' parameters
 constexpr int ENV_PORT          = 9005;         // tools/live/MuseScoreEnvelopes/core.py PORT
 constexpr int ENV_PAIRS         = 100;          // (tick, value) pairs a /ms/env/lane
-constexpr int ENV_CURVE_STEPS   = 16;
 
 struct LiveParam {
       int d { -1 };

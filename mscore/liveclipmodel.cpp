@@ -796,13 +796,13 @@ std::vector<std::pair<int, double>> envelopeEvents(const std::vector<Automation:
                   if (b.value != a.value)
                         out.push_back({ b.tick, a.value });
                   }
-            else if (a.curved()) {
-                  for (int k = 1; k < ENV_CURVE_STEPS; ++k) {
-                        const double x = double(k) / ENV_CURVE_STEPS;
-                        const int t = a.tick + int(std::lround(x * (b.tick - a.tick)));
-                        const double y = Automation::curveAt(a.c1x, a.c1y, a.c2x, a.c2y, x);
+            else if (a.curved() && std::fabs(b.value - a.value) > 1e-12) {
+                  // (within one MIDI step of the parameter's range, 0-1 here, of the curve)
+                  const double tolY = Automation::CC_RESOLUTION / std::fabs(b.value - a.value);
+                  for (const auto& xy : Automation::flattenCurve(a.c1x, a.c1y, a.c2x, a.c2y, tolY)) {
+                        const int t = a.tick + int(std::lround(xy.first * (b.tick - a.tick)));
                         if (t > out.back().first && t < b.tick)
-                              out.push_back({ t, a.value + (b.value - a.value) * y });
+                              out.push_back({ t, a.value + (b.value - a.value) * xy.second });
                         }
                   }
             }

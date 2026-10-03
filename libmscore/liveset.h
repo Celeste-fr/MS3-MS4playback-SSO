@@ -114,8 +114,9 @@ Set parse(const QByteArray& xml);
 Set read(const QString& path);                // a .als (gzip) or its XML
 
 // Live's curve between two points (CurveControl1X/1Y/2X/2Y: a cubic Bézier's control points in
-// the segment, 0-1 each way) as straight pieces: the points after `a` up to and including `b`
-std::vector<Point> curve(const Point& a, const Point& b, double c1x, double c1y, double c2x, double c2y, int pieces = 16);
+// the segment, 0-1 each way) as straight pieces: the points after `a` up to and including `b`, nowhere further
+// than tolValue (in the envelope's own units: one MIDI step of its range) from the curve (Automation::flattenCurve)
+std::vector<Point> curve(const Point& a, const Point& b, double c1x, double c1y, double c2x, double c2y, double tolValue);
 
 //---------------------------------------------------------
 //   Matching to the score

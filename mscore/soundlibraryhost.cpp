@@ -2493,20 +2493,22 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             h->setContentsMargins(0, 0, 0, 0);
             _tolerance = new QDoubleSpinBox(row);
             _tolerance->setRange(0.0, 50.0);
-            _tolerance->setDecimals(1);
+            _tolerance->setDecimals(3);
             _tolerance->setSingleStep(0.5);
             _tolerance->setPrefix(tr("share within "));
             _tolerance->setSuffix(tr(" cents"));
             _tolerance->setToolTip(tr("A note this close to a copy's tuning plays on it, at its tuning (more: fewer copies, less exact)"));
             _tail = new QDoubleSpinBox(row);
-            _tail->setRange(0.0, 10.0);
+            _tail->setRange(-0.5, 10.0);
+            _tail->setSpecialValueText(tr("ring: the measured release"));        // (-0.5: SoundLib::laneRing)
             _tail->setDecimals(1);
             _tail->setSingleStep(0.5);
             _tail->setPrefix(tr("ring "));
             _tail->setSuffix(tr(" s"));
             _tail->setToolTip(tr("How long a copy rings after its last note (release, room) before it can be retuned"));
             _maxLanes = new QSpinBox(row);
-            _maxLanes->setRange(1, 16);
+            _maxLanes->setRange(0, 16);
+            _maxLanes->setSpecialValueText(tr("as the free memory allows"));     // (0: SoundLib::memoryMaxLanes)
             _maxLanes->setPrefix(tr("at most "));
             _maxLanes->setSuffix(tr(" per patch"));
             _maxLanes->setToolTip(tr("Past it, the copy quiet longest is retuned, its tail with it"));
@@ -2912,7 +2914,7 @@ void SoundLibraryOptions::load()
             const SoundLib::LaneSettings ls = SoundLib::laneSettings(_score, *_library);
             const QSignalBlocker b1(_tolerance), b2(_tail), b3(_maxLanes);
             _tolerance->setValue(ls.tolerance);
-            _tail->setValue(ls.tail);
+            _tail->setValue(ls.tail < 0 ? -0.5 : ls.tail);
             _maxLanes->setValue(ls.maxLanes);
             }
       if (_legatoEarly) {
@@ -3030,7 +3032,7 @@ void SoundLibraryOptions::setLaneSettings(bool libraryDefaults)
             return;
       SoundLib::LaneSettings s;
       s.tolerance = _tolerance->value();
-      s.tail = _tail->value();
+      s.tail = _tail->value() < 0 ? -1.0 : _tail->value();
       s.maxLanes = _maxLanes->value();
       setMetaTag(SoundLib::laneSettingsMetaTag, libraryDefaults ? QString() : SoundLib::writeLaneSettings(s, *_library));
       load();

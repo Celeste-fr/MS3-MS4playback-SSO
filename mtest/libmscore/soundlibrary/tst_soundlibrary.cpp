@@ -34,6 +34,7 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
+#include "libmscore/tuning.h"
 #include "libmscore/livesetwriter.h"
 #include "libmscore/synthesizerstate.h"
 #include "mtest/testutils.h"
@@ -134,6 +135,7 @@ class TestSoundLibrary : public QObject, public MTest
       void pluginExtract();
       void pitchShift();
       void tuningLanes();
+      void computedLaneSettings();
       void tuningBend();
       void tuningBendAtArrival();
       void tuningOneInstance();
@@ -1438,11 +1440,12 @@ void TestSoundLibrary::legatoLevelBalance()
       QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(rest * std::pow(10.0, 2 / 20.0))));
       QCOMPARE(valueAt(cc, 4 * Q), rest);
       }
-      // 9 dB loud: down by levelMaxDb (6); off (the default): untouched
+      // 11 dB loud: down by levelMaxDb (9.4, the loudest measured: sso_legato_levels.json); off (the default): untouched
       {
-      const auto cc = render("legatoLevelLong='+2:72:9'", "legato/levelBalance=1");
-      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(127 * std::pow(10.0, -6 / 20.0))));
-      const auto off = render("legatoLevelLong='+2:72:9'", "");
+      QCOMPARE(Playback::definition("legato/levelMaxDb")->value, 9.4);
+      const auto cc = render("legatoLevelLong='+2:72:11'", "legato/levelBalance=1");
+      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(127 * std::pow(10.0, -9.4 / 20.0))));
+      const auto off = render("legatoLevelLong='+2:72:11'", "");
       for (const auto& c : off)
             QCOMPARE(c.second, 127);
       }
@@ -3325,7 +3328,7 @@ void TestSoundLibrary::tuningBendAtArrival()
             };
       auto ticksOf = [](double msec) { return int(std::lround(msec * 0.96)); };
       // on: D5+ starts 173.75 ms (167 ticks) early, its bend holds C5's 8192 until 12000 (the transition's arrival),
-      // then glides to 10240 over 30 ms; E5 the same from 10240 to 8192
+      // then glides to 10240 (+50 cents of ±200) one cent a tick: 50 steps on the next 50 ticks; E5 the same from 10240 to 8192
       render();
       QCOMPARE(ons[6].pitch, 74);
       QCOMPARE(ons[7].pitch, 76);
@@ -3339,7 +3342,11 @@ void TestSoundLibrary::tuningBendAtArrival()
             QVERIFY2(b[1].tick >= written && b[1].tick <= written + ticksOf(4),
                      qPrintable(QString("glide %1 starts at %2, arrival %3").arg(g).arg(b[1].tick).arg(written)));
             QCOMPARE(b.back().value, g == 6 ? 10240 : 8192);
-            QVERIFY(b.back().tick <= written + ticksOf(31));
+            QCOMPARE(int(b.size()), 1 + 50);
+            for (size_t k = 2; k < b.size(); ++k) {
+                  QCOMPARE(b[k].tick, b[k - 1].tick + 1);                                  // a step a tick
+                  QVERIFY(std::abs(b[k].value - b[k - 1].value) * 200.0 / 8192 <= 1.0 + 200.0 / 8191);  // of at most a cent (to a bend unit)
+                  }
             }
       // fresh attacks (m1-m5): one bend, at the note-on
       for (size_t i = 0; i < 6; ++i) {
@@ -3356,7 +3363,7 @@ void TestSoundLibrary::tuningBendAtArrival()
             QVERIFY2(std::abs(ons[7].tick - (12480 - ticksOf(521.25))) <= 1, qPrintable(QString::number(ons[7].tick)));
             QCOMPARE(b.back().value, 10240);
             QVERIFY(b.back().tick < ons[7].tick && b.back().tick >= ons[7].tick - ticksOf(5));
-            QVERIFY(b[1].tick >= ons[7].tick - ticksOf(34));
+            QCOMPARE(b[1].tick, ons[7].tick - 50);          // (50 steps, the last a tick before E5)
       }
       SoundLib::setCurrent(lib);
       // the layers: ini off (the glide at the note-on), the score's on over it, the score's off
@@ -3494,10 +3501,68 @@ void TestSoundLibrary::tuningOneInstance()
 //   tuningBend
 //    microtones by the patch's own pitch bend (<Instrument bend>, SoundLib::bendValue): each note-on on
 //    a lane of a bending patch gets its tuning's bend right before it and plays untuned (no varispeed);
-//    a slurred note's lane glides from the note before's bend over 30 ms; a tuning beyond the range
+//    a slurred note's lane glides from the note before's bend one cent a tick; a tuning beyond the range
 //    plays by varispeed with the bend at the centre. Played on the test synth (it bends ±200 cents):
 //    ±50 cents heard within a few cents, and no varispeed engaged (quartertones.musicxml, ♩ = 120)
 //---------------------------------------------------------
+
+void TestSoundLibrary::computedLaneSettings()
+      {
+      // a map whose <Tuning> gives no tolerance, tail or maximum (SSO's since 2026-10-03): each computed
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' release='1200'/>"
+         "<Articulation name='Spiccato' value='2' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::LaneSettings ls = SoundLib::libraryLaneSettings(*lib);
+      // tolerance: half the smallest gap between two distinct accidentals' values (16.5 against 16.667)
+      QCOMPARE(ls.tolerance, ScoreTuning::smallestAccidentalGap() / 2);
+      QVERIFY(std::fabs(ls.tolerance - (200.0 / 12.0 - 16.5) / 2) < 1e-9);
+      QCOMPARE(ls.tail, -1.0);                    // each note's measured ring
+      QCOMPARE(ls.maxLanes, 0);                   // by the free memory
+      // the ring: twice the release to 30 dB under (ISO 3382-1's T30, extrapolated to 60 dB); an unmeasured
+      // articulation: its patch's longest
+      const SoundLib::LibInstrument& v = lib->instruments[0];
+      QCOMPARE(SoundLib::laneRing(v, &v.articulations[0], { &v }), 2.4);
+      QCOMPARE(SoundLib::laneRing(v, &v.articulations[1], { &v }), 2.4);
+      QCOMPARE(SoundLib::laneRing(v, nullptr, { &v }), 2.4);
+      // copies: 1 + free memory / (245 MB a copy (1276 - 1031 MB, the owner's measurement) × the score's parts)
+      QCOMPARE(SoundLib::LANE_COPY_BYTES, qint64(245) * 1024 * 1024);
+      QCOMPARE(SoundLib::memoryMaxLanes(qint64(245) * 1024 * 1024 * 8, 2), 5);
+      QCOMPARE(SoundLib::memoryMaxLanes(qint64(100) * 1024 * 1024, 1), 1);
+      QCOMPARE(SoundLib::memoryMaxLanes(-1, 1), 1);                   // (unknown: no copies)
+      QVERIFY(SoundLib::freeMemoryBytes() > 0);                       // (Linux: /proc/meminfo MemAvailable)
+      // playback.ini over the computed ones
+      Playback::setIniValuesForTest({ { "tuning/tail", "1.5" }, { "tuning/maxLanes", "4" }, { "tuning/tolerance", "3" } });
+      const SoundLib::LaneSettings ini = SoundLib::libraryLaneSettings(*lib);
+      QCOMPARE(ini.tail, 1.5);
+      QCOMPARE(ini.maxLanes, 4);
+      QCOMPARE(ini.tolerance, 3.0);
+      Playback::setIniValuesForTest({});
+
+      // lanes with the measured ring (quartertones.musicxml, 120 bpm): m3's D5+ (+50) ends at 4.5 s; m5 (8 s) needs
+      // +50 again for nothing but C5 / E5- (0 / -50): with a ring of 2.4 s the +50 copy is silent by then, so m5's
+      // notes take the two copies there are; with a release of 3.9 s (ring 7.8 s) it still rings, a third copy
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      QVERIFY(!routes.empty());
+      QCOMPARE(SoundLib::lanes(score, score->parts()[0], { routes[0].instrument }, 3, -1).count[0], 2);
+      auto longRelease = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' release='3900'/>"
+         "</Instrument></SoundLibrary>");
+      QCOMPARE(SoundLib::lanes(score, score->parts()[0], { &longRelease->instruments[0] }, 3, -1).count[0], 3);
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
 
 void TestSoundLibrary::tuningBend()
       {
@@ -3571,15 +3636,17 @@ void TestSoundLibrary::tuningBend()
             else
                   QCOMPARE(last, value[i]);
             }
-      // m7's glides: from the note-on, steps over 30 ms (29 ticks at 120) to the note's bend, rising
+      // m7's glides: from the note-on, a step of at most a cent a tick (50 cents: 50 ticks) to the note's bend, rising
       for (int g : { 6, 7 }) {
             std::vector<Bend> steps;
             for (const Bend& b : bends)
-                  if (b.channel == ons[size_t(g)].channel && b.tick >= ons[size_t(g)].tick && b.tick <= ons[size_t(g)].tick + 40)
+                  if (b.channel == ons[size_t(g)].channel && b.tick >= ons[size_t(g)].tick && b.tick <= ons[size_t(g)].tick + 60)
                         steps.push_back(b);
-            QVERIFY2(steps.size() >= 8, qPrintable(QString("glide %1: %2 steps").arg(g).arg(steps.size())));
+            QVERIFY2(steps.size() == 51, qPrintable(QString("glide %1: %2 steps").arg(g).arg(steps.size())));
             QCOMPARE(steps.back().value, value[size_t(g)]);
-            QVERIFY(steps.back().tick - ons[size_t(g)].tick <= 30);
+            QCOMPARE(steps.back().tick - ons[size_t(g)].tick, 50);
+            for (size_t k = 1; k < steps.size(); ++k)
+                  QVERIFY(std::abs(steps[k].value - steps[k - 1].value) * 200.0 / 8192 <= 1.0 + 200.0 / 8191);   // (to a bend unit)
             for (size_t k = 1; k < steps.size(); ++k)
                   QVERIFY(g == 6 ? steps[k].value >= steps[k - 1].value : steps[k].value <= steps[k - 1].value);
             }
@@ -5445,14 +5512,33 @@ void TestSoundLibrary::automationCurves()
       // Live's own control points (the importer's test curve): its own values, not the editor's form
       Lane live = lane;
       live.points[0].c1x = 0.2; live.points[0].c1y = 0.8; live.points[0].c2x = 0.5; live.points[0].c2y = 1.0;
-      const std::vector<LiveSet::Point> pieces = LiveSet::curve({ 0, 0.2 }, { 4, 1.0 }, 0.2, 0.8, 0.5, 1.0, 64);
-      for (const LiveSet::Point& q : pieces)
+      // as straight pieces (LiveSet::curve, Automation::flattenCurve): nowhere further than one MIDI step from the curve
+      const std::vector<LiveSet::Point> pieces = LiveSet::curve({ 0, 0.2 }, { 4, 1.0 }, 0.2, 0.8, 0.5, 1.0, Automation::CC_RESOLUTION);
+      QVERIFY2(pieces.size() >= 4 && pieces.size() < 64, qPrintable(QString::number(pieces.size())));
+      LiveSet::Point from { 0, 0.2 };
+      for (const LiveSet::Point& q : pieces) {
             QVERIFY2(std::fabs(live.valueAt(int(std::lround(q.beat * 480))) - q.value) < 0.01, qPrintable(QString::number(q.beat)));
-      // events along a curve: every 30 ticks, the curve's values
-      const auto ev = lane.events(0, 1920, 30, 0.001);
+            for (int t = int(std::ceil(from.beat * 480)); t <= int(q.beat * 480); ++t) {
+                  const double line = from.value + (q.value - from.value) * (t / 480.0 - from.beat) / (q.beat - from.beat);
+                  QVERIFY2(std::fabs(live.valueAt(t) - line) <= Automation::CC_RESOLUTION + 1e-3,     // (+ a tick's rounding)
+                           qPrintable(QString("tick %1: %2 against %3").arg(t).arg(line).arg(live.valueAt(t))));
+                  }
+            from = q;
+            }
+      // a less curved one needs fewer pieces; a flat one (no rise) none but its end
+      QVERIFY(LiveSet::curve({ 0, 0.2 }, { 4, 0.3 }, 0.2, 0.8, 0.5, 1.0, Automation::CC_RESOLUTION).size() < pieces.size());
+      QCOMPARE(int(LiveSet::curve({ 0, 0.5 }, { 4, 0.5 }, 0.2, 0.8, 0.5, 1.0, Automation::CC_RESOLUTION).size()), 1);
+      // events along a curve: at each tick where it reaches another step of the resolution, the curve's values, no
+      // step skipped between two events
+      const double res = 0.001;
+      const auto ev = lane.events(0, 1920, res);
       QVERIFY(ev.size() > 30);
-      for (const auto& e : ev)
-            QVERIFY(std::fabs(e.second - lane.valueAt(e.first)) < 1e-12);
+      for (size_t i = 0; i < ev.size(); ++i) {
+            QVERIFY(std::fabs(ev[i].second - lane.valueAt(ev[i].first)) < 1e-12);
+            const int end = i + 1 < ev.size() ? ev[i + 1].first : 1920;
+            for (int t = ev[i].first + 1; t < end; ++t)
+                  QCOMPARE(std::lround(lane.valueAt(t) / res), std::lround(ev[i].second / res));
+            }
 
       // the metaTag: a curve's control points as a fourth element; a lane without curves as before
       MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
@@ -5828,7 +5914,7 @@ void TestSoundLibrary::automation()
       Lane raw;
       raw.target = "cc21";
       QCOMPARE(raw.cc(), 21);
-      const auto ev = lane.events(600, 2000, 30, 0.1);
+      const auto ev = lane.events(600, 2000, 0.1);
       QCOMPARE(ev.front().first, 600);                    // the value in force at the chunk's start
       QCOMPARE(ev.front().second, 0.2);
       QCOMPARE(ev.back().first, 1920);
@@ -5836,7 +5922,10 @@ void TestSoundLibrary::automation()
       int ramp = 0;
       for (const auto& e : ev)
             ramp += e.first > 960 && e.first < 1920;
-      QVERIFY2(ramp >= 6 && ramp <= 8, qPrintable(QString::number(ramp)));    // every 0.1 of the way up
+      QCOMPARE(ramp, 8);            // each step of 0.1 the ramp reaches (rounded: 0.25, 0.35 … 0.95), at its tick
+      for (const auto& e : ev)
+            if (e.first > 960 && e.first < 1920)
+                  QVERIFY(std::lround(lane.valueAt(e.first - 1) / 0.1) != std::lround(e.second / 0.1));
 
       // kept in the score
       MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
