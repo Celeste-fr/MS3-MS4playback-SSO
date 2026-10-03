@@ -249,6 +249,8 @@ void Score::endCmd(bool rollback)
 
       if (rollback)
             undoStack()->current()->unwind();
+      else if (_endCmdHook && !undoStack()->current()->empty())
+            _endCmdHook(this);
 
       update(false);
 

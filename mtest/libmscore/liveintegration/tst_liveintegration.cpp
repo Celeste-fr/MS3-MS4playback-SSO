@@ -40,6 +40,11 @@
 #include "libmscore/rest.h"
 #include "libmscore/tie.h"
 #include "libmscore/staff.h"
+#include "libmscore/system.h"
+#include "libmscore/page.h"
+#include <QPainter>
+#include <QImage>
+#include "libmscore/clef.h"
 #include "mscore/liveclipedit.h"
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
@@ -86,6 +91,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEditUndoAndIds();
       void clipEditDrums();
       void clipEditInstrument();
+      void clipEditBands();
       void clipEditOutside();
       void clipEditPackets();
       void clipTitleUnnamed();
@@ -1103,6 +1109,40 @@ static Note* noteAt(Score* score, int tick, int pitch)
       return nullptr;
       }
 
+// a picture of the score's one page as MuseScore draws it (Score::print), for a person to look at
+static bool renderPng(MasterScore* score, const QString& path)
+      {
+      score->doLayout();
+      Page* page = score->pages().front();
+      QRectF r;
+      for (const Element* e : page->items(page->abbox()))
+            if (e->visible())
+                  r |= e->pageBoundingRect();
+      r.adjust(-20, -20, 20, 20);
+      const qreal scale = 0.5;
+      QImage img(int(r.width() * scale) + 1, int(r.height() * scale) + 1, QImage::Format_ARGB32);
+      img.fill(Qt::white);
+      QPainter p(&img);
+      p.setRenderHint(QPainter::Antialiasing);
+      p.scale(scale, scale);
+      p.translate(-r.topLeft());
+      score->print(&p, 0);
+      p.end();
+      return img.save(path);
+      }
+
+// the band staves shown in the clip tab (0 treble 15ma, 1 treble, 2 bass, 3 bass 15mb)
+static std::vector<int> shownStaves(Score* score)
+      {
+      score->doLayout();
+      std::vector<int> out;
+      System* sys = score->systems().front();
+      for (int i = 0; i < score->nstaves(); ++i)
+            if (sys->staff(i)->show())
+                  out.push_back(i);
+      return out;
+      }
+
 void TestLiveIntegration::clipEditImport()
       {
       const Clip clip = melody();
@@ -1116,7 +1156,8 @@ void TestLiveIntegration::clipEditImport()
       QCOMPARE(score->parts().size(), 1);
       QCOMPARE(score->parts()[0]->partName(), QString("Violin"));
       QCOMPARE(score->parts()[0]->instrument()->getId(), QString("violin"));
-      QCOMPARE(score->nstaves(), 1);
+      QCOMPARE(score->nstaves(), BANDS);                  // the band staves, treble shown
+      QVERIFY(shownStaves(score) == std::vector<int>({ 1 }));
       QCOMPARE(score->fileInfo()->completeBaseName(), QString("Violin › Idea"));
       QCOMPARE(score->lastMeasure()->endTick().ticks(), 12 * 480);     // up to the clip's end
       QCOMPARE(score->firstMeasure()->timesig(), Fraction(4, 4));
@@ -1126,8 +1167,9 @@ void TestLiveIntegration::clipEditImport()
       QVERIFY(score->styleB(Sid::showMeasureNumberOne));
       QCOMPARE(score->styleI(Sid::measureNumberInterval), 1);
       QVERIFY(!score->styleB(Sid::measureNumberSystem));
+      // (on the first staff shown: treble)
       for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
-            QVERIFY2(m->noText(0) && m->noText(0)->visible(), qPrintable(QString("bar %1").arg(m->no() + 1)));
+            QVERIFY2(m->noText(1) && m->noText(1)->visible(), qPrintable(QString("bar %1").arg(m->no() + 1)));
       // quantized in the notation, each note found with its Live note
       const std::vector<Sig> sigs = signatures(score);
       QCOMPARE(int(sigs.size()), 6);
@@ -1561,7 +1603,7 @@ void TestLiveIntegration::clipEditChord()
       MasterScore* score = importClip(clip, nullptr);
       QVERIFY(score);
       QCOMPARE(score->parts()[0]->instrument()->getId(), QString("piano"));
-      QCOMPARE(score->nstaves(), 1);          // the range fits one clef
+      QVERIFY(shownStaves(score) == std::vector<int>({ 1 }));    // the range fits treble
       const Baseline b = match(clip, score);
       QCOMPARE(b.unmatched, 0);
       QCOMPARE(int(b.entries.size()), 5);
@@ -1672,15 +1714,219 @@ void TestLiveIntegration::clipEditInstrument()
       clip.name = "Wide";
       clip.end = 4;
       clip.notes = { ln(1, 36, 0, 1, 80), ln(2, 84, 0, 1, 80), ln(3, 43, 1, 1, 80), ln(4, 79, 1, 1, 80) };
-      QVERIFY(needsGrandStaff(clip));
       MasterScore* score = importClip(clip, nullptr);
       QVERIFY(score);
       QCOMPARE(score->parts()[0]->instrument()->getId(), QString("piano"));
-      QCOMPARE(score->nstaves(), 2);
+      // C6 needs one ledger line on treble 15ma, two on treble; C2 one on bass 15mb, two on bass: all four bands
+      QVERIFY(shownStaves(score) == std::vector<int>({ 0, 1, 2, 3 }));
       const Baseline b = match(clip, score);
       QCOMPARE(b.unmatched, 0);
       QVERIFY(diff(b, signatures(score)).empty());
       delete score;
+      }
+
+//---------------------------------------------------------
+//   clipEditBands: the four band staves acting as one (makeBandStaves, assignBands)
+//---------------------------------------------------------
+
+static Clip bandClip(const QString& track, const std::vector<int>& pitches)
+      {
+      Clip clip;
+      clip.key = "b";
+      clip.track = track;
+      clip.name = "Bands";
+      clip.end = 8;
+      int id = 1;
+      double t = 0;
+      for (int p : pitches) {
+            clip.notes.push_back(ln(id++, p, t, 0.5, 90));
+            t += 0.5;
+            }
+      return clip;
+      }
+
+// the clefs never change: each staff's clef at every bar is its band's, no clef element anywhere
+static bool clefsFixed(Score* score)
+      {
+      for (int i = 0; i < score->nstaves(); ++i)
+            for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
+                  if (score->staff(i)->clef(m->tick()) != BAND_CLEFS[i])
+                        return false;
+      for (Segment* seg = score->firstSegment(SegmentType::All); seg; seg = seg->next1())
+            for (Element* e : seg->elist())
+                  if (e && e->isClef() && !e->generated())
+                        return false;
+      return true;
+      }
+
+static int outOfRange(Score* score)
+      {
+      int n = 0;
+      std::vector<Note*> notes;
+      signatures(score, &notes);
+      for (Note* note : notes) {
+            const Instrument* in = note->part()->instrument(note->tick());
+            if (note->ppitch() < in->minPitchP() || note->ppitch() > in->maxPitchP())
+                  ++n;
+            }
+      return n;
+      }
+
+// every note drawn on the band where it needs the fewest ledger lines
+static bool onBands(Score* score)
+      {
+      std::vector<Note*> notes;
+      signatures(score, &notes);
+      for (Note* n : notes) {
+            const std::vector<int> b = bandsOf(n->ppitch());
+            if (std::find(b.begin(), b.end(), n->chord()->vStaffIdx()) == b.end())
+                  return false;
+            }
+      return true;
+      }
+
+void TestLiveIntegration::clipEditBands()
+      {
+      // ledger lines as MuseScore places the notes
+      QCOMPARE(ledgerLines(64, ClefType::G), 0);
+      QCOMPARE(ledgerLines(60, ClefType::G), 1);
+      QCOMPARE(ledgerLines(57, ClefType::G), 2);
+      QCOMPARE(ledgerLines(84, ClefType::G), 2);
+      QCOMPARE(ledgerLines(36, ClefType::F), 2);
+      QCOMPARE(ledgerLines(12, ClefType::F15_MB), 2);
+      QCOMPARE(ledgerLines(88, ClefType::G15_MA), 0);
+      // the bands: the fewest ledger lines; middle C on treble or bass alike, B5 treble or treble 15ma, D2 bass or 15mb
+      QVERIFY(bandsOf(60) == std::vector<int>({ 1, 2 }));
+      QVERIFY(bandsOf(83) == std::vector<int>({ 0, 1 }));
+      QVERIFY(bandsOf(38) == std::vector<int>({ 2, 3 }));
+      QVERIFY(bandsOf(59) == std::vector<int>({ 2 }));
+      QVERIFY(bandsOf(62) == std::vector<int>({ 1 }));
+      QVERIFY(bandsOf(35) == std::vector<int>({ 3 }));
+
+      struct Case {
+            const char* what;
+            QString track;
+            std::vector<int> pitches;
+            std::vector<int> shown;
+            };
+      const std::vector<Case> cases {
+            // the owner's bass synth (2026-10-03): its notes on bass 15mb, the higher ones on bass
+            { "low", "35-BuzzWave", { 12, 19, 24, 28, 31, 35, 43, 50 }, { 2, 3 } },
+            { "wide", "Pad", { 48, 55, 60, 64, 72, 79, 43, 76 }, { 1, 2 } },
+            { "very wide", "Pad", { 12, 24, 43, 50, 67, 76, 96, 100 }, { 0, 1, 2, 3 } },
+            { "high", "Lead", { 88, 91, 96, 100, 103, 108, 96, 88 }, { 0 } },
+            };
+      for (const Case& c : cases) {
+            const Clip clip = bandClip(c.track, c.pitches);
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY2(score, c.what);
+            QCOMPARE(score->nstaves(), BANDS);
+            QVERIFY2(shownStaves(score) == c.shown, c.what);
+            QVERIFY2(clefsFixed(score), c.what);
+            QVERIFY2(onBands(score), c.what);
+            QCOMPARE(outOfRange(score), 0);
+            const Baseline b = match(clip, score);
+            QCOMPARE(b.unmatched, 0);
+            QVERIFY2(diff(b, signatures(score)).empty(), c.what);
+            delete score;
+            }
+
+      // a pitch edit over a band border: the note drawn on the other staff, one modification sent; undo
+      {
+            const Clip clip = bandClip("Pad", { 60, 64, 67, 72, 76, 79, 72, 67 });
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY(score);
+            QVERIFY(shownStaves(score) == std::vector<int>({ 1 }));
+            const Baseline b = match(clip, score);
+            Note* n = noteAt(score, 240, 64);
+            QVERIFY(n);
+            score->startCmd();
+            score->undoChangePitch(n, 48, n->tpc1(), n->tpc2());
+            score->endCmd();
+            QCOMPARE(n->chord()->vStaffIdx(), 2);
+            QVERIFY(shownStaves(score) == std::vector<int>({ 1, 2 }));
+            QVERIFY(onBands(score));
+            const Diff d = diff(b, signatures(score));
+            QCOMPARE(int(d.ops.size()), 1);
+            QCOMPARE(d.ops[0].id, 2);
+            QCOMPARE(d.ops[0].pitch, 48);
+            score->undoRedo(true, nullptr);
+            QCOMPARE(n->chord()->vStaffIdx(), 1);
+            QVERIFY(shownStaves(score) == std::vector<int>({ 1 }));
+            QVERIFY(diff(b, signatures(score)).empty());
+            score->undoRedo(false, nullptr);
+            QCOMPARE(n->chord()->vStaffIdx(), 2);
+            delete score;
+      }
+
+      // a chord over two bands: split by band into two voices, each drawn on its staff; nothing sent; a pitch
+      // edit of one of its notes sends only that note
+      {
+            Clip clip = bandClip("Pad", {});
+            clip.notes = { ln(1, 43, 0, 1, 80), ln(2, 48, 0, 1, 81), ln(3, 72, 0, 1, 82), ln(4, 76, 0, 1, 83),
+                           ln(5, 79, 1, 1, 84) };
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY(score);
+            QVERIFY(onBands(score));
+            QVERIFY(shownStaves(score) == std::vector<int>({ 1, 2 }));
+            Note* lo = noteAt(score, 0, 43);
+            Note* hi = noteAt(score, 0, 72);
+            QVERIFY(lo && hi);
+            QVERIFY(lo->chord() != hi->chord());
+            QCOMPARE(lo->chord()->vStaffIdx(), 2);
+            QCOMPARE(hi->chord()->vStaffIdx(), 1);
+            const Baseline b = match(clip, score);
+            QCOMPARE(b.unmatched, 0);
+            QVERIFY(diff(b, signatures(score)).empty());
+            // velocities kept by the split
+            QCOMPARE(signatures(score).size(), size_t(5));
+            score->startCmd();
+            score->undoChangePitch(lo, 41, lo->tpc1(), lo->tpc2());
+            score->endCmd();
+            const Diff d = diff(b, signatures(score));
+            QCOMPARE(int(d.ops.size()), 1);
+            QCOMPARE(d.ops[0].id, 1);
+            delete score;
+      }
+
+      // a picture (MS_CLIPBANDS_PNG=<folder>): a clip over all four bands, then a note moved from treble to bass
+      // and a chord over two bands
+      if (qEnvironmentVariableIsSet("MS_CLIPBANDS_PNG")) {
+            const QString dir = qEnvironmentVariable("MS_CLIPBANDS_PNG");
+            Clip clip = bandClip("35-BuzzWave", { 12, 19, 24, 31, 36, 43, 48, 55, 60, 64, 67, 72, 79, 88, 96, 100 });
+            clip.notes.push_back(ln(50, 48, 8.0 - 1.0, 1.0, 80));
+            clip.notes.push_back(ln(51, 72, 8.0 - 1.0, 1.0, 80));
+            clip.end = 8;
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY(score);
+            QVERIFY(renderPng(score, dir + "/clip-bands-1-imported.png"));
+            {
+                  QFileInfo fi(dir + "/clip-bands-1-imported.mscz");
+                  QVERIFY(score->saveCompressedFile(fi, false, false));
+            }
+            Note* n = noteAt(score, 9 * 240, 64);
+            QVERIFY(n);
+            score->startCmd();
+            score->undoChangePitch(n, 50, n->tpc1(), n->tpc2());
+            score->endCmd();
+            QVERIFY(renderPng(score, dir + "/clip-bands-2-E4-to-D3.png"));
+            {
+                  QFileInfo fi(dir + "/clip-bands-2-E4-to-D3.mscz");
+                  QVERIFY(score->saveCompressedFile(fi, false, false));
+            }
+            delete score;
+            }
+
+      // a track named after an instrument keeps its range
+      {
+            const Clip clip = bandClip("Cello", { 48, 50, 52, 53, 55, 57, 59, 60 });
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY(score);
+            QCOMPARE(score->parts()[0]->instrument()->getId(), QString("violoncello"));
+            QVERIFY(score->parts()[0]->instrument()->minPitchP() > 0);
+            QVERIFY(shownStaves(score) == std::vector<int>({ 2 }));
+            delete score;
+      }
       }
 
 void TestLiveIntegration::clipEditOutside()

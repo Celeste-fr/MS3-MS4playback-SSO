@@ -80,6 +80,7 @@
 #include <QVariantList>
 
 #include "libmscore/automation.h"
+#include "libmscore/clef.h"
 
 namespace Ms {
 
@@ -191,8 +192,28 @@ QByteArray midiFile(const Clip& clip);
 // the MuseScore instrument named like the Live track (instruments.xml ids, track and long names,
 // compared loosely: case, digits, punctuation), or "" when none
 QString instrumentForTrack(const QString& trackName);
-// a piano clip needs a grand staff when it doesn't fit one clef
-bool needsGrandStaff(const Clip& clip);
+// The staves of a pitched clip (the owner, 2026-10-03: "show bass, treble, bass 15mb and treble 15ma staffs
+// whenever there are any notes that fall inside them. they should act as ONE STAFF, not separate staffs that you
+// have to switch notes from one to the other"): four band staves braced together, top to bottom treble 15ma,
+// treble, bass, bass 15mb, each with one clef for the whole clip (no clef changes). The notes stay in the staff
+// and voice the import or the editing put them in; each chord is drawn on its band's staff (cross-staff,
+// ChordRest::staffMove), and a staff shows only while a chord is drawn on it (Score::lineHidesEmptyStaves).
+// A note's band: the staff where it needs the fewest ledger lines (ledgerLines; equal on two: C4 treble / bass,
+// B5 treble / treble 15ma, D2 bass / bass 15mb): the band of the chord before it, else the band whose middle
+// line is nearest the part's median pitch. A chord over two bands is split by band into other voices (a voice
+// free for its length: the chord's staff first, then the other band staves), the band with the most notes
+// staying; a chord with ties, a tuplet or grace notes, or with no free voice, stays whole on that band.
+// Rests: voice 1's shown where nothing is drawn on their staff, the others hidden.
+// assignBands runs after the import and at the end of every command, inside its undo step (Score::setEndCmdHook)
+constexpr int BANDS = 4;
+constexpr ClefType BAND_CLEFS[BANDS] = { ClefType::G15_MA, ClefType::G, ClefType::F, ClefType::F15_MB };
+// the ledger lines a note of this pitch needs in this clef (spelled as MuseScore spells it in C major)
+int ledgerLines(int pitch, ClefType clef);
+// the bands (0-3, BAND_CLEFS) where a note of this pitch needs the fewest ledger lines
+std::vector<int> bandsOf(int pitch);
+void makeBandStaves(MasterScore* score, bool noRange);
+// each chord of a band part drawn on its band, rests shown or hidden (undoable); the number of changes
+int assignBands(Score* score);
 // the import's grid in ticks: 120 (a sixteenth), or 60 (a thirty-second) when the clip's notes are on 32nds (every
 // start and end within GRID_TOLERANCE ticks of that grid, at least one on an odd 32nd)
 constexpr int GRID_TOLERANCE = TICKS_PER_BEAT / 32;

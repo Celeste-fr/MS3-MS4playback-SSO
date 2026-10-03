@@ -97,6 +97,8 @@ void Score::resetSystems(bool layoutAll, LayoutContext& lc)
       {
       System* system = systems().front();
       system->setInstrumentNames(/* longNames */ true);
+      if (_lineHidesEmptyStaves)
+            hideStavesNothingIsDrawnOn(system);       // (before the measures: measure numbers go on the first shown staff)
 
       QPointF pos;
       bool firstMeasure = true;     //lc.startTick.isZero();
@@ -178,6 +180,42 @@ void Score::resetSystems(bool layoutAll, LayoutContext& lc)
             }
 
       system->setWidth(pos.x());
+      }
+
+//---------------------------------------------------------
+//   hideStavesNothingIsDrawnOn
+//    (lineHidesEmptyStaves) the staves that hide when empty "always" show only while a chord is drawn on them
+//---------------------------------------------------------
+
+void Score::hideStavesNothingIsDrawnOn(System* system)
+      {
+      const int n = nstaves();
+      std::vector<bool> drawn(size_t(n), false);
+      for (Segment* s = firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            for (int track = 0; track < n * VOICES; ++track) {
+                  Element* e = s->element(track);
+                  if (e && e->isChord()) {
+                        const int v = toChord(e)->vStaffIdx();
+                        if (v >= 0 && v < n)
+                              drawn[size_t(v)] = true;
+                        }
+                  }
+            }
+      for (Part* p : qAsConst(_parts)) {
+            bool any = false;
+            for (Staff* st : *p->staves()) {
+                  const int i = st->idx();
+                  const bool show = st->show() && (st->hideWhenEmpty() != Staff::HideMode::ALWAYS || drawn[size_t(i)]);
+                  if (i < int(system->staves()->size()))
+                        system->staff(i)->setShow(show);
+                  any = any || show;
+                  }
+            if (!any && p->show()) {
+                  for (Staff* st : *p->staves())
+                        if (st->showIfEmpty() && st->idx() < int(system->staves()->size()))
+                              system->staff(st->idx())->setShow(true);
+                  }
+            }
       }
 
 //---------------------------------------------------------

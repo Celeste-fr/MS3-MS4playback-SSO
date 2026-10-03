@@ -761,9 +761,26 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   sixteenth, or a 32nd when every start and end is within 1/32 beat of the 32nd grid and one is on an odd 32nd;
   an end snaps to the grid's nearest point (a humanized length within half a step: no tiny rests). Drums keep it.
 - **Instrument**: from the track's name (MuseScore's instrument ids, track and long names, compared without
-  case, digits and punctuation, plus a few short names: cello, bass, keys …), else piano; a piano gets a
-  grand staff (the import's left / right hand split) only when the notes don't fit one clef (treble A3-C6 or
-  bass E2-G4). Change it in the Instruments dialog as usual. **Drums**: a Drum Rack (`DrumGroupDevice`) on
+  case, digits and punctuation, plus a few short names: cello, bass, keys …), with its range (notes outside it
+  red, as anywhere in MuseScore); else piano (MuseScore's sound while the track has no MuseScore Link) with no
+  range (0-127, what MuseScore gives an instrument without one), so a synth's notes are never red.
+- **Staves** (the owner, 2026-10-03: "show bass, treble, bass 15mb and treble 15ma staffs whenever there are any
+  notes that fall inside them. they should act as ONE STAFF"): every pitched clip gets four staves braced
+  together, treble 15ma, treble, bass, bass 15mb, each with one clef for the whole clip (the import's clef
+  changes off), and only those with notes on them are shown (Continuous View hides the others: a low bass
+  synth shows bass and bass 15mb, a pad treble and bass, an empty clip treble). A note is drawn on the staff
+  where it needs the fewest ledger lines; where two need as many (middle C on treble or bass, B5 on treble or
+  15ma, D2 on bass or 15mb) on the staff of the chord before it, else the one whose middle line is nearest the
+  clip's median pitch. The notes stay where they are written (cross-staff notation, as Ctrl+Shift+↑/↓ moves
+  a chord), and after every edit (note input, pitch, paste; in the same undo step) each chord is drawn on its
+  band again, so a note never has to be moved between staves. A chord over two bands is split by band into
+  another voice (free for its length: the chord's staff first, then the others), the band with most notes
+  staying; rests of voices 2-4 and those under notes drawn from another staff are hidden (View › Show
+  Invisible off in the tab). Limits: a chord with ties, a tuplet or grace notes, or with no free voice, stays
+  whole on one band; a tie or beam between notes of two bands is drawn across the staves; a staff a chord was
+  moved off shows a gap there (no rest), and a staff can't show more than its four voices. The written and
+  played pitches are the same (octave clefs change only where a note is drawn), so what is sent to Live and
+  played is unchanged. **Drums**: a Drum Rack (`DrumGroupDevice`) on
   the track, or a track named like drum / kit / perc / beat: channel 10 in the file, so the import uses
   MuseScore's drumset (GM pitches: a Drum Rack's C1 = 36 is the kick).
 - **Playback** while editing (the owner, 2026-10-02: "if I edit the clip, playback in musescore plays the
@@ -959,8 +976,11 @@ Tested here:
   mute; delete (removal by id) and a note written in its place (a modification of the same Live note); an added
   note (its tick, length, velocity 100); a shorter note (length only); a tie chain over the bar line (one Live
   note); a chord (only the edited note's id); added ids and undo (the added note removed by its id, a pitch edit
-  undone goes back to Live's pitch); a drum clip (drumset, a snare changed to a clap); names → instruments and
-  the grand staff rule; notes outside the clip never touched; the write packets. clipTabMidi: what the Live
+  undone goes back to Live's pitch); a drum clip (drumset, a snare changed to a clap); names → instruments;
+  clipEditBands: the band staves (low: bass + 15mb, wide: treble + bass, very wide: all four, high: 15ma),
+  no clef changes, no note out of range, nothing sent; a pitch edit over a band border (the other staff, one
+  modification, undo and redo); a chord over two bands split into two voices (nothing sent, then one note's
+  edit); notes outside the clip never touched; the write packets. clipTabMidi: what the Live
   track gets (notes, a key held twice released with the last, no Mixer controllers or programs, the pedals and
   bend once per change, MuseScore's stop releasing only what is down) and the `/ms/midi` packet. linkWatch: one
   notice per loss, none while nothing used the link, one when back; what the notices say.
