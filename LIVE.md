@@ -733,7 +733,10 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   lines stay on Live's beats). Clip time = score time: clip beat *b* is tick *b* × 480, from the clip's time 0,
   bars up to the clip's end (the later of end marker and loop end). The layout mode is set to Continuous View
   before the import, so no page layout ever runs (the importer doesn't set one; tested: one page, one system).
-  Tempo: Live's song tempo (a tempo marking). Time signature: the clip's own.
+  Tempo: Live's song tempo (a tempo marking). Time signature: the clip's own. Every bar numbered.
+  Lengths as Live has them: no "simplify durations" (it made 0.75-beat notes quarters), quantized to a
+  sixteenth, or a 32nd when every start and end is within 1/32 beat of the 32nd grid and one is on an odd 32nd;
+  an end snaps to the grid's nearest point (a humanized length within half a step: no tiny rests). Drums keep it.
 - **Instrument**: from the track's name (MuseScore's instrument ids, track and long names, compared without
   case, digits and punctuation, plus a few short names: cello, bass, keys …), else piano; a piano gets a
   grand staff (the import's left / right hand split) only when the notes don't fit one clef (treble A3-C6 or

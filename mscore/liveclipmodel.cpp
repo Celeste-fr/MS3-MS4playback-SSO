@@ -508,6 +508,36 @@ bool needsGrandStaff(const Clip& clip)
       }
 
 //---------------------------------------------------------
+//   the clip's grid: a sixteenth, or a thirty-second when the clip has notes on its odd 32nds (every start and
+//   end within GRID_TOLERANCE of the 32nd grid, at least one on an odd 32nd); a humanized clip (times off
+//   both grids) gets the sixteenth
+//---------------------------------------------------------
+
+int importGrid(const Clip& clip)
+      {
+      const int g32 = TICKS_PER_BEAT / 8;
+      bool odd = false;
+      bool all32 = true;
+      auto look = [&](double beats) {
+            const double t = beats * TICKS_PER_BEAT;
+            const double k = std::round(t / g32);
+            if (std::abs(t - k * g32) > GRID_TOLERANCE) {
+                  all32 = false;
+                  return;
+                  }
+            if (std::llround(k) % 2 != 0)
+                  odd = true;
+            };
+      for (const LiveNote& n : clip.notes) {
+            if (n.start < 0 || n.start >= clip.end)
+                  continue;
+            look(n.start);
+            look(n.start + n.duration);
+            }
+      return odd && all32 ? g32 : 2 * g32;
+      }
+
+//---------------------------------------------------------
 //   importClip
 //---------------------------------------------------------
 
@@ -546,6 +576,15 @@ MasterScore* importClip(const Clip& clip, QString* error)
             data->trackOpers.searchPickupMeasure.setDefaultValue(false, false);
             data->trackOpers.measureCount2xLess.setDefaultValue(false, false);
             data->trackOpers.doStaffSplit.setDefaultValue(split, false);
+            // the notes as long as Live has them, at the clip's grid (the owner, 2026-10-02: 0.75-beat notes are
+            // dotted eighths and a sixteenth rest, not quarters): no "simplify durations" (it lengthens a note over
+            // a rest after it when that takes fewer symbols), the grid as the quantization (ends snap to its
+            // nearest point: a humanized length within half a step of it is read as that). Drums keep it: a
+            // drum hit's length means nothing, the import shortens it and leaves out the rests
+            data->trackOpers.simplifyDurations.setDefaultValue(clip.drums, false);
+            data->trackOpers.quantValue.setDefaultValue(importGrid(clip) == TICKS_PER_BEAT / 8
+                                                        ? MidiOperations::QuantValue::Q_32
+                                                        : MidiOperations::QuantValue::Q_16, false);
             data->forcedInstrument = templ;
       }
 
@@ -575,6 +614,11 @@ MasterScore* importClip(const Clip& clip, QString* error)
             return nullptr;
             }
       score->setLayoutMode(LayoutMode::LINE);
+      // every bar numbered (the owner, 2026-10-02), the first one too: one long line has no system starts
+      score->style().set(Sid::showMeasureNumber, true);
+      score->style().set(Sid::showMeasureNumberOne, true);
+      score->style().set(Sid::measureNumberInterval, 1);
+      score->style().set(Sid::measureNumberSystem, false);
       score->setImportedFilePath(QString());            // (not a MIDI file: no MIDI import panel)
       QString title = clip.track.isEmpty() ? clip.name : clip.track + " › " + clip.name;
       title.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");

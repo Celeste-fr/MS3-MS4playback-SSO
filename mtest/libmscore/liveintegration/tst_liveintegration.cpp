@@ -36,6 +36,7 @@
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/tempo.h"
 #include "libmscore/measure.h"
+#include "libmscore/measurenumber.h"
 #include "libmscore/rest.h"
 #include "libmscore/tie.h"
 #include "libmscore/staff.h"
@@ -75,6 +76,10 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEditDeleteAndAdd();
       void clipEditLengthAndMove();
       void clipEditTieChain();
+      void clipEditDottedLengths();
+      void clipEditHumanizedLengths();
+      void clipEditAddTie();
+      void clipEditRemoveTie();
       void clipEditChord();
       void clipEditUndoAndIds();
       void clipEditDrums();
@@ -1106,6 +1111,13 @@ void TestLiveIntegration::clipEditImport()
       QCOMPARE(score->lastMeasure()->endTick().ticks(), 12 * 480);     // up to the clip's end
       QCOMPARE(score->firstMeasure()->timesig(), Fraction(4, 4));
       QCOMPARE(qRound(score->tempomap()->tempo(0) * 60), 96);
+      // every bar numbered, the first too
+      QVERIFY(score->styleB(Sid::showMeasureNumber));
+      QVERIFY(score->styleB(Sid::showMeasureNumberOne));
+      QCOMPARE(score->styleI(Sid::measureNumberInterval), 1);
+      QVERIFY(!score->styleB(Sid::measureNumberSystem));
+      for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
+            QVERIFY2(m->noText(0) && m->noText(0)->visible(), qPrintable(QString("bar %1").arg(m->no() + 1)));
       // quantized in the notation, each note found with its Live note
       const std::vector<Sig> sigs = signatures(score);
       QCOMPARE(int(sigs.size()), 6);
@@ -1329,6 +1341,201 @@ void TestLiveIntegration::clipEditTieChain()
       QCOMPARE(int(d.ops.size()), 1);
       QCOMPARE(d.ops[0].id, 2);
       QCOMPARE(d.ops[0].mask, int(PITCH));
+      delete score;
+      }
+
+// what the first voice of staff 0 shows: (tick, ticks, note pitch or -1 for a rest), up to tick `end`
+static QList<QList<int>> voice0(Score* score, int end)
+      {
+      QList<QList<int>> out;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            if (s->tick().ticks() >= end)
+                  break;
+            Element* e = s->element(0);
+            if (!e)
+                  continue;
+            ChordRest* cr = toChordRest(e);
+            out << QList<int>({ s->tick().ticks(), cr->actualTicks().ticks(),
+                                cr->isChord() ? toChord(cr)->upNote()->pitch() : -1 });
+            }
+      return out;
+      }
+
+static Clip simpleClip(const std::vector<LiveNote>& notes, double end = 4)
+      {
+      Clip c;
+      c.key = "c11";
+      c.track = "Violin";
+      c.name = "Lengths";
+      c.end = end;
+      c.notes = notes;
+      return c;
+      }
+
+void TestLiveIntegration::clipEditDottedLengths()
+      {
+      // the owner, 2026-10-02: three G's 0.75 beat long, each followed by a 0.25-beat gap: dotted eighths and
+      // sixteenth rests (the import's "simplify durations" made them quarters)
+      Clip clip = simpleClip({ ln(1, 67, 0, 0.75, 90), ln(2, 67, 1, 0.75, 90), ln(3, 67, 2, 0.75, 90),
+                               ln(4, 72, 3, 0.5, 90) });
+      QCOMPARE(importGrid(clip), 120);
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QCOMPARE(voice0(score, 1920), QList<QList<int>>({ { 0, 360, 67 }, { 360, 120, -1 }, { 480, 360, 67 }, { 840, 120, -1 },
+                                                          { 960, 360, 67 }, { 1320, 120, -1 },
+                                                          { 1440, 240, 72 }, { 1680, 240, -1 } }));
+      QVERIFY(!noteAt(score, 1440, 72)->chord()->articulations().size());   // (not a staccato quarter)
+      const Baseline b = match(clip, score);
+      QCOMPARE(b.unmatched, 0);
+      for (const Entry& e : b.entries)
+            QCOMPARE(int(e.live.size()), 1);
+      QCOMPARE(b.entries[0].sig.ticks, 360);
+      QVERIFY(diff(b, signatures(score)).empty());        // untouched: nothing written
+      delete score;
+
+      // on 32nds: a 32nd grid (a dotted sixteenth and a 32nd rest)
+      clip = simpleClip({ ln(1, 67, 0, 0.375, 90), ln(2, 67, 0.5, 0.375, 90), ln(3, 69, 1, 1, 90) });
+      QCOMPARE(importGrid(clip), 60);
+      score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QCOMPARE(voice0(score, 960), QList<QList<int>>({ { 0, 180, 67 }, { 180, 60, -1 }, { 240, 180, 67 }, { 420, 60, -1 },
+                                                         { 480, 480, 69 } }));
+      QVERIFY(diff(match(clip, score), signatures(score)).empty());
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditHumanizedLengths()
+      {
+      // humanized (off the grid by up to 0.05 beat): a sixteenth grid, each end at its nearest sixteenth, no tiny rests
+      Clip clip = simpleClip({ ln(1, 67, 0.013, 0.73, 90), ln(2, 67, 1.02, 0.71, 90), ln(3, 67, 1.98, 0.79, 90),
+                               ln(4, 72, 3.03, 0.93, 90) });
+      QCOMPARE(importGrid(clip), 120);
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QCOMPARE(voice0(score, 1920), QList<QList<int>>({ { 0, 360, 67 }, { 360, 120, -1 }, { 480, 360, 67 }, { 840, 120, -1 },
+                                                          { 960, 360, 67 }, { 1320, 120, -1 }, { 1440, 480, 72 } }));
+      Baseline b = match(clip, score);
+      QCOMPARE(b.unmatched, 0);
+      QVERIFY(diff(b, signatures(score)).empty());
+      delete score;
+
+      // the humanized melody: quarters, eighths and a whole note as before (no rests between them)
+      clip = melody();
+      QCOMPARE(importGrid(clip), 120);
+      score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QList<int> lengths;
+      for (const Sig& g : signatures(score))
+            lengths << g.ticks;
+      QCOMPARE(lengths, QList<int>({ 480, 480, 480, 240, 240, 1920 }));
+      for (const QList<int>& cr : voice0(score, 1920))
+            QVERIFY(cr[2] >= 0);
+      QVERIFY(diff(match(clip, score), signatures(score)).empty());
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditAddTie()
+      {
+      // the owner, 2026-10-02: a G half note tied to a G dotted quarter (then an eighth C) stayed two notes in Live.
+      // What MuseScore does: the tie fires playlistChanged (the clip tab writes on it) and the write is the first
+      // G as long as the chain plus the second G removed by id
+      // (in the second bar: not the one with the tempo marking, whose layout marks the playlist dirty anyway)
+      Clip clip = simpleClip({ ln(1, 67, 4, 2, 90), ln(2, 67, 6, 1.5, 90), ln(3, 72, 7.5, 0.5, 90) }, 8);
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      QCOMPARE(int(b.entries.size()), 3);
+      QCOMPARE(b.entries[1].sig.ticks, 720);
+      score->setPlaylistClean();                         // (as after the clip tab's earlier edits)
+      int changed = 0;
+      QObject::connect(score, &Score::playlistChanged, [&changed]() { ++changed; });
+      Note* g = noteAt(score, 1920, 67);
+      QVERIFY(g && !g->tieFor());
+      score->select(g);
+      score->cmdToggleTie();                              // (T: its own command)
+      QVERIFY(g->tieFor());
+      QVERIFY(changed > 0);                               // the clip tab hears of it
+      Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 2);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& x, const Op& y) { return x.id < y.id; });
+      QCOMPARE(int(d.ops[0].kind), int(Op::MODIFY));     // the first G: the chain's length
+      QCOMPARE(d.ops[0].id, 1);
+      QCOMPARE(d.ops[0].mask, int(DURATION));
+      QCOMPARE(d.ops[0].duration, 1680);
+      QCOMPARE(int(d.ops[1].kind), int(Op::REMOVE));     // the second G: gone
+      QCOMPARE(d.ops[1].id, 2);
+      QCOMPARE(liveOf(d.next, 1)->duration, 3.5);
+      QCOMPARE(liveOf(d.next, 1)->start, 4.0);
+      QVERIFY(!liveOf(d.next, 2));
+      // undone: the first G back to 2 beats, the second added again
+      changed = 0;
+      score->undoRedo(true, nullptr);
+      QVERIFY(!g->tieFor());
+      QVERIFY(changed > 0);
+      d = diff(d.next, signatures(score));
+      QCOMPARE(int(d.ops.size()), 2);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& x, const Op& y) { return int(x.kind) < int(y.kind); });
+      QCOMPARE(d.ops[0].id, 1);
+      QCOMPARE(d.ops[0].mask, int(DURATION));
+      QCOMPARE(d.ops[0].duration, 960);
+      QCOMPARE(int(d.ops[1].kind), int(Op::ADD));
+      QCOMPARE(d.ops[1].pitch, 67);
+      QCOMPARE(d.ops[1].start, 2880);
+      QCOMPARE(d.ops[1].duration, 720);
+      delete score;
+
+      // over the bar line: G 2 … 4 tied to G 4 … 6
+      clip = simpleClip({ ln(1, 67, 2, 2, 90), ln(2, 67, 4, 2, 90) }, 8);
+      score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b2 = match(clip, score);
+      g = noteAt(score, 960, 67);
+      QVERIFY(g && !g->tieFor());
+      score->select(g);
+      score->cmdToggleTie();
+      QVERIFY(g->tieFor() && g->tieFor()->endNote()->tick().ticks() == 1920);
+      d = diff(b2, signatures(score));
+      QCOMPARE(int(d.ops.size()), 2);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& x, const Op& y) { return x.id < y.id; });
+      QCOMPARE(d.ops[0].id, 1);
+      QCOMPARE(d.ops[0].mask, int(DURATION));
+      QCOMPARE(d.ops[0].duration, 1920);
+      QCOMPARE(int(d.ops[1].kind), int(Op::REMOVE));
+      QCOMPARE(d.ops[1].id, 2);
+      delete score;
+      }
+
+void TestLiveIntegration::clipEditRemoveTie()
+      {
+      // one Live note over the bar line (3 … 5): a tie chain; its tie removed: two notes, the Live note shortened
+      // to the first and the second added
+      Clip clip = simpleClip({ ln(1, 67, 3, 2, 90) }, 8);
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      QCOMPARE(int(b.entries.size()), 1);
+      QCOMPARE(b.entries[0].sig.ticks, 960);
+      Note* g = noteAt(score, 1440, 67);
+      QVERIFY(g && g->tieFor());
+      score->setPlaylistClean();                         // (as after the clip tab's earlier edits)
+      int changed = 0;
+      QObject::connect(score, &Score::playlistChanged, [&changed]() { ++changed; });
+      score->select(g);
+      score->cmdToggleTie();
+      QVERIFY(!g->tieFor());
+      QVERIFY(changed > 0);
+      Diff d = diff(b, signatures(score));
+      QCOMPARE(int(d.ops.size()), 2);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& x, const Op& y) { return int(x.kind) < int(y.kind); });
+      QCOMPARE(int(d.ops[0].kind), int(Op::MODIFY));
+      QCOMPARE(d.ops[0].id, 1);
+      QCOMPARE(d.ops[0].mask, int(DURATION));
+      QCOMPARE(d.ops[0].duration, 480);
+      QCOMPARE(int(d.ops[1].kind), int(Op::ADD));
+      QCOMPARE(d.ops[1].pitch, 67);
+      QCOMPARE(d.ops[1].start, 1920);
+      QCOMPARE(d.ops[1].duration, 480);
+      QCOMPARE(int(d.added.size()), 1);
       delete score;
       }
 

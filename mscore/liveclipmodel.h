@@ -189,6 +189,10 @@ QByteArray midiFile(const Clip& clip);
 QString instrumentForTrack(const QString& trackName);
 // a piano clip needs a grand staff when it doesn't fit one clef
 bool needsGrandStaff(const Clip& clip);
+// the import's grid in ticks: 120 (a sixteenth), or 60 (a thirty-second) when the clip's notes are on 32nds (every
+// start and end within GRID_TOLERANCE ticks of that grid, at least one on an odd 32nd)
+constexpr int GRID_TOLERANCE = TICKS_PER_BEAT / 32;
+int importGrid(const Clip& clip);
 // a new score of the clip, in Continuous View, not laid out as pages at any time (nullptr: error)
 MasterScore* importClip(const Clip& clip, QString* error);
 
