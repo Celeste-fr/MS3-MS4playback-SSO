@@ -40,6 +40,7 @@
 #include "libmscore/rest.h"
 #include "libmscore/tie.h"
 #include "libmscore/staff.h"
+#include "mscore/liveclipedit.h"
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
 #include "audio/midi/event.h"
@@ -87,6 +88,9 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEditInstrument();
       void clipEditOutside();
       void clipEditPackets();
+      void clipTitleUnnamed();
+      void clipTabClean();
+      void clipTabAudible();
       void clipEnvelopeMapping();
       void laneTimeAxis();
       void liveParamLanes();
@@ -1729,6 +1733,150 @@ void TestLiveIntegration::clipEditPackets()
       QCOMPARE(address, QString("/ms/clip/ops"));
       QCOMPARE(args.size(), 3 + 8 * 8);
       QCOMPARE(args[3 + 1].toInt(), 1032);
+      }
+
+//---------------------------------------------------------
+//   clipTitleUnnamed
+//    an unnamed clip's tab and window title (the owner, 2026-10-03: "35-BuzzWave ›" with nothing after it): "(clip)"
+//    until the device says where it is, then its session slot (shown from 1) or "arrangement clip"
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTitleUnnamed()
+      {
+      Clip clip = melody("35-BuzzWave");
+      QCOMPARE(clipTitle(clip), QString("35-BuzzWave › Idea"));
+      QCOMPARE(clipTitle(clip, 2), QString("35-BuzzWave › Idea"));      // (a name wins)
+      clip.name = QString();
+      QCOMPARE(clipLabel(clip), QString("(clip)"));
+      QCOMPARE(clipTitle(clip), QString("35-BuzzWave › (clip)"));
+      QCOMPARE(clipTitle(clip, 2), QString("35-BuzzWave › session slot 3"));
+      QCOMPARE(clipTitle(clip, ARRANGEMENT), QString("35-BuzzWave › arrangement clip"));
+      clip.name = "  ";
+      QCOMPARE(clipLabel(clip, 0), QString("session slot 1"));
+      clip.name = "a/b: c?";
+      QCOMPARE(clipTitle(clip), QString("35-BuzzWave › a_b_ c_"));
+      clip.name = QString();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      QCOMPARE(score->fileInfo()->completeBaseName(), QString("35-BuzzWave › (clip)"));
+      QCOMPARE(score->title(), QString("35-BuzzWave › (clip)"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipTabClean
+//    a clip tab shows no '*' while it is in sync with Live (liveclipedit.h; the owner, 2026-10-03): clean when
+//    opened, dirty from an edit until Live confirms the write, clean again then; undo still works (dirty, written,
+//    clean); a conflict leaves it dirty
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTabClean()
+      {
+      using namespace Ms::LiveIntegration;
+      LiveClipEditor* ed = LiveClipEditor::instance();
+      Clip clip = melody();
+      clip.key = "c901";
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      Note* first = noteAt(score, 0, 67);
+      QVERIFY(first);
+      score->startCmd();                                // (an undo step before the editing starts)
+      score->undoChangePitch(first, 66, first->tpc1() - 7, first->tpc2() - 7);
+      score->endCmd();
+      QVERIFY(score->dirty());
+      clip.notes[0].pitch = 66;                         // (Live has it so)
+      ed->edit(clip, score);
+      QVERIFY(ed->isClipScore(score));
+      QVERIFY(ed->inSync(score));
+      QVERIFY(!score->dirty());                         // as read from Live: no '*'
+      QVERIFY(score->undoStack()->canUndo());           // (the undo steps stay)
+
+      // an edit: dirty until the write is confirmed
+      Note* n = noteAt(score, 480, 69);
+      QVERIFY(n);
+      score->startCmd();
+      score->undoChangePitch(n, 68, n->tpc1() - 7, n->tpc2() - 7);
+      score->endCmd();
+      QVERIFY(score->dirty());
+      QVERIFY(!ed->inSync(score));                      // (waiting for the debounce)
+      QTest::qWait(500);
+      QCOMPARE(int(ed->state(score)), int(LiveClipEditor::State::SENDING));
+      QVERIFY(score->dirty());
+      QVERIFY(!ed->inSync(score));
+      ed->received("/live/clip/written", { clip.key, 1, "ok", 1234 });
+      QCOMPARE(int(ed->state(score)), int(LiveClipEditor::State::SYNC));
+      QVERIFY(ed->inSync(score));
+      QVERIFY(!score->dirty());
+      QVERIFY2(ed->statusText(score).startsWith("Live clip Violin › Idea: in sync"), qPrintable(ed->statusText(score)));
+
+      // undo: dirty, written, clean; the undone pitch is in Live
+      QVERIFY(score->undoStack()->canUndo());
+      score->undoRedo(true, nullptr);
+      score->update();                                  // (the next update says the playlist changed)
+      QVERIFY(score->dirty());
+      QVERIFY(noteAt(score, 480, 69));
+      QTest::qWait(500);
+      QCOMPARE(int(ed->state(score)), int(LiveClipEditor::State::SENDING));
+      QVERIFY(score->dirty());
+      ed->received("/live/clip/written", { clip.key, 2, "ok", 1235 });
+      QVERIFY(!score->dirty());
+      QVERIFY(score->undoStack()->canRedo());
+
+      // a conflict: stays dirty
+      n = noteAt(score, 480, 69);
+      QVERIFY(n);
+      score->startCmd();
+      score->undoChangePitch(n, 70, n->tpc1() + 7, n->tpc2() + 7);
+      score->endCmd();
+      QTest::qWait(500);
+      ed->received("/live/clip/written", { clip.key, 3, "conflict", 999 });
+      QCOMPARE(int(ed->state(score)), int(LiveClipEditor::State::CONFLICT));
+      QVERIFY(!ed->inSync(score));
+      QVERIFY(score->dirty());
+      QVERIFY(ed->statusText(score).contains("conflict"));
+      QVERIFY(ed->statusDetails(score).contains("Reload from Live"));
+
+      ed->scoreClosed(score);
+      QVERIFY(!ed->isClipScore(score));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipTabAudible
+//    a clip tab playing through its Live track asks the device to make the track audible (liveclipedit.h; the
+//    owner, 2026-10-03, option A): /ms/cliptab/audible 1 <track> at Play and each second while playing (the device's
+//    heartbeat), 0 <track> at Stop or when it plays through another track; tools/live/test/test_cliptab.js has the
+//    device's side
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTabAudible()
+      {
+      using namespace Ms::LiveIntegration;
+      LiveClipEditor* ed = LiveClipEditor::instance();
+      QStringList sent;
+      LiveClipEditor::setSendHook([&sent](const QByteArray& p) {
+            QString address;
+            QVariantList args;
+            if (LiveClips::parseOsc(p, &address, &args) && address == "/ms/cliptab/audible")
+                  sent << QString("%1 %2").arg(args.value(0).toInt()).arg(args.value(1).toInt());
+            });
+      ed->setAudible(42);
+      QCOMPARE(sent, QStringList({ "1 42" }));
+      QCOMPARE(ed->audible(), 42);
+      ed->setAudible(42);                               // (unchanged: nothing more than the heartbeat)
+      QCOMPARE(sent.size(), 1);
+      ed->audibleBeat();                                // the heartbeat (each second while audible)
+      QCOMPARE(sent, QStringList({ "1 42", "1 42" }));
+      sent.clear();
+      ed->setAudible(43);                               // another track: the first as it was, then the new one
+      QCOMPARE(sent, QStringList({ "0 42", "1 43" }));
+      sent.clear();
+      ed->setAudible(0);                                // Stop
+      QCOMPARE(sent, QStringList({ "0 43" }));
+      ed->audibleBeat();
+      QCOMPARE(sent.size(), 1);                         // (no heartbeat after)
+      QCOMPARE(ed->audible(), 0);
+      LiveClipEditor::setSendHook(nullptr);
       }
 
 //---------------------------------------------------------

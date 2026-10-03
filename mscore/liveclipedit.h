@@ -21,7 +21,8 @@
 //     The same clip again: its tab comes to the front (read again if it changed in Live).
 //   - A clip score is marked here only (a property of this object, not of the file): saving it gives
 //     an ordinary score; closing its tab ends the editing (/ms/clip/close); an unsaved one closes
-//     without asking.
+//     without asking. Its tab shows '*' only while edits aren't in Live yet (inSync); an unnamed clip is named by
+//     its place (clipLabel). The status line is short and cut to its room (ElidedLabel), the details in its tooltip.
 //   - Each edit (the score's playlistChanged, 300 ms after the last, not in the middle of a command)
 //     is diffed against the baseline and the operations are sent (/ms/clip/write + ops); one write at
 //     a time, confirmed by /live/clip/written with the ids of the added notes, sent again (same write
@@ -49,12 +50,14 @@
 //     (/ms/clip/adopt with its last known hash), and edits made meanwhile are written.
 //---------------------------------------------------------
 
+#include <functional>
 #include <map>
 #include <set>
 
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 
 #include "liveclipmodel.h"
@@ -98,6 +101,7 @@ class LiveClipEditor : public QObject {
             int writes { 0 };                   // confirmed writes
             int notesChanged { 0 };             // notes modified, removed and added in Live so far
             QString error;
+            int place { LiveClipEdit::NO_PLACE };   // the session slot, ARRANGEMENT or not known (/live/clip/where)
             // playback through the clip's Live track
             int trackId { 0 };                  // the track's LOM id (0: not known yet: an older device)
             bool copy { false };                // a MuseScore Link copy (protocol 4+) is on it
@@ -125,6 +129,12 @@ class LiveClipEditor : public QObject {
       std::map<QString, Session> _sessions;     // by the device's clip key
       std::map<QString, LiveClipEdit::Clip> _incoming;
       std::set<QString> _dirty;
+      QString _flushing;                        // (the clip being written by flush())
+      int _audible { 0 };                       // the Live track made audible for MuseScore's playback (0: none)
+      bool _playing { false };
+      bool _seqConnected { false };
+      QTimer* _audibleBeat { nullptr };
+      void updateAudible();
       std::set<const MasterScore*> _replaced;   // tabs being replaced by a reload (closed without asking)
       QTimer* _debounce { nullptr };
       QTimer* _poll { nullptr };
@@ -147,6 +157,10 @@ class LiveClipEditor : public QObject {
       void writeEnvelopes(const QString& key);
       void envWritten(const QString& key, int write, const QString& status, qint32 hash);
       void updateStatus();
+      void statusParts(const MasterScore* score, QStringList* parts, QStringList* details) const;
+      bool inSync(const QString& key, const Session& s) const;
+      void updateClean(const QString& key);
+      void retitle(Session& s);
       void updateRouting();
       int _routed { -1 };                       // the track the sequencer was last given (-1: never)
 
@@ -175,14 +189,29 @@ class LiveClipEditor : public QObject {
       void scoreClosed(MasterScore* score);
       void setCurrentScore(MasterScore* score);
       void reload(MasterScore* score);
+      // a clip read from Live, edited in score from now on (opened() with the imported score; the tests)
+      void edit(const LiveClipEdit::Clip& clip, MasterScore* score);
+      // the status line: short (the status bar; cut to its room), and the details (its tooltip)
       QString statusText(const MasterScore* score) const;
+      QString statusDetails(const MasterScore* score) const;
+      // a clip tab shows no '*' (its undo stack marked clean) while it is in sync with Live: every edit written
+      // and confirmed, the envelopes too (the owner, 2026-10-03: edits are in Live as they are made, the '*'
+      // only nagged to save); '*' while an edit waits, is being written or can't be (a conflict, the clip gone,
+      // Live not answering). Undo and redo work as before: an undo makes it dirty and is written like any edit.
+      bool inSync(const MasterScore* score) const;
+      // the clip tab's Live track made audible while MuseScore plays through it (its mute, its groups' mute and the
+      // solo set aside by the device, put back after; LIVE.md › Clip tabs play through Live): 0 none
+      void setAudible(int track);
+      int audible() const { return _audible; }
+      void audibleBeat();                       // (each second while audible: the device's heartbeat)
+      static void setSendHook(std::function<void(const QByteArray&)> hook);    // (the tests: every packet sent)
       State state(const MasterScore* score) const;
       // automation lanes of a clip tab: the Live parameters its lanes can be on (nullptr: none, the reason in
       // envText), and the clip's key; paramsChanged: the device sent a track's parameters
       const std::vector<LiveClipEdit::LiveParam>* liveParams(const Score* score) const;
       QString clipKey(const Score* score) const;
       EnvState envState(const MasterScore* score) const;
-      QString envText(const MasterScore* score) const;
+      QString envText(const MasterScore* score, QString* details = nullptr) const;   // (short; details: the long one)
       void paramsChanged(const QString& key);
       };
 

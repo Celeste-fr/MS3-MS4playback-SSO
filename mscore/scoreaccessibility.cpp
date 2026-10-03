@@ -6,6 +6,7 @@
 #include "musescore.h"
 #include "playpanel.h"
 #include "scoreaccessibility.h"
+#include "elidedlabel.h"
 #include "selectionwindow.h"
 #include "synthcontrol.h"
 
@@ -203,7 +204,7 @@ ScoreAccessibility* ScoreAccessibility::inst = 0;
 ScoreAccessibility::ScoreAccessibility(QMainWindow* mainWindow) : QObject(mainWindow)
       {
       this->mainWindow = mainWindow;
-      statusBarLabel = new QLabel(mainWindow->statusBar());
+      statusBarLabel = new ElidedLabel(mainWindow->statusBar());   // (a long description never widens the window)
       statusBarLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
       mainWindow->statusBar()->addWidget(statusBarLabel);
       }

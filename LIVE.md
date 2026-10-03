@@ -722,15 +722,22 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
    (with the setting on: *Mixer › Advanced Options… › Ableton Live › Edit Live clips in MuseScore*, on by
    default; it only listens on 127.0.0.1). "Live plays the score" and "Play through Live" don't need to be on.
 2. In Live, click the MIDI clip so its notes show in the Clip View (arrangement or session clip).
-3. Press **Edit in MuseScore** on the device (any copy of it). A tab "<track> › <clip>" opens in Continuous View.
-4. Edit as usual. The status bar says "Editing Live clip <track> › <clip>: in sync (n note change(s) sent)".
-   Each edit reaches the clip about 0.3 s later.
+3. Press **Edit in MuseScore** on the device (any copy of it). A tab "<track> › <clip>" opens in Continuous View
+   (an unnamed clip: "<track> › session slot n" or "<track> › arrangement clip"; "(clip)" for the moment before
+   the device says where it is).
+4. Edit as usual. The status bar says "Live clip <track> › <clip>: in sync · n changes sent" (short, cut to the
+   room it has: it never widens the window; the details, e.g. why there are no lanes, in its tooltip). Each edit
+   reaches the clip about 0.3 s later. The tab and the window title show no `*` while the tab is in sync with Live
+   (every edit written and confirmed): `*` only while an edit waits or is being written, or can't be (a
+   conflict, the clip gone, Live not answering). Undo and redo work as always (an undo is written like an edit).
 5. **Play** in MuseScore as usual: the notes sound through the clip's own Live track (its instrument and
    effects: a synth rack, Kontakt …), as long as a MuseScore Link copy is on that track (put one before the
    instrument; the status bar says "add MuseScore Link to the Live track … to hear it there" otherwise, and
    MuseScore's own sounds play). MuseScore's Play, Stop and cursor stay MuseScore's: Live's transport, position
    and clips are not touched, so Live may play or stand still meanwhile. Off: *Mixer › Advanced Options… ›
-   Ableton Live › Clip tabs play through Live (the clip's own track)* (on by default).
+   Ableton Live › Clip tabs play through Live (the clip's own track)* (on by default). A muted track (or one
+   in a muted group, or one silenced by another track's solo) is made audible while MuseScore plays and put
+   back as it was when MuseScore stops (below, **Audible while MuseScore plays**).
 6. Close the tab to stop. *Save* (Ctrl+S) opens no dialog: the status bar says the edits are already in Live and the
    set is saved in Live. An unsaved clip score closes without asking (its edits are in Live already); *Save
    As* makes an ordinary score of it.
@@ -783,7 +790,25 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   is computed (ahead of its output by its buffer), Live plays it after the hop through Max (a few ms, not
   measured in real Live) and its own output buffer; so the sound lags MuseScore's cursor by about Live's output
   latency minus MuseScore's. The clip score is never "the score Live plays" (`LiveClipsLink::setScore` skips it).
+- **Audible while MuseScore plays** (the owner, 2026-10-03, option A: "as long as it returns to the previous state
+  after MuseScore stops playing"): at Play MuseScore sends `/ms/cliptab/audible 1 <track id>`, again each second
+  while it plays (a heartbeat), and `/ms/cliptab/audible 0 <track id>` at Stop, when the tab closes or plays
+  elsewhere, and when MuseScore quits (`LiveClipEditor::setAudible`). The hub (`MuseScoreLink.js` › a clip tab's
+  track audible) sets the track's `mute` (also its Track Activator) and each group track it is in
+  (`Track.group_track`) to 0, and, when another track or return track is soloed and neither this track nor a group
+  it is in is, its `solo` to 1. Each property it changed is kept with its old value and the value set (in the
+  device's Global, so a new hub can put it back). At `0`, after 4 s without a heartbeat (MuseScore gone, the link
+  lost), when the track's copy goes, or when the hub is deleted, each goes back to its old value **only if it
+  still has the value set**: a mute or solo the user changed meanwhile stays as the user set it. The heartbeat
+  sets nothing again. Live's transport, the clip and other tracks' mute are never touched. Solo: Live's
+  *Exclusive Solo* preference is applied by its control surfaces (Ableton's own Remote Scripts un-solo the others
+  when `song.exclusive_solo` is on), not by the LOM's `solo` setter, so the other soloed tracks stay soloed; should
+  Live un-solo one all the same, the device notes it and solos it again at Stop (tested on the stand-in only).
+  An older device ignores the message (the track stays as the user left it).
 - **Marked as a clip editor** in `LiveClipEditor` only (a runtime property): nothing is written into the file.
+  In sync with Live (`LiveClipEditor::inSync`: no edit waiting, none in flight, the envelopes too, no conflict),
+  the score's undo stack is marked clean (`UndoStack::setClean`), so the tab and the window title show no `*`;
+  `Save` still saves (a clip score is "created": it asks for a file name).
 - **The round trip** (`LiveClipEdit::match`, `diff`): after the import each notation note (a tie chain, by its
   first note; grace notes left out) gets the Live note(s) it came from (same pitch, nearest start within a
   beat; two Live notes the import merged share one notation note). Its signature: pitch as played
@@ -899,6 +924,15 @@ correct place, and if not it prompts the user to copy it for them." (`mscore/liv
 ### What is tested, and what only Live can show
 
 Tested here:
+- Clip tabs, 2026-10-03: `tst_liveintegration` clipTabClean (clean when opened even after an earlier undo step,
+  dirty from an edit until `/live/clip/written` ok, clean then; undo: dirty, written, clean, redo still possible; a
+  conflict stays dirty; the short status and its details), clipTitleUnnamed ("(clip)", "session slot n",
+  "arrangement clip", file-name characters), clipTabAudible (`/ms/cliptab/audible` 1 at start, the heartbeat each
+  second, 0 then 1 for another track, 0 at Stop, no heartbeat after); `test_cliptab.js` audible: a muted track
+  un-muted and muted again (the heartbeat setting nothing), muted groups, another track or a return track soloed
+  (this one soloed, the others left; a soloed group: nothing), an exclusive-solo stand-in (the others soloed again
+  at Stop), the user's change during play kept, the heartbeat lost after 4 s, the track's copy or the hub deleted.
+  The status bar under Xvfb: the main window's width unchanged with a very long status message and clip status.
 - The Live helpers: `tst_liveintegration` liveHelpersLibrary (Live 12.4.6's `Library.cfg` from the test VM with the
   user's name replaced, `mtest/libmscore/liveintegration/Library.cfg`; versions newest first, 12.10 > 12.4.6; the
   Documents fallback; OneDrive paths), liveHelpersInstall (missing / different / up to date, the copy, an update of
@@ -971,7 +1005,10 @@ Only real Live can show (to check first):
 - clip tabs through Live: `Patcher.getnamed("msl_in")` in `v8`, `[receive]` renamed by "set", `[forward]` to it
   from another device, `[sprintf msl_m%ld]` + `[prepend send]` making "send msl_m<id>", `[midiout]` of a MIDI
   effect reaching the instrument after it (not recorded), how soon notes arrive (the hop through Max), and no
-  stuck notes when MuseScore stops.
+  stuck notes when MuseScore stops;
+- a clip tab's track made audible: `Track.group_track`, setting `mute` / `solo` from the device (the deferlow
+  thread), solo set by the LOM with *Exclusive Solo* on leaving the others soloed, the Track Activator following
+  `mute`, and setting the LOM from `notifydeleted` when the hub is deleted.
 
 ### Open questions for the owner
 

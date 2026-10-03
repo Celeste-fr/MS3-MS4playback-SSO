@@ -169,5 +169,156 @@ test("nothing of it touches Live's transport, song time, launch or the clip's ma
       assert.deepStrictEqual(transportCalls(s.live), []);
       });
 
+// a clip tab's track audible while MuseScore plays (/ms/cliptab/audible; the owner, 2026-10-03, option A)
+function mutesAndSolos(live) {
+      return live.calls.filter((c) => c[0] === "set" && (c[2] === "mute" || c[2] === "solo"));
+      }
+
+test("audible: a muted track is un-muted while MuseScore plays and muted again at Stop", () => {
+      const s = setUp();
+      s.synth.mute = 1;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.strictEqual(s.synth.mute, 0);
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);       // (the heartbeat: nothing set again)
+      assert.strictEqual(mutesAndSolos(s.live).length, 1);
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.strictEqual(s.synth.mute, 1);
+      assert.strictEqual(s.hub.api.audibleState(), null);
+      // a track not muted: nothing set at all; a stop for another track changes nothing
+      s.live.calls.length = 0;
+      s.hub.message("/ms/cliptab/audible", [1, s.bass.id]);
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.ok(s.hub.api.audibleState());
+      s.hub.message("/ms/cliptab/audible", [0, s.bass.id]);
+      assert.deepStrictEqual(mutesAndSolos(s.live), []);
+      assert.deepStrictEqual(transportCalls(s.live), []);
+      });
+
+test("audible: the group tracks it is in are un-muted too, and muted again after", () => {
+      const s = setUp();
+      const inner = s.live.track("Leads");
+      const outer = s.live.track("Synths");
+      s.synth.group = inner.id;
+      inner.group = outer.id;
+      inner.mute = 1;
+      outer.mute = 1;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.deepStrictEqual([s.synth.mute, inner.mute, outer.mute], [0, 0, 0]);
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.deepStrictEqual([s.synth.mute, inner.mute, outer.mute], [0, 1, 1]);
+      });
+
+test("audible: another track soloed: this one soloed too while playing, the others left soloed; un-soloed after", () => {
+      const s = setUp();
+      s.pad.solo = 1;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.deepStrictEqual([s.synth.solo, s.pad.solo, s.bass.solo], [1, 1, 0]);
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.deepStrictEqual([s.synth.solo, s.pad.solo, s.bass.solo], [0, 1, 0]);
+      // a soloed return track counts too; a soloed group the track is in: nothing to solo
+      const ret = s.live.returnTrack("A-Reverb");
+      s.pad.solo = 0;
+      ret.solo = 1;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.strictEqual(s.synth.solo, 1);
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.deepStrictEqual([s.synth.solo, ret.solo], [0, 1]);
+      const grp = s.live.track("Group");
+      s.synth.group = grp.id;
+      grp.solo = 1;
+      ret.solo = 0;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.strictEqual(s.synth.solo, 0);
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      // no solo anywhere: nothing soloed
+      grp.solo = 0;
+      s.live.calls.length = 0;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.deepStrictEqual(mutesAndSolos(s.live), []);
+      });
+
+test("audible: a Live that un-solos the others (exclusive solo) gets them soloed again at Stop", () => {
+      const s = setUp();
+      s.pad.solo = 1;
+      const tracks = [s.synth, s.bass, s.pad];
+      for (const t of tracks) {                 // (the stand-in made exclusive: soloing a track un-solos every other)
+            let v = t.solo;
+            Object.defineProperty(t, "solo", { get() { return v; }, set(x) {
+                  v = x;
+                  if (x && s.live.exclusive)
+                        for (const o of tracks)
+                              if (o !== t)
+                                    o.solo = 0;
+                  } });
+            }
+      s.pad.solo = 1;
+      s.live.exclusive = true;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.deepStrictEqual([s.synth.solo, s.pad.solo], [1, 0]);
+      s.live.exclusive = false;
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.deepStrictEqual([s.synth.solo, s.pad.solo], [0, 1]);
+      });
+
+test("audible: a change the user makes while MuseScore plays is kept", () => {
+      const s = setUp();
+      s.synth.mute = 1;
+      s.pad.solo = 1;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.deepStrictEqual([s.synth.mute, s.synth.solo], [0, 1]);
+      s.synth.solo = 0;                                             // (the user un-solos it, and mutes it again, in Live)
+      s.synth.mute = 1;
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);       // (the heartbeat sets nothing again)
+      assert.deepStrictEqual([s.synth.mute, s.synth.solo], [1, 0]);
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.deepStrictEqual([s.synth.mute, s.synth.solo, s.pad.solo], [1, 0, 1]);
+      // the user un-mutes it: stays un-muted
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      s.synth.solo = 1;
+      s.hub.message("/ms/cliptab/audible", [0, s.synth.id]);
+      assert.strictEqual(s.synth.mute, 1);
+      assert.strictEqual(s.synth.solo, 0);
+      });
+
+test("audible: MuseScore silent for 4 s (quit, link lost), the track's copy or the hub deleted: put back", () => {
+      const s = setUp();
+      s.synth.mute = 1;
+      s.bass.mute = 1;
+      let t = 1e12;
+      for (const d of [s.hub, s.other])
+            d.call("now = function() { return " + t + "; }");
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.strictEqual(s.synth.mute, 0);
+      t += 3000;
+      s.hub.call("now = function() { return " + t + "; }");
+      s.hub.api.checkAudible();
+      assert.strictEqual(s.synth.mute, 0);                          // (3 s: still playing)
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      t += 4500;
+      s.hub.call("now = function() { return " + t + "; }");
+      s.hub.call("beat()");                                         // (the hub's second)
+      assert.strictEqual(s.synth.mute, 1);
+      assert.strictEqual(s.hub.api.audibleState(), null);
+      // the bass track's copy deleted while playing through it
+      s.other.call("now = function() { return " + t + "; }");
+      s.other.call("beat()");
+      s.hub.message("/ms/cliptab/audible", [1, s.bass.id]);
+      assert.strictEqual(s.bass.mute, 0);
+      s.other.call("notifydeleted()");
+      s.hub.call("beat()");
+      assert.strictEqual(s.bass.mute, 1);
+      // the hub deleted while playing through its own track: put back before it goes
+      s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
+      assert.strictEqual(s.synth.mute, 0);
+      s.hub.call("notifydeleted()");
+      assert.strictEqual(s.synth.mute, 1);
+      // no copy on the track: nothing changed
+      s.pad.mute = 1;
+      const s2 = setUp();
+      s2.pad.mute = 1;
+      s2.hub.message("/ms/cliptab/audible", [1, s2.pad.id]);
+      assert.strictEqual(s2.pad.mute, 1);
+      });
+
 console.log(failures ? failures + " failed" : "all passed");
 process.exitCode = failures ? 1 : 0;

@@ -5,7 +5,7 @@
 //
 //   node fake_live_server.js [--port 9001] [--play-at <s> --play-from <beat> --stop-at <s>] Violin Flute …
 //
-// Editing a Live clip in MuseScore: --edit-clip <track> puts a clip of the owner's ("Idea", 8 beats, a
+// Editing a Live clip in MuseScore: --edit-clip <track> puts a clip of the owner's ("Idea", or --clip-name <name>; 8 beats, a
 // humanized melody with Live-only fields set) on that track and shows it in the Detail View; --edit-at <s>
 // presses the device's Edit in MuseScore button then; --live-change-at <s> changes the clip in "Live" (the
 // first note's velocity), as the owner would while it is edited in MuseScore. --session: the clip in the track's first
@@ -27,7 +27,7 @@ const { FakeLive, loadDevice } = require("./fakelive");
 const argv = process.argv.slice(2);
 let port = 9001, playAt = -1, playFrom = 0, stopAt = -1, quitAt = -1, editAt = -1, liveChangeAt = -1;
 let goneAt = -1, backAt = -1, noCopy = false, gone = false, session = false;
-let editTrack = "";
+let editTrack = "", clipName = "Idea";
 const names = [];
 for (let i = 0; i < argv.length; ++i) {
       if (argv[i] === "--port") port = Number(argv[++i]);
@@ -42,6 +42,7 @@ for (let i = 0; i < argv.length; ++i) {
       else if (argv[i] === "--back-at") backAt = Number(argv[++i]);
       else if (argv[i] === "--no-copy") noCopy = true;
       else if (argv[i] === "--session") session = true;
+      else if (argv[i] === "--clip-name") clipName = argv[++i];
       else names.push(argv[i]);
       }
 
@@ -77,7 +78,7 @@ if (editTrack) {
             live.param(rack, "Cutoff", 0.5, 0, 1);
             live.param(rack, "Drive", 0, 0, 2);
             }
-      editClip = live.clip(t, "Idea", 16, 24);
+      editClip = live.clip(t, clipName, 16, 24);
       if (session) {                        // (the same clip in the first session slot)
             t.clips = t.clips.filter((x) => x !== editClip.id);
             const slot = live.clipSlot(t);

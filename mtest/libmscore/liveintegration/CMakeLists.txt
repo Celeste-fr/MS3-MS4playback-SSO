@@ -8,4 +8,7 @@
 
 set(TARGET tst_liveintegration)
 
+# (MuseScore's app: the clip tabs' LiveClipEditor, which uses the main window)
+set(MTEST_LINK_MSCOREAPP TRUE)
+
 include(${PROJECT_SOURCE_DIR}/mtest/CreateMtestTarget.cmake)

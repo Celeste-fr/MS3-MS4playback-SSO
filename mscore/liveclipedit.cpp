@@ -9,7 +9,9 @@
 //=============================================================================
 
 #include "liveclipedit.h"
+#include "elidedlabel.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -38,6 +40,7 @@ static const char* const SETTING = "liveIntegration/editClips";
 static const char* const PLAY_SETTING = "liveIntegration/clipTabsPlayLive";
 static constexpr int DEBOUNCE_MS  = 300;
 static constexpr int CONFIRM_MS   = 3000;
+static constexpr int AUDIBLE_BEAT_MS = 1000;      // (the device restores after 4 s without one)
 static constexpr int MAX_TRIES    = 3;
 
 static void log(const QString& s)
@@ -103,6 +106,7 @@ void LiveClipEditor::updateRouting()
             _routed = track;
             updateStatus();
             }
+      updateAudible();
       }
 
 void LiveClipEditor::linkChanged()
@@ -166,6 +170,11 @@ LiveClipEditor::LiveClipEditor()
       _poll->setInterval(500);
       connect(_poll, &QTimer::timeout, this, &LiveClipEditor::poll);
       _poll->start();
+      _audibleBeat = new QTimer(this);
+      _audibleBeat->setInterval(AUDIBLE_BEAT_MS);
+      connect(_audibleBeat, &QTimer::timeout, this, &LiveClipEditor::audibleBeat);
+      if (qApp)                                 // (quitting while playing: Live's mute and solo as they were)
+            connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { setAudible(0); });
       }
 
 LiveClipEditor::Session* LiveClipEditor::sessionOf(const Score* score)
@@ -188,9 +197,59 @@ bool LiveClipEditor::unsavedClipScore(const MasterScore* score) const
       return _replaced.count(score) || (isClipScore(score) && score->created());
       }
 
+static std::function<void(const QByteArray&)> sendHook;
+
+void LiveClipEditor::setSendHook(std::function<void(const QByteArray&)> hook)
+      {
+      sendHook = hook;
+      }
+
 void LiveClipEditor::send(const QByteArray& p)
       {
+      if (sendHook)
+            sendHook(p);
       LiveClipsLink::instance()->sendDatagram(p);
+      }
+
+//---------------------------------------------------------
+//   the clip's track audible while MuseScore plays through it (the owner, 2026-10-03, option A: "as long as it
+//   returns to the previous state after MuseScore stops playing"): /ms/cliptab/audible 1 <track> at Play and each
+//   second while playing (the device's heartbeat: silent 4 s, it restores by itself), 0 <track> at Stop, when the
+//   tab or its routing changes, at quit. The device un-mutes (and solos) and puts back (MuseScoreLink.js › audible).
+//---------------------------------------------------------
+
+void LiveClipEditor::setAudible(int track)
+      {
+      if (track == _audible)
+            return;
+      if (_audible) {
+            log(QString("playback: Live track %1 as it was").arg(_audible));
+            send(LiveClips::osc("/ms/cliptab/audible", { 0, _audible }));
+            }
+      _audible = track;
+      if (_audible) {
+            log(QString("playback: Live track %1 audible").arg(_audible));
+            send(LiveClips::osc("/ms/cliptab/audible", { 1, _audible }));
+            _audibleBeat->start();
+            }
+      else
+            _audibleBeat->stop();
+      }
+
+void LiveClipEditor::audibleBeat()
+      {
+      if (_audible)
+            send(LiveClips::osc("/ms/cliptab/audible", { 1, _audible }));
+      }
+
+void LiveClipEditor::updateAudible()
+      {
+      if (seq && !_seqConnected) {
+            _seqConnected = true;
+            connect(seq, &Seq::started, this, [this]() { _playing = true; updateAudible(); });
+            connect(seq, &Seq::stopped, this, [this]() { _playing = false; updateAudible(); });
+            }
+      setAudible(_playing && _routed > 0 ? _routed : 0);
       }
 
 void LiveClipEditor::sendEnv(const QByteArray& p)
@@ -387,32 +446,49 @@ void LiveClipEditor::envWritten(const QString& key, int writeNo, const QString& 
       updateStatus();
       }
 
-QString LiveClipEditor::envText(const MasterScore* score) const
+QString LiveClipEditor::envText(const MasterScore* score, QString* details) const
       {
       const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
       if (!s)
             return QString();
+      QString more;
+      QString text;
       switch (s->env) {
             case EnvState::NONE:
-                  return LiveClipsLink::instance()->deviceProtocol() < PARAMS_PROTOCOL
-                         ? tr("automation lanes: update the MuseScore Link device in Live") : QString();
+                  if (LiveClipsLink::instance()->deviceProtocol() < PARAMS_PROTOCOL) {
+                        text = tr("no lanes (update MuseScore Link)");
+                        more = tr("Automation lanes need a newer MuseScore Link device in Live: update it.");
+                        }
+                  break;
             case EnvState::READING:
-                  return tr("reading the clip's envelopes…");
+                  text = tr("reading envelopes…");
+                  break;
             case EnvState::READY:
                   if (!TrackParams::instance()->params(s->clip.key))
-                        return tr("waiting for the track's parameters");
-                  return s->envInFlight ? tr("writing the envelopes…")
-                                        : s->envWrites ? tr("envelopes in sync (%n write(s))", "", s->envWrites) : QString();
+                        text = tr("waiting for the track's parameters");
+                  else if (s->envInFlight)
+                        text = tr("writing envelopes…");
+                  else if (s->envWrites)
+                        text = tr("envelopes in sync");
+                  break;
             case EnvState::ARRANGEMENT:
-                  return tr("no automation lanes: an arrangement clip has no envelopes Live's API can reach (a session "
-                            "clip has)");
+                  text = tr("no lanes (arrangement clip)");
+                  more = tr("No automation lanes: an arrangement clip has no envelopes Live's API can reach (a session "
+                            "clip has).");
+                  break;
             case EnvState::NO_SCRIPT:
-                  return tr("no automation lanes: the MuseScore Envelopes control surface doesn't answer (install it in "
-                            "Live and choose it in Settings › Tempo & MIDI › Control Surface: LIVE.md)");
+                  text = tr("no lanes (MuseScore Envelopes not set up)");
+                  more = tr("No automation lanes: the MuseScore Envelopes control surface doesn't answer. Install it in "
+                            "Live and choose it in Settings › Tempo & MIDI › Control Surface (LIVE.md).");
+                  break;
             case EnvState::FAILED:
-                  return tr("envelopes: %1").arg(s->envError);
+                  text = tr("envelopes failed");
+                  more = tr("Envelopes: %1").arg(s->envError);
+                  break;
             }
-      return QString();
+      if (details)
+            *details = more;
+      return text;
       }
 
 //---------------------------------------------------------
@@ -509,6 +585,8 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             const bool moved = s.envTrack != track || s.envSlot != slot;
             s.envTrack = track;
             s.envSlot = slot;
+            s.place = slot < 0 || track < 0 ? ARRANGEMENT : slot;
+            retitle(s);                         // (an unnamed clip: named by its place)
             log(QString("clip %1: track %2, %3").arg(key).arg(track).arg(slot < 0 ? QString("arrangement")
                                                                                   : QString("session slot %1").arg(slot)));
             if (slot < 0 || track < 0) {
@@ -620,22 +698,7 @@ void LiveClipEditor::opened(Clip clip)
       if (synti)
             score->setSynthesizerState(synti->state());
       score->updateExpressive(MuseScore::synthesizer("Fluid"));
-      Session s;
-      s.clip = clip;
-      s.score = score;
-      s.base = match(clip, score);
-      applyMutes(s.base, score);             // (Live's muted notes don't play here either)
-      s.liveHash = clip.hash;
-      if (it != _sessions.end()) {
-            s.write = it->second.write;          // (write numbers go on: the device may remember the last)
-            s.trackId = it->second.trackId;      // (the device says it again after the notes)
-            s.copy = it->second.copy;
-            s.copyWas = it->second.copyWas;
-            }
-      _sessions[clip.key] = s;
-      connect(score, &Score::playlistChanged, this, [this, score]() { scoreChanged(score); });
-      log(QString("clip %1 opened: %2 notation notes, %3 Live notes not shown, %4 outside the clip")
-          .arg(clip.key).arg(s.base.entries.size()).arg(s.base.unmatched).arg(s.base.outside));
+      edit(clip, score);
       const int idx = mscore->appendScore(score);
       mscore->setCurrentScoreView(idx);
       if (old) {                                  // read again: the old tab goes (no question: it is replaced)
@@ -647,6 +710,82 @@ void LiveClipEditor::opened(Clip clip)
                   }
             }
       updateStatus();
+      }
+
+void LiveClipEditor::edit(const Clip& clip, MasterScore* score)
+      {
+      auto it = _sessions.find(clip.key);
+      Session s;
+      s.clip = clip;
+      s.score = score;
+      s.base = match(clip, score);
+      applyMutes(s.base, score);             // (Live's muted notes don't play here either)
+      s.liveHash = clip.hash;
+      if (it != _sessions.end()) {
+            s.write = it->second.write;          // (write numbers go on: the device may remember the last)
+            s.trackId = it->second.trackId;      // (the device says it again after the notes)
+            s.copy = it->second.copy;
+            s.copyWas = it->second.copyWas;
+            s.place = it->second.place;
+            }
+      _sessions[clip.key] = s;
+      connect(score, &Score::playlistChanged, this, [this, score]() { scoreChanged(score); });
+      log(QString("clip %1 opened: %2 notation notes, %3 Live notes not shown, %4 outside the clip")
+          .arg(clip.key).arg(s.base.entries.size()).arg(s.base.unmatched).arg(s.base.outside));
+      if (s.place != NO_PLACE)
+            retitle(_sessions[clip.key]);
+      updateClean(clip.key);                  // (as read from Live: nothing to save)
+      }
+
+//---------------------------------------------------------
+//   in sync: no '*'
+//---------------------------------------------------------
+
+bool LiveClipEditor::inSync(const QString& key, const Session& s) const
+      {
+      return s.score && s.state == State::SYNC && !s.inFlight && !s.changedMeanwhile && !_dirty.count(key) && key != _flushing
+             && !s.envInFlight && !s.envChangedMeanwhile && s.env != EnvState::FAILED && !s.score->undoStack()->active();
+      }
+
+bool LiveClipEditor::inSync(const MasterScore* score) const
+      {
+      for (const auto& s : _sessions)
+            if (s.second.score && s.second.score == score)
+                  return inSync(s.first, s.second);
+      return false;
+      }
+
+void LiveClipEditor::updateClean(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || !inSync(key, it->second) || !it->second.score->dirty())
+            return;
+      MasterScore* score = it->second.score;
+      score->undoStack()->setClean();         // (undo and redo stay: an undo is an edit, written like any)
+      if (!mscore || MScore::noGui || mscore->scores().indexOf(score) < 0)
+            return;                           // (not in a tab yet: its tab is made clean)
+      mscore->dirtyChanged(score);            // (the tab's '*')
+      Score* cs = mscore->currentScore();
+      mscore->setWindowModified(cs ? cs->dirty() : false);   // (dirtyChanged set it from this score)
+      }
+
+// an unnamed clip's tab and window title once its place is known (a tab saved meanwhile keeps its file's name)
+void LiveClipEditor::retitle(Session& s)
+      {
+      if (!s.score || !s.score->created() || !s.clip.name.trimmed().isEmpty())
+            return;
+      const QString name = clipTitle(s.clip, s.place) + ".mscz";
+      if (s.score->fileInfo()->fileName() == name)
+            return;
+      s.score->fileInfo()->setFile(name);
+      if (!mscore || MScore::noGui)
+            return;
+      if (mscore->scores().indexOf(s.score) >= 0)
+            mscore->dirtyChanged(s.score);      // (sets the tab's text)
+      Score* cs = mscore->currentScore();
+      mscore->setWindowModified(cs ? cs->dirty() : false);
+      if (cs && cs->masterScore() == s.score)
+            mscore->updateWindowTitle(cs);
       }
 
 //---------------------------------------------------------
@@ -667,8 +806,11 @@ void LiveClipEditor::flush()
       const std::set<QString> keys = _dirty;
       _dirty.clear();
       for (const QString& key : keys) {
+            _flushing = key;                  // (not in sync before both are sent)
             write(key);
             writeEnvelopes(key);
+            _flushing.clear();
+            updateClean(key);                 // (nothing to send: a change Live doesn't have, e.g. a text)
             }
       }
 
@@ -834,57 +976,92 @@ LiveClipEditor::State LiveClipEditor::state(const MasterScore* score) const
       return s ? s->state : State::SYNC;
       }
 
-QString LiveClipEditor::statusText(const MasterScore* score) const
+// the status line's parts: short ones (the status bar) and the long explanations (its tooltip)
+void LiveClipEditor::statusParts(const MasterScore* score, QStringList* parts, QStringList* details) const
       {
       const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
       if (!s)
-            return QString();
-      QString what = tr("Editing Live clip %1 › %2").arg(s->clip.track, s->clip.name);
+            return;
+      const QString what = tr("Live clip %1 › %2").arg(s->clip.track, clipLabel(s->clip, s->place));
       QString state;
       switch (s->state) {
             case State::SYNC:
-                  state = s->notesChanged ? tr("in sync (%n note change(s) sent)", "", s->notesChanged) : tr("in sync");
+                  state = tr("in sync");
+                  if (s->notesChanged)
+                        state += " · " + tr("%n change(s) sent", "", s->notesChanged);
                   break;
             case State::SENDING:
-                  state = tr("%n change(s) being sent", "", int(s->pending.ops.size()));
+                  state = tr("sending %n change(s)", "", int(s->pending.ops.size()));
                   break;
             case State::CONFLICT:
-                  state = tr("conflict: the clip changed in Live; nothing more is written until you reload it");
+                  state = tr("conflict: changed in Live");
+                  *details << tr("Conflict: the clip changed in Live; nothing more is written until you reload it "
+                                 "(Reload from Live).");
                   break;
             case State::RELOADING:
-                  state = tr("reading the clip from Live…");
+                  state = tr("reading from Live…");
                   break;
             case State::GONE:
-                  state = tr("the clip is gone from Live");
+                  state = tr("gone from Live");
+                  *details << tr("The clip is gone from Live (deleted there): edits here are no longer written.");
                   break;
             case State::NO_ANSWER:
-                  state = tr("Live doesn't answer (is the MuseScore Link device loaded?)");
+                  state = tr("Live doesn't answer");
+                  *details << tr("Live doesn't answer: is the MuseScore Link device loaded?");
                   break;
             case State::FAILED:
-                  state = s->error;
+                  state = tr("failed");
+                  *details << s->error;
                   break;
             }
-      QString text = what + ": " + state;
-      const QString env = envText(s->score);
+      *parts << what + ": " + state;
+      QString envMore;
+      const QString env = envText(s->score, &envMore);
       if (!env.isEmpty())
-            text += " · " + env;
-      if (s->base.unmatched || s->base.outside)
-            text += " " + tr("(%n Live note(s) not shown here are left as they are)", "", s->base.unmatched + s->base.outside);
+            *parts << env;
+      if (!envMore.isEmpty())
+            *details << envMore;
+      if (s->base.unmatched || s->base.outside) {
+            const int n = s->base.unmatched + s->base.outside;
+            *parts << tr("%n Live note(s) not shown", "", n);
+            *details << tr("%n Live note(s) not shown here are left as they are.", "", n);
+            }
       // playback
       const LiveClipsLink* link = LiveClipsLink::instance();
       if (!playLiveSetting())
-            return text;                        // (MuseScore's own sounds, as asked)
-      if (!link->deviceAnswers())
-            text += " · " + tr("the connection to Live is lost: MuseScore's own sounds (reconnects by itself)");
-      else if (liveTrack(score))
-            text += " · " + tr("plays through Live's track %1").arg(s->clip.track);
-      else if (link->deviceProtocol() < MIDI_PROTOCOL || !s->trackId)
-            text += " · " + tr("MuseScore's own sounds: the MuseScore Link device in Live is older (update it to play "
-                               "through the track)");
-      else if (!s->copy)
-            text += " · " + tr("add MuseScore Link to the Live track %1 to hear it there (MuseScore's own sounds meanwhile)")
-                    .arg(s->clip.track);
-      return text;
+            return;                             // (MuseScore's own sounds, as asked)
+      if (!link->deviceAnswers()) {
+            *parts << tr("Live link lost: own sounds");
+            *details << tr("The connection to Live is lost: MuseScore's own sounds play (it reconnects by itself).");
+            }
+      else if (liveTrack(score)) {
+            *parts << tr("plays through Live");
+            *details << tr("Plays through Live's track %1.").arg(s->clip.track);
+            }
+      else if (link->deviceProtocol() < MIDI_PROTOCOL || !s->trackId) {
+            *parts << tr("own sounds (update MuseScore Link)");
+            *details << tr("MuseScore's own sounds: the MuseScore Link device in Live is older (update it to play "
+                           "through the track).");
+            }
+      else if (!s->copy) {
+            *parts << tr("own sounds (no MuseScore Link on the track)");
+            *details << tr("Add MuseScore Link to the Live track %1 to hear it there (MuseScore's own sounds meanwhile).")
+                        .arg(s->clip.track);
+            }
+      }
+
+QString LiveClipEditor::statusText(const MasterScore* score) const
+      {
+      QStringList parts, details;
+      statusParts(score, &parts, &details);
+      return parts.join(" · ");
+      }
+
+QString LiveClipEditor::statusDetails(const MasterScore* score) const
+      {
+      QStringList parts, details;
+      statusParts(score, &parts, &details);
+      return details.join("\n");
       }
 
 void LiveClipEditor::setCurrentScore(MasterScore* score)
@@ -897,6 +1074,8 @@ void LiveClipEditor::setCurrentScore(MasterScore* score)
 void LiveClipEditor::updateStatus()
       {
       TrackParams::instance()->touch();         // (the lanes a clip tab offers may have changed)
+      for (const auto& e : _sessions)           // (a write confirmed, the envelopes read: no '*')
+            updateClean(e.first);
       emit statusChanged();
       if (!mscore || MScore::noGui)
             return;
@@ -904,7 +1083,7 @@ void LiveClipEditor::updateStatus()
             _status = new QWidget;
             QHBoxLayout* h = new QHBoxLayout(_status);
             h->setContentsMargins(4, 0, 4, 0);
-            _statusLabel = new QLabel(_status);
+            _statusLabel = new ElidedLabel(_status);    // (cut to its room: never widens the window; the owner, 2026-10-03)
             _reload = new QPushButton(tr("Reload from Live"), _status);
             _reload->setToolTip(tr("Read the clip from Live again, as it is there now. Edits made here and not yet in "
                                    "Live are lost."));
@@ -917,7 +1096,10 @@ void LiveClipEditor::updateStatus()
       _status->setVisible(s != nullptr);
       if (!s)
             return;
-      _statusLabel->setText(statusText(_current));
+      const QString text = statusText(_current);
+      const QString details = statusDetails(_current);
+      _statusLabel->setText(text);
+      _statusLabel->setToolTip(details.isEmpty() ? text : text + "\n\n" + details);
       _reload->setVisible(s->state == State::CONFLICT || s->state == State::FAILED || s->state == State::NO_ANSWER
                           || s->env == EnvState::FAILED);
       }

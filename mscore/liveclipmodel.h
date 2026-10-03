@@ -197,8 +197,17 @@ bool needsGrandStaff(const Clip& clip);
 // start and end within GRID_TOLERANCE ticks of that grid, at least one on an odd 32nd)
 constexpr int GRID_TOLERANCE = TICKS_PER_BEAT / 32;
 int importGrid(const Clip& clip);
-// a new score of the clip, in Continuous View, not laid out as pages at any time (nullptr: error)
+// a new score of the clip, in Continuous View, not laid out as pages at any time (nullptr: error); its file name
+// (the tab, the window title) is clipTitle(clip)
 MasterScore* importClip(const Clip& clip, QString* error);
+// the clip's name in its tab, the window title and the status line: its name; an unnamed one (the owner, 2026-10-03:
+// "35-BuzzWave ›" with nothing after it) by its place: slot the session slot (from 0, shown from 1), ARRANGEMENT
+// an arrangement clip, NO_PLACE not known yet ("(clip)"; the device says where after the notes, /live/clip/where)
+constexpr int NO_PLACE = -2;
+constexpr int ARRANGEMENT = -1;
+QString clipLabel(const Clip& clip, int slot = NO_PLACE);
+// "<track> › <label>", fit for a file name (\ / : * ? " < > | as _)
+QString clipTitle(const Clip& clip, int slot = NO_PLACE);
 
 std::vector<QByteArray> writePackets(const QString& key, int write, const std::vector<Op>& ops);
 

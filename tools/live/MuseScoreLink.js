@@ -30,6 +30,8 @@
 //     instrument (nothing recorded, no arming). The hub tells MuseScore each edited clip's track and whether a
 //     copy of protocol 4+ is on it (/live/clip/track, again when that changes). Live's transport, song time and
 //     clips are never touched for it. /live/bye when the hub goes; /ms/clip/adopt: a new hub takes over a clip.
+//     While MuseScore plays through the track (/ms/cliptab/audible) the hub un-mutes it and its groups and solos it
+//     when others are soloed, and puts each back after (below, "a clip tab's track audible").
 //   - automation lanes of any Live track (protocol 5; /ms/params/ask: all of them again; the owner, 2026-10-02: "the automation display wouldn't only work
 //     for sso, it works for any midi clip"): for each edited clip and each route's track the hub sends the track's
 //     automatable parameters, /live/params key:s hash:i chunk:i chunks:i (d:i p:i name:s min:f max:f quantized:i) × n
@@ -255,6 +257,7 @@ function beat() {
                   send("/live/hello", session, PROTOCOL);
             checkEdits();
             checkRouteParams();
+            checkAudible();
             }
       else
             elect();
@@ -324,6 +327,7 @@ function notifydeleted() {
       delete r[me.key];
       saveRegistry(r);
       if (isHub) {
+            try { restoreAudible(); } catch (e) {}    // (else the next hub does, the heartbeat stale)
             g.hub = null;
             g.hubBeat = 0;
             send("/live/bye", session);           // (MuseScore: the connection lost now, not in 6 s)
@@ -477,6 +481,15 @@ function handle(address, a) {
             delete edits[str(a[0])];
       else if (address === "/ms/clip/adopt")
             adoptEdit(str(a[0]), num(a[1]));
+      else if (address === "/ms/cliptab/audible") {
+            if (num(a[0]))
+                  makeAudible(num(a[1]));
+            else {
+                  var au = audibleState();
+                  if (au && au.track === num(a[1]))
+                        restoreAudible();
+                  }
+            }
       else if (address === "/ms/midi")            // (only with an older patcher: its [route /ms/midi] passes them on)
             messnamed("msl_m" + num(a[0]), num(a[1]), num(a[2]), num(a[3]));
       }
@@ -985,6 +998,128 @@ function copyOn(trackId) {
             if (r[k].track === trackId && (r[k].protocol || 0) >= 4 && now() - r[k].beat < HUB_STALE_MS)
                   return true;
       return false;
+      }
+
+//---------------------------------------------------------
+//   a clip tab's track audible while MuseScore plays through it (the owner, 2026-10-03, option A: "as long as it
+//   returns to the previous state after MuseScore stops playing")
+//   /ms/cliptab/audible 1 <track id>: at MuseScore's Play and each second while it plays. The hub un-mutes the track
+//   (mute is also the Track Activator) and the group tracks it is in, and, when another track (or a return track)
+//   is soloed and neither this track nor a group it is in is, solos this track. Each property changed is kept, with
+//   the value it had and the value set, in the Global (g.audible: a new hub can put it back too).
+//   /ms/cliptab/audible 0 <track id> (MuseScore's Stop, the tab closed or routed elsewhere, MuseScore quitting), no
+//   heartbeat for AUDIBLE_STALE_MS (MuseScore gone, the link lost), the track's copy gone or the hub deleted: each
+//   property put back to the value it had, only where it still has the value set (one the user changed meanwhile is
+//   left as the user set it). Live's transport is never touched.
+//   Solo: Live's "Exclusive Solo" preference is applied by its control surfaces (Ableton's own Remote Scripts un-solo
+//   the other tracks themselves when song.exclusive_solo is on), not by the LOM's solo setter, so setting solo here
+//   leaves the others soloed. Should Live un-solo any all the same, each is kept as changed (1 -> 0) and soloed again
+//   when MuseScore stops. Not yet checked in Live 12.4.6 itself (LIVE.md › Clip tabs play through Live).
+//---------------------------------------------------------
+
+var AUDIBLE_STALE_MS = 4000;
+
+function audibleState() {
+      try { return g.audible ? JSON.parse(g.audible) : null; } catch (e) { return null; }
+      }
+function saveAudible(a) { g.audible = a ? JSON.stringify(a) : ""; }
+
+function lomValue(id, prop) {
+      var o = new LiveAPI("id " + id);
+      return num(o.id) > 0 ? num(o.get(prop)) : NaN;
+      }
+
+// the track's group tracks, the innermost first (Track.group_track; 0 or none: not in a group)
+function groupsOf(trackId) {
+      var out = [];
+      var id = trackId;
+      for (var n = 0; n < 32; ++n) {
+            var t = new LiveAPI("id " + id);
+            if (!(num(t.id) > 0))
+                  break;
+            var gid = ids(t.get("group_track"))[0];
+            if (!gid || out.indexOf(gid) >= 0)
+                  break;
+            out.push(gid);
+            id = gid;
+            }
+      return out;
+      }
+
+// the soloed tracks and return tracks
+function soloedTracks() {
+      var song = new LiveAPI("live_set");
+      var all = ids(song.get("tracks")).concat(ids(song.get("return_tracks")));
+      var out = [];
+      for (var i = 0; i < all.length; ++i)
+            if (lomValue(all[i], "solo") === 1)
+                  out.push(all[i]);
+      return out;
+      }
+
+function makeAudible(trackId) {
+      var a = audibleState();
+      if (a && a.track === trackId) {               // (the heartbeat: nothing set again, a change the user makes stays)
+            a.beat = now();
+            saveAudible(a);
+            return;
+            }
+      if (a)
+            restoreAudible();
+      if (!copyOn(trackId))                          // (MuseScore plays nothing there)
+            return;
+      var changes = [];
+      function change(id, prop, v) {
+            var o = new LiveAPI("id " + id);
+            if (!(num(o.id) > 0))
+                  return;
+            var before = num(o.get(prop));
+            if (before === v)
+                  return;
+            o.set(prop, v);
+            changes.push({ id: id, prop: prop, before: before, set: v });
+            }
+      var chain = [trackId].concat(groupsOf(trackId));
+      for (var i = 0; i < chain.length; ++i)
+            change(chain[i], "mute", 0);
+      var soloed = soloedTracks();
+      var chainSoloed = false;
+      for (var j = 0; j < chain.length; ++j)
+            if (soloed.indexOf(chain[j]) >= 0)
+                  chainSoloed = true;
+      if (soloed.length && !chainSoloed) {
+            change(trackId, "solo", 1);
+            for (var k = 0; k < soloed.length; ++k)  // (un-soloed by Live after all: soloed again at the end)
+                  if (lomValue(soloed[k], "solo") === 0)
+                        changes.push({ id: soloed[k], prop: "solo", before: 1, set: 0 });
+            }
+      saveAudible({ track: trackId, beat: now(), changes: changes });
+      status("MuseScore Link: MuseScore plays through track " + trackId + " (" + changes.length
+             + " mute/solo change(s), put back at Stop)");
+      }
+
+function restoreAudible() {
+      var a = audibleState();
+      if (!a)
+            return;
+      saveAudible(null);
+      for (var i = 0; i < a.changes.length; ++i) {
+            var c = a.changes[i];
+            try {
+                  var o = new LiveAPI("id " + c.id);
+                  if (num(o.id) > 0 && num(o.get(c.prop)) === c.set)
+                        o.set(c.prop, c.before);
+                  }
+            catch (e) {}
+            }
+      status("MuseScore Link: track " + a.track + "'s mute and solo as they were");
+      }
+
+// the hub, each second: MuseScore silent too long, or the track's copy gone
+function checkAudible() {
+      var a = audibleState();
+      if (a && (now() - a.beat > AUDIBLE_STALE_MS || !copyOn(a.track)))
+            restoreAudible();
       }
 
 // a new hub takes over a clip MuseScore edits (the copy that was the hub went): hash as MuseScore knows the notes
@@ -1853,6 +1988,7 @@ if (typeof module !== "undefined")
                          checkEdits: checkEdits, edit: edit, looseTitle: looseTitle, applyParams: applyParams,
                          pollParams: pollParams, restoreSaved: restoreSaved, encodeSaved: encodeSaved, packLane: packLane,
                          unpackLane: unpackLane, flushStores: flushStores,
+                         checkAudible: checkAudible, audibleState: audibleState,
                          decodeSaved: decodeSaved, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
                                         edits: edits, slots: slots, bases: bases, waiting: waiting, prefix: prefix,

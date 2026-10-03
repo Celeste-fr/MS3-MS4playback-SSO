@@ -538,6 +538,28 @@ int importGrid(const Clip& clip)
       }
 
 //---------------------------------------------------------
+//   clipLabel, clipTitle
+//---------------------------------------------------------
+
+QString clipLabel(const Clip& clip, int slot)
+      {
+      if (!clip.name.trimmed().isEmpty())
+            return clip.name;
+      if (slot >= 0)
+            return QObject::tr("session slot %1").arg(slot + 1);
+      if (slot == ARRANGEMENT)
+            return QObject::tr("arrangement clip");
+      return QObject::tr("(clip)");
+      }
+
+QString clipTitle(const Clip& clip, int slot)
+      {
+      QString title = clip.track.isEmpty() ? clipLabel(clip, slot) : clip.track + " › " + clipLabel(clip, slot);
+      title.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
+      return title;
+      }
+
+//---------------------------------------------------------
 //   importClip
 //---------------------------------------------------------
 
@@ -620,9 +642,7 @@ MasterScore* importClip(const Clip& clip, QString* error)
       score->style().set(Sid::measureNumberInterval, 1);
       score->style().set(Sid::measureNumberSystem, false);
       score->setImportedFilePath(QString());            // (not a MIDI file: no MIDI import panel)
-      QString title = clip.track.isEmpty() ? clip.name : clip.track + " › " + clip.name;
-      title.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
-      score->fileInfo()->setFile(title + ".mscz");
+      score->fileInfo()->setFile(clipTitle(clip) + ".mscz");
       score->setMetaTag("workTitle", clip.name);
       score->setMetaTag("originalFormat", QString());
       for (Part* p : score->parts())

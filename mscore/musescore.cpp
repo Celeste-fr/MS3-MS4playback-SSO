@@ -11,6 +11,7 @@
 //=============================================================================
 
 #include "musescore.h"
+#include "elidedlabel.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -1735,7 +1736,7 @@ MuseScore::MuseScore()
       panAction       = getAction("pan");
 
       _statusBar = new QStatusBar;
-      _messageLabel = new QLabel(this);
+      _messageLabel = new ElidedLabel(this);   // (cut to the room it has: a long message never widens the window)
       _statusBar->addWidget(_messageLabel);
       _messageTimer = new QTimer(this);
       _messageTimer->setSingleShot(true);

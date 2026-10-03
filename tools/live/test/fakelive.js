@@ -45,9 +45,15 @@ class FakeLive {
             }
       track(name, props) {
             const t = this.add(Object.assign({ kind: "track", name: name, has_midi_input: 1, clips: [], devices: [],
-                                              inputType: "All Ins", inputChannel: "All Channels",
+                                              inputType: "All Ins", inputChannel: "All Channels", mute: 0, solo: 0,
                                               current_monitoring_state: 1 }, props || {}));
             this.song.tracks.push(t.id);
+            return t;
+            }
+      // a return track (song.return_tracks)
+      returnTrack(name) {
+            const t = this.add({ kind: "track", name: name, has_midi_input: 0, clips: [], devices: [], mute: 0, solo: 0 });
+            (this.song.returns = this.song.returns || []).push(t.id);
             return t;
             }
       device(track, className, name) {
@@ -151,6 +157,8 @@ function liveApiFor(live, deviceId) {
                               return live.idList(o.cues);
                         if (prop === "tracks")
                               return live.idList(o.tracks);
+                        if (prop === "return_tracks")
+                              return live.idList(o.returns || []);
                         return [o[prop]];
                         }
                   if (o.kind === "track") {
@@ -160,6 +168,8 @@ function liveApiFor(live, deviceId) {
                               return live.idList(o.devices);
                         if (prop === "clip_slots")
                               return live.idList(o.slots || []);
+                        if (prop === "group_track")         // (the group it is in; id 0: none)
+                              return ["id", o.group || 0];
                         if (prop === "mixer_device")
                               return ["id", live.mixer(o).id];
                         if (prop === "input_routing_type")
