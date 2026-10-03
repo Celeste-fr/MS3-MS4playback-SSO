@@ -456,7 +456,7 @@ int apply(MasterScore* score, const std::vector<Mark>& want, std::vector<Element
 //   the set file
 //---------------------------------------------------------
 
-static bool near(double a, double b)
+static bool sameTime(double a, double b)
       {
       return std::fabs(a - b) <= std::ldexp(std::max(std::fabs(a), std::fabs(b)), -23);
       }
@@ -473,7 +473,7 @@ bool setHasClip(const LiveSet::Set& set, const QString& track, int trackIndex, c
             if (t.name != track)
                   continue;
             for (const LiveSet::ArrangementClip& c : t.clips)
-                  if (near(c.start, span.start) && near(c.end, span.end))
+                  if (sameTime(c.start, span.start) && sameTime(c.end, span.end))
                         return true;
             }
       return false;
