@@ -75,6 +75,10 @@ endif (MSCORE_OUTPUT_NAME)
 # the Max for Live device for "Live plays the score" (LIVE.md; tools/live/make_device.py writes it)
 if (MINGW OR MSVC)
       install(FILES "${PROJECT_SOURCE_DIR}/tools/live/MuseScore Link.amxd" DESTINATION bin)
+      # Live's Control Surface script for clip envelopes (LIVE.md › Automation lanes in a clip tab): the owner copies
+      # the folder into Documents\Ableton\User Library\Remote Scripts
+      install(DIRECTORY "${PROJECT_SOURCE_DIR}/tools/live/MuseScoreEnvelopes" DESTINATION bin
+              FILES_MATCHING PATTERN "*.py")
 endif (MINGW OR MSVC)
 
 # the measurement double-clicks (Extract / Measure / Scan / Verify SSO … in background.bat): not in the
