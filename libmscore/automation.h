@@ -102,6 +102,18 @@ void setCurvature(Point& p, double k);
 double curvature(const Point& p);
 // a Bézier segment in its box: the y (0-1 of the way to the next value) at time x (0-1)
 double curveAt(double c1x, double c1y, double c2x, double c2y, double x);
+// the curve as straight pieces, the points after (0, 0) up to and including (1, 1), so that the line through
+// them is nowhere further than tolY (box units) from the curve at the same x: de Casteljau halving until the
+// control points are within tolY of their piece's chord (a Bézier lies within its control points' hull, so
+// its distance from the chord does too). Used with tolY = one MIDI step (1/127 of the parameter's range) over
+// the segment's rise: Live's clip envelopes and a Live Set's curves read here
+std::vector<std::pair<double, double>> flattenCurve(double c1x, double c1y, double c2x, double c2y, double tolY);
+
+// the resolution a lane's value is sent at (Lane::events): a MIDI controller's (MIDI 1.0: 7-bit data, 0-127, so
+// 1/127 of the range a step); a plug-in parameter's: the lane's own (its points are kept to 1e-4: pointJson;
+// a VST 3 parameter is a double, Kontakt's automation slots give no step count MuseScore reads)
+constexpr double CC_RESOLUTION = 1.0 / 127;
+constexpr double PARAM_RESOLUTION = 1e-4;
 
 // the time axis (canvas x) of a score laid out in Continuous View, for the lanes (mscore/automationlanes.h): tick -> x
 // anchors (a note's tick: the middle of its note heads; a measure's end: its bar line), x at a tick, the middle
@@ -123,8 +135,10 @@ struct Lane {
       // the value at tick: -1 before the first point
       double valueAt(int tick) const;
       // what to send in [tick1, tick2): the value in force at tick1 (when there is one), then each
-      // point, and along a ramp every stepTicks as far as the value moves by resolution or more
-      std::vector<std::pair<int, double>> events(int tick1, int tick2, int stepTicks, double resolution) const;
+      // point, and along a ramp each tick at which the value, counted in steps of resolution (rounded), changes:
+      // a MIDI controller gets every one of its 128 values a ramp passes, at the tick it reaches it (the
+      // owner's criterion, 2026-10-03: a step whenever the value changes by one MIDI step), no fixed step
+      std::vector<std::pair<int, double>> events(int tick1, int tick2, double resolution) const;
       };
 
 // a hash of points (ticks, values to 1e-4 as written, curves), for pointsHash

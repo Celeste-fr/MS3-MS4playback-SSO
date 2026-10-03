@@ -1341,7 +1341,11 @@ static QByteArray jsonNumber(double v)
 
 // a lane's events packed as MuseScoreLink.js packLane does (the same rule, the same atoms): an event "time value",
 // or a run of m >= 3 evenly spaced steps "-m t1 v1 tm vm vh" on the parabola through v1, vh (step floor((m-1)/2)), vm
-static constexpr double PACK_DV = 0.0015;
+// (PACK_DV: one MIDI step of the parameter's range, Automation::CC_RESOLUTION, the owner's criterion for Live's copy of
+// MuseScore's curves (2026-10-03); PACK_DT: one tick in clip units, LiveClips::UNITS_PER_BEAT / 480: the grid a lane's
+// events sit on)
+static constexpr double PACK_DV = 1.0 / 127;
+static constexpr double PACK_DT = 8;
 static constexpr int PACK_MAX = 4096;
 
 static double runValue(int k, int m, double v1, double vh, double vm)
@@ -1361,21 +1365,59 @@ std::vector<double> packLane(const std::vector<std::pair<int, float>>& ev)
             if (!(tm > t1))
                   return false;
             const double v1 = ev[i].second, vm = ev[j].second, vh = ev[i + size_t((m - 1) / 2)].second;
+            // (the staircase of events i … j at time t: the last event at or before it, as MuseScoreLink.js stairAt)
+            auto stairAt = [&ev, i, j](double t) {
+                  size_t lo = i, hi = j;
+                  while (lo < hi) {
+                        const size_t h = (lo + hi + 1) / 2;
+                        if (ev[h].first <= t)
+                              lo = h;
+                        else
+                              hi = h - 1;
+                        }
+                  return double(ev[lo].second);
+                  };
             for (int k = 1; k < m - 1; ++k) {
                   const double t = std::round(t1 + k * (tm - t1) / (m - 1)), o = ev[i + size_t(k)].second;
-                  if (std::fabs(runValue(k, m, v1, vh, vm) - o) > PACK_DV)
+                  if (std::fabs(runValue(k, m, v1, vh, vm) - o) > PACK_DV / 2)
                         return false;
-                  if (std::fabs(t - ev[i + size_t(k)].first) > 2 && std::fabs(o - double(ev[i + size_t(k) - 1].second)) > PACK_DV)
+                  if (std::fabs(t - ev[i + size_t(k)].first) > PACK_DT && std::fabs(stairAt(t) - o) > PACK_DV / 2)
                         return false;
                   }
             return true;
             };
+      // the longest run from step i (as MuseScoreLink.js lastFit: doubling while it fits, then halving)
+      auto lastFit = [&fits](size_t i, size_t n) -> long {
+            if (n == 0)
+                  return -1;
+            const size_t limit = std::min(n - 1, i + size_t(PACK_MAX) - 1);
+            if (i + 2 > limit || !fits(i, i + 2))
+                  return -1;
+            size_t good = i + 2, bad = limit + 1, step = 1;
+            while (good < limit) {
+                  const size_t c = std::min(limit, good + step);
+                  if (fits(i, c)) {
+                        good = c;
+                        step *= 2;
+                        }
+                  else {
+                        bad = c;
+                        break;
+                        }
+                  }
+            while (bad - good > 1) {
+                  const size_t h = (good + bad) / 2;
+                  if (fits(i, h))
+                        good = h;
+                  else
+                        bad = h;
+                  }
+            return long(good);
+            };
       std::vector<double> out;
       const size_t n = ev.size();
       for (size_t i = 0; i < n;) {
-            long best = -1;
-            for (size_t j = i + 2; j < n && j - i < size_t(PACK_MAX) && fits(i, j); ++j)
-                  best = long(j);
+            const long best = lastFit(i, n);
             if (best >= 0) {
                   const size_t b = size_t(best), m = b - i + 1;
                   out.insert(out.end(), { -double(m), double(ev[i].first), double(ev[i].second), double(ev[b].first),

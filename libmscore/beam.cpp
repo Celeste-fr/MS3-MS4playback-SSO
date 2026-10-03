@@ -392,13 +392,16 @@ void Beam::layout1()
             //
             // determine beam stem direction
             //
+            // all chords moved by more than one staff (a Live clip tab's band staves, mscore/liveclipmodel.h; the
+            // commands move a chord by one): the beam is on that staff, not across staves
+            const bool movedFar = c1 && minMove == maxMove && std::abs(minMove) > 1;
             if (_direction != Direction::AUTO) {
                   _up = _direction == Direction::UP;
                   }
             else {
-                  if (maxMove > 0)            // cross staff beaming down
+                  if (maxMove > 0 && !movedFar)            // cross staff beaming down
                         _up = true;
-                  else if (minMove < 0)
+                  else if (minMove < 0 && !movedFar)
                         _up = false;
                   else if (c1) {
                         Measure* m = c1->measure();
@@ -419,7 +422,7 @@ void Beam::layout1()
                   }
 
             _cross = minMove < maxMove;
-            if (minMove == 1 && maxMove == 1)
+            if ((minMove == 1 && maxMove == 1) || movedFar)
                   setTrack(staffIdx * VOICES + voice());
             else if (c1)
                   setTrack(c1->staffIdx() * VOICES + voice());

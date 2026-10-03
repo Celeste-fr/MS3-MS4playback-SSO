@@ -74,19 +74,17 @@ QByteArray gunzip(const QByteArray& data, QString* error)
 //    segment's box (x: time, y: value, each 0-1 from a to b)
 //---------------------------------------------------------
 
-std::vector<Point> curve(const Point& a, const Point& b, double c1x, double c1y, double c2x, double c2y, int pieces)
+std::vector<Point> curve(const Point& a, const Point& b, double c1x, double c1y, double c2x, double c2y, double tolValue)
       {
       std::vector<Point> out;
-      auto bez = [](double p1, double p2, double t) {
-            const double u = 1 - t;
-            return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;           // p0 0, p3 1
-            };
-      for (int i = 1; i <= pieces; ++i) {
-            const double t = double(i) / pieces;
-            const double x = std::min(1.0, std::max(0.0, bez(c1x, c2x, t)));
-            const double y = bez(c1y, c2y, t);
-            out.push_back({ a.beat + (b.beat - a.beat) * x, a.value + (b.value - a.value) * y });
+      const double rise = std::fabs(b.value - a.value);
+      if (rise <= tolValue) {
+            out.push_back(b);
+            return out;
             }
+      for (const auto& xy : Automation::flattenCurve(c1x, c1y, c2x, c2y, tolValue / rise))
+            out.push_back({ a.beat + (b.beat - a.beat) * std::min(1.0, std::max(0.0, xy.first)),
+                            a.value + (b.value - a.value) * xy.second });
       out.back() = b;
       return out;
       }
@@ -304,7 +302,10 @@ static Envelope resolve(const RawEnvelope& raw, const TrackState& ts)
             const Point p { r.time, r.value };
             if (!pts.empty() && i > 0 && ev[i - 1].curved && ev[i - 1].time > DEFAULT_EVENT_TIME + 1) {
                   const RawEvent& a = ev[i - 1];
-                  for (const Point& q : curve(pts.back(), p, a.c1x, a.c1y, a.c2x, a.c2y))
+                  // (one MIDI step of the range: a clip's CC envelope is in controller values 0-127, a plug-in
+                  // parameter's in Live's 0-1)
+                  const double tol = e.kind == Envelope::Kind::CLIP_CC ? 1.0 : Automation::CC_RESOLUTION;
+                  for (const Point& q : curve(pts.back(), p, a.c1x, a.c1y, a.c2x, a.c2y, tol))
                         pts.push_back(q);
                   }
             else

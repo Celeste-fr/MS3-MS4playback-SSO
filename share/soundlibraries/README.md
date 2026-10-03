@@ -252,15 +252,17 @@ switch value of each articulation. For example:
                   onset="45"/>
   </Instrument>
   ```
-- **Microtones.** `<Tuning method="varispeed" tolerance="0.5" tail="1.5" maxLanes="4"/>`: a plug-in
+- **Microtones.** `<Tuning method="varispeed" [tolerance="…" tail="…" maxLanes="…"]/>`: a plug-in
   that ignores a note's tuning (Kontakt) plays a part's notes on copies of the patch ("lanes"),
   one tuning each. Where the patch has `bend`, a lane's tuning within the range is played by the
-  patch's own pitch bend (sent on the lane's channel before each note, gliding 30 ms for a slurred
-  note), otherwise by playing the copy faster or slower (varispeed, hosted only), which also
+  patch's own pitch bend (sent on the lane's channel before each note, gliding one cent a tick for a
+  slurred note), otherwise by playing the copy faster or slower (varispeed, hosted only), which also
   plays the plug-in's own timing (envelopes, scripts, effects) a little faster or slower (3 % for a quarter tone). Over MIDI out the bends go to
-  the host with the notes. `tolerance` (cents): a note this close to a lane's tuning shares it;
-  `tail` (seconds): how long a lane rings before it can be retuned (or the note's `release`, if
-  longer); `maxLanes`: copies per patch at most. A score can set its own in *View › Sound Library…*.
+  the host with the notes. `tolerance` (cents): a note this close to a lane's tuning shares it
+  (left out: half the smallest gap between two accidentals' values, 0.083); `tail` (seconds): how long a
+  lane rings before it can be retuned (or the note's `release`, if longer; left out: twice the note's
+  `release`, its ring to 60 dB under); `maxLanes`: copies per patch at most (left out: as many as the free
+  memory holds at 245 MB a copy, shared by the score's parts). A score can set its own in *View › Sound Library…*.
 - **Percussion kits.** An `Instrument` with `kit="1"` serves MuseScore's unpitched percussion
   and has no patch of its own. Its extra patches say which key plays each MuseScore drum sound
   (the note's pitch in the drumset): `<Drum pitch="38" key="62" name="Snare hit"/>`, with

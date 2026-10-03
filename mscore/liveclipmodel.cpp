@@ -14,6 +14,7 @@
 #include <functional>
 #include <cmath>
 #include <map>
+#include <set>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -33,6 +34,10 @@
 #include "libmscore/segment.h"
 #include "libmscore/staff.h"
 #include "libmscore/tie.h"
+#include "libmscore/keysig.h"
+#include "libmscore/rest.h"
+#include "libmscore/undo.h"
+#include "libmscore/utils.h"
 #include "libmscore/liveclips.h"
 
 namespace Ms {
@@ -490,21 +495,253 @@ QString instrumentForTrack(const QString& trackName)
       return QString();
       }
 
-bool needsGrandStaff(const Clip& clip)
+//---------------------------------------------------------
+//   the band staves of a clip tab
+//---------------------------------------------------------
+
+int ledgerLines(int pitch, ClefType clef)
       {
-      int lo = 128, hi = -1;
-      for (const LiveNote& n : clip.notes) {
-            if (n.start < 0 || n.start >= clip.end)
-                  continue;
-            lo = std::min(lo, n.pitch);
-            hi = std::max(hi, n.pitch);
+      // the note's line as MuseScore places it (utils.cpp: relStep, absStep with C major's nearest spelling): 0 the
+      // top line, 8 the bottom line of a five-line staff, one step a half space
+      const int line = relStep(absStep(pitch), clef);
+      if (line < 0)
+            return -line / 2;
+      if (line > 8)
+            return (line - 8) / 2;
+      return 0;
+      }
+
+std::vector<int> bandsOf(int pitch)
+      {
+      std::vector<int> out;
+      int best = 1000;
+      for (int b = 0; b < BANDS; ++b) {
+            const int n = ledgerLines(pitch, BAND_CLEFS[b]);
+            if (n < best) {
+                  best = n;
+                  out.clear();
+                  }
+            if (n == best)
+                  out.push_back(b);
             }
-      if (hi < 0)
+      return out;
+      }
+
+// the pitch on a band's middle line
+static int middlePitch(int band)
+      {
+      for (int p = 0; p < 128; ++p)
+            if (relStep(absStep(p), BAND_CLEFS[band]) == 4)
+                  return p;
+      return 60;
+      }
+
+static bool isBandPart(const Part* part)
+      {
+      if (part->nstaves() != BANDS)
             return false;
-      // one clef holds a note two ledger lines outside it: treble A3 … C6 (57-84), bass E2 … G4 (40-67)
-      const bool treble = lo >= 57 && hi <= 84;
-      const bool bass = lo >= 36 && hi <= 67;
-      return !treble && !bass;
+      for (int b = 0; b < BANDS; ++b)
+            if (part->staff(b)->defaultClefType()._concertClef != BAND_CLEFS[b])
+                  return false;
+      return true;
+      }
+
+// the track's chords and rests in [from, to) of the measure: true when only rests that start at or after
+// `from` (or nothing), none in a tuplet: a chord can go there (expandVoice, makeGap)
+static bool voiceFree(Measure* m, int track, const Fraction& from, const Fraction& to)
+      {
+      for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
+            Element* e = seg->element(track);
+            if (!e)
+                  continue;
+            ChordRest* cr = toChordRest(e);
+            const Fraction s = cr->tick();
+            const Fraction end = s + cr->actualTicks();
+            if (end <= from || s >= to)
+                  continue;
+            if (cr->isChord() || s < from || cr->tuplet())
+                  return false;
+            }
+      return true;
+      }
+
+// a chord can be split into others (the same length, in another voice): no ties, tuplet, grace notes
+static bool splittable(const Chord* c)
+      {
+      if (c->tuplet() || !c->graceNotes().empty() || c->isGrace())
+            return false;
+      for (const Note* n : c->notes())
+            if (n->tieFor() || n->tieBack())
+                  return false;
+      return true;
+      }
+
+int assignBands(Score* score)
+      {
+      int changes = 0;
+      for (Part* part : score->parts()) {
+            if (!isBandPart(part))
+                  continue;
+            const int first = part->staff(0)->idx();
+            const int strack = first * VOICES;
+            const int etrack = (first + BANDS) * VOICES;
+
+            // the chords in time order, and the median pitch of their notes
+            std::vector<Chord*> chords;
+            std::vector<int> pitches;
+            for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+                  for (int t = strack; t < etrack; ++t) {
+                        Element* e = seg->element(t);
+                        if (!e || !e->isChord())
+                              continue;
+                        chords.push_back(toChord(e));
+                        for (Note* n : toChord(e)->notes())
+                              pitches.push_back(n->ppitch());
+                        }
+                  }
+            if (chords.empty())
+                  continue;
+            std::sort(pitches.begin(), pitches.end());
+            const int median = pitches[pitches.size() / 2];
+            int nearMedian = 0;
+            for (int b = 1; b < BANDS; ++b)
+                  if (std::abs(middlePitch(b) - median) < std::abs(middlePitch(nearMedian) - median))
+                        nearMedian = b;
+
+            int prev = -1;    // the band of the chord before
+            auto settle = [&](const std::vector<int>& cands) {
+                  if (std::find(cands.begin(), cands.end(), prev) != cands.end())
+                        return prev;
+                  int best = cands.front();
+                  for (int b : cands)
+                        if (std::abs(b - nearMedian) < std::abs(best - nearMedian))
+                              best = b;
+                  return best;
+                  };
+            auto setMove = [&](Chord* c, int band) {
+                  const int move = first + band - c->staffIdx();
+                  if (c->staffMove() != move) {
+                        score->undo(new ChangeChordStaffMove(c, move));
+                        ++changes;
+                        }
+                  for (Chord* g : c->graceNotes())
+                        if (g->staffMove() != move)
+                              score->undo(new ChangeChordStaffMove(g, move));
+                  };
+
+            for (Chord* c : chords) {
+                  // each note's bands (the fewest ledger lines); the chord's: the bands all its notes share
+                  std::vector<std::vector<int>> nb;
+                  std::set<int> common { 0, 1, 2, 3 };
+                  for (Note* n : c->notes()) {
+                        nb.push_back(bandsOf(n->ppitch()));
+                        std::set<int> keep;
+                        for (int b : nb.back())
+                              if (common.count(b))
+                                    keep.insert(b);
+                        common = keep;
+                        }
+                  if (!common.empty()) {
+                        prev = settle(std::vector<int>(common.begin(), common.end()));
+                        setMove(c, prev);
+                        continue;
+                        }
+                  // a chord over two or more bands: each note to its band (a note two bands hold alike: the band
+                  // another note of the chord has, else as above), the band with the most notes stays the chord's
+                  std::set<int> single;
+                  for (const auto& b : nb)
+                        if (b.size() == 1)
+                              single.insert(b.front());
+                  std::map<int, std::vector<Note*>> groups;
+                  for (size_t i = 0; i < nb.size(); ++i) {
+                        int band = -1;
+                        for (int b : nb[i])
+                              if (single.count(b)) {
+                                    band = b;
+                                    break;
+                                    }
+                        groups[band >= 0 ? band : settle(nb[i])].push_back(c->notes()[i]);
+                        }
+                  int keep = groups.begin()->first;
+                  for (const auto& g : groups)
+                        if (g.second.size() > groups[keep].size())
+                              keep = g.first;
+                  if (splittable(c)) {
+                        Measure* m = c->measure();
+                        const Fraction from = c->tick();
+                        const Fraction to = from + c->actualTicks();
+                        for (const auto& g : groups) {
+                              if (g.first == keep)
+                                    continue;
+                              // a free voice: the chord's staff first, then the other band staves
+                              int target = -1;
+                              for (int k = 0; k < BANDS && target < 0; ++k) {
+                                    const int st = k == 0 ? c->staffIdx() : first + ((c->staffIdx() - first + k) % BANDS);
+                                    for (int v = 0; v < VOICES && target < 0; ++v) {
+                                          const int t = st * VOICES + v;
+                                          if (t != c->track() && voiceFree(m, t, from, to))
+                                                target = t;
+                                          }
+                                    }
+                              if (target < 0)
+                                    continue;         // (stays in the chord: shown on the chord's band)
+                              Segment* seg = c->segment();
+                              if (!seg->element(target))
+                                    score->expandVoice(seg, target);
+                              score->makeGap(seg, target, c->actualTicks(), nullptr);
+                              Chord* nc = new Chord(score);
+                              nc->setTrack(target);
+                              nc->setDurationType(c->durationType());
+                              nc->setTicks(c->ticks());
+                              nc->setStaffMove(first + g.first - target / VOICES);
+                              for (Note* n : g.second) {
+                                    Note* nn = new Note(score);
+                                    nn->setTrack(target);
+                                    nn->setNval(n->noteVal(), from);
+                                    nn->setVeloType(n->veloType());
+                                    nn->setVeloOffset(n->veloOffset());
+                                    nn->setPlay(n->play());
+                                    nn->setTuning(n->tuning());
+                                    nc->add(nn);
+                                    score->undoRemoveElement(n);
+                                    }
+                              score->undoAddCR(nc, m, from);
+                              ++changes;
+                              }
+                        }
+                  prev = keep;
+                  setMove(c, keep);
+                  }
+
+            // rests: voice 1's where nothing is drawn on their staff, the others' hidden
+            std::vector<std::vector<std::pair<Fraction, Fraction>>> drawn(BANDS);
+            std::vector<Rest*> rests;
+            for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+                  for (int t = strack; t < etrack; ++t) {
+                        Element* e = seg->element(t);
+                        if (!e)
+                              continue;
+                        ChordRest* cr = toChordRest(e);
+                        if (cr->isRest())
+                              rests.push_back(toRest(cr));
+                        else if (cr->vStaffIdx() >= first && cr->vStaffIdx() < first + BANDS)
+                              drawn[size_t(cr->vStaffIdx() - first)].push_back({ cr->tick(), cr->tick() + cr->actualTicks() });
+                        }
+                  }
+            for (Rest* r : rests) {
+                  bool show = r->voice() == 0;
+                  const Fraction a = r->tick();
+                  const Fraction b = a + r->actualTicks();
+                  for (const auto& iv : drawn[size_t(r->staffIdx() - first)])
+                        if (show && iv.first < b && a < iv.second)
+                              show = false;
+                  if (r->visible() != show) {
+                        r->undoChangeProperty(Pid::VISIBLE, show);
+                        ++changes;
+                        }
+                  }
+            }
+      return changes;
       }
 
 //---------------------------------------------------------
@@ -560,6 +797,65 @@ QString clipTitle(const Clip& clip, int slot)
       }
 
 //---------------------------------------------------------
+//   makeBandStaves: the imported staff becomes treble 15ma, with treble, bass and bass 15mb added below it,
+//   braced; every staff hides while nothing is drawn on it (treble shown in an empty clip); each chord drawn on
+//   its band (assignBands now and at the end of every command)
+//---------------------------------------------------------
+
+void makeBandStaves(MasterScore* score, bool noRange)
+      {
+      Part* part = score->parts()[0];
+      Staff* home = part->staff(0);
+      for (int b = 1; b < BANDS; ++b) {
+            Staff* st = new Staff(score);
+            st->setPart(part);
+            st->setStaffType(Fraction(0, 1), *home->staffType(Fraction(0, 1)));
+            score->undoInsertStaff(st, b, true);
+            }
+      // the key signatures the import gave the first staff, on the others too
+      KeyList km = *home->keyList();
+      for (int b = 1; b < BANDS; ++b) {
+            for (auto i = km.begin(); i != km.end(); ++i) {
+                  const Fraction tick = Fraction::fromTicks(i->first);
+                  Measure* m = score->tick2measure(tick);
+                  if (!m)
+                        continue;
+                  KeySigEvent ke = i->second;
+                  KeySig* ks = new KeySig(score);
+                  ks->setTrack((home->idx() + b) * VOICES);
+                  ks->setKeySigEvent(ke);
+                  Segment* seg = m->getSegment(SegmentType::KeySig, tick);
+                  seg->add(ks);
+                  part->staff(b)->setKey(tick, ke);
+                  }
+            }
+      for (int b = 0; b < BANDS; ++b) {
+            Staff* st = part->staff(b);
+            st->setDefaultClefType(ClefTypeList(BAND_CLEFS[b], BAND_CLEFS[b]));
+            st->setHideWhenEmpty(Staff::HideMode::ALWAYS);
+            st->setShowIfEmpty(b == 1);
+            st->setBarLineSpan(b < BANDS - 1);
+            st->setBracketType(0, BracketType::NO_BRACKET);
+            }
+      home->setBracketType(0, BracketType::BRACE);
+      home->setBracketSpan(0, BANDS);
+      // no instrument named by the track (a synth, a sampler …): no playable range, as MuseScore gives an
+      // instrument whose instruments.xml entry has none (instrtemplate.cpp: 0-127), so no note shows red
+      if (noRange) {
+            Instrument* in = part->instrument();
+            in->setMinPitchA(0);
+            in->setMaxPitchA(127);
+            in->setMinPitchP(0);
+            in->setMaxPitchP(127);
+            }
+      score->setLineHidesEmptyStaves(true);
+      // hidden rests stay hidden (View › Show Invisible off for this score)
+      score->setShowInvisible(false);
+      assignBands(score);
+      score->setEndCmdHook([](Score* s) { assignBands(s); });
+      }
+
+//---------------------------------------------------------
 //   importClip
 //---------------------------------------------------------
 
@@ -583,12 +879,11 @@ MasterScore* importClip(const Clip& clip, QString* error)
       }
 
       // the instrument, and the import's options for a clip: its own beats (no human-performance beat
-      // tracking, which would move the bar lines), no pickup measure, both hands split for a piano whose
-      // range needs a grand staff
+      // tracking, which would move the bar lines), no pickup measure; one staff (no left / right hand split) and
+      // one clef (no clef changes): the band staves below show the notes
       const QString instrumentId = clip.drums ? QString() : instrumentForTrack(clip.track);
       const InstrumentTemplate* templ = clip.drums ? nullptr
                                         : searchTemplate(instrumentId.isEmpty() ? QString("piano") : instrumentId);
-      const bool split = templ && templ->nstaves() > 1 && needsGrandStaff(clip);
       auto& opers = midiImportOperations;
       opers.addNewMidiFile(path);
       {
@@ -597,7 +892,8 @@ MasterScore* importClip(const Clip& clip, QString* error)
             data->trackOpers.isHumanPerformance.setDefaultValue(false, false);
             data->trackOpers.searchPickupMeasure.setDefaultValue(false, false);
             data->trackOpers.measureCount2xLess.setDefaultValue(false, false);
-            data->trackOpers.doStaffSplit.setDefaultValue(split, false);
+            data->trackOpers.doStaffSplit.setDefaultValue(false, false);
+            data->trackOpers.changeClef.setDefaultValue(false, false);
             // the notes as long as Live has them, at the clip's grid (the owner, 2026-10-02: 0.75-beat notes are
             // dotted eighths and a sixteenth rest, not quarters): no "simplify durations" (it lengthens a note over
             // a rest after it when that takes fewer symbols), the grid as the quantization (ends snap to its
@@ -647,6 +943,8 @@ MasterScore* importClip(const Clip& clip, QString* error)
       score->setMetaTag("originalFormat", QString());
       for (Part* p : score->parts())
             p->setPartName(clip.track.isEmpty() ? p->partName() : clip.track);
+      if (!clip.drums && score->parts().size() == 1 && score->nstaves() == 1)
+            makeBandStaves(score, instrumentId.isEmpty());
 
       // the whole clip: bars up to its end, so there is room to write in its empty end
       const int endTick = toTicks(clip.end);
@@ -796,13 +1094,13 @@ std::vector<std::pair<int, double>> envelopeEvents(const std::vector<Automation:
                   if (b.value != a.value)
                         out.push_back({ b.tick, a.value });
                   }
-            else if (a.curved()) {
-                  for (int k = 1; k < ENV_CURVE_STEPS; ++k) {
-                        const double x = double(k) / ENV_CURVE_STEPS;
-                        const int t = a.tick + int(std::lround(x * (b.tick - a.tick)));
-                        const double y = Automation::curveAt(a.c1x, a.c1y, a.c2x, a.c2y, x);
+            else if (a.curved() && std::fabs(b.value - a.value) > 1e-12) {
+                  // (within one MIDI step of the parameter's range, 0-1 here, of the curve)
+                  const double tolY = Automation::CC_RESOLUTION / std::fabs(b.value - a.value);
+                  for (const auto& xy : Automation::flattenCurve(a.c1x, a.c1y, a.c2x, a.c2y, tolY)) {
+                        const int t = a.tick + int(std::lround(xy.first * (b.tick - a.tick)));
                         if (t > out.back().first && t < b.tick)
-                              out.push_back({ t, a.value + (b.value - a.value) * y });
+                              out.push_back({ t, a.value + (b.value - a.value) * xy.second });
                         }
                   }
             }

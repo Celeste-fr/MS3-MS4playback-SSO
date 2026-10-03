@@ -170,7 +170,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   export; crackles / slow loads: memory (Kontakt's preload override at 30 kB).
 
 **Live** (LIVE.md): `libmscore/midisync.h`, `liveset.*` (automation from a set), `liveclips.*` + `mscore/liveclips.*`
-(Live plays the score; carrier notes 114-127), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
+(Live plays the score; carrier notes 114-127), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
 `libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
 `tools/live/test/compare_als_skeleton.py`), `mscore/liveequivalence.*`, `tools/live/` (Max for Live device, Node
 tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Live through the device (`/ms/params`,
@@ -187,7 +187,7 @@ the owner installs it once: LIVE.md › Automation lanes in a clip tab), MuseSco
 (`liveclipedit.cpp` env*). **Live helpers** (`mscore/livehelpers.*`): at startup (and *Install Live helpers…* in the
 Mixer) MuseScore checks Live 12's User Library (its `Library.cfg`) for the device and the script shipped in `bin`
 and offers to install / update them (OneDrive-pinned); the Control Surface choice stays manual (a one-time hint). Session clips only (arrangement clips have no envelopes in Live's API, 12.4.6); curves go
-as 16 straight pieces (Live ignores a breakpoint's curve). Tests: `tools/live/test/test_envelopes.py`,
+as straight pieces within one MIDI step of the curve (Live ignores a breakpoint's curve). Tests: `tools/live/test/test_envelopes.py`,
 `test_envparams.js`, `tst_liveintegration` clipEnvelopeMapping / liveParamLanes / laneTimeAxis.
 
 **Playback verification** (VERIFY.md; checks in `audio/vst3/playbackverify.h`): `--verify-playback`,
@@ -228,11 +228,11 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 68 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-02, legato-level-balance);
+- `tst_soundlibrary`: 69 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-03, numbers-computed);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
-  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 45 (links mscoreapp since 2026-10-03), `tst_keysig` 8, `tst_tuning` 17,
+  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 46 (links mscoreapp since 2026-10-03; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

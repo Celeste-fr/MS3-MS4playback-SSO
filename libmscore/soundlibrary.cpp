@@ -43,6 +43,13 @@
 #include "trill.h"
 #include "tuning.h"
 
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>                // (GlobalMemoryStatusEx: freeMemoryBytes)
+#endif
+
 namespace Ms {
 namespace SoundLib {
 
@@ -396,6 +403,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         lib->laneTail = a.value("tail").toDouble();
                   if (a.hasAttribute("maxLanes"))
                         lib->maxLanes = std::max(1, a.value("maxLanes").toInt());
+                  // (left out: computed, Library::laneTolerance / laneTail / maxLanes)
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Legato") {
@@ -1377,13 +1385,68 @@ std::vector<Route> routes(const Score* score, const Library& library)
 
 const char* laneSettingsMetaTag = "soundLibraryLanes";
 
+double defaultLaneTolerance()
+      {
+      return ScoreTuning::smallestAccidentalGap() / 2;
+      }
+
+double laneRing(const LibInstrument& patch, const Articulation* articulation, const std::vector<const LibInstrument*>& patches)
+      {
+      auto longest = [](const LibInstrument& p) {
+            double r = 0;
+            for (const Articulation& a : p.articulations)
+                  r = std::max(r, a.releaseMs);
+            return r;
+            };
+      double ms = articulation && articulation->releaseMs > 0 ? articulation->releaseMs : longest(patch);
+      if (ms <= 0)
+            for (const LibInstrument* p : patches)
+                  ms = std::max(ms, longest(*p));
+      return ms > 0 ? 2 * ms / 1000.0 : 0.0;          // (T30 extrapolated to 60 dB)
+      }
+
+qint64 freeMemoryBytes()
+      {
+      static const qint64 bytes = [] {
+#if defined(Q_OS_WIN)
+            MEMORYSTATUSEX m;
+            m.dwLength = sizeof(m);
+            return GlobalMemoryStatusEx(&m) ? qint64(m.ullAvailPhys) : qint64(-1);
+#elif defined(Q_OS_LINUX)
+            QFile f("/proc/meminfo");                 // MemAvailable: the kernel's estimate of memory available to start applications
+            if (f.open(QIODevice::ReadOnly))
+                  for (const QByteArray& line : f.readAll().split('\n'))
+                        if (line.startsWith("MemAvailable:"))
+                              return line.mid(13).trimmed().split(' ').value(0).toLongLong() * 1024;
+            return qint64(-1);
+#else
+            return qint64(-1);
+#endif
+            }();
+      return bytes;
+      }
+
+int memoryMaxLanes(qint64 freeBytes, int parts)
+      {
+      if (freeBytes < 0)
+            return 1;                                 // (unknown: no copies beyond the patch itself)
+      return 1 + int(freeBytes / (LANE_COPY_BYTES * std::max(1, parts)));
+      }
+
+int memoryMaxLanes(const Score* score)
+      {
+      return memoryMaxLanes(freeMemoryBytes(), score ? int(score->masterScore()->parts().size()) : 1);
+      }
+
 LaneSettings libraryLaneSettings(const Library& library)
       {
-      // (the map's, unless playback.ini [tuning] sets its own)
+      // (the map's, unless playback.ini [tuning] sets its own; neither: computed, see the Library's fields)
       LaneSettings s;
-      s.tolerance = Playback::value("tuning/tolerance", nullptr, library.laneTolerance);
-      s.tail = Playback::value("tuning/tail", nullptr, library.laneTail);
-      s.maxLanes = int(Playback::value("tuning/maxLanes", nullptr, library.maxLanes));
+      s.tolerance = Playback::value("tuning/tolerance", nullptr, library.laneTolerance >= 0 ? library.laneTolerance
+                                                                                          : defaultLaneTolerance());
+      s.tail = Playback::iniHas("tuning/tail") || library.laneTail >= 0 ? Playback::value("tuning/tail", nullptr, library.laneTail) : -1.0;
+      s.maxLanes = Playback::iniHas("tuning/maxLanes") || library.maxLanes > 0
+                   ? int(Playback::value("tuning/maxLanes", nullptr, library.maxLanes)) : 0;
       return s;
       }
 
@@ -1510,6 +1573,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
       out.count.assign(patches.size(), patches.empty() ? 0 : 1);
       if (patches.empty() || patches[0]->kit)
             return out;
+      if (maxLanes <= 0)
+            maxLanes = memoryMaxLanes(score);
       Score* sc = const_cast<Score*>(score);
       const ScoreTuningScope tuningScope(sc);
       const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
@@ -1526,7 +1591,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             const Note* note;
             int patch;
             double on, off;               // seconds
-            double release;               // its articulation's ring after the end (seconds, 0: unknown or not waited for)
+            double ring;                  // how long its copy rings after its end (seconds: the tail, or laneRing)
             double measured;              // the same, whatever waitForRelease
             double cents;
             bool slurred;                 // under a slur: legato from the note before on its track
@@ -1564,7 +1629,10 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                               }
                         const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
                         const double measured = c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
-                        items.push_back({ note, c ? c.patch : 0, on, off, waitForRelease ? measured : 0.0, measured,
+                        // (the ring: a fixed tail with the release waited for, else the release to 60 dB under)
+                        const double ring = tailSeconds < 0 ? laneRing(*patches[size_t(c ? c.patch : 0)], c ? c.articulation : nullptr, patches)
+                                                            : std::max(tailSeconds, waitForRelease ? measured : 0.0);
+                        items.push_back({ note, c ? c.patch : 0, on, off, ring, measured,
                                           playbackTuning(note), slurred, track });
                         };
                   for (const Chord* g : chord->graceNotes())
@@ -1622,11 +1690,11 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             lane.cents = cents;
             lane.tuned = true;
             // (a release rings up to 2.9 s, SSO's Flautando: retuning the lane before would move its pitch)
-            lane.busyUntil = std::max(lane.busyUntil, it.off + std::max(tailSeconds, it.release));
-            // (one instance: its notes ended, or their measured release rung out; a note not bent: as busyUntil)
-            const double freeAt = !bent ? it.off + std::max(tailSeconds, it.release)
+            lane.busyUntil = std::max(lane.busyUntil, it.off + it.ring);
+            // (one instance: its notes ended, or their measured release (to 30 dB under) rung out; a note not bent: as busyUntil)
+            const double freeAt = !bent ? it.off + it.ring
                                   : mode == OneInstance::AGGRESSIVE ? it.off
-                                  : it.off + (it.measured > 0 ? it.measured : tailSeconds);
+                                  : it.off + (it.measured > 0 ? it.measured : tailSeconds >= 0 ? tailSeconds : it.ring / 2);
             lane.bendFreeAt = std::max(lane.bendFreeAt, freeAt);
             lane.lastOn = it.on;
             lane.lastEnd = it.off;

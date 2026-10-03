@@ -18,6 +18,7 @@
  Definition of Score class.
 */
 
+#include <functional>
 #include <memory>
 
 #include "input.h"
@@ -466,6 +467,10 @@ class Score : public QObject, public ScoreElement {
       QString _importedFilePath;          // file from which the score was imported, or empty
 
       bool _showInvisible         { true  };
+      // not saved: Continuous View hides this score's staves that nothing is drawn on (a Live clip tab,
+      // mscore/liveclipmodel.h), and a function run at the end of every command, inside its undo step
+      bool _lineHidesEmptyStaves  { false };
+      std::function<void(Score*)> _endCmdHook;
       bool _showUnprintable       { true  };
       bool _showFrames            { true  };
       bool _showPageborders       { false };
@@ -815,6 +820,12 @@ class Score : public QObject, public ScoreElement {
       void mapExcerptTracks(QList<int>& l);
 
       bool showInvisible() const       { return _showInvisible; }
+      // Continuous View: a staff with "hide when empty: always" is shown only while a chord is drawn on it (its
+      // own or one moved there, staffMove); a part with none shown shows its staves marked "show if empty"
+      bool lineHidesEmptyStaves() const      { return _lineHidesEmptyStaves; }
+      void setLineHidesEmptyStaves(bool v)   { _lineHidesEmptyStaves = v; }
+      // run by endCmd before its layout when the command changed something; its changes join the command's undo step
+      void setEndCmdHook(std::function<void(Score*)> f) { _endCmdHook = f; }
       bool showUnprintable() const     { return _showUnprintable; }
       bool showFrames() const          { return _showFrames; }
       bool showPageborders() const     { return _showPageborders; }
@@ -1284,6 +1295,7 @@ class Score : public QObject, public ScoreElement {
 
       System* getNextSystem(LayoutContext&);
       void hideEmptyStaves(System* system, bool isFirstSystem);
+      void hideStavesNothingIsDrawnOn(System* system);
       void layoutLyrics(System*);
       void createBeams(LayoutContext&, Measure*);
 
