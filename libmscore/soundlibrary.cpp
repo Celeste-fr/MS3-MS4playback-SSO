@@ -676,14 +676,15 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
                         if (!a.techniques.contains(base))
                               continue;
                         // a short that lasts longer than the note (Short 0'5 for a fast eighth): not this one
-                        // (measured: from where it sounds closer to the note's meant length than the next choice;
-                        // else its sample's length against the written one)
+                        // (measured: from where it sounds closer to the note's meant length than the next choice.
+                        // Without a measured from= a short isn't skipped: the earlier rule, its sample's nominal
+                        // length= against 90 % of the written one, had no source; every SSO short with a length= has
+                        // a from= (numbers-measured, 2026-10-03))
                         // (playback.ini [shorts.from] by patch|articulation: an offset or its own number)
                         const double from = a.fromSeconds > 0
                               ? Playback::adjust("shorts.from", patches[p]->name, a.name, 0, a.fromSeconds) : -1;
                         const double meant = want.byMeantLength ? want.soundSeconds : want.seconds;
-                        if (from > 0 ? (meant > 0 && meant < from)
-                                     : (a.length > 0 && want.seconds > 0 && want.seconds < want.nominalShare * a.length))
+                        if (from > 0 && meant > 0 && meant < from)
                               continue;
                         bool fits = true;
                         for (const QString& m : a.modifiers)
@@ -1794,7 +1795,6 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
       // the same in every family)
       // (playback settings [shorts]: a factor set in playback.ini or the score replaces MS4's for its articulation)
       w.byMeantLength = Playback::on("shorts/byMeantLength", score);
-      w.nominalShare = Playback::value("shorts/nominalShare", score) / 100.0;
       if (seconds > 0) {
             double factor = Ms4::note(Ms4::Family::Strings, arts, 0, false).dur / double(Ms4::HUNDRED);
             const bool stacc = has(Art::Staccato), ten = has(Art::Tenuto);

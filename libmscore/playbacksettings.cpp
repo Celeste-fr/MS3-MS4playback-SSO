@@ -33,8 +33,11 @@ static const double MAP = std::numeric_limits<double>::quiet_NaN();
 // has where each one acts and how it was measured)
 static const std::vector<Definition> DEFINITIONS = {
       // [legato]
-      { "legato/overlapTicks", 30, 0, 480, "ticks (480 a quarter)",
-        "a slurred note lasts this long into the next one (sample libraries' legato needs the overlap)", true },
+      // (measured, numbers-measured 2026-10-03: SSO's 43 Performance patches play a legato transition whenever the note
+      // before ends at most 20 ms before the next note-on, never at 40 ms or more, whatever the overlap; 0 is the smallest
+      // value with every transition: docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
+      { "legato/overlapTicks", 0, 0, 480, "ticks (480 a quarter)",
+        "a slurred note lasts this long into the next one (SSO joins notes up to 20 ms apart: 0 is enough for it)", true },
       { "legato/slurEndOverlap", 0, 0, 1, "on/off",
         "1: a slur's last note overlaps the note after it too (MuseScore 4); 0: it ends on time, so the next note gets its own attack", true },
       { "legato/early", MAP, 0, 200, "%",
@@ -69,8 +72,6 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/staccatissimo", 25, 1, 100, "%", "the same for staccatissimo", true },
       { "shorts/tenuto", 99, 1, 100, "%", "the same for tenuto", true },
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
-      { "shorts/nominalShare", 90, 1, 200, "%",
-        "a short without a measured from= is not chosen for a note under this share of its nominal length (Short 0.5: 0.5 s)", true },
       // [pedal]
       { "pedal/upAfterMs", 40, 0, 1000, "ms",
         "a sound library part's sustain pedal goes up this long after the chord it changes with", true },
@@ -102,12 +103,16 @@ static const std::vector<Definition> DEFINITIONS = {
       // [automation]
       { "automation/stepTicks", 30, 1, 480, "ticks", "an automation ramp is sent as a value every this many ticks", true },
       // [live]
-      { "live/carrierEpsilon", 2, 1, 50, "clip units",
-        "in Live clips a controller carrier note sits this far before the note it belongs to (2: ~0.26 ms at 120 bpm)", true },
+      // (measured in Live 12.4.6: 1 and 0 units keep every carrier before its note; 1 is the smallest the range allows:
+      // LiveClips::EPSILON, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
+      { "live/carrierEpsilon", 1, 1, 50, "clip units",
+        "in Live clips a controller carrier note sits this far before the note it belongs to (1: ~0.13 ms at 120 bpm)", true },
       // [hosting] (global: the hosted plug-ins are the same for every score)
       { "hosting/maxVoices", 512, 0, 4096, "voices",
         "every Kontakt patch MuseScore sets up gets this voice limit (0: the patch's own; MS_KONTAKT_MAX_VOICES wins); also in the Live Set", false },
-      { "hosting/settleSeconds", 1.0, 0, 10, "s",
+      // (measured: a patch's script keeps a parameter set after 1025 frames; 1025 / 22050 Hz, the lowest rate
+      // offered, rounded up to 1 ms: Vst3Plugin::SETTLE_SECONDS, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
+      { "hosting/settleSeconds", 0.047, 0, 10, "s",
         "a patch just loaded runs this long before its controllers are set (its script initialises)", false },
       { "hosting/mixSmoothingMs", 5, 0, 100, "ms", "the Mixer's volume, pan and mute glide over this long (no clicks)", false },
       };
@@ -194,6 +199,10 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
             // (the fast-note ramp, replaced on 2026-10-02 by keepMs, fastShare / fastFullMs and fastTechnique: fast slurs on time)
             if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
                   i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs, fastTechnique; delete the line)").arg(id);
+            // (the nominal short rule, 90 % of length=, had no source; every SSO short with a length= has a measured
+            // from=: removed 2026-10-03, numbers-measured)
+            else if (id == "shorts/nominalShare")
+                  i.warnings << QString("%1 is no longer used (since 2026-10-03: every short with a length= has a measured from=; delete the line)").arg(id);
             else
                   i.warnings << QString("unknown key %1 (ignored)").arg(id);
             return;

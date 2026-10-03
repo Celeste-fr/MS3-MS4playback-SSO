@@ -130,7 +130,7 @@ class MidiRenderer {
       int libLegatoEarly = 0;                                     // SoundLib::legatoEarly, percent (this chunk)
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       // playback settings (libmscore/playbacksettings.h) for this chunk
-      int libOverlapTicks = 30;
+      int libOverlapTicks = 0;           // (playback setting legato/overlapTicks)
       bool libSlurEndOverlap = false;
       // an early start (a legato transition, a held note's onset) after a note on the same patch: that note keeps at
       // least libKeep seconds as played ([legato] keepMs); a transition after a short note: libFastDelay ([legato]

@@ -105,7 +105,12 @@ namespace LiveClips {
 constexpr int PROTOCOL           = 4;         // 2: editing Live clips (mscore/liveclipmodel.h); 3: parameter lanes; 4: clip tabs play through their track
 constexpr int PVALS_PER_PACKET   = 100;       // (time, value) pairs a /ms/pvals
 constexpr int UNITS_PER_BEAT     = 3840;
-constexpr int EPSILON            = 2;         // units: ~0.26 ms at 120 bpm
+// EPSILON measured (numbers-measured, 2026-10-03, Live 12.4.6 on the Windows VM, the MuseScore Link hub writing the
+// clip, Kontakt 8 + SSO Violins 1, frozen): 160 quarters alternating Spiccato / Tremolo, each after its CC32 carrier,
+// rendered alike with the carrier 1 unit before the note (120 and 240 bpm) or 0 units (240 bpm) as with 96 units
+// before it (every note's level envelope within 0.00 dB); 96 units after it changed 157 of 160. Rule: the smallest
+// spacing the setting allows (1) that kept every carrier before its note
+constexpr int EPSILON            = 1;         // units: ~0.13 ms at 120 bpm
 constexpr int NOTES_PER_PACKET   = 48;        // 5 int32 + 5 type tags each: about 1.3 kB a datagram
 constexpr int CUES_PER_PACKET    = 40;
 constexpr int DEFAULT_PORT       = 9001;

@@ -202,7 +202,6 @@ struct Want {
       QStringList modifiers;
       double seconds { -1 };              // the note's written length (noteSeconds); -1: unknown
       bool byMeantLength { true };        // playback setting shorts/byMeantLength: from= against soundSeconds (else seconds)
-      double nominalShare { 0.9 };        // shorts/nominalShare: a nominal length= is skipped for a note under this share
       double soundSeconds { -1 };         // how long it is meant to sound: seconds times MS4's duration factor for its
                                           // articulations (strings: staccato 50 %, staccatissimo 25 %, tenuto 99 %,
                                           // portato their average 74.5 %); <Articulation from> is compared with this

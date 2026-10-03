@@ -39,8 +39,8 @@ using namespace LiveClipEdit;
 static const char* const SETTING = "liveIntegration/editClips";
 static const char* const PLAY_SETTING = "liveIntegration/clipTabsPlayLive";
 static constexpr int DEBOUNCE_MS  = 300;
-static constexpr int CONFIRM_MS   = 3000;
-static constexpr int AUDIBLE_BEAT_MS = 1000;      // (the device restores after 4 s without one)
+static constexpr int CONFIRM_MS   = 3800;         // (measured: liveclips.cpp CONFIRM_MS)
+static constexpr int AUDIBLE_BEAT_MS = 1000;      // (the device restores after 7 s without one: AUDIBLE_STALE_MS)
 static constexpr int MAX_TRIES    = 3;
 
 static void log(const QString& s)

@@ -1307,8 +1307,8 @@ def release(patch, sound, t):
     if rel:
         return int(max(rel))
     return int(t['releaseMs']) if t.get('releaseMs', -1) > 0 else None
-# - from= (seconds) on Short 0.5 / Short 1.0: chosen for a note meant to sound at least this long (else 90 % of
-#   length=, Spitfire's nominal 0.5 / 1.0 s, against the written length). Meant to sound: the written length times
+# - from= (seconds) on Short 0.5 / Short 1.0: chosen for a note meant to sound at least this long (length= is
+#   Spitfire's nominal 0.5 / 1.0 s, for reference). Meant to sound: the written length times
 #   MS4's duration factor for its articulations (the renderer's Want::soundSeconds; ms4tables.h PROFILE, strings:
 #   staccato 50 %, staccatissimo 25 %, tenuto 99 %, a portato the average, 74.5 %; the owner, 2026-10-01: a portato
 #   must stay detached, so not the full written length). Measured (sso_short_lengths.json, the rest check's shorts
@@ -1320,7 +1320,8 @@ def release(patch, sound, t):
 #   Short 0.5 against Spiccato (what a staccato falls back to), Short 1.0 against Short 0.5 (a portato's or tenuto's
 #   next); from= is the meant length from which it is the closer one for every longer note. E.g. Violins 1 Short 0.5
 #   from 0.43 s (a staccato from 0.86 s written), Short 1.0 from 0.71 (a portato from 0.95 s, a tenuto from 0.72);
-#   Violas 0.61 / 1.06; Basses 0.73 / 1.07. Unmeasured patches keep the nominal rule.
+#   Violas 0.61 / 1.06; Basses 0.73 / 1.07. Every short with a length= has one (11 of 11, 2026-10-03); the nominal rule
+#   (90 % of length=, no source) is gone: a short without from= is not skipped by length.
 import bisect
 SHORT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_short_lengths.json')
 SHORT_LENGTHS = json.load(open(SHORT_FILE, encoding='utf-8')) if os.path.exists(SHORT_FILE) else {}

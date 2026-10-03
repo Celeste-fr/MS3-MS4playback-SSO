@@ -227,9 +227,10 @@ switch value of each articulation. For example:
     `legato_levels_from_scan.py`, `sso_legato_levels.json`; `gen_spitfire_sso.py`).
   - `<Onset early="100"/>` (top level): that percent (SSO: 100). A score can set its own in *Mixer ›
     Advanced Options…* ("Held notes early by", metaTag `soundLibraryOnsetEarly`); 0 plays them on the beat.
-  - `length` on an `Articulation` (seconds): how long its sample is (SSO's Short 0.5 / Short 1.0): not
-    chosen for a note whose written length is under 90 % of it; with `from` (seconds): not chosen for
-    a note meant to sound shorter than that instead: its written length times MS4's duration factor
+  - `length` on an `Articulation` (seconds): how long its sample is (SSO's Short 0.5 / Short 1.0), for
+    reference; with `from` (seconds): not chosen for a note meant to sound shorter than that (without a
+    measured `from` a short is not skipped by length: the earlier 90 % of `length` had no source, removed
+    2026-10-03; every SSO short with a `length` has a `from`): its written length times MS4's duration factor
     for its articulations (staccato 50 %, staccatissimo 25 %, tenuto 99 %, portato 74.5 %). SSO's
     `from` is measured: the meant length from which the short's sounding length (the last time it is
     within 10 dB of its peak; the note-off hardly cuts them) is closer to it than what would play

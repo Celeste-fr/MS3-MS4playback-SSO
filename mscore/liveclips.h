@@ -169,7 +169,7 @@ class LiveClipsLink : public QObject {
       void sendDatagramTo(const QByteArray& packet, int port);
       // the route key ("<port>:<channel>") of a part's main patch when the score Live plays is this one (else "")
       QString routeKey(const Part* part) const;
-      bool deviceAnswers() const;                   // a hello within 6 s (either feature)
+      bool deviceAnswers() const;                   // a hello within 8 s (either feature; HELLO_TIMEOUT_MS)
       int deviceProtocol() const { return _deviceProtocol; }
       int port() const { return _port; }
       LinkWatch::Uses uses() const;

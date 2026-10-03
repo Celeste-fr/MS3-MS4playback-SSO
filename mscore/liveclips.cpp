@@ -48,9 +48,17 @@ static constexpr int DEBOUNCE_MS      = 300;
 static constexpr int STEP_BUDGET_MS   = 10;
 static constexpr int PACE_MS          = 15;
 static constexpr int PACKETS_PER_PACE = 8;          // ~ 0.7 MB/s at most
-static constexpr int CONFIRM_MS       = 3000;
+// HELLO_TIMEOUT_MS and CONFIRM_MS measured (numbers-measured, 2026-10-03, Live 12.4.6 on the Windows VM, a listener in
+// MuseScore's place logging the MuseScore Link hub's datagrams, docs/PLAYBACK_SETTINGS.md › Measured by sweeps): while
+// Live froze a Kontakt + SSO track with a 160-note clip (3x), duplicated such a track (2x) and loaded a set, the hub's
+// hellos (every 2 s from its 1 s Task) were at most 6.0 s apart (the owner's rule 7B: the timeout is the longest silence
+// plus one hello period: 8 s; with extra load, 4 heavy probes a second, they reached 8.6 s). Probe answers (the path of
+// MuseScore's own messages) came at most 3.79 s after outside freezes (median 46 ms): CONFIRM_MS, rounded up to 0.1 s
+// (during a freeze Live answers nothing until it ends). MAX_TRIES, DEBOUNCE_MS: not measured (no UDP loss was seen,
+// 0 of 6898 probes on localhost)
+static constexpr int CONFIRM_MS       = 3800;
 static constexpr int MAX_TRIES        = 3;
-static constexpr int HELLO_TIMEOUT_MS = 6000;       // the device says hello every 2 s
+static constexpr int HELLO_TIMEOUT_MS = 8000;       // the device says hello every 2 s
 static constexpr double FOLLOW_TOLERANCE = 0.15;    // seconds MuseScore may be off Live's position before it moves
 
 // MS_LIVE_LOG=1: what the link does, on stderr (tools/live/test/fake_live_server.js)

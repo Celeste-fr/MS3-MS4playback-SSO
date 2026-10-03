@@ -1596,7 +1596,7 @@ void TestSoundLibrary::playbackSettingsIni()
             QVERIFY(Playback::source(d.id) == Playback::Source::DEFAULT);   // (written as the defaults: the defaults)
             }
       QVERIFY(text.contains("[legato]") && text.contains("[hosting]") && text.contains("[legato.delay]"));
-      QCOMPARE(Playback::value("legato/overlapTicks"), 30.0);
+      QCOMPARE(Playback::value("legato/overlapTicks"), 0.0);
       QCOMPARE(Playback::source("legato/overlapTicks"), Playback::Source::DEFAULT);
       // edited by hand: an override, a bad value, an unknown key, one out of range, a table
       QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
@@ -1621,7 +1621,7 @@ void TestSoundLibrary::playbackSettingsIni()
       Playback::setIniPath(path);
       QCOMPARE(Playback::value("legato/overlapTicks"), 60.0);
       Playback::setIniValuesForTest({});
-      QCOMPARE(Playback::value("legato/overlapTicks"), 30.0);
+      QCOMPARE(Playback::value("legato/overlapTicks"), 0.0);
       // the score layer's text: only what is set, in the definitions' order; read back clamped
       QCOMPARE(Playback::writeScoreValues({}), QString());
       QCOMPARE(Playback::writeScoreValues({ { "pedal/upAfterMs", 60 }, { "legato/overlapTicks", 40 } }),
@@ -1674,10 +1674,10 @@ void TestSoundLibrary::playbackSettingsLayers()
             return notes;
             };
       const int Q = DIVISION;
-      // C5 (slurred into D5) lasts overlapTicks past its end into D5: default 30, ini 60, the score's 90
+      // C5 (slurred into D5) lasts overlapTicks past its end into D5: default 0, ini 60, the score's 90
       // (C5's own end is MS4's 99 % of it, 5 ticks before D5)
       std::vector<N> n = render();
-      const int base = n[0].off - n[1].on - 30;
+      const int base = n[0].off - n[1].on;
       QCOMPARE(base, -5);
       Playback::setIniValuesForTest({ { "legato/overlapTicks", "60" } });
       n = render();

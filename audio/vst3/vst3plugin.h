@@ -100,8 +100,15 @@ class Vst3Plugin {
       // audio it is lost, after 50 ms it holds). settle: silence processed (and discarded) until the
       // plug-in has run seconds since its last setState; not while process() runs elsewhere (GUI thread
       // before the instance is in a Vst3Synth slot, or the exporting thread). secondsSinceState: how
-      // much it has run (any thread)
-      static constexpr double SETTLE_SECONDS = 1.0;
+      // much it has run (any thread). SETTLE_SECONDS measured (numbers-measured, 2026-10-03, Windows VM, kthost:
+      // Kontakt 8 offline and realtime, settle in blocks of at most 1024 frames as here, 3-4 repeats per value,
+      // every repeat alike): Grand Piano, Violins 1 / Horn Solo - Performance and Timpani keep a parameter set after
+      // 1025 frames or more (44.1 kHz: lost after 23 ms, kept from 24 ms) and lose it after 1024 or fewer; in blocks
+      // of 256 already after the second block (441 frames), in one block of 4096 after 1103 frames: Kontakt runs
+      // the script in its first sub-block of at most 1024 frames. Rule: the smallest settle that keeps them at every
+      // sample rate MuseScore offers: 1025 frames at the lowest (22050 Hz, Preferences › I/O), 46.5 ms, on the 1 ms
+      // grid 47 ms (docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
+      static constexpr double SETTLE_SECONDS = 0.047;
       void settle(double seconds = -1);        // -1: playback setting hosting/settleSeconds (SETTLE_SECONDS)
       double secondsSinceState() const;
 

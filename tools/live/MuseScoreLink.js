@@ -92,7 +92,10 @@ var PROTOCOL = 5;                       // 2: editing Live clips; 3: parameter l
                                         // 5: the tracks' parameters and the clips' places (automation lanes of any track)
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
-var HUB_STALE_MS = 5000;
+// (measured, numbers-measured 2026-10-03, Live 12.4.6: while Live froze or duplicated Kontakt + SSO tracks the hub's 1 s
+// Task stalled up to 6.0 s (its hellos 6.0 s apart); at 5 s other copies took over and several hubs said hello at once.
+// The longest stall plus one beat: 7 s. AUDIBLE_STALE_MS the same: the stall plus MuseScore's 1 s heartbeat)
+var HUB_STALE_MS = 7000;
 
 var self = this;
 // shared by every copy of the device: which is the hub, and where each copy sits (as JSON: a
@@ -1017,7 +1020,7 @@ function copyOn(trackId) {
 //   when MuseScore stops. Not yet checked in Live 12.4.6 itself (LIVE.md › Clip tabs play through Live).
 //---------------------------------------------------------
 
-var AUDIBLE_STALE_MS = 4000;
+var AUDIBLE_STALE_MS = 7000;                // (measured: HUB_STALE_MS)
 
 function audibleState() {
       try { return g.audible ? JSON.parse(g.audible) : null; } catch (e) { return null; }
