@@ -715,7 +715,8 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
    MuseScore's own sounds play). MuseScore's Play, Stop and cursor stay MuseScore's: Live's transport, position
    and clips are not touched, so Live may play or stand still meanwhile. Off: *Mixer › Advanced Options… ›
    Ableton Live › Clip tabs play through Live (the clip's own track)* (on by default).
-6. Close the tab to stop. An unsaved clip score closes without asking (its edits are in Live already); *Save
+6. Close the tab to stop. *Save* (Ctrl+S) opens no dialog: the status bar says the edits are already in Live and the
+   set is saved in Live. An unsaved clip score closes without asking (its edits are in Live already); *Save
    As* makes an ordinary score of it.
 
 ### How it works
