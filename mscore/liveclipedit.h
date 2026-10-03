@@ -46,6 +46,14 @@
 //     made in Live is a conflict like the notes' (Reload from Live). An arrangement clip: no lanes (Live's API has
 //     no envelopes for it, still in 12.4.6); the script not answering: no lanes, the status line says how to set it
 //     up, asked again every 5 s.
+//   - The song's tempo (the owner, 2026-10-03; cliptempo.h has the rules): a clip score's tempo markings and rit. /
+//     accel. words follow the song. A session clip, or an arrangement clip whose set has no tempo automation: Live's
+//     current tempo (each /live/transport, applied at most every poll, 500 ms; in place, no undo step). An arrangement
+//     clip (protocol 6: /live/clip/span): the set's tempo automation under the clip, the set file found in the
+//     background (QtConcurrent: the candidates read and checked) and read again when Live saves it (watched; 1.5 s
+//     to settle, as LiveIntegration::Watcher). Not found: a notice once ("Choose Live Set…"; the choice is kept in
+//     QSettings liveIntegration/tempoSets), Live's tempo meanwhile, searched again when Live's Log.txt or
+//     Preferences.cfg changes. Nothing changes while MuseScore plays: after it stops.
 //   - A new hub (the old copy deleted; /live/hello with another session): each clip edited here is handed to it
 //     (/ms/clip/adopt with its last known hash), and edits made meanwhile are written.
 //---------------------------------------------------------
@@ -53,7 +61,9 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <memory>
 
+#include <QDateTime>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -61,7 +71,10 @@
 #include <QVariantList>
 
 #include "liveclipmodel.h"
+#include "cliptempo.h"
+#include "libmscore/liveset.h"
 
+class QFileSystemWatcher;
 class QLabel;
 class QPushButton;
 class QTimer;
@@ -83,6 +96,12 @@ class LiveClipEditor : public QObject {
       // lanes are the clip's envelopes), ARRANGEMENT (an arrangement clip: Live's API has no envelopes for it),
       // NO_SCRIPT (the MuseScore Envelopes script doesn't answer), FAILED
       enum class EnvState { NONE, READING, READY, ARRANGEMENT, NO_SCRIPT, FAILED };
+      // where a clip score's tempo comes from: LIVE (Live's current tempo: a session clip, or an arrangement clip whose
+      // set has no tempo automation), SEARCHING (an arrangement clip: its set being looked for), SET (the set's tempo
+      // automation), NO_SET (the set not found: Live's tempo meanwhile), OLD_DEVICE (a device before protocol 6 says
+      // nothing of the clip's place in the song: Live's tempo)
+      enum class TempoFrom { LIVE, SEARCHING, SET, NO_SET, OLD_DEVICE };
+      static constexpr int SPAN_PROTOCOL = 6;     // the device's protocol from which it sends /live/clip/span
 
    private:
       struct Session {
@@ -124,7 +143,42 @@ class LiveClipEditor : public QObject {
             int envTries { 0 };
             int envWrites { 0 };
             QString envError;
+            // the song's tempo (cliptempo.h)
+            TempoFrom tempoFrom { TempoFrom::LIVE };
+            LiveClipTempo::Span span;           // an arrangement clip's place in the song
+            bool hasSpan { false };
+            QString setPath;                    // the set it is in ("": not found)
+            bool setAutomated { false };        // the set has tempo automation
+            std::vector<LiveClipTempo::Point> setTempo;     // the song's tempo by the set
+            std::vector<Element*> tempoOwned;   // the markings and words put in the score
+            double appliedBpm { -1 };           // Live's tempo as last put in the score
+            bool tempoPending { false };        // to put in the score (at the next poll, not while playing)
+            int searchSerial { 0 };             // the search in flight (a later one wins)
+            bool searching { false };
+            qint64 searchedPrefs { 0 };         // Live's lists as they were at the last search (their files' times)
+            bool asked { false };               // the notice asking for the set shown
             };
+
+   public:
+      // a set read: kept while its file is unchanged (several tabs, searches again)
+      struct ReadSet {
+            QDateTime modified;
+            std::shared_ptr<const LiveSet::Set> set;
+            };
+   private:
+      std::map<QString, ReadSet> _sets;
+      double _songBpm { -1 };                   // Live's tempo (/live/transport)
+      QFileSystemWatcher* _setWatch { nullptr };
+      QTimer* _setSettle { nullptr };
+      QStringList _setsChanged;
+      void findSet(const QString& key, const QString& prefer = QString());
+      void setFound(const QString& key, int serial, const QString& path, const std::map<QString, ReadSet>& read);
+      void applyTempo(const QString& key);
+      void watchSets();
+      void setsSaved();
+   public:
+      void setSaved(const QString& path);           // (a set file saved: what the watcher reports, settled; the tests)
+   private:
 
       std::map<QString, Session> _sessions;     // by the device's clip key
       std::map<QString, LiveClipEdit::Clip> _incoming;
@@ -142,6 +196,7 @@ class LiveClipEditor : public QObject {
       QWidget* _status { nullptr };
       QLabel* _statusLabel { nullptr };
       QPushButton* _reload { nullptr };
+      QPushButton* _chooseSet { nullptr };
 
       Session* sessionOf(const Score* score);
       void opened(LiveClipEdit::Clip clip);
@@ -213,6 +268,19 @@ class LiveClipEditor : public QObject {
       EnvState envState(const MasterScore* score) const;
       QString envText(const MasterScore* score, QString* details = nullptr) const;   // (short; details: the long one)
       void paramsChanged(const QString& key);
+
+      // the song's tempo (cliptempo.h): Live's tempo now (/live/transport); a clip's place in the song
+      void songTempo(double bpm);
+      TempoFrom tempoFrom(const MasterScore* score) const;
+      QString tempoSet(const MasterScore* score) const;            // the set file found ("": none)
+      QString tempoText(const MasterScore* score, QString* details = nullptr) const;
+      void chooseSet(MasterScore* score);                         // "Choose Live Set…" (a file dialog)
+      void useSet(MasterScore* score, const QString& path);        // that file (checked; remembered when it has the clip)
+      void applyPendingTempos();                                  // (each poll)
+      static QStringList rememberedSets();                        // QSettings liveIntegration/tempoSets, the latest first
+      // (the tests: Live's preferences folders to look in instead of this computer's; the search on this thread)
+      static void setLivePrefsBases(const QStringList& bases);
+      static void setSearchInline(bool on);
       };
 
 }     // namespace LiveIntegration

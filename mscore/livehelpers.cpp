@@ -143,7 +143,7 @@ QString findUserLibrary(const QStringList& prefsBases, const QString& documents)
       return QString();
       }
 
-static QStringList prefsBases()
+QStringList prefsBases()
       {
 #if defined(Q_OS_WIN)
       return { qEnvironmentVariable("APPDATA") + "/Ableton" };

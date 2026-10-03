@@ -75,6 +75,7 @@ QString userLibraryFromCfg(const QByteArray& xml);
 // then <documents>/Ableton/User Library
 QString findUserLibrary(const QStringList& prefsBases, const QString& documents);
 QString userLibrary();        // this computer's (bases: %APPDATA%/Ableton etc.)
+QStringList prefsBases();     // where Live keeps its "Live <version>" preferences folders on this computer
 // Live 12 on this computer: its folders or its uninstall entry (Windows; elsewhere false)
 bool live12Installed();
 bool liveRunning();           // Windows: tasklist; elsewhere false

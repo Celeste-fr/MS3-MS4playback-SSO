@@ -37,6 +37,7 @@
 //---------------------------------------------------------
 
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 
@@ -178,8 +179,10 @@ class LiveClipsLink : public QObject {
       int deviceProtocol() const { return _deviceProtocol; }
       int port() const { return _port; }
       LinkWatch::Uses uses() const;
-      // a notice: a yellow bar across the top of the score area (not a dialog), until dismissed; good: green, gone after 10 s
-      void notice(const QString& text, bool good = false);
+      // a notice: a yellow bar across the top of the score area (not a dialog), until dismissed; good: green, gone after 10 s;
+      // action: a button on it ("Choose Live Set…") that calls onAction and closes the bar
+      void notice(const QString& text, bool good = false, const QString& action = QString(),
+                  std::function<void()> onAction = std::function<void()>());
       QString lastNotice() const { return _lastNotice; }   // (tests)
       // the routes ("<port>:<channel>" keys) the device found no track for, for the score Live plays now;
       // *known: false unless the device answers for this score and has confirmed every route's clip

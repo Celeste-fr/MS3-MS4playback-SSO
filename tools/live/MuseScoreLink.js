@@ -38,6 +38,10 @@
 //     (d -1: the mixer, p 0 volume, 1 pan; else devices[d].parameters[p]; MuseScore Link itself left out), again
 //     when the track's devices change (checked once a second), and each edited clip's place, /live/clip/where key:s
 //     track:i slot:i (the track's index; the session slot's, -1 for an arrangement clip), again when it moves.
+//   - a clip tab plays at the song's tempo (protocol 6; mscore/cliptempo.h): for an edited arrangement clip the hub
+//     sends its place in the song, /live/clip/span key:s start_time:f end_time:f start_marker:f end_marker:f
+//     loop_start:f loop_end:f looping:i (after /live/clip/where, again when one changes: checked once a second), and
+//     /live/transport goes out as soon as Live's tempo changes (also while stopped), so a clip tab follows it.
 //     A clip tab's lanes are written into the clip's own envelopes by the MuseScore Envelopes Control Surface
 //     script (tools/live/MuseScoreEnvelopes: Max for Live can't), MuseScore talking to it directly. A route's lane
 //     titled "live:<d>/<p>" is that parameter of the track (no plug-in needed), driven as below.
@@ -88,8 +92,9 @@ outlets = 8;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2:
                   // 6: the lanes to keep in the Live Set ([pattr Lanes]),
                   // 7: "set msl_m<track id>" to the [receive] that plays MuseScore's notes for a clip tab
 
-var PROTOCOL = 5;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
-                                        // 5: the tracks' parameters and the clips' places (automation lanes of any track)
+var PROTOCOL = 6;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+                                        // 5: the tracks' parameters and the clips' places (automation lanes of any track);
+                                        // 6: an arrangement clip's place in the song, Live's tempo reported as it changes
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 var HUB_STALE_MS = 5000;
@@ -840,10 +845,13 @@ function report() {
       var song = new LiveAPI("live_set");
       var playing = num(song.get("is_playing")) ? 1 : 0;
       var b = num(song.get("current_song_time"));
+      var bpm = num(song.get("tempo"));
       var t = now();
-      if (playing || playing !== lastTransport.playing || Math.abs(b - lastTransport.beat) > 1e-6 || t - lastTransport.sent > 1000) {
-            send("/live/transport", playing, b, num(song.get("tempo")));
-            lastTransport = { playing: playing, beat: b, sent: t };
+      // (Live's tempo changed: at once, also while stopped, for the clip tabs that follow it; protocol 6)
+      if (playing || playing !== lastTransport.playing || Math.abs(b - lastTransport.beat) > 1e-6 || t - lastTransport.sent > 1000
+          || bpm !== lastTransport.bpm) {
+            send("/live/transport", playing, b, bpm);
+            lastTransport = { playing: playing, beat: b, sent: t, bpm: bpm };
             }
       }
 
@@ -1288,10 +1296,27 @@ function whereOf(clip, tr) {
 
 function sendWhere(e, clip, tr, always) {
       var w = whereOf(clip, tr);
-      if (!always && e.where && e.where.track === w.track && e.where.slot === w.slot)
+      if (always || !e.where || e.where.track !== w.track || e.where.slot !== w.slot) {
+            e.where = w;
+            send("/live/clip/where", e.key, w.track, w.slot);
+            always = true;
+            }
+      // an arrangement clip's place in the song (protocol 6)
+      if (w.slot >= 0 || w.track < 0)
             return;
-      e.where = w;
-      send("/live/clip/where", e.key, w.track, w.slot);
+      var sp = spanOf(clip);
+      var k = sp.join(" ");
+      if (!always && e.span === k)
+            return;
+      e.span = k;
+      send.apply(this, ["/live/clip/span", e.key].concat(sp));
+      }
+
+// start_time, end_time (song beats), start_marker, end_marker, loop_start, loop_end (clip beats), looping
+function spanOf(clip) {
+      return [num(clip.get("start_time")), num(clip.get("end_time")), num(clip.get("start_marker")),
+              num(clip.get("end_marker")), num(clip.get("loop_start")), num(clip.get("loop_end")),
+              num(clip.get("looping")) ? 1 : 0];
       }
 
 function isLink(dev) {

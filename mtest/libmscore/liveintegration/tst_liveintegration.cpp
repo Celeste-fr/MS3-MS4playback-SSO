@@ -40,12 +40,15 @@
 #include "libmscore/rest.h"
 #include "libmscore/tie.h"
 #include "libmscore/staff.h"
+#include "mscore/cliptempo.h"
 #include "libmscore/system.h"
 #include "libmscore/page.h"
 #include <QPainter>
 #include <QImage>
 #include "libmscore/clef.h"
 #include "mscore/liveclipedit.h"
+#include "libmscore/tempotext.h"
+#include "libmscore/systemtext.h"
 #include "mscore/liveclips.h"
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
@@ -108,6 +111,12 @@ class TestLiveIntegration : public QObject, public MTest
       void liveSetMissing();
       void liveHelpersLibrary();
       void liveHelpersInstall();
+      void clipTempoSetRead();
+      void clipTempoMapping();
+      void clipTempoScore();
+      void clipTempoFollowLive();
+      void clipTempoArrangement();
+      void clipTempoLiveLists();
       };
 
 //---------------------------------------------------------
@@ -2995,6 +3004,551 @@ void TestLiveIntegration::liveHelpersInstall()
       QCOMPARE(read(lib + "/Presets/MIDI Effects/Max MIDI Effect/Other.amxd"), QByteArray("someone else's"));
       QCOMPARE(read(lib + "/Remote Scripts/MuseScoreEnvelopes/MuseScoreEnvelopes.log"), QByteArray("log"));
       QCOMPARE(QDir(lib + "/Remote Scripts/MuseScoreEnvelopes").entryList(QDir::Files).size(), 4);
+      }
+
+
+//---------------------------------------------------------
+//   clip tabs at the song's tempo (mscore/cliptempo.h)
+//---------------------------------------------------------
+
+static const char* const TEMPO_SETS = "liveIntegration/tempoSets";
+
+// tempo.xml (a Live 12.4.6 set's main track, tempo automation added) as an .als at path
+static bool writeTempoSet(const QString& path, const QByteArray& from = QByteArray(), const QByteArray& to = QByteArray())
+      {
+      QFile x(QString(DIR_ROOT) + "tempo.xml");
+      if (!x.open(QIODevice::ReadOnly))
+            return false;
+      QByteArray xml = x.readAll();
+      if (!from.isEmpty())
+            xml.replace(from, to);
+      QDir().mkpath(QFileInfo(path).path());
+      QFile f(path);
+      if (!f.open(QIODevice::WriteOnly))
+            return false;
+      f.write(gzip(xml));
+      return true;
+      }
+
+static double bpmAt(const Score* score, int tick)
+      {
+      return score->tempomap()->tempo(tick) * 60.0;
+      }
+
+static bool nearly(double a, double b)
+      {
+      return std::fabs(a - b) <= 1e-9 * std::max(1.0, std::fabs(b));
+      }
+
+// the score's tempo markings: visible, invisible (a ramp's steps), and the words (system text)
+static void countTempo(const Score* score, int* shown, int* hidden, int* words)
+      {
+      *shown = *hidden = *words = 0;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (Element* e : s->annotations()) {
+                  if (e->isTempoText())
+                        ++*(e->visible() ? shown : hidden);
+                  else if (e->isSystemText())
+                        ++*words;
+                  }
+      }
+
+//---------------------------------------------------------
+//   clipTempoSetRead
+//    the main track's tempo automation and the tracks' arrangement clips; which set has the clip
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTempoSetRead()
+      {
+      QTemporaryDir dir;
+      const QString path = dir.path() + "/Song Project/Song.als";
+      QVERIFY(writeTempoSet(path));
+      const LiveSet::Set set = LiveSet::read(path);
+      QVERIFY2(set.error.isEmpty(), qPrintable(set.error));
+      QCOMPARE(set.creator, QString("Ableton Live 12.4.6"));
+      QCOMPARE(set.tempo, 120.0);
+      QCOMPARE(set.tempoInitial, 120.0);
+      QCOMPARE(int(set.tempoEvents.size()), 7);
+      QCOMPARE(set.tempoEvents[2].time, 16.0);
+      QCOMPARE(set.tempoEvents[2].value, 150.0);
+      QVERIFY(!set.tempoEvents[2].curved);
+      QVERIFY(set.tempoEvents[3].curved);
+      QCOMPARE(set.tempoEvents[3].c1x, 0.5);
+      QCOMPARE(set.tempoEvents[3].c2y, 0.5);
+      QCOMPARE(set.tempoEvents[5].time, 32.0);
+      QCOMPARE(set.tempoEvents[6].time, 32.0);
+      QCOMPARE(set.tempoEvents[6].value, 100.0);
+      // the time signature's envelope (an EnumEvent on another target) is not the tempo
+      QCOMPARE(int(set.tracks.size()), 3);
+      QCOMPARE(set.tracks[0].kind, QString("MidiTrack"));
+      QCOMPARE(set.tracks[2].kind, QString("ReturnTrack"));
+      QCOMPARE(int(set.tracks[0].clips.size()), 2);
+      const LiveSet::ArrangementClip& c = set.tracks[0].clips[0];
+      QCOMPARE(c.start, 8.0);
+      QCOMPARE(c.end, 24.0);
+      QVERIFY(c.loopOn);
+      QCOMPARE(c.startRelative, 1.0);
+      QCOMPARE(c.name, QString("Riff"));
+
+      using namespace LiveClipTempo;
+      Span s;
+      s.start = 8;
+      s.end = 24;
+      QVERIFY(setHasClip(set, "Violin", 0, s));
+      QVERIFY(!setHasClip(set, "Violin", 1, s));         // (another track there)
+      QVERIFY(setHasClip(set, "Violin", -1, s));
+      QVERIFY(!setHasClip(set, "Bass", 1, s));
+      s.start = 0;
+      s.end = 16;
+      QVERIFY(setHasClip(set, "Bass", 1, s));
+      // the device's float32: 24 × 2^-23 ≈ 2.9e-6 apart at most
+      s.start = 8;
+      s.end = float(24.000001);
+      QVERIFY(setHasClip(set, "Violin", 0, s));
+      s.end = 24.0001;
+      QVERIFY(!setHasClip(set, "Violin", 0, s));
+      // a set without tempo automation (only Live's default event): none
+      const LiveSet::Set plain = LiveSet::read(writeSet(dir));
+      QVERIFY(plain.tempoEvents.empty());
+      QCOMPARE(int(songTempo(plain).size()), 1);
+      QCOMPARE(songTempo(plain)[0].bpm, 120.0);
+      }
+
+//---------------------------------------------------------
+//   clipTempoMapping
+//    song beats -> clip beats: the start marker, a loop (each beat at its first pass), the end; the tempo on them
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTempoMapping()
+      {
+      using namespace LiveClipTempo;
+      QTemporaryDir dir;
+      const QString path = dir.path() + "/Song.als";
+      QVERIFY(writeTempoSet(path));
+      const std::vector<Point> song = songTempo(LiveSet::read(path));
+      // the default 120, the points; the curve's pieces between its ends; the jump at 32
+      const std::vector<LiveSet::Point> pieces = LiveSet::curve({ 20, 150 }, { 28, 90 }, 0.5, 0, 1, 0.5, CURVE_TOLERANCE_BPM);
+      QVERIFY(pieces.size() > 1);
+      QCOMPARE(int(song.size()), 1 + 7 + int(pieces.size()) - 1);
+      QCOMPARE(tempoAt(song, 12), 135.0);
+      QCOMPARE(tempoAt(song, 32, true), 90.0);
+      QCOMPARE(tempoAt(song, 32), 100.0);
+      QCOMPARE(tempoAt(song, 50), 100.0);
+      for (const LiveSet::Point& q : pieces)
+            QVERIFY(nearly(tempoAt(song, q.beat), q.value));
+
+      // a looping clip: from beat 8 of the song, start marker 1, loop 0-4, to beat 24
+      Span s;
+      s.start = 8;
+      s.end = 24;
+      s.startMarker = 1;
+      s.endMarker = 4;
+      s.loopStart = 0;
+      s.loopEnd = 4;
+      s.looping = true;
+      std::vector<Piece> p = firstPasses(s, 4);
+      QCOMPARE(int(p.size()), 2);
+      QCOMPARE(p[0].clipFrom, 0.0);           // (first played in the second pass: song beat 11)
+      QCOMPARE(p[0].clipTo, 1.0);
+      QCOMPARE(p[0].song, 11.0);
+      QCOMPARE(p[1].clipFrom, 1.0);
+      QCOMPARE(p[1].clipTo, 4.0);
+      QCOMPARE(p[1].song, 8.0);
+      std::vector<Point> clip = clipTempo(song, p);
+      QCOMPARE(int(clip.size()), 4);
+      QCOMPARE(clip[0].beat, 0.0);
+      QCOMPARE(clip[0].bpm, 131.25);          // song 11: 120 + 30 × 3/8
+      QCOMPARE(clip[1].beat, 1.0);
+      QCOMPARE(clip[1].bpm, 135.0);           // song 12
+      QCOMPARE(clip[2].beat, 1.0);
+      QCOMPARE(clip[2].bpm, 120.0);           // song 8 (a jump in the clip's time)
+      QCOMPARE(clip[3].bpm, 131.25);          // song 11
+
+      // cut short: ends at song 10 (only beats 1-3 of the clip played)
+      s.end = 10;
+      p = firstPasses(s, 4);
+      QCOMPARE(int(p.size()), 1);
+      QCOMPARE(p[0].clipFrom, 1.0);
+      QCOMPARE(p[0].clipTo, 3.0);
+      clip = clipTempo(song, p);
+      QCOMPARE(clip.front().beat, 0.0);       // (before: held)
+      QCOMPARE(clip.front().bpm, 120.0);
+      QCOMPARE(clip.back().beat, 3.0);
+      QCOMPARE(clip.back().bpm, 127.5);
+
+      // not looping, the start marker at 2: beats 2-6 at song 0-4; 0-2 never played (held), 6-8 neither
+      Span n;
+      n.start = 12;
+      n.end = 16;
+      n.startMarker = 2;
+      n.endMarker = 8;
+      p = firstPasses(n, 8);
+      QCOMPARE(int(p.size()), 1);
+      QCOMPARE(p[0].clipFrom, 2.0);
+      QCOMPARE(p[0].clipTo, 6.0);
+      QCOMPARE(p[0].song, 12.0);
+      clip = clipTempo(song, p);
+      QCOMPARE(clip.front().bpm, 135.0);
+      QCOMPARE(tempoAt(clip, 1), 135.0);
+      QCOMPARE(tempoAt(clip, 4), 142.5);
+      QCOMPARE(tempoAt(clip, 7), 150.0);
+
+      // the marks: a marking, "accel.", its steps every 32nd; at the jump a marking, "accel." again, its steps
+      s.end = 24;
+      const std::vector<Mark> m = marks(clipTempo(song, firstPasses(s, 4)), 1920);
+      int texts = 0, steps = 0, words = 0;
+      for (const Mark& k : m)
+            ++(k.kind == Mark::TEXT ? texts : (k.kind == Mark::STEP ? steps : words));
+      QCOMPARE(texts, 2);
+      QCOMPARE(words, 2);
+      QCOMPARE(steps, 7 + 23);
+      QCOMPARE(int(m[0].kind), int(Mark::TEXT));
+      QCOMPARE(m[0].tempo, 131.25 / 60);
+      QCOMPARE(int(m[1].kind), int(Mark::WORD));
+      QCOMPARE(m[1].text, QString("accel."));
+      QCOMPARE(m[5].tick, 240);
+      QCOMPARE(m[5].tempo, 133.125 / 60);
+      QCOMPARE(m[9].tick, 480);
+      QCOMPARE(int(m[9].kind), int(Mark::TEXT));
+      QCOMPARE(m[9].tempo, 2.0);
+      QCOMPARE(int(m[10].kind), int(Mark::WORD));
+      QCOMPARE(m.back().tick, 1860);
+      QCOMPARE(tempoText(97.5), QString("<sym>metNoteQuarterUp</sym> = 97.5"));
+      QCOMPARE(tempoText(120), QString("<sym>metNoteQuarterUp</sym> = 120"));
+      QCOMPARE(tempoText(133.333333), QString("<sym>metNoteQuarterUp</sym> = 133.33"));
+      }
+
+//---------------------------------------------------------
+//   clipTempoScore
+//    the marks in a clip score: the tempo map as Live's (ramps, a curve, a jump), the notes untouched (nothing to
+//    send), values changed in place without an undo step, a new shape as one undo step once the score has edits
+//---------------------------------------------------------
+
+static Clip tempoClip(const QString& key, double end)
+      {
+      Clip c;
+      c.key = key;
+      c.track = "Violin";
+      c.name = "Riff";
+      c.bpm = 120;
+      c.end = end;
+      int id = 900;
+      for (int b = 0; b < int(end); ++b)
+            c.notes.push_back(ln(++id, 60 + b % 12, b, 1, 90));
+      return c;
+      }
+
+void TestLiveIntegration::clipTempoScore()
+      {
+      using namespace LiveClipTempo;
+      QTemporaryDir dir;
+      const QString path = dir.path() + "/Song.als";
+      QVERIFY(writeTempoSet(path));
+      const std::vector<Point> song = songTempo(LiveSet::read(path));
+      const Clip clip = tempoClip("c940", 16);
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const std::vector<Sig> before = signatures(score);
+      std::vector<Element*> owned = tempoTexts(score);
+      QCOMPARE(int(owned.size()), 1);                   // (the import's)
+
+      // song beats 16-32 (the curve from 20 to 28) on a clip of 16 beats
+      Span s;
+      s.start = 16;
+      s.end = 32;
+      s.endMarker = 16;
+      const std::vector<Point> pts = clipTempo(song, firstPasses(s, 16));
+      QCOMPARE(apply(score, marks(pts, score->endTick().ticks()), &owned, false), 2);
+      QVERIFY(!score->undoStack()->canUndo());
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 150.0);
+      QCOMPARE(bpmAt(score, 4 * 480 - 1), 150.0);
+      // each of the curve's pieces ends on its value (the tick it is rounded to)
+      const std::vector<LiveSet::Point> curve = LiveSet::curve({ 20, 150 }, { 28, 90 }, 0.5, 0, 1, 0.5, CURVE_TOLERANCE_BPM);
+      std::map<int, double> atTick;                     // (pieces less than a tick apart: the later one)
+      for (const LiveSet::Point& c : curve)
+            atTick[int(std::lround((c.beat - 16) * 480))] = c.value;
+      for (const auto& c : atTick)
+            QVERIFY2(nearly(bpmAt(score, c.first), c.second), qPrintable(QString("tick %1: %2, Live %3").arg(c.first).arg(bpmAt(score, c.first)).arg(c.second)));
+      // between them a step every 32nd at most, each on Live's curve (its pieces, within CURVE_TOLERANCE_BPM of it),
+      // held to the next (as MuseScore's own rit. / accel. lines)
+      int last = -1;
+      for (const Mark& k : marks(pts, score->endTick().ticks())) {
+            if (k.kind == Mark::WORD)
+                  continue;
+            QVERIFY(nearly(bpmAt(score, k.tick), k.tempo * 60));
+            // (a piece's start rounded to its tick: Live's tempo within half a tick of it)
+            const double lo = tempoAt(song, 16 + (k.tick - 0.5) / 480.0), hi = tempoAt(song, 16 + (k.tick + 0.5) / 480.0);
+            QVERIFY(k.tempo * 60 >= std::min(lo, hi) - 1e-9 && k.tempo * 60 <= std::max(lo, hi) + 1e-9);
+            if (last >= 1920 && k.tick <= 5760)
+                  QVERIFY2(k.tick - last <= STEP_TICKS, qPrintable(QString("%1 -> %2").arg(last).arg(k.tick)));
+            last = k.tick;
+            }
+      QCOMPARE(bpmAt(score, 15 * 480), 90.0);
+      int shown = 0, hidden = 0, words = 0;
+      countTempo(score, &shown, &hidden, &words);
+      QCOMPARE(shown, 2);                               // 150 at the start, 90 where the curve ends
+      QCOMPARE(words, 1);                               // the curve read as one rit.
+      int wantSteps = 0;
+      for (const Mark& k : marks(pts, score->endTick().ticks()))
+            wantSteps += k.kind == Mark::STEP;
+      QCOMPARE(hidden, wantSteps);                      // its steps: every 32nd from each piece's start
+      QVERIFY(hidden >= (5760 - 1920) / STEP_TICKS);
+      // the notes are where they were: nothing to send
+      QVERIFY(signatures(score) == before);
+      QVERIFY(diff(match(clip, score), signatures(score)).empty());
+
+      // the same shape, other values: in place, no undo step
+      std::vector<Point> faster = pts;
+      for (Point& p : faster)
+            p.bpm *= 1.5;
+      QCOMPARE(apply(score, marks(faster, score->endTick().ticks()), &owned, false), 1);
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 225.0);
+      QCOMPARE(bpmAt(score, 15 * 480), 135.0);
+      QVERIFY(!score->undoStack()->canUndo());
+      QCOMPARE(apply(score, marks(faster, score->endTick().ticks()), &owned, false), 0);   // (unchanged: nothing)
+
+      // another shape once the score has an edit: one undo step, undone to the marks before
+      Note* n = noteAt(score, 0, 60);
+      QVERIFY(n);
+      score->startCmd();
+      score->undoChangePitch(n, 61, n->tpc1() + 7, n->tpc2() + 7);
+      score->endCmd();
+      const std::vector<Point> flat = { { 0, 100, false } };
+      QCOMPARE(apply(score, marks(flat, score->endTick().ticks()), &owned, true), 2);
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 100.0);
+      QCOMPARE(bpmAt(score, 15 * 480), 100.0);
+      countTempo(score, &shown, &hidden, &words);
+      QCOMPARE(shown + hidden + words, 1);
+      QCOMPARE(int(owned.size()), 1);
+      score->undoRedo(true, nullptr);                   // the tempo's step
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 225.0);
+      countTempo(score, &shown, &hidden, &words);
+      QCOMPARE(hidden, wantSteps);
+      QVERIFY(noteAt(score, 0, 61));                    // (the edit's step is the one before)
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipTempoFollowLive
+//    a session clip follows Live's tempo (/live/transport): in place, no undo step, nothing sent to Live
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTempoFollowLive()
+      {
+      using namespace Ms::LiveIntegration;
+      LiveClipEditor* ed = LiveClipEditor::instance();
+      QStringList sent;
+      LiveClipEditor::setSendHook([&sent](const QByteArray& p) {
+            QString address;
+            QVariantList args;
+            if (LiveClips::parseOsc(p, &address, &args))
+                  sent << address;
+            });
+      Clip clip = tempoClip("c950", 8);
+      clip.bpm = 96;
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      ed->songTempo(96);
+      ed->edit(clip, score);
+      ed->received("/live/clip/where", { clip.key, 0, 2 });     // a session clip
+      QCOMPARE(int(ed->tempoFrom(score)), int(LiveClipEditor::TempoFrom::LIVE));
+      ed->songTempo(97.5);
+      ed->applyPendingTempos();
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 97.5);
+      QCOMPARE(bpmAt(score, 7 * 480), 97.5);
+      const std::vector<Element*> texts = LiveClipTempo::tempoTexts(score);
+      QCOMPARE(int(texts.size()), 1);
+      QVERIFY(toTempoText(texts[0])->xmlText().endsWith("= 97.5"));
+      QVERIFY(!score->undoStack()->canUndo());
+      QVERIFY(ed->tempoText(score).contains("97.5"));
+      QTest::qWait(500);                                // (the edit debounce: nothing to write)
+      QVERIFY2(!sent.contains("/ms/clip/write"), qPrintable(sent.join(" ")));
+      QVERIFY(ed->inSync(score));
+      ed->scoreClosed(score);
+      LiveClipEditor::setSendHook(nullptr);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipTempoArrangement
+//    an arrangement clip: its set found through Live's Log.txt (a set without the clip passed over), the song's
+//    tempo automation under it, read again when the set is saved; not found: Live's tempo and the reason
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipTempoArrangement()
+      {
+      using namespace Ms::LiveIntegration;
+      LiveClipEditor* ed = LiveClipEditor::instance();
+      QSettings().remove(TEMPO_SETS);
+      QTemporaryDir dir;
+      const QString path = dir.path() + "/Song Project/Song.als";
+      QVERIFY(writeTempoSet(path));
+      const QString other = writeSet(dir);              // (another set, opened later in Live: without the clip)
+      const QString prefs = dir.path() + "/Ableton/Live 12.4.6/Preferences";
+      QDir().mkpath(prefs);
+      {
+      QFile log(prefs + "/Log.txt");
+      QVERIFY(log.open(QIODevice::WriteOnly));
+      log.write(QString("2026-10-03T11:35:09.696048: info: Loading document \"%1\"\n"
+                        "2026-10-03T11:35:12.660148: info: Loaded document was created by Ableton Live 12.4.6\n"
+                        "2026-10-03T11:36:01.000000: info: Loading document \"C:\\ProgramData\\Ableton\\Live 12 Trial\\Resources\\Core Library\\Defaults\\Creating Tracks/MIDI Track\\Default MIDI Track.als\"\n"
+                        "2026-10-03T11:37:54.611976: info: Loading document \"%2\"\n")
+                .arg(QDir::toNativeSeparators(path), QDir::toNativeSeparators(other)).toUtf8());
+      }
+      LiveClipEditor::setLivePrefsBases({ dir.path() + "/Ableton" });
+      LiveClipEditor::setSearchInline(true);
+      QStringList sent;
+      LiveClipEditor::setSendHook([&sent](const QByteArray& p) {
+            QString address;
+            QVariantList args;
+            if (LiveClips::parseOsc(p, &address, &args))
+                  sent << address;
+            });
+
+      const Clip clip = tempoClip("c960", 4);
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const std::vector<Sig> before = signatures(score);
+      ed->edit(clip, score);
+      ed->received("/live/clip/where", { clip.key, 0, -1 });
+      ed->received("/live/clip/span", { clip.key, 8.0, 24.0, 1.0, 4.0, 0.0, 4.0, 1 });
+      QCOMPARE(int(ed->tempoFrom(score)), int(LiveClipEditor::TempoFrom::SET));
+      QCOMPARE(ed->tempoSet(score), path);
+      QCOMPARE(LiveClipEditor::rememberedSets(), QStringList({ path }));
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 131.25);                // clip beat 0: song beat 11 (the loop's second pass)
+      QCOMPARE(bpmAt(score, 240), 133.125);
+      QCOMPARE(bpmAt(score, 480), 120.0);               // clip beat 1: song beat 8
+      QCOMPARE(bpmAt(score, 1200), 125.625);
+      QVERIFY(signatures(score) == before);
+      QVERIFY(!score->undoStack()->canUndo());
+      QVERIFY(ed->tempoText(score).contains("automation"));
+      // drawn on the band staves (the top one, track 0's, is hidden where no note falls on it): the markings and
+      // words are on the page; MS_CLIP_TEMPO_PNG=<file>: a picture to look at
+      if (!qEnvironmentVariableIsEmpty("MS_CLIP_TEMPO_PNG"))
+            QVERIFY(renderPng(score, qEnvironmentVariable("MS_CLIP_TEMPO_PNG")));
+      {
+      score->doLayout();
+      Page* page = score->pages().front();
+      int drawnTexts = 0, drawnWords = 0;
+      for (const Element* e : page->items(page->abbox())) {
+            if (e->isTempoText() && e->visible() && !e->bbox().isEmpty())
+                  ++drawnTexts;
+            if (e->isSystemText() && !e->bbox().isEmpty())
+                  ++drawnWords;
+            }
+      QCOMPARE(drawnTexts, 2);
+      QCOMPARE(drawnWords, 2);
+      }
+      // Live's tempo now doesn't change it (the song's automation does)
+      ed->songTempo(70);
+      ed->applyPendingTempos();
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 131.25);
+
+      // Live saves the set: the ramp now goes to 180 at beat 16
+      QVERIFY(writeTempoSet(path, "Time=\"16\" Value=\"150\"", "Time=\"16\" Value=\"180\""));
+      ed->setSaved(path);
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 142.5);                 // 120 + 60 × 3/8
+      QCOMPARE(bpmAt(score, 480), 120.0);
+      QVERIFY(!score->undoStack()->canUndo());          // (values only: in place)
+      QTest::qWait(500);
+      QVERIFY2(!sent.contains("/ms/clip/write"), qPrintable(sent.join(" ")));
+
+      // the clip moved in Live to where no saved set has it: Live's tempo, the reason said
+      ed->received("/live/clip/span", { clip.key, 100.0, 116.0, 1.0, 4.0, 0.0, 4.0, 1 });
+      QCOMPARE(int(ed->tempoFrom(score)), int(LiveClipEditor::TempoFrom::NO_SET));
+      ed->applyPendingTempos();
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 70.0);
+      QCOMPARE(bpmAt(score, 1200), 70.0);
+      QVERIFY(ed->tempoText(score, nullptr).contains("not found"));
+      QString details;
+      ed->tempoText(score, &details);
+      QVERIFY(details.contains("save the set in Live"));
+      // chosen by hand (the set saved meanwhile with the clip there): found
+      QVERIFY(writeTempoSet(path, "<CurrentStart Value=\"8\" />\n\t\t\t\t\t\t\t<CurrentEnd Value=\"24\" />",
+                            "<CurrentStart Value=\"100\" />\n\t\t\t\t\t\t\t<CurrentEnd Value=\"116\" />"));
+      ed->useSet(score, path);
+      QCOMPARE(int(ed->tempoFrom(score)), int(LiveClipEditor::TempoFrom::SET));
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 100.0);                 // song beat 103: after the jump at 32
+      // moved into a session slot: Live's tempo
+      ed->received("/live/clip/where", { clip.key, 0, 3 });
+      QCOMPARE(int(ed->tempoFrom(score)), int(LiveClipEditor::TempoFrom::LIVE));
+      ed->applyPendingTempos();
+      score->doLayout();
+      QCOMPARE(bpmAt(score, 0), 70.0);
+
+      ed->scoreClosed(score);
+      LiveClipEditor::setSendHook(nullptr);
+      LiveClipEditor::setSearchInline(false);
+      LiveClipEditor::setLivePrefsBases(QStringList());
+      QSettings().remove(TEMPO_SETS);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipTempoLiveLists
+//    the sets Live lists: Log.txt's loaded documents (the latest first, Live's own left out), Preferences.cfg's
+//    RecentDocsList (UTF-16, as Live 12.4.6 writes it), each Live version's folder, newest first
+//---------------------------------------------------------
+
+static QByteArray utf16Entry(const QString& s)
+      {
+      QByteArray b;
+      const quint32 n = quint32(s.size());
+      b.append(char(n & 0xff)).append(char((n >> 8) & 0xff)).append(char(0)).append(char(0));
+      for (const QChar c : s)
+            b.append(char(c.unicode() & 0xff)).append(char(c.unicode() >> 8));
+      b.append(char(1)).append(QByteArray(31, 0));
+      return b;
+      }
+
+void TestLiveIntegration::clipTempoLiveLists()
+      {
+      using namespace LiveClipTempo;
+      const QByteArray log =
+            "2026-10-03T11:35:09: info: Loading document \"C:\\claude\\a\\One.als\"\n"
+            "2026-10-03T11:36:01: info: Loading document \"C:\\ProgramData\\Ableton\\Live 12 Trial\\Resources\\Core Library\\Defaults\\Creating Tracks/MIDI Track\\Default MIDI Track.als\"\n"
+            "2026-10-03T11:37:54: info: Loading document \"C:\\claude\\b\\Two.als\"\n"
+            "2026-10-03T11:38:00: info: Loading document \"C:\\claude\\a\\One.als\"\n";
+      QCOMPARE(documentsFromLog(log), QStringList({ "C:/claude/a/One.als", "C:/claude/b/Two.als" }));
+      // (the layout seen in Live 12.4.6's Preferences.cfg: the key, a count, "FileRef", each path's length and UTF-16)
+      QByteArray cfg = QByteArray::fromHex("000e") + QByteArray("RecentDocsList") + QByteArray::fromHex("08000000170000000007")
+                       + QByteArray("FileRef") + QByteArray(12, 0) + utf16Entry("C:/claude/b/Two.als")
+                       + QByteArray::fromHex("07") + QByteArray("FileRef") + QByteArray(12, 0)
+                       + utf16Entry(QString("C:/Users/me/Música/Três.als"));
+      QCOMPARE(documentsFromPreferences(cfg), QStringList({ "C:/claude/b/Two.als", QString("C:/Users/me/Música/Três.als") }));
+
+      QTemporaryDir dir;
+      const QString base = dir.path() + "/Ableton";
+      const QString a = dir.path() + "/sets/A.als";
+      const QString b = dir.path() + "/sets/B.als";
+      QDir().mkpath(dir.path() + "/sets");
+      for (const QString& p : { a, b }) {
+            QFile f(p);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            }
+      auto write = [](const QString& p, const QByteArray& data) {
+            QDir().mkpath(QFileInfo(p).path());
+            QFile f(p);
+            f.open(QIODevice::WriteOnly);
+            f.write(data);
+            };
+      write(base + "/Live 12.2/Preferences/Log.txt", QString("info: Loading document \"%1\"\n").arg(a).toUtf8());
+      write(base + "/Live 12.4.6/Preferences/Log.txt", QString("info: Loading document \"%1\"\n"
+                                                               "info: Loading document \"%2/sets/Gone.als\"\n").arg(b, dir.path()).toUtf8());
+      write(base + "/Live 12.4.6/Preferences/Preferences.cfg", utf16Entry(a));
+      QDir().mkpath(base + "/Live Reports");
+      // 12.4.6 first (its log, then its recent list), then 12.2; files that don't exist left out
+      QCOMPARE(setCandidates({ base }), QStringList({ b, a }));
       }
 
 QTEST_MAIN(TestLiveIntegration)

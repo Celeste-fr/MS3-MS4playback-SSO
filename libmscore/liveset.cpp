@@ -141,6 +141,7 @@ struct ClipTiming {
       double loopEnd { 0 };         // Loop/LoopEnd
       double startRelative { 0 };   // Loop/StartRelative
       bool loopOn { false };
+      QString name;
       };
 
 struct RawEnvelope {
@@ -334,6 +335,25 @@ Set parse(const QByteArray& xml)
       QString upper, lower;
       bool masterTrack = false;
       int masterDepth = -1;
+      // the main track's envelopes and its Tempo's automation target (the song's tempo)
+      QString tempoTarget;
+      std::vector<RawEnvelope> masterEnvelopes;
+      RawEnvelope masterEnv;
+      int masterEnvDepth = -1;
+      auto readEvent = [](const QXmlStreamAttributes& a) {
+            RawEvent e;
+            e.time = a.value("Time").toDouble();
+            e.value = num(a.value("Value"));
+            if (a.hasAttribute("CurveControl1X")) {
+                  e.c1x = a.value("CurveControl1X").toDouble();
+                  e.c1y = a.value("CurveControl1Y").toDouble();
+                  e.c2x = a.value("CurveControl2X").toDouble();
+                  e.c2y = a.value("CurveControl2Y").toDouble();
+                  // a straight line's controls lie on the diagonal
+                  e.curved = std::fabs(e.c1x - e.c1y) > 1e-6 || std::fabs(e.c2x - e.c2y) > 1e-6;
+                  }
+            return e;
+            };
       bool sawRoot = false;
 
       auto inside = [&stack](const char* name, int from = 0) {
@@ -363,6 +383,7 @@ Set parse(const QByteArray& xml)
                         }
                   if (!ts && isTrack(n) && parent() == "Tracks") {
                         ts.reset(new TrackState);
+                        ts->track.kind = n.toString();
                         trackDepth = depth;
                         upper.clear();
                         lower.clear();
@@ -376,6 +397,16 @@ Set parse(const QByteArray& xml)
                   if (masterTrack) {
                         if (n == "Manual" && parent() == "Tempo" && set.tempo == 0)
                               set.tempo = value.toDouble();
+                        else if (n == "AutomationTarget" && parent() == "Tempo")
+                              tempoTarget = a.value("Id").toString();
+                        else if (n == "AutomationEnvelope") {
+                              masterEnv = RawEnvelope();
+                              masterEnvDepth = depth;
+                              }
+                        else if (masterEnvDepth >= 0 && n == "PointeeId" && parent() == "EnvelopeTarget")
+                              masterEnv.pointee = value.toString();
+                        else if (masterEnvDepth >= 0 && n == "FloatEvent" && parent() == "Events")
+                              masterEnv.events.push_back(readEvent(a));
                         continue;
                         }
                   if (!ts)
@@ -455,8 +486,11 @@ Set parse(const QByteArray& xml)
                         ts->timing.start = value.toDouble();
                   else if (clipDepth >= 0 && depth == clipDepth + 1 && n == "CurrentEnd")
                         ts->timing.end = value.toDouble();
-                  else if (clipDepth >= 0 && depth == clipDepth + 1 && n == "Name" && value.startsWith(QLatin1String("MuseScore: ")))
-                        set.museScoreClips = true;
+                  else if (clipDepth >= 0 && depth == clipDepth + 1 && n == "Name") {
+                        ts->timing.name = value.toString();
+                        if (value.startsWith(QLatin1String("MuseScore: ")))
+                              set.museScoreClips = true;
+                        }
                   else if (clipDepth >= 0 && parent() == "Loop" && depth == clipDepth + 2) {
                         if (n == "LoopStart")
                               ts->timing.loopStart = value.toDouble();
@@ -477,23 +511,16 @@ Set parse(const QByteArray& xml)
                   else if (envelopeDepth >= 0 && n == "PointeeId" && parent() == "EnvelopeTarget")
                         env.pointee = value.toString();
                   else if (envelopeDepth >= 0 && (n == "FloatEvent" || n == "BoolEvent" || n == "EnumEvent" || n == "IntEvent")
-                           && parent() == "Events") {
-                        RawEvent e;
-                        e.time = a.value("Time").toDouble();
-                        e.value = num(a.value("Value"));
-                        if (a.hasAttribute("CurveControl1X")) {
-                              e.c1x = a.value("CurveControl1X").toDouble();
-                              e.c1y = a.value("CurveControl1Y").toDouble();
-                              e.c2x = a.value("CurveControl2X").toDouble();
-                              e.c2y = a.value("CurveControl2Y").toDouble();
-                              // a straight line's controls lie on the diagonal
-                              e.curved = std::fabs(e.c1x - e.c1y) > 1e-6 || std::fabs(e.c2x - e.c2y) > 1e-6;
-                              }
-                        env.events.push_back(e);
-                        }
+                           && parent() == "Events")
+                        env.events.push_back(readEvent(a));
                   }
             else if (tt == QXmlStreamReader::EndElement) {
                   const int depth = int(stack.size()) - 1;
+                  if (masterTrack && depth == masterEnvDepth) {
+                        if (!masterEnv.pointee.isEmpty())
+                              masterEnvelopes.push_back(masterEnv);
+                        masterEnvDepth = -1;
+                        }
                   if (masterTrack && depth == masterDepth)
                         masterTrack = false, masterDepth = -1;
                   if (ts) {
@@ -514,6 +541,16 @@ Set parse(const QByteArray& xml)
                               for (RawEnvelope& e : ts->envelopes)
                                     if (e.inClip && e.clip == ts->clip)
                                           e.timing = ts->timing;
+                              ArrangementClip ac;
+                              ac.time = ts->timing.time;
+                              ac.start = ts->timing.start;
+                              ac.end = ts->timing.end;
+                              ac.loopStart = ts->timing.loopStart;
+                              ac.loopEnd = ts->timing.loopEnd;
+                              ac.startRelative = ts->timing.startRelative;
+                              ac.loopOn = ts->timing.loopOn;
+                              ac.name = ts->timing.name;
+                              ts->track.clips.push_back(ac);
                               clipDepth = -1;
                               ts->inClip = false;
                               }
@@ -530,6 +567,26 @@ Set parse(const QByteArray& xml)
                         }
                   stack.pop_back();
                   }
+            }
+      // the song's tempo automation
+      for (const RawEnvelope& m : masterEnvelopes) {
+            if (tempoTarget.isEmpty() || m.pointee != tempoTarget)
+                  continue;
+            std::vector<RawEvent> ev = m.events;
+            std::stable_sort(ev.begin(), ev.end(), [](const RawEvent& a, const RawEvent& b) { return a.time < b.time; });
+            for (const RawEvent& r : ev) {
+                  if (r.time <= DEFAULT_EVENT_TIME + 1) {
+                        set.tempoInitial = r.value;
+                        continue;
+                        }
+                  Event x;
+                  x.time = r.time;
+                  x.value = r.value;
+                  x.curved = r.curved;
+                  x.c1x = r.c1x; x.c1y = r.c1y; x.c2x = r.c2x; x.c2y = r.c2y;
+                  set.tempoEvents.push_back(x);
+                  }
+            break;
             }
       if (r.hasError() && set.tracks.empty())
             set.error = QString("XML: %1 (line %2)").arg(r.errorString()).arg(r.lineNumber());

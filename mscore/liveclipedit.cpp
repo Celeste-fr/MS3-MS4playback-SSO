@@ -13,7 +13,14 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QFileSystemWatcher>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
+#include <QRegularExpression>
+#include <QDir>
+#include <QtConcurrent>
 #include <QLabel>
 #include <QPushButton>
 #include <QSettings>
@@ -28,6 +35,7 @@
 #include "libmscore/undo.h"
 #include "liveclips.h"
 #include "livehelpers.h"
+#include "liveintegration.h"
 #include "musescore.h"
 #include "seq.h"
 
@@ -175,6 +183,16 @@ LiveClipEditor::LiveClipEditor()
       connect(_audibleBeat, &QTimer::timeout, this, &LiveClipEditor::audibleBeat);
       if (qApp)                                 // (quitting while playing: Live's mute and solo as they were)
             connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { setAudible(0); });
+      _setWatch = new QFileSystemWatcher(this);
+      _setSettle = new QTimer(this);
+      _setSettle->setSingleShot(true);
+      _setSettle->setInterval(1500);            // (Live writes the file in steps: as LiveIntegration::Watcher)
+      connect(_setWatch, &QFileSystemWatcher::fileChanged, this, [this](const QString& path) {
+            if (!_setsChanged.contains(path))
+                  _setsChanged << path;
+            _setSettle->start();
+            });
+      connect(_setSettle, &QTimer::timeout, this, &LiveClipEditor::setsSaved);
       }
 
 LiveClipEditor::Session* LiveClipEditor::sessionOf(const Score* score)
@@ -589,6 +607,20 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             retitle(s);                         // (an unnamed clip: named by its place)
             log(QString("clip %1: track %2, %3").arg(key).arg(track).arg(slot < 0 ? QString("arrangement")
                                                                                   : QString("session slot %1").arg(slot)));
+            // the song's tempo: an arrangement clip's from its set, once the device says where it is in the song
+            if (slot < 0 || track < 0) {
+                  if (LiveClipsLink::instance()->deviceProtocol() < SPAN_PROTOCOL)
+                        s.tempoFrom = TempoFrom::OLD_DEVICE;
+                  else if (s.tempoFrom == TempoFrom::LIVE || s.tempoFrom == TempoFrom::OLD_DEVICE)
+                        s.tempoFrom = TempoFrom::SEARCHING;
+                  }
+            else if (s.tempoFrom != TempoFrom::LIVE) {    // (now a session clip: Live's tempo)
+                  s.tempoFrom = TempoFrom::LIVE;
+                  s.hasSpan = false;
+                  s.setPath.clear();
+                  s.tempoPending = true;
+                  watchSets();
+                  }
             if (slot < 0 || track < 0) {
                   s.env = EnvState::ARRANGEMENT;
                   updateStatus();
@@ -597,6 +629,28 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
                   readEnvelopes(key);
             else if (moved && s.env == EnvState::READY)
                   log(QString("clip %1 moved in Live: its envelopes are written there").arg(key));
+            }
+      else if (address == "/live/clip/span") {      // an arrangement clip's place in the song (protocol 6)
+            auto it = _sessions.find(key);
+            if (it == _sessions.end())
+                  return;
+            Session& s = it->second;
+            LiveClipTempo::Span sp;
+            sp.start = args.value(1).toDouble();
+            sp.end = args.value(2).toDouble();
+            sp.startMarker = args.value(3).toDouble();
+            sp.endMarker = args.value(4).toDouble();
+            sp.loopStart = args.value(5).toDouble();
+            sp.loopEnd = args.value(6).toDouble();
+            sp.looping = args.value(7).toInt() != 0;
+            const bool changed = !s.hasSpan || sp != s.span;
+            s.span = sp;
+            s.hasSpan = true;
+            log(QString("clip %1: in the song from beat %2 to %3").arg(key).arg(sp.start).arg(sp.end));
+            if (s.tempoFrom == TempoFrom::LIVE || s.tempoFrom == TempoFrom::OLD_DEVICE)
+                  s.tempoFrom = TempoFrom::SEARCHING;
+            if (changed)
+                  findSet(key, s.setPath);
             }
       else if (address == "/live/env/begin") {
             auto it = _sessions.find(key);
@@ -727,8 +781,18 @@ void LiveClipEditor::edit(const Clip& clip, MasterScore* score)
             s.copy = it->second.copy;
             s.copyWas = it->second.copyWas;
             s.place = it->second.place;
+            s.tempoFrom = it->second.tempoFrom;  // (the song's tempo as found for it)
+            s.span = it->second.span;
+            s.hasSpan = it->second.hasSpan;
+            s.setPath = it->second.setPath;
+            s.setAutomated = it->second.setAutomated;
+            s.setTempo = it->second.setTempo;
+            s.asked = it->second.asked;
             }
+      // the song's tempo: the import's marking (the clip's tempo when it was read) is this one's to change
+      s.tempoOwned = LiveClipTempo::tempoTexts(score);
       _sessions[clip.key] = s;
+      applyTempo(clip.key);                    // (at once: exact, as Live has it)
       connect(score, &Score::playlistChanged, this, [this, score]() { scoreChanged(score); });
       log(QString("clip %1 opened: %2 notation notes, %3 Live notes not shown, %4 outside the clip")
           .arg(clip.key).arg(s.base.entries.size()).arg(s.base.unmatched).arg(s.base.outside));
@@ -893,6 +957,7 @@ void LiveClipEditor::written(const QString& key, int writeNo, const QString& sta
 void LiveClipEditor::poll()
       {
       const qint64 now = QDateTime::currentMSecsSinceEpoch();
+      applyPendingTempos();
       for (auto& e : _sessions) {             // the envelopes: a read or a write unanswered
             Session& s = e.second;
             if (s.env == EnvState::READING && now - s.envSentAt >= CONFIRM_MS) {
@@ -967,6 +1032,380 @@ void LiveClipEditor::scoreClosed(MasterScore* score)
       }
 
 //---------------------------------------------------------
+//   the song's tempo (cliptempo.h)
+//---------------------------------------------------------
+
+static const char* const SETS_SETTING = "liveIntegration/tempoSets";
+static QStringList livePrefsBasesOverride;
+static bool livePrefsBasesSet = false;
+static bool searchInline = false;
+
+void LiveClipEditor::setLivePrefsBases(const QStringList& bases)
+      {
+      livePrefsBasesOverride = bases;
+      livePrefsBasesSet = true;
+      }
+
+void LiveClipEditor::setSearchInline(bool on)
+      {
+      searchInline = on;
+      }
+
+static QStringList livePrefsBases()
+      {
+      return livePrefsBasesSet ? livePrefsBasesOverride : LiveHelpers::prefsBases();
+      }
+
+// Live's lists (Log.txt, Preferences.cfg) as they are now: the latest of their files' times
+static qint64 livePrefsStamp()
+      {
+      qint64 t = 0;
+      for (const QString& base : livePrefsBases())
+            for (const QString& v : QDir(base).entryList({ "Live *" }, QDir::Dirs))
+                  for (const char* f : { "/Preferences/Log.txt", "/Preferences/Preferences.cfg" }) {
+                        const QFileInfo fi(base + "/" + v + f);
+                        if (fi.exists())
+                              t = std::max(t, fi.lastModified().toMSecsSinceEpoch());
+                        }
+      return t;
+      }
+
+QStringList LiveClipEditor::rememberedSets()
+      {
+      return QSettings().value(SETS_SETTING).toStringList();
+      }
+
+static void rememberSet(const QString& path)
+      {
+      QStringList l = LiveClipEditor::rememberedSets();
+      l.removeAll(path);
+      l.prepend(path);
+      for (int i = l.size() - 1; i >= 0; --i)         // (sets deleted or moved since: dropped)
+            if (!QFileInfo(l[i]).isFile())
+                  l.removeAt(i);
+      QSettings().setValue(SETS_SETTING, l);
+      }
+
+namespace {
+struct SearchResult {
+      QString path;
+      std::map<QString, LiveClipEditor::ReadSet> read;      // the sets read for it (kept for the next search)
+      };
+}
+
+// the candidates in order, read (or taken from what was read before, unchanged) until one has the clip
+static SearchResult searchSets(QStringList candidates, QStringList prefsBases, std::map<QString, LiveClipEditor::ReadSet> known,
+                               QString track, int trackIndex, LiveClipTempo::Span span)
+      {
+      SearchResult r;
+      for (const QString& p : LiveClipTempo::setCandidates(prefsBases))
+            if (!candidates.contains(p))
+                  candidates << p;
+      for (const QString& path : candidates) {
+            const QFileInfo fi(path);
+            if (!fi.isFile())
+                  continue;
+            std::shared_ptr<const LiveSet::Set> set;
+            auto k = known.find(path);
+            if (k != known.end() && k->second.modified == fi.lastModified() && k->second.set)
+                  set = k->second.set;
+            else {
+                  set = std::make_shared<const LiveSet::Set>(LiveSet::read(path));
+                  r.read[path] = { fi.lastModified(), set };
+                  }
+            if (set->error.isEmpty() && LiveClipTempo::setHasClip(*set, track, trackIndex, span)) {
+                  r.path = path;
+                  r.read[path] = { fi.lastModified(), set };
+                  return r;
+                  }
+            }
+      return r;
+      }
+
+void LiveClipEditor::findSet(const QString& key, const QString& prefer)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || !it->second.hasSpan)
+            return;
+      Session& s = it->second;
+      // the candidates: the one asked for, the sets of other clip tabs, the sets linked to open scores, the sets chosen
+      // before; then (in the search) Live's own lists
+      QStringList candidates;
+      auto add = [&candidates](const QString& p) {
+            if (!p.isEmpty() && !candidates.contains(p))
+                  candidates << p;
+            };
+      add(prefer);
+      for (const auto& o : _sessions)
+            add(o.second.setPath);
+      if (mscore)
+            for (MasterScore* m : mscore->scores())
+                  add(linkedSet(m));
+      for (const QString& p : rememberedSets())
+            add(p);
+      const int serial = ++s.searchSerial;
+      s.searching = true;
+      s.searchedPrefs = livePrefsStamp();
+      log(QString("clip %1: looking for its Live Set (%2 candidates before Live's lists)").arg(key).arg(candidates.size()));
+      const QStringList bases = livePrefsBases();
+      if (searchInline || MScore::noGui) {
+            const SearchResult r = searchSets(candidates, bases, _sets, s.clip.track, s.envTrack, s.span);
+            setFound(key, serial, r.path, r.read);
+            return;
+            }
+      QFutureWatcher<SearchResult>* w = new QFutureWatcher<SearchResult>(this);
+      connect(w, &QFutureWatcher<SearchResult>::finished, this, [this, w, key, serial]() {
+            const SearchResult r = w->result();
+            w->deleteLater();
+            setFound(key, serial, r.path, r.read);
+            });
+      const std::map<QString, ReadSet> known = _sets;
+      const QString track = s.clip.track;
+      const int trackIndex = s.envTrack;
+      const LiveClipTempo::Span span = s.span;
+      w->setFuture(QtConcurrent::run([candidates, bases, known, track, trackIndex, span]() {
+            return searchSets(candidates, bases, known, track, trackIndex, span);
+            }));
+      updateStatus();
+      }
+
+void LiveClipEditor::setFound(const QString& key, int serial, const QString& path, const std::map<QString, ReadSet>& read)
+      {
+      for (const auto& r : read)
+            _sets[r.first] = r.second;
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || it->second.searchSerial != serial)
+            return;                           // (closed, or a later search)
+      Session& s = it->second;
+      s.searching = false;
+      if (s.tempoFrom == TempoFrom::LIVE)       // (a session clip meanwhile)
+            return;
+      if (path.isEmpty()) {
+            log(QString("clip %1: its Live Set wasn't found").arg(key));
+            s.tempoFrom = TempoFrom::NO_SET;
+            s.setPath.clear();
+            s.setTempo.clear();
+            s.setAutomated = false;
+            s.tempoPending = true;
+            if (!s.asked && mscore && !MScore::noGui) {
+                  s.asked = true;
+                  QPointer<MasterScore> score = s.score;
+                  LiveClipsLink::instance()->notice(tr("The Live clip %1 › %2 plays at Live's current tempo: its Live Set wasn't "
+                                                       "found, so the song's tempo automation can't be read. Save the set in "
+                                                       "Live to use its tempo automation, or choose its file.")
+                                                    .arg(s.clip.track, clipLabel(s.clip, s.place)), false,
+                                                    tr("Choose Live Set…"), [this, score]() { if (score) chooseSet(score); });
+                  }
+            }
+      else {
+            const ReadSet& rs = _sets[path];
+            s.setPath = path;
+            s.setAutomated = rs.set && !rs.set->tempoEvents.empty();
+            s.setTempo = rs.set ? LiveClipTempo::songTempo(*rs.set) : std::vector<LiveClipTempo::Point>();
+            s.tempoFrom = TempoFrom::SET;
+            s.tempoPending = true;
+            rememberSet(path);
+            log(QString("clip %1: its Live Set is %2 (%3)").arg(key, path, s.setAutomated ? QString("tempo automation")
+                                                                                         : QString("no tempo automation")));
+            }
+      watchSets();
+      applyPendingTempos();
+      updateStatus();
+      }
+
+void LiveClipEditor::useSet(MasterScore* score, const QString& path)
+      {
+      Session* s = sessionOf(score);
+      if (!s || path.isEmpty())
+            return;
+      _sets.erase(path);                        // (read anew)
+      const QString key = s->clip.key;
+      s->asked = true;
+      findSet(key, path);
+      }
+
+void LiveClipEditor::chooseSet(MasterScore* score)
+      {
+      Session* s = sessionOf(score);
+      if (!s || !mscore)
+            return;
+      const QStringList remembered = rememberedSets();
+      const QString start = !s->setPath.isEmpty() ? s->setPath : (remembered.isEmpty() ? QString() : QFileInfo(remembered.first()).path());
+      const QString path = QFileDialog::getOpenFileName(mscore, tr("The Live Set of the clip %1").arg(clipLabel(s->clip, s->place)),
+                                                        start, tr("Ableton Live Set") + " (*.als)");
+      if (path.isEmpty())
+            return;
+      const QString key = s->clip.key;
+      useSet(score, path);
+      auto it = _sessions.find(key);
+      if (it != _sessions.end() && !it->second.searching && it->second.setPath != path)
+            LiveClipsLink::instance()->notice(tr("%1 has no clip of the track %2 at its place in the song: is the set saved "
+                                                 "in Live?").arg(QFileInfo(path).fileName(), it->second.clip.track));
+      }
+
+void LiveClipEditor::watchSets()
+      {
+      QStringList want;
+      for (const auto& s : _sessions)
+            if (!s.second.setPath.isEmpty() && !want.contains(s.second.setPath))
+                  want << s.second.setPath;
+      const QStringList have = _setWatch->files();
+      for (const QString& p : have)
+            if (!want.contains(p))
+                  _setWatch->removePath(p);
+      for (const QString& p : want)
+            if (!have.contains(p) && QFileInfo(p).isFile())
+                  _setWatch->addPath(p);
+      }
+
+// Live saved a set (settled): the clips in it read it again
+void LiveClipEditor::setsSaved()
+      {
+      const QStringList paths = _setsChanged;
+      _setsChanged.clear();
+      for (const QString& path : paths) {
+            if (!QFileInfo(path).isFile()) {      // (replaced by a rename: back in a moment)
+                  QTimer::singleShot(1000, this, [this]() { watchSets(); });
+                  continue;
+                  }
+            _sets.erase(path);
+            std::vector<QString> keys;
+            for (const auto& s : _sessions)
+                  if (s.second.setPath == path)
+                        keys.push_back(s.first);
+            for (const QString& k : keys)
+                  findSet(k, path);
+            }
+      watchSets();                              // (a file replaced by rename leaves the watcher)
+      }
+
+// for the tests and the watcher alike: a set file saved (path), as the watcher reports it
+void LiveClipEditor::setSaved(const QString& path)
+      {
+      if (!_setsChanged.contains(path))
+            _setsChanged << path;
+      setsSaved();
+      }
+
+void LiveClipEditor::songTempo(double bpm)
+      {
+      if (bpm <= 0 || bpm == _songBpm)
+            return;
+      _songBpm = bpm;
+      for (auto& s : _sessions)
+            if (s.second.tempoFrom != TempoFrom::SET || !s.second.setAutomated)
+                  s.second.tempoPending = true;
+      }
+
+void LiveClipEditor::applyPendingTempos()
+      {
+      std::vector<QString> keys;
+      for (const auto& s : _sessions)
+            keys.push_back(s.first);
+      for (const QString& k : keys) {
+            auto it = _sessions.find(k);
+            if (it == _sessions.end())
+                  continue;
+            Session& s = it->second;
+            // not found: looked for again when Live's lists change (a set saved, opened)
+            if (s.tempoFrom == TempoFrom::NO_SET && !s.searching && livePrefsStamp() != s.searchedPrefs)
+                  findSet(k);
+            it = _sessions.find(k);
+            if (it != _sessions.end() && it->second.tempoPending)
+                  applyTempo(k);
+            }
+      }
+
+void LiveClipEditor::applyTempo(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || !it->second.score)
+            return;
+      Session& s = it->second;
+      if (seq && seq->isPlaying()) {            // (after MuseScore stops)
+            s.tempoPending = true;
+            return;
+            }
+      s.tempoPending = false;
+      MasterScore* score = s.score;
+      std::vector<LiveClipTempo::Point> pts;
+      if (s.tempoFrom == TempoFrom::SET && s.setAutomated && s.hasSpan)
+            pts = LiveClipTempo::clipTempo(s.setTempo, LiveClipTempo::firstPasses(s.span, s.clip.end));
+      else {
+            const double bpm = _songBpm > 0 ? _songBpm : s.clip.bpm;
+            pts.push_back({ 0, bpm, false });
+            s.appliedBpm = bpm;
+            }
+      const std::vector<LiveClipTempo::Mark> want = LiveClipTempo::marks(pts, score->endTick().ticks());
+      if (seq)
+            seq->waitForRendering();
+      const int r = LiveClipTempo::apply(score, want, &s.tempoOwned, score->undoStack()->canUndo() || score->undoStack()->canRedo());
+      if (r) {
+            log(QString("clip %1: the song's tempo put in the score (%2 marking(s) and line(s)%3)").arg(key).arg(want.size())
+                .arg(r == 2 ? QString(", replaced") : QString(", in place")));
+            score->update();
+            updateClean(key);
+            }
+      }
+
+LiveClipEditor::TempoFrom LiveClipEditor::tempoFrom(const MasterScore* score) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      return s ? s->tempoFrom : TempoFrom::LIVE;
+      }
+
+QString LiveClipEditor::tempoSet(const MasterScore* score) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      return s ? s->setPath : QString();
+      }
+
+QString LiveClipEditor::tempoText(const MasterScore* score, QString* details) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      if (!s)
+            return QString();
+      QString bpm = QString::number(s->appliedBpm > 0 ? s->appliedBpm : s->clip.bpm, 'f', 2);
+      while (bpm.contains('.') && (bpm.endsWith('0') || bpm.endsWith('.')))
+            bpm.chop(1);
+      QString text, more;
+      switch (s->tempoFrom) {
+            case TempoFrom::LIVE:
+                  text = tr("tempo: Live's (%1)").arg(bpm);
+                  more = tr("Tempo: Live's song tempo, followed as it changes.");
+                  break;
+            case TempoFrom::SEARCHING:
+                  text = tr("tempo: looking for the Live Set…");
+                  break;
+            case TempoFrom::SET:
+                  if (s->setAutomated) {
+                        text = tr("tempo: the song's automation");
+                        more = tr("Tempo: the song's tempo automation under the clip, from %1 (read again when Live saves it). "
+                                  "A looping clip shows each beat at its tempo in its first pass.").arg(QDir::toNativeSeparators(s->setPath));
+                        }
+                  else {
+                        text = tr("tempo: Live's (%1)").arg(bpm);
+                        more = tr("Tempo: Live's song tempo, followed as it changes (%1 has no tempo automation).")
+                               .arg(QFileInfo(s->setPath).fileName());
+                        }
+                  break;
+            case TempoFrom::NO_SET:
+                  text = tr("tempo: Live's (%1), set not found").arg(bpm);
+                  more = tr("Tempo: Live's current song tempo. The clip's Live Set wasn't found: save the set in Live to use its "
+                            "tempo automation, or choose its file (Choose Live Set…).");
+                  break;
+            case TempoFrom::OLD_DEVICE:
+                  text = tr("tempo: Live's (%1)").arg(bpm);
+                  more = tr("Tempo: Live's current song tempo. Update the MuseScore Link device in Live to follow the song's "
+                            "tempo automation under an arrangement clip.");
+                  break;
+            }
+      if (details)
+            *details = more;
+      return text;
+      }
+
+//---------------------------------------------------------
 //   status
 //---------------------------------------------------------
 
@@ -1021,6 +1460,12 @@ void LiveClipEditor::statusParts(const MasterScore* score, QStringList* parts, Q
             *parts << env;
       if (!envMore.isEmpty())
             *details << envMore;
+      QString tempoMore;
+      const QString tempo = tempoText(s->score, &tempoMore);
+      if (!tempo.isEmpty())
+            *parts << tempo;
+      if (!tempoMore.isEmpty())
+            *details << tempoMore;
       if (s->base.unmatched || s->base.outside) {
             const int n = s->base.unmatched + s->base.outside;
             *parts << tr("%n Live note(s) not shown", "", n);
@@ -1087,9 +1532,14 @@ void LiveClipEditor::updateStatus()
             _reload = new QPushButton(tr("Reload from Live"), _status);
             _reload->setToolTip(tr("Read the clip from Live again, as it is there now. Edits made here and not yet in "
                                    "Live are lost."));
+            _chooseSet = new QPushButton(tr("Choose Live Set…"), _status);
+            _chooseSet->setToolTip(tr("The Live Set this arrangement clip is in, for the song's tempo automation (Live doesn't "
+                                      "say which file it is; save the set in Live first)."));
             h->addWidget(_statusLabel);
             h->addWidget(_reload);
+            h->addWidget(_chooseSet);
             connect(_reload, &QPushButton::clicked, this, [this]() { reload(_current); });
+            connect(_chooseSet, &QPushButton::clicked, this, [this]() { chooseSet(_current); });
             mscore->statusBar()->addPermanentWidget(_status);
             }
       const Session* s = sessionOf(_current);
@@ -1102,6 +1552,7 @@ void LiveClipEditor::updateStatus()
       _statusLabel->setToolTip(details.isEmpty() ? text : text + "\n\n" + details);
       _reload->setVisible(s->state == State::CONFLICT || s->state == State::FAILED || s->state == State::NO_ANSWER
                           || s->env == EnvState::FAILED);
+      _chooseSet->setVisible(s->tempoFrom == TempoFrom::NO_SET);
       }
 
 }     // namespace LiveIntegration

@@ -37,6 +37,12 @@
 //         Automation/Events/FloatEvent (times relative to the clip's start, 0-127)
 //   Everything is read by element name wherever it sits under its track, so a device inside a
 //   rack or a moved element is still found.
+//   The song's tempo (clip tabs follow it, liveclipmodel.h › Clip tempo): the main track (MainTrack in Live 12,
+//   MasterTrack before) holds DeviceChain/Mixer/Tempo with Manual Value= (bpm) and an AutomationTarget Id=; its
+//   AutomationEnvelopes/…/AutomationEnvelope whose PointeeId is that Id is the tempo automation: FloatEvent Time=
+//   (song beats) Value= (bpm), the default event first, a curve's CurveControl… as any envelope's. (Checked with Live
+//   12.2 and 12.4.6 sets: the owner's WASP_From_Mars set, the VM's; none had tempo breakpoints of Live's making.)
+//   Each track's arrangement MIDI clips are kept too (their place: which file is the set a clip comes from).
 //
 //   Beats to ticks: 480 a quarter note; Live's beat 0 is the score's start (Live follows
 //   MuseScore's clock, midisync.h), in played (unrolled) time: a point in a repeat's second pass
@@ -90,18 +96,36 @@ struct Envelope {
       bool inClip { false };        // a clip's envelope (its own axis, looped: points placed in the arrangement)
       };
 
+// an arrangement MIDI clip (MainSequencer/…/ArrangerAutomation/Events/MidiClip)
+struct ArrangementClip {
+      double time { 0 };            // Time=
+      double start { 0 };           // CurrentStart (song beats; Live's API: start_time)
+      double end { 0 };             // CurrentEnd (end_time)
+      double loopStart { 0 };       // Loop/LoopStart (clip beats)
+      double loopEnd { 0 };         // Loop/LoopEnd
+      double startRelative { 0 };   // Loop/StartRelative (the start marker is LoopStart + StartRelative)
+      bool loopOn { false };
+      QString name;
+      };
+
 struct Track {
+      QString kind;                 // MidiTrack, AudioTrack, GroupTrack, ReturnTrack (Live's API lists the returns apart)
       QString name;                 // UserName, else EffectiveName
       QString inputTarget;          // MidiInputRouting/Target as written
       QString inputDevice;          // the MIDI port it listens to ("" : none or all)
       int inputChannel { -1 };      // 1-16; -1: all
       QStringList devices;          // its plug-ins
       std::vector<Envelope> envelopes;
+      std::vector<ArrangementClip> clips;
       };
 
 struct Set {
       QString creator;              // "Ableton Live 12.x"
-      double tempo { 0 };           // the arrangement's first tempo (bpm)
+      double tempo { 0 };           // the arrangement's first tempo (bpm): the main track's Tempo Manual
+      // the main track's tempo automation as Live keeps it (bpm by song beat; the default event left out: tempoInitial,
+      // -1 none); empty: no automation (the tempo is `tempo` throughout)
+      double tempoInitial { -1 };
+      std::vector<Event> tempoEvents;
       // a clip named "MuseScore: …" (liveclips.h): Live played the score as clips, at one tempo, the
       // notes at their real times: a beat is seconds × tempo / 60, not a quarter note of the score
       bool museScoreClips { false };
