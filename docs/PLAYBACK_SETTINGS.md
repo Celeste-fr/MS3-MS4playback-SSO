@@ -57,7 +57,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Legato delay per patch and interval | map `legatoDelay` (5-pitch grid; octaves by template fit) | `Articulation::legatoDelayAt` | `[legato.delay]` table |
 | Octave slurs (±12) by start pitch (16 patches, measured at ~16-30 starts each; 2026-10-02, option C) | map `octaveUp` / `octaveDown` (start MIDI pitch:ms; failed fits left out); unmeasured start: the nearest measured one, a tie (one-semitone gap) to the side whose run of like values (±50 ms, adjacent) is shorter, else the lower; unknown start: the table's median; patches without them: `legatoDelay`'s ±12 | `SoundLib::octaveDelayAt` via `legatoDelayAt(interval, fromPitch)` | `[legato.delay]` offset (adds) or table (its ±12 replaces) |
 | Oboe Solo +60 (not its +12 per-start octave values), Violins 2 +25 ms legato corrections; Violins 2 octave slurs −30 / −30 more (+12 / −12; the octave sweep of 5698181 heard both 30 ms early) | map (generator `SWEEP_LEGATO_CORRECTION`, `OCTAVE_NO_SWEEP_CORRECTION`, `OCTAVE_SWEEP_CORRECTION`) | map data | `[legato.delay]` offset |
-| An early start leaves the note before at least this much of its length as played (it may have started early itself) | 40 ms | `legatoTransition`, `onsetEarliest` (`libPlayedOn`) | `[legato] keepMs` |
+| An early start leaves the note before at least this much of its length as played (it may have started early itself) | 40 ms (chosen by a sweep: below) | `legatoTransition`, `onsetEarliest` (`libPlayedOn`) | `[legato] keepMs` |
 | A transition after a short note starts early by a share of the measured delay: 50 % after a very short note, rising linearly to all of it after a 380 ms note (fitted: below) | 50 %, 380 ms | `libFastDelay` | `[legato] fastShare`, `fastFullMs` (0: always all) |
 | A slur's first note right after a note too short for the transition (same patch, no rest) starts as early as that transition | on | `collect` (held-note branch) | `[legato] fastFirsts` |
 | Fast technique: a slurred note after a note shorter than its transition plays its own attack on the same patch (the note before ends there) instead of a legato transition | off (measured about as on time as the default with its notes as early; the owner decides by ear) | `collect` (`libRetrigger`) | `[legato] fastTechnique`; "too short": `fastBelowShare` (100 % of the transition's delay; also used by fastFirsts) |
@@ -112,7 +112,8 @@ check's), MuseScore 2bc46bc's `--verify-playback`, Live 12.4.6 (trial). Tools in
   note-on; transition or fresh attack told by the new note's own harmonics over its first 400 ms against the same
   pair's references (+250 ms: legato; −300 ms: attack). Result: transition in 336 of 336 cases at every ending from
   −20 ms on (−20, −10, 0, +1, +5, +30), in 80 of 336 at −40 ms, none from −60 ms (offline, events in blocks of their
-  own as MuseScore sends them; [OFFSETS]). The unit that matters is time (SSO joins notes up to 20 ms apart); 0 ticks
+  own as MuseScore sends them; the same in 512-frame blocks with each event at its sample offset, as a realtime host
+  and Live deliver them: 106 of 106 from −20 ms on, 24 of 106 at −40 ms, 14 patches). The unit that matters is time (SSO joins notes up to 20 ms apart); 0 ticks
   is the smallest value, tempo-independent, with a 20 ms margin. Note: a slur's last note ending 1 % early
   (`slurEndOverlap` 0) is therefore also played as a transition by SSO whenever that 1 % is 20 ms or less, i.e. for
   any note up to 2 s: the phrase break needs a gap of 40 ms or more (open, for the owner).
@@ -144,6 +145,14 @@ check's), MuseScore 2bc46bc's `--verify-playback`, Live 12.4.6 (trial). Tools in
   `analyze_fastruns.py`: 2580 transitions of 12 Performance patches at 100 / 130 / 160 / 200 bpm
   (`tools/playbackverify/fast_share_fit.json`: the 48 groups). rms group error 20.1 ms (65 % / 800: 22.4); the
   minimum is flat (within 5 %: 39-60 %, 260-1060 ms): sixteenths only pin the share near their lengths (75-150 ms).
+- **`[legato] keepMs` 40 → 40 ms (now chosen).** Rule (stated before the renders): the value of 0 / 20 / 40 / 60 /
+  80 / 120 ms whose median |arrival − written time| of the slurred transitions (not slur firsts) over the 12 parts and
+  4 tempi is the smallest, among those with the fewest transitions without an arrival; within 1 ms the larger.
+  `make_fastrun_scores.py`'s three scores with each value (and the refit fastShare 50 % / fastFullMs 380) through
+  MuseScore 2bc46bc `--verify-playback`, `analyze_fastruns.py`, `tools/playbackverify/choose_keep_ms.py`
+  (`keep_ms_choice.json`): 3072 transitions each; median |arrival| 31 / 31 / 31 / 34 / 45 / 94 ms, 90 % 104 / 104 /
+  104 / 109 / 129 / 159; no arrival found 431 / 430 / 410 / 424 / 432 / 432 (mostly the analysis, alike for every
+  value). 40 wins on the fewest without an arrival and on the tie-break; 0-40 hear the same, 60 and more get late.
 - **`[shorts] nominalShare` (90 %) removed.** Every SSO short with a `length` (11) has a measured `from`, so the rule
   applied to nothing; a short without `from` is no longer skipped by length.
 - **Varispeed glide (`[legato] glideMs` 30 ms) removed**: computed by the owner's criterion, each output frame's step

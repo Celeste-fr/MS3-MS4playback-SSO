@@ -1,0 +1,47 @@
+{
+ "chosen": 40,
+ "values": {
+  "0": {
+   "transitions": 3072,
+   "swallowed": 431,
+   "medianAbsMs": 31,
+   "p90AbsMs": 104,
+   "firstsMedianAbsMs": 56
+  },
+  "20": {
+   "transitions": 3072,
+   "swallowed": 430,
+   "medianAbsMs": 31.0,
+   "p90AbsMs": 104,
+   "firstsMedianAbsMs": 59
+  },
+  "40": {
+   "transitions": 3072,
+   "swallowed": 410,
+   "medianAbsMs": 31.0,
+   "p90AbsMs": 104,
+   "firstsMedianAbsMs": 64
+  },
+  "60": {
+   "transitions": 3072,
+   "swallowed": 424,
+   "medianAbsMs": 34.0,
+   "p90AbsMs": 109,
+   "firstsMedianAbsMs": 59
+  },
+  "80": {
+   "transitions": 3072,
+   "swallowed": 432,
+   "medianAbsMs": 45.0,
+   "p90AbsMs": 129,
+   "firstsMedianAbsMs": 79.0
+  },
+  "120": {
+   "transitions": 3072,
+   "swallowed": 432,
+   "medianAbsMs": 94.0,
+   "p90AbsMs": 159,
+   "firstsMedianAbsMs": 111
+  }
+ }
+}

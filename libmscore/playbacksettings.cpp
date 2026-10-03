@@ -42,6 +42,9 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: a slur's last note overlaps the note after it too (MuseScore 4); 0: it ends on time, so the next note gets its own attack", true },
       { "legato/early", MAP, 0, 200, "%",
         "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
+      // (keepMs chosen by a sweep, numbers-measured 2026-10-03: 0 / 20 / 40 / 60 / 80 / 120 ms on make_fastrun_scores.py's
+      // scores, MuseScore 2bc46bc on the Windows VM, 3072 transitions each: median |arrival| 31 / 31 / 31 / 34 / 45 / 94
+      // ms, 40 the fewest without an arrival (410 against 424-432); tools/playbackverify/choose_keep_ms.py)
       { "legato/keepMs", 40, 0, 1000, "ms",
         "a note before a transition (or before a held note started early) on the same patch keeps at least this much of its length as played", true },
       // (fastShare / fastFullMs fitted, numbers-measured 2026-10-03: tools/playbackverify/fit_fast_share.py on 2580
