@@ -110,8 +110,8 @@ class Vst3Synth : public Synthesizer {
       void setVarispeed(bool on) { _varispeed = on; }
       // (GUI thread, SoundLibraryHost::sync) a slot's parameter ids by controller index (automation)
       void setParameterIds(int slot, const std::vector<long>& ids);
-      // (a slurred note of another tuning on its previous note's lane glides by varispeed over [legato] glideMs:
-      // playback settings; the old constant, unused, went 2026-10-03)
+      // (a slurred note of another tuning on its previous note's lane glides by varispeed, each output frame within a
+      // cent: Vst3Plugin::GLIDE_CENT_STEP; [legato] glideMs, 30 ms without a source, went 2026-10-03, numbers-measured)
 
       // the Mixer (any thread): a slot's volume and pan as MuseScore's channels keep them (0-127,
       // volume 100 and pan 64 play the plug-in as it is), muted: silent (mute or solo). Volume:

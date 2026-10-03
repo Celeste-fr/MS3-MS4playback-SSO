@@ -227,7 +227,7 @@ void Vst3Synth::deliver(const PlayEvent& event)
             bool any = false;
             for (unsigned char n : sounding)
                   any = any || n > 0;
-            _slots[slot]->setPitch(event.tuning(), any ? Playback::value("legato/glideMs") / 1000.0 : 0.0);   // (playback settings)
+            _slots[slot]->setPitch(event.tuning(), any ? -1.0 : 0.0);   // (-1: each frame within a cent, GLIDE_CENT_STEP)
             }
       // automation of a plug-in parameter (not MIDI): the controller's parameter on this slot's instance
       if (event.type() == ME_PARAMETER) {

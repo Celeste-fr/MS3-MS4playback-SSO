@@ -135,7 +135,7 @@ class MidiRenderer {
       // an early start (a legato transition, a held note's onset) after a note on the same patch: that note keeps at
       // least libKeep seconds as played ([legato] keepMs); a transition after a short note: libFastDelay ([legato]
       // fastShare, fastFullMs)
-      double libKeep = 0.04, libFastShare = 0.65, libFastFull = 0.8;
+      double libKeep = 0.04, libFastShare = 0.50, libFastFull = 0.38;
       // the fast technique ([legato] fastTechnique, fastBelowShare): a slurred note after a note shorter than this share
       // of its transition's delay plays its own attack (no legato transition)
       bool libFastTechnique = false;

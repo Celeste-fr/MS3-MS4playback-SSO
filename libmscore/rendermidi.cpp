@@ -2652,7 +2652,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
 //    the note-on, the new note heard ~90-130 ms after it); no later than the lane's next note-on less
 //    the glide (it ends by then). Off: at the note-on. A note with no note before (a fresh attack, a
 //    slur's first note) bends at its note-on. A chord's notes at one tick on one lane: one glide, at
-//    the earliest arrival. ([legato] glideMs is varispeed's glide only.) A tuning beyond the range: bend at the centre and varispeed plays it all
+//    the earliest arrival. (Varispeed glides by the same criterion per output frame: Vst3Plugin::GLIDE_CENT_STEP.) A tuning beyond the range: bend at the centre and varispeed plays it all
 //    (one way for a whole note; the lanes keep what sounds from moving either way). Works hosted and
 //    over MIDI out alike (the bends are events on the lane's route), and in Live's clips
 //---------------------------------------------------------
@@ -4727,9 +4727,11 @@ bool MidiRenderer::libSlurAcross(const Measure* last) const
 //   MidiRenderer::libFastDelay
 //    a legato transition's delay (ms) after a note lenBefore seconds long: SSO's transitions are quicker after short
 //    notes than the legato grid's (measured from long notes): fastShare of it after a very short note, rising
-//    linearly to all of it after a note fastFullMs long (playback settings [legato] fastShare, fastFullMs). Measured
-//    (2026-10-02, 13 Performance patches, slurred sixteenths at 100-200 bpm, 2666 transitions): 65 % and 800 ms
-//    predict each patch's median at each tempo within 11 ms (median; 90 % within 40)
+//    linearly to all of it after a note fastFullMs long (playback settings [legato] fastShare, fastFullMs). Fitted
+//    (numbers-measured, 2026-10-03; the 2026-10-02 fit's 65 % / 800 ms left no data or script): 12 Performance patches,
+//    slurred sixteenths at 100-200 bpm with legato early 0 (MuseScore 2bc46bc on the Windows VM), 2580 transitions:
+//    50 % and 380 ms, least squares over the 48 part x tempo medians, rms 20 ms (65 % / 800: 22); a flat minimum:
+//    within 5 % of it 39-60 % and 260-1060 ms (tools/playbackverify/fit_fast_share.py, fast_share_fit.json)
 //---------------------------------------------------------
 
 double MidiRenderer::libFastDelay(double delayMs, double lenBefore) const

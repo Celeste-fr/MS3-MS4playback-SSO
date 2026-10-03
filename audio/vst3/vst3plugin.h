@@ -81,6 +81,8 @@ class Vst3Plugin {
       // plug-in that ignores a note's tuning (Kontakt). The plug-in renders into a buffer read back
       // at that speed through a windowed-sinc resampler (8 samples each side; exact pitch, a
       // latency of 8 samples once engaged). Jumps at once, or glides over glideSeconds
+      // glideSeconds < 0: as short as each output frame's step stays within GLIDE_CENT_STEP cents (the owner's criterion)
+      static constexpr double GLIDE_CENT_STEP = 1.0;
       void setPitch(double cents, double glideSeconds = 0);
       double pitch() const;               // the target, cents
       void allNotesOff();

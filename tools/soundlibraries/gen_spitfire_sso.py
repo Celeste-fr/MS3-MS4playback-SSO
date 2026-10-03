@@ -1301,7 +1301,9 @@ def onset(patch, sound):
 #   62 / 63; Basses - Performance 965-2955; Violins 1 Long Flautando 775-3480), most likely the recordings' open
 #   strings and room. A lane must stay busy while any of its notes rings, so the articulation's longest over its
 #   range (240 articulations: a median 1.3 times the test pitch's, 46 over 1.5 s and 30 % above it, up to 3.5 s);
-#   a release over 6 s (-1) is left out; no range data: the timing check's, at the test pitch.
+#   a release over the tail (-1) is left out; no range data: the timing check's, at the test pitch. The 98 sounds whose
+#   release reached the rest check's 6 s tail were measured again with 25 s (release_long_tail.py,
+#   releases_from_long_tail.py, 2026-10-03): the timpani's swells 7.6 s (were 6.1 / 5.7: the tail), Tubular Bells 9.8 s.
 def release(patch, sound, t):
     rows = RANGE.get(patch, {}).get(sound, {}).get('range')
     rel = [r[9] for r in rows or [] if r[9] is not None and r[9] > 0]

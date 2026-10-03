@@ -195,7 +195,7 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
 - **Status:** Mixer › Advanced Options… › Ableton Live shows whether the device answers, when the last
   update was confirmed, and each route that found no track.
 - **The connection lost** (the owner, 2026-10-02: "musescore should notify you if a connection stopped"): the
-  device says hello every 2 s; none for 6 s (Live or the set closed, the device deleted, its port changed), or
+  device says hello every 2 s; none for 8 s (measured: up to 6.0 s apart while Live is busy) (Live or the set closed, the device deleted, its port changed), or
   its `/live/bye` (the hub copy deleted: at once), and MuseScore shows a yellow bar across the top of the
   score area (over the tabs), once per loss and only while something uses the link (a clip tab, Live plays the score, Play
   through Live): "Lost the connection to Live (the MuseScore Link device, UDP port 9001): …" with what stops
@@ -612,8 +612,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 - **Host-only playback settings** (docs/PLAYBACK_SETTINGS.md; playback.ini `[hosting]`): `settleSeconds` (how long a
   freshly loaded patch runs before MuseScore sets its controllers) and `mixSmoothingMs` (the Mixer's gain glide) act
-  in MuseScore's own hosting only; Live loads and mixes the plug-ins itself. The varispeed side of `[legato]
-  glideMs` too (varispeed can't reach Live); its pitch-bend glides are rendered and reach the clips. Every other
+  in MuseScore's own hosting only; Live loads and mixes the plug-ins itself. Varispeed's glides too (each frame
+  within a cent; varispeed can't reach Live); the pitch-bend glides are rendered and reach the clips. Every other
   playback setting acts in the renderer (the clips' events) or, `[hosting] maxVoices`, in the Kontakt states the Live
   Set carries, so Live gets it identically.
 - **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): MuseScore
@@ -820,7 +820,7 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   track audible) sets the track's `mute` (also its Track Activator) and each group track it is in
   (`Track.group_track`) to 0, and, when another track or return track is soloed and neither this track nor a group
   it is in is, its `solo` to 1. Each property it changed is kept with its old value and the value set (in the
-  device's Global, so a new hub can put it back). At `0`, after 4 s without a heartbeat (MuseScore gone, the link
+  device's Global, so a new hub can put it back). At `0`, after 7 s without a heartbeat (measured: the device stalls up to 6 s while Live freezes or loads Kontakt tracks; docs/PLAYBACK_SETTINGS.md › Measured by sweeps) (MuseScore gone, the link
   lost), when the track's copy goes, or when the hub is deleted, each goes back to its old value **only if it
   still has the value set**: a mute or solo the user changed meanwhile stays as the user set it. The heartbeat
   sets nothing again. Live's transport, the clip and other tracks' mute are never touched. Solo: Live's

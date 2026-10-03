@@ -44,9 +44,12 @@ static const std::vector<Definition> DEFINITIONS = {
         "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
       { "legato/keepMs", 40, 0, 1000, "ms",
         "a note before a transition (or before a held note started early) on the same patch keeps at least this much of its length as played", true },
-      { "legato/fastShare", 65, 0, 100, "%",
+      // (fastShare / fastFullMs fitted, numbers-measured 2026-10-03: tools/playbackverify/fit_fast_share.py on 2580
+      // transitions of 12 Performance patches in fast runs at 100-200 bpm, least squares over part x tempo medians;
+      // docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
+      { "legato/fastShare", 50, 0, 100, "%",
         "after a very short note a transition starts early by this share of its measured delay (SSO is quicker in fast passages) ...", true },
-      { "legato/fastFullMs", 800, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
+      { "legato/fastFullMs", 380, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
       { "legato/fastTechnique", 0, 0, 1, "on/off",
         "1: a slurred note after a note too short for the transition into it plays its own attack (early as the transition would be) instead of a legato transition", true },
       { "legato/fastFirsts", 1, 0, 1, "on/off",
@@ -54,8 +57,6 @@ static const std::vector<Definition> DEFINITIONS = {
       { "legato/fastBelowShare", 100, 0, 400, "%",
         "too short: shorter than this share of the transition's delay (the patch's measured delay, after fastShare / fastFullMs)", true },
       // (varispeed only; 30 has no source: needs a sweep on the VM. A pitch-bend glide takes one cent a tick: libraryPitchBends)
-      { "legato/glideMs", 30, 0, 500, "ms",
-        "a slurred note on a tuning copy played by varispeed glides from the note before's tuning over this long (a pitch-bend glide: one cent a tick, as short as it can be without a step over a cent)", true },
       { "legato/levelBalance", 0, 0, 1, "on/off",
         "1: a legato transition plays at its pitch's level (the map's measured legatoLevel: SSO's transitions alone arrive 2-6 dB louder or softer), by CC11 from its arrival; off: in runs the notes around a transition move its level as much (measured), so it didn't even them", true },
       // (the largest measured correction: Cor Anglais - Performance, +3 settled from G4, 9.4 dB loud, of 30288 measured
@@ -204,6 +205,10 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
                   i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs, fastTechnique; delete the line)").arg(id);
             // (the nominal short rule, 90 % of length=, had no source; every SSO short with a length= has a measured
             // from=: removed 2026-10-03, numbers-measured)
+            // (varispeed's glide time: now as short as each frame's step stays within a cent, Vst3Plugin::GLIDE_CENT_STEP)
+            else if (id == "legato/glideMs")
+                  i.warnings << QString("%1 is no longer used (since 2026-10-03: a varispeed glide is as short as each step stays "
+                                        "within a cent; delete the line)").arg(id);
             else if (id == "shorts/nominalShare")
                   i.warnings << QString("%1 is no longer used (since 2026-10-03: every short with a length= has a measured from=; delete the line)").arg(id);
             // (a fixed ramp step, replaced on 2026-10-03: a ramp sends a value at each tick where it moves by one step of its

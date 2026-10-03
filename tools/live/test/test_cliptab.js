@@ -280,7 +280,7 @@ test("audible: a change the user makes while MuseScore plays is kept", () => {
       assert.strictEqual(s.synth.solo, 0);
       });
 
-test("audible: MuseScore silent for 4 s (quit, link lost), the track's copy or the hub deleted: put back", () => {
+test("audible: MuseScore silent for 7 s (quit, link lost), the track's copy or the hub deleted: put back", () => {
       const s = setUp();
       s.synth.mute = 1;
       s.bass.mute = 1;
@@ -289,12 +289,12 @@ test("audible: MuseScore silent for 4 s (quit, link lost), the track's copy or t
             d.call("now = function() { return " + t + "; }");
       s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
       assert.strictEqual(s.synth.mute, 0);
-      t += 3000;
+      t += 6000;
       s.hub.call("now = function() { return " + t + "; }");
       s.hub.api.checkAudible();
-      assert.strictEqual(s.synth.mute, 0);                          // (3 s: still playing)
+      assert.strictEqual(s.synth.mute, 0);                          // (6 s: still playing; AUDIBLE_STALE_MS 7000)
       s.hub.message("/ms/cliptab/audible", [1, s.synth.id]);
-      t += 4500;
+      t += 7500;
       s.hub.call("now = function() { return " + t + "; }");
       s.hub.call("beat()");                                         // (the hub's second)
       assert.strictEqual(s.synth.mute, 1);

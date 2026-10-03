@@ -10,7 +10,7 @@ numbers, a file per part, keyed by patch then sound ("<articulation name>", a dr
   sso_sound_range.json      "pitch": the test note; "range": [[pitch, ppDb, mfDb, ffDb, ppPerceived, mfPerceived,
                             ffPerceived, mfAttack, mfFullMs, mfReleaseMs], ...] every semitone that sounds at mf
                             (levels: the loudest 50 ms, dB; perceived: perceivedLoudnessDb; attack: attackSalience;
-                            full: from the note-on to 6 dB under its peak; release: to 30 dB under, -1 none or over 6 s),
+                            full: from the note-on to 6 dB under its peak; release: to 30 dB under, -1 none or over the tail: 6 s until 2026-10-03, now 19 s),
                             "silentAt": the silent pitches tried at the ends (and in gaps)
   sso_sound_repeats.json    the test pitch at mf 8 times: [[loudDb, perceivedDb, attack, startMs, fullMs], ...] and
                             "spreadDb": loudest minus quietest (round robins)

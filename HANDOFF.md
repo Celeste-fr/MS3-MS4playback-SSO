@@ -59,7 +59,7 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   slur's first note inside a run (its own attack right after the note before) 100-160 ms late. Now: the note before
   keeps `keepMs` (40) of its length as played (not a share of the written one), so every note of a run starts early
   by about the same and keeps its length; after a short note a transition takes 65 % of its measured delay rising to
-  all of it at 800 ms (`fastShare`, `fastFullMs`: fitted to 2666 measured transitions, each patch's median within 11
+  all of it at 800 ms (refit 2026-10-03, numbers-measured: 50 % / 380 ms, docs/PLAYBACK_SETTINGS.md › Measured by sweeps) (`fastShare`, `fastFullMs`: fitted to 2666 measured transitions, each patch's median within 11
   ms); a slur's first note in a fast run starts as early as a transition would (`fastFirsts`); a transition's note
   before ends `overlapTicks` after the new start as played. Measured (Windows VM, kthost re-timing the renderer's events
   offline through Kontakt; 13 Performance patches; `tools/playbackverify/make_fastrun_scores.py`,

@@ -155,7 +155,11 @@ class ArticulationCheck {
       //                               cents of the second for 3 frames), and the level's dip in the first 600 ms
       //                               against the second note's own level after it (dB, 0 or below)
       static constexpr double HOLD_SECONDS = 2.5;
-      static constexpr double TAIL_SECONDS = 6.0;
+      // TAIL_SECONDS measured (numbers-measured, 2026-10-03, kthost on the Windows VM, tools/soundlibraries/
+      // release_long_tail.py): the 98 sounds whose release reached the old 6 s tail (or -1), again with 25 s: the
+      // longest release (to 30 dB under) 18.9 s (Percussion - Unpitched - Metal - Cymbal Hi, FX Bow); the rule: the
+      // smallest whole second longer than the longest measured release. held() stops a tail early once it is quiet
+      static constexpr double TAIL_SECONDS = 19.0;
       static constexpr int LEGATO_OVERLAP_MS = 30;
       static constexpr int LEGATO_VELOCITIES[3] = { 20, 64, 110 };
       static constexpr int LEGATO_INTERVALS[2] = { 2, -5 };

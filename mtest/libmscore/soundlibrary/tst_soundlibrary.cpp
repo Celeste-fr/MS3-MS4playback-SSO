@@ -773,6 +773,18 @@ void TestSoundLibrary::render()
       delete score;
       }
 
+// The legato timing the render tests below were computed with: the overlap and the fast-note share before
+// numbers-measured (2026-10-03: overlapTicks 0, fastShare 50 %, fastFullMs 380 ms measured). They test the
+// mechanism, so they keep their numbers; playbackSettingsIni / Layers check the defaults.
+static const std::map<QString, QString> OLD_TIMING = { { "legato/overlapTicks", "30" }, { "legato/fastShare", "65" },
+                                                       { "legato/fastFullMs", "800" } };
+static std::map<QString, QString> withOld(std::map<QString, QString> m)
+      {
+      for (const auto& v : OLD_TIMING)
+            m.insert(v);
+      return m;
+      }
+
 //---------------------------------------------------------
 //   renderPatches
 //    a part with extra patches: slurred notes on the legato patch (overlapping), "sul G" on
@@ -782,6 +794,7 @@ void TestSoundLibrary::render()
 
 void TestSoundLibrary::renderPatches()
       {
+      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Instrument name='Violin' ids='violin'>"
@@ -884,6 +897,7 @@ void TestSoundLibrary::renderPatches()
                   sulG = te.second.extChannel();
       QCOMPARE(sulG, 0);
       delete score;
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
@@ -896,6 +910,7 @@ void TestSoundLibrary::renderPatches()
 
 void TestSoundLibrary::renderPhraseMark()
       {
+      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Instrument name='Violin' ids='violin'>"
@@ -965,6 +980,7 @@ void TestSoundLibrary::renderPhraseMark()
       for (const N& n : notes)
             QVERIFY(n.off > n.on);
       delete score;
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
@@ -979,6 +995,7 @@ void TestSoundLibrary::renderPhraseMark()
 
 void TestSoundLibrary::legatoEarly()
       {
+      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='75'/>"
          "<Instrument name='Violin' ids='violin'>"
@@ -1071,6 +1088,7 @@ void TestSoundLibrary::legatoEarly()
       score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
       QCOMPARE(SoundLib::legatoEarly(score, *lib), 75);
       delete score;
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
@@ -1084,6 +1102,7 @@ void TestSoundLibrary::legatoEarly()
 
 void TestSoundLibrary::legatoEarlyFastRun()
       {
+      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       struct N { int on; int off; };
       auto render = [this](int delayMs) {
             auto lib = loadMap(QString(
@@ -1145,9 +1164,9 @@ void TestSoundLibrary::legatoEarlyFastRun()
             }
       // 200 ms: after a sixteenth 141.9 ms, longer than it; with the fast technique ([legato] fastTechnique=1) every note
       // its own attack, on the beat here (no onset in this map), the note before ending there
-      Playback::setIniValuesForTest({ { "legato/fastTechnique", "1" } });
+      Playback::setIniValuesForTest(withOld({ { "legato/fastTechnique", "1" } }));
       n = render(200);
-      Playback::setIniValuesForTest({});
+      Playback::setIniValuesForTest(withOld({}));
       QCOMPARE(int(n.size()), 17);
       for (int i = 0; i < 16; ++i) {
             QCOMPARE(n[size_t(i)].on, i * S);
@@ -1164,6 +1183,7 @@ void TestSoundLibrary::legatoEarlyFastRun()
             QVERIFY2(qAbs(n[size_t(i)].on - expected) <= 1,
                      qPrintable(QString("note %1 starts at %2, expected %3").arg(i).arg(n[size_t(i)].on).arg(expected)));
             }
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
@@ -1175,6 +1195,7 @@ void TestSoundLibrary::legatoEarlyFastRun()
 
 void TestSoundLibrary::legatoEarlyByInterval()
       {
+      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
                        "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+2:abc'/>"
                        "</Instrument></SoundLibrary>"));
@@ -1232,6 +1253,7 @@ void TestSoundLibrary::legatoEarlyByInterval()
                                 .arg(ons[i].first).arg(expected)));
             }
       delete score;
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
@@ -1468,6 +1490,7 @@ void TestSoundLibrary::legatoLevelBalance()
 
 void TestSoundLibrary::onsetEarly()
       {
+      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/><Onset early='100'/>"
          "<Instrument name='Violin' ids='violin'>"
@@ -1545,9 +1568,9 @@ void TestSoundLibrary::onsetEarly()
             QVERIFY(qAbs(notes[size_t(12 + i)].on - (12 * Q + i * S - 135)) <= 1);
             QCOMPARE(notes[size_t(12 + i - 1)].off, notes[size_t(12 + i)].on + 30);
             }
-      Playback::setIniValuesForTest({ { "legato/fastTechnique", "1" } });
+      Playback::setIniValuesForTest(withOld({ { "legato/fastTechnique", "1" } }));
       notes = render();
-      Playback::setIniValuesForTest({});
+      Playback::setIniValuesForTest(withOld({}));
       for (int i = 1; i < 8; ++i) {
             QVERIFY(qAbs(notes[size_t(12 + i)].on - (12 * Q + i * S - 135)) <= 1);
             QCOMPARE(notes[size_t(12 + i - 1)].off, notes[size_t(12 + i)].on);
@@ -1571,6 +1594,7 @@ void TestSoundLibrary::onsetEarly()
       QVERIFY(notes[7].off > 8 * Q - 48);                       // (B4 keeps its end)
       score->setMetaTag(SoundLib::onsetEarlyMetaTag, "");
       delete score;
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
@@ -3277,6 +3301,7 @@ void TestSoundLibrary::vst3Settle()
 
 void TestSoundLibrary::tuningBendAtArrival()
       {
+      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       auto mapWith = [&](const QString& delay) {
             return loadMap(
                "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
@@ -3369,16 +3394,17 @@ void TestSoundLibrary::tuningBendAtArrival()
       // the layers: ini off (the glide at the note-on), the score's on over it, the score's off
       auto glideStart = [&]() { render(); return between(6)[1].tick - ons[6].tick; };
       QVERIFY(glideStart() >= ticksOf(173));
-      Playback::setIniValuesForTest({ { "tuning/bendAtArrival", "0" } });
+      Playback::setIniValuesForTest(withOld({ { "tuning/bendAtArrival", "0" } }));
       QVERIFY2(glideStart() <= ticksOf(4), qPrintable(QString::number(glideStart())));
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "tuning/bendAtArrival", 1 } }));
       QCOMPARE(Playback::source("tuning/bendAtArrival", score), Playback::Source::SCORE);
       QVERIFY(glideStart() >= ticksOf(173));
-      Playback::setIniValuesForTest({});
+      Playback::setIniValuesForTest(withOld({}));
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "tuning/bendAtArrival", 0 } }));
       QVERIFY(glideStart() <= ticksOf(4));
       score->setMetaTag(Playback::metaTag, "");
       delete score;
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------

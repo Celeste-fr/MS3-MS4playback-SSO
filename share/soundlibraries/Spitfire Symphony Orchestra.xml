@@ -992,10 +992,10 @@
     <Switch type="keyswitch"/>
     <Articulation name="Timpani" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
-    <Articulation name="Roll" value="2" techniques="tremolo" release="4720"/>
-    <Articulation name="Roll Muted" value="3" techniques="tremolo" modifiers="muted" release="1835"/>
-    <Articulation name="Swell mf" value="4" techniques="" release="6070"/>
-    <Articulation name="Swell f" value="5" techniques="" release="5730"/>
+    <Articulation name="Roll" value="2" techniques="tremolo" release="4715"/>
+    <Articulation name="Roll Muted" value="3" techniques="tremolo" modifiers="muted" release="1975"/>
+    <Articulation name="Swell mf" value="4" techniques="" release="7575"/>
+    <Articulation name="Swell f" value="5" techniques="" release="7550"/>
     <Controller id="variation" name="Variation" param="Variation"/>
     <Controller id="releases" name="Releases" param="Releases"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
@@ -1016,7 +1016,7 @@
     <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>
     <Articulation name="Hard Sticks" value="2" techniques=""/>
-    <Articulation name="Roll" value="3" techniques="tremolo" release="5325"/>
+    <Articulation name="Roll" value="3" techniques="tremolo" release="12875"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
@@ -1055,7 +1055,7 @@
   </Instrument>
   <Instrument name="Tubular Bells" ids="tubular-bells" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Tubular Bells.nki" pitch="58" bend="195.1">
     <Switch type="keyswitch"/>
-    <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" release="6110"/>
+    <Articulation name="Normal" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" release="9845"/>
     <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted" release="1690"/>
     <Controller id="mic1" name="Mic 1 (Close)" param="Mic 1 level"/>
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>

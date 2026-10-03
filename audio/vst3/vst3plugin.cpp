@@ -718,6 +718,16 @@ void Vst3Plugin::setPitch(double cents, double glideSeconds)
             d->ratio = target;
             }
       d->targetRatio = target;
+      if (glideSeconds < 0 && d->sampleRate > 0) {
+            // GLIDE_CENT_STEP: the owner's criterion (2026-10-03), "a glide as short as possible without audible steps:
+            // each step at most one cent". Varispeed changes its speed every output frame, linearly in the ratio, so
+            // a glide of d cents in n frames moves at most d / n times the larger ratio over the smaller cents a frame:
+            // n = ceil(d * that) frames keep each frame's step within a cent (a quarter tone: 51 frames, ~1.2 ms at
+            // 44.1 kHz; the renderer's pitch-bend glides take one tick a cent, rendermidi.cpp libraryPitchBends)
+            const double d0 = std::fabs(1200.0 * std::log2(target / d->ratio));
+            const double frames = std::ceil(d0 * std::max(target, d->ratio) / std::min(target, d->ratio) / GLIDE_CENT_STEP);
+            glideSeconds = frames / d->sampleRate;
+            }
       if (glideSeconds <= 0 || d->sampleRate <= 0) {
             d->ratio = target;
             d->ratioStep = 0;

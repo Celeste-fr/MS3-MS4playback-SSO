@@ -1,0 +1,342 @@
+{
+ "share": 50,
+ "fullMs": 380,
+ "groups": [
+  {
+   "part": "Basses",
+   "tempo": 100,
+   "n": 57,
+   "measured": 104,
+   "predicted": 104.6
+  },
+  {
+   "part": "Basses",
+   "tempo": 130,
+   "n": 51,
+   "measured": 124,
+   "predicted": 97.8
+  },
+  {
+   "part": "Basses",
+   "tempo": 160,
+   "n": 49,
+   "measured": 101,
+   "predicted": 106.0
+  },
+  {
+   "part": "Basses",
+   "tempo": 200,
+   "n": 39,
+   "measured": 99,
+   "predicted": 89.8
+  },
+  {
+   "part": "Bassoon",
+   "tempo": 100,
+   "n": 59,
+   "measured": 69,
+   "predicted": 59.3
+  },
+  {
+   "part": "Bassoon",
+   "tempo": 130,
+   "n": 53,
+   "measured": 74,
+   "predicted": 60.3
+  },
+  {
+   "part": "Bassoon",
+   "tempo": 160,
+   "n": 54,
+   "measured": 76.0,
+   "predicted": 51.4
+  },
+  {
+   "part": "Bassoon",
+   "tempo": 200,
+   "n": 50,
+   "measured": 70.0,
+   "predicted": 55.4
+  },
+  {
+   "part": "Celli",
+   "tempo": 100,
+   "n": 51,
+   "measured": 159,
+   "predicted": 153.4
+  },
+  {
+   "part": "Celli",
+   "tempo": 130,
+   "n": 48,
+   "measured": 121.5,
+   "predicted": 143.4
+  },
+  {
+   "part": "Celli",
+   "tempo": 160,
+   "n": 47,
+   "measured": 121,
+   "predicted": 137.1
+  },
+  {
+   "part": "Celli",
+   "tempo": 200,
+   "n": 39,
+   "measured": 99,
+   "predicted": 131.7
+  },
+  {
+   "part": "Clarinet",
+   "tempo": 100,
+   "n": 64,
+   "measured": 114.0,
+   "predicted": 97.6
+  },
+  {
+   "part": "Clarinet",
+   "tempo": 130,
+   "n": 61,
+   "measured": 104,
+   "predicted": 91.3
+  },
+  {
+   "part": "Clarinet",
+   "tempo": 160,
+   "n": 59,
+   "measured": 96,
+   "predicted": 87.3
+  },
+  {
+   "part": "Clarinet",
+   "tempo": 200,
+   "n": 59,
+   "measured": 89,
+   "predicted": 83.8
+  },
+  {
+   "part": "Flute",
+   "tempo": 100,
+   "n": 64,
+   "measured": 74.0,
+   "predicted": 76.7
+  },
+  {
+   "part": "Flute",
+   "tempo": 130,
+   "n": 55,
+   "measured": 89,
+   "predicted": 71.7
+  },
+  {
+   "part": "Flute",
+   "tempo": 160,
+   "n": 54,
+   "measured": 98.5,
+   "predicted": 68.6
+  },
+  {
+   "part": "Flute",
+   "tempo": 200,
+   "n": 50,
+   "measured": 109.0,
+   "predicted": 65.9
+  },
+  {
+   "part": "Horn",
+   "tempo": 100,
+   "n": 59,
+   "measured": 114,
+   "predicted": 115.1
+  },
+  {
+   "part": "Horn",
+   "tempo": 130,
+   "n": 54,
+   "measured": 119.0,
+   "predicted": 104.3
+  },
+  {
+   "part": "Horn",
+   "tempo": 160,
+   "n": 54,
+   "measured": 113.5,
+   "predicted": 99.7
+  },
+  {
+   "part": "Horn",
+   "tempo": 200,
+   "n": 49,
+   "measured": 109,
+   "predicted": 95.8
+  },
+  {
+   "part": "Oboe",
+   "tempo": 100,
+   "n": 57,
+   "measured": 94,
+   "predicted": 111.6
+  },
+  {
+   "part": "Oboe",
+   "tempo": 130,
+   "n": 53,
+   "measured": 89,
+   "predicted": 104.3
+  },
+  {
+   "part": "Oboe",
+   "tempo": 160,
+   "n": 47,
+   "measured": 81,
+   "predicted": 99.7
+  },
+  {
+   "part": "Oboe",
+   "tempo": 200,
+   "n": 43,
+   "measured": 80,
+   "predicted": 95.8
+  },
+  {
+   "part": "Trombone",
+   "tempo": 100,
+   "n": 63,
+   "measured": 119,
+   "predicted": 90.7
+  },
+  {
+   "part": "Trombone",
+   "tempo": 130,
+   "n": 61,
+   "measured": 114,
+   "predicted": 84.7
+  },
+  {
+   "part": "Trombone",
+   "tempo": 160,
+   "n": 60,
+   "measured": 116.0,
+   "predicted": 71.7
+  },
+  {
+   "part": "Trombone",
+   "tempo": 200,
+   "n": 54,
+   "measured": 94.0,
+   "predicted": 77.8
+  },
+  {
+   "part": "Trumpet",
+   "tempo": 100,
+   "n": 64,
+   "measured": 121.5,
+   "predicted": 111.6
+  },
+  {
+   "part": "Trumpet",
+   "tempo": 130,
+   "n": 63,
+   "measured": 114,
+   "predicted": 104.3
+  },
+  {
+   "part": "Trumpet",
+   "tempo": 160,
+   "n": 61,
+   "measured": 106,
+   "predicted": 81.0
+  },
+  {
+   "part": "Trumpet",
+   "tempo": 200,
+   "n": 58,
+   "measured": 94.0,
+   "predicted": 95.8
+  },
+  {
+   "part": "Tuba",
+   "tempo": 100,
+   "n": 57,
+   "measured": 94,
+   "predicted": 90.7
+  },
+  {
+   "part": "Tuba",
+   "tempo": 130,
+   "n": 50,
+   "measured": 114.0,
+   "predicted": 84.7
+  },
+  {
+   "part": "Tuba",
+   "tempo": 160,
+   "n": 41,
+   "measured": 96,
+   "predicted": 81.0
+  },
+  {
+   "part": "Tuba",
+   "tempo": 200,
+   "n": 40,
+   "measured": 94.0,
+   "predicted": 77.8
+  },
+  {
+   "part": "Violas",
+   "tempo": 100,
+   "n": 60,
+   "measured": 124.0,
+   "predicted": 139.5
+  },
+  {
+   "part": "Violas",
+   "tempo": 130,
+   "n": 55,
+   "measured": 104,
+   "predicted": 130.4
+  },
+  {
+   "part": "Violas",
+   "tempo": 160,
+   "n": 47,
+   "measured": 136,
+   "predicted": 124.7
+  },
+  {
+   "part": "Violas",
+   "tempo": 200,
+   "n": 48,
+   "measured": 101.5,
+   "predicted": 119.7
+  },
+  {
+   "part": "Violins 1",
+   "tempo": 100,
+   "n": 63,
+   "measured": 139,
+   "predicted": 163.9
+  },
+  {
+   "part": "Violins 1",
+   "tempo": 130,
+   "n": 60,
+   "measured": 126.5,
+   "predicted": 153.2
+  },
+  {
+   "part": "Violins 1",
+   "tempo": 160,
+   "n": 53,
+   "measured": 136,
+   "predicted": 159.0
+  },
+  {
+   "part": "Violins 1",
+   "tempo": 200,
+   "n": 43,
+   "measured": 124,
+   "predicted": 155.7
+  }
+ ]
+}
