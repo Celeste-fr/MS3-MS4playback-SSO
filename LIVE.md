@@ -886,6 +886,15 @@ correct place, and if not it prompts the user to copy it for them." (`mscore/liv
   `linkDevice`), while a device dragged in from a MuseScore build folder still points there and is re-added once
   from Live's browser.
 - **Not automated**: the Control Surface choice (Live's binary preferences). The hint above says how.
+- **Tried on the Windows test VM** (Live 12.4.6 Trial running, build 6946f1f, a fresh settings folder; the VM's own
+  copies moved aside and put back after): the prompt came after the Start Center was closed (build db3707b showed it
+  behind the application-modal Start Center: fixed), listed the four files "not there yet"; *Install* copied them
+  (hashes equal to the build's), said "Live is running: restart Live…" and the Control Surface step; restarted: no
+  prompt; a line added to the build's `core.py`: the prompt listed only `core.py` ("another version"), button
+  *Update*; *Don't ask again* wrote `liveHelpers/dontAsk` and the next start asked nothing. Not tried there: OneDrive
+  pinning (the VM has no OneDrive), the Mixer button, the Control Surface hint, Live reopening a set after the device
+  file changed. The Windows builds' `.py` files have CRLF line endings (the CI checkout): a copy taken from the
+  repository (LF) counts as another version.
 
 ### What is tested, and what only Live can show
 

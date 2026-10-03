@@ -430,6 +430,7 @@ static void showPrompt(QWidget* parent, const QString& lib, const QVector<Item>&
       d->setAttribute(Qt::WA_DeleteOnClose);
       d->setModal(false);
       d->setWindowTitle(QObject::tr("Ableton Live helpers"));
+      d->setWindowFlags(d->windowFlags() & ~Qt::WindowContextHelpButtonHint);
       QVBoxLayout* v = new QVBoxLayout(d);
       QLabel* text = new QLabel(d);
       text->setWordWrap(true);
@@ -468,6 +469,8 @@ static void showPrompt(QWidget* parent, const QString& lib, const QVector<Item>&
             never->hide();
             later->setText(QObject::tr("Close"));
             box->setFocus();
+            if (QWidget* w = box->window())
+                  w->adjustSize();
             });
       d->show();
       d->raise();
