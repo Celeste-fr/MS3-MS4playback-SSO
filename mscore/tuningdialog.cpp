@@ -140,7 +140,6 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       form->addRow(tr("Quarter tones:"), _quarter);
       _persian = new QComboBox;
       _persian->addItem(tr("Vaziri's quarter tones: koron −50, sori +50 (the most common)"), int(Temperament::Persian::VAZIRI));
-      _persian->addItem(tr("As played: koron about −60, sori about +40"), int(Temperament::Persian::PRACTICE));
       _persian->addItem(tr("As the Microtonal Tuner plugin played them in 3.6: −67, +33"), int(Temperament::Persian::MS36));
       form->addRow(tr("Koron and sori:"), _persian);
 

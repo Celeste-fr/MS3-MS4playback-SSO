@@ -231,13 +231,14 @@ class Library {
       // microtones (<Tuning method="varispeed" tolerance tail>): the plug-in ignores a note's tuning
       // (Kontakt), so a part's notes are spread over copies of its patch ("lanes", Lanes below),
       // each played faster or slower by its tuning (Vst3Plugin::setPitch). A lane changes its
-      // tuning only once silent: after its last note's end plus laneTail seconds (the release,
-      // the room); a note within laneTolerance cents of a lane's tuning shares it and plays at the
-      // lane's tuning (what sounds on it never moves); 0.5 merges rounding only, not the schisma
+      // tuning only once silent: after its last note's end plus its ring (laneTail seconds when the map
+      // gives one, else the note's measured release to 60 dB under: laneRing); a note within laneTolerance
+      // cents of a lane's tuning shares it and plays at the lane's tuning (what sounds on it never moves).
+      // Each computed when the map leaves it out (2026-10-03, the owner's rule: no number without a source):
       bool varispeed { false };
-      double laneTolerance { 0.5 };       // cents
-      double laneTail { 1.5 };            // seconds
-      int maxLanes { 4 };                 // per patch: past it, the lane quiet longest is retuned (its tail with it)
+      double laneTolerance { -1 };        // cents; < 0: defaultLaneTolerance()
+      double laneTail { -1 };             // seconds; < 0: measured (laneRing)
+      int maxLanes { 0 };                 // per patch, past it the lane quiet longest is retuned (its tail with it); 0: memoryMaxLanes
       // a legato transition starts early by this share of its articulation's legatoDelayMs (<Legato early>,
       // percent; the score's own: legatoEarly())
       int legatoEarly { 0 };
@@ -509,11 +510,11 @@ struct Lanes {
       std::map<const Note*, double> cents;          // the tuning each note plays at (its lane's)
       };
 // (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
-// releaseMs)
+// releaseMs ([tuning] waitForRelease); < 0: plus the note's laneRing. maxLanes <= 0: memoryMaxLanes)
 // (oneInstance: SETTING the score's [tuning] oneInstance, else OFF, SAFE, AGGRESSIVE)
 enum class OneInstance : signed char { SETTING = -1, OFF = 0, SAFE = 1, AGGRESSIVE = 2 };
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
-            double toleranceCents, double tailSeconds, int maxLanes = 4, OneInstance oneInstance = OneInstance::SETTING);
+            double toleranceCents, double tailSeconds, int maxLanes = 0, OneInstance oneInstance = OneInstance::SETTING);
 OneInstance oneInstance(const Score* score);      // [tuning] oneInstance (playback settings, per score)
 
 //---------------------------------------------------------
@@ -523,12 +524,31 @@ OneInstance oneInstance(const Score* score);      // [tuning] oneInstance (playb
 //---------------------------------------------------------
 
 struct LaneSettings {
-      double tolerance { 0.5 };           // cents
-      double tail { 1.5 };                // seconds
-      int maxLanes { 4 };
+      double tolerance { 0 };             // cents
+      double tail { -1 };                 // seconds; < 0: each note's measured release to 60 dB under (laneRing)
+      int maxLanes { 0 };                 // 0: as the free memory allows (memoryMaxLanes)
       bool operator==(const LaneSettings& o) const { return tolerance == o.tolerance && tail == o.tail && maxLanes == o.maxLanes; }
       };
 extern const char* laneSettingsMetaTag;
+// a lane's tolerance when the map gives none: half the smallest gap between two distinct accidental values
+// (ScoreTuning::smallestAccidentalGap, 0.1667 cents: 0.083), so that a note shares a copy only with notes whose
+// accidentals are the same value, whatever their spelling; never two different accidentals (the owner's criterion,
+// 2026-10-03: "merge only rounding: half the smallest real gap between accidental values")
+double defaultLaneTolerance();
+// how long a note's copy rings after its end when the map gives no tail: its measured release to 60 dB under,
+// ISO 3382-1's reverberation time (the decay by 60 dB), from the map's release= (to 30 dB under, the longest over the
+// range: <Articulation release>) extrapolated as ISO 3382-1 does from a 30 dB range (T30: twice the time of a 30 dB
+// decay); unmeasured: the longest of its patch's articulations, else of the part's patches; none: 0
+double laneRing(const LibInstrument& patch, const Articulation* articulation, const std::vector<const LibInstrument*>& patches);
+// copies per patch when the map gives no maximum: as many as the free memory holds (the owner, 2026-10-03: "free
+// memory ÷ the measured cost per copy"), a copy costing 245 MB (the owner measured Kontakt at 1031 MB with one copy
+// of a patch, 1276 with two: Kontakt shares no samples between copies, docs/HISTORY.md › tuning lanes), the free
+// memory shared by the score's parts (each may need copies): 1 + free / (245 MB × parts), at least 1. Free: the
+// system's available physical memory, read once per run (freeMemoryBytes)
+int memoryMaxLanes(const Score* score);
+int memoryMaxLanes(qint64 freeBytes, int parts);
+qint64 freeMemoryBytes();
+constexpr qint64 LANE_COPY_BYTES = qint64(1276 - 1031) * 1024 * 1024;
 LaneSettings libraryLaneSettings(const Library&);
 LaneSettings laneSettings(const Score*, const Library&);
 QString writeLaneSettings(const LaneSettings& s, const Library&);      // "" when the library's

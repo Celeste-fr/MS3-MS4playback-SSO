@@ -84,9 +84,12 @@ struct Temperament {
       Quarter quarter { Quarter::FIXED };   // quarter-tone accidentals (Stein-Zimmermann, Gould arrows)
       enum class Persian : char {
             VAZIRI,                 // quarter tones, as Vaziri defined them: koron -50, sori +50
-            PRACTICE,               // as reported in performance: koron -60, sori +40
             MS36                    // as the Microtonal Tuner plugin played them in 3.6 (MuseScore
-                                    // PR #4452, 2019, no reason given): -67, +33
+                                    // PR #4452, 2019, no reason given): -67, +33 (libmscore/accidental.cpp,
+                                    // the accidental table's SORI / KORON rows)
+            // (until 2026-10-03 also "as played", koron -60 / sori +40: no source for those numbers was found
+            // (the owner's rule, 2026-10-03: every number sourced; else MuseScore 3.6's), so a score that chose
+            // it ("practice" in the metaTag) now reads as MS36)
             };
       Persian persian { Persian::VAZIRI };
       bool accidentalsDefault() const { return quarter == Quarter::FIXED && persian == Persian::VAZIRI; }
@@ -150,6 +153,11 @@ class ScoreTuning {
       static double symbolCents(SymId sym, bool* valued, int* spelled = nullptr);
       static bool hejiAccidental(AccidentalType type, int* sharps, int* arrows);
       static bool looksLikeTunerValue(double tuning);
+      // the smallest difference between two distinct accidental values (cents from the natural: every symbol and
+      // accidental type valued by accidentalCents / symbolCents, the stacked modifiers' values and the score
+      // choices' sizes of quarter tones, koron and sori): 0.1667 cents (the 23-limit comma's 16.5 of MuseScore 3.6's
+      // table against Wyschnegradsky's 1/12 tone, 16.667), computed once
+      static double smallestAccidentalGap();
       };
 
 //---------------------------------------------------------

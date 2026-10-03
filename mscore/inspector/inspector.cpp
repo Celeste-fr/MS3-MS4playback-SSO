@@ -776,6 +776,7 @@ InspectorArticulation::InspectorArticulation(QWidget* parent)
             iiList.push_back({ Pid::MARCATO_LEVEL, 0, ar.marcatoLevel, ar.resetMarcatoLevel });
       ar.marcatoLevelLabel->setVisible(marcatos);
       ar.marcatoLevel->setVisible(marcatos);
+      ar.marcatoLevel->setRange(MarcatoLevel::MIN_DB, MarcatoLevel::MAX_DB);   // (articulation.h: what SSO's marcatos span)
       ar.resetMarcatoLevel->setVisible(marcatos);
       const std::vector<InspectorPanel> ppList = { { ar.title, ar.panel } };
       mapSignals(iiList, ppList);

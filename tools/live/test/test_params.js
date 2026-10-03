@@ -431,16 +431,15 @@ test("the blob as Create Live Set writes it (livesetwriter.cpp linkBlob, tst_liv
       assert.strictEqual(vib.size, 4001);                         // the song: 8 beats at 120 bpm
       });
 
-// MuseScore's events for a lane of points as rendermidi plays them (Automation::Lane::events: the points, a ramp's
-// steps every 30 ticks as far as the value moves by 0.001), at 120 bpm: ticks -> units (480 ticks a beat)
+// MuseScore's events for a lane of points as rendermidi plays them (Automation::Lane::events: the points, then along
+// a ramp each tick where the value reaches another step of a parameter's resolution, 1e-4), at 120 bpm: ticks ->
+// units (480 ticks a beat)
+const RES = 1e-4, PACK_DV = 1 / 127, TICK = UNITS / 480;
 function rendered(points, bend) {
       const ev = [];
       let last = null;
       const put = (tick, v) => {
-            const t = Math.round(tick / 480 * UNITS);
-            if (last !== null && Math.abs(v - last) < 0.001)
-                  return;
-            ev.push(t, v);
+            ev.push(Math.round(tick / 480 * UNITS), v);
             last = v;
             };
       for (let i = 0; i < points.length; ++i) {
@@ -449,9 +448,11 @@ function rendered(points, bend) {
             const nx = points[i + 1];
             if (!ramp || !nx)
                   continue;
-            for (let t = tick + 30; t < nx[0]; t += 30) {
+            for (let t = tick + 1; t < nx[0]; ++t) {
                   const x = (t - tick) / (nx[0] - tick), y = bend ? Math.pow(x, 2.5) : x;   // (a curved ramp: some bend)
-                  put(t, Math.round((v + (nx[1] - v) * y) * 1000) / 1000);
+                  const val = v + (nx[1] - v) * y;
+                  if (Math.round(val / RES) !== Math.round(last / RES))
+                        put(t, val);
                   }
             }
       return ev;
@@ -471,11 +472,11 @@ function staircase(ev, end) {
       return out;
       }
 
-// the largest difference between two staircases, away from (more than 2 units from) the first's event times
+// the largest difference between two staircases, away from (more than a tick from) the first's event times
 function worstDiff(ev, back, end) {
       const a = staircase(ev, end), b = staircase(back, end), near2 = new Uint8Array(end);
       for (let i = 0; i < ev.length; i += 2)
-            for (let d = -2; d <= 2; ++d)
+            for (let d = -TICK; d <= TICK; ++d)
                   if (ev[i] + d >= 0 && ev[i] + d < end)
                         near2[ev[i] + d] = 1;
       let worst = 0;
@@ -485,7 +486,7 @@ function worstDiff(ev, back, end) {
       return worst;
       }
 
-test("lanes packed for the set: straight ramps one run each, curves a few; played as MuseScore's staircase to 0.0015-0.003", () => {
+test("lanes packed for the set: straight ramps one run each, curves a few; played as MuseScore's staircase to one step", () => {
       const s = setUp();
       const pts = [];
       for (let b = 0; b < 64; b += 2)                            // a point every 2 beats, ramps up and down
@@ -495,7 +496,7 @@ test("lanes packed for the set: straight ramps one run each, curves a few; playe
             const packed = s.hub.api.packLane(ev);
             const back = s.hub.api.unpackLane(packed);
             const worst = worstDiff(ev, back, 64 * UNITS);
-            assert.ok(worst <= 0.003 + 1e-9, "worst " + worst);       // (0.0015 at the steps; a slow ramp's step a little early or late)
+            assert.ok(worst <= PACK_DV + 1e-9, "worst " + worst);       // (a step's value within one MIDI step, its time within a tick)
             if (!bend)
                   assert.ok(packed.length <= 32 * 6, packed.length + " atoms for " + ev.length / 2 + " events");
             else
@@ -535,7 +536,7 @@ test("a 10-minute piece with 10 curved lanes fits the stores and comes back", ()
       assert.strictEqual(b.length, 10);
       for (let l = 0; l < 10; ++l) {
             const worst = worstDiff(a[l].ev, b[l].ev, 1200 * UNITS);
-            assert.ok(worst <= 0.003 + 1e-6, "lane " + l + " worst " + worst);
+            assert.ok(worst <= PACK_DV + 1e-6, "lane " + l + " worst " + worst);
             }
       });
 

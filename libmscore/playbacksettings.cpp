@@ -50,11 +50,14 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: a slur's first note right after a note too short for a transition (same patch, no rest) starts as early as that transition would", true },
       { "legato/fastBelowShare", 100, 0, 400, "%",
         "too short: shorter than this share of the transition's delay (the patch's measured delay, after fastShare / fastFullMs)", true },
+      // (varispeed only; 30 has no source: needs a sweep on the VM. A pitch-bend glide takes one cent a tick: libraryPitchBends)
       { "legato/glideMs", 30, 0, 500, "ms",
-        "a slurred note on a tuning copy glides from the note before's tuning over this long (pitch bend and varispeed)", true },
+        "a slurred note on a tuning copy played by varispeed glides from the note before's tuning over this long (a pitch-bend glide: one cent a tick, as short as it can be without a step over a cent)", true },
       { "legato/levelBalance", 0, 0, 1, "on/off",
         "1: a legato transition plays at its pitch's level (the map's measured legatoLevel: SSO's transitions alone arrive 2-6 dB louder or softer), by CC11 from its arrival; off: in runs the notes around a transition move its level as much (measured), so it didn't even them", true },
-      { "legato/levelMaxDb", 6, 0, 12, "dB",
+      // (the largest measured correction: Cor Anglais - Performance, +3 settled from G4, 9.4 dB loud, of 30288 measured
+      // transitions; sso_legato_levels.json, tools/soundlibraries/derived_numbers.py levelmax)
+      { "legato/levelMaxDb", 9.4, 0, 12, "dB",
         "the level balance turns a transition down by at most this much (and up by at most levelHeadroomDb)", true },
       { "legato/levelHeadroomDb", 0, 0, 12, "dB",
         "a part with measured transition levels rests this much down on CC11, so that transitions arriving softer can be raised by up to it (the whole part is that much softer)", true },
@@ -82,9 +85,11 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
       // [tuning]
       { "tuning/tolerance", MAP, 0, 50, "cents",
-        "a note this close to a tuning copy's tuning plays on it (default: the map's <Tuning tolerance>, SSO 0.5)", true },
-      { "tuning/tail", MAP, 0, 10, "s", "a copy rings this long after its last note before it is retuned (default: the map's, SSO 1.5)", true },
-      { "tuning/maxLanes", MAP, 1, 16, "copies", "at most this many copies of a patch for other tunings (default: the map's, SSO 4)", true },
+        "a note this close to a tuning copy's tuning plays on it (default: the map's <Tuning tolerance>, else half the smallest gap between two accidentals' values, 0.083: ScoreTuning::smallestAccidentalGap)", true },
+      { "tuning/tail", MAP, 0, 10, "s", "a copy rings this long after its last note before it is retuned (default: the map's, else each "
+        "note's measured release to 60 dB under: twice its release to 30 dB, as ISO 3382-1 extrapolates T30)", true },
+      { "tuning/maxLanes", MAP, 1, 16, "copies", "at most this many copies of a patch for other tunings (default: the map's, else "
+        "as many as the free memory holds at 245 MB a copy, shared by the score's library parts)", true },
       { "tuning/waitForRelease", 1, 0, 1, "on/off",
         "1: a copy also waits for its notes' measured release (<Articulation release>) before it is retuned", true },
       { "tuning/pitchBend", 1, 0, 1, "on/off",
@@ -99,8 +104,6 @@ static const std::vector<Definition> DEFINITIONS = {
       // [dynamics]
       { "dynamics/evenSteps", 0, 0, 1, "on/off",
         "1: the Advanced Options' even dynamic steps act (off since 2026-09-28; MS_EVEN_DYNAMIC_STEPS turns it on too)", true },
-      // [automation]
-      { "automation/stepTicks", 30, 1, 480, "ticks", "an automation ramp is sent as a value every this many ticks", true },
       // [live]
       { "live/carrierEpsilon", 2, 1, 50, "clip units",
         "in Live clips a controller carrier note sits this far before the note it belongs to (2: ~0.26 ms at 120 bpm)", true },
@@ -194,6 +197,11 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
             // (the fast-note ramp, replaced on 2026-10-02 by keepMs, fastShare / fastFullMs and fastTechnique: fast slurs on time)
             if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
                   i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs, fastTechnique; delete the line)").arg(id);
+            // (a fixed ramp step, replaced on 2026-10-03: a ramp sends a value at each tick where it moves by one step of its
+            // controller's resolution, Automation::Lane::events)
+            else if (id == "automation/stepTicks")
+                  i.warnings << QString("%1 is no longer used (since 2026-10-03: a ramp sends each change of one MIDI step, or of a "
+                                        "parameter's resolution, at the tick it happens; delete the line)").arg(id);
             else
                   i.warnings << QString("unknown key %1 (ignored)").arg(id);
             return;

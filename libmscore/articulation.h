@@ -155,10 +155,12 @@ class Articulation final : public Element {
 //    the owner (2026-10-02): "make [the marcato level] configurable in the inspector when you select a
 //    marcato sign. default value: library default, no change of ours." A marcato (articMarcato*, with
 //    staccato or tenuto too) has a level offset in dB (Pid::MARCATO_LEVEL, Inspector › Articulation ›
-//    Marcato level, -24 … +24 in 0.5 dB steps, linked: a part's copy follows the score's); 0, the default,
-//    changes nothing (playback exactly as without the setting). SSO's marcato samples play -7 to +22 dB
-//    against the same instrument's plain held note at mf (median +4; tools/soundlibraries/
-//    sso_sound_dynamics.json), on top of MS4's accent velocity boost.
+//    Marcato level, MIN_DB … MAX_DB in 0.5 dB steps, linked: a part's copy follows the score's); 0, the default,
+//    changes nothing (playback exactly as without the setting). The range: what SSO's marcatos span against
+//    the same instrument's plain held note at the same dynamic (no accent boost since 2026-10-02), -18.5 dB
+//    (Bassoon Solo Marcato at pp) … +12.4 (Trumpet Solo Marcato (Muted) at 127), median -1.1, over 212 pairs
+//    (sso_sound_dynamics.json "curve"), rounded outward to the 0.5 dB step (the owner, 2026-10-03: the range
+//    SSO's marcatos actually span; tools/soundlibraries/derived_numbers.py marcato).
 //
 //    Playback (rendermidi.cpp), the note's chord's marcato level, of every note of the chord:
 //    - a sound library note whose velocity sets its level (SSO's "Marcato" on winds and brass: <Dynamics
@@ -186,8 +188,8 @@ class Chord;
 namespace MarcatoLevel {
 
 extern const char* const metaTag;
-constexpr double MIN_DB = -24.0;
-constexpr double MAX_DB = 24.0;
+constexpr double MIN_DB = -18.5;           // (derived_numbers.py marcato, above)
+constexpr double MAX_DB = 12.5;
 
 // the level offset of a chord's marcato (0: none, or no marcato)
 double of(const Chord* chord);
