@@ -169,6 +169,11 @@ class LiveClipsLink : public QObject {
       void sendDatagramTo(const QByteArray& packet, int port);
       // the route key ("<port>:<channel>") of a part's main patch when the score Live plays is this one (else "")
       QString routeKey(const Part* part) const;
+      // QSettings liveIntegration/liveSoundsMidiInput (default on): while the device answers, MuseScore does not sound
+      // notes from the MIDI input device (Live plays the selected track); note input is unaffected
+      static bool liveSoundsMidiInputSetting();
+      static void setLiveSoundsMidiInputSetting(bool on);
+      static bool silencesMidiInput();              // the setting, and the device answers (MScore::midiInputSilenced)
       bool deviceAnswers() const;                   // a hello within 6 s (either feature)
       int deviceProtocol() const { return _deviceProtocol; }
       int port() const { return _port; }
