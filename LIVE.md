@@ -959,7 +959,7 @@ never scales scaled values.
   (session: the clip in the track's playing slot, or a fired one from its launch; arrangement: within the clip's span,
   when the track follows the arrangement), at the note's clip time (its loop included); other clips on the track and other
   tracks are untouched. The curve is kept with the set (above, *Kept without Live undo steps*): the set plays it without
-  MuseScore, also after it is opened again. Needs MuseScore Link (protocol 6) on the clip's track; without one the status
+  MuseScore, also after it is opened again. Needs MuseScore Link (protocol 7) on the clip's track; without one the status
   line says the notes play unshaped in Live.
 - **Write into the notes**: each note whose velocity the curve changes is written into the Live clip (a velocity-only
   `apply_note_modifications` through the edit path: undo, conflicts, *Reload from Live* as any edit). The notation keeps
@@ -987,7 +987,7 @@ never scales scaled values.
   90 BPM, 44.1 kHz) until the bias was added; the launch quantization's grid from Live's `Song.Quantization` /
   `ClipLaunchQuantization` values (read from 12.4.6's Python API); a session clip's clip time from its `start_time`
   ("the time the clip was started", Live's API) and start marker, a legato one from `playing_position`.
-- **Protocol 6** (`liveclipmodel.h` › The Velocity lane has the messages): MuseScore asks for the clip's record when the
+- **Protocol 7** (after the clip tempo's 6) (`liveclipmodel.h` › The Velocity lane has the messages): MuseScore asks for the clip's record when the
   tab opens (`/ms/vel/ask`), sends it after each change (`/ms/vel/set`, chunked as the note packets: 24 × 9 atoms), in
   "write" after Live confirmed the notes' write; the hub keeps a track's records in its Global (`kvel<track id>`) and in
   the track (`set_data("musescore_vel")`), and tells the track's copies. A clip is found by its place: the session
@@ -1009,6 +1009,69 @@ never scales scaled values.
   clipVelocityReopen, clipVelocityRecord.
 - **Owner decisions** (proposed, LIVE.md › Open questions): the scale range 0-200 % with 100 % at the lane's middle (the
   owner's own example); "shape" as the default output.
+### The song's tempo in a clip tab (2026-10-03)
+
+The owner, 2026-10-03: "when I play a midi clip inside musescore, it doesn't respect the song tempo automation in the
+main track." Before, a clip tab took Live's tempo once, as a tempo marking, when it opened. Now its tempo markings and
+rit. / accel. follow the song (`mscore/cliptempo.{h,cpp}`, the session side in `liveclipedit.cpp`):
+
+| Clip | Tempo in the tab | Changes |
+|---|---|---|
+| Session clip | Live's current song tempo (no arrangement automation applies) | followed as it changes |
+| Arrangement clip, set found, tempo automation | the song's tempo automation under the clip | read again when Live saves the set |
+| Arrangement clip, set found, no tempo automation | Live's current song tempo | followed |
+| Arrangement clip, set not found (unsaved, saved elsewhere) | Live's current song tempo; a notice asks once | searched again when Live's lists change; *Choose Live Set…* |
+| Arrangement clip, device older than protocol 6 | Live's current song tempo | followed |
+
+- **Live's current tempo**: the device's `/live/transport` (each 40 ms while Live plays, once a second while stopped,
+  and since protocol 6 at once when the tempo changes). MuseScore puts it in at most every 500 ms (the tab's poll),
+  never while MuseScore plays (after it stops), by changing the tab's tempo marking in place: no undo step, nothing
+  sent to Live.
+- **The song's tempo automation**: no Live API reads arrangement automation, so the saved set is read
+  (`libmscore/liveset.*`): the main track's (`MainTrack`, `MasterTrack` before Live 12) `Mixer/Tempo` has `Manual` and
+  an `AutomationTarget Id`; the `AutomationEnvelope` pointing at that Id holds the tempo's breakpoints (`FloatEvent`
+  Time = song beats, Value = bpm, Live's default event first, curves as `CurveControl…` like any envelope). The
+  device says where the clip is in the song (`/live/clip/span`: Live's `start_time`, `end_time`, `start_marker`,
+  `end_marker`, `loop_start`, `loop_end`, `looping`). From `start_time` Live plays the clip from its start marker; a
+  looping clip goes on from `loop_start` at `loop_end`, until `end_time`.
+- **Looping clips**: the tab shows each clip beat once (clip time = score time), Live plays it again in each pass
+  under later tempos. **Each beat gets the tempo of the first pass that plays it** (a beat before the start marker:
+  the second pass). Later passes are not shown. A beat Live never plays under the clip (before the start marker of a
+  clip that doesn't loop, after `end_time`) holds the tempo next to it.
+- **In the score**: a tempo marking at the start, where the tempo jumps and where a ramp ends; a ramp (linear in
+  beats, as Live's envelope lies on the song's beats) as invisible tempo markings every 32nd (the grid MuseScore's own
+  rit. / accel. lines play on, `tempochange.cpp`) at the ramp's tempo there, with the word *accel.* / *rit.* (system
+  text) at its start; a curved ramp (Live's Bézier) as straight pieces no further than 0.005 bpm from the curve (half
+  of 0.01 bpm, the smallest step Live shows a tempo in; `LiveSet::curve`), read as one *rit.* / *accel.*. Not rit. /
+  accel. lines: MuseScore 3 ends a line at the end of the note or rest it ends in (`Spanner::computeEndElement`), while
+  Live's breakpoints fall anywhere. The markings are on track 0: with the clip tab's band staves the top staff may be
+  hidden, the markings are still drawn (tested).
+  Times are rounded to the score's ticks (480 a beat). Markings like "♩ = 97.5"
+  (two decimals at most, as Live shows a tempo). The marks change no note: the tab sends nothing to Live for them.
+  When only values change (a ramp's end tempo, Live's tempo) they change in place without an undo step. A new shape
+  replaces them: one undo step once the tab has edits, none before.
+- **Which file is the set** (Live's API doesn't say): the candidates, each read in the background and kept only if it
+  has the clip (the track at the clip's index, return tracks left out, named as in Live, with an arrangement clip at
+  the clip's `start_time` and `end_time`, within the device's float32 rounding):
+  1. the set another clip tab found, the sets linked to open scores (*Import automation from Live Set…*), the sets
+     chosen or found before (QSettings `liveIntegration/tempoSets`, the latest first);
+  2. Live's own lists in each `Live <version>` preferences folder (newest version first; Windows
+     `%APPDATA%\Ableton`, macOS `~/Library/Preferences/Ableton`): `Log.txt`'s `Loading document "…"` lines (the
+     sets this Live opened, the latest first; Live's Core Library sets left out) and `Preferences.cfg`'s
+     `RecentDocsList` (binary; the paths are UTF-16 strings, read as such). Seen in Live 12.4.6 on the test VM: the log
+     names the set at each load; the recent list was written at Live's `SavePrefs` (in the log just before Live restarted),
+     so a set saved for the first time may be found by the list only later.
+  None has the clip: Live's tempo, and a notice once: "… Save the set in Live to use its tempo automation, or choose
+  its file." with *Choose Live Set…* (also on the status line while not found). It is looked for again whenever
+  Live's `Log.txt` or `Preferences.cfg` changes.
+- **Saved again**: the found set's file is watched; 1.5 s after Live writes it (as *Import again when Live saves it*)
+  it is read again and the tab's tempo follows. The clip moved in Live: the device sends its new place, the set is
+  checked again (a move not yet saved: not found until saved).
+- The status line says where the tempo comes from ("tempo: the song's automation", "tempo: Live's (120)", "…, set not
+  found"), its tooltip the file and what to do.
+- **Not done**: Live's *Re-enable Automation* state (tempo automation overridden by hand: Live plays the manual tempo;
+  the tab still shows the automation); the main track's `UserTempoAutomation` element (empty in every set seen) is
+  not read; a clip in a group track works like any (Live's API lists group tracks among the tracks, as the set does).
 
 ### The Live helpers, installed by MuseScore (2026-10-03)
 
@@ -1050,6 +1113,21 @@ correct place, and if not it prompts the user to copy it for them." (`mscore/liv
 ### What is tested, and what only Live can show
 
 Tested here:
+- The song's tempo in a clip tab, 2026-10-03: `tst_liveintegration` clipTempoSetRead (`tempo.xml`: a Live 12.4.6
+  set's main track as Live wrote it, tracks cut down, tempo breakpoints added by a script: none of Live's making was
+  at hand; the envelope, the arrangement clips, which set has the clip, the float32 tolerance), clipTempoMapping (a
+  looping clip with its start marker inside the loop: each beat at its first pass; cut short; not looping with a
+  start marker; the marks), clipTempoScore (the tempo map at each of a curve's pieces and every 32nd on Live's curve, a ramp,
+  a jump; notes untouched and nothing to send; values in place without undo; a new shape as one undo step, undone),
+  clipTempoFollowLive (a session clip: Live's tempo in place, no undo step, nothing written), clipTempoArrangement
+  (the set found through a `Log.txt` listing a later set without the clip, the markings and words drawn on the band staves, the tempo under a looping clip, read again
+  when saved, Live's tempo ignored meanwhile; moved where no set has it: Live's tempo and the reason; the file chosen;
+  moved to a session slot), clipTempoLiveLists (`Log.txt` and `Preferences.cfg` as Live 12.4.6 writes them, versions
+  newest first); `tools/live/test/test_cliptempo.js` (`/live/clip/span` after `/live/clip/where`, none for a session
+  clip, again when the clip moves / loops, `/live/transport` at once on a tempo change).
+  Not tried in real Live (the VM's Live was busy with another session): Live's `start_marker` / `loop_*` of an
+  arrangement clip as assumed, a tempo envelope Live itself saved (curves especially), a first save's trace in Live's
+  lists, MuseScore's GUI (the notice's button, the file watch on Windows).
 - Clip tabs, 2026-10-03: `tst_liveintegration` clipTabClean (clean when opened even after an earlier undo step,
   dirty from an edit until `/live/clip/written` ok, clean then; undo: dirty, written, clean, redo still possible; a
   conflict stays dirty; the short status and its details), clipTitleUnnamed ("(clip)", "session slot n",
@@ -1145,6 +1223,8 @@ Only real Live can show (to check first):
   difference).
 - The instrument from the track's name, else piano; a drum clip by a Drum Rack or the track's name. Other rules?
 - Notes added in MuseScore get velocity 100 when the note has none set.
+- A looping arrangement clip shows each beat at the tempo of its first pass. Alternatives: the tab shows every pass
+  of the clip under the arrangement (unrolled), or the tempo of a chosen pass.
 - A clip tab sends notes, pedals and the pitch bend to its Live track, not the score's dynamics as controllers
   (CC 1 / 11 would change many synths' timbre) nor the Mixer's volume. Should it send any of them?
 - The Velocity lane (2026-10-03): its scale range is 0-200 % with 100 % (unchanged) at the lane's middle, the owner's

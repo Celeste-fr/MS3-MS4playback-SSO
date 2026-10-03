@@ -343,7 +343,7 @@ std::vector<QByteArray> envWritePackets(const QString& key, int write, int track
                                         const std::vector<EnvLane>& lanes);
 
 //---------------------------------------------------------
-//   The Velocity lane of a clip tab (protocol 6; the owner, 2026-10-03: "I want to be able to automate the velocity
+//   The Velocity lane of a clip tab (protocol 7; the owner, 2026-10-03: "I want to be able to automate the velocity
 //   in MuseScore, and I can toggle override the existing note velocities vs. use data saved in MuseScore Link"; then:
 //   one curve a clip, scale or absolute a mode of that curve; in "Write" the notes' velocities before the curve kept,
 //   so the curve never scales already scaled ones).
@@ -376,7 +376,7 @@ std::vector<QByteArray> envWritePackets(const QString& key, int write, int track
 //                          /live/vel/curve key:s found:i kept:i chunk:i chunks:i (atom) × n
 //---------------------------------------------------------
 
-constexpr int VEL_PROTOCOL      = 6;            // the device's protocol from which it keeps and shapes velocity curves
+constexpr int VEL_PROTOCOL      = 7;            // the device's protocol from which it keeps and shapes velocity curves
 constexpr int VEL_UNITS         = 3840;         // the device's UNITS a beat (LiveClips::UNITS_PER_BEAT): originals' starts
 extern const char* const VELOCITY_TARGET;       // "velocity"
 

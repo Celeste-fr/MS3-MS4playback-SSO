@@ -38,10 +38,14 @@
 //     (d -1: the mixer, p 0 volume, 1 pan; else devices[d].parameters[p]; MuseScore Link itself left out), again
 //     when the track's devices change (checked once a second), and each edited clip's place, /live/clip/where key:s
 //     track:i slot:i (the track's index; the session slot's, -1 for an arrangement clip), again when it moves.
+//   - a clip tab plays at the song's tempo (protocol 6; mscore/cliptempo.h): for an edited arrangement clip the hub
+//     sends its place in the song, /live/clip/span key:s start_time:f end_time:f start_marker:f end_marker:f
+//     loop_start:f loop_end:f looping:i (after /live/clip/where, again when one changes: checked once a second), and
+//     /live/transport goes out as soon as Live's tempo changes (also while stopped), so a clip tab follows it.
 //     A clip tab's lanes are written into the clip's own envelopes by the MuseScore Envelopes Control Surface
 //     script (tools/live/MuseScoreEnvelopes: Max for Live can't), MuseScore talking to it directly. A route's lane
 //     titled "live:<d>/<p>" is that parameter of the track (no plug-in needed), driven as below.
-//   - velocity curves of clip tabs (protocol 6): the copy on a clip's track changes the clip's note-ons as they pass
+//   - velocity curves of clip tabs (protocol 7): the copy on a clip's track changes the clip's note-ons as they pass
 //     (its patcher, from a ring this script fills), and what the device keeps in the set goes into the track through
 //     the MuseScore Envelopes script (Track.set_data: no Live undo step). Below, "velocity curves", "kept in the set".
 //   - plug-in parameter lanes (MuseScore's automation of Kontakt's parameters): the LOM can't write clip
@@ -93,9 +97,10 @@ outlets = 10;     // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2:
                   // 8: OSC to the MuseScore Envelopes script ([udpsend 127.0.0.1 9005]: what is kept in the set),
                   // 9: the velocity shaper ("bias <ticks>", "log 0/1")
 
-var PROTOCOL = 6;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+var PROTOCOL = 7;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
                                         // 5: the tracks' parameters and the clips' places (automation lanes of any track);
-                                        // 6: velocity curves of clip tabs, kept through the MuseScore Envelopes script
+                                        // 6: an arrangement clip's place in the song, Live's tempo reported as it changes;
+                                        // 7: velocity curves of clip tabs, kept through the MuseScore Envelopes script
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 var HUB_STALE_MS = 5000;
@@ -542,7 +547,7 @@ function handle(address, a) {
                   velAnswerLate(true);
                   }
             }
-      // velocity curves of clip tabs (protocol 6)
+      // velocity curves of clip tabs (protocol 7)
       else if (address === "/ms/vel/set") {
             var vin = velIncoming[str(a[0])];
             if (!vin || vin.serial !== num(a[1]))
@@ -912,10 +917,13 @@ function report() {
       var song = new LiveAPI("live_set");
       var playing = num(song.get("is_playing")) ? 1 : 0;
       var b = num(song.get("current_song_time"));
+      var bpm = num(song.get("tempo"));
       var t = now();
-      if (playing || playing !== lastTransport.playing || Math.abs(b - lastTransport.beat) > 1e-6 || t - lastTransport.sent > 1000) {
-            send("/live/transport", playing, b, num(song.get("tempo")));
-            lastTransport = { playing: playing, beat: b, sent: t };
+      // (Live's tempo changed: at once, also while stopped, for the clip tabs that follow it; protocol 6)
+      if (playing || playing !== lastTransport.playing || Math.abs(b - lastTransport.beat) > 1e-6 || t - lastTransport.sent > 1000
+          || bpm !== lastTransport.bpm) {
+            send("/live/transport", playing, b, bpm);
+            lastTransport = { playing: playing, beat: b, sent: t, bpm: bpm };
             }
       }
 
@@ -1360,10 +1368,27 @@ function whereOf(clip, tr) {
 
 function sendWhere(e, clip, tr, always) {
       var w = whereOf(clip, tr);
-      if (!always && e.where && e.where.track === w.track && e.where.slot === w.slot)
+      if (always || !e.where || e.where.track !== w.track || e.where.slot !== w.slot) {
+            e.where = w;
+            send("/live/clip/where", e.key, w.track, w.slot);
+            always = true;
+            }
+      // an arrangement clip's place in the song (protocol 6)
+      if (w.slot >= 0 || w.track < 0)
             return;
-      e.where = w;
-      send("/live/clip/where", e.key, w.track, w.slot);
+      var sp = spanOf(clip);
+      var k = sp.join(" ");
+      if (!always && e.span === k)
+            return;
+      e.span = k;
+      send.apply(this, ["/live/clip/span", e.key].concat(sp));
+      }
+
+// start_time, end_time (song beats), start_marker, end_marker, loop_start, loop_end (clip beats), looping
+function spanOf(clip) {
+      return [num(clip.get("start_time")), num(clip.get("end_time")), num(clip.get("start_marker")),
+              num(clip.get("end_marker")), num(clip.get("loop_start")), num(clip.get("loop_end")),
+              num(clip.get("looping")) ? 1 : 0];
       }
 
 function isLink(dev) {
@@ -2037,7 +2062,7 @@ function fillSlot(k, lane, base, bpm, lengthBeats) {
       }
 
 //---------------------------------------------------------
-//   kept in the set by the MuseScore Envelopes script (protocol 6; tools/live/MuseScoreEnvelopes/core.py › /ms/keep)
+//   kept in the set by the MuseScore Envelopes script (protocol 7; tools/live/MuseScoreEnvelopes/core.py › /ms/keep)
 //   The owner, 2026-10-03: "if we can achieve possibly zero [undo steps], I'd be all for it". A track's values go
 //   into the track with Live's Python Track.set_data (no undo step; Max for Live's Object Model has no set_data), so
 //   when the script answers (/ms/keep/ping every 2 s with the hello) a copy sends its lanes there at once instead of
@@ -2165,7 +2190,7 @@ function keptChanged(what) {
       }
 
 //---------------------------------------------------------
-//   velocity curves of clip tabs (protocol 6; the owner, 2026-10-03: "I want to be able to automate the velocity in
+//   velocity curves of clip tabs (protocol 7; the owner, 2026-10-03: "I want to be able to automate the velocity in
 //   MuseScore, and I can toggle override the existing note velocities vs. use data saved in MuseScore Link")
 //
 //   One curve a clip (a clip tab's "Velocity" lane, mscore/liveclipmodel.h › Velocity lane), in one of two modes:
