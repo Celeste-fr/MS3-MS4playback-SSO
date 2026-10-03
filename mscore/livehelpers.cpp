@@ -12,6 +12,7 @@
 
 #include "livehelpers.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -29,6 +30,7 @@
 #include <QSaveFile>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QXmlStreamReader>
 
@@ -468,6 +470,8 @@ static void showPrompt(QWidget* parent, const QString& lib, const QVector<Item>&
             box->setFocus();
             });
       d->show();
+      d->raise();
+      d->activateWindow();
       }
 
 void startupCheck(QWidget* parent)
@@ -481,7 +485,24 @@ void startupCheck(QWidget* parent)
       const QString version = shippedVersion(files(shippedDir(), lib));
       if (QSettings().value(KEY_DONT_ASK).toString() == version)
             return;
-      showPrompt(parent, lib, items, version);
+      // after the Start Center and any other modal window at startup (it would hide the prompt and block it)
+      QPointer<QWidget> p(parent);
+      QTimer* wait = new QTimer(parent);
+      wait->setInterval(1000);
+      QObject::connect(wait, &QTimer::timeout, wait, [wait, p, lib, items, version]() {
+            if (QApplication::activeModalWidget())
+                  return;
+            wait->stop();
+            wait->deleteLater();
+            if (p)
+                  showPrompt(p, lib, items, version);
+            });
+      if (QApplication::activeModalWidget())
+            wait->start();
+      else {
+            delete wait;
+            showPrompt(parent, lib, items, version);
+            }
       }
 
 void showOnDemand(QWidget* parent)
