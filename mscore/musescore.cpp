@@ -143,6 +143,7 @@
 #include "playbackverify.h"
 #include "liveequivalence.h"
 #include "livesetexport.h"
+#include "livehelpers.h"
 #include "libmscore/livesetwriter.h"
 #include <QLockFile>
 #include <atomic>
@@ -10159,6 +10160,9 @@ void MuseScore::init(QStringList& argv)
       const bool lastSessionShowedPlayPanel = settings.value("showPlayPanel").toBool();
       settings.endGroup();
       mscore->showPlayPanel(forceShowPlayPanel || lastSessionShowedPlayPanel);
+
+      // Ableton Live's helpers in its User Library (livehelpers.h): checked after startup, a prompt only when needed
+      QTimer::singleShot(3000, mscore, []() { LiveIntegration::LiveHelpers::startupCheck(mscore); });
       }
 
 

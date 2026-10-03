@@ -314,7 +314,7 @@ add_library(mscoreapp STATIC
       soundlibraryhost.cpp soundlibraryhost.h playbacksettingswidget.cpp playbacksettingswidget.h soundlibrarymemory.cpp soundlibraryloadtimes.cpp soundlibraryloadtimes.h
       liveintegration.cpp liveintegration.h liveclips.cpp liveclips.h livesetexport.cpp livesetexport.h
       liveequivalence.cpp liveequivalence.h
-      liveclipmodel.cpp liveclipmodel.h liveclipedit.cpp liveclipedit.h livemidiout.cpp livemidiout.h
+      liveclipmodel.cpp liveclipmodel.h liveclipedit.cpp liveclipedit.h livemidiout.cpp livemidiout.h livehelpers.cpp livehelpers.h
       soundlibrarycheck.cpp soundlibrarycheck.h
       playbackverify.cpp playbackverify.h
       tuningdialog.cpp tuningdialog.h

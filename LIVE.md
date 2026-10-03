@@ -210,10 +210,12 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
 
 ### Setting it up
 
-1. **Install the device.** Copy `tools/live/MuseScore Link.amxd` (in the Windows build's folder:
-   `MuseScore Link.amxd` next to MuseScore3Evo.exe) into Live's User Library, e.g.
-   `Documents\Ableton\User Library\Presets\MIDI Effects\Max MIDI Effect`. It needs Max for Live
-   (Suite) and Max 9 (Live 12.2 comes with 9.0.7): its script runs in Max's `v8` object.
+1. **Install the device**: MuseScore offers it ([The Live helpers](#the-live-helpers-installed-by-musescore)): at
+   startup, when Live 12 is on the computer and its User Library lacks the device (or has another version), a prompt
+   copies `MuseScore Link.amxd` to `<User Library>\Presets\MIDI Effects\Max MIDI Effect`; any time: *Mixer ›
+   Advanced Options… › Ableton Live › Install Live helpers…*. By hand: copy `tools/live/MuseScore Link.amxd` (next to
+   MuseScore3Evo.exe in the Windows build) there. It needs Max for Live (Suite) and Max 9 (Live 12.2 comes with
+   9.0.7): its script runs in Max's `v8` object.
 2. **Live's settings:** EXT (external sync) **off**: Live is the clock here. *Options › Chase MIDI
    Notes* on (the default).
 3. **One MIDI track per route**: *Mixer › Advanced Options… › Ableton Live › **Create Live Set…*** writes a
@@ -832,10 +834,13 @@ The owner, 2026-10-02: lanes drawn in an Edit-in-MuseScore tab "must be written 
   removed lane clears it. One write at a time, sent again after 3 s (applied once). The script hashes the clip's
   envelopes once a second: a change made in Live is a **conflict** like the notes' (*Reload from Live*); a write
   against an older hash is refused.
-- **Set up once in Live** (the owner): copy `tools/live/MuseScoreEnvelopes` to `<User Library>/Remote Scripts/`
-  (Windows: `Documents\Ableton\User Library\Remote Scripts\MuseScoreEnvelopes`), restart Live, then *Settings ›
-  Tempo & MIDI › Control Surface*: `MuseScoreEnvelopes` in a free row, Input and Output None. Without it the tab
-  has no lanes and the status line says how to set it up (asked again every 5 s). It listens on 127.0.0.1 only and
+- **Set up once in Live** (the owner): the script's files go to `<User Library>/Remote Scripts/MuseScoreEnvelopes`;
+  MuseScore installs them with the device ([The Live helpers](#the-live-helpers-installed-by-musescore)), by hand: copy
+  `tools/live/MuseScoreEnvelopes` (next to MuseScore3Evo.exe in the Windows build) there. Restart Live, then
+  *Settings › Tempo & MIDI › Control Surface*: `MuseScoreEnvelopes` in a free row, Input and Output None (by hand:
+  Live keeps it in its binary preferences). Without it the tab has no lanes and the status line says how to set it
+  up (asked again every 5 s); the first time in a run, while the device answers, a small window says it too
+  (*Don't show again*), or offers to install the script when it isn't in the User Library. It listens on 127.0.0.1 only and
   writes `MuseScoreEnvelopes.log` next to itself.
 - **What Live 12.4.6 does** (tried on the test VM, 2026-10-02, Operator on a MIDI track): `create_event` takes the
   parameter's value (`events_in_range` gives Live's stored one, which differs for Volume-like parameters: read with
@@ -854,9 +859,41 @@ The owner, 2026-10-02: lanes drawn in an Edit-in-MuseScore tab "must be written 
   them. Live's own **CC Control** device on the track gives CC lanes: its controls are parameters, so they are lanes.
 - MuseScore's Play in the tab sends the notes to the track (above) but not the envelopes (What still differs).
 
+### The Live helpers, installed by MuseScore (2026-10-03)
+
+The owner, 2026-10-03: "whenever MuseScore opens, it tries to see if it can find the correct files copied to the
+correct place, and if not it prompts the user to copy it for them." (`mscore/livehelpers.{h,cpp}`)
+
+- **When**: 3 s after MuseScore's window shows (nothing is blocked), and on demand: *Mixer › Advanced Options… ›
+  Ableton Live › Install Live helpers…*. Nothing happens without Live 12 on the computer (a `Live 12*` folder in
+  ProgramData / Program Files `\Ableton`, an "Ableton Live 12…" uninstall entry, or Live 12's preferences), a User
+  Library, or the files next to MuseScore3Evo.exe (so: only the Windows builds).
+- **The User Library**: Live's `Library.cfg` (`%APPDATA%\Ableton\Live <version>\Preferences`, the newest version
+  whose folder exists; Live 12.2 and 12.4.6 write `<UserLibrary><LibraryProject>` with `ProjectPath` + `ProjectName`),
+  else `Documents\Ableton\User Library` (Windows' Documents folder, also when it is in OneDrive). Create Live Set uses
+  the same (before 2026-10-03 it read `ProjectPath` alone, one folder too high: the device was still found by the
+  search, but its set's `RelativePath` began with "User Library/"; Live then found it by the absolute path).
+- **The check**: `MuseScore Link.amxd` → `Presets\MIDI Effects\Max MIDI Effect\`, `MuseScoreEnvelopes\__init__.py`,
+  `core.py`, `surface.py` → `Remote Scripts\MuseScoreEnvelopes\`, compared by content (SHA-1).
+- **The prompt** (missing or different): a small window, not modal, listing each file, where it goes and why, with
+  *Install* (*Update* when one is there in another version), *Not now* (asked at the next start) and *Don't ask
+  again* (until a MuseScore comes with other files: QSettings `liveHelpers/dontAsk` holds the shipped files' hash).
+  *Install* copies only these files (each replaced whole, atomically; nothing else in those folders is touched), pins
+  them in OneDrive when the User Library is there (`attrib +P -U` on the `MuseScoreEnvelopes` folder and on each
+  copied file: "Always keep on this device"; a failure is reported, not fatal) and says what Live needs next: a
+  restart when Live runs and the script changed; the Control Surface choice when the script is new; for a new
+  device version, reopening the sets (they refer to the device's file in the User Library: `livesetwriter.cpp`
+  `linkDevice`), while a device dragged in from a MuseScore build folder still points there and is re-added once
+  from Live's browser.
+- **Not automated**: the Control Surface choice (Live's binary preferences). The hint above says how.
+
 ### What is tested, and what only Live can show
 
 Tested here:
+- The Live helpers: `tst_liveintegration` liveHelpersLibrary (Live 12.4.6's `Library.cfg` from the test VM with the
+  user's name replaced, `mtest/libmscore/liveintegration/Library.cfg`; versions newest first, 12.10 > 12.4.6; the
+  Documents fallback; OneDrive paths), liveHelpersInstall (missing / different / up to date, the copy, an update of
+  one file, other files untouched; in a temp dir).
 - Clip-tab lanes: `tst_liveintegration` clipEnvelopeMapping (points → breakpoints and back, curves, the packets, the
   parameter lists), liveParamLanes (a part Live plays: a "live:" lane to the device titled by its target, nothing in
   MuseScore's own playback), laneTimeAxis (a point under its note's heads, the grid's bar line on the staff's);
@@ -1025,7 +1062,8 @@ do.
   routes, the device, the states, the dialog. `tools/live/test/compare_als_skeleton.py`: a written set against one
   Live saved.
 - `mscore/liveclipmodel.{h,cpp}`: editing Live clips: the import, the baseline, the diff, the messages;
-  `mscore/liveclipedit.{h,cpp}`: the sessions, tabs and status line.
+  `mscore/liveclipedit.{h,cpp}`: the sessions, tabs and status line. `mscore/livehelpers.{h,cpp}`: the device and the
+  envelopes script checked and installed into Live's User Library.
 - `tools/live/`: the device (`MuseScoreLink.js`, `make_device.py`) and its tests (`test/`); `MuseScoreEnvelopes/`:
   the Control Surface script that writes a clip tab's lanes into the clip's envelopes (`test/test_envelopes.py`).
 - `mscore/liveequivalence.{h,cpp}`: Live against MuseScore (the check, `readBack`); test `tst_liveequivalence`.

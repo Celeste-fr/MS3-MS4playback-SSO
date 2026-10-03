@@ -25,6 +25,7 @@
 #include "audio/midi/msynthesizer.h"
 #include "libmscore/undo.h"
 #include "liveclips.h"
+#include "livehelpers.h"
 #include "musescore.h"
 #include "seq.h"
 
@@ -757,6 +758,9 @@ void LiveClipEditor::poll()
                   s.envSentAt = now;
                   log(QString("clip %1: the MuseScore Envelopes script doesn't answer").arg(e.first));
                   updateStatus();
+                  // how to set it up, once (livehelpers.h): the device answers (it sent the clip), the script doesn't
+                  if (mscore && !MScore::noGui && s.state != State::NO_ANSWER && s.state != State::GONE)
+                        LiveHelpers::controlSurfaceHint(mscore);
                   }
             else if (s.env == EnvState::NO_SCRIPT && now - s.envSentAt >= 5000 && s.score)
                   readEnvelopes(e.first);       // (asked again: installed meanwhile)

@@ -12,6 +12,7 @@
 #include "liveclipedit.h"
 #include "liveclips.h"
 #include "livesetexport.h"
+#include "livehelpers.h"
 #include "liveintegration.h"
 #include "libmscore/automation.h"
 #include "soundlibrarycheck.h"
@@ -2807,6 +2808,13 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             sets->addWidget(create);
             sets->addWidget(missing);
             sets->addStretch();
+            // the device and the envelopes script in Live's User Library (livehelpers.h; also asked at startup)
+            QPushButton* helpers = new QPushButton(tr("Install Live helpers…"), liveBox);
+            helpers->setToolTip(tr("Checks Live's User Library for the MuseScore Link device and the MuseScoreEnvelopes "
+                                   "Control Surface script that come with this MuseScore, and installs or updates them "
+                                   "(only these files) when you agree."));
+            connect(helpers, &QPushButton::clicked, this, [this]() { LiveIntegration::LiveHelpers::showOnDemand(this); });
+            sets->addWidget(helpers);
             v->addLayout(sets);
             connect(create, &QPushButton::clicked, this, [this]() {
                   LiveIntegration::createLiveSetDialog(_score, this, false);

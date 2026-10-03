@@ -41,6 +41,7 @@
 #include "libmscore/tie.h"
 #include "libmscore/staff.h"
 #include "mscore/liveclipmodel.h"
+#include "mscore/livehelpers.h"
 #include "audio/midi/event.h"
 #include "mtest/testutils.h"
 
@@ -93,6 +94,8 @@ class TestLiveIntegration : public QObject, public MTest
       void linkWatch();
       void liveSetWrite();
       void liveSetMissing();
+      void liveHelpersLibrary();
+      void liveHelpersInstall();
       };
 
 //---------------------------------------------------------
@@ -2408,6 +2411,136 @@ void TestLiveIntegration::liveSetMissing()
       QVERIFY(!hasTrack(set, violin));
       set = setOf({ { "a", "" }, { "b", "" }, { "Winds", "MuseScore B" } });
       QVERIFY(!hasTrack(set, flute));
+      }
+
+//---------------------------------------------------------
+//   liveHelpersLibrary
+//    Live's Library.cfg (12.4.6's, from the test VM, the user's name replaced): ProjectPath + ProjectName; the newest
+//    Live version whose library exists; Documents/Ableton/User Library without one
+//---------------------------------------------------------
+
+void TestLiveIntegration::liveHelpersLibrary()
+      {
+      using namespace LiveIntegration::LiveHelpers;
+      QFile f(QString(DIR_ROOT) + "Library.cfg");
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      const QByteArray cfg = f.readAll();
+      QCOMPARE(userLibraryFromCfg(cfg), QString("C:/Users/someone/Documents/Ableton/User Library"));
+      QCOMPARE(userLibraryFromCfg("<Ableton><ContentLibrary><UserLibrary><LibraryProject>"
+                                  "<ProjectPath Value=\"D:\\OneDrive\\Docs\\Ableton\\User Library\"/>"
+                                  "</LibraryProject></UserLibrary></ContentLibrary></Ableton>"),
+               QString("D:/OneDrive/Docs/Ableton/User Library"));
+      QCOMPARE(userLibraryFromCfg("<Ableton><ContentLibrary/></Ableton>"), QString());
+
+      QVERIFY(compareLiveVersions("Live 12.4.6", "Live 12.2") > 0);
+      QVERIFY(compareLiveVersions("Live 12.10", "Live 12.4.6") > 0);           // (not as text)
+      QVERIFY(compareLiveVersions("Live 11.3.13", "Live 12") < 0);
+      QVERIFY(compareLiveVersions("Live 12.2", "Live 12.2.0") < 0);
+      QCOMPARE(compareLiveVersions("Live 12.4", "Live 12.4"), 0);
+
+      QTemporaryDir tmp;
+      const QString base = tmp.path() + "/AppData/Ableton";
+      const QString docs = tmp.path() + "/Documents";
+      auto prefs = [&](const QString& version, const QString& lib) {
+            const QString dir = base + "/" + version + "/Preferences";
+            QDir().mkpath(dir);
+            QFile c(dir + "/Library.cfg");
+            QVERIFY(c.open(QIODevice::WriteOnly));
+            QByteArray x = cfg;
+            const int slash = lib.lastIndexOf('/');
+            x.replace("C:/Users/someone/Documents/Ableton", lib.left(slash).toUtf8());
+            x.replace("\"User Library\"", "\"" + lib.mid(slash + 1).toUtf8() + "\"");
+            c.write(x);
+            };
+      // nothing: no library
+      QCOMPARE(findUserLibrary({ base }, docs), QString());
+      // the Documents fallback
+      QDir().mkpath(docs + "/Ableton/User Library");
+      QCOMPARE(findUserLibrary({ base }, docs), docs + "/Ableton/User Library");
+      // Live's preferences win; the newest version whose library exists
+      QDir().mkpath(tmp.path() + "/Lib122/User Library");
+      QDir().mkpath(tmp.path() + "/Lib1246/My Library");
+      QDir().mkpath(base + "/Live Reports");
+      prefs("Live 12.2", tmp.path() + "/Lib122/User Library");
+      QCOMPARE(findUserLibrary({ base }, docs), tmp.path() + "/Lib122/User Library");
+      prefs("Live 12.4.6", tmp.path() + "/Lib1246/My Library");
+      QCOMPARE(findUserLibrary({ base }, docs), tmp.path() + "/Lib1246/My Library");
+      prefs("Live 12.10", tmp.path() + "/Gone/User Library");                   // (its folder doesn't exist)
+      QCOMPARE(findUserLibrary({ base }, docs), tmp.path() + "/Lib1246/My Library");
+
+      QVERIFY(underOneDrive("D:/OneDrive/Artemisia - personnel/Documents/Ableton/User Library"));
+      QVERIFY(underOneDrive("C:\\Users\\x\\OneDrive - Company\\Documents"));
+      QVERIFY(!underOneDrive("C:/Users/user/Documents/Ableton/User Library"));
+      }
+
+//---------------------------------------------------------
+//   liveHelpersInstall
+//    the check (missing, different, up to date) and the copy, in a temp dir: only our files, other files untouched
+//---------------------------------------------------------
+
+void TestLiveIntegration::liveHelpersInstall()
+      {
+      using namespace LiveIntegration::LiveHelpers;
+      QTemporaryDir tmp;
+      const QString bin = tmp.path() + "/bin";
+      const QString lib = tmp.path() + "/User Library";
+      auto write = [](const QString& path, const QByteArray& data) {
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(data);
+            };
+      auto read = [](const QString& path) {
+            QFile f(path);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray("(none)");
+            };
+      QDir().mkpath(lib);
+      QCOMPARE(files(bin, lib).size(), 0);                                      // (a build without them: nothing)
+      write(bin + "/MuseScore Link.amxd", "device 1");
+      write(bin + "/MuseScoreEnvelopes/__init__.py", "init 1");
+      write(bin + "/MuseScoreEnvelopes/core.py", "core 1");
+      write(bin + "/MuseScoreEnvelopes/surface.py", "surface 1");
+      write(lib + "/Presets/MIDI Effects/Max MIDI Effect/Other.amxd", "someone else's");
+      write(lib + "/Remote Scripts/MuseScoreEnvelopes/MuseScoreEnvelopes.log", "log");
+
+      const QVector<File> list = files(bin, lib);
+      QCOMPARE(list.size(), 4);
+      QCOMPARE(list[0].target, lib + "/Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd");
+      QCOMPARE(list[2].target, lib + "/Remote Scripts/MuseScoreEnvelopes/core.py");
+      QVector<Item> items = check(list);
+      QCOMPARE(items.size(), 4);
+      for (const Item& it : items)
+            QCOMPARE(int(it.state), int(State::MISSING));
+      QVERIFY(!upToDate(items));
+      const QString v1 = shippedVersion(list);
+
+      InstallResult r = install(items, false);
+      QCOMPARE(r.copied.size(), 4);
+      QVERIFY(r.failed.isEmpty());
+      QVERIFY(!r.pinned);
+      items = check(list);
+      QVERIFY(upToDate(items));
+      QCOMPARE(read(lib + "/Remote Scripts/MuseScoreEnvelopes/surface.py"), QByteArray("surface 1"));
+      QCOMPARE(read(lib + "/Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd"), QByteArray("device 1"));
+
+      // a MuseScore with another script: that file only, Update; the shipped version changes (asked again)
+      write(bin + "/MuseScoreEnvelopes/core.py", "core 2");
+      items = check(list);
+      QCOMPARE(int(items[0].state), int(State::UP_TO_DATE));
+      QCOMPARE(int(items[2].state), int(State::DIFFERENT));
+      QVERIFY(shippedVersion(list) != v1);
+      r = install(items, false);
+      QCOMPARE(r.copied, QStringList({ lib + "/Remote Scripts/MuseScoreEnvelopes/core.py" }));
+      QCOMPARE(read(lib + "/Remote Scripts/MuseScoreEnvelopes/core.py"), QByteArray("core 2"));
+      QVERIFY(upToDate(check(list)));
+      // edited in the library: different again
+      write(lib + "/Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd", "device edited");
+      QCOMPARE(int(check(list)[0].state), int(State::DIFFERENT));
+
+      // the other files untouched
+      QCOMPARE(read(lib + "/Presets/MIDI Effects/Max MIDI Effect/Other.amxd"), QByteArray("someone else's"));
+      QCOMPARE(read(lib + "/Remote Scripts/MuseScoreEnvelopes/MuseScoreEnvelopes.log"), QByteArray("log"));
+      QCOMPARE(QDir(lib + "/Remote Scripts/MuseScoreEnvelopes").entryList(QDir::Files).size(), 4);
       }
 
 QTEST_MAIN(TestLiveIntegration)

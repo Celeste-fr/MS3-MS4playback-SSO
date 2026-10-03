@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "livesetexport.h"
+#include "livehelpers.h"
 #include "libmscore/automation.h"
 
 #include <algorithm>
@@ -49,52 +50,13 @@ static const char* const DEVICE_PLACE = "Presets/MIDI Effects/Max MIDI Effect"; 
 
 //---------------------------------------------------------
 //   liveUserLibrary
-//    Live keeps its User Library's folder in Library.cfg (Preferences of each Live version; the newest
-//    wins): the first existing folder named in its UserLibrary element
+//    Live's Library.cfg (newest Live version first; ProjectPath + ProjectName), else Documents/Ableton/User Library:
+//    livehelpers.h
 //---------------------------------------------------------
 
 QString liveUserLibrary()
       {
-      QStringList prefs;
-#if defined(Q_OS_WIN)
-      prefs << qEnvironmentVariable("APPDATA") + "/Ableton";
-#elif defined(Q_OS_MAC)
-      prefs << QDir::homePath() + "/Library/Preferences/Ableton";
-#else
-      prefs << QDir::homePath() + "/.Ableton";
-#endif
-      for (const QString& base : prefs) {
-            QDir d(base);
-            QStringList versions = d.entryList({ "Live *" }, QDir::Dirs, QDir::Name);
-            std::sort(versions.begin(), versions.end(), [](const QString& a, const QString& b) {
-                  return QString::compare(a, b, Qt::CaseInsensitive) > 0;      // newest first (Live 12.2.5 > Live 12.1)
-                  });
-            for (const QString& v : versions) {
-                  for (const QString& cfg : { base + "/" + v + "/Preferences/Library.cfg", base + "/" + v + "/Library.cfg" }) {
-                        QFile f(cfg);
-                        if (!f.open(QIODevice::ReadOnly))
-                              continue;
-                        const QString text = QString::fromUtf8(f.readAll());
-                        const int from = text.indexOf("<UserLibrary");
-                        const int to = text.indexOf("</UserLibrary>", from);
-                        if (from < 0)
-                              continue;
-                        static const QRegularExpression value("Value=\"([^\"]+)\"");
-                        QRegularExpressionMatchIterator it = value.globalMatch(text.mid(from, to < 0 ? -1 : to - from));
-                        while (it.hasNext()) {
-                              QString p = it.next().captured(1);
-                              p.replace("&amp;", "&").replace("&quot;", "\"").replace("&apos;", "'");
-                              if (!p.isEmpty() && QFileInfo(p).isDir())
-                                    return QDir::cleanPath(QDir::fromNativeSeparators(p));
-                              }
-                        }
-                  }
-            }
-      const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-      for (const QString& p : { docs + "/Ableton/User Library", QDir::homePath() + "/Music/Ableton/User Library" })
-            if (QFileInfo(p).isDir())
-                  return QDir::cleanPath(p);
-      return QString();
+      return LiveHelpers::userLibrary();
       }
 
 //---------------------------------------------------------
