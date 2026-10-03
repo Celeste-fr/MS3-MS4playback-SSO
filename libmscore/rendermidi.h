@@ -118,6 +118,9 @@ class MidiRenderer {
       std::shared_ptr<const SoundLib::Library> library;
       int libGeneration = -1;
       std::map<const Part*, LibPart> libParts;
+      // each part's Velocity lane (automation.h VELOCITY_TARGET: an Edit-in-MuseScore clip tab's), with points: every
+      // note of MuseScore 3's playback shaped by it (playNote), as the MuseScore Link device or the clip's notes do in Live
+      std::map<const Part*, Automation::Lane> velocityLanes;
       // channel -> MIDI out port and channel per patch, per lane (SoundLib::Lanes: copies of a patch by tuning)
       std::map<int, std::vector<std::vector<std::pair<int, int>>>> libRoutes;
       std::map<const Note*, int> libLanes;                        // a note's lane, when not 0

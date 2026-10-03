@@ -327,7 +327,7 @@ void LiveClipsLink::read()
 void LiveClipsLink::received(const QString& address, const QVariantList& args)
       {
       const qint64 now = QDateTime::currentMSecsSinceEpoch();
-      if (address.startsWith("/live/clip/")) {     // editing a Live clip (liveclipedit.h)
+      if (address.startsWith("/live/clip/") || address.startsWith("/live/vel/")) {    // editing a Live clip (liveclipedit.h)
             _lastHello = now;
             LiveClipEditor::instance()->received(address, args);
             return;

@@ -188,7 +188,13 @@ the owner installs it once: LIVE.md › Automation lanes in a clip tab), MuseSco
 Mixer) MuseScore checks Live 12's User Library (its `Library.cfg`) for the device and the script shipped in `bin`
 and offers to install / update them (OneDrive-pinned); the Control Surface choice stays manual (a one-time hint). Session clips only (arrangement clips have no envelopes in Live's API, 12.4.6); curves go
 as 16 straight pieces (Live ignores a breakpoint's curve). Tests: `tools/live/test/test_envelopes.py`,
-`test_envparams.js`, `tst_liveintegration` clipEnvelopeMapping / liveParamLanes / laneTimeAxis.
+`test_envparams.js`, `tst_liveintegration` clipEnvelopeMapping / liveParamLanes / laneTimeAxis. A clip tab's
+**Velocity lane** (protocol 6, `liveclipmodel.h` › The Velocity lane; LIVE.md): scale 0-200 % or absolute, "shape"
+(the device changes note-ons in its patcher from a ring the script fills, per playing clip; `MuseScoreLink.js` › velocity
+curves) or "write" (velocity-only edits from the notes' originals); MuseScore's own playback shaped too (rendermidi
+playNote). **Kept without undo steps**: with the MuseScore Envelopes script the device keeps a track's lanes and velocity
+curves in the track (`Track.set_data` through `/ms/keep`, the set marked changed by folding the track twice); the
+`[pattr]` stores only without it. Tests: `test_velocity.js`, `tst_liveintegration` clipVelocity*.
 
 **Playback verification** (VERIFY.md; checks in `audio/vst3/playbackverify.h`): `--verify-playback`,
 `--verify-audio`, `tools/playbackverify/read_verify_report.py`, faults via `MS_VERIFY_FAULT`.
@@ -232,7 +238,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
-  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 45 (links mscoreapp since 2026-10-03), `tst_keysig` 8, `tst_tuning` 17,
+  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 49 (links mscoreapp since 2026-10-03; clipVelocity* added the 4 more), `tst_keysig` 8, `tst_tuning` 17,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

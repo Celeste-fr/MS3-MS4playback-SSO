@@ -478,6 +478,35 @@ them and, as long as MuseScore hasn't sent its own for the track, plays them. **
 "Change in MuseScore Link", per pause; playback follows each edit at once). Lanes needing more than the 4 stores are not
 kept (a note in the report; they still play while MuseScore runs).
 
+**Kept without Live undo steps (2026-10-03).** The owner: "if we can achieve possibly zero [undo steps], I'd be all for it".
+With the MuseScore Envelopes control surface set up (the clip tabs' lanes need it already), the device keeps a track's
+lanes, and the clip tabs' velocity curves (below), **in the track itself** through the script: Live's Python
+`Track.set_data(key, value)` ("Store data for the given key in this object. The data is persistent and will be restored
+when loading the Live Set"; Song and Track have it, a Clip doesn't, in 12.4.6). Max for Live's Object Model has no
+`set_data`, so the device sends the atoms to the script (`/ms/keep/put`, UDP 9005, `core.py` › What MuseScore Link
+keeps) and the hub asks for every track's values when the script first answers (`/ms/keep/ping` each second, `/ms/keep/ask`).
+Then the `[pattr]` stores are left alone (the lanes go at once, no 2 s wait); a set from an older device, or without the
+script, keeps using them as above (the script's value wins when both are there).
+What was tried on the test VM (Live 12.4.6 trial, 2026-10-03, a research device `VLStore` and then this device):
+
+| store | undo step | in the saved set | a later value |
+|---|---|---|---|
+| `[pattr]` Blob, *Stored Only* (the old stores) | yes (one per set) | yes | yes |
+| `[pattr]` Blob, *Stored Only*, "Undo When Visible" off | yes | | |
+| `[dict]` as a Live parameter (Blob) | yes | | |
+| a Float parameter *Stored Only*, "Undo When Visible" off | yes | | |
+| a Float parameter *Visible*, "Undo When Visible" off | **no** | yes | (one number a parameter, shown to Push: too small for curves) |
+| `[dict]` / `[coll]` with `@embed 1` | no | **no** (only in the device's own file) | |
+| Python `Song.set_data` / `Track.set_data` | **no** (`song.can_undo` stayed False) | **yes** (in the track's `ViewData`; 2.7 MB came back) | **yes** |
+
+`set_data` doesn't mark the set as changed (no `*` in the title, *File › Save Live Set* greyed out), so the script then
+folds the track's arrangement lane and unfolds it again (`Track.View.is_collapsed` twice: nothing visible changes, no undo
+step, the title gets its `*`) and Save saves it. Checked with this device: a velocity curve and a lane set from MuseScore's
+messages: `song.can_undo` still False, the title `velA*`, saved; the saved set's MuseScore Link `MxDBlob` had `"Lanes": [ 0 ]`
+… (the stores untouched) and the track's `ViewData` both values; Live restarted with the set, no MuseScore: the device
+drove the lane's mixer volume again ("seenSerial saved2") and shaped the clip's notes. A track's value moves with the
+track (it is the track's); Live's undo doesn't touch it (MuseScore sends its own again when it changes).
+
 **Packed** (`packLane`, the same in `MuseScoreLink.js` and `livesetwriter.cpp`, checked atom for atom): a lane's events
 are its points and a ramp's steps (every 30 ticks as far as the value moves by 0.001), so a long ramp is hundreds of
 events. Stored: an event `time value`, or a run of m evenly spaced steps `-m t1 v1 tm vm vh` on the parabola through the
@@ -884,6 +913,77 @@ The owner, 2026-10-02: lanes drawn in an Edit-in-MuseScore tab "must be written 
   them. Live's own **CC Control** device on the track gives CC lanes: its controls are parameters, so they are lanes.
 - MuseScore's Play in the tab sends the notes to the track (above) but not the envelopes (What still differs).
 
+### The Velocity lane of a clip tab (2026-10-03)
+
+The owner, 2026-10-03: "I don't like that I can't automate velocity in Live. I want to be able to automate the velocity
+in MuseScore, and I can toggle override the existing note velocities vs. use data saved in MuseScore Link." Then: one
+curve a clip (scale or absolute a mode of that curve), and in "write" the notes' velocities before the curve kept so it
+never scales scaled values.
+
+- **Use**: in a clip tab (session or arrangement clip) *+* › **Velocity** (always offered, first). Draw it like any lane
+  (points, ramps, Alt-drag curves, Draw Mode, copy / paste, undo). Before its first point the notes keep their own
+  velocities. Right-click the lane:
+  - **Scale the Notes' Velocities (0-200 %)** (the default): each note's velocity × 2u, u the lane's value at the note's
+    start (the lane's middle: 100 %, unchanged), rounded, 1-127; or **Set the Velocities (1-127)**: round(127 u), 1-127
+    (MIDI 1.0: a note-on's velocity has 7 bits and 0 is a note-off). The header shows the unit: "Velocity (%)" or
+    "Velocity (1-127)", the value at the cursor "50 %" / "64"; *Edit Value…* asks in those units.
+  - **Shape While Playing (Notes Unchanged)** (the default) or **Write into the Notes** (asks first; *Don't ask again*:
+    QSettings `liveIntegration/velocityWriteNoAsk`). The header says "shaped" or "written".
+  Changing either is an undo step, like an edit of the points.
+- **Shape while playing**: the clip's notes stay as they are; the MuseScore Link copy on the clip's track (a MIDI effect
+  before the instrument) changes each note-on as it passes, from the curve kept in the device: only while that clip plays
+  (session: the clip in the track's playing slot, or a fired one from its launch; arrangement: within the clip's span,
+  when the track follows the arrangement), at the note's clip time (its loop included); other clips on the track and other
+  tracks are untouched. The curve is kept with the set (above, *Kept without Live undo steps*): the set plays it without
+  MuseScore, also after it is opened again. Needs MuseScore Link (protocol 6) on the clip's track; without one the status
+  line says the notes play unshaped in Live.
+- **Write into the notes**: each note whose velocity the curve changes is written into the Live clip (a velocity-only
+  `apply_note_modifications` through the edit path: undo, conflicts, *Reload from Live* as any edit). The notation keeps
+  each note's velocity before the curve (its "original"; MuseScore compares Live with the notes as the curve makes them,
+  `signaturesForLive`), so editing the curve, or setting it again, writes from the originals. The originals go to the
+  device with the curve (by Live's note id, pitch and start, and the velocity written): when the tab opens again, a note
+  still at the velocity written gets its original back in the notation; a note changed in Live since takes Live's as its
+  original (and the curve over it is written at the next edit); a note without one (added later) keeps its own.
+  *Write* → *Shape*: one write puts the originals back, then the device shapes; *Shape* → *Write*: written from the
+  originals. A velocity edited in MuseScore is the note's new original.
+- **MuseScore's own playback** of the tab (its sounds, or the notes it sends to the Live track) plays every note shaped
+  by the lane in both outputs (`rendermidi.cpp` playNote: the part's "velocity" lane), as Live plays the clip. (The
+  device's ring holds float32 codes: a product exactly half way between two velocities may round the other way there.)
+- **How the device does it** (`MuseScoreLink.js` › velocity curves, `make_device.py`): not in the script (Max's `[v8]`
+  runs in the low-priority thread) but in the patcher, in the scheduler: each note that isn't a carrier → `[t l b 0]`
+  (the code reset, the song position, the note) → `[snapshot~]` of the song-position phasor → the ring's cell
+  (`[expr]`: the tick, plus a bias, modulo the ring) → `[peek~ ---mslv]` → the code into the velocity `[expr]` (0: as it
+  is; c ≥ 1: v (c − 1); c < 0: −c). The script fills the ring (`[buffer~ ---mslv]`, one cell a tick of song time, 480 a
+  beat) every second and at once when the track's playing or fired slot or the transport changes, from the song position
+  two seconds ahead, with what plays on the track then. **Numbers and where they come from**: the ring
+  2 × ⌈2 s × 999 BPM / 60 × 480⌉ = 31 968 cells (two fills' windows at Live's fastest tempo: 999 BPM, measured: 12.4.6
+  took 20 and 999 and refused 10, 1000, 5000 "Tempo out of range"; the fill every second is the device's heartbeat);
+  the bias one signal vector (from `[dspstate~]`): `snapshot~` "reports the sample value in the most recently received
+  signal vector" (Max 9's reference) and on the VM every note read exactly 64 samples (the vector) early (0.00218 beats at
+  90 BPM, 44.1 kHz) until the bias was added; the launch quantization's grid from Live's `Song.Quantization` /
+  `ClipLaunchQuantization` values (read from 12.4.6's Python API); a session clip's clip time from its `start_time`
+  ("the time the clip was started", Live's API) and start marker, a legato one from `playing_position`.
+- **Protocol 6** (`liveclipmodel.h` › The Velocity lane has the messages): MuseScore asks for the clip's record when the
+  tab opens (`/ms/vel/ask`), sends it after each change (`/ms/vel/set`, chunked as the note packets: 24 × 9 atoms), in
+  "write" after Live confirmed the notes' write; the hub keeps a track's records in its Global (`kvel<track id>`) and in
+  the track (`set_data("musescore_vel")`), and tells the track's copies. A clip is found by its place: the session
+  slot's index, or the arrangement clip's start (3840 units a beat), so a curve stays with a clip that isn't moved.
+- **Tried in real Live** (the test VM, Live 12.4.6 trial, 2026-10-03; MuseScore's messages sent by a script; the device's
+  note log and Live's MIDI Monitor after it): a 4-beat looping session clip, notes on each beat at velocity 100, curve
+  50 % from beat 0 and 80 % from beat 2 → 50 50 80 80 in every loop (20 notes), launched while stopped and, quantized to
+  the next bar, while playing; another clip on the track: 90 as written; an arrangement clip with an absolute curve
+  (64, then 127) → 64 64 127 127, and nothing while the session overrode the arrangement; MIDI Monitor showed C3 50, C#3 50,
+  D3 80, D#3 80 (a screenshot, not kept here); the curve read back after Live was restarted with the saved set.
+  Not tried in real Live: MuseScore's GUI (the Windows build), "write" against real Live, a legato launch, follow actions.
+- **Tests**: `tools/live/test/test_velocity.js` (the math, a session clip's ring with its loop, another clip left alone,
+  a launch to come with the song's and the clip's quantization, arrangement clips, "write", kept by a stand-in of the
+  script and given back after a reopen, an ask before the values came, a track's lanes kept by the script and not by the
+  stores), `test_patch.js` (the patcher's shaper: codes, the reset, a note-off, carriers untouched, the log),
+  `test_envelopes.py` › Keep (the script's side); `tst_liveintegration` clipVelocityLane, clipVelocityWrite,
+  clipVelocityReopen, clipVelocityRecord.
+- **Owner decisions** (proposed, LIVE.md › Open questions): the scale range 0-200 % with 100 % at the lane's middle (the
+  owner's own example); "shape" as the default output.
+
 ### The Live helpers, installed by MuseScore (2026-10-03)
 
 The owner, 2026-10-03: "whenever MuseScore opens, it tries to see if it can find the correct files copied to the
@@ -1018,6 +1118,9 @@ Only real Live can show (to check first):
 - Notes added in MuseScore get velocity 100 when the note has none set.
 - A clip tab sends notes, pedals and the pitch bend to its Live track, not the score's dynamics as controllers
   (CC 1 / 11 would change many synths' timbre) nor the Mixer's volume. Should it send any of them?
+- The Velocity lane (2026-10-03): its scale range is 0-200 % with 100 % (unchanged) at the lane's middle, the owner's
+  example ("e.g. 0-200 % with 100 = unchanged"); another range (0-400 %, or a dB scale)? "Shape while playing" is the
+  default output (the notes untouched); keep it?
 
 ## What the owner's Live set confirmed, and what it didn't
 

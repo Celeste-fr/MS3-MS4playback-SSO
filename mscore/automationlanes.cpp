@@ -186,6 +186,8 @@ std::vector<AutomationLanes::Target> AutomationLanes::computeTargets(const Part*
       // an Edit-in-MuseScore clip tab: the clip's track's Live parameters, whatever plays there (no sound library)
       LiveIntegration::LiveClipEditor* ed = LiveIntegration::LiveClipEditor::instance();
       if (ed->isClipScore(s)) {
+            // the notes' velocities first (always: liveclipmodel.h › The Velocity lane)
+            out.push_back({ LiveClipEdit::VELOCITY_TARGET, tr("Velocity"), false, false });
             if (const std::vector<LiveClipEdit::LiveParam>* lp = ed->liveParams(s))
                   for (const LiveClipEdit::LiveParam& p : *lp)
                         out.push_back({ LiveClipEdit::liveTarget(p.d, p.p), p.name, false, true });
@@ -308,7 +310,9 @@ void AutomationLanes::commit(const QString& what)
       for (auto& pl : all) {
             PartLanes keep;
             for (Lane l : pl.second) {
-                  if (l.points.empty())
+                  // (an empty lane goes; the Velocity lane keeps its settings: scale or absolute, shaped or written)
+                  if (l.points.empty() && !(l.target == LiveClipEdit::VELOCITY_TARGET
+                                            && (l.extra.contains("velocityMode") || l.extra.contains("velocityOutput"))))
                         continue;
                   // when it was last changed here (the Live conflict dialog shows it)
                   bool same = false;
@@ -558,8 +562,13 @@ double AutomationLanes::yOfValue(const Row& r, double v) const
       return vr.bottom() - v * vr.height();
       }
 
-QString AutomationLanes::valueText(double v) const
+QString AutomationLanes::valueText(const QString& target, double v) const
       {
+      if (target == LiveClipEdit::VELOCITY_TARGET) {
+            const Score* s = score();
+            const Part* p = s && !s->masterScore()->parts().empty() ? s->masterScore()->parts().front() : nullptr;
+            return LiveClipEdit::velocityText(v, LiveClipEdit::velMode(lane(p, target)));
+            }
       const double x = v * 127;
       return std::fabs(x - std::round(x)) < 0.05 ? QString::number(int(std::lround(x))) : QString::number(x, 'f', 1);
       }
@@ -807,17 +816,22 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       if (_hover.x() >= 0 && r.rect.contains(_hover))
             at = xToTick(_hover.x());
       const double v = l.valueAt(at);
-      QString line2 = v >= 0 ? valueText(v) : QString::fromUtf8("–");
+      QString line2 = v >= 0 ? valueText(r.target, v) : QString::fromUtf8("–");
       if (live)
             line2 += "  " + tr("Live");
-      const QString name = QFontMetrics(p.font()).elidedText(r.name, Qt::ElideRight, int(text.width()));
+      QString title = r.name;
+      if (r.target == LiveClipEdit::VELOCITY_TARGET)        // its unit, and how Live gets it
+            title = (LiveClipEdit::velMode(l) == LiveClipEdit::VelMode::ABSOLUTE ? tr("Velocity (1-127)") : tr("Velocity (%)"))
+                    + QString::fromUtf8(" · ")
+                    + (LiveClipEdit::velOutput(l) == LiveClipEdit::VelOutput::WRITE ? tr("written") : tr("shaped"));
+      const QString name = QFontMetrics(p.font()).elidedText(title, Qt::ElideRight, int(text.width()));
       if (h.height() >= 30) {
             p.drawText(text.adjusted(0, 2, 0, -h.height() / 2), Qt::AlignBottom | Qt::AlignLeft, name);
             p.setPen(QColor(85, 88, 92));
             p.drawText(text.adjusted(0, h.height() / 2, 0, -2), Qt::AlignTop | Qt::AlignLeft, line2);
             }
       else
-            p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, QFontMetrics(p.font()).elidedText(r.name + "  " + line2, Qt::ElideRight, int(text.width())));
+            p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, QFontMetrics(p.font()).elidedText(title + "  " + line2, Qt::ElideRight, int(text.width())));
       // × hides the lane
       p.setPen(QColor(110, 110, 110));
       p.drawText(QRectF(h.right() - 20, h.top(), 18, h.height()), Qt::AlignCenter, QString::fromUtf8("×"));
@@ -971,7 +985,7 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
             _drag = Drag::MOVE;
             _working = false;
             _hover = p;
-            _hoverText = valueText(_before.points[size_t(pt)].value);
+            _hoverText = valueText(r.target, _before.points[size_t(pt)].value);
             _view->update();
             return true;
             }
@@ -1041,7 +1055,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   std::vector<int> sel = moved;
                   select(r, sel);
                   _hover = QPointF(tickToX(g.tick + dtick), yOfValue(r, std::min(1.0, std::max(0.0, g.value + dv))));
-                  _hoverText = valueText(std::min(1.0, std::max(0.0, g.value + dv)));
+                  _hoverText = valueText(r.target, std::min(1.0, std::max(0.0, g.value + dv)));
                   _view->update();
                   return true;
                   }
@@ -1074,7 +1088,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   setLane(r.master, l);
                   _drawCell = t0;
                   _hover = p;
-                  _hoverText = valueText(v);
+                  _hoverText = valueText(r.target, v);
                   _view->update();
                   return true;
                   }
@@ -1174,7 +1188,7 @@ void AutomationLanes::hover(const QPoint& pos)
             const Lane l = lane(r->master, r->target);
             const int pt = pointAt(*r, l, p);
             if (pt >= 0)
-                  _hoverText = valueText(l.points[size_t(pt)].value);
+                  _hoverText = valueText(r->target, l.points[size_t(pt)].value);
             }
       if (old != _hover || oldText != _hoverText)
             _view->update();
@@ -1219,26 +1233,67 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             if (l.points[size_t(seg)].curved())
                   straight = menu.addAction(tr("Straight"));
             }
+      // the Velocity lane: scale or absolute (one curve, read either way), shaped in Live or written into the notes
+      const bool velocity = r.target == LiveClipEdit::VELOCITY_TARGET;
+      QAction* scale = nullptr;
+      QAction* absolute = nullptr;
+      QAction* shape = nullptr;
+      QAction* writeNotes = nullptr;
+      if (velocity) {
+            menu.addSeparator();
+            scale = menu.addAction(tr("Scale the Notes' Velocities (0-200 %)"));
+            absolute = menu.addAction(tr("Set the Velocities (1-127)"));
+            menu.addSeparator();
+            shape = menu.addAction(tr("Shape While Playing (Notes Unchanged)"));
+            writeNotes = menu.addAction(tr("Write into the Notes"));
+            for (QAction* x : { scale, absolute, shape, writeNotes })
+                  x->setCheckable(true);
+            scale->setChecked(LiveClipEdit::velMode(l) == LiveClipEdit::VelMode::SCALE);
+            absolute->setChecked(!scale->isChecked());
+            shape->setChecked(LiveClipEdit::velOutput(l) == LiveClipEdit::VelOutput::SHAPE);
+            writeNotes->setChecked(!shape->isChecked());
+            }
       menu.addSeparator();
       QAction* clear = l.points.empty() ? nullptr : menu.addAction(tr("Clear Lane"));
       QAction* hide = menu.addAction(tr("Hide Lane"));
       QAction* a = menu.exec(globalPos);
       if (!a)
             return true;
-      if (a == editValue || a == add) {
+      const LiveClipEdit::VelMode vm = LiveClipEdit::velMode(l);
+      if (a == scale || a == absolute) {
+            LiveClipEdit::setVelMode(l, a == scale ? LiveClipEdit::VelMode::SCALE : LiveClipEdit::VelMode::ABSOLUTE);
+            setLane(r.master, l);
+            commit(a == scale ? tr("Velocity: scales the notes' velocities") : tr("Velocity: sets the velocities"));
+            }
+      else if (a == shape || a == writeNotes) {
+            if (a == writeNotes && LiveClipEdit::velOutput(l) != LiveClipEdit::VelOutput::WRITE
+                && !LiveIntegration::LiveClipEditor::confirmVelocityWrite(_view))
+                  return true;
+            LiveClipEdit::setVelOutput(l, a == shape ? LiveClipEdit::VelOutput::SHAPE : LiveClipEdit::VelOutput::WRITE);
+            setLane(r.master, l);
+            commit(a == shape ? tr("Velocity: shaped while playing") : tr("Velocity: written into the notes"));
+            }
+      else if (a == editValue || a == add) {
             bool ok = false;
             const double start = a == add ? std::max(0.0, l.valueAt(tick)) : l.points[size_t(pt)].value;
-            const double v = QInputDialog::getDouble(_view, r.name, tr("Value (0-127):"), start * 127, 0, 127, 1, &ok);
+            // (shown as the lane shows it: 0-127; the Velocity lane % or 1-127)
+            const double shown = velocity ? LiveClipEdit::velocityShown(start, vm) : start * 127;
+            const double hi = velocity && vm == LiveClipEdit::VelMode::SCALE ? 200 : 127;
+            const QString label = !velocity ? tr("Value (0-127):")
+                                  : vm == LiveClipEdit::VelMode::SCALE ? tr("Velocity (0-200 %):") : tr("Velocity (1-127):");
+            const double x = QInputDialog::getDouble(_view, r.name, label, shown, velocity && vm == LiveClipEdit::VelMode::ABSOLUTE ? 1 : 0,
+                                                     hi, 1, &ok);
             if (!ok)
                   return true;
+            const double v = velocity ? LiveClipEdit::velocityFromShown(x, vm) : x / 127;
             if (a == add)
-                  Edit::addPoint(l, snap(tick, false), v / 127);
+                  Edit::addPoint(l, snap(tick, false), v);
             else {
                   // the selected points move by as much (Live: "they will all be moved relatively")
                   std::vector<int> sel = (_focus && _selPart == r.master && _selTarget == r.target && !_sel.empty()) ? _sel : std::vector<int>{ pt };
                   if (std::find(sel.begin(), sel.end(), pt) == sel.end())
                         sel = { pt };
-                  Edit::movePoints(l, sel, 0, v / 127 - l.points[size_t(pt)].value);
+                  Edit::movePoints(l, sel, 0, v - l.points[size_t(pt)].value);
                   }
             setLane(r.master, l);
             commit(tr("Automation: value"));

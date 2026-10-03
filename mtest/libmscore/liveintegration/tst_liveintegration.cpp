@@ -41,6 +41,7 @@
 #include "libmscore/tie.h"
 #include "libmscore/staff.h"
 #include "mscore/liveclipedit.h"
+#include "mscore/liveclips.h"
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
 #include "audio/midi/event.h"
@@ -91,6 +92,10 @@ class TestLiveIntegration : public QObject, public MTest
       void clipTitleUnnamed();
       void clipTabClean();
       void clipTabAudible();
+      void clipVelocityLane();
+      void clipVelocityWrite();
+      void clipVelocityReopen();
+      void clipVelocityRecord();
       void clipEnvelopeMapping();
       void laneTimeAxis();
       void liveParamLanes();
@@ -1877,6 +1882,380 @@ void TestLiveIntegration::clipTabAudible()
       QCOMPARE(sent.size(), 1);                         // (no heartbeat after)
       QCOMPARE(ed->audible(), 0);
       LiveClipEditor::setSendHook(nullptr);
+      }
+
+//---------------------------------------------------------
+//   clipVelocityLane
+//    a clip tab's Velocity lane (liveclipmodel.h): scale (2u: 0-200 %) and absolute (127 u) within 1-127, nothing
+//    before the first point; in "shape" the notes Live has stay (nothing to write) and MuseScore's own playback plays
+//    them shaped, as the MuseScore Link device does in Live; the device's record and back
+//---------------------------------------------------------
+
+// the clip score's Velocity lane set as one undo step (the lane editor's commit)
+static void setVelocityLane(MasterScore* score, const std::vector<std::pair<int, double>>& points, LiveClipEdit::VelMode m,
+                            LiveClipEdit::VelOutput o)
+      {
+      Automation::Lane l;
+      l.target = LiveClipEdit::VELOCITY_TARGET;
+      for (const auto& p : points)
+            l.points.push_back(Automation::Point(p.first, p.second, Automation::Curve::STEP));
+      LiveClipEdit::setVelMode(l, m);
+      LiveClipEdit::setVelOutput(l, o);
+      std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+      Automation::PartLanes keep;
+      for (const Automation::Lane& x : all[score->parts().front()])
+            if (x.target != l.target)
+                  keep.push_back(x);
+      keep.push_back(l);
+      all[score->parts().front()] = keep;
+      QVERIFY(Automation::undoWrite(score, all));
+      }
+
+// MuseScore 3's playback of the clip score: (pitch, velocity) of each note-on
+static QList<int> playedVelocities(MasterScore* score)
+      {
+      score->setPlaylistDirty();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      QList<int> played;
+      for (const auto& te : events)
+            if (te.second.type() == ME_NOTEON && te.second.velo() > 0)
+                  played << te.second.pitch() << te.second.velo();
+      return played;
+      }
+
+void TestLiveIntegration::clipVelocityLane()
+      {
+      using LiveClipEdit::VelMode;
+      using LiveClipEdit::VelOutput;
+      QCOMPARE(shapeVelocity(100, -1, VelMode::SCALE), 100);           // before the first point: its own
+      QCOMPARE(shapeVelocity(100, 0.5, VelMode::SCALE), 100);          // the lane's middle: 100 %
+      QCOMPARE(shapeVelocity(87, 0.25, VelMode::SCALE), 44);           // 50 %: 43.5, rounded
+      QCOMPARE(shapeVelocity(90, 1.0, VelMode::SCALE), 127);           // 200 %: 180, at most 127
+      QCOMPARE(shapeVelocity(100, 0.0, VelMode::SCALE), 1);            // 0 %: 1 (0 is a note-off)
+      QCOMPARE(shapeVelocity(37, 0.5, VelMode::ABSOLUTE), 64);         // absolute: 63.5, its own left out
+      QCOMPARE(shapeVelocity(37, 0.0, VelMode::ABSOLUTE), 1);
+      QCOMPARE(shapeVelocity(37, 1.0, VelMode::ABSOLUTE), 127);
+      QCOMPARE(LiveClipEdit::velocityText(0.5, VelMode::SCALE), QString("100 %"));
+      QCOMPARE(LiveClipEdit::velocityText(0.5, VelMode::ABSOLUTE), QString("64"));
+      QCOMPARE(LiveClipEdit::velocityFromShown(150, VelMode::SCALE), 0.75);
+      QCOMPARE(LiveClipEdit::velocityShown(0.75, VelMode::SCALE), 150.0);
+
+      const Clip clip = melody();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      const Baseline b = match(clip, score);
+      QCOMPARE(playedVelocities(score), QList<int>({ 67, 87, 69, 81, 71, 91, 72, 70, 74, 76, 76, 99 }));
+      // 50 % from beat 0, 150 % from beat 2; shaped while playing: nothing to write, MuseScore plays it shaped
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::SCALE, VelOutput::SHAPE);
+      const LiveClipEdit::VelocityLane v = LiveClipEdit::velocityLane(score);
+      QVERIFY(v.present);
+      QCOMPARE(int(v.output), int(VelOutput::SHAPE));
+      QVERIFY(diff(b, signaturesForLive(score)).empty());
+      QCOMPARE(playedVelocities(score), QList<int>({ 67, 44, 69, 41, 71, 127, 72, 105, 74, 114, 76, 127 }));
+      // the same curve, absolute: 32 and 95 whatever the notes had
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::ABSOLUTE, VelOutput::SHAPE);
+      QCOMPARE(playedVelocities(score), QList<int>({ 67, 32, 69, 32, 71, 95, 72, 95, 74, 95, 76, 95 }));
+      // the lane's settings stay without points (the lane editor keeps them), and nothing is shaped then
+      setVelocityLane(score, {}, VelMode::ABSOLUTE, VelOutput::WRITE);
+      const LiveClipEdit::VelocityLane e = LiveClipEdit::velocityLane(score);
+      QVERIFY(!e.present);
+      QCOMPARE(int(e.mode), int(VelMode::ABSOLUTE));
+      QCOMPARE(int(e.output), int(VelOutput::WRITE));
+      QCOMPARE(playedVelocities(score), QList<int>({ 67, 87, 69, 81, 71, 91, 72, 70, 74, 76, 76, 99 }));
+
+      // the device's record: mode, output, the points (with a curve), the originals; and back
+      LiveClipEdit::VelocityLane r;
+      r.present = true;
+      r.mode = VelMode::ABSOLUTE;
+      r.output = VelOutput::WRITE;
+      r.lane.target = LiveClipEdit::VELOCITY_TARGET;
+      Automation::Point p0(0, 0.2, Automation::Curve::LINEAR);
+      Automation::setCurvature(p0, 0.5);
+      r.lane.points = { p0, Automation::Point(1920, 0.9, Automation::Curve::STEP) };
+      const std::vector<LiveClipEdit::Original> orig = { { 101, 67, 50, 87, 44 }, { 102, 69, 3917, 81, 41 } };
+      const QVariantList atoms = velRecord(r, orig);
+      QCOMPARE(atoms.size(), 3 + 2 * 7 + 1 + 2 * 5);
+      QCOMPARE(atoms.value(0).toInt(), 1);
+      QCOMPARE(atoms.value(1).toInt(), 1);
+      LiveClipEdit::VelocityLane back;
+      std::vector<LiveClipEdit::Original> ob;
+      QVERIFY(parseVelRecord(atoms, &back, &ob));
+      QCOMPARE(int(back.mode), int(VelMode::ABSOLUTE));
+      QCOMPARE(int(back.output), int(VelOutput::WRITE));
+      QCOMPARE(int(back.lane.points.size()), 2);
+      QVERIFY(back.lane.points[0].curved());
+      QCOMPARE(back.lane.points[0].c1y, p0.c1y);
+      QCOMPARE(back.lane.points[1].tick, 1920);
+      QCOMPARE(int(ob.size()), 2);
+      QCOMPARE(ob[1].start, 3917);
+      QCOMPARE(ob[1].written, 41);
+      QVERIFY(!parseVelRecord(QVariantList({ 0, 0, 5 }), nullptr, nullptr));       // (cut short)
+      // the packets: chunked, each with the key and serial
+      QVariantList many;
+      for (int i = 0; i < 1000; ++i)
+            many << i;
+      const std::vector<QByteArray> pk = velSetPackets("c7", 3, many);
+      QVERIFY(pk.size() > 1);
+      int total = 0;
+      for (size_t c = 0; c < pk.size(); ++c) {
+            QString address;
+            QVariantList args;
+            QVERIFY(LiveClips::parseOsc(pk[c], &address, &args));
+            QCOMPARE(address, QString("/ms/vel/set"));
+            QCOMPARE(args.value(0).toString(), QString("c7"));
+            QCOMPARE(args.value(1).toInt(), 3);
+            QCOMPARE(args.value(2).toInt(), int(c));
+            QCOMPARE(args.value(3).toInt(), int(pk.size()));
+            total += args.size() - 4;
+            }
+      QCOMPARE(total, 1000);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipVelocityWrite
+//    "Write into the notes": the curve written as velocity-only modifications of the notes it changes, always from
+//    the notes' velocities before it (the originals, kept in the notation), so a curve edited or re-applied never
+//    scales scaled values; undo writes back; back to "shape": the originals written back
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipVelocityWrite()
+      {
+      using LiveClipEdit::VelMode;
+      using LiveClipEdit::VelOutput;
+      const Clip clip = melody();
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      Baseline b = match(clip, score);
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::SCALE, VelOutput::WRITE);
+      Diff d = diff(b, signaturesForLive(score));
+      QCOMPARE(int(d.ops.size()), 6);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
+      QList<int> vel;
+      for (const Op& o : d.ops) {
+            QCOMPARE(int(o.kind), int(Op::MODIFY));
+            QCOMPARE(o.mask, int(VELOCITY));              // velocity only: Live's timing, probability … kept
+            vel << o.velocity;
+            }
+      QCOMPARE(vel, QList<int>({ 44, 41, 127, 105, 114, 127 }));
+      QCOMPARE(liveOf(d.next, 101)->start, 0.013);
+      QCOMPARE(liveOf(d.next, 101)->probability, 0.75);
+      b = d.next;                                       // (Live confirmed the write)
+      // the notation keeps the originals; the device gets them with what was written
+      QCOMPARE(noteAt(score, 0, 67)->veloOffset(), 87);
+      std::vector<LiveClipEdit::Original> orig = originals(b, score);
+      QCOMPARE(int(orig.size()), 6);
+      std::sort(orig.begin(), orig.end(), [](const LiveClipEdit::Original& a, const LiveClipEdit::Original& c) { return a.id < c.id; });
+      QCOMPARE(orig[0].id, 101);
+      QCOMPARE(orig[0].pitch, 67);
+      QCOMPARE(orig[0].start, 50);                      // 0.013 beats in UNITS (3840 a beat)
+      QCOMPARE(orig[0].velocity, 87);
+      QCOMPARE(orig[0].written, 44);
+      QCOMPARE(orig[2].written, 127);
+      QVERIFY(diff(b, signaturesForLive(score)).empty());
+
+      // the curve edited (50 % -> 80 % in the first half): from the originals, not from what was written (87 -> 70,
+      // not 44 -> 35)
+      setVelocityLane(score, { { 0, 0.4 }, { 960, 0.75 } }, VelMode::SCALE, VelOutput::WRITE);
+      d = diff(b, signaturesForLive(score));
+      QCOMPARE(int(d.ops.size()), 2);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
+      QCOMPARE(d.ops[0].id, 101);
+      QCOMPARE(d.ops[0].velocity, 70);
+      QCOMPARE(d.ops[1].id, 102);
+      QCOMPARE(d.ops[1].velocity, 65);
+      b = d.next;
+      // the same curve applied again: nothing (no compounding)
+      setVelocityLane(score, { { 0, 0.4 }, { 960, 0.75 }, { 5000, 0.75 } }, VelMode::SCALE, VelOutput::WRITE);
+      QVERIFY(diff(b, signaturesForLive(score)).empty());
+      score->undoRedo(true, nullptr);                   // (that last, no-op edit undone)
+      // undo of the curve edit: written back as it was (44, 41)
+      score->undoRedo(true, nullptr);
+      d = diff(b, signaturesForLive(score));
+      QCOMPARE(int(d.ops.size()), 2);
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
+      QCOMPARE(d.ops[0].velocity, 44);
+      QCOMPARE(d.ops[1].velocity, 41);
+      b = d.next;
+      // a velocity edited here: the new original, written through the curve (100 at 50 %: 50)
+      Note* n = noteAt(score, 0, 67);
+      score->startCmd();
+      n->undoChangeProperty(Pid::VELO_OFFSET, 100);
+      score->endCmd();
+      d = diff(b, signaturesForLive(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(d.ops[0].velocity, 50);
+      b = d.next;
+      // absolute: the same curve, 32 / 95, whatever the originals
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::ABSOLUTE, VelOutput::WRITE);
+      d = diff(b, signaturesForLive(score));
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
+      vel.clear();
+      for (const Op& o : d.ops)
+            vel << o.velocity;
+      QCOMPARE(vel, QList<int>({ 32, 32, 95, 95, 95, 95 }));
+      b = d.next;
+      // back to "shape while playing": one write, the originals back into the notes
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::ABSOLUTE, VelOutput::SHAPE);
+      d = diff(b, signaturesForLive(score));
+      std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
+      vel.clear();
+      for (const Op& o : d.ops) {
+            QCOMPARE(o.mask, int(VELOCITY));
+            vel << o.velocity;
+            }
+      QCOMPARE(vel, QList<int>({ 100, 81, 91, 70, 76, 99 }));
+      b = d.next;
+      QVERIFY(originals(b, score).empty());             // ("shape": the notes are the originals)
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipVelocityReopen
+//    a clip in "write" opened again (another session, the set reopened): the record's originals give each note its
+//    velocity before the curve when Live still has the velocity written; a note changed in Live since takes Live's as
+//    its original, one without a record keeps its own; then the notation and Live agree (nothing written)
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipVelocityReopen()
+      {
+      using LiveClipEdit::VelMode;
+      using LiveClipEdit::VelOutput;
+      Clip clip = melody();
+      // as written by the curve (50 % then 150 %); note 104 changed in Live since (60 for 105); the note ids new (the
+      // set reopened): found by pitch and start
+      const double written[] = { 44, 41, 127, 60, 114, 127 };
+      for (int i = 0; i < 6; ++i) {
+            clip.notes[size_t(i)].velocity = written[i];
+            clip.notes[size_t(i)].id = 201 + i;
+            }
+      const std::vector<LiveClipEdit::Original> orig = {
+            { 101, 67, int(std::lround(0.013 * 3840)), 87, 44 }, { 102, 69, int(std::lround(1.02 * 3840)), 81, 41 },
+            { 103, 71, int(std::lround(1.991 * 3840)), 91, 127 }, { 104, 72, int(std::lround(3.004 * 3840)), 70, 105 },
+            { 105, 74, int(std::lround(3.51 * 3840)), 76, 114 } };            // (106: none, added later)
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      Baseline b = match(clip, score);
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::SCALE, VelOutput::WRITE);
+      QCOMPARE(applyOriginals(b, score, orig), 4);
+      QCOMPARE(noteAt(score, 0, 67)->veloOffset(), 87);
+      QCOMPARE(noteAt(score, 480, 69)->veloOffset(), 81);
+      QCOMPARE(noteAt(score, 960, 71)->veloOffset(), 91);
+      QCOMPARE(noteAt(score, 1440, 72)->veloOffset(), 60);        // changed in Live: Live's is its original now
+      QCOMPARE(noteAt(score, 1680, 74)->veloOffset(), 76);
+      QCOMPARE(noteAt(score, 1920, 76)->veloOffset(), 127);       // no record: its own
+      // the curve over the originals is what Live has, but for the note changed in Live: 60 at 150 % -> 90
+      Diff d = diff(b, signaturesForLive(score));
+      QCOMPARE(int(d.ops.size()), 1);
+      QCOMPARE(d.ops[0].id, 204);
+      QCOMPARE(d.ops[0].velocity, 90);
+      QCOMPARE(d.ops[0].mask, int(VELOCITY));
+      // applied twice: nothing more
+      QCOMPARE(applyOriginals(b, score, orig), 0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   clipVelocityRecord
+//    the clip tab and the MuseScore Link device (protocol 6): the record asked for when the tab opens and read back
+//    into the lane; a lane edit sends it (/ms/vel/set) once confirmed in sync; in "write" the notes' write goes first
+//    and the record (with the originals) after Live confirmed it; the status line
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipVelocityRecord()
+      {
+      using namespace Ms::LiveIntegration;
+      using LiveClipEdit::VelMode;
+      using LiveClipEdit::VelOutput;
+      LiveClipsLink::instance()->setDeviceProtocol(LiveClipEdit::VEL_PROTOCOL);
+      LiveClipEditor* ed = LiveClipEditor::instance();
+      QStringList sent;
+      std::map<QString, QVariantList> last;
+      LiveClipEditor::setSendHook([&sent, &last](const QByteArray& p) {
+            QString address;
+            QVariantList args;
+            if (LiveClips::parseOsc(p, &address, &args)) {
+                  sent << address;
+                  last[address] = args;
+                  }
+            });
+      Clip clip = melody();
+      clip.key = "c902";
+      MasterScore* score = importClip(clip, nullptr);
+      QVERIFY(score);
+      ed->edit(clip, score);
+      QVERIFY(sent.contains("/ms/vel/ask"));
+      QCOMPARE(last["/ms/vel/ask"], QVariantList({ "c902" }));
+      // the device keeps a curve for it: read into the lane (no undo step), nothing sent back
+      LiveClipEdit::VelocityLane kept;
+      kept.present = true;
+      kept.lane.target = LiveClipEdit::VELOCITY_TARGET;
+      kept.lane.points = { Automation::Point(0, 0.25, Automation::Curve::STEP) };
+      QVariantList curve { "c902", 1, 1, 0, 1 };
+      curve.append(velRecord(kept, {}));
+      sent.clear();
+      ed->received("/live/vel/curve", curve);
+      const LiveClipEdit::VelocityLane got = LiveClipEdit::velocityLane(score);
+      QVERIFY(got.present);
+      QCOMPARE(got.lane.points.front().value, 0.25);
+      QVERIFY(!score->undoStack()->canUndo());
+      QTest::qWait(500);
+      QVERIFY(ed->inSync(score));
+      QVERIFY(!sent.contains("/ms/vel/set"));
+      QVERIFY2(ed->statusText(score).contains("velocity shaped in Live"), qPrintable(ed->statusText(score)));
+
+      // an edit of the lane: the record sent, in flight until the device answers
+      setVelocityLane(score, { { 0, 0.4 } }, VelMode::SCALE, VelOutput::SHAPE);
+      score->update();
+      QTest::qWait(500);
+      QVERIFY(sent.contains("/ms/vel/set"));
+      QVERIFY(!sent.contains("/ms/clip/write"));        // ("shape": the notes stay)
+      QVariantList a = last["/ms/vel/set"];
+      QCOMPARE(a.value(0).toString(), QString("c902"));
+      const int serial = a.value(1).toInt();
+      LiveClipEdit::VelocityLane v;
+      std::vector<LiveClipEdit::Original> o;
+      QVERIFY(parseVelRecord(a.mid(4), &v, &o));
+      QVERIFY(std::fabs(v.lane.points.front().value - 0.4) < 1e-6);     // (float32 in OSC)
+      QVERIFY(o.empty());
+      QVERIFY(!ed->inSync(score));
+      ed->received("/live/vel/set", { "c902", serial, "ok", 1 });
+      QVERIFY(ed->inSync(score));
+
+      // "write": the notes first, the record with the originals once Live confirmed them
+      sent.clear();
+      setVelocityLane(score, { { 0, 0.4 } }, VelMode::SCALE, VelOutput::WRITE);
+      score->update();
+      QTest::qWait(500);
+      QVERIFY(sent.contains("/ms/clip/write"));
+      QVERIFY(!sent.contains("/ms/vel/set"));
+      const int write = last["/ms/clip/write"].value(1).toInt();
+      ed->received("/live/clip/written", { "c902", write, "ok", 4321 });
+      QVERIFY(sent.contains("/ms/vel/set"));
+      a = last["/ms/vel/set"];
+      QVERIFY(parseVelRecord(a.mid(4), &v, &o));
+      QCOMPARE(int(v.output), int(VelOutput::WRITE));
+      QCOMPARE(int(o.size()), 6);
+      ed->received("/live/vel/set", { "c902", a.value(1).toInt(), "ok", 1 });
+      QVERIFY(ed->inSync(score));
+      QVERIFY2(ed->statusText(score).contains("velocity written"), qPrintable(ed->statusText(score)));
+
+      // not kept (the script not set up): said in the details
+      setVelocityLane(score, { { 0, 0.3 } }, VelMode::SCALE, VelOutput::SHAPE);
+      score->update();
+      QTest::qWait(500);
+      const int w2 = last["/ms/clip/write"].value(1).toInt();
+      ed->received("/live/clip/written", { "c902", w2, "ok", 4322 });          // (the originals written back)
+      a = last["/ms/vel/set"];
+      ed->received("/live/vel/set", { "c902", a.value(1).toInt(), "ok", 0 });
+      QVERIFY2(ed->statusDetails(score).contains("not kept with the set"), qPrintable(ed->statusDetails(score)));
+
+      ed->scoreClosed(score);
+      LiveClipEditor::setSendHook(nullptr);
+      LiveClipsLink::instance()->setDeviceProtocol(0);
+      delete score;
       }
 
 //---------------------------------------------------------

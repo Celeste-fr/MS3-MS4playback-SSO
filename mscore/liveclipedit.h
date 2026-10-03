@@ -46,6 +46,9 @@
 //     made in Live is a conflict like the notes' (Reload from Live). An arrangement clip: no lanes (Live's API has
 //     no envelopes for it, still in 12.4.6); the script not answering: no lanes, the status line says how to set it
 //     up, asked again every 5 s.
+//   - The Velocity lane (liveclipmodel.h › The Velocity lane, protocol 6): asked for when the tab opens (/ms/vel/ask)
+//     and read into the lane (no undo step; in "write" the notes still at the velocity written get their originals);
+//     sent after each change (/ms/vel/set), in "write" once Live confirmed the notes' write (with the originals).
 //   - A new hub (the old copy deleted; /live/hello with another session): each clip edited here is handed to it
 //     (/ms/clip/adopt with its last known hash), and edits made meanwhile are written.
 //---------------------------------------------------------
@@ -124,6 +127,20 @@ class LiveClipEditor : public QObject {
             int envTries { 0 };
             int envWrites { 0 };
             QString envError;
+            // the Velocity lane (liveclipmodel.h): its record in the MuseScore Link device (kept in the set)
+            bool velAsked { false };            // /ms/vel/ask sent
+            bool velRead { false };             // the record read back (or there was none, or the device is older)
+            std::map<int, QVariantList> velIncoming;
+            QString velSent;                    // the record as the device has it (velRecordKey)
+            QString velPending;                 // … as sent, not confirmed yet
+            int velSerial { 0 };
+            bool velInFlight { false };
+            bool velAfterWrite { false };       // (sent once the notes' write in flight is confirmed)
+            std::vector<QByteArray> velPackets;
+            qint64 velSentAt { 0 };
+            int velTries { 0 };
+            bool velKept { false };             // the device kept it in the set (the MuseScore Envelopes script)
+            QString velStatus;                  // the device's word ("ok", or why it can't shape)
             };
 
       std::map<QString, Session> _sessions;     // by the device's clip key
@@ -156,6 +173,9 @@ class LiveClipEditor : public QObject {
       void envelopesRead(const QString& key);
       void writeEnvelopes(const QString& key);
       void envWritten(const QString& key, int write, const QString& status, qint32 hash);
+      void askVelocity(const QString& key);
+      void velocityRead(const QString& key, bool found, const QVariantList& atoms);
+      void sendVelocity(const QString& key);
       void updateStatus();
       void statusParts(const MasterScore* score, QStringList* parts, QStringList* details) const;
       bool inSync(const QString& key, const Session& s) const;
@@ -213,6 +233,10 @@ class LiveClipEditor : public QObject {
       EnvState envState(const MasterScore* score) const;
       QString envText(const MasterScore* score, QString* details = nullptr) const;   // (short; details: the long one)
       void paramsChanged(const QString& key);
+      // the Velocity lane: "Write into notes" asks first (QSettings liveIntegration/velocityWriteNoAsk: "Don't ask
+      // again"); false: the user said no
+      static bool confirmVelocityWrite(QWidget* parent);
+      QString velocityText(const MasterScore* score, QString* details = nullptr) const;
       };
 
 }     // namespace LiveIntegration

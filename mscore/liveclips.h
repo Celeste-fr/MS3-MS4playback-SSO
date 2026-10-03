@@ -171,6 +171,7 @@ class LiveClipsLink : public QObject {
       QString routeKey(const Part* part) const;
       bool deviceAnswers() const;                   // a hello within 6 s (either feature)
       int deviceProtocol() const { return _deviceProtocol; }
+      void setDeviceProtocol(int p) { _deviceProtocol = p; }     // (the tests: a device of that protocol)
       int port() const { return _port; }
       LinkWatch::Uses uses() const;
       // a notice: a yellow bar across the top of the score area (not a dialog), until dismissed; good: green, gone after 10 s

@@ -40,6 +40,7 @@ Plug-in parameter lanes (MuseScoreLink.js › Parameter lanes), in the signal do
 """
 
 import json
+import math
 import os
 import struct
 import sys
@@ -53,6 +54,19 @@ STORES = 4                                                      # [pattr Lanes] 
 # the song-position phasor's period: 16384 quarter notes at Max's 480 ticks a quarter (MuseScoreLink.js PERIOD_QUARTERS);
 # 2 h 16 min at 120 bpm before it wraps
 PERIOD_TICKS = 16384 * 480
+# the velocity shaper's ring of codes, one a tick (480 a beat) of song time: MuseScoreLink.js VEL_RING, derived the same
+# way there (two windows of VEL_AHEAD_S 2 s at Live's fastest tempo, 999 BPM)
+VEL_RING = 2 * math.ceil(2 * 999 / 60 * 480)
+# a note-on's velocity v and the ring's code c (MuseScoreLink.js velShape): c 0 v; c >= 1 round(v (c - 1)) within 1-127;
+# c < 0 -c; a velocity 0 (a note-off) as it is. Max's expr has no comma-free min / max, so the clamp is written out
+# (R: the rounded product)
+_R = "int($i1*($f2-1)+0.5)"
+VEL_EXPR = ("expr ($i1>0)*(($f2==0)*$i1+($f2>=1)*(" + _R + "+(" + _R + "<1)*(1-" + _R + ")-(" + _R + ">127)*(" + _R
+            + "-127))+($f2<0)*int(0.5-$f2))")
+# the ring's cell for the song position: the phasor's phase (0-1 over PERIOD_TICKS ticks) plus the bias (ticks),
+# rounded, modulo the ring (written without fmod's comma)
+_X = "floor($f1*" + str(PERIOD_TICKS) + ".+$f2+0.5)"
+VEL_INDEX = "expr " + _X + "-$f3*floor(" + _X + "/$f3)"
 
 
 class Patch:
@@ -137,7 +151,7 @@ def build(script):
         p.connect(trig, 1, bend, inlet)
         p.connect(trig, 0, bend, 0)
     p.connect(bend, 0, it, 0)
-    p.connect(route, n + 2, fmt, 0)
+    # (any other note: through the velocity shaper, below, to midiformat)
     for k in range(1, 7):
         p.connect(parse, k, fmt, k)
     p.connect(fmt, 0, midiout, 0)
@@ -169,7 +183,7 @@ def build(script):
 
     # --- the script: the hub's work (clips, locators, transport), the status line
     dev = p.obj("live.thisdevice", 1, 3, 500, 30, outlettype=["bang", "int", "int"])
-    js = p.box("newobj", "v8", 1, 8, (500, 450, 120, 22), outlettype=["", "", "", "", "", "", "", ""],
+    js = p.box("newobj", "v8", 1, 10, (500, 450, 120, 22), outlettype=[""] * 10,
                saved_object_attributes={"parameter_enable": 0},
                textfile={"text": script, "filename": "none", "flags": 0, "embed": 1, "autowatch": 1})
     # the track's parameter lanes kept in the Live Set: a [pattr] that is a Live parameter of type Blob, Stored Only
@@ -207,6 +221,71 @@ def build(script):
     ms = p.obj("*~ 1.", 2, 1, 30, 490, outlettype=["signal"])
     p.connect(phasor, 0, ms, 0)
     p.connect(js, 4, ms, 1)
+    # --- the velocity shaper (MuseScoreLink.js › velocity curves): each note that isn't a carrier, in the scheduler:
+    # t l b 0: first 0 (the code reset: a note never takes an older one), then the song position (snapshot~ of the
+    # phasor, banged) -> the ring's cell (VEL_INDEX; its bias and the ring's size in its right inlets) -> peek~ ---mslv
+    # -> the code into VEL_EXPR's right inlet, then the note: unpack -> its velocity through VEL_EXPR -> pack with its
+    # pitch -> midiformat. The script fills [buffer~ ---mslv] (all 0: every note as it is).
+    shp = p.obj("t l b 0", 1, 3, 450, 150, outlettype=["", "bang", "int"])
+    vsnap = p.obj("snapshot~", 2, 1, 450, 180, outlettype=["float"])
+    vidx = p.obj(VEL_INDEX, 3, 1, 450, 210, w=360, outlettype=[""])
+    vring = p.obj(f"loadmess {VEL_RING}", 1, 1, 820, 180, outlettype=[""])
+    p.obj("buffer~ ---mslv", 1, 2, 820, 240, w=100, outlettype=["float", "bang"])
+    vpeek = p.obj("peek~ ---mslv", 3, 1, 450, 240, w=100, outlettype=["float"])
+    vexpr = p.obj(VEL_EXPR, 2, 1, 450, 270, w=360, outlettype=[""])
+    vunp = p.obj("unpack 0 0", 1, 2, 30, 270, outlettype=["int", "int"])
+    vpack = p.obj("pack 0 0", 2, 1, 30, 300, outlettype=[""])
+    p.connect(route, n + 2, shp, 0)
+    p.connect(shp, 2, vexpr, 1)
+    p.connect(phasor, 0, vsnap, 0)
+    p.connect(shp, 1, vsnap, 0)
+    p.connect(vsnap, 0, vidx, 0)
+    p.connect(vring, 0, vidx, 2)
+    p.connect(vidx, 0, vpeek, 0)
+    p.connect(vpeek, 0, vexpr, 1)
+    p.connect(shp, 0, vunp, 0)
+    p.connect(vunp, 1, vexpr, 0)
+    p.connect(vexpr, 0, vpack, 1)
+    p.connect(vunp, 0, vpack, 0)
+    p.connect(vpack, 0, fmt, 0)
+    # the script's outlet 9: "bias <ticks>" -> VEL_INDEX's bias; "log 0/1" opens the log: each note as "vlog <pitch>
+    # <phase> <velocity in> <velocity out>" -> deferlow -> the script (the "vlog" probe)
+    # snapshot~ reports "the sample value in the most recently received signal vector" (Max 9's snapshot~ reference): one
+    # signal vector before the note (measured: every note 64 samples, the vector, early, 2026-10-03 on the test VM), so
+    # the script adds one vector (the sample rate and vector size from [dspstate~], asked when the device loads) as the
+    # index's bias
+    dsp = p.obj("dspstate~", 1, 4, 820, 60, outlettype=["int", "float", "int", "int"])
+    p.connect(dev, 0, dsp, 0)
+    for k, word in ((1, "dspsr"), (2, "dspvs")):
+        pre_d = p.obj(f"prepend {word}", 1, 1, 820 + (k - 1) * 90, 90)
+        p.connect(dsp, k, pre_d, 0)
+        p.connect(pre_d, 0, js, 0)
+    vroute = p.obj("route bias log", 1, 3, 820, 120, outlettype=["", "", ""])
+    p.connect(js, 9, vroute, 0)
+    p.connect(vroute, 0, vidx, 1)
+    vlog = p.obj("pack 0 0. 0 0", 4, 1, 30, 330, outlettype=[""])
+    p.connect(vunp, 0, vlog, 0)
+    p.connect(vsnap, 0, vlog, 1)
+    p.connect(vunp, 1, vlog, 2)
+    p.connect(vexpr, 0, vlog, 3)
+    vgate = p.obj("gate 1", 2, 1, 30, 360, outlettype=[""])
+    p.connect(vroute, 1, vgate, 0)
+    p.connect(vlog, 0, vgate, 1)
+    vpre = p.obj("prepend vlog", 1, 1, 30, 390)
+    vdl = p.obj("deferlow", 1, 1, 30, 420)
+    p.connect(vgate, 0, vpre, 0)
+    p.connect(vpre, 0, vdl, 0)
+    p.connect(vdl, 0, js, 0)
+    # outlet 8: what is kept in the set, to the MuseScore Envelopes script; its word that a track's values came, and a
+    # velocity curve changed (the hub's messnamed), through deferlow
+    p.connect(js, 8, p.obj("udpsend 127.0.0.1 9005", 1, 0, 650, 560), 0)
+    for name in ("msl_keep", "msl_vel"):
+        r = p.obj(f"receive {name}", 0, 1, 650, 590 if name == "msl_keep" else 650, outlettype=[""])
+        d = p.obj("deferlow", 1, 1, 650, 615 if name == "msl_keep" else 675)
+        pr = p.obj(f"prepend {name}", 1, 1, 750, 615 if name == "msl_keep" else 675)
+        p.connect(r, 0, d, 0)
+        p.connect(d, 0, pr, 0)
+        p.connect(pr, 0, js, 0)
     snap = p.obj("snapshot~", 2, 1, 200, 490, outlettype=["float"])
     pos = p.obj("prepend posvalue", 1, 1, 200, 520)
     p.connect(ms, 0, snap, 0)

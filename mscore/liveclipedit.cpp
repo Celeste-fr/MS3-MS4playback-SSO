@@ -11,10 +11,12 @@
 #include "liveclipedit.h"
 #include "elidedlabel.h"
 
+#include <QCheckBox>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
 #include <QStatusBar>
@@ -492,6 +494,179 @@ QString LiveClipEditor::envText(const MasterScore* score, QString* details) cons
       }
 
 //---------------------------------------------------------
+//   the Velocity lane (liveclipmodel.h): its record in the MuseScore Link device
+//---------------------------------------------------------
+
+// a record's atoms as text: two records alike are the same text (doubles as the device keeps them, float32: 6 digits)
+static QString velRecordKey(const QVariantList& atoms)
+      {
+      QStringList l;
+      for (const QVariant& a : atoms)
+            l << (int(a.type()) == QMetaType::Double || int(a.type()) == QMetaType::Float ? QString::number(a.toDouble(), 'g', 6)
+                                                                                          : a.toString());
+      return l.join(' ');
+      }
+
+void LiveClipEditor::askVelocity(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end())
+            return;
+      Session& s = it->second;
+      s.velAsked = true;
+      s.velRead = false;
+      s.velIncoming.clear();
+      s.velSentAt = QDateTime::currentMSecsSinceEpoch();
+      s.velTries = 1;
+      send(LiveClips::osc("/ms/vel/ask", { key }));
+      }
+
+// the record read back: the lane in the score as the device keeps it (no undo step: as the notes were imported), and in
+// "write" each note still at the velocity written gets its original
+void LiveClipEditor::velocityRead(const QString& key, bool found, const QVariantList& atoms)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || !it->second.score)
+            return;
+      Session& s = it->second;
+      s.velRead = true;
+      VelocityLane v;
+      std::vector<Original> orig;
+      if (!found || !parseVelRecord(atoms, &v, &orig)) {
+            log(QString("clip %1: no velocity curve kept").arg(key));
+            updateStatus();
+            return;
+            }
+      MasterScore* score = s.score;
+      if (score->parts().empty())
+            return;
+      const Part* part = score->parts().front();
+      std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+      Automation::PartLanes keep;
+      for (const Automation::Lane& l : all[part])
+            if (l.target != VELOCITY_TARGET)
+                  keep.push_back(l);
+      if (v.present)
+            keep.push_back(v.lane);
+      all[part] = keep;
+      const QString tag = Automation::write(score, all);
+      if (tag != score->metaTag(Automation::metaTag)) {
+            if (seq)
+                  seq->waitForRendering();
+            score->setMetaTag(Automation::metaTag, tag);
+            score->setPlaylistDirty();
+            }
+      const int n = applyOriginals(s.base, score, orig);
+      s.velSent = velRecordKey(velRecord(v, orig));
+      log(QString("clip %1: velocity curve read (%2 point(s), %3 original(s), %4 note(s) back to theirs)")
+          .arg(key).arg(v.lane.points.size()).arg(orig.size()).arg(n));
+      score->update();
+      updateStatus();
+      }
+
+// the record to the device when it changed (a lane edit, its mode, the originals after a write)
+void LiveClipEditor::sendVelocity(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || !it->second.score)
+            return;
+      Session& s = it->second;
+      if (LiveClipsLink::instance()->deviceProtocol() < VEL_PROTOCOL || !s.velRead
+          || s.state == State::CONFLICT || s.state == State::GONE || s.state == State::RELOADING)
+            return;
+      if (s.velInFlight || s.inFlight || s.score->undoStack()->active()) {
+            s.velAfterWrite = true;             // (once that is confirmed: the originals as Live has the notes then)
+            return;
+            }
+      s.velAfterWrite = false;
+      const VelocityLane v = velocityLane(s.score);
+      const std::vector<Original> orig = originals(s.base, s.score);
+      if (!v.present && orig.empty() && s.velSent.isEmpty())
+            return;                             // (never had one)
+      const QVariantList atoms = velRecord(v, orig);
+      const QString k = velRecordKey(atoms);
+      if (k == s.velSent)
+            return;
+      s.velPending = k;
+      ++s.velSerial;
+      s.velPackets = velSetPackets(key, s.velSerial, atoms);
+      s.velInFlight = true;
+      s.velTries = 1;
+      s.velSentAt = QDateTime::currentMSecsSinceEpoch();
+      log(QString("clip %1: velocity curve %2 sent (%3 point(s), %4 original(s))").arg(key).arg(s.velSerial)
+          .arg(v.present ? int(v.lane.points.size()) : 0).arg(orig.size()));
+      for (const QByteArray& p : s.velPackets)
+            send(p);
+      updateStatus();
+      }
+
+bool LiveClipEditor::confirmVelocityWrite(QWidget* parent)
+      {
+      static const char* const NO_ASK = "liveIntegration/velocityWriteNoAsk";
+      QSettings st;
+      if (st.value(NO_ASK, false).toBool())
+            return true;
+      QMessageBox box(QMessageBox::Question, tr("Write velocities into the Live clip"),
+                      tr("The Velocity lane's curve will be written into the velocities of the clip's notes in Live.\n\n"
+                         "Their velocities now are kept (in MuseScore Link, with the Live set), so the curve can be changed "
+                         "or set back to \"Shape while playing\" later: the notes then get them back."),
+                      QMessageBox::Cancel, parent);
+      QPushButton* write = box.addButton(tr("Write"), QMessageBox::AcceptRole);
+      box.setDefaultButton(write);
+      QCheckBox* again = new QCheckBox(tr("Don't ask again"));
+      box.setCheckBox(again);
+      box.exec();
+      if (box.clickedButton() != write)
+            return false;
+      if (again->isChecked())
+            st.setValue(NO_ASK, true);
+      return true;
+      }
+
+QString LiveClipEditor::velocityText(const MasterScore* score, QString* details) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      if (!s || !s->score)
+            return QString();
+      const VelocityLane v = velocityLane(s->score);
+      if (!v.present && s->velSent.isEmpty())
+            return QString();
+      QString text, more;
+      const bool old = LiveClipsLink::instance()->deviceProtocol() < VEL_PROTOCOL;
+      if (v.output == VelOutput::WRITE) {
+            text = tr("velocity written");
+            if (old)
+                  more = tr("Velocity: written into the notes; the notes' velocities before the curve are not kept (the "
+                            "MuseScore Link device in Live is older: update it).");
+            else if (!s->velKept)
+                  more = tr("Velocity: written into the notes; the notes' velocities before the curve are kept only while "
+                            "Live runs (set up the MuseScore Envelopes control surface to keep them with the set).");
+            }
+      else {
+            if (old) {
+                  text = tr("velocity: MuseScore only (update MuseScore Link)");
+                  more = tr("Velocity: only MuseScore's own playback follows the curve: the MuseScore Link device in Live is "
+                            "older (update it).");
+                  }
+            else if (!s->velStatus.isEmpty() && s->velStatus != "ok") {
+                  text = tr("velocity not shaped in Live");
+                  more = tr("Velocity: %1").arg(s->velStatus);
+                  }
+            else {
+                  text = tr("velocity shaped in Live");
+                  if (!s->velKept && !s->velSent.isEmpty())
+                        more = tr("Velocity: shaped while Live runs, not kept with the set (set up the MuseScore Envelopes "
+                                  "control surface).");
+                  }
+            }
+      if (s->velInFlight)
+            text = tr("sending velocity…");
+      if (details)
+            *details = more;
+      return text;
+      }
+
+//---------------------------------------------------------
 //   the device's messages
 //---------------------------------------------------------
 
@@ -640,6 +815,40 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             }
       else if (address == "/live/env/written")
             envWritten(key, args.value(1).toInt(), args.value(2).toString(), args.value(3).toInt());
+      else if (address == "/live/vel/curve") {
+            auto it = _sessions.find(key);
+            if (it == _sessions.end() || it->second.velRead)
+                  return;
+            Session& s = it->second;
+            s.velKept = args.value(2).toInt() != 0;
+            s.velIncoming[args.value(3).toInt()] = args.mid(5);
+            if (int(s.velIncoming.size()) < args.value(4).toInt())
+                  return;
+            QVariantList all;
+            for (const auto& c : s.velIncoming)
+                  all.append(c.second);
+            s.velIncoming.clear();
+            velocityRead(key, args.value(1).toInt() != 0, all);
+            }
+      else if (address == "/live/vel/set") {
+            auto it = _sessions.find(key);
+            if (it == _sessions.end())
+                  return;
+            Session& s = it->second;
+            if (!s.velInFlight || args.value(1).toInt() != s.velSerial)
+                  return;
+            s.velInFlight = false;
+            s.velSent = s.velPending;
+            s.velStatus = args.value(2).toString();
+            s.velKept = args.value(3).toInt() != 0;
+            log(QString("clip %1: velocity curve %2: %3%4").arg(key).arg(s.velSerial).arg(s.velStatus)
+                .arg(s.velKept ? ", kept in the set" : ", not kept in the set"));
+            if (s.velAfterWrite) {
+                  s.velAfterWrite = false;
+                  sendVelocity(key);
+                  }
+            updateStatus();
+            }
       else if (address == "/live/env/conflict") {
             auto it = _sessions.find(key);
             if (it != _sessions.end() && it->second.env == EnvState::READY && it->second.state != State::RELOADING) {
@@ -730,6 +939,11 @@ void LiveClipEditor::edit(const Clip& clip, MasterScore* score)
             }
       _sessions[clip.key] = s;
       connect(score, &Score::playlistChanged, this, [this, score]() { scoreChanged(score); });
+      // the clip's Velocity lane as the device keeps it (an older device: none)
+      if (LiveClipsLink::instance()->deviceProtocol() >= VEL_PROTOCOL)
+            askVelocity(clip.key);
+      else
+            _sessions[clip.key].velRead = true;
       log(QString("clip %1 opened: %2 notation notes, %3 Live notes not shown, %4 outside the clip")
           .arg(clip.key).arg(s.base.entries.size()).arg(s.base.unmatched).arg(s.base.outside));
       if (s.place != NO_PLACE)
@@ -744,7 +958,8 @@ void LiveClipEditor::edit(const Clip& clip, MasterScore* score)
 bool LiveClipEditor::inSync(const QString& key, const Session& s) const
       {
       return s.score && s.state == State::SYNC && !s.inFlight && !s.changedMeanwhile && !_dirty.count(key) && key != _flushing
-             && !s.envInFlight && !s.envChangedMeanwhile && s.env != EnvState::FAILED && !s.score->undoStack()->active();
+             && !s.envInFlight && !s.envChangedMeanwhile && s.env != EnvState::FAILED && !s.velInFlight && !s.velAfterWrite
+             && !s.score->undoStack()->active();
       }
 
 bool LiveClipEditor::inSync(const MasterScore* score) const
@@ -809,6 +1024,7 @@ void LiveClipEditor::flush()
             _flushing = key;                  // (not in sync before both are sent)
             write(key);
             writeEnvelopes(key);
+            sendVelocity(key);
             _flushing.clear();
             updateClean(key);                 // (nothing to send: a change Live doesn't have, e.g. a text)
             }
@@ -831,7 +1047,7 @@ void LiveClipEditor::write(const QString& key)
             _debounce->start();
             return;
             }
-      Diff d = diff(s.base, signatures(s.score));
+      Diff d = diff(s.base, signaturesForLive(s.score));
       if (d.empty()) {
             s.state = State::SYNC;
             updateStatus();
@@ -878,6 +1094,7 @@ void LiveClipEditor::written(const QString& key, int writeNo, const QString& sta
                   s.changedMeanwhile = false;
                   write(key);
                   }
+            sendVelocity(key);                  // ("write": the originals as Live has the notes now)
             }
       else if (status == "conflict")
             s.state = State::CONFLICT;
@@ -918,6 +1135,34 @@ void LiveClipEditor::poll()
                         s.envSentAt = now;
                         for (const QByteArray& p : s.envPackets)    // (the same write number: applied once)
                               sendEnv(p);
+                        }
+                  }
+            }
+      for (auto& e : _sessions) {             // the Velocity lane: the ask or the record unanswered
+            Session& s = e.second;
+            if (s.velAsked && !s.velRead && now - s.velSentAt >= CONFIRM_MS) {
+                  if (s.velTries >= MAX_TRIES) {
+                        s.velRead = true;       // (none read: the lane as it is here)
+                        s.velStatus = tr("MuseScore Link didn't answer");
+                        updateStatus();
+                        }
+                  else {
+                        ++s.velTries;
+                        s.velSentAt = now;
+                        send(LiveClips::osc("/ms/vel/ask", { e.first }));
+                        }
+                  }
+            else if (s.velInFlight && now - s.velSentAt >= CONFIRM_MS) {
+                  if (s.velTries >= MAX_TRIES) {
+                        s.velInFlight = false;
+                        s.velStatus = tr("MuseScore Link didn't answer");
+                        updateStatus();
+                        }
+                  else {
+                        ++s.velTries;
+                        s.velSentAt = now;
+                        for (const QByteArray& p : s.velPackets)    // (the same serial: the device keeps the last)
+                              send(p);
                         }
                   }
             }
@@ -1021,6 +1266,12 @@ void LiveClipEditor::statusParts(const MasterScore* score, QStringList* parts, Q
             *parts << env;
       if (!envMore.isEmpty())
             *details << envMore;
+      QString velMore;
+      const QString vel = velocityText(s->score, &velMore);
+      if (!vel.isEmpty())
+            *parts << vel;
+      if (!velMore.isEmpty())
+            *details << velMore;
       if (s->base.unmatched || s->base.outside) {
             const int n = s->base.unmatched + s->base.outside;
             *parts << tr("%n Live note(s) not shown", "", n);
