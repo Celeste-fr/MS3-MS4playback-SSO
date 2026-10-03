@@ -1149,6 +1149,241 @@ std::vector<QByteArray> envWritePackets(const QString& key, int write, int track
       }
 
 //---------------------------------------------------------
+//   the Velocity lane (liveclipmodel.h)
+//---------------------------------------------------------
+
+const char* const VELOCITY_TARGET = "velocity";        // (Automation::VELOCITY_TARGET)
+// atoms a /ms/vel/set datagram at most: as many as a /live/clip/notes packet has (NOTES_PER_PACKET notes of 9 values,
+// "about 0.9 kB a datagram")
+static constexpr int VEL_ATOMS_PER_PACKET = NOTES_PER_PACKET * 9;
+
+VelMode velMode(const Automation::Lane& lane)
+      {
+      return lane.extra.value("velocityMode").toString() == "absolute" ? VelMode::SET : VelMode::SCALE;
+      }
+
+VelOutput velOutput(const Automation::Lane& lane)
+      {
+      return lane.extra.value("velocityOutput").toString() == "write" ? VelOutput::WRITE : VelOutput::SHAPE;
+      }
+
+void setVelMode(Automation::Lane& lane, VelMode m)
+      {
+      if (m == VelMode::SCALE)
+            lane.extra.remove("velocityMode");
+      else
+            lane.extra["velocityMode"] = "absolute";
+      }
+
+void setVelOutput(Automation::Lane& lane, VelOutput o)
+      {
+      if (o == VelOutput::SHAPE)
+            lane.extra.remove("velocityOutput");
+      else
+            lane.extra["velocityOutput"] = "write";
+      }
+
+int shapeVelocity(int v, double u, VelMode m)
+      {
+      return Automation::shapeVelocity(v, u, m == VelMode::SET);
+      }
+
+double velocityShown(double u, VelMode m)
+      {
+      return m == VelMode::SET ? std::max(1.0, std::min(127.0, std::round(127 * u))) : 200 * u;
+      }
+
+double velocityFromShown(double x, VelMode m)
+      {
+      return std::max(0.0, std::min(1.0, m == VelMode::SET ? x / 127 : x / 200));
+      }
+
+QString velocityText(double u, VelMode m)
+      {
+      const double x = velocityShown(u, m);
+      if (m == VelMode::SET)
+            return QString::number(int(x));
+      return (std::fabs(x - std::round(x)) < 0.05 ? QString::number(int(std::lround(x))) : QString::number(x, 'f', 1))
+             + QString::fromUtf8(" %");
+      }
+
+VelocityLane velocityLane(const Score* score)
+      {
+      VelocityLane v;
+      if (!score || score->parts().empty())
+            return v;
+      const MasterScore* ms = score->masterScore();
+      const std::map<const Part*, Automation::PartLanes> all = Automation::read(ms);
+      auto it = all.find(ms->parts().front());
+      if (it == all.end())
+            return v;
+      for (const Automation::Lane& l : it->second)
+            if (l.target == VELOCITY_TARGET) {
+                  v.lane = l;
+                  v.mode = velMode(l);
+                  v.output = velOutput(l);
+                  v.present = !l.points.empty();
+                  break;
+                  }
+      return v;
+      }
+
+std::vector<Sig> signaturesForLive(const Score* score, std::vector<Note*>* notes)
+      {
+      std::vector<Sig> out = signatures(score, notes);
+      const VelocityLane v = velocityLane(score);
+      if (!v.present || v.output != VelOutput::WRITE)
+            return out;
+      for (Sig& s : out)
+            s.velocity = shapeVelocity(s.velocity >= 0 ? s.velocity : 100, v.lane.valueAt(s.tick), v.mode);
+      return out;
+      }
+
+std::vector<Original> originals(const Baseline& base, const Score* score)
+      {
+      std::vector<Original> out;
+      const VelocityLane v = velocityLane(score);
+      if (!v.present || v.output != VelOutput::WRITE)
+            return out;
+      std::vector<Note*> notes;
+      const std::vector<Sig> plain = signatures(score, &notes);
+      std::multimap<Sig, int> byShaped;                   // the notation's notes by their signature as Live has it
+      for (int i = 0; i < int(plain.size()); ++i) {
+            Sig s = plain[size_t(i)];
+            s.velocity = shapeVelocity(s.velocity >= 0 ? s.velocity : 100, v.lane.valueAt(s.tick), v.mode);
+            byShaped.insert({ s, i });
+            }
+      for (const Entry& e : base.entries) {
+            auto it = byShaped.find(e.sig);
+            if (it == byShaped.end())
+                  continue;
+            const int orig = plain[size_t(it->second)].velocity >= 0 ? plain[size_t(it->second)].velocity : 100;
+            byShaped.erase(it);
+            for (const LiveNote& n : e.live)
+                  out.push_back({ n.id, n.pitch, int(std::lround(n.start * VEL_UNITS)), orig, velocityByte(n.velocity) });
+            }
+      return out;
+      }
+
+int applyOriginals(const Baseline& base, Score* score, const std::vector<Original>& originals)
+      {
+      if (originals.empty())
+            return 0;
+      std::vector<Note*> notes;
+      signatures(score, &notes);
+      if (notes.size() != base.entries.size())
+            return 0;                                     // (only right after the import: entries and notes in step)
+      std::map<int, const Original*> byId;
+      std::multimap<std::pair<int, int>, const Original*> byPlace;
+      for (const Original& o : originals) {
+            byId[o.id] = &o;
+            byPlace.insert({ { o.pitch, o.start }, &o });
+            }
+      int n = 0;
+      for (size_t i = 0; i < notes.size(); ++i) {
+            const Entry& e = base.entries[i];
+            if (e.live.empty())
+                  continue;
+            int orig = -1;
+            bool all = true;
+            for (const LiveNote& l : e.live) {
+                  const int start = int(std::lround(l.start * VEL_UNITS));
+                  const Original* o = nullptr;
+                  auto id = byId.find(l.id);
+                  // (the same id at its place: a note of this session; else by its place: the set opened again)
+                  if (id != byId.end() && id->second->pitch == l.pitch && std::abs(id->second->start - start) <= 1)
+                        o = id->second;
+                  else {
+                        auto pl = byPlace.find({ l.pitch, start });
+                        if (pl != byPlace.end())
+                              o = pl->second;
+                        }
+                  if (!o || o->written != velocityByte(l.velocity)) {
+                        all = false;              // (changed in Live since, or no original: Live's is the original)
+                        break;
+                        }
+                  orig = o->velocity;
+                  }
+            if (!all || orig < 0)
+                  continue;
+            Note* note = notes[i];
+            if (note->veloType() == Note::ValueType::USER_VAL && note->veloOffset() == orig)
+                  continue;
+            note->setVeloType(Note::ValueType::USER_VAL);
+            note->setVeloOffset(orig);
+            ++n;
+            }
+      if (n)
+            score->setPlaylistDirty();
+      return n;
+      }
+
+QVariantList velRecord(const VelocityLane& v, const std::vector<Original>& originals)
+      {
+      QVariantList a;
+      a << (v.mode == VelMode::SET ? 1 : 0) << (v.output == VelOutput::WRITE ? 1 : 0);
+      const std::vector<Automation::Point> pts = v.present ? v.lane.points : std::vector<Automation::Point>();
+      a << int(pts.size());
+      for (const Automation::Point& p : pts)
+            a << p.tick << p.value << (p.curve == Automation::Curve::LINEAR ? 1 : 0) << p.c1x << p.c1y << p.c2x << p.c2y;
+      a << int(originals.size());
+      for (const Original& o : originals)
+            a << o.id << o.pitch << o.start << o.velocity << o.written;
+      return a;
+      }
+
+bool parseVelRecord(const QVariantList& a, VelocityLane* v, std::vector<Original>* originals)
+      {
+      if (a.size() < 4)
+            return false;
+      VelocityLane r;
+      r.mode = a[0].toInt() == 1 ? VelMode::SET : VelMode::SCALE;
+      r.output = a[1].toInt() == 1 ? VelOutput::WRITE : VelOutput::SHAPE;
+      r.lane.target = VELOCITY_TARGET;
+      setVelMode(r.lane, r.mode);
+      setVelOutput(r.lane, r.output);
+      const int n = a[2].toInt();
+      int p = 3;
+      if (n < 0 || p + 7 * n + 1 > a.size())
+            return false;
+      for (int i = 0; i < n; ++i, p += 7) {
+            Automation::Point q(a[p].toInt(), a[p + 1].toDouble(), a[p + 2].toInt() ? Automation::Curve::LINEAR : Automation::Curve::STEP);
+            q.c1x = a[p + 3].toDouble();
+            q.c1y = a[p + 4].toDouble();
+            q.c2x = a[p + 5].toDouble();
+            q.c2y = a[p + 6].toDouble();
+            r.lane.points.push_back(q);
+            }
+      std::stable_sort(r.lane.points.begin(), r.lane.points.end());
+      r.present = !r.lane.points.empty();
+      const int m = a[p].toInt();
+      ++p;
+      if (m < 0 || p + 5 * m > a.size())
+            return false;
+      std::vector<Original> o;
+      for (int i = 0; i < m; ++i, p += 5)
+            o.push_back({ a[p].toInt(), a[p + 1].toInt(), a[p + 2].toInt(), a[p + 3].toInt(), a[p + 4].toInt() });
+      if (v)
+            *v = r;
+      if (originals)
+            *originals = o;
+      return true;
+      }
+
+std::vector<QByteArray> velSetPackets(const QString& key, int serial, const QVariantList& atoms)
+      {
+      std::vector<QByteArray> out;
+      const int n = int(atoms.size());
+      const int chunks = std::max(1, (n + VEL_ATOMS_PER_PACKET - 1) / VEL_ATOMS_PER_PACKET);
+      for (int c = 0; c < chunks; ++c) {
+            QVariantList args { key, serial, c, chunks };
+            args.append(atoms.mid(c * VEL_ATOMS_PER_PACKET, VEL_ATOMS_PER_PACKET));
+            out.push_back(LiveClips::osc("/ms/vel/set", args));
+            }
+      return out;
+      }
+
+//---------------------------------------------------------
 //   LiveMidi
 //---------------------------------------------------------
 

@@ -85,9 +85,36 @@ function receive(id, inlet, v) {
                   else
                         emit(id, 1, list[0]);
                   return;
-            case "expr":                        // (the one expression the patcher has)
-                  assert.strictEqual(b.text, "expr $i1*($i1>1)");
-                  emit(id, 0, list[0] * (list[0] > 1 ? 1 : 0));
+            case "expr": {                      // ($i1 / $f2 … from the inlets; the left one hot; int() truncates)
+                  s.in = s.in || [];
+                  s.in[inlet] = list[0];
+                  if (inlet !== 0)
+                        return;
+                  const src = b.text.slice(5).replace(/\$[if](\d)/g, (m, k) => "(" + (s.in[Number(k) - 1] || 0) + ")")
+                        .replace(/\bint\(/g, "Math.trunc(").replace(/\bfloor\(/g, "Math.floor(");
+                  emit(id, 0, Number(Function("return " + src)()));
+                  return;
+                  }
+            case "snapshot~":                   // (the song position's phase: the model's)
+                  if (inlet === 0 && list[0] === "bang")
+                        emit(id, 0, songPhase);
+                  return;
+            case "peek~":                       // (the ring the script fills: the model's)
+                  if (inlet === 0)
+                        emit(id, 0, ring[Math.round(list[0])] || 0);
+                  return;
+            case "unpack":
+                  for (let k = Math.min(list.length, args.length) - 1; k >= 0; --k)
+                        emit(id, k, list[k]);
+                  return;
+            case "gate":
+                  if (inlet === 0)
+                        s.open = list[0];
+                  else if (s.open)
+                        emit(id, 0, v);
+                  return;
+            case "loadmess":
+                  emit(id, 0, args.length === 1 ? args[0] : args);
                   return;
             case "-":
                   if (inlet === 0)
@@ -98,7 +125,7 @@ function receive(id, inlet, v) {
                   return;
             case "t": {                        // (trigger: right to left)
                   for (let k = args.length - 1; k >= 0; --k)
-                        emit(id, k, args[k] === "b" ? "bang" : args[k] === "l" ? list : list[0]);
+                        emit(id, k, args[k] === "b" ? "bang" : args[k] === "l" ? list : typeof args[k] === "number" ? args[k] : list[0]);
                   return;
                   }
             case "pack": {
@@ -171,7 +198,12 @@ function receive(id, inlet, v) {
             }
       }
 
+let songPhase = 0;
+const ring = {};
 const midiin = patcher.boxes.find((b) => b.box.text === "midiin").box.id;
+for (const b of patcher.boxes)                  // (the patcher loaded: a [loadmess] with a number says it)
+      if (b.box.maxclass === "newobj" && /^loadmess \d+$/.test(b.box.text || ""))
+            receive(b.box.id, 0, "bang");
 function play(bytes) {
       midiOut.length = 0;
       for (const x of bytes)
@@ -301,14 +333,14 @@ test("parameter lanes: the song position in ms (phasor~ locked to Live's transpo
       const byText = (t) => patcher.boxes.filter((b) => b.box.text === t).map((b) => b.box.id);
       const has = (a, ao, b, bi) => (wires[a + ":" + ao] || []).some(([d, i]) => d === b && i === bi);
       const v8 = byText("v8")[0];
-      assert.strictEqual(boxes[v8].numoutlets, 8);
+      assert.strictEqual(boxes[v8].numoutlets, 10);
       const [phasor] = byText("phasor~ @frequency 7864320 ticks @lock 1");
       assert.strictEqual(7864320, 16384 * 480);
       const [ms] = byText("*~ 1.");
       assert.ok(phasor && ms);
       assert.ok(has(phasor, 0, ms, 0));
       assert.ok(has(v8, 4, ms, 1));                          // the factor
-      const [snap] = byText("snapshot~");
+      const snap = byText("snapshot~").find((x) => has(ms, 0, x, 0));      // (the other one reads the phase: the velocity shaper)
       const [pos] = byText("prepend posvalue");
       assert.ok(has(ms, 0, snap, 0) && has(v8, 5, snap, 0) && has(snap, 0, pos, 0) && has(pos, 0, v8, 0));
       const [route] = byText("route " + Array.from({ length: 16 }, (_, k) => k).join(" "));
@@ -355,11 +387,58 @@ test("a clip tab's notes: /ms/midi from the hub's udpreceive reach the copy on t
       assert.deepStrictEqual(play([0x90, 126, 65]), [0xb0, 1, 65]);
       });
 
+test("the velocity shaper: a note-on's velocity by the ring's code at the song position (MuseScoreLink.js velShape)", () => {
+      const js = fs.readFileSync(path.join(dir, "MuseScoreLink.js"), "utf8");
+      const ringSize = Number(/loadmess (\d+)/.exec(patcher.boxes.map((b) => b.box.text || "").join("\n"))[1]);
+      assert.strictEqual(ringSize, 2 * Math.ceil(2 * 999 / 60 * 480));
+      const v8 = patcher.boxes.find((b) => b.box.text === "v8").box.id;
+      // the bias: one signal vector (64 samples at 44.1 kHz) at 120 bpm, in ticks
+      const bias = 64 / 44100 * 120 / 60 * 480;
+      emit(v8, 9, ["bias", bias]);
+      const at = (beat) => { songPhase = (beat * 480 - bias) / (16384 * 480); };     // (snapshot~: a vector early)
+      const cell = (beat) => Math.round(beat * 480) % ringSize;
+      ring[cell(10)] = 1.5;                       // scale 50 %
+      ring[cell(11)] = -64;                       // absolute 64
+      ring[cell(12)] = 0;                         // as it is
+      ring[cell(13)] = 3;                         // 200 %
+      at(10);
+      assert.deepStrictEqual(play([0x90, 60, 100]), [0x90, 60, 50]);
+      assert.deepStrictEqual(play([0x80, 60, 0]), [0x90, 60, 0]);              // a note-off as it is
+      at(11);
+      assert.deepStrictEqual(play([0x90, 61, 10]), [0x90, 61, 64]);
+      at(12);
+      assert.deepStrictEqual(play([0x90, 62, 77]), [0x90, 62, 77]);
+      at(13);
+      assert.deepStrictEqual(play([0x90, 63, 100]), [0x90, 63, 127]);           // 200 -> 127
+      assert.deepStrictEqual(play([0x91, 63, 1]), [0x91, 63, 2]);               // its channel kept
+      ring[cell(13)] = 1.0;                       // 0 % -> 1, never a note-off
+      assert.deepStrictEqual(play([0x90, 63, 100]), [0x90, 63, 1]);
+      // the code is reset for each note: an empty cell after a shaped one plays the note as it is
+      at(14);
+      assert.deepStrictEqual(play([0x90, 64, 99]), [0x90, 64, 99]);
+      // the carriers aren't shaped
+      at(10);
+      assert.deepStrictEqual(play([0x90, 126, 65]), [0xb0, 1, 65]);
+      // the log: closed until the script opens it, then each note to the script
+      toScript.length = 0;
+      play([0x90, 60, 100]);
+      assert.deepStrictEqual(toScript, []);
+      emit(v8, 9, ["log", 1]);
+      play([0x90, 60, 100]);
+      assert.strictEqual(toScript.length, 1);
+      assert.deepStrictEqual([toScript[0][0], toScript[0][1], toScript[0][3], toScript[0][4]], ["vlog", 60, 100, 50]);
+      emit(v8, 9, ["log", 0]);
+      at(0);
+      for (const k of Object.keys(ring))
+            delete ring[k];
+      assert.ok(/function velShape\(v, c\)/.test(js));
+      });
+
 test("the script's constants agree with the patcher's", () => {
       const js = fs.readFileSync(path.join(dir, "MuseScoreLink.js"), "utf8");
       assert.ok(/var SLOTS = 16;/.test(js));
       assert.ok(/var PERIOD_QUARTERS = 16384;/.test(js));
-      assert.ok(/outlets = 8;/.test(js));
+      assert.ok(/outlets = 10;/.test(js));
       });
 
 if (failures) {

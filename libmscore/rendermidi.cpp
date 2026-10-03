@@ -108,6 +108,7 @@ struct SndConfig {
       int* libPlayed = nullptr;   // where a library note starts as played (any note, early or not)
       int libKey = -1;            // a library kit: the patch's key that plays the drum sound
                                   // (a sound library plays the trill / tremolo: SoundLib)
+      const Automation::Lane* velocityLane = nullptr;    // the part's Velocity lane (MidiRenderer::velocityLanes)
 
       SndConfig() {}
       SndConfig(bool use, int c, DynamicsRenderMethod me) : useSND(use), controller(c), method(me) {}
@@ -383,7 +384,8 @@ static int ms3PitchBend(int p)
       }
 
 static void playNote(EventMap* events, const Note* note, int channel, int pitch,
-   int velo, int onTime, int offTime, int staffIdx, int layer = -1, int libPatch = 0)
+   int velo, int onTime, int offTime, int staffIdx, int layer = -1, int libPatch = 0,
+   const Automation::Lane* velocityLane = nullptr)
       {
       if (!note->play())
             return;
@@ -392,6 +394,11 @@ static void playNote(EventMap* events, const Note* note, int channel, int pitch,
       // (articulation.h MarcatoLevel; MS4 mode: collectMeasureEventsMs4)
       if (layer < 0)
             velo = MarcatoLevel::velocity(note->customizeVelocity(velo), MarcatoLevel::of(note->chord()));
+      // a clip tab's Velocity lane (automation.h): the curve's value at the note's start (its chord's tick: score time, as
+      // the lane's points), as Live plays the clip with it
+      if (layer < 0 && velocityLane)
+            velo = Automation::shapeVelocity(velo, velocityLane->valueAt(note->chord()->tick().ticks()),
+                                             Automation::velocityAbsolute(*velocityLane));
       NPlayEvent ev(ME_NOTEON, channel, pitch, velo);
       ev.setOriginatingStaff(staffIdx);
       ev.setLayer(layer);
@@ -592,7 +599,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   }
 
             velo *= velocityMultiplier;
-            playNote(events, note, channel, p, qBound(1, velo, 127), on, off, staffIdx);
+            playNote(events, note, channel, p, qBound(1, velo, 127), on, off, staffIdx, -1, 0, config.velocityLane);
             }
 
       // Single-note dynamics
@@ -1040,6 +1047,8 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
 
                   bool useSND = instr->singleNoteDynamics();
                   SndConfig config = SndConfig(useSND, controller, sctx.method);
+                  auto vl = velocityLanes.find(st1->part());
+                  config.velocityLane = vl != velocityLanes.end() ? &vl->second : nullptr;
 
                   //
                   // Add normal note events
@@ -4524,6 +4533,11 @@ void MidiRenderer::updateState()
             score->updateSwing();
             score->updateCapo();
 
+            velocityLanes.clear();
+            for (const auto& pl : Automation::read(score->masterScore()))
+                  for (const Automation::Lane& l : pl.second)
+                        if (l.target == Automation::VELOCITY_TARGET && !l.points.empty())
+                              velocityLanes[pl.first] = l;
             libParts.clear();
             libRoutes.clear();
             libLanes.clear();

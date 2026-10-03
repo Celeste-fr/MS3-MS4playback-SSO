@@ -144,6 +144,13 @@ struct Lane {
 // a hash of points (ticks, values to 1e-4 as written, curves), for pointsHash
 QString pointsHash(const std::vector<Point>& points);
 
+// The Velocity lane of an Edit-in-MuseScore clip tab (mscore/liveclipmodel.h › The Velocity lane): target "velocity";
+// "velocityMode" "absolute" in its extra: a note's velocity is round(127 u), else (scale) v × 2u, both 1-127; before
+// its first point (u < 0) a note keeps its own. MuseScore 3's playback plays every note so (rendermidi, playNote)
+extern const char* const VELOCITY_TARGET;
+bool velocityAbsolute(const Lane& lane);
+int shapeVelocity(int v, double u, bool absolute);
+
 using PartLanes = std::vector<Lane>;
 
 std::map<const Part*, PartLanes> read(const MasterScore* score);

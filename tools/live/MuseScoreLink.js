@@ -38,9 +38,16 @@
 //     (d -1: the mixer, p 0 volume, 1 pan; else devices[d].parameters[p]; MuseScore Link itself left out), again
 //     when the track's devices change (checked once a second), and each edited clip's place, /live/clip/where key:s
 //     track:i slot:i (the track's index; the session slot's, -1 for an arrangement clip), again when it moves.
+//   - a clip tab plays at the song's tempo (protocol 6; mscore/cliptempo.h): for an edited arrangement clip the hub
+//     sends its place in the song, /live/clip/span key:s start_time:f end_time:f start_marker:f end_marker:f
+//     loop_start:f loop_end:f looping:i (after /live/clip/where, again when one changes: checked once a second), and
+//     /live/transport goes out as soon as Live's tempo changes (also while stopped), so a clip tab follows it.
 //     A clip tab's lanes are written into the clip's own envelopes by the MuseScore Envelopes Control Surface
 //     script (tools/live/MuseScoreEnvelopes: Max for Live can't), MuseScore talking to it directly. A route's lane
 //     titled "live:<d>/<p>" is that parameter of the track (no plug-in needed), driven as below.
+//   - velocity curves of clip tabs (protocol 7): the copy on a clip's track changes the clip's note-ons as they pass
+//     (its patcher, from a ring this script fills), and what the device keeps in the set goes into the track through
+//     the MuseScore Envelopes script (Track.set_data: no Live undo step). Below, "velocity curves", "kept in the set".
 //   - plug-in parameter lanes (MuseScore's automation of Kontakt's parameters): the LOM can't write clip
 //     envelopes or arrangement automation, so each copy drives its own track's plug-in parameters
 //     itself while Live plays. Below, "Parameter lanes".
@@ -83,13 +90,17 @@
 
 autowatch = 0;
 inlets = 1;
-outlets = 8;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text,
+outlets = 10;     // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2: status text,
                   // 3: "k id n" to the slots' live.remote~ (route 0 … 15), 4: the ms factor ([*~]), 5: bang [snapshot~],
                   // 6: the lanes to keep in the Live Set ([pattr Lanes]),
-                  // 7: "set msl_m<track id>" to the [receive] that plays MuseScore's notes for a clip tab
+                  // 7: "set msl_m<track id>" to the [receive] that plays MuseScore's notes for a clip tab,
+                  // 8: OSC to the MuseScore Envelopes script ([udpsend 127.0.0.1 9005]: what is kept in the set),
+                  // 9: the velocity shaper ("bias <ticks>", "log 0/1")
 
-var PROTOCOL = 5;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
-                                        // 5: the tracks' parameters and the clips' places (automation lanes of any track)
+var PROTOCOL = 7;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+                                        // 5: the tracks' parameters and the clips' places (automation lanes of any track);
+                                        // 6: an arrangement clip's place in the song, Live's tempo reported as it changes;
+                                        // 7: velocity curves of clip tabs, kept through the MuseScore Envelopes script
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 // (measured, numbers-measured 2026-10-03, Live 12.4.6: while Live froze or duplicated Kontakt + SSO tracks the hub's 1 s
@@ -245,7 +256,12 @@ function bang() {
       if (!isHub)
             status("MuseScore Link: on this track (the hub is another copy)");
       outlet(4, msFactor(liveTempo()));
+      if (g["klanes" + me.track])                   // (the script gave this track's values before this copy loaded)
+            keptChanged("lanes");
       paramsCheck(!!saved);
+      velTask = new Task(velFill, this);
+      velObserve();
+      velChanged();
       }
 
 function beat() {
@@ -258,13 +274,16 @@ function beat() {
             g.hubBeat = now();
             if (Math.floor(now() / 1000) % 2 === 0)
                   send("/live/hello", session, PROTOCOL);
+            outlet(8, "/ms/keep/ping", udpPort);          // (the script answers /live/keep/pong: it keeps the values)
             checkEdits();
             checkRouteParams();
             checkAudible();
+            velAnswerLate();
             }
       else
             elect();
       paramsCheck();
+      velFill();
       }
 
 function elect() {
@@ -340,6 +359,7 @@ function notifydeleted() {
       if (reporter) reporter.cancel();
       if (paramTask) paramTask.cancel();
       if (storeTask) storeTask.cancel();
+      if (velTask) velTask.cancel();
       }
 
 //---------------------------------------------------------
@@ -375,6 +395,26 @@ function anything() {
             return restoreSaved(a);
       if (messagename === "posvalue")                         // ([snapshot~]: a "pos" probe's answer)
             return answerPos(num(a[0]));
+      if (messagename === "msl_keep") {                       // (the hub got a track's kept values from the script)
+            if (num(a[0]) === me.track && me.track)
+                  keptChanged(str(a[1]));
+            return;
+            }
+      if (messagename === "msl_vel") {                        // (a velocity curve on a track changed)
+            if (num(a[0]) === me.track && me.track)
+                  velChanged();
+            return;
+            }
+      if (messagename === "vlog")                             // (the shaper's note-ons, while the "vlog" probe asks)
+            return velLog(a);
+      if (messagename === "dspsr" || messagename === "dspvs") {   // ([dspstate~]: the sample rate, the vector size)
+            if (messagename === "dspsr")
+                  velSr = num(a[0]);
+            else
+                  velVs = num(a[0]);
+            velSig = "";
+            return;
+            }
       if (!isHub)
             return;
       handle(messagename, a);
@@ -495,6 +535,43 @@ function handle(address, a) {
             }
       else if (address === "/ms/midi")            // (only with an older patcher: its [route /ms/midi] passes them on)
             messnamed("msl_m" + num(a[0]), num(a[1]), num(a[2]), num(a[3]));
+      // what is kept in the set: the MuseScore Envelopes script's answers (it sends to this port too)
+      else if (address === "/live/keep/pong") {
+            var fresh = !scriptAlive();
+            g.keepAlive = now();
+            if (fresh || !keepAsked)                  // (the script came: what it keeps of this set)
+                  askKept();
+            }
+      else if (address === "/live/keep/data")
+            keptData(a);
+      else if (address === "/live/keep/end") {
+            if (str(a[0]) === "vel") {
+                  velReady = true;
+                  velAnswerLate(true);
+                  }
+            }
+      // velocity curves of clip tabs (protocol 7)
+      else if (address === "/ms/vel/set") {
+            var vin = velIncoming[str(a[0])];
+            if (!vin || vin.serial !== num(a[1]))
+                  vin = velIncoming[str(a[0])] = { serial: num(a[1]), chunks: num(a[3]), parts: {}, n: 0 };
+            if (vin.parts[num(a[2])] === undefined)
+                  ++vin.n;
+            vin.parts[num(a[2])] = a.slice(4);
+            if (vin.n >= vin.chunks) {
+                  delete velIncoming[str(a[0])];
+                  var all = [];
+                  for (var vc = 0; vc < vin.chunks; ++vc)
+                        all = all.concat(vin.parts[vc] || []);
+                  velSet(str(a[0]), vin.serial, all);
+                  }
+            }
+      else if (address === "/ms/vel/ask") {
+            if (scriptAlive() && !velReady)
+                  velAsks.push({ key: str(a[0]), since: now() });     // (answered once the script gave the set's)
+            else
+                  velAnswer(str(a[0]));
+            }
       }
 
 // a packet of one lane's events: a chunk sent again replaces itself; another gen's are dropped
@@ -843,10 +920,13 @@ function report() {
       var song = new LiveAPI("live_set");
       var playing = num(song.get("is_playing")) ? 1 : 0;
       var b = num(song.get("current_song_time"));
+      var bpm = num(song.get("tempo"));
       var t = now();
-      if (playing || playing !== lastTransport.playing || Math.abs(b - lastTransport.beat) > 1e-6 || t - lastTransport.sent > 1000) {
-            send("/live/transport", playing, b, num(song.get("tempo")));
-            lastTransport = { playing: playing, beat: b, sent: t };
+      // (Live's tempo changed: at once, also while stopped, for the clip tabs that follow it; protocol 6)
+      if (playing || playing !== lastTransport.playing || Math.abs(b - lastTransport.beat) > 1e-6 || t - lastTransport.sent > 1000
+          || bpm !== lastTransport.bpm) {
+            send("/live/transport", playing, b, bpm);
+            lastTransport = { playing: playing, beat: b, sent: t, bpm: bpm };
             }
       }
 
@@ -1291,10 +1371,27 @@ function whereOf(clip, tr) {
 
 function sendWhere(e, clip, tr, always) {
       var w = whereOf(clip, tr);
-      if (!always && e.where && e.where.track === w.track && e.where.slot === w.slot)
+      if (always || !e.where || e.where.track !== w.track || e.where.slot !== w.slot) {
+            e.where = w;
+            send("/live/clip/where", e.key, w.track, w.slot);
+            always = true;
+            }
+      // an arrangement clip's place in the song (protocol 6)
+      if (w.slot >= 0 || w.track < 0)
             return;
-      e.where = w;
-      send("/live/clip/where", e.key, w.track, w.slot);
+      var sp = spanOf(clip);
+      var k = sp.join(" ");
+      if (!always && e.span === k)
+            return;
+      e.span = k;
+      send.apply(this, ["/live/clip/span", e.key].concat(sp));
+      }
+
+// start_time, end_time (song beats), start_marker, end_marker, loop_start, loop_end (clip beats), looping
+function spanOf(clip) {
+      return [num(clip.get("start_time")), num(clip.get("end_time")), num(clip.get("start_marker")),
+              num(clip.get("end_marker")), num(clip.get("loop_start")), num(clip.get("loop_end")),
+              num(clip.get("looping")) ? 1 : 0];
       }
 
 function isLink(dev) {
@@ -1683,6 +1780,14 @@ function keep(e) {
       if (saved && JSON.stringify(saved) === JSON.stringify(next))
             return;
       saved = next;
+      if (scriptAlive()) {                      // kept in the track by the MuseScore Envelopes script: no undo step
+            keptByScript = true;
+            keptStatus = "";
+            if (storeTask)
+                  storeTask.cancel();
+            keepToScript(me.track, "lanes", saved && Object.keys(saved.routes).length ? encodeSaved(saved) : []);
+            return;
+            }
       if (storeTask)
             storeTask.schedule(STORE_DELAY_MS);   // (again: the delay starts over)
       else
@@ -1901,6 +2006,8 @@ function restoreSaved(args) {
       catch (e) {}
       if (!(k >= 0 && k < STORES))
             return;
+      if (keptByScript)                       // (the script keeps this track's lanes: an older store's value is stale)
+            return;
       if (sentParts[k] === JSON.stringify(part))
             return;
       parts[k] = part;
@@ -1958,6 +2065,581 @@ function fillSlot(k, lane, base, bpm, lengthBeats) {
       }
 
 //---------------------------------------------------------
+//   kept in the set by the MuseScore Envelopes script (protocol 7; tools/live/MuseScoreEnvelopes/core.py › /ms/keep)
+//   The owner, 2026-10-03: "if we can achieve possibly zero [undo steps], I'd be all for it". A track's values go
+//   into the track with Live's Python Track.set_data (no undo step; Max for Live's Object Model has no set_data), so
+//   when the script answers (/ms/keep/ping every 2 s with the hello) a copy sends its lanes there at once instead of
+//   setting the [pattr] stores (one Live undo step a pause). The hub asks for every track's values when the script
+//   first answers (/ms/keep/ask "lanes" and "vel"), puts each into the Global ("klanes<track id>", "kvel<track id>",
+//   the atoms as JSON) and tells the copies ([receive msl_keep]). Without the script the stores work as before.
+//---------------------------------------------------------
+
+// a datagram to the script at most: Max's [udpsend] sends up to its maxpacketsize, default 5096 bytes (Max 9's
+// udpsend reference); core.py KEEP_PACKET is the same
+var KEEP_PACKET = 5096;
+var keepAsked = false;        // hub: the script was asked for this set's values
+var keptIn = {};              // hub: "<what>:<track>" -> { stamp, chunks, parts, n } being received
+var keptByScript = false;     // copy: its lanes are kept by the script (the [pattr] stores' values are older)
+
+function scriptAlive() {
+      var t = Number(g.keepAlive || 0);
+      return t > 0 && now() - t < HUB_STALE_MS;
+      }
+
+function trackIndex(trackId) {
+      return ids(new LiveAPI("live_set").get("tracks")).indexOf(trackId);
+      }
+
+function utf8Length(s) {
+      var n = 0;
+      for (var i = 0; i < s.length; ++i) {
+            var c = s.charCodeAt(i);
+            n += c < 0x80 ? 1 : c < 0x800 ? 2 : (c >= 0xD800 && c < 0xDC00) ? 2 : 3;   // (a surrogate pair: 4 in all)
+            }
+      return n;
+      }
+
+// an atom's bytes in an OSC message, its type tag's byte included (OSC 1.0: int32 / float32 4 bytes, a string its
+// UTF-8 bytes and a 0, padded to 4)
+function atomBytes(a) {
+      if (typeof a === "number")
+            return 5;
+      return (Math.floor(utf8Length(str(a)) / 4) + 1) * 4 + 1;
+      }
+
+// atoms in parts that each fit a KEEP_PACKET datagram after `header` bytes
+function chunkAtoms(atoms, header) {
+      var parts = [], cur = [], size = header;
+      for (var i = 0; i < atoms.length; ++i) {
+            var s = atomBytes(atoms[i]);
+            if (cur.length && size + s > KEEP_PACKET) {
+                  parts.push(cur);
+                  cur = [];
+                  size = header;
+                  }
+            cur.push(atoms[i]);
+            size += s;
+            }
+      parts.push(cur);
+      return parts;
+      }
+
+// an OSC message's bytes before its atoms: the address, the fixed arguments with their type tags, the tags' ","
+// and their padding (at most 4 bytes more)
+function oscHeader(address, fixed) {
+      var n = atomBytes(address) - 1 + 1 + 4;
+      for (var i = 0; i < fixed.length; ++i)
+            n += atomBytes(fixed[i]);
+      return n;
+      }
+
+// a track's value of `what` to the script (no atoms: removed)
+function keepToScript(trackId, what, atoms) {
+      var t = trackIndex(trackId);
+      if (t < 0)
+            return false;
+      var stamp = Math.floor(Math.random() * 1e9);
+      var parts = chunkAtoms(atoms, oscHeader("/ms/keep/put", [t, what, stamp, 0, 0]));
+      for (var c = 0; c < parts.length; ++c)
+            outlet(8, ["/ms/keep/put", t, what, stamp, c, parts.length].concat(parts[c]));
+      return true;
+      }
+
+function askKept() {
+      keepAsked = true;
+      velReady = false;
+      outlet(8, "/ms/keep/ask", udpPort, "lanes");
+      outlet(8, "/ms/keep/ask", udpPort, "vel");
+      }
+
+// /live/keep/data what track stamp chunk chunks atoms…
+function keptData(a) {
+      var what = str(a[0]), t = num(a[1]), k = what + ":" + t;
+      var inc = keptIn[k];
+      if (!inc || inc.stamp !== num(a[2]))
+            inc = keptIn[k] = { stamp: num(a[2]), chunks: num(a[4]), parts: {}, n: 0 };
+      if (inc.parts[num(a[3])] === undefined)
+            ++inc.n;
+      inc.parts[num(a[3])] = a.slice(5);
+      if (inc.n < inc.chunks)
+            return;
+      delete keptIn[k];
+      var atoms = [];
+      for (var c = 0; c < inc.chunks; ++c)
+            atoms = atoms.concat(inc.parts[c] || []);
+      var tl = ids(new LiveAPI("live_set").get("tracks"));
+      if (!(t >= 0 && t < tl.length))
+            return;
+      g["k" + what + tl[t]] = JSON.stringify(atoms);
+      if (typeof messnamed === "function")
+            messnamed(what === "vel" ? "msl_vel" : "msl_keep", tl[t], what);
+      }
+
+// copy: the script's value of `what` for this track
+function keptChanged(what) {
+      if (what !== "lanes")
+            return velChanged();
+      var atoms = null;
+      try { atoms = JSON.parse(g["klanes" + me.track] || "null"); } catch (e) {}
+      if (!atoms)
+            return;
+      var sv = decodeSaved(atoms);
+      keptByScript = true;
+      if (storeTask)
+            storeTask.cancel();
+      saved = sv && Object.keys(sv.routes).length ? sv : null;
+      ++savedSerial;
+      paramsCheck(true);
+      }
+
+//---------------------------------------------------------
+//   velocity curves of clip tabs (protocol 7; the owner, 2026-10-03: "I want to be able to automate the velocity in
+//   MuseScore, and I can toggle override the existing note velocities vs. use data saved in MuseScore Link")
+//
+//   One curve a clip (a clip tab's "Velocity" lane, mscore/liveclipmodel.h › Velocity lane), in one of two modes:
+//   scale (the lane's value u 0-1 multiplies each note's own velocity by 2u: 0-200 %, 100 % = unchanged) or absolute
+//   (the note's velocity is round(127 u), 1 at least); before the lane's first point notes keep their own. Two outputs:
+//   "write" (MuseScore writes the velocities into the clip's notes: nothing here) and "shape" (the notes stay; this
+//   device changes their note-ons as they pass, below).
+//     MuseScore -> hub
+//       /ms/vel/set key:s serial:i chunk:i chunks:i (atom) × n   the clip's record (velClip below; none: removed)
+//         -> /live/vel/set key:s serial:i status:s kept:i         ("ok" or why it can't shape; kept 1: in the set)
+//       /ms/vel/ask key:s
+//         -> /live/vel/curve key:s found:i kept:i chunk:i chunks:i (atom) × n
+//   A clip's record, as atoms: mode (0 scale, 1 absolute), output (0 shape, 1 write), points n, then per point tick
+//   (480 a beat, clip time) value (0-1) curve (0 step, 1 ramp) c1x c1y c2x c2y (Live's Bézier, automation.h), then
+//   originals m, per note: note id, pitch, start (UNITS, clip time), velocity before the curve, velocity written.
+//   A track's value ("vel", in the Global "kvel<track id>" and kept by the script): "msl-vel" 1 clips, per clip its
+//   place: kind (0 a session slot, 1 an arrangement clip) and where (the slot's index; the arrangement clip's start
+//   in UNITS), then its record.
+//
+//   Shaping (the copy on the clip's track; the first copy on a track: drivesTrack): the patcher's MIDI path (not
+//   this script) changes each note-on: its velocity v by the code c read from [buffer~ ---mslv] at the song position
+//   ([snapshot~] of the song-position phasor, banged by the note): 0 v as it is; c >= 1: round(v (c - 1)), 1-127;
+//   c < 0: -c. The buffer is a ring of VEL_RING cells, one a MuseScore tick of song time (480 a beat), cell = tick mod
+//   VEL_RING; this script fills it every second (and at once when a curve or the track's clips change) from the song
+//   position up to VEL_AHEAD_S seconds ahead, with what plays on the track then: the session clip playing
+//   (playing_slot_index; its clip time from playing_position, its loop), the fired one from its launch (the launch
+//   quantization's next boundary), or the arrangement clips (track.back_to_arranger 0). Other clips: 0, unchanged.
+//---------------------------------------------------------
+
+// Live's tempo at most: 999 BPM (Live 12.4.6 on the test VM, 2026-10-03: song.tempo took 20 and 999, refused 10, 1000
+// and 5000 with "Tempo out of range")
+var VEL_MAX_BPM = 999;
+// the ring is filled from the song position this far ahead: two fills (the fill comes every second: the device's
+// heartbeat) so a late one still finds the next filled
+var VEL_AHEAD_S = 2;
+// two windows at the fastest tempo: the window just filled and the one before it, which notes may still read
+var VEL_RING = 2 * Math.ceil(VEL_AHEAD_S * VEL_MAX_BPM / 60 * TICKS);
+var velReady = false;        // hub: the script gave this set's curves (or it doesn't answer)
+var velIncoming = {};         // hub: key -> a /ms/vel/set being received
+var velAsks = [];             // hub: /ms/vel/ask waiting for the script's values
+var velTask = null;
+var velRec = null;            // copy: this track's record, parsed
+var velSig = "";              // copy: what is in the ring (its window and inputs), to skip a refill
+var velSized = false;
+var velActive = false;        // copy: the ring holds codes (not all 0)
+var velLogOn = -1;            // copy: the shaper's note-on log as last set (the "vlog on" probe)
+var velBiasTicks = 0;         // copy: the index's bias, one signal vector in ticks (make_device.py: snapshot~ reads the
+                              // vector before the note's)
+var velSr = 0;                // ([dspstate~]) the sample rate
+var velVs = 0;                // ([dspstate~]) the signal vector size
+var velObservers = [];
+
+// the clip record's atoms -> { mode, output, points: [{ tick, value, curve, c1x, c1y, c2x, c2y }], originals: [...] }
+function velClip(a, p) {
+      p = p || 0;
+      var r = { mode: num(a[p]), output: num(a[p + 1]), points: [], originals: [] };
+      var n = num(a[p + 2]);
+      p += 3;
+      for (var i = 0; i < n; ++i, p += 7)
+            r.points.push({ tick: num(a[p]), value: num(a[p + 1]), curve: num(a[p + 2]), c1x: num(a[p + 3]), c1y: num(a[p + 4]),
+                            c2x: num(a[p + 5]), c2y: num(a[p + 6]) });
+      var m = num(a[p]);
+      ++p;
+      for (i = 0; i < m; ++i, p += 5)
+            r.originals.push([num(a[p]), num(a[p + 1]), num(a[p + 2]), num(a[p + 3]), num(a[p + 4])]);
+      r.end = p;
+      return r;
+      }
+
+function velClipAtoms(r) {
+      var a = [r.mode, r.output, r.points.length];
+      for (var i = 0; i < r.points.length; ++i) {
+            var q = r.points[i];
+            a.push(q.tick, q.value, q.curve, q.c1x, q.c1y, q.c2x, q.c2y);
+            }
+      a.push(r.originals.length);
+      for (i = 0; i < r.originals.length; ++i)
+            a = a.concat(r.originals[i]);
+      return a;
+      }
+
+// a track's value -> { clips: [{ kind, where, rec }] } (null: none or not this format)
+function velTrack(a) {
+      if (!a || a.length < 3 || str(a[0]) !== "msl-vel" || num(a[1]) !== 1)
+            return null;
+      var out = { clips: [] }, n = num(a[2]), p = 3;
+      for (var i = 0; i < n; ++i) {
+            if (p + 5 > a.length)
+                  return null;
+            var c = { kind: num(a[p]), where: num(a[p + 1]) };
+            c.rec = velClip(a, p + 2);
+            p = c.rec.end;
+            delete c.rec.end;
+            out.clips.push(c);
+            }
+      return out;
+      }
+
+function velTrackAtoms(t) {
+      var a = ["msl-vel", 1, t.clips.length];
+      for (var i = 0; i < t.clips.length; ++i)
+            a = a.concat([t.clips[i].kind, t.clips[i].where]).concat(velClipAtoms(t.clips[i].rec));
+      return a;
+      }
+
+function velTrackOf(trackId) {
+      try { return velTrack(JSON.parse(g["kvel" + trackId] || "null")); } catch (e) { return null; }
+      }
+
+// a clip's place in its track: a session slot's index, else the arrangement clip's start (UNITS)
+function velPlace(clip, tr) {
+      var p = ids(clip.get("canonical_parent"));
+      if (p.length && str(new LiveAPI("id " + p[0]).type) === "ClipSlot")
+            return { kind: 0, where: ids(tr.get("clip_slots")).indexOf(p[0]) };
+      return { kind: 1, where: Math.round(num(clip.get("start_time")) * UNITS) };
+      }
+
+function velFind(t, place) {
+      if (!t)
+            return -1;
+      for (var i = 0; i < t.clips.length; ++i)
+            if (t.clips[i].kind === place.kind && t.clips[i].where === place.where)
+                  return i;
+      return -1;
+      }
+
+// hub: MuseScore's record for an edited clip
+function velSet(key, serial, atoms) {
+      var e = edits[key];
+      var clip = e ? new LiveAPI("id " + e.clipId) : null;
+      if (!clip || !(num(clip.id) > 0))
+            return send("/live/vel/set", key, serial, "gone", 0);
+      var tr = trackOf(clip);
+      if (!tr)
+            return send("/live/vel/set", key, serial, "no track", 0);
+      var tid = num(tr.id), place = velPlace(clip, tr);
+      var t = velTrackOf(tid) || { clips: [] };
+      var i = velFind(t, place);
+      var rec = atoms.length >= 4 ? velClip(atoms, 0) : null;
+      if (rec)
+            delete rec.end;
+      if (rec && (rec.points.length || rec.originals.length)) {
+            if (i >= 0)
+                  t.clips[i].rec = rec;
+            else
+                  t.clips.push({ kind: place.kind, where: place.where, rec: rec });
+            }
+      else if (i >= 0)
+            t.clips.splice(i, 1);
+      var value = t.clips.length ? velTrackAtoms(t) : [];
+      g["kvel" + tid] = JSON.stringify(value);
+      if (typeof messnamed === "function")
+            messnamed("msl_vel", tid);
+      var kept = scriptAlive() && keepToScript(tid, "vel", value);
+      var st = "ok";
+      if (rec && rec.output === 0 && rec.points.length && !copyOn(tid))
+            st = "no MuseScore Link on the clip's track: Live plays the notes unshaped";
+      send("/live/vel/set", key, serial, st, kept ? 1 : 0);
+      }
+
+// hub: the stored curve of an edited clip
+function velAnswer(key) {
+      var e = edits[key];
+      var clip = e ? new LiveAPI("id " + e.clipId) : null;
+      var tr = clip && num(clip.id) > 0 ? trackOf(clip) : null;
+      var rec = null;
+      if (tr) {
+            var t = velTrackOf(num(tr.id));
+            var i = velFind(t, velPlace(clip, tr));
+            rec = i >= 0 ? t.clips[i].rec : null;
+            }
+      var kept = scriptAlive() ? 1 : 0;
+      var atoms = rec ? velClipAtoms(rec) : [];
+      var parts = chunkAtoms(atoms, oscHeader("/live/vel/curve", [key, 0, 0, 0, 0]));
+      for (var c = 0; c < parts.length; ++c)
+            send.apply(this, ["/live/vel/curve", key, rec ? 1 : 0, kept, c, parts.length].concat(parts[c]));
+      }
+
+// hub: asks waiting for the script (answered when its values came, or once it stopped answering)
+function velAnswerLate(ready) {
+      if (!velAsks.length || (!ready && scriptAlive() && !velReady))
+            return;
+      var l = velAsks;
+      velAsks = [];
+      for (var i = 0; i < l.length; ++i)
+            velAnswer(l[i].key);
+      }
+
+// the lane's value at a tick (automation.cpp Lane::valueAt, curveAt): -1 before the first point
+function velBez(p1, p2, t) {
+      var u = 1 - t;
+      return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;
+      }
+function velDiag(x, y) { return Math.abs(x - y) <= 1e-6; }
+function velCurveAt(c1x, c1y, c2x, c2y, x) {
+      if (x <= 0)
+            return 0;
+      if (x >= 1)
+            return 1;
+      if (velDiag(c1x, c1y) && velDiag(c2x, c2y))
+            return x;
+      var lo = 0, hi = 1;
+      for (var i = 0; i < 60; ++i) {                    // (automation.cpp: the same bisection)
+            var t = 0.5 * (lo + hi);
+            if (velBez(c1x, c2x, t) < x)
+                  lo = t;
+            else
+                  hi = t;
+            }
+      return velBez(c1y, c2y, 0.5 * (lo + hi));
+      }
+function velValueAt(points, tick) {
+      if (!points.length || tick < points[0].tick)
+            return -1;
+      var k = 0;
+      while (k + 1 < points.length && points[k + 1].tick <= tick)
+            ++k;
+      var p = points[k], q = points[k + 1];
+      if (!q || p.curve === 0 || q.tick === p.tick)
+            return p.value;
+      var x = (tick - p.tick) / (q.tick - p.tick);
+      var curved = !(velDiag(p.c1x, p.c1y) && velDiag(p.c2x, p.c2y));
+      var y = curved ? velCurveAt(p.c1x, p.c1y, p.c2x, p.c2y, x) : x;
+      return p.value + (q.value - p.value) * y;
+      }
+
+// the shaper's code for a lane value (see above; liveclipmodel.cpp shapeVelocity reads it the same way)
+function velCode(mode, u) {
+      if (u < 0)
+            return 0;
+      if (mode === 1)
+            return -Math.max(1, Math.min(127, Math.round(127 * u)));
+      return 1 + 2 * u;
+      }
+
+// what the patcher does with a note-on's velocity (the tests; make_device.py's expr)
+function velShape(v, c) {
+      if (v <= 0 || c === 0)
+            return v;
+      if (c < 0)
+            return Math.floor(-c);
+      return Math.min(127, Math.max(1, Math.floor(v * (c - 1) + 0.5)));
+      }
+
+// a clip's time in ticks (480 a beat) after `x` beats of playing from clip time `from` (beats): its loop, or null once
+// it ended. Rounded to ticks before the loop is applied: a note at the loop's end is the loop's start
+function velClipTime(info, from, x) {
+      var t = Math.round((from + x) * TICKS);
+      var ls = Math.round(info.loopStart * TICKS), le = Math.round(info.loopEnd * TICKS);
+      if (info.looping) {
+            if (t >= le && le > ls)
+                  t = ls + (t - le) % (le - ls);
+            return t;
+            }
+      return t < Math.round(info.endMarker * TICKS) ? t : null;
+      }
+
+function velClipInfo(clip) {
+      return { looping: num(clip.get("looping")) !== 0, loopStart: num(clip.get("loop_start")), loopEnd: num(clip.get("loop_end")),
+               startMarker: num(clip.get("start_marker")), endMarker: num(clip.get("end_marker")) };
+      }
+
+// the launch quantization's grid in beats (a quarter note a beat): Live's Song.Quantization values (q_no_q 0,
+// q_8_bars 1, q_4_bars 2, q_2_bars 3, q_bar 4, q_half 5, q_half_triplet 6, q_quarter 7, q_quarter_triplet 8,
+// q_eight 9, q_eight_triplet 10, q_sixtenth 11, q_sixtenth_triplet 12, q_thirtytwoth 13: Live 12.4.6's Python API);
+// a clip's launch_quantization is ClipLaunchQuantization (q_global 0, q_none 1, then as the Song's + 1)
+function velGrid(q, barBeats) {
+      var g8 = [0, 8 * barBeats, 4 * barBeats, 2 * barBeats, barBeats, 2, 4 / 3, 1, 2 / 3, 0.5, 1 / 3, 0.25, 1 / 6, 0.125];
+      return q >= 0 && q < g8.length ? g8[q] : barBeats;
+      }
+
+function velLaunchAt(clip, song, nowB) {
+      if (!num(song.get("is_playing")))
+            return nowB;
+      var q = clip ? num(clip.get("launch_quantization")) : 0;
+      q = q === 0 ? num(song.get("clip_trigger_quantization")) : q - 1;
+      var bar = (num(song.get("signature_numerator")) || 4) * 4 / (num(song.get("signature_denominator")) || 4);
+      var grid = velGrid(q, bar);
+      return grid > 0 ? Math.ceil(nowB / grid - 1e-9) * grid : nowB;
+      }
+
+// what the track plays at song beat b, from now on: [{ from, to, rec, info, at, clipFrom }] (clip time at song beat
+// b: velClipTime(info, clipFrom, b - at))
+function velPlan(tr, t, song, nowB) {
+      var plan = [];
+      var shaped = function(kind, where) {
+            var i = velFind(t, { kind: kind, where: where });
+            var r = i >= 0 ? t.clips[i].rec : null;
+            return r && r.output === 0 && r.points.length ? r : null;
+            };
+      var slots = ids(tr.get("clip_slots"));
+      var slotClip = function(k) {
+            if (!(k >= 0 && k < slots.length))
+                  return null;
+            var c = ids(new LiveAPI("id " + slots[k]).get("clip"));
+            return c.length ? new LiveAPI("id " + c[0]) : null;
+            };
+      var psi = num(tr.get("playing_slot_index")), fsi = num(tr.get("fired_slot_index"));
+      var switchAt = Infinity;
+      if (fsi >= 0 || fsi === -2) {
+            var fc = fsi >= 0 ? slotClip(fsi) : null;
+            switchAt = velLaunchAt(fc, song, nowB);
+            var fr = fc ? shaped(0, fsi) : null;
+            if (fr) {
+                  var fi = velClipInfo(fc);
+                  plan.push({ from: switchAt, to: Infinity, rec: fr, info: fi, at: switchAt, clipFrom: fi.startMarker });
+                  }
+            }
+      if (psi >= 0) {
+            var pc = slotClip(psi), pr = pc ? shaped(0, psi) : null;
+            if (pr) {
+                  // a session clip's start_time is "the time the clip was started" (Live's API): it plays from its start
+                  // marker since then; a legato clip (launched at the position of the clip before) from where it is now
+                  var pi = velClipInfo(pc);
+                  if (num(pc.get("legato")))
+                        plan.push({ from: -Infinity, to: switchAt, rec: pr, info: pi, at: nowB,
+                                    clipFrom: num(pc.get("playing_position")) });
+                  else
+                        plan.push({ from: -Infinity, to: switchAt, rec: pr, info: pi, at: num(pc.get("start_time")),
+                                    clipFrom: pi.startMarker });
+                  }
+            }
+      else if (!num(tr.get("back_to_arranger"))) {
+            var ac = ids(tr.get("arrangement_clips"));
+            for (var i = 0; i < ac.length; ++i) {
+                  var c = new LiveAPI("id " + ac[i]);
+                  var s = num(c.get("start_time")), r = shaped(1, Math.round(s * UNITS));
+                  if (!r)
+                        continue;
+                  var info = velClipInfo(c);
+                  plan.push({ from: s, to: Math.min(num(c.get("end_time")), switchAt), rec: r, info: info, at: s,
+                              clipFrom: info.startMarker });
+                  }
+            }
+      return plan;
+      }
+
+// the code for song beat b
+function velCodeAt(plan, b) {
+      for (var i = 0; i < plan.length; ++i) {
+            var p = plan[i];
+            if (b < p.from || b >= p.to)
+                  continue;
+            var ct = velClipTime(p.info, p.clipFrom, b - p.at);
+            if (ct === null)
+                  return 0;
+            return velCode(p.rec.mode, velValueAt(p.rec.points, ct));
+            }
+      return 0;
+      }
+
+function velChanged() {
+      velRec = velTrackOf(me.track);
+      velSig = "";
+      if (velTask)
+            velTask.schedule(0);
+      else
+            velFill();
+      }
+
+// Live tells when the track's playing or fired clip changes and when the transport starts: the ring at once
+function velObserve() {
+      if (typeof LiveAPI === "undefined" || !me.track)
+            return;
+      var cb = function() { velSig = ""; if (velTask) velTask.schedule(0); };
+      try {
+            var props = [["id " + me.track, "playing_slot_index"], ["id " + me.track, "fired_slot_index"], ["live_set", "is_playing"]];
+            for (var i = 0; i < props.length; ++i) {
+                  var o = new LiveAPI(cb, props[i][0]);
+                  o.property = props[i][1];
+                  velObservers.push(o);
+                  }
+            }
+      catch (e) {}
+      }
+
+function velRingName() { return prefix.replace(/mslp$/, "mslv"); }
+
+// the ring from the song position on (each second, and at once on a change)
+function velFill() {
+      if (!me.track || !prefix)
+            return;
+      var logOn = g.vlog ? 1 : 0;
+      if (logOn !== velLogOn) {
+            velLogOn = logOn;
+            outlet(9, "log", logOn);
+            }
+      var t = velRec;
+      var tr = new LiveAPI("id " + me.track);
+      var any = false;
+      if (t)
+            for (var i = 0; i < t.clips.length; ++i)
+                  if (t.clips[i].rec.output === 0 && t.clips[i].rec.points.length)
+                        any = true;
+      var b = new Buffer(velRingName());
+      if (!velSized) {
+            b.send("sizeinsamps", VEL_RING, 1);
+            velSized = true;
+            }
+      if (!any || !drivesTrack(tr)) {
+            if (velActive) {
+                  var zeros = [];
+                  for (i = 0; i < VEL_RING; ++i)
+                        zeros.push(0);
+                  for (i = 0; i < VEL_RING; i += POKE)
+                        b.poke(1, i, zeros.slice(i, Math.min(VEL_RING, i + POKE)));
+                  velActive = false;
+                  }
+            return;
+            }
+      var song = new LiveAPI("live_set");
+      var nowB = num(song.get("current_song_time"));
+      var bpm = liveTempo();
+      var plan = velPlan(tr, t, song, nowB);
+      var t0 = Math.floor(nowB * TICKS), cells = Math.min(VEL_RING / 2, Math.ceil(VEL_AHEAD_S * bpm / 60 * TICKS));
+      var vals = [];
+      for (i = 0; i < cells; ++i)
+            vals.push(velCodeAt(plan, (t0 + i) / TICKS));
+      var start = t0 % VEL_RING;
+      for (i = 0; i < cells; i += POKE) {
+            var part = vals.slice(i, Math.min(cells, i + POKE));
+            var at = (start + i) % VEL_RING;
+            var first = Math.min(part.length, VEL_RING - at);
+            b.poke(1, at, part.slice(0, first));
+            if (first < part.length)
+                  b.poke(1, 0, part.slice(first));
+            }
+      velActive = true;
+      velBiasTicks = velSr > 0 ? velVs / velSr * bpm / 60 * TICKS : 0;
+      outlet(9, "bias", velBiasTicks);
+      }
+
+// ("vlog" probe) the shaper's notes: "vlog <pitch> <phase> <velocity in> <velocity out>", kept as [song beat (from
+// the phase), pitch, velocity in, velocity out]
+function velLog(a) {
+      var o = {};
+      try { o = JSON.parse(g.vlogged || "{}"); } catch (e) {}
+      var l = o[me.track] || [];
+      l.push([Math.round(num(a[1]) * PERIOD_QUARTERS * 1e6) / 1e6, num(a[0]), num(a[2]), num(a[3])]);
+      if (l.length > 64)
+            l.shift();
+      o[me.track] = l;
+      g.vlogged = JSON.stringify(o);
+      }
+
+//---------------------------------------------------------
 //   debugging in real Live (hub): /ms/probe, /ms/probecall
 //---------------------------------------------------------
 
@@ -1977,6 +2659,21 @@ function probe(id, what) {
             }
       if (what === "saved") {                   // (the lanes kept in the set: every copy's, through the Global)
             return send("/live/probe", id, str(g.savedInfo).substring(0, 7000));
+            }
+      if (what === "vlog on" || what === "vlog off") {    // (every copy: the shaper's note-ons to the script, or not)
+            g.vlog = what === "vlog on" ? 1 : 0;
+            return send("/live/probe", id, what);
+            }
+      if (what === "vlog") {                    // (every copy's logged note-ons, through the Global)
+            return send("/live/probe", id, str(g.vlogged).substring(0, 7000));
+            }
+      if (what === "vel") {                     // (the velocity state: the script, the Global's records)
+            var vs = { alive: scriptAlive(), keepAsked: keepAsked, velReady: velReady, asks: velAsks.length, sr: velSr, vs: velVs,
+                       bias: velBiasTicks, active: velActive, records: {} };
+            for (var vk in g)
+                  if (/^k(vel|lanes)\d+$/.test(vk))
+                        vs.records[vk] = str(g[vk]).substring(0, 600);
+            return send("/live/probe", id, probeText(vs).substring(0, 7000));
             }
       if (what === "state") {
             var o = { me: me, prefix: prefix, slots: slots, bases: bases, seenSerial: seenSerial, filledBpm: filledBpm,
@@ -2032,8 +2729,13 @@ if (typeof module !== "undefined")
                          pollParams: pollParams, restoreSaved: restoreSaved, encodeSaved: encodeSaved, packLane: packLane,
                          unpackLane: unpackLane, flushStores: flushStores,
                          checkAudible: checkAudible, audibleState: audibleState,
+                         velShape: velShape, velCode: velCode, velValueAt: velValueAt, velClip: velClip,
+                         velClipAtoms: velClipAtoms, velTrack: velTrack, velTrackAtoms: velTrackAtoms, velFill: velFill,
+                         velClipTime: velClipTime, velGrid: velGrid, chunkAtoms: chunkAtoms, beat: beat,
+                         VEL_RING: VEL_RING, KEEP_PACKET: KEEP_PACKET,
                          decodeSaved: decodeSaved, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
                                         edits: edits, slots: slots, bases: bases, waiting: waiting, prefix: prefix,
-                                        pendingParams: pendingParams, saved: saved };
+                                        pendingParams: pendingParams, saved: saved, keptByScript: keptByScript,
+                                        velRec: velRec, velReady: velReady, velAsks: velAsks };
                                } };

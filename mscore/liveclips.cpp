@@ -20,6 +20,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QStatusBar>
 #include <QToolButton>
 #include <QSettings>
@@ -137,7 +138,7 @@ void LiveClipsLink::watch()
       LiveClipEditor::instance()->linkChanged();
       }
 
-void LiveClipsLink::notice(const QString& text, bool good)
+void LiveClipsLink::notice(const QString& text, bool good, const QString& action, std::function<void()> onAction)
       {
       _lastNotice = text;
       emit statusChanged();
@@ -167,6 +168,8 @@ void LiveClipsLink::notice(const QString& text, bool good)
             };
       static QPointer<QFrame> bar;
       static QLabel* label = nullptr;
+      static QPushButton* button = nullptr;
+      static std::function<void()> act;
       static QTimer* hide = nullptr;
       static Follow* follow = nullptr;
       if (!bar) {
@@ -180,8 +183,15 @@ void LiveClipsLink::notice(const QString& text, bool good)
             close->setText("×");
             close->setAutoRaise(true);
             close->setToolTip(tr("Hide this notice"));
+            button = new QPushButton(bar);
             h->addWidget(label, 1);
+            h->addWidget(button, 0, Qt::AlignTop);
             h->addWidget(close, 0, Qt::AlignTop);
+            connect(button, &QPushButton::clicked, bar.data(), []() {
+                  bar->hide();
+                  if (act)
+                        act();
+                  });
             hide = new QTimer(bar);
             hide->setSingleShot(true);
             connect(hide, &QTimer::timeout, bar.data(), &QWidget::hide);
@@ -193,6 +203,9 @@ void LiveClipsLink::notice(const QString& text, bool good)
                               : "QFrame#liveNotice { background: #ffd970; border-bottom: 1px solid #b08a20; } QLabel { color: #302000; }");
       label->setText(text);
       label->setToolTip(text);
+      act = onAction;
+      button->setText(action);
+      button->setVisible(!action.isEmpty() && onAction);
       bar->show();
       follow->place();
       if (good)
@@ -354,7 +367,7 @@ void LiveClipsLink::read()
 void LiveClipsLink::received(const QString& address, const QVariantList& args)
       {
       const qint64 now = QDateTime::currentMSecsSinceEpoch();
-      if (address.startsWith("/live/clip/")) {     // editing a Live clip (liveclipedit.h)
+      if (address.startsWith("/live/clip/") || address.startsWith("/live/vel/")) {    // editing a Live clip (liveclipedit.h)
             _lastHello = now;
             LiveClipEditor::instance()->received(address, args);
             return;
@@ -428,6 +441,7 @@ void LiveClipsLink::received(const QString& address, const QVariantList& args)
       else if (address == "/live/transport") {
             _lastHello = now;
             transport(args.value(0).toInt() != 0, args.value(1).toDouble(), args.value(2).toDouble());
+            LiveClipEditor::instance()->songTempo(args.value(2).toDouble());     // (clip tabs that follow Live's tempo)
             }
       if (_wasConnected != connected()) {
             _wasConnected = connected();

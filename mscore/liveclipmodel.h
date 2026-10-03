@@ -342,6 +342,89 @@ struct EnvLane {
 std::vector<QByteArray> envWritePackets(const QString& key, int write, int track, int slot, qint32 hash,
                                         const std::vector<EnvLane>& lanes);
 
+//---------------------------------------------------------
+//   The Velocity lane of a clip tab (protocol 7; the owner, 2026-10-03: "I want to be able to automate the velocity
+//   in MuseScore, and I can toggle override the existing note velocities vs. use data saved in MuseScore Link"; then:
+//   one curve a clip, scale or absolute a mode of that curve; in "Write" the notes' velocities before the curve kept,
+//   so the curve never scales already scaled ones).
+//
+//   One lane, target "velocity", on the clip score's part (Automation::Lane; its points as any lane's, values 0-1),
+//   with two settings in its extra:
+//     "velocityMode": "scale" (the default): a note's velocity v × 2u (u the lane's value at the note's start: 0-200 %,
+//       the middle of the lane 100 %, unchanged), rounded, 1-127; "absolute": round(127 u), 1-127. Before the lane's
+//       first point a note keeps its velocity (a lane says nothing there, automation.h).
+//       (0-200 %: the owner's suggestion, "e.g. 0-200 % with 100 = unchanged": an owner decision, LIVE.md.)
+//     "velocityOutput": "shape" (the default, the notes untouched): the MuseScore Link copy on the clip's track changes
+//       the note-ons as Live plays them (tools/live/MuseScoreLink.js › velocity curves; the curve is kept in the set);
+//       "write": the velocities are written into the clip's notes (the edit path: a velocity-only modification of
+//       each note whose velocity changes, undo and conflicts as any edit).
+//   In "write" the notation keeps each note's velocity before the curve (its "original"), the signatures Live is
+//   compared with have the curve applied (signaturesForLive), so a curve edit writes the notes it changes, from the
+//   originals. The originals go to the device with the curve (by Live's note id, with pitch and start for a set
+//   reopened, and the velocity written): read back when the tab opens, a note still at the velocity written gets its
+//   original in the notation; a note changed in Live since (another velocity) takes Live's as its original; a note
+//   without one (added later) its own. "write" -> "shape": the originals are written back (one write) and the device
+//   shapes; "shape" -> "write": written from the originals.
+//   MuseScore's own playback of the tab (MuseScore's sounds, or the notes it sends to the Live track) plays every note
+//   shaped by the lane in both outputs (rendermidi: the clip score's "velocity" lane), as Live plays it.
+//   The device's record (MuseScoreLink.js): mode (0 scale, 1 absolute), output (0 shape, 1 write), points n, per point
+//   tick value curve (0 step, 1 ramp) c1x c1y c2x c2y, originals m, per note id pitch start (UNITS, clip time) velocity
+//   written.
+//     MuseScore -> device: /ms/vel/set key:s serial:i chunk:i chunks:i (atom) × n   (n 0 or no points and no originals:
+//                          removed);  /ms/vel/ask key:s
+//     device -> MuseScore: /live/vel/set key:s serial:i status:s kept:i;
+//                          /live/vel/curve key:s found:i kept:i chunk:i chunks:i (atom) × n
+//---------------------------------------------------------
+
+constexpr int VEL_PROTOCOL      = 7;            // the device's protocol from which it keeps and shapes velocity curves
+constexpr int VEL_UNITS         = 3840;         // the device's UNITS a beat (LiveClips::UNITS_PER_BEAT): originals' starts
+extern const char* const VELOCITY_TARGET;       // "velocity"
+
+enum class VelMode : signed char { SCALE, SET };      // (SET: absolute; ABSOLUTE is a macro of windows.h)
+enum class VelOutput : signed char { SHAPE, WRITE };
+
+VelMode velMode(const Automation::Lane& lane);
+VelOutput velOutput(const Automation::Lane& lane);
+void setVelMode(Automation::Lane& lane, VelMode m);
+void setVelOutput(Automation::Lane& lane, VelOutput o);
+// a note's velocity v with the lane's value u at its start (u < 0: before the first point, v as it is)
+int shapeVelocity(int v, double u, VelMode m);
+// the lane's value as shown: "100 %" / "64"; and the number in a value dialog (%, or 1-127) and back
+QString velocityText(double u, VelMode m);
+double velocityShown(double u, VelMode m);
+double velocityFromShown(double x, VelMode m);
+
+struct VelocityLane {
+      bool present { false };             // the score has a "velocity" lane with points
+      Automation::Lane lane;
+      VelMode mode { VelMode::SCALE };
+      VelOutput output { VelOutput::SHAPE };
+      };
+VelocityLane velocityLane(const Score* score);
+
+// the score's notes as Live should have them: in "write", each velocity shaped by the lane (the notation keeps the
+// originals); else signatures()
+std::vector<Sig> signaturesForLive(const Score* score, std::vector<Note*>* notes = nullptr);
+
+struct Original {
+      int id { 0 };
+      int pitch { 60 };
+      int start { 0 };                    // VEL_UNITS a beat, clip time
+      int velocity { 100 };               // before the curve
+      int written { 100 };                // as written into Live
+      };
+// in "write": each Live note a notation note stands for, with the notation's velocity (the original) and Live's (as
+// written), after a write (the baseline is Live's then)
+std::vector<Original> originals(const Baseline& base, const Score* score);
+// a clip opened again (its curve and originals read back): each notation note whose Live notes are all at the
+// velocity written gets its original (no undo step, as the import's own velocities); returns how many
+int applyOriginals(const Baseline& base, Score* score, const std::vector<Original>& originals);
+
+// the device's record and back
+QVariantList velRecord(const VelocityLane& v, const std::vector<Original>& originals);
+bool parseVelRecord(const QVariantList& atoms, VelocityLane* v, std::vector<Original>* originals);
+std::vector<QByteArray> velSetPackets(const QString& key, int serial, const QVariantList& atoms);
+
 }     // namespace LiveClipEdit
 
 namespace LiveIntegration {

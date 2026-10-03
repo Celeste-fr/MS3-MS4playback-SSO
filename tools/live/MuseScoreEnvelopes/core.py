@@ -33,15 +33,42 @@ The protocol (OSC over UDP on 127.0.0.1, this script listening on PORT; answers 
     /live/env/conflict key:s hash:i                    the envelopes changed in Live
     /live/env/gone key:s
 A parameter: d >= 0: the track's devices[d].parameters[p]; d -1: the mixer (p 0 volume, 1 panning).
+
+What MuseScore Link keeps in the Live Set (VERSION 2; LIVE.md › What MuseScore Link keeps in the Live Set): the
+device's data of a track (its parameter lanes, the clip tabs' velocity curves) goes into the track itself with
+Track.set_data(key, value) (Live's Python API: "Store data for the given key in this object. The data is persistent
+and will be restored when loading the Live Set"; a Song and a Track have it, a Clip doesn't, still in 12.4.6). Tried
+on the test VM (Live 12.4.6, 2026-10-03): set_data adds no undo step (song.can_undo stayed False), a value of 2.7 MB
+came back after the set was saved and opened again, a later value replaced an earlier one; Live saves it in the
+track's ViewData. It doesn't mark the set as changed (the window title kept no '*' and File › Save Live Set stayed
+greyed out), so after each value the script folds the track's arrangement lane and unfolds it again
+(Track.View.is_collapsed, twice: no visible change, no undo step, the title shows '*': tried there too), and Save
+saves it. Max for Live's Object Model has no set_data (the Song's and Track's function lists in Live 12.4.6), and every
+Max for Live store tried there (a [pattr] or [dict] Live parameter of type Blob, also with "Undo When Visible" off, a
+Float parameter "Stored Only") adds an undo step, while [dict] / [coll] with @embed 1 add none but aren't saved in the
+set.
+  device (any copy) -> script
+    /ms/keep/put track:i what:s stamp:i chunk:i chunks:i (atom) × n   the track's value of `what` ("lanes", "vel"),
+                                                       in chunks (one value: one stamp); stored once all are in; no
+                                                       atoms at all: the value removed
+    /ms/keep/ask port:i what:s                         every track's value of `what`, to 127.0.0.1:port:
+        -> /live/keep/data what:s track:i stamp:i chunk:i chunks:i (atom) × n   per track that has one
+        -> /live/keep/end what:s tracks:i
+    /ms/keep/ping port:i                               -> /live/keep/pong version:i  (to 127.0.0.1:port)
+  track: the index in song.tracks (Max for Live's "live_set tracks <n>").
 """
 
 import struct
 
-VERSION = 1
+VERSION = 2                  # 2: /ms/keep (what MuseScore Link keeps in the set)
 PORT = 9005
 TICKS = 480
 PAIRS_PER_PACKET = 100
 EPS = 1e-6
+KEEP_PREFIX = "musescore_"
+# a datagram to the device at most: Max's [udpsend] sends packets up to its maxpacketsize, default 5096 bytes (Max 9's
+# udpsend reference); [udpreceive]'s reference gives no limit, so the answers are kept as small as udpsend's
+KEEP_PACKET = 5096
 
 
 # ---------------------------------------------------------------- OSC 1.0: i, f, s
@@ -209,6 +236,7 @@ class Handler(object):
         self.EE = EnvelopeEvent
         self.log = log
         self.edits = {}           # key -> {track, slot, hash, addr, write, reply, incoming}
+        self.keeping = {}         # (track, what) -> {stamp, chunks, parts}: a value being received
 
     def handle(self, data, addr):
         try:
@@ -227,6 +255,12 @@ class Handler(object):
                 self.lane(str(a[0]), int(a[1]), int(a[2]), int(a[3]), int(a[4]), int(a[5]), a[6:], addr)
             elif address == "/ms/env/close":
                 self.edits.pop(str(a[0]), None)
+            elif address == "/ms/keep/put":
+                self.keep_put(int(a[0]), str(a[1]), int(a[2]), int(a[3]), int(a[4]), a[5:])
+            elif address == "/ms/keep/ask":
+                self.keep_ask(int(a[0]), str(a[1]))
+            elif address == "/ms/keep/ping":
+                self.send(osc("/live/keep/pong", VERSION), ("127.0.0.1", int(a[0])))
         except Exception as e:
             import traceback
             self.log(traceback.format_exc())
@@ -349,3 +383,75 @@ class Handler(object):
             if h != e["hash"]:
                 e["hash"] = h
                 self.send(osc("/live/env/conflict", key, h), e["addr"])
+
+    # ------------------------------------------------------------ what MuseScore Link keeps in the set
+
+    def keep_put(self, track, what, stamp, chunk, chunks, atoms):
+        k = (track, what)
+        inc = self.keeping.get(k)
+        if inc is None or inc["stamp"] != stamp:      # (a newer value: an older one not complete is dropped)
+            inc = self.keeping[k] = {"stamp": stamp, "chunks": chunks, "parts": {}}
+        inc["parts"][chunk] = list(atoms)
+        if len(inc["parts"]) < inc["chunks"]:
+            return
+        del self.keeping[k]
+        tracks = list(self.song.tracks)
+        if track < 0 or track >= len(tracks):
+            self.log("keep: no track", track)
+            return
+        value = []
+        for c in range(inc["chunks"]):
+            value += inc["parts"].get(c, [])
+        tr = tracks[track]
+        tr.set_data(KEEP_PREFIX + what, value if value else None)
+        mark_changed(tr)
+        self.log("kept", what, "of track", track, len(value), "atom(s)")
+
+    def keep_ask(self, port, what):
+        addr = ("127.0.0.1", port)
+        n = 0
+        for i, tr in enumerate(self.song.tracks):
+            value = tr.get_data(KEEP_PREFIX + what, None)
+            if not value:
+                continue
+            n += 1
+            parts = chunked(value, osc_size("/live/keep/data", what, i, 0, 0, 0))
+            for c, part in enumerate(parts):
+                self.send(osc("/live/keep/data", what, i, n, c, len(parts), *part), addr)
+        self.send(osc("/live/keep/end", what, n), addr)
+
+
+def mark_changed(track):
+    """the set marked as changed without an undo step: the track's arrangement lane folded and unfolded (Live 12.4.6)"""
+    try:
+        v = track.view
+        v.is_collapsed = not v.is_collapsed
+        v.is_collapsed = not v.is_collapsed
+    except Exception:
+        pass
+
+
+def atom_size(a):
+    """an atom's bytes in an OSC message, its type tag's byte included (OSC 1.0: int32 and float32 are 4 bytes, a
+    string its UTF-8 bytes and a 0, padded to 4)"""
+    if isinstance(a, (bool, int, float)):
+        return 5
+    return len(_pad(str(a).encode("utf-8"))) + 1
+
+
+def osc_size(address, *args):
+    return len(osc(address, *args)) + 4          # (the type tags' padding: at most one word more)
+
+
+def chunked(atoms, header):
+    """the atoms in parts that each fit a KEEP_PACKET datagram after the header (at least one part)"""
+    parts, cur, size = [], [], header
+    for a in atoms:
+        s = atom_size(a)
+        if cur and size + s > KEEP_PACKET:
+            parts.append(cur)
+            cur, size = [], header
+        cur.append(a)
+        size += s
+    parts.append(cur)
+    return parts

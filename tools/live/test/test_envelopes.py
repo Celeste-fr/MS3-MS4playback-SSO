@@ -255,5 +255,106 @@ class Test(unittest.TestCase):
         self.assertEqual(core.parse(d), ("/x", ["abc", 7, 0.5, -3]))
 
 
+class KeepTrack(object):
+    """a track with Live's set_data / get_data (kept as Live keeps them: a later value replaces) and its view's fold"""
+    def __init__(self):
+        self.data = {}
+        self.view = None
+        self.clip_slots, self.devices = [], []
+
+    def set_data(self, key, value):
+        self.data[key] = value
+
+    def get_data(self, key, default):
+        return self.data.get(key, default)
+
+
+class FoldCount(object):
+    def __init__(self):
+        self.n = 0
+        self._c = False
+
+    @property
+    def is_collapsed(self):
+        return self._c
+
+    @is_collapsed.setter
+    def is_collapsed(self, v):
+        self.n += 1
+        self._c = v
+
+
+class Keep(unittest.TestCase):
+    """what MuseScore Link keeps in the set: Track.set_data through the script (core.py › /ms/keep)"""
+    def setUp(self):
+        self.tracks = [KeepTrack(), KeepTrack(), KeepTrack()]
+        for t in self.tracks:
+            t.view = FoldCount()
+        self.song = Obj(tracks=self.tracks)
+        self.sent = []
+        self.h = core.Handler(self.song, lambda d, a: self.sent.append((core.parse(d), a)), EE)
+
+    def msg(self, address, *args):
+        self.h.handle(core.osc(address, *args), ("127.0.0.1", 50000))
+
+    def test_put_in_chunks_then_ask(self):
+        self.msg("/ms/keep/put", 1, "lanes", 77, 1, 3, 4.5, "b")
+        self.msg("/ms/keep/put", 1, "lanes", 77, 0, 3, "msl-lanes", 2, 960)
+        self.assertEqual(self.tracks[1].data, {})               # (not all chunks yet)
+        self.msg("/ms/keep/put", 1, "lanes", 77, 2, 3, -7)
+        self.assertEqual(self.tracks[1].data["musescore_lanes"], ["msl-lanes", 2, 960, 4.5, "b", -7])
+        self.assertEqual(self.tracks[1].view.n, 2)               # folded and unfolded: the set marked changed
+        self.assertFalse(self.tracks[1].view.is_collapsed)
+        self.assertEqual(self.tracks[0].view.n, 0)
+        self.msg("/ms/keep/ask", 9001, "lanes")
+        data = [(m, a) for (m, a) in self.sent if m[0] == "/live/keep/data"]
+        self.assertEqual(len(data), 1)
+        (m, a), = data
+        self.assertEqual(a, ("127.0.0.1", 9001))
+        self.assertEqual(m[1][:2], ["lanes", 1])
+        self.assertEqual(m[1][3:5], [0, 1])
+        self.assertEqual(m[1][5:], ["msl-lanes", 2, 960, 4.5, "b", -7])
+        self.assertEqual(self.sent[-1][0], ("/live/keep/end", ["lanes", 1]))
+
+    def test_other_what_and_removal(self):
+        self.msg("/ms/keep/put", 0, "vel", 1, 0, 1, "msl-vel", 1)
+        self.msg("/ms/keep/ask", 9001, "lanes")
+        self.assertEqual(self.sent[-1][0], ("/live/keep/end", ["lanes", 0]))
+        self.msg("/ms/keep/put", 0, "vel", 2, 0, 1)
+        self.assertIsNone(self.tracks[0].data["musescore_vel"])
+        self.msg("/ms/keep/ask", 9001, "vel")
+        self.assertEqual(self.sent[-1][0], ("/live/keep/end", ["vel", 0]))
+
+    def test_newer_value_drops_an_unfinished_one(self):
+        self.msg("/ms/keep/put", 2, "vel", 5, 0, 2, 1, 2)
+        self.msg("/ms/keep/put", 2, "vel", 6, 0, 1, 3)
+        self.assertEqual(self.tracks[2].data["musescore_vel"], [3])
+        self.msg("/ms/keep/put", 2, "vel", 5, 1, 2, 9)          # (the dropped value's last chunk: nothing)
+        self.assertEqual(self.tracks[2].data["musescore_vel"], [3])
+
+    def test_no_track(self):
+        self.msg("/ms/keep/put", 7, "vel", 1, 0, 1, 3)
+        self.assertTrue(all(not t.data for t in self.tracks))
+
+    def test_ping(self):
+        self.msg("/ms/keep/ping", 9011)
+        self.assertEqual(self.sent[-1], (("/live/keep/pong", [core.VERSION]), ("127.0.0.1", 9011)))
+
+    def test_big_value_in_datagrams_that_fit(self):
+        value = ["msl-lanes", 2] + [i * 0.5 for i in range(20000)] + ["Mic Mix Distance"] * 300
+        self.tracks[0].set_data("musescore_lanes", value)
+        self.msg("/ms/keep/ask", 9001, "lanes")
+        data = [m for (m, a) in self.sent if m[0] == "/live/keep/data"]
+        self.assertGreater(len(data), 1)
+        got = []
+        for m in data:
+            self.assertEqual(m[1][4], len(data))
+            got += m[1][5:]
+        self.assertEqual(len(got), len(value))
+        self.assertEqual(got[-1], "Mic Mix Distance")
+        for c, part in enumerate(core.chunked(value, core.osc_size("/live/keep/data", "lanes", 0, 0, 0, 0))):
+            self.assertLessEqual(len(core.osc("/live/keep/data", "lanes", 0, 1, c, len(data), *part)), core.KEEP_PACKET)
+
+
 if __name__ == "__main__":
     unittest.main()

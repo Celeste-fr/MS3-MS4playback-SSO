@@ -49,7 +49,9 @@
 //     Ctrl+C / Ctrl+X: the selected points; Ctrl+V: at the mouse's time in the lane under it (another
 //       parameter too, as Live allows), else after the copied ones; Ctrl+D: duplicated after themselves;
 //     right-click: Edit Value…, Delete, Step / Linear, Straight, Clear Lane, Hide Lane.
-//   Values are shown 0-127 (the map's controller scale; SSO's controls are 0-127).
+//   Values are shown 0-127 (the map's controller scale; SSO's controls are 0-127); a clip tab's Velocity lane
+//   (liveclipmodel.h, offered first, always) in % (scale) or 1-127 (absolute), its right-click menu also choosing scale /
+//   absolute and "shape while playing" / "write into the notes" (asks first).
 //   A lane Live's set has as it is (Automation::Lane::playedByLive) is marked "Live"; editing it here makes
 //   MuseScore's the newer one (automation.h).
 //---------------------------------------------------------
@@ -204,7 +206,7 @@ class AutomationLanes : public QObject {
       void paintHeader(QPainter& p, const Row& r) const;
       QRectF headerRect(const Row& r) const;                                 // viewport
       QString headLabel(const Row& r) const;
-      QString valueText(double v) const;
+      QString valueText(const QString& target, double v) const;     // (0-127; the Velocity lane: % or 1-127)
       void select(const Row& r, const std::vector<int>& sel);
       void dropFocus();
       void addLaneMenu(const Row& r, const QPoint& globalPos);

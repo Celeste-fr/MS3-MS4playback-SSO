@@ -128,6 +128,22 @@ double Lane::valueAt(int tick) const
       return p.value + (next->value - p.value) * y;
       }
 
+const char* const VELOCITY_TARGET = "velocity";
+
+bool velocityAbsolute(const Lane& lane)
+      {
+      return lane.extra.value("velocityMode").toString() == "absolute";
+      }
+
+// MIDI 1.0: a note-on's velocity has 7 bits and 0 is a note-off, so a played note's is 1-127
+int shapeVelocity(int v, double u, bool absolute)
+      {
+      if (u < 0)
+            return v;
+      const long r = absolute ? std::lround(127 * u) : std::lround(v * 2 * u);
+      return int(std::max(1L, std::min(127L, r)));
+      }
+
 bool Lane::playedByLive() const
       {
       if (extra.contains("pointsHash"))
@@ -258,7 +274,7 @@ std::map<const Part*, PartLanes> read(const MasterScore* score)
                         lane.points.push_back(p);
                         }
                   std::stable_sort(lane.points.begin(), lane.points.end());
-                  if (!lane.points.empty())
+                  if (!lane.points.empty() || lane.target == VELOCITY_TARGET)      // (the Velocity lane: its settings)
                         lanes.push_back(lane);
                   }
             if (lanes.empty())
@@ -281,7 +297,9 @@ QString write(const MasterScore* score, const std::map<const Part*, PartLanes>& 
                   continue;
             QJsonArray la;
             for (const Lane& lane : it->second) {
-                  if (lane.points.empty())
+                  // (an empty lane isn't written; the Velocity lane's settings are, scale / absolute, shaped / written)
+                  if (lane.points.empty() && !(lane.target == VELOCITY_TARGET
+                                               && (lane.extra.contains("velocityMode") || lane.extra.contains("velocityOutput"))))
                         continue;
                   QJsonArray pts;
                   for (const Point& p : lane.points)
