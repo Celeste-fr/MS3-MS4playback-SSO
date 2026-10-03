@@ -41,6 +41,9 @@
 #include "seq.h"
 
 namespace Ms {
+
+extern bool (*midiInputSilenced)();     // libmscore/mscore.cpp (Score::processMidiInput asks it)
+
 namespace LiveIntegration {
 
 static const char* const SETTING = "liveIntegration/clips";
@@ -81,6 +84,7 @@ bool LiveClipsLink::enabledSetting()
 
 LiveClipsLink::LiveClipsLink()
       {
+      midiInputSilenced = &LiveClipsLink::silencesMidiInput;
       _debounce = new QTimer(this);
       _debounce->setSingleShot(true);
       _debounce->setInterval(DEBOUNCE_MS);
@@ -212,6 +216,21 @@ void LiveClipsLink::updateSocket()
 bool LiveClipsLink::deviceAnswers() const
       {
       return _socket && !_session.isEmpty() && QDateTime::currentMSecsSinceEpoch() - _lastHello < HELLO_TIMEOUT_MS;
+      }
+
+bool LiveClipsLink::liveSoundsMidiInputSetting()
+      {
+      return QSettings().value("liveIntegration/liveSoundsMidiInput", true).toBool();
+      }
+
+void LiveClipsLink::setLiveSoundsMidiInputSetting(bool on)
+      {
+      QSettings().setValue("liveIntegration/liveSoundsMidiInput", on);
+      }
+
+bool LiveClipsLink::silencesMidiInput()
+      {
+      return liveSoundsMidiInputSetting() && instance()->deviceAnswers();
       }
 
 bool LiveClipsLink::active() const

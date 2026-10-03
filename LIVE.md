@@ -741,6 +741,11 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
 6. Close the tab to stop. *Save* (Ctrl+S) opens no dialog: the status bar says the edits are already in Live and the
    set is saved in Live. An unsaved clip score closes without asking (its edits are in Live already); *Save
    As* makes an ordinary score of it.
+7. **The MIDI keyboard** (2026-10-03): while the MuseScore Link device answers, notes from the MIDI input device are
+   not sounded by MuseScore, because Live plays them on the selected track (monitoring follows selection). Note
+   input from the keyboard still works, silently; clicking or typing notes in MuseScore still sounds. *Mixer › Advanced
+   Options › Ableton Live › Live plays my MIDI keyboard* (QSettings `liveIntegration/liveSoundsMidiInput`, on by
+   default); off: MuseScore sounds the keyboard too. Test: `tst_liveintegration::midiInputSilent`.
 
 ### How it works
 

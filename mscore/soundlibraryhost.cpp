@@ -2793,6 +2793,16 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                   LiveIntegration::LiveClipEditor::setPlayLiveSetting(on);
                   });
             v->addWidget(playClips);
+            QCheckBox* liveKeys = new QCheckBox(tr("Live plays my MIDI keyboard (MuseScore stays silent while linked)"), liveBox);
+            liveKeys->setToolTip(tr("While the MuseScore Link device answers, notes from your MIDI keyboard are not sounded by "
+                                    "MuseScore (Live plays them on the selected track). Note input from the keyboard still "
+                                    "works, silently; clicking or typing notes in MuseScore still sounds.\n"
+                                    "Off: MuseScore sounds the keyboard too."));
+            liveKeys->setChecked(LiveIntegration::LiveClipsLink::liveSoundsMidiInputSetting());
+            connect(liveKeys, &QCheckBox::toggled, this, [](bool on) {
+                  LiveIntegration::LiveClipsLink::setLiveSoundsMidiInputSetting(on);
+                  });
+            v->addWidget(liveKeys);
             // the set itself (livesetexport.h): one track per route, the device and the patch on each
             QHBoxLayout* sets = new QHBoxLayout;
             QPushButton* create = new QPushButton(tr("Create Live Set…"), liveBox);

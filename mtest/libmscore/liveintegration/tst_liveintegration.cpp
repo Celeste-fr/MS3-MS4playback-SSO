@@ -46,6 +46,7 @@
 #include <QImage>
 #include "libmscore/clef.h"
 #include "mscore/liveclipedit.h"
+#include "mscore/liveclips.h"
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
 #include "audio/midi/event.h"
@@ -102,6 +103,7 @@ class TestLiveIntegration : public QObject, public MTest
       void liveParamLanes();
       void clipTabMidi();
       void linkWatch();
+      void midiInputSilent();
       void liveSetWrite();
       void liveSetMissing();
       void liveHelpersLibrary();
@@ -2425,6 +2427,41 @@ void TestLiveIntegration::clipTabMidi()
       QVERIFY(LiveClips::parseOsc(midiPacket(12345, on), &address, &args));
       QCOMPARE(address, QString("/ms/midi"));
       QCOMPARE(args, QVariantList({ 12345, 0x90, 72, 101 }));
+      }
+
+//---------------------------------------------------------
+//   midiInputSilent: while Live is linked, notes from the MIDI input device are entered but not sounded
+//---------------------------------------------------------
+
+namespace Ms { extern bool (*midiInputSilenced)(); }
+static bool silentYes() { return true; }
+static bool silentNo() { return false; }
+
+void TestLiveIntegration::midiInputSilent()
+      {
+      QVERIFY(!LiveIntegration::LiveClipsLink::silencesMidiInput());          // no device answering: MuseScore sounds as before
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      score->rebuildMidiMapping();
+      for (int round = 0; round < 2; ++round) {
+            const bool silent = round == 0;
+            Ms::midiInputSilenced = silent ? &silentYes : &silentNo;
+            score->inputState().setTrack(0);
+            score->inputState().setSegment(score->tick2segment(Fraction(0, 1), false, SegmentType::ChordRest));
+            score->inputState().setDuration(TDuration::DurationType::V_QUARTER);
+            score->inputState().setNoteEntryMode(true);
+            score->setPlayNote(false);
+            score->setPlayChord(false);
+            score->enqueueMidiEvent({ 60 + round, false, 80 });
+            QVERIFY(score->processMidiInput());
+            Ms::Chord* c = score->firstMeasure()->findChord(Fraction(0, 1), 0);
+            QVERIFY(c);
+            QCOMPARE(c->notes().front()->pitch(), 60 + round);    // note input works either way
+            QCOMPARE(score->playNote(), !silent);                 // the entered note sounds only when not silenced
+            score->inputState().setNoteEntryMode(false);
+            score->undoRedo(true, nullptr);
+            }
+      Ms::midiInputSilenced = nullptr;
+      delete score;
       }
 
 //---------------------------------------------------------

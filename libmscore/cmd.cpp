@@ -2330,6 +2330,8 @@ void Score::resetAllPositions()
       scanElements(nullptr, resetElementPosition);
       }
 
+extern bool (*midiInputSilenced)();
+
 //---------------------------------------------------------
 //   processMidiInput
 //---------------------------------------------------------
@@ -2344,6 +2346,8 @@ bool Score::processMidiInput()
 
       NoteEntryMethod entryMethod = _is.noteEntryMethod();
       bool cmdActive = false;
+      // Live plays the MIDI keyboard while the Live link answers (liveIntegration/liveSoundsMidiInput)
+      const bool silenced = midiInputSilenced && midiInputSilenced();
       while (!midiInputQueue()->empty()) {
             MidiInputEvent ev = midiInputQueue()->dequeue();
             for (auto itr = activeMidiPitches()->begin(); itr != activeMidiPitches()->end();) {
@@ -2368,7 +2372,7 @@ bool Score::processMidiInput()
                         if (!styleB(Sid::concertPitch))
                               ev.pitch += p->instrument(selection().tickStart())->transpose().chromatic;
 
-                        if (MScore::seq)
+                        if (MScore::seq && !silenced)
                               MScore::seq->startNote(
                                                 p->instrument(selection().tickStart())->channel(0)->channel(),   // tick that way?
                                                 ev.pitch,
@@ -2421,6 +2425,10 @@ bool Score::processMidiInput()
             }
       if (cmdActive) {
             endCmd();
+            if (silenced) {         // the entered note is not sounded (MuseScore::endCmd would play it)
+                  setPlayNote(false);
+                  setPlayChord(false);
+                  }
             //after relayout
             Element* e = inputState().cr();
             if (e) {
