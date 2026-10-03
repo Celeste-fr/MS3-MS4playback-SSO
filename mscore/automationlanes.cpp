@@ -821,7 +821,7 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
             line2 += "  " + tr("Live");
       QString title = r.name;
       if (r.target == LiveClipEdit::VELOCITY_TARGET)        // its unit, and how Live gets it
-            title = (LiveClipEdit::velMode(l) == LiveClipEdit::VelMode::ABSOLUTE ? tr("Velocity (1-127)") : tr("Velocity (%)"))
+            title = (LiveClipEdit::velMode(l) == LiveClipEdit::VelMode::SET ? tr("Velocity (1-127)") : tr("Velocity (%)"))
                     + QString::fromUtf8(" · ")
                     + (LiveClipEdit::velOutput(l) == LiveClipEdit::VelOutput::WRITE ? tr("written") : tr("shaped"));
       const QString name = QFontMetrics(p.font()).elidedText(title, Qt::ElideRight, int(text.width()));
@@ -1261,7 +1261,7 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             return true;
       const LiveClipEdit::VelMode vm = LiveClipEdit::velMode(l);
       if (a == scale || a == absolute) {
-            LiveClipEdit::setVelMode(l, a == scale ? LiveClipEdit::VelMode::SCALE : LiveClipEdit::VelMode::ABSOLUTE);
+            LiveClipEdit::setVelMode(l, a == scale ? LiveClipEdit::VelMode::SCALE : LiveClipEdit::VelMode::SET);
             setLane(r.master, l);
             commit(a == scale ? tr("Velocity: scales the notes' velocities") : tr("Velocity: sets the velocities"));
             }
@@ -1281,7 +1281,7 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             const double hi = velocity && vm == LiveClipEdit::VelMode::SCALE ? 200 : 127;
             const QString label = !velocity ? tr("Value (0-127):")
                                   : vm == LiveClipEdit::VelMode::SCALE ? tr("Velocity (0-200 %):") : tr("Velocity (1-127):");
-            const double x = QInputDialog::getDouble(_view, r.name, label, shown, velocity && vm == LiveClipEdit::VelMode::ABSOLUTE ? 1 : 0,
+            const double x = QInputDialog::getDouble(_view, r.name, label, shown, velocity && vm == LiveClipEdit::VelMode::SET ? 1 : 0,
                                                      hi, 1, &ok);
             if (!ok)
                   return true;

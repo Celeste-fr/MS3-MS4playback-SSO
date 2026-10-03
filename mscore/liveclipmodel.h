@@ -380,7 +380,7 @@ constexpr int VEL_PROTOCOL      = 6;            // the device's protocol from wh
 constexpr int VEL_UNITS         = 3840;         // the device's UNITS a beat (LiveClips::UNITS_PER_BEAT): originals' starts
 extern const char* const VELOCITY_TARGET;       // "velocity"
 
-enum class VelMode : signed char { SCALE, ABSOLUTE };
+enum class VelMode : signed char { SCALE, SET };      // (SET: absolute; ABSOLUTE is a macro of windows.h)
 enum class VelOutput : signed char { SHAPE, WRITE };
 
 VelMode velMode(const Automation::Lane& lane);

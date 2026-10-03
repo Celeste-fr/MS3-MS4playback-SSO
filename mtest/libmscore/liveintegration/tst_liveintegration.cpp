@@ -2180,11 +2180,11 @@ void TestLiveIntegration::clipVelocityLane()
       QCOMPARE(shapeVelocity(87, 0.25, VelMode::SCALE), 44);           // 50 %: 43.5, rounded
       QCOMPARE(shapeVelocity(90, 1.0, VelMode::SCALE), 127);           // 200 %: 180, at most 127
       QCOMPARE(shapeVelocity(100, 0.0, VelMode::SCALE), 1);            // 0 %: 1 (0 is a note-off)
-      QCOMPARE(shapeVelocity(37, 0.5, VelMode::ABSOLUTE), 64);         // absolute: 63.5, its own left out
-      QCOMPARE(shapeVelocity(37, 0.0, VelMode::ABSOLUTE), 1);
-      QCOMPARE(shapeVelocity(37, 1.0, VelMode::ABSOLUTE), 127);
+      QCOMPARE(shapeVelocity(37, 0.5, VelMode::SET), 64);         // absolute: 63.5, its own left out
+      QCOMPARE(shapeVelocity(37, 0.0, VelMode::SET), 1);
+      QCOMPARE(shapeVelocity(37, 1.0, VelMode::SET), 127);
       QCOMPARE(LiveClipEdit::velocityText(0.5, VelMode::SCALE), QString("100 %"));
-      QCOMPARE(LiveClipEdit::velocityText(0.5, VelMode::ABSOLUTE), QString("64"));
+      QCOMPARE(LiveClipEdit::velocityText(0.5, VelMode::SET), QString("64"));
       QCOMPARE(LiveClipEdit::velocityFromShown(150, VelMode::SCALE), 0.75);
       QCOMPARE(LiveClipEdit::velocityShown(0.75, VelMode::SCALE), 150.0);
 
@@ -2201,20 +2201,20 @@ void TestLiveIntegration::clipVelocityLane()
       QVERIFY(diff(b, signaturesForLive(score)).empty());
       QCOMPARE(playedVelocities(score), QList<int>({ 67, 44, 69, 41, 71, 127, 72, 105, 74, 114, 76, 127 }));
       // the same curve, absolute: 32 and 95 whatever the notes had
-      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::ABSOLUTE, VelOutput::SHAPE);
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::SET, VelOutput::SHAPE);
       QCOMPARE(playedVelocities(score), QList<int>({ 67, 32, 69, 32, 71, 95, 72, 95, 74, 95, 76, 95 }));
       // the lane's settings stay without points (the lane editor keeps them), and nothing is shaped then
-      setVelocityLane(score, {}, VelMode::ABSOLUTE, VelOutput::WRITE);
+      setVelocityLane(score, {}, VelMode::SET, VelOutput::WRITE);
       const LiveClipEdit::VelocityLane e = LiveClipEdit::velocityLane(score);
       QVERIFY(!e.present);
-      QCOMPARE(int(e.mode), int(VelMode::ABSOLUTE));
+      QCOMPARE(int(e.mode), int(VelMode::SET));
       QCOMPARE(int(e.output), int(VelOutput::WRITE));
       QCOMPARE(playedVelocities(score), QList<int>({ 67, 87, 69, 81, 71, 91, 72, 70, 74, 76, 76, 99 }));
 
       // the device's record: mode, output, the points (with a curve), the originals; and back
       LiveClipEdit::VelocityLane r;
       r.present = true;
-      r.mode = VelMode::ABSOLUTE;
+      r.mode = VelMode::SET;
       r.output = VelOutput::WRITE;
       r.lane.target = LiveClipEdit::VELOCITY_TARGET;
       Automation::Point p0(0, 0.2, Automation::Curve::LINEAR);
@@ -2228,7 +2228,7 @@ void TestLiveIntegration::clipVelocityLane()
       LiveClipEdit::VelocityLane back;
       std::vector<LiveClipEdit::Original> ob;
       QVERIFY(parseVelRecord(atoms, &back, &ob));
-      QCOMPARE(int(back.mode), int(VelMode::ABSOLUTE));
+      QCOMPARE(int(back.mode), int(VelMode::SET));
       QCOMPARE(int(back.output), int(VelOutput::WRITE));
       QCOMPARE(int(back.lane.points.size()), 2);
       QVERIFY(back.lane.points[0].curved());
@@ -2335,7 +2335,7 @@ void TestLiveIntegration::clipVelocityWrite()
       QCOMPARE(d.ops[0].velocity, 50);
       b = d.next;
       // absolute: the same curve, 32 / 95, whatever the originals
-      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::ABSOLUTE, VelOutput::WRITE);
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::SET, VelOutput::WRITE);
       d = diff(b, signaturesForLive(score));
       std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
       vel.clear();
@@ -2344,7 +2344,7 @@ void TestLiveIntegration::clipVelocityWrite()
       QCOMPARE(vel, QList<int>({ 32, 32, 95, 95, 95, 95 }));
       b = d.next;
       // back to "shape while playing": one write, the originals back into the notes
-      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::ABSOLUTE, VelOutput::SHAPE);
+      setVelocityLane(score, { { 0, 0.25 }, { 960, 0.75 } }, VelMode::SET, VelOutput::SHAPE);
       d = diff(b, signaturesForLive(score));
       std::sort(d.ops.begin(), d.ops.end(), [](const Op& a, const Op& c) { return a.id < c.id; });
       vel.clear();

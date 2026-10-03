@@ -990,7 +990,9 @@ never scales scaled values.
   50 % from beat 0 and 80 % from beat 2 → 50 50 80 80 in every loop (20 notes), launched while stopped and, quantized to
   the next bar, while playing; another clip on the track: 90 as written; an arrangement clip with an absolute curve
   (64, then 127) → 64 64 127 127, and nothing while the session overrode the arrangement; MIDI Monitor showed C3 50, C#3 50,
-  D3 80, D#3 80 (a screenshot, not kept here); the curve read back after Live was restarted with the saved set.
+  D3 80, D#3 80 (a screenshot, not kept here); the curve read back after Live was restarted with the saved set. The
+  final device (this commit's), the saved set opened again without MuseScore: the clip's curve (120 %) played every note
+  at 120 over two and a half loops, the track's lane drove its parameter again, `song.can_undo` False.
   Not tried in real Live: MuseScore's GUI (the Windows build), "write" against real Live, a legato launch, follow actions.
 - **Tests**: `tools/live/test/test_velocity.js` (the math, a session clip's ring with its loop, another clip left alone,
   a launch to come with the song's and the clip's quantization, arrangement clips, "write", kept by a stand-in of the

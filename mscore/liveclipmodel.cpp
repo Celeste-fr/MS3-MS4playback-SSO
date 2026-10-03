@@ -1159,7 +1159,7 @@ static constexpr int VEL_ATOMS_PER_PACKET = NOTES_PER_PACKET * 9;
 
 VelMode velMode(const Automation::Lane& lane)
       {
-      return lane.extra.value("velocityMode").toString() == "absolute" ? VelMode::ABSOLUTE : VelMode::SCALE;
+      return lane.extra.value("velocityMode").toString() == "absolute" ? VelMode::SET : VelMode::SCALE;
       }
 
 VelOutput velOutput(const Automation::Lane& lane)
@@ -1185,23 +1185,23 @@ void setVelOutput(Automation::Lane& lane, VelOutput o)
 
 int shapeVelocity(int v, double u, VelMode m)
       {
-      return Automation::shapeVelocity(v, u, m == VelMode::ABSOLUTE);
+      return Automation::shapeVelocity(v, u, m == VelMode::SET);
       }
 
 double velocityShown(double u, VelMode m)
       {
-      return m == VelMode::ABSOLUTE ? std::max(1.0, std::min(127.0, std::round(127 * u))) : 200 * u;
+      return m == VelMode::SET ? std::max(1.0, std::min(127.0, std::round(127 * u))) : 200 * u;
       }
 
 double velocityFromShown(double x, VelMode m)
       {
-      return std::max(0.0, std::min(1.0, m == VelMode::ABSOLUTE ? x / 127 : x / 200));
+      return std::max(0.0, std::min(1.0, m == VelMode::SET ? x / 127 : x / 200));
       }
 
 QString velocityText(double u, VelMode m)
       {
       const double x = velocityShown(u, m);
-      if (m == VelMode::ABSOLUTE)
+      if (m == VelMode::SET)
             return QString::number(int(x));
       return (std::fabs(x - std::round(x)) < 0.05 ? QString::number(int(std::lround(x))) : QString::number(x, 'f', 1))
              + QString::fromUtf8(" %");
@@ -1321,7 +1321,7 @@ int applyOriginals(const Baseline& base, Score* score, const std::vector<Origina
 QVariantList velRecord(const VelocityLane& v, const std::vector<Original>& originals)
       {
       QVariantList a;
-      a << (v.mode == VelMode::ABSOLUTE ? 1 : 0) << (v.output == VelOutput::WRITE ? 1 : 0);
+      a << (v.mode == VelMode::SET ? 1 : 0) << (v.output == VelOutput::WRITE ? 1 : 0);
       const std::vector<Automation::Point> pts = v.present ? v.lane.points : std::vector<Automation::Point>();
       a << int(pts.size());
       for (const Automation::Point& p : pts)
@@ -1337,7 +1337,7 @@ bool parseVelRecord(const QVariantList& a, VelocityLane* v, std::vector<Original
       if (a.size() < 4)
             return false;
       VelocityLane r;
-      r.mode = a[0].toInt() == 1 ? VelMode::ABSOLUTE : VelMode::SCALE;
+      r.mode = a[0].toInt() == 1 ? VelMode::SET : VelMode::SCALE;
       r.output = a[1].toInt() == 1 ? VelOutput::WRITE : VelOutput::SHAPE;
       r.lane.target = VELOCITY_TARGET;
       setVelMode(r.lane, r.mode);
