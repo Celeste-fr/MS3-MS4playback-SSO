@@ -508,11 +508,12 @@ drove the lane's mixer volume again ("seenSerial saved2") and shaped the clip's 
 track (it is the track's); Live's undo doesn't touch it (MuseScore sends its own again when it changes).
 
 **Packed** (`packLane`, the same in `MuseScoreLink.js` and `livesetwriter.cpp`, checked atom for atom): a lane's events
-are its points and a ramp's steps (every 30 ticks as far as the value moves by 0.001), so a long ramp is hundreds of
-events. Stored: an event `time value`, or a run of m evenly spaced steps `-m t1 v1 tm vm vh` on the parabola through the
-first, middle and last step. A straight ramp is one run, a curved one one to three. Played back it is MuseScore's own
-staircase: each step's value within 0.0015, its time within 2 units (0.26 ms at 120 bpm) or, for a step of no more than
-0.0015, a little earlier or later. (The lane's own points can't be stored instead: repeats and tempo changes are already
+are its points and a ramp's steps (at each tick where the value reaches another 1e-4, a parameter's resolution:
+`Automation::PARAM_RESOLUTION`, since 2026-10-03), so a long ramp is thousands of events. Stored: an event `time value`,
+or a run of m evenly spaced steps `-m t1 v1 tm vm vh` on the parabola through the first, middle and last step (the
+longest run found by doubling, then halving). Played back it is MuseScore's own staircase to within one MIDI step
+(1/127: each step's value within half of it, and where its time is more than a tick (8 units) off, MuseScore's
+staircase at that time within the other half). (The lane's own points can't be stored instead: repeats and tempo changes are already
 unrolled into the events.) A 10-minute piece with 10 lanes, a point every 2 beats, curved and straight ramps: 300 480
 event atoms → 49 663 stored (2 of the 4 stores) (`test_params.js`; also on the VM: stored, copied to a duplicated device
 whole). Sets saved by the earlier device (`msl-lanes 1`, plain pairs) still load.
@@ -770,6 +771,11 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
 6. Close the tab to stop. *Save* (Ctrl+S) opens no dialog: the status bar says the edits are already in Live and the
    set is saved in Live. An unsaved clip score closes without asking (its edits are in Live already); *Save
    As* makes an ordinary score of it.
+7. **The MIDI keyboard** (2026-10-03): while the MuseScore Link device answers, notes from the MIDI input device are
+   not sounded by MuseScore, because Live plays them on the selected track (monitoring follows selection). Note
+   input from the keyboard still works, silently; clicking or typing notes in MuseScore still sounds. *Mixer › Advanced
+   Options › Ableton Live › Live plays my MIDI keyboard* (QSettings `liveIntegration/liveSoundsMidiInput`, on by
+   default); off: MuseScore sounds the keyboard too. Test: `tst_liveintegration::midiInputSilent`.
 
 ### How it works
 
@@ -918,7 +924,8 @@ The owner, 2026-10-02: lanes drawn in an Edit-in-MuseScore tab "must be written 
   `value_at_time`); two breakpoints at one time are a jump (`value_at_time` at that time gives the earlier value);
   `delete_events_in_range` includes both ends; a breakpoint's curve (`EnvelopeEventControlCoefficients`) is ignored
   (always read back 0.5, straight). So a step is written as its value again just before the next point, a straight
-  ramp as two breakpoints, a **curved ramp as 16 straight pieces** along MuseScore's curve (read back, the lane has
+  ramp as two breakpoints, a **curved ramp as straight pieces nowhere further than one MIDI step (1/127 of the range) from MuseScore's
+  curve** (`Automation::flattenCurve`) (read back, the lane has
   those points). Before a lane's first point Live's envelope holds the first value (a MuseScore lane says nothing
   there); after the last both hold it. Played: the clip launched, Operator's *Transpose* read back four times a beat
   followed the envelope (0 → 40 over beats 0-4, -20 from beat 4, again at the loop).
@@ -1159,7 +1166,7 @@ CC 21 envelope, a second track at "All Ins"; kept outside the repository) was th
   input from the computer keyboard, so it was matched by its name. The reader tries the display
   strings ("MuseScore A" / "Ext: MuseScore A", "Ch. 3"), then the target's string, then the name.
 - **Not compared:** the curve's exact shape against Live's drawing (read as a cubic Bézier in the
-  segment's box, 16 straight pieces).
+  segment's box, straight pieces within one MIDI step of it).
 - `ParameterId` is kept in each lane as `paramId`, not used.
 
 ## Kontakt's state from the set (not done)

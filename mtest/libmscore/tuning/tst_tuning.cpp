@@ -58,6 +58,7 @@ class TestTuning : public QObject, public MTest
       void customKeyDrop();
       void customKeyPasteAndAdapt();
       void json();
+      void smallestAccidentalGap();
       };
 
 //---------------------------------------------------------
@@ -655,9 +656,8 @@ void TestTuning::families()
 
       // koron and sori
       Temperament p;
-      p.persian = Temperament::Persian::PRACTICE;
-      l = play(p);
-      QVERIFY(qAbs(l[2] + 60) < 1e-3 && qAbs(l[3] - 40) < 1e-3);
+      // ("as played" -60 / +40 had no source: a score that chose it plays MuseScore 3.6's)
+      QVERIFY(Temperament::fromJson("{\"persian\":\"practice\"}").persian == Temperament::Persian::MS36);
       p.persian = Temperament::Persian::MS36;
       l = play(p);
       QVERIFY(qAbs(l[2] + 67) < 1e-3 && qAbs(l[3] - 33) < 1e-3);
@@ -920,6 +920,24 @@ void TestTuning::customKeyPasteAndAdapt()
       eFlat(0, "pasted");
       eFlat(1, "pasted");
       delete score;
+      }
+
+//---------------------------------------------------------
+//   smallestAccidentalGap
+//    the smallest difference between distinct accidental values: the 23-limit comma of MuseScore 3.6's
+//    table (16.5) against Wyschnegradsky's 1/12 tone (200 / 12); every other pair is further apart
+//    (the lanes' tolerance is half of it: SoundLib::defaultLaneTolerance)
+//---------------------------------------------------------
+
+void TestTuning::smallestAccidentalGap()
+      {
+      const double g = ScoreTuning::smallestAccidentalGap();
+      QVERIFY(qAbs(g - (200.0 / 12.0 - 16.5)) < 1e-9);
+      // more than MuseScore 3.6's table's own rounding (0.1 cents, two values): no gap is a rounding
+      QVERIFY(g > 0.1);
+      bool valued;
+      QCOMPARE(ScoreTuning::accidentalCents(AccidentalType::SHARP_23, &valued), 16.5);
+      QVERIFY(qAbs(ScoreTuning::accidentalCents(AccidentalType::ONE_TWELFTH_SHARP, &valued) - 200.0 / 12.0) < 1e-9);
       }
 
 QTEST_MAIN(TestTuning)

@@ -107,6 +107,7 @@ class TestLiveIntegration : public QObject, public MTest
       void liveParamLanes();
       void clipTabMidi();
       void linkWatch();
+      void midiInputSilent();
       void liveSetWrite();
       void liveSetMissing();
       void liveHelpersLibrary();
@@ -315,11 +316,13 @@ void TestLiveIntegration::liveSetRead()
       QCOMPARE(vib.parameter, QString("Vibrato"));
       QCOMPARE(vib.parameterId, 1);
       QCOMPARE(vib.initial, 0.25);                  // Live's value before everything (-63072000)
-      // 0, 4, the curve's 16 pieces to 8, 26, 34
-      QCOMPARE(int(vib.points.size()), 2 + 16 + 2);
+      // 0, 4, the curve's pieces (within one MIDI step of it: LiveSet::curve) to 8, 26, 34
+      const size_t n = vib.points.size();
+      QVERIFY2(n >= 2 + 2 + 2 && n < 2 + 64 + 2, qPrintable(QString::number(n)));
       QCOMPARE(vib.points[1].beat, 4.0);
-      QCOMPARE(vib.points[17].beat, 8.0);
-      QCOMPARE(vib.points[17].value, 0.5);
+      QCOMPARE(vib.points[n - 3].beat, 8.0);
+      QCOMPARE(vib.points[n - 3].value, 0.5);
+      QCOMPARE(vib.points[n - 2].beat, 26.0);
       QCOMPARE(t.envelopes[1].parameter, QString("Unknown Knob"));
       QCOMPARE(int(t.envelopes[2].kind), int(LiveSet::Envelope::Kind::OTHER));
       QCOMPARE(t.envelopes[2].parameter, QString("Mixer Volume"));
@@ -343,14 +346,16 @@ void TestLiveIntegration::liveSetRead()
 
 //---------------------------------------------------------
 //   liveSetCurve
-//    a curved segment as straight pieces: from a to b, inside their box; the diagonal is a line
+//    a curved segment as straight pieces: from a to b, inside their box, each within one MIDI step of the curve
+//    (Automation::flattenCurve: as few as that allows); the diagonal is one line
 //---------------------------------------------------------
 
 void TestLiveIntegration::liveSetCurve()
       {
       const LiveSet::Point a { 4, 1.0 }, b { 8, 0.5 };
-      const std::vector<LiveSet::Point> c = LiveSet::curve(a, b, 0.2, 0.8, 0.5, 1.0);
-      QCOMPARE(int(c.size()), 16);
+      const double tol = Automation::CC_RESOLUTION;
+      const std::vector<LiveSet::Point> c = LiveSet::curve(a, b, 0.2, 0.8, 0.5, 1.0, tol);
+      QVERIFY2(c.size() > 2 && c.size() < 64, qPrintable(QString::number(c.size())));
       QCOMPARE(c.back().beat, 8.0);
       QCOMPARE(c.back().value, 0.5);
       double last = a.beat;
@@ -359,12 +364,22 @@ void TestLiveIntegration::liveSetCurve()
             QVERIFY(p.value >= 0.5 - 1e-9 && p.value <= 1.0 + 1e-9);
             last = p.beat;
             }
-      // bowed towards the end value early (1Y 0.8 at 1X 0.2): half way the value is past half way
-      const double mid = c[7].value;
-      QVERIFY2(mid < 0.75, qPrintable(QString::number(mid)));
-      const std::vector<LiveSet::Point> line = LiveSet::curve(a, b, 1.0 / 3, 1.0 / 3, 2.0 / 3, 2.0 / 3, 4);
-      for (const LiveSet::Point& p : line)
-            QVERIFY(std::fabs(p.value - (1.0 - 0.5 * (p.beat - 4) / 4)) < 1e-9);
+      // within one MIDI step of the curve at every 1/480 beat, and bowed towards the end value early (1Y 0.8 at 1X
+      // 0.2): half way the value is past half way
+      LiveSet::Point from = a;
+      for (const LiveSet::Point& p : c) {
+            for (double x = from.beat; x <= p.beat; x += 1.0 / 480) {
+                  const double line = from.value + (p.value - from.value) * (p.beat > from.beat ? (x - from.beat) / (p.beat - from.beat) : 0);
+                  const double curve = 1.0 - 0.5 * Automation::curveAt(0.2, 0.8, 0.5, 1.0, (x - 4) / 4);
+                  QVERIFY2(std::fabs(line - curve) <= tol + 1e-9, qPrintable(QString("beat %1: %2 against %3").arg(x).arg(line).arg(curve)));
+                  if (std::fabs(x - 6) < 1e-9)
+                        QVERIFY2(line < 0.75, qPrintable(QString::number(line)));
+                  }
+            from = p;
+            }
+      const std::vector<LiveSet::Point> line = LiveSet::curve(a, b, 1.0 / 3, 1.0 / 3, 2.0 / 3, 2.0 / 3, tol);
+      QCOMPARE(int(line.size()), 1);
+      QCOMPARE(line[0].beat, 8.0);
       }
 
 //---------------------------------------------------------
@@ -2546,20 +2561,29 @@ void TestLiveIntegration::clipEnvelopeMapping()
       QCOMPARE(int(envelopeEvents({ Point(0, 0.5, Curve::STEP), Point(480, 0.5, Curve::STEP) }).size()), 2);
       QCOMPARE(int(envelopeEvents({ Point(240, 0.3, Curve::LINEAR) }).size()), 1);
 
-      // a curved ramp (curvature 0.8, rising early): ENV_CURVE_STEPS straight pieces on MuseScore's curve
+      // a curved ramp (curvature 0.8, rising early): straight pieces nowhere further than one MIDI step (1/127 of the
+      // range) from MuseScore's curve, at every tick (Automation::flattenCurve; the breakpoints on ticks: + a tick's rise)
       Point c(0, 0.0, Curve::LINEAR);
       Automation::setCurvature(c, 0.8);
       QVERIFY(c.curved());
       ev = envelopeEvents({ c, Point(1920, 1.0, Curve::STEP) });
-      QCOMPARE(int(ev.size()), ENV_CURVE_STEPS + 1);
+      QVERIFY2(ev.size() > 3 && ev.size() < 64, qPrintable(QString::number(ev.size())));
       QCOMPARE(ev.front(), std::make_pair(0, 0.0));
       QCOMPARE(ev.back(), std::make_pair(1920, 1.0));
-      for (size_t i = 1; i + 1 < ev.size(); ++i) {
+      for (size_t i = 1; i < ev.size(); ++i) {
             QVERIFY(ev[i].first > ev[i - 1].first);
-            const double x = double(ev[i].first) / 1920;
-            QVERIFY(std::fabs(ev[i].second - Automation::curveAt(c.c1x, c.c1y, c.c2x, c.c2y, x)) < 0.02);
+            for (int t = ev[i - 1].first; t <= ev[i].first; ++t) {
+                  const double line = ev[i - 1].second + (ev[i].second - ev[i - 1].second) * (t - ev[i - 1].first)
+                                                         / (ev[i].first - ev[i - 1].first);
+                  const double curve = Automation::curveAt(c.c1x, c.c1y, c.c2x, c.c2y, t / 1920.0);
+                  QVERIFY2(std::fabs(line - curve) <= Automation::CC_RESOLUTION + 0.003,
+                           qPrintable(QString("tick %1: %2 against %3").arg(t).arg(line).arg(curve)));
+                  }
             }
-      QVERIFY(ev[ev.size() / 2].second > 0.6);             // (above the straight line: it rises early)
+      for (size_t i = 1; i < ev.size(); ++i)                // (above the straight line half way: it rises early)
+            if (ev[i - 1].first <= 960 && ev[i].first >= 960)
+                  QVERIFY(ev[i - 1].second + (ev[i].second - ev[i - 1].second) * (960 - ev[i - 1].first)
+                          / std::max(1, ev[i].first - ev[i - 1].first) > 0.6);
 
       // the packets: /ms/env/write, then each lane's /ms/env/lane in chunks of ENV_PAIRS
       EnvLane a { 1, 2, {} };
@@ -2804,6 +2828,41 @@ void TestLiveIntegration::clipTabMidi()
       QVERIFY(LiveClips::parseOsc(midiPacket(12345, on), &address, &args));
       QCOMPARE(address, QString("/ms/midi"));
       QCOMPARE(args, QVariantList({ 12345, 0x90, 72, 101 }));
+      }
+
+//---------------------------------------------------------
+//   midiInputSilent: while Live is linked, notes from the MIDI input device are entered but not sounded
+//---------------------------------------------------------
+
+namespace Ms { extern bool (*midiInputSilenced)(); }
+static bool silentYes() { return true; }
+static bool silentNo() { return false; }
+
+void TestLiveIntegration::midiInputSilent()
+      {
+      QVERIFY(!LiveIntegration::LiveClipsLink::silencesMidiInput());          // no device answering: MuseScore sounds as before
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      score->rebuildMidiMapping();
+      for (int round = 0; round < 2; ++round) {
+            const bool silent = round == 0;
+            Ms::midiInputSilenced = silent ? &silentYes : &silentNo;
+            score->inputState().setTrack(0);
+            score->inputState().setSegment(score->tick2segment(Fraction(0, 1), false, SegmentType::ChordRest));
+            score->inputState().setDuration(TDuration::DurationType::V_QUARTER);
+            score->inputState().setNoteEntryMode(true);
+            score->setPlayNote(false);
+            score->setPlayChord(false);
+            score->enqueueMidiEvent({ 60 + round, false, 80 });
+            QVERIFY(score->processMidiInput());
+            Ms::Chord* c = score->firstMeasure()->findChord(Fraction(0, 1), 0);
+            QVERIFY(c);
+            QCOMPARE(c->notes().front()->pitch(), 60 + round);    // note input works either way
+            QCOMPARE(score->playNote(), !silent);                 // the entered note sounds only when not silenced
+            score->inputState().setNoteEntryMode(false);
+            score->undoRedo(true, nullptr);
+            }
+      Ms::midiInputSilenced = nullptr;
+      delete score;
       }
 
 //---------------------------------------------------------

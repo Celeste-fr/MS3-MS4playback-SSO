@@ -18,6 +18,7 @@
 #include "segment.h"
 
 #include <algorithm>
+#include <functional>
 #include <set>
 #include <cmath>
 #include <QJsonArray>
@@ -173,7 +174,33 @@ QString pointsHash(const std::vector<Point>& points)
       return QString::number(h, 16);
       }
 
-std::vector<std::pair<int, double>> Lane::events(int tick1, int tick2, int stepTicks, double resolution) const
+std::vector<std::pair<double, double>> flattenCurve(double c1x, double c1y, double c2x, double c2y, double tolY)
+      {
+      struct P { double x, y; };
+      std::vector<std::pair<double, double>> out;
+      // (depth: a guard only; halving shrinks a piece's distance from its chord fourfold, so tolY is met long before)
+      std::function<void(P, P, P, P, int)> split = [&](P a, P b, P c, P d, int depth) {
+            auto off = [&](P q) {
+                  const double dx = d.x - a.x;
+                  const double l = dx > 1e-12 ? a.y + (d.y - a.y) * (q.x - a.x) / dx : a.y;
+                  return std::fabs(q.y - l);
+                  };
+            if (depth >= 24 || (off(b) <= tolY && off(c) <= tolY)) {
+                  out.push_back({ d.x, d.y });
+                  return;
+                  }
+            auto mid = [](P p, P q) { return P { 0.5 * (p.x + q.x), 0.5 * (p.y + q.y) }; };
+            const P ab = mid(a, b), bc = mid(b, c), cd = mid(c, d);
+            const P abc = mid(ab, bc), bcd = mid(bc, cd), m = mid(abc, bcd);
+            split(a, ab, abc, m, depth + 1);
+            split(m, bcd, cd, d, depth + 1);
+            };
+      split({ 0, 0 }, { c1x, c1y }, { c2x, c2y }, { 1, 1 }, 0);
+      out.back() = { 1.0, 1.0 };
+      return out;
+      }
+
+std::vector<std::pair<int, double>> Lane::events(int tick1, int tick2, double resolution) const
       {
       std::vector<std::pair<int, double>> out;
       if (points.empty() || tick2 <= tick1)
@@ -189,12 +216,12 @@ std::vector<std::pair<int, double>> Lane::events(int tick1, int tick2, int stepT
                   out.push_back({ p.tick, p.value });
                   last = p.value;
                   }
-            // along a ramp to the next point, inside [tick1, tick2)
-            if (p.curve == Curve::LINEAR && i + 1 < points.size() && stepTicks > 0) {
+            // along a ramp to the next point, inside [tick1, tick2): at each tick where it reaches another step
+            if (p.curve == Curve::LINEAR && i + 1 < points.size() && resolution > 0) {
                   const Point& n = points[i + 1];
-                  for (int t = std::max(p.tick, tick1) + stepTicks; t < std::min(n.tick, tick2); t += stepTicks) {
+                  for (int t = std::max(p.tick, tick1) + 1; t < std::min(n.tick, tick2); ++t) {
                         const double v = valueAt(t);
-                        if (std::fabs(v - last) >= resolution) {
+                        if (std::lround(v / resolution) != std::lround(last / resolution)) {
                               out.push_back({ t, v });
                               last = v;
                               }

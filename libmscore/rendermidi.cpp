@@ -2114,11 +2114,12 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                               putCtrl(t->first, t->second);
                         }
                   // automation lanes: the value in force at the chunk's start, then their points and ramps
-                  // (a MIDI controller to 1/127, a plug-in parameter to 1/1000, every 30 ticks along a ramp)
+                  // (along a ramp each change of a MIDI step, 1/127, or of a plug-in parameter's resolution, at the tick
+                  // it happens: Automation::CC_RESOLUTION, PARAM_RESOLUTION)
                   for (const LibPart::Auto& a : lp->automation) {
                         const bool param = a.param >= 0 || a.live >= 0;
-                        for (const auto& tv : a.lane.events(tick1, tick2, int(Playback::value("automation/stepTicks", score)),
-                                                            param ? 0.001 : 1.0 / 127)) {
+                        for (const auto& tv : a.lane.events(tick1, tick2, param ? Automation::PARAM_RESOLUTION
+                                                                                : Automation::CC_RESOLUTION)) {
                               for (const auto& ip : *part->instruments()) {
                                     if (!libraryPlays(ip.second))
                                           continue;
@@ -2649,15 +2650,18 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
 //    slower (vibrato, attacks: 3 % for a quarter tone): each note-on on a lane (route) of a bending patch
 //    gets the bend of its tuning right before it (absolute: playback may start anywhere), and plays
 //    untuned (tuning 0: Vst3Synth engages no varispeed). A legato transition's lane glides from the
-//    note before's bend over [legato] glideMs (as varispeed glides), a step every 3 ms, cut at the
-//    lane's next note-on. The glide starts when the transition arrives ([tuning] bendAtArrival, on):
+//    note before's bend one cent a tick: the owner's criterion (2026-10-03), "a glide as short as possible
+//    without audible steps: each step at most one cent", on the renderer's time grid (an event sits on a tick,
+//    so one step a tick is as short as it gets): a glide of d cents takes ceil(d) ticks (a quarter tone 50,
+//    ~52 ms at 120 bpm), each step the bend value nearest k / ceil(d) of the way, so at most a cent to within the bend's own
+//    resolution (range / 8191 a unit, 0.012 cents for SSO's ±100); cut at the lane's next note-on. The glide starts when the transition arrives ([tuning] bendAtArrival, on):
 //    the note-on plus the patch's measured legato delay for the interval (the full delay, whatever the
 //    early start took: libGlideDelayMs), since the bend is the channel's and retunes the note before,
 //    which sounds until then (SSO, Whence on 49b00a0, 2026-10-02: violas 65-83 % retuned 10-30 ms after
 //    the note-on, the new note heard ~90-130 ms after it); no later than the lane's next note-on less
 //    the glide (it ends by then). Off: at the note-on. A note with no note before (a fresh attack, a
 //    slur's first note) bends at its note-on. A chord's notes at one tick on one lane: one glide, at
-//    the earliest arrival. A tuning beyond the range: bend at the centre and varispeed plays it all
+//    the earliest arrival. ([legato] glideMs is varispeed's glide only.) A tuning beyond the range: bend at the centre and varispeed plays it all
 //    (one way for a whole note; the lanes keep what sounds from moving either way). Works hosted and
 //    over MIDI out alike (the bends are events on the lane's route), and in Live's clips
 //---------------------------------------------------------
@@ -2668,11 +2672,8 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             return;
       const int utick1 = chunk.utick1();
       const int utick2 = chunk.utick2();
-      const double STEP = 0.003;
-      const double glide = Playback::value("legato/glideMs", score) / 1000.0;
-      const int GLIDE_STEPS = std::max(1, int(std::lround(glide / STEP)));     // (as Vst3Synth's glide)
       const bool atArrival = Playback::on("tuning/bendAtArrival", score);      // (playback settings [tuning])
-      struct Start { int tick; int from; int target; double delay; };          // a note-on's bend; delay (s) -1: no glide
+      struct Start { int tick; int from; int target; double delay; double range; };   // a note-on's bend; delay (s) -1: no glide
       struct Bend { int tick; int value; int glideStart; };                    // glideStart -1: not a glide's step
       std::map<std::pair<int, int>, std::vector<Start>> starts;                // (port, channel) -> note-ons' bends
       std::map<std::pair<int, int>, std::vector<int>> noteOns;                 // (port, channel) -> note-on ticks
@@ -2712,7 +2713,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   ons.push_back(i->first);
             source[route] = { ev.channel(), ev.getOriginatingStaff() };
             patchOf[route] = ev.libraryPatch();
-            Start st { i->first, target, target, -1 };
+            Start st { i->first, target, target, -1, range };
             auto g = libGlideFrom.find(ev.note());
             if (g != libGlideFrom.end() && laneOf(g->second) == laneOf(ev.note())) {
                   st.from = bendOf(centsOf(g->second), range);
@@ -2739,14 +2740,18 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   bends.push_back({ st.tick, st.from, -1 });
                   if (st.from == st.target || st.delay < 0)
                         continue;
+                  // (cents of a bend value: SoundLib::bendValue's scale, 8192 down, 8191 up)
+                  auto cents = [&st](int v) { return (v - 8192) * st.range / (v < 8192 ? 8192.0 : 8191.0); };
+                  // (to within one bend unit, the bend's own resolution: +50 cents is 10240, read back as 50.006)
+                  const int steps = std::max(1, int(std::ceil(std::fabs(cents(st.target) - cents(st.from)) - st.range / 8191.0)));
                   const qreal on = score->utick2utime(st.tick);
-                  qreal t0 = on + st.delay;
+                  int t0 = std::max(st.tick, score->utime2utick(on + st.delay));
                   auto next = std::upper_bound(ons.begin(), ons.end(), st.tick);
                   if (next != ons.end())
-                        t0 = std::max(on, std::min(t0, score->utick2utime(*next) - glide - STEP));   // (it ends before the next note-on)
-                  for (int k = 1; k <= GLIDE_STEPS; ++k) {
-                        const int v = st.from + int(std::lround((st.target - st.from) * double(k) / GLIDE_STEPS));
-                        bends.push_back({ std::max(st.tick, score->utime2utick(t0 + k * STEP)), v, st.tick });
+                        t0 = std::max(st.tick, std::min(t0, *next - steps - 1));   // (it ends before the next note-on)
+                  for (int k = 1; k <= steps; ++k) {
+                        const int v = st.from + int(std::lround((st.target - st.from) * double(k) / steps));
+                        bends.push_back({ t0 + k, v, st.tick });
                         }
                   }
             for (const Bend& bend : bends) {

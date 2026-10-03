@@ -94,7 +94,7 @@ double PlaybackSettingsWidget::mapValue(const char* id) const
       if (s == "heldNotes/early")
             return _library->onsetEarly;
       if (s == "tuning/tolerance")
-            return _library->laneTolerance;
+            return _library->laneTolerance >= 0 ? _library->laneTolerance : SoundLib::defaultLaneTolerance();
       if (s == "tuning/tail")
             return _library->laneTail;
       if (s == "tuning/maxLanes")
@@ -165,8 +165,15 @@ void PlaybackSettingsWidget::refresh()
             box->setRange(d.min, d.max);
             const bool integral = d.min == std::floor(d.min) && d.max == std::floor(d.max)
                                   && QString(d.unit) != "s" && QString(d.unit) != "cents" && id != "shorts/portato";
-            box->setDecimals(integral ? 0 : 2);
+            box->setDecimals(id == "tuning/tolerance" ? 3 : integral ? 0 : 2);
             box->setValue(v);
+            // (computed when the map gives none: tuning tail per note, copies by the free memory)
+            if (map < 0 && src != Playback::Source::SCORE && src != Playback::Source::INI
+                && (id == "tuning/tail" || id == "tuning/maxLanes")) {
+                  box->setMinimum(d.min - 1);
+                  box->setSpecialValueText(id == "tuning/tail" ? tr("measured release") : tr("by free memory"));
+                  box->setValue(d.min - 1);
+                  }
             box->setKeyboardTracking(false);
             box->setEnabled(d.perScore && _score);
             box->setToolTip(it->toolTip(0));

@@ -104,6 +104,10 @@ double  MScore::pixelRatio  = 0.8;        // DPI / logicalDPI
 MPaintDevice* MScore::_paintDevice;
 
 Sequencer* MScore::seq = 0;
+// set by the Live link (mscore/liveclips.h): true while notes arriving from the MIDI input device must not sound in
+// MuseScore (Live plays them); note input itself is unaffected. (Declared in cmd.cpp and the Live link, not in
+// mscore.h, which nearly every file includes.)
+bool (*midiInputSilenced)() = nullptr;
 MuseScoreCore* MuseScoreCore::mscoreCore;
 
 extern void initDrumset();
