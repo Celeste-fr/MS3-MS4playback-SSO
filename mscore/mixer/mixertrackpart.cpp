@@ -83,6 +83,10 @@ MixerTrackPart::MixerTrackPart(QWidget *parent, MixerTrackItemPtr mti, bool expa
       QWidget(parent), _mti(mti), _selected(false), _group(0)
       {
       setupUi(this);
+      // a clicked toggle must not keep the keyboard focus: Space would toggle it again instead of starting playback
+      expandBn->setFocusPolicy(Qt::NoFocus);
+      soloBn->setFocusPolicy(Qt::NoFocus);
+      muteBn->setFocusPolicy(Qt::NoFocus);
 
       int numChannels = 0;
       Part* part = _mti->part();
