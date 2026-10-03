@@ -109,6 +109,9 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
 - SSO's controls: which controls say "not in <patch>" on the owner's patches.
 - Playback verification with Kontakt: the owner's runs on the test scores and the piano score (VERIFY.md).
 - Live: everything LIVE.md lists under "what only Live can show" and "Open questions for the owner".
+- Clip-tab automation lanes as the clip's envelopes (branch `clip-envelopes`): the owner installs the Control
+  Surface script `tools/live/MuseScoreEnvelopes` once (LIVE.md › Automation lanes in a clip tab) and tries a Windows
+  build (the new device, protocol 5, from that build's `tools/live`); arrangement clips get no lanes (open question).
 - One instance for a line's tunings (`[tuning] oneInstance`, branch `bend-one-instance`, off by default): the owner
   listens to Whence with 2 (aggressive: 19 → 15 instances; a detached note's tail is bent to the next note's tuning)
   and decides; 1 (safe) saves nothing on Whence. Only patches that bend (Performance) share; SSO's All techniques

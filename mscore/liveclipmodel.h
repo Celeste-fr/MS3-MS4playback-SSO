@@ -72,10 +72,14 @@
 //                                                        notes as MuseScore last knew them (another: a conflict)
 //---------------------------------------------------------
 
+#include <map>
 #include <vector>
 
 #include <QByteArray>
 #include <QString>
+#include <QVariantList>
+
+#include "libmscore/automation.h"
 
 namespace Ms {
 
@@ -231,6 +235,82 @@ class LiveMidi {
       };
 
 QByteArray midiPacket(int trackId, const MidiMsg& m);
+
+//---------------------------------------------------------
+//   Automation lanes of any Live track (the owner, 2026-10-02: "the automation display wouldn't only work for sso, it
+//   works for any midi clip"; clip-tab lanes "written into the Live clip's own envelopes", Live 12.4's API).
+//
+//   - The track's parameters: the device sends them (protocol 5, tools/live/MuseScoreLink.js) for an edited clip
+//     (key "c<id>") and for each route's track (key "<port>:<channel>"):
+//       /live/params key:s hash:i chunk:i chunks:i (d:i p:i name:s min:f max:f quantized:i) × n
+//     d -1: the mixer (p 0 volume, 1 pan); else the track's devices[d].parameters[p]. A lane on one has the target
+//     "live:<d>/<p>" (liveTarget) and keeps the name in its extra ("name"), shown when the track isn't known.
+//       /live/clip/where key:s track:i slot:i   the edited clip's place: the track's index, the session slot's (-1:
+//                                               an arrangement clip)
+//     MuseScore -> device: /ms/params/ask (every track's parameters again: MuseScore started anew).
+//   - A clip tab's lanes are the clip's own envelopes in Live. Max for Live can't reach them (Live 12.4.6: a Clip
+//     has has_envelopes, clear_envelope and clear_all_envelopes only); Live's Python API can, for Session clips
+//     only (Clip.automation_envelope / create_automation_envelope; Envelope.create_event, from Live 12.4,
+//     delete_events_in_range, events_in_range, value_at_time). So a Control Surface script does it,
+//     tools/live/MuseScoreEnvelopes (installed once in Live's User Library and chosen in Live's settings), and
+//     MuseScore talks to it directly on ENV_PORT; its protocol: tools/live/MuseScoreEnvelopes/core.py.
+//     A lane goes as breakpoints (envelopeEvents): each point; a step's value again just before the next point
+//     (two breakpoints at one time are a jump in Live); a curved ramp as ENV_CURVE_STEPS straight pieces (Live's
+//     create_event ignores a breakpoint's curve: tried in 12.4.6). Read back (lanePoints): each breakpoint a point,
+//     a flat piece before a jump a step again. Before a lane's first point Live's envelope holds the first value
+//     (a MuseScore lane: the parameter's own value); after the last both hold it.
+//---------------------------------------------------------
+
+constexpr int PARAMS_PROTOCOL   = 5;            // the device's protocol from which it sends the tracks' parameters
+constexpr int ENV_PORT          = 9005;         // tools/live/MuseScoreEnvelopes/core.py PORT
+constexpr int ENV_PAIRS         = 100;          // (tick, value) pairs a /ms/env/lane
+constexpr int ENV_CURVE_STEPS   = 16;
+
+struct LiveParam {
+      int d { -1 };
+      int p { 0 };
+      QString name;                       // "Operator › Tone", "Mixer › Volume"
+      double min { 0 };
+      double max { 1 };
+      bool quantized { false };
+      };
+QString liveTarget(int d, int p);         // "live:<d>/<p>"
+bool parseLiveTarget(const QString& target, int* d, int* p);
+
+// the parameters the device sent, by key (an edited clip's, a route's)
+class TrackParams {
+      struct Entry {
+            qint32 hash { 0 };            // the list being received
+            int chunks { 0 };
+            qint32 doneHash { 0 };        // the list in params
+            std::map<int, std::vector<LiveParam>> parts;
+            std::vector<LiveParam> params;
+            bool complete { false };
+            };
+      std::map<QString, Entry> _entries;
+      int _generation { 0 };
+   public:
+      static TrackParams* instance();
+      // a /live/params; true when a key's list is complete and changed
+      bool accept(const QVariantList& args);
+      const std::vector<LiveParam>* params(const QString& key) const;   // nullptr: none known
+      const LiveParam* param(const QString& key, const QString& target) const;
+      void clear() { _entries.clear(); ++_generation; }
+      void touch() { ++_generation; }     // (what the lanes offer changed otherwise: a clip tab's envelopes read)
+      int generation() const { return _generation; }
+      };
+
+std::vector<std::pair<int, double>> envelopeEvents(const std::vector<Automation::Point>& points);
+std::vector<Automation::Point> lanePoints(const std::vector<std::pair<int, double>>& events);
+
+struct EnvLane {
+      int d { -1 };
+      int p { 0 };
+      std::vector<std::pair<int, double>> events;     // empty: the envelope cleared
+      };
+// /ms/env/write, then each lane's /ms/env/lane
+std::vector<QByteArray> envWritePackets(const QString& key, int write, int track, int slot, qint32 hash,
+                                        const std::vector<EnvLane>& lanes);
 
 }     // namespace LiveClipEdit
 

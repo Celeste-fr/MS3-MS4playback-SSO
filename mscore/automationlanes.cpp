@@ -9,6 +9,8 @@
 //=============================================================================
 
 #include "automationlanes.h"
+#include "liveclipedit.h"
+#include "liveclips.h"
 #include "scoreview.h"
 #include "musescore.h"
 #include "seq.h"
@@ -46,6 +48,7 @@ static const double HEAD_SP = 2.4;        // the part's header row, spatium
 static const double LANE_SP = 5.0;        // a lane
 static const double GAP_SP = 0.4;
 static const int HEADER_PX = 150;         // the headers' width on screen
+static const int HEADER_MAX_PX = 420;     // the header row's at most (its label: headerRect)
 static const double POINT_PX = 4.5;       // a breakpoint's radius on screen
 static const char* SETTING = "ui/canvas/automationLanes";
 
@@ -161,6 +164,11 @@ void AutomationLanes::selectionChanged()
 
 std::vector<AutomationLanes::Target> AutomationLanes::targets(const Part* part) const
       {
+      const int gen = LiveClipEdit::TrackParams::instance()->generation();
+      if (gen != _targetsGeneration) {          // (a Live track's parameters came, a clip tab's lanes became ready)
+            _targetsGeneration = gen;
+            _targets.clear();
+            }
       auto cached = _targets.find(part);
       if (cached != _targets.end())
             return cached->second;
@@ -170,6 +178,30 @@ std::vector<AutomationLanes::Target> AutomationLanes::targets(const Part* part) 
       }
 
 std::vector<AutomationLanes::Target> AutomationLanes::computeTargets(const Part* part) const
+      {
+      std::vector<Target> out;
+      Score* s = score();
+      if (!s || !part)
+            return out;
+      // an Edit-in-MuseScore clip tab: the clip's track's Live parameters, whatever plays there (no sound library)
+      LiveIntegration::LiveClipEditor* ed = LiveIntegration::LiveClipEditor::instance();
+      if (ed->isClipScore(s)) {
+            if (const std::vector<LiveClipEdit::LiveParam>* lp = ed->liveParams(s))
+                  for (const LiveClipEdit::LiveParam& p : *lp)
+                        out.push_back({ LiveClipEdit::liveTarget(p.d, p.p), p.name, false, true });
+            return out;
+            }
+      out = libraryTargets(part);
+      // a part Live plays (Live plays the score): its Live track's parameters too
+      const QString key = LiveIntegration::LiveClipsLink::instance()->routeKey(part);
+      if (!key.isEmpty())
+            if (const std::vector<LiveClipEdit::LiveParam>* lp = LiveClipEdit::TrackParams::instance()->params(key))
+                  for (const LiveClipEdit::LiveParam& p : *lp)
+                        out.push_back({ LiveClipEdit::liveTarget(p.d, p.p), tr("Live: %1").arg(p.name), false, true });
+      return out;
+      }
+
+std::vector<AutomationLanes::Target> AutomationLanes::libraryTargets(const Part* part) const
       {
       std::vector<Target> out;
       Score* s = score();
@@ -286,6 +318,10 @@ void AutomationLanes::commit(const QString& what)
                               same = same || (o.target == l.target && pointsHash(o.points) == pointsHash(l.points));
                   if (!same)
                         l.extra["edited"] = now;
+                  if (l.target.startsWith("live:") && !l.extra.contains("name"))      // (shown when the track isn't known)
+                        for (const Target& t : targets(pl.first))
+                              if (t.id == l.target)
+                                    l.extra["name"] = t.name;
                   keep.push_back(l);
                   }
             pl.second = keep;
@@ -417,9 +453,15 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
                   r.master = master;
                   r.target = t;
                   r.name = t;
+                  bool listed = false;
                   for (const Target& x : all)
                         if (x.id == t)
-                              r.name = x.name, r.param = x.param;
+                              r.name = x.name, r.param = x.param, listed = true;
+                  if (!listed) {                // (a Live parameter of a track not known now: the name it was given)
+                        const QString n = lane(master, t).extra.value("name").toString();
+                        if (!n.isEmpty())
+                              r.name = n;
+                        }
                   r.rect = QRectF(x0, y, x1 - x0, LANE_SP * sp);
                   out.push_back(r);
                   y += (LANE_SP + GAP_SP) * sp;
@@ -432,46 +474,14 @@ void AutomationLanes::buildAnchors() const
       {
       if (_anchorsValid)
             return;
-      _anchors.clear();
-      Score* s = score();
-      if (!s)
-            return;
-      for (Measure* m = s->firstMeasureMM(); m; m = m->nextMeasureMM()) {
-            if (!m->system())
-                  continue;
-            bool first = true;
-            for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
-                  if (!seg->visible())
-                        continue;
-                  if (first && seg->tick() != m->tick())
-                        _anchors.push_back({ m->tick().ticks(), seg->canvasPos().x() });
-                  first = false;
-                  _anchors.push_back({ seg->tick().ticks(), seg->canvasPos().x() });
-                  }
-            Segment* bar = m->findSegment(SegmentType::EndBarLine, m->endTick());
-            const double xe = bar ? bar->canvasPos().x() : m->canvasPos().x() + m->width();
-            _anchors.push_back({ m->endTick().ticks(), xe });
-            }
+      _anchors = Automation::timeAxis(score());
       _anchorsValid = true;
       }
 
 double AutomationLanes::tickToX(int tick) const
       {
       buildAnchors();
-      if (_anchors.empty())
-            return 0;
-      if (tick <= _anchors.front().first)
-            return _anchors.front().second;
-      if (tick >= _anchors.back().first)
-            return _anchors.back().second;
-      // the last anchor at or before the tick (of several at one tick: the last, the first note's), the next after
-      auto it = std::upper_bound(_anchors.begin(), _anchors.end(), tick,
-                                 [](int t, const std::pair<int, double>& a) { return t < a.first; });
-      const auto& b = *it;
-      const auto& a = *std::prev(it);
-      if (b.first == a.first)
-            return a.second;
-      return a.second + (b.second - a.second) * double(tick - a.first) / double(b.first - a.first);
+      return Automation::xAtTick(_anchors, tick);
       }
 
 int AutomationLanes::xToTick(double x) const
@@ -554,10 +564,29 @@ QString AutomationLanes::valueText(double v) const
       return std::fabs(x - std::round(x)) < 0.05 ? QString::number(int(std::lround(x))) : QString::number(x, 'f', 1);
       }
 
+// the header row's label, and its font (bold, as tall as the row allows)
+QString AutomationLanes::headLabel(const Row& r) const
+      {
+      return QString::fromUtf8("▾ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
+      }
+
+static QFont headFont(double height)
+      {
+      QFont f = QApplication::font();
+      f.setPixelSize(std::max(9, std::min(13, int(height * 0.42))));
+      f.setBold(true);
+      return f;
+      }
+
 QRectF AutomationLanes::headerRect(const Row& r) const
       {
       const QRectF vr = _view->matrix().mapRect(r.rect);
-      return QRectF(0, vr.top(), r.target.isEmpty() ? HEADER_PX + 90 : HEADER_PX, vr.height());
+      if (!r.target.isEmpty())
+            return QRectF(0, vr.top(), HEADER_PX, vr.height());
+      // the header row as wide as its label needs (the part's name whole: "Automation · Violin" was cut to "Vio…"),
+      // with room for its three buttons; at most HEADER_MAX_PX (then the name is shortened in the middle)
+      const int label = QFontMetrics(headFont(vr.height())).horizontalAdvance(headLabel(r));
+      return QRectF(0, vr.top(), std::max(HEADER_PX + 90, std::min(HEADER_MAX_PX, 6 + label + 12 + 84)), vr.height());
       }
 
 const AutomationLanes::Row* AutomationLanes::rowAt(const QPointF& canvas) const
@@ -669,8 +698,11 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
       for (Measure* m = s->tick2measureMM(Fraction::fromTicks(ta)); m && m->tick().ticks() <= tb; m = m->nextMeasureMM()) {
             const int beat = 1920 / std::max(1, m->timesig().denominator());
             for (int t = m->tick().ticks(); t < m->endTick().ticks(); t += beat) {
-                  const double x = tickToX(t);
-                  p.setPen(QPen(t == m->tick().ticks() ? QColor(170, 170, 170) : QColor(220, 220, 220), px));
+                  // (a bar: where the staff's bar line is; the beats where their notes are)
+                  const bool bar = t == m->tick().ticks();
+                  const Measure* prev = bar ? m->prevMeasureMM() : nullptr;
+                  const double x = prev && prev->system() == m->system() ? Automation::barLineX(prev) : tickToX(t);
+                  p.setPen(QPen(bar ? QColor(170, 170, 170) : QColor(220, 220, 220), px));
                   p.drawLine(QPointF(x, r.rect.top()), QPointF(x, r.rect.bottom()));
                   }
             }
@@ -744,9 +776,9 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
             p.setPen(QColor(29, 31, 34));
             f.setBold(true);
             p.setFont(f);
+            p.setFont(headFont(h.height()));
             p.drawText(h.adjusted(6, 0, -84, 0), Qt::AlignVCenter | Qt::AlignLeft,
-                       QFontMetrics(p.font()).elidedText(QString::fromUtf8("▾ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name,
-                                                         Qt::ElideRight, int(h.width()) - 90));
+                       QFontMetrics(p.font()).elidedText(headLabel(r), Qt::ElideMiddle, int(h.width()) - 6 - 84 - 4));
             f.setBold(false);
             p.setFont(f);
             // + (add a lane), All, the pencil (Draw Mode)
@@ -814,7 +846,7 @@ void AutomationLanes::dropFocus()
 
 bool AutomationLanes::headerClick(const QPoint& pixel)
       {
-      if (pixel.x() >= HEADER_PX + 90)
+      if (pixel.x() >= HEADER_MAX_PX)
             return false;
       for (const Row& r : rows()) {
             const QRectF h = headerRect(r);
@@ -860,10 +892,22 @@ void AutomationLanes::addLaneMenu(const Row& r, const QPoint& globalPos)
       QMenu menu;
       const std::vector<Target> all = targets(r.part);
       const std::vector<QString> shown = shownTargets(r.master, all);
+      // (a Live track's parameters: a submenu per device, "Operator › Tone"; the library's controls as they are)
+      std::map<QString, QMenu*> sub;
       for (const Target& t : all) {
             if (std::find(shown.begin(), shown.end(), t.id) != shown.end())
                   continue;
-            QAction* a = menu.addAction(t.name);
+            const int sep = t.live ? t.name.indexOf(QString::fromUtf8(" › ")) : -1;
+            QAction* a = nullptr;
+            if (sep > 0) {
+                  const QString dev = t.name.left(sep);
+                  QMenu*& m = sub[dev];
+                  if (!m)
+                        m = menu.addMenu(dev);
+                  a = m->addAction(t.name.mid(sep + 3));
+                  }
+            else
+                  a = menu.addAction(t.name);
             a->setData(t.id);
             }
       if (menu.isEmpty())

@@ -26,6 +26,8 @@
 #include <QTimer>
 #include <QUdpSocket>
 
+#include "libmscore/part.h"
+#include "libmscore/partplayback.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
@@ -330,12 +332,24 @@ void LiveClipsLink::received(const QString& address, const QVariantList& args)
             LiveClipEditor::instance()->received(address, args);
             return;
             }
+      if (address.startsWith("/live/env/")) {      // the MuseScore Envelopes script (a clip tab's lanes)
+            LiveClipEditor::instance()->received(address, args);
+            return;
+            }
+      if (address == "/live/params") {             // a track's parameters (automation lanes of any track)
+            _lastHello = now;
+            if (LiveClipEdit::TrackParams::instance()->accept(args))
+                  LiveClipEditor::instance()->paramsChanged(args.value(0).toString());
+            return;
+            }
       if (address == "/live/hello") {
             const QString session = args.value(0).toString();
             _deviceProtocol = args.value(1).toInt();
             _lastHello = now;
             if (session != _session) {          // the device (re)loaded: it knows nothing yet
                   _session = session;
+                  if (_deviceProtocol >= LiveClipEdit::PARAMS_PROTOCOL)       // (and this MuseScore knows none of its tracks)
+                        send(LiveClips::osc("/ms/params/ask", {}));
                   if (_on)
                         resync();
                   LiveClipEditor::instance()->newDevice();      // (the clips edited here: to the new hub)
@@ -729,6 +743,24 @@ void LiveClipsLink::poll()
                   enqueueParams(track);
                   }
             }
+      }
+
+void LiveClipsLink::sendDatagramTo(const QByteArray& packet, int port)
+      {
+      if (_socket)
+            _socket->writeDatagram(packet, QHostAddress::LocalHost, quint16(port));
+      }
+
+QString LiveClipsLink::routeKey(const Part* part) const
+      {
+      const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
+      if (!part || !lib || !_on || !active() || !_score || part->masterScore() != _score.data())
+            return QString();
+      const Part* master = PartPlaybackModes::masterPart(part);
+      for (const SoundLib::Route& r : SoundLib::routes(_score.data(), *lib))
+            if (r.part == master && r.patch == 0 && r.lane == 0)
+                  return QString("%1:%2").arg(r.port).arg(r.channel + 1);
+      return QString();
       }
 
 QStringList LiveClipsLink::keysWithoutTrack(const MasterScore* score, bool* known) const

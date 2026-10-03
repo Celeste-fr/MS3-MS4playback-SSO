@@ -2553,6 +2553,10 @@ void ChangeMetaTags::flip(EditData*)
       {
       QMap<QString,QString> t = score->metaTags();
       score->setMetaTags(metaTags);
+      // (the automation lanes, automation.h: what plays changed, and an edit or its undo is seen as one by
+      // playlistChanged: a clip tab writes its lanes into Live then, liveclipedit.h)
+      if (t.value("automation") != metaTags.value("automation"))
+            score->setPlaylistDirty();
       metaTags = t;
       }
 

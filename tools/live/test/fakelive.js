@@ -62,6 +62,16 @@ class FakeLive {
             (device.parameters = device.parameters || []).push(p.id);
             return p;
             }
+      // the track's mixer (MixerDevice: volume, panning), made when first asked for
+      mixer(track) {
+            if (!track.mixer) {
+                  const m = this.add({ kind: "mixer", track: track.id });
+                  m.volume = this.add({ kind: "param", name: "Track Volume", value: 0.85, min: 0, max: 1, automation_state: 0 }).id;
+                  m.panning = this.add({ kind: "param", name: "Track Panning", value: 0, min: -1, max: 1, automation_state: 0 }).id;
+                  track.mixer = m.id;
+                  }
+            return this.objects[track.mixer];
+            }
       // every copy's scheduled work and the hubs' work steps, until nothing is left
       settle() {
             for (let n = 0; n < 50; ++n) {
@@ -126,7 +136,7 @@ function liveApiFor(live, deviceId) {
             this.id = o ? o.id : 0;
             this.path = p;
             this.type = o ? { song: "Song", track: "Track", clip: "Clip", clipslot: "ClipSlot", device: "Device", cue: "CuePoint",
-                              view: "Song.View", param: "DeviceParameter" }[o.kind] : "";
+                              view: "Song.View", param: "DeviceParameter", mixer: "MixerDevice" }[o.kind] : "";
             this.info = o ? "id " + o.id + "\ntype " + this.type + "\nproperty name str\ndone" : "No object";
             const self = this;
             this.getcount = function(what) {
@@ -148,6 +158,10 @@ function liveApiFor(live, deviceId) {
                               return live.idList(o.clips);
                         if (prop === "devices")
                               return live.idList(o.devices);
+                        if (prop === "clip_slots")
+                              return live.idList(o.slots || []);
+                        if (prop === "mixer_device")
+                              return ["id", live.mixer(o).id];
                         if (prop === "input_routing_type")
                               return [JSON.stringify({ input_routing_type: { display_name: o.inputType, identifier: 7 } })];
                         if (prop === "input_routing_channel")
@@ -156,6 +170,8 @@ function liveApiFor(live, deviceId) {
                         }
                   if (o.kind === "device" && prop === "parameters")
                         return live.idList(o.parameters || []);
+                  if (o.kind === "mixer" && (prop === "volume" || prop === "panning"))
+                        return ["id", o[prop]];
                   if (o.kind === "clip" && prop === "canonical_parent")
                         return ["id", o.parent];
                   if (o.kind === "clipslot" && prop === "canonical_parent")

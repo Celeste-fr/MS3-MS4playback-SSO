@@ -86,6 +86,9 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEditInstrument();
       void clipEditOutside();
       void clipEditPackets();
+      void clipEnvelopeMapping();
+      void laneTimeAxis();
+      void liveParamLanes();
       void clipTabMidi();
       void linkWatch();
       void liveSetWrite();
@@ -1723,6 +1726,236 @@ void TestLiveIntegration::clipEditPackets()
       QCOMPARE(address, QString("/ms/clip/ops"));
       QCOMPARE(args.size(), 3 + 8 * 8);
       QCOMPARE(args[3 + 1].toInt(), 1032);
+      }
+
+//---------------------------------------------------------
+//   clipEnvelopeMapping
+//    a clip tab's lanes as the clip's envelopes (liveclipmodel.h): a lane's points as Live's breakpoints (a step's
+//    value again before the next point, a jump as two at one time, a curve as straight pieces along MuseScore's
+//    Bézier), read back as the same points; the targets; the /ms/env packets; the device's parameter lists
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipEnvelopeMapping()
+      {
+      using Automation::Point;
+      using Automation::Curve;
+      int d = 0, p = 0;
+      QCOMPARE(liveTarget(-1, 0), QString("live:-1/0"));
+      QVERIFY(parseLiveTarget("live:3/12", &d, &p));
+      QCOMPARE(d, 3);
+      QCOMPARE(p, 12);
+      QVERIFY(parseLiveTarget("live:-1/1", &d, &p) && d == -1 && p == 1);
+      QVERIFY(!parseLiveTarget("vibrato", &d, &p));
+      QVERIFY(!parseLiveTarget("live:a/1", &d, &p));
+
+      // steps (0.25 from beat 0, 0.75 from beat 2), a straight ramp to 0.5 at beat 4 … 1.0 at beat 6, a jump to 0 there
+      std::vector<Point> pts { Point(0, 0.25, Curve::STEP), Point(960, 0.75, Curve::STEP), Point(1920, 0.5, Curve::LINEAR),
+                               Point(2880, 1.0, Curve::LINEAR), Point(2880, 0.0, Curve::STEP) };
+      std::vector<std::pair<int, double>> ev = envelopeEvents(pts);
+      const std::vector<std::pair<int, double>> want { { 0, 0.25 }, { 960, 0.25 }, { 960, 0.75 }, { 1920, 0.75 }, { 1920, 0.5 },
+                                                       { 2880, 1.0 }, { 2880, 0.0 } };
+      QCOMPARE(ev, want);
+      // read back: the same lane (each point; the steps steps again)
+      const std::vector<Point> back = lanePoints(ev);
+      QCOMPARE(int(back.size()), int(pts.size()));
+      for (size_t i = 0; i < pts.size(); ++i) {
+            QCOMPARE(back[i].tick, pts[i].tick);
+            QCOMPARE(back[i].value, pts[i].value);
+            if (i + 1 < pts.size() && pts[i + 1].tick != pts[i].tick)
+                  QCOMPARE(int(back[i].curve), int(pts[i].curve));
+            }
+      // and written again from what was read: the same breakpoints (nothing grows on a round trip)
+      QCOMPARE(envelopeEvents(back), want);
+      // a step to the same value: no extra breakpoint; one point: one breakpoint
+      QCOMPARE(int(envelopeEvents({ Point(0, 0.5, Curve::STEP), Point(480, 0.5, Curve::STEP) }).size()), 2);
+      QCOMPARE(int(envelopeEvents({ Point(240, 0.3, Curve::LINEAR) }).size()), 1);
+
+      // a curved ramp (curvature 0.8, rising early): ENV_CURVE_STEPS straight pieces on MuseScore's curve
+      Point c(0, 0.0, Curve::LINEAR);
+      Automation::setCurvature(c, 0.8);
+      QVERIFY(c.curved());
+      ev = envelopeEvents({ c, Point(1920, 1.0, Curve::STEP) });
+      QCOMPARE(int(ev.size()), ENV_CURVE_STEPS + 1);
+      QCOMPARE(ev.front(), std::make_pair(0, 0.0));
+      QCOMPARE(ev.back(), std::make_pair(1920, 1.0));
+      for (size_t i = 1; i + 1 < ev.size(); ++i) {
+            QVERIFY(ev[i].first > ev[i - 1].first);
+            const double x = double(ev[i].first) / 1920;
+            QVERIFY(std::fabs(ev[i].second - Automation::curveAt(c.c1x, c.c1y, c.c2x, c.c2y, x)) < 0.02);
+            }
+      QVERIFY(ev[ev.size() / 2].second > 0.6);             // (above the straight line: it rises early)
+
+      // the packets: /ms/env/write, then each lane's /ms/env/lane in chunks of ENV_PAIRS
+      EnvLane a { 1, 2, {} };
+      for (int i = 0; i < 150; ++i)
+            a.events.push_back({ i * 10, i / 150.0 });
+      EnvLane cleared { -1, 0, {} };
+      const std::vector<QByteArray> pk = envWritePackets("c9", 4, 2, 1, -77, { a, cleared });
+      QCOMPARE(int(pk.size()), 4);
+      QString address;
+      QVariantList args;
+      QVERIFY(LiveClips::parseOsc(pk[0], &address, &args));
+      QCOMPARE(address, QString("/ms/env/write"));
+      QCOMPARE(args, QVariantList({ "c9", 4, 2, 1, -77, 2 }));
+      QVERIFY(LiveClips::parseOsc(pk[2], &address, &args));
+      QCOMPARE(address, QString("/ms/env/lane"));
+      QCOMPARE(args.mid(0, 6), QVariantList({ "c9", 4, 1, 2, 1, 2 }));
+      QCOMPARE(args.size(), 6 + 2 * 50);
+      QCOMPARE(args[6].toInt(), 1000);
+      QVERIFY(LiveClips::parseOsc(pk[3], &address, &args));
+      QCOMPARE(args, QVariantList({ "c9", 4, -1, 0, 0, 1 }));           // (no pairs: cleared)
+
+      // the device's parameter lists: in chunks, complete once every chunk is in; the same list again changes nothing
+      TrackParams* tp = TrackParams::instance();
+      tp->clear();
+      const QVariantList c0 { "c9", 55, 0, 2, -1, 0, "Mixer › Volume", 0.0, 1.0, 0 };
+      const QVariantList c1 { "c9", 55, 1, 2, 1, 4, "Operator › Algorithm", 0.0, 10.0, 1 };
+      QVERIFY(!tp->accept(c0));
+      QVERIFY(!tp->params("c9"));
+      QVERIFY(tp->accept(c1));
+      QCOMPARE(int(tp->params("c9")->size()), 2);
+      const LiveParam* algo = tp->param("c9", "live:1/4");
+      QVERIFY(algo && algo->quantized && algo->max == 10.0 && algo->name == QString("Operator › Algorithm"));
+      QVERIFY(!tp->param("c9", "live:1/5"));
+      const int gen = tp->generation();
+      QVERIFY(!tp->accept(c0));
+      QVERIFY(!tp->accept(c1));                                         // (the same list)
+      QCOMPARE(tp->generation(), gen);
+      QVERIFY(tp->accept({ "c9", 56, 0, 1, -1, 1, "Mixer › Pan", -1.0, 1.0, 0 }));   // a device removed in Live
+      QCOMPARE(int(tp->params("c9")->size()), 1);
+      tp->clear();
+      }
+
+//---------------------------------------------------------
+//   laneTimeAxis
+//    the automation lanes' time axis in Continuous View (libmscore/automation.h timeAxis, drawn by mscore/automationlanes.h; the owner's screenshot, 2026-10-02:
+//    the lanes' bar lines ~10 px right of the staff's, a point left of its note): a tick at a note is the middle of
+//    its note heads; the grid's bar line is the staff's bar line; between them the time runs on to the bar line
+//---------------------------------------------------------
+
+void TestLiveIntegration::laneTimeAxis()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      score->setLayoutMode(LayoutMode::LINE);
+      score->doLayout();
+      const double sp = score->spatium();
+      const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+      QVERIFY(!anchors.empty());
+      int notes = 0;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            Element* e = s->element(0);
+            if (!e || !e->isChord())
+                  continue;
+            for (Note* n : toChord(e)->notes()) {
+                  const double head = n->canvasBoundingRect().center().x();
+                  const double x = Automation::xAtTick(anchors, s->tick().ticks());
+                  QVERIFY2(std::fabs(x - head) < 0.1 * sp, qPrintable(QString("tick %1: lane %2, note %3")
+                                                                     .arg(s->tick().ticks()).arg(x).arg(head)));
+                  ++notes;
+                  }
+            }
+      QVERIFY(notes > 3);
+      for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure()) {
+            const double bar = Automation::barLineX(m);
+            const double edge = m->canvasPos().x() + m->width();
+            // (the bar line drawn: the end bar line's middle, or before a start repeat that one's: within its width)
+            QVERIFY2(std::fabs(bar - edge) < 1.0 * sp, qPrintable(QString("bar %1, measure's end %2").arg(bar).arg(edge)));
+            // just before the bar: almost at the bar line; at the next bar's tick: its first note, right of it
+            QVERIFY(std::fabs(Automation::xAtTick(anchors, m->endTick().ticks() - 1) - bar) < 0.2 * sp);
+            if (m->nextMeasure())
+                  QVERIFY(Automation::xAtTick(anchors, m->endTick().ticks()) > bar + 0.5 * sp);
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveParamLanes
+//    a part Live plays: a lane on a parameter of its Live track ("live:<d>/<p>") goes to the device as a parameter
+//    lane titled by its target (the device finds it on the track), next to the library's own; MuseScore's own
+//    playback (the hosted plug-in) has nothing for it; an empty one nothing at all
+//---------------------------------------------------------
+
+void TestLiveIntegration::liveParamLanes()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      auto lib = loadMap(MAP);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      score->rebuildMidiMapping();
+      std::map<const Part*, Automation::PartLanes> all;
+      Automation::Lane vib;
+      vib.target = "vibrato";
+      vib.points = { Automation::Point(0, 0.5, Automation::Curve::STEP) };
+      Automation::Lane tone;
+      tone.target = "live:1/2";
+      tone.extra["name"] = "Operator › Tone";
+      tone.points = { Automation::Point(0, 0.2, Automation::Curve::STEP), Automation::Point(960, 0.9, Automation::Curve::STEP) };
+      Automation::Lane vol;
+      vol.target = "live:-1/0";
+      vol.points = { Automation::Point(480, 0.7, Automation::Curve::STEP) };
+      Automation::Lane empty;
+      empty.target = "live:2/0";
+      all[score->parts()[0]] = { vib, tone, vol, empty };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, all));
+      QCOMPARE(LiveClips::liveLanes(Automation::read(score).at(score->parts()[0])), QStringList({ "live:1/2", "live:-1/0" }));
+
+      EventMap events;
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      for (int utick = 0;;) {
+            const MidiRenderer::Chunk ch = r.getChunkAt(utick);
+            if (!ch)
+                  break;
+            r.renderChunk(ch, &events, ctx);
+            utick = ch.utick2();
+            }
+      const std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, events, { "MuseScore A" },
+                                                                     LiveClips::timeline(score));
+      const LiveClips::Track* violin = nullptr;
+      for (const LiveClips::Track& t : tracks)
+            if (t.part == "Violin" && t.main)
+                  violin = &t;
+      QVERIFY(violin);
+      QStringList titles;
+      for (const LiveClips::Track::ParamLane& pl : violin->params)
+            titles << pl.title;
+      titles.sort();
+      QCOMPARE(titles, QStringList({ "Vibrato", "live:-1/0", "live:1/2" }));
+      for (const LiveClips::Track::ParamLane& pl : violin->params) {
+            if (pl.title != "live:1/2")
+                  continue;
+            QCOMPARE(int(pl.events.size()), 2);
+            QCOMPARE(pl.events[0].first, 0);
+            QVERIFY(std::fabs(pl.events[0].second - 0.2f) < 1e-6);
+            QCOMPARE(pl.events[1].first, 2 * U);
+            QVERIFY(std::fabs(pl.events[1].second - 0.9f) < 1e-6);
+            }
+      // the flute: none
+      for (const LiveClips::Track& t : tracks)
+            if (t.part == "Flute")
+                  QVERIFY(t.params.empty());
+
+      // MuseScore's own playback (the hosted plug-in): Vibrato only
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      score->setPlaylistDirty();
+      EventMap hosted;
+      score->renderMidi(&hosted, false, true, ss);
+      int vibrato = 0;
+      for (const auto& te : hosted) {
+            if (te.second.type() != ME_PARAMETER)
+                  continue;
+            QVERIFY(te.second.dataA() != LiveClips::LIVE_PARAM);
+            ++vibrato;
+            }
+      QVERIFY(vibrato > 0);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      SoundLib::setCurrent(nullptr);
+      delete score;
       }
 
 //---------------------------------------------------------

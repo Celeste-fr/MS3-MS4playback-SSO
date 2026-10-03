@@ -94,10 +94,14 @@ class MidiRenderer {
             std::vector<Ctrl> controllers;
             // the part's automation lanes (automation.h) its main patch can play: a MIDI controller's
             // (cc) or a plug-in parameter's (param: the controller's index in allControllers)
+            // A lane on a parameter of the part's Live track ("live:<d>/<p>": LiveClips::liveLanes) plays only where Live
+            // plays the score (forLiveClips): live, its index among them (a parameter event of controller
+            // LiveClips::LIVE_PARAM, that index as its second byte)
             struct Auto {
                   Automation::Lane lane;
                   int cc { -1 };
                   int param { -1 };
+                  int live { -1 };
                   };
             std::vector<Auto> automation;
             // a lane on the library's dynamics controller (CC1): from its first point it, not the notation's

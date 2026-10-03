@@ -25,7 +25,14 @@
 //
 //   Lanes (Automation::Lane::target): Dynamics (the library's dynamics CC: it takes the notation's place
 //   from its first point) and Expression (CC11), then every controller of the part's patches (the map's:
-//   SSO's named controls, Vibrato, Release, Tightness, Mic 1-5 … as Kontakt parameters or CCs). Shown: the
+//   SSO's named controls, Vibrato, Release, Tightness, Mic 1-5 … as Kontakt parameters or CCs).
+//   Not only the sound library's parts (the owner, 2026-10-02: "the automation display wouldn't only work for sso, it
+//   works for any midi clip"): an Edit-in-MuseScore clip tab's part gets its Live track's parameters (the mixer's
+//   volume and pan, every device's: a synth rack's macros, Sampler's, Operator's …; "live:<d>/<p>", read from Live by
+//   the MuseScore Link device), whatever instrument the track has; those lanes are the clip's own envelopes in Live
+//   (liveclipedit.h). A part Live plays (Live plays the score) gets its track's Live parameters after the map's
+//   ("Live: Operator › Tone"); the device plays them in Live (liveclips.h), MuseScore's own playback can't. The "+"
+//   menu has a submenu per Live device. Shown: the
 //   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
 //   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes.
 //
@@ -64,6 +71,7 @@ class QPainter;
 
 namespace Ms {
 
+class Measure;
 class Part;
 class Score;
 class ScoreView;
@@ -76,6 +84,7 @@ class AutomationLanes : public QObject {
             QString id;             // Automation::Lane::target
             QString name;
             bool param { false };   // a plug-in parameter (else a MIDI controller)
+            bool live { false };    // a parameter of the Live track ("live:<d>/<p>", liveclipmodel.h)
             };
       struct Row {
             const Part* part { nullptr };       // the view score's
@@ -167,8 +176,10 @@ class AutomationLanes : public QObject {
       mutable std::vector<Row> _rows;
       mutable bool _rowsValid { false };
       mutable std::map<const Part*, std::vector<Target>> _targets;
+      mutable int _targetsGeneration { -1 };
       std::vector<Row> computeRows() const;
       std::vector<Target> computeTargets(const Part* part) const;
+      std::vector<Target> libraryTargets(const Part* part) const;      // the sound library's controls (SSO's map)
       mutable std::vector<std::pair<int, double>> _anchors;
       mutable bool _anchorsValid { false };
       void buildAnchors() const;
@@ -192,6 +203,7 @@ class AutomationLanes : public QObject {
       void paintLane(QPainter& p, const Row& r, const QRectF& visible) const;
       void paintHeader(QPainter& p, const Row& r) const;
       QRectF headerRect(const Row& r) const;                                 // viewport
+      QString headLabel(const Row& r) const;
       QString valueText(double v) const;
       void select(const Row& r, const std::vector<int>& sel);
       void dropFocus();

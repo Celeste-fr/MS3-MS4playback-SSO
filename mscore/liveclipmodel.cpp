@@ -675,6 +675,162 @@ std::vector<QByteArray> writePackets(const QString& key, int write, const std::v
       }
 
 //---------------------------------------------------------
+//   automation lanes of a Live track: its parameters, a clip's envelopes
+//---------------------------------------------------------
+
+QString liveTarget(int d, int p)
+      {
+      return QString("live:%1/%2").arg(d).arg(p);
+      }
+
+bool parseLiveTarget(const QString& target, int* d, int* p)
+      {
+      static const QRegularExpression re("^live:(-?\\d+)/(\\d+)$");
+      const QRegularExpressionMatch m = re.match(target);
+      if (!m.hasMatch())
+            return false;
+      if (d)
+            *d = m.captured(1).toInt();
+      if (p)
+            *p = m.captured(2).toInt();
+      return true;
+      }
+
+TrackParams* TrackParams::instance()
+      {
+      static TrackParams t;
+      return &t;
+      }
+
+bool TrackParams::accept(const QVariantList& a)
+      {
+      const QString key = a.value(0).toString();
+      const qint32 hash = a.value(1).toInt();
+      const int chunk = a.value(2).toInt();
+      const int chunks = std::max(1, a.value(3).toInt());
+      Entry& e = _entries[key];
+      if (chunk == 0 || e.hash != hash || e.chunks != chunks) {     // (a new list: the last one in use until it is in)
+            e.parts.clear();
+            e.hash = hash;
+            e.chunks = chunks;
+            }
+      std::vector<LiveParam>& part = e.parts[chunk];
+      part.clear();
+      for (int i = 4; i + 5 < a.size(); i += 6) {
+            LiveParam p;
+            p.d = a[i].toInt();
+            p.p = a[i + 1].toInt();
+            p.name = a[i + 2].toString();
+            p.min = a[i + 3].toDouble();
+            p.max = a[i + 4].toDouble();
+            p.quantized = a[i + 5].toInt() != 0;
+            part.push_back(p);
+            }
+      if (int(e.parts.size()) < chunks)
+            return false;
+      std::vector<LiveParam> list;
+      for (const auto& pp : e.parts)
+            list.insert(list.end(), pp.second.begin(), pp.second.end());
+      e.parts.clear();
+      const bool changed = !e.complete || e.doneHash != hash;
+      e.params = list;
+      e.doneHash = hash;
+      e.complete = true;
+      if (changed)
+            ++_generation;
+      return changed;
+      }
+
+const std::vector<LiveParam>* TrackParams::params(const QString& key) const
+      {
+      auto it = _entries.find(key);
+      if (it == _entries.end() || (!it->second.complete && it->second.params.empty()))
+            return nullptr;
+      return &it->second.params;
+      }
+
+const LiveParam* TrackParams::param(const QString& key, const QString& target) const
+      {
+      int d = 0, p = 0;
+      const std::vector<LiveParam>* l = params(key);
+      if (!l || !parseLiveTarget(target, &d, &p))
+            return nullptr;
+      for (const LiveParam& x : *l)
+            if (x.d == d && x.p == p)
+                  return &x;
+      return nullptr;
+      }
+
+std::vector<std::pair<int, double>> envelopeEvents(const std::vector<Automation::Point>& points)
+      {
+      std::vector<std::pair<int, double>> out;
+      for (size_t i = 0; i < points.size(); ++i) {
+            const Automation::Point& a = points[i];
+            out.push_back({ a.tick, a.value });
+            if (i + 1 == points.size())
+                  break;
+            const Automation::Point& b = points[i + 1];
+            if (b.tick == a.tick)
+                  continue;                     // (a jump: the next point follows at once)
+            if (a.curve == Automation::Curve::STEP) {
+                  if (b.value != a.value)
+                        out.push_back({ b.tick, a.value });
+                  }
+            else if (a.curved()) {
+                  for (int k = 1; k < ENV_CURVE_STEPS; ++k) {
+                        const double x = double(k) / ENV_CURVE_STEPS;
+                        const int t = a.tick + int(std::lround(x * (b.tick - a.tick)));
+                        const double y = Automation::curveAt(a.c1x, a.c1y, a.c2x, a.c2y, x);
+                        if (t > out.back().first && t < b.tick)
+                              out.push_back({ t, a.value + (b.value - a.value) * y });
+                        }
+                  }
+            }
+      return out;
+      }
+
+std::vector<Automation::Point> lanePoints(const std::vector<std::pair<int, double>>& events)
+      {
+      std::vector<Automation::Point> pts;
+      for (const auto& e : events)
+            pts.push_back(Automation::Point(e.first, std::min(1.0, std::max(0.0, e.second)), Automation::Curve::LINEAR));
+      // a flat piece that ends in a jump: a step (as Live's own steps, insert_step, are written)
+      std::vector<Automation::Point> out;
+      for (size_t i = 0; i < pts.size(); ++i) {
+            Automation::Point p = pts[i];
+            if (i + 2 < pts.size() && pts[i + 1].tick > p.tick && pts[i + 2].tick == pts[i + 1].tick
+                && std::fabs(pts[i + 1].value - p.value) < 1e-6) {
+                  p.curve = Automation::Curve::STEP;
+                  out.push_back(p);
+                  ++i;                          // (its end is the step's)
+                  continue;
+                  }
+            out.push_back(p);
+            }
+      if (!out.empty())
+            out.back().curve = Automation::Curve::STEP;     // (the last holds: either is the same)
+      return out;
+      }
+
+std::vector<QByteArray> envWritePackets(const QString& key, int write, int track, int slot, qint32 hash,
+                                        const std::vector<EnvLane>& lanes)
+      {
+      std::vector<QByteArray> out;
+      out.push_back(LiveClips::osc("/ms/env/write", { key, write, track, slot, hash, int(lanes.size()) }));
+      for (const EnvLane& l : lanes) {
+            const int n = int(l.events.size());
+            const int chunks = std::max(1, (n + ENV_PAIRS - 1) / ENV_PAIRS);
+            for (int c = 0; c < chunks; ++c) {
+                  QVariantList args { key, write, l.d, l.p, c, chunks };
+                  for (int i = c * ENV_PAIRS; i < std::min(n, (c + 1) * ENV_PAIRS); ++i)
+                        args << l.events[size_t(i)].first << l.events[size_t(i)].second;
+                  out.push_back(LiveClips::osc("/ms/env/lane", args));
+                  }
+            }
+      return out;
+      }
+
+//---------------------------------------------------------
 //   LiveMidi
 //---------------------------------------------------------
 

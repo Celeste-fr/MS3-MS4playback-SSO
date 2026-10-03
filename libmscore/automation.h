@@ -72,7 +72,9 @@
 namespace Ms {
 
 class MasterScore;
+class Measure;
 class Part;
+class Score;
 
 namespace Automation {
 
@@ -100,6 +102,13 @@ void setCurvature(Point& p, double k);
 double curvature(const Point& p);
 // a Bézier segment in its box: the y (0-1 of the way to the next value) at time x (0-1)
 double curveAt(double c1x, double c1y, double c2x, double c2y, double x);
+
+// the time axis (canvas x) of a score laid out in Continuous View, for the lanes (mscore/automationlanes.h): tick -> x
+// anchors (a note's tick: the middle of its note heads; a measure's end: its bar line), x at a tick, the middle
+// of a measure's end bar line (where the lanes' grid draws the bar)
+std::vector<std::pair<int, double>> timeAxis(Score* score);
+double xAtTick(const std::vector<std::pair<int, double>>& anchors, int tick);
+double barLineX(const Measure* m);
 
 extern const char* const SOURCE_LIVE;     // "live"
 

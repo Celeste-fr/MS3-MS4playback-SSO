@@ -55,6 +55,7 @@ namespace Ms {
 
 class MasterScore;
 class MidiRenderer;
+class Part;
 
 namespace LiveIntegration {
 
@@ -163,6 +164,11 @@ class LiveClipsLink : public QObject {
       // the socket is shared with the clip editor (liveclipedit.h): bound while either is on
       void updateSocket();
       void sendDatagram(const QByteArray& packet) { send(packet); }
+      // to another port on this machine from the same socket (its answers come back here): the MuseScore Envelopes
+      // Control Surface script in Live (LiveClipEdit::ENV_PORT)
+      void sendDatagramTo(const QByteArray& packet, int port);
+      // the route key ("<port>:<channel>") of a part's main patch when the score Live plays is this one (else "")
+      QString routeKey(const Part* part) const;
       bool deviceAnswers() const;                   // a hello within 6 s (either feature)
       int deviceProtocol() const { return _deviceProtocol; }
       int port() const { return _port; }

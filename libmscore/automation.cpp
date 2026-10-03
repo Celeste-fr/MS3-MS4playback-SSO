@@ -13,6 +13,9 @@
 #include "part.h"
 #include "score.h"
 #include "undo.h"
+#include "barline.h"
+#include "measure.h"
+#include "segment.h"
 
 #include <algorithm>
 #include <set>
@@ -413,6 +416,81 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
 //---------------------------------------------------------
 //   Edit
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   the lanes' time axis (mscore/automationlanes.h draws on it)
+//---------------------------------------------------------
+
+// The score's time axis as laid out (the owner's report, 2026-10-02: the lanes' bar lines stood ~10 px right of the
+// staff's and a point left of its note). Anchors: each chord or rest at the middle of its note heads (the segment's x
+// is the heads' left edge), so a point stands under its note; each measure's end at the middle of its bar line, so
+// the time between the last note and the bar line runs to the bar line. Two anchors at a bar's tick: the bar line
+// (the end of the measure before) and the first note after it: a point at that tick stands under the note (the last
+// anchor), the grid's bar line at the bar line (barLineX).
+std::vector<std::pair<int, double>> timeAxis(Score* s)
+      {
+      std::vector<std::pair<int, double>> out;
+      if (!s)
+            return out;
+      const double half = 0.5 * s->noteHeadWidth();
+      for (Measure* m = s->firstMeasureMM(); m; m = m->nextMeasureMM()) {
+            if (!m->system())
+                  continue;
+            bool first = true;
+            for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
+                  if (!seg->visible())
+                        continue;
+                  const double x = seg->canvasPos().x() + half;
+                  if (first && seg->tick() != m->tick())
+                        out.push_back({ m->tick().ticks(), x });
+                  first = false;
+                  out.push_back({ seg->tick().ticks(), x });
+                  }
+            out.push_back({ m->endTick().ticks(), barLineX(m) });
+            }
+      return out;
+      }
+
+double barLineX(const Measure* m)
+      {
+      auto middle = [](const Segment* s, double* x) {
+            if (!s || !s->enabled() || s->width() <= 0)
+                  return false;
+            for (Element* e : s->elist())
+                  if (e && e->isBarLine() && !e->bbox().isEmpty()) {
+                        *x = e->canvasBoundingRect().center().x();
+                        return true;
+                        }
+            return false;
+            };
+      double x = 0;
+      if (middle(m->findSegment(SegmentType::EndBarLine, m->endTick()), &x))
+            return x;
+      // (no end bar line drawn: the next measure starts with a start repeat's, in the same system)
+      const Measure* next = m->nextMeasureMM();
+      if (next && next->system() == m->system()
+          && middle(next->findSegment(SegmentType::StartRepeatBarLine, next->tick()), &x))
+            return x;
+      return m->canvasPos().x() + m->width();
+      }
+
+double xAtTick(const std::vector<std::pair<int, double>>& anchors, int tick)
+      {
+      if (anchors.empty())
+            return 0;
+      if (tick <= anchors.front().first)
+            return anchors.front().second;
+      if (tick >= anchors.back().first)
+            return anchors.back().second;
+      // the last anchor at or before the tick (of several at one tick: the last, the first note's), the next after
+      auto it = std::upper_bound(anchors.begin(), anchors.end(), tick,
+                                 [](int t, const std::pair<int, double>& a) { return t < a.first; });
+      const auto& b = *it;
+      const auto& a = *std::prev(it);
+      if (b.first == a.first)
+            return a.second;
+      return a.second + (b.second - a.second) * double(tick - a.first) / double(b.first - a.first);
+      }
 
 namespace Edit {
 

@@ -18,7 +18,9 @@
 #include <QStatusBar>
 #include <QTimer>
 
+#include "libmscore/automation.h"
 #include "libmscore/liveclips.h"
+#include "libmscore/part.h"
 #include "libmscore/score.h"
 #include "audio/midi/msynthesizer.h"
 #include "libmscore/undo.h"
@@ -190,6 +192,228 @@ void LiveClipEditor::send(const QByteArray& p)
       LiveClipsLink::instance()->sendDatagram(p);
       }
 
+void LiveClipEditor::sendEnv(const QByteArray& p)
+      {
+      LiveClipsLink::instance()->sendDatagramTo(p, ENV_PORT);
+      }
+
+//---------------------------------------------------------
+//   automation lanes: the clip's envelopes
+//---------------------------------------------------------
+
+const std::vector<LiveParam>* LiveClipEditor::liveParams(const Score* score) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      if (!s || s->env != EnvState::READY)
+            return nullptr;
+      return TrackParams::instance()->params(s->clip.key);
+      }
+
+QString LiveClipEditor::clipKey(const Score* score) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      return s ? s->clip.key : QString();
+      }
+
+LiveClipEditor::EnvState LiveClipEditor::envState(const MasterScore* score) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      return s ? s->env : EnvState::NONE;
+      }
+
+void LiveClipEditor::paramsChanged(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end())
+            return;
+      log(QString("clip %1: the track's parameters (%2)").arg(key)
+          .arg(TrackParams::instance()->params(key) ? int(TrackParams::instance()->params(key)->size()) : 0));
+      if (it->second.score)
+            it->second.score->update();
+      updateStatus();
+      }
+
+void LiveClipEditor::readEnvelopes(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end())
+            return;
+      Session& s = it->second;
+      s.env = EnvState::READING;
+      s.envIncoming.clear();
+      s.envChunks.clear();
+      s.envExpected = -1;
+      s.envInFlight = false;
+      s.envSentAt = QDateTime::currentMSecsSinceEpoch();
+      sendEnv(LiveClips::osc("/ms/env/read", { key, s.envTrack, s.envSlot }));
+      }
+
+// the envelopes read: the score's lanes on Live parameters are Live's now (no undo step: as the notes were imported)
+void LiveClipEditor::envelopesRead(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || !it->second.score)
+            return;
+      Session& s = it->second;
+      MasterScore* score = s.score;
+      if (score->parts().empty())
+            return;
+      const Part* part = score->parts().front();
+      std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+      Automation::PartLanes keep;
+      for (const Automation::Lane& l : all[part])
+            if (!parseLiveTarget(l.target, nullptr, nullptr))
+                  keep.push_back(l);
+      s.envSent.clear();
+      for (const auto& in : s.envIncoming) {
+            std::vector<std::pair<int, double>> ev;
+            for (const auto& c : in.second)
+                  ev.insert(ev.end(), c.second.begin(), c.second.end());
+            Automation::Lane l;
+            l.target = liveTarget(in.first.first, in.first.second);
+            l.points = lanePoints(ev);
+            if (l.points.empty())
+                  continue;
+            const LiveParam* p = TrackParams::instance()->param(key, l.target);
+            if (p)
+                  l.extra["name"] = p->name;
+            s.envSent[l.target] = Automation::pointsHash(l.points);
+            keep.push_back(l);
+            }
+      all[part] = keep;
+      const QString tag = Automation::write(score, all);
+      if (tag != score->metaTag(Automation::metaTag)) {
+            if (seq)
+                  seq->waitForRendering();
+            score->setMetaTag(Automation::metaTag, tag);
+            score->setPlaylistDirty();
+            }
+      s.envIncoming.clear();
+      s.envChunks.clear();
+      s.env = EnvState::READY;
+      log(QString("clip %1: %2 envelope(s) read").arg(key).arg(s.envSent.size()));
+      score->update();
+      updateStatus();
+      }
+
+void LiveClipEditor::writeEnvelopes(const QString& key)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end() || !it->second.score)
+            return;
+      Session& s = it->second;
+      if (s.env != EnvState::READY || s.state == State::CONFLICT || s.state == State::GONE || s.state == State::RELOADING)
+            return;
+      if (s.envInFlight) {
+            s.envChangedMeanwhile = true;
+            return;
+            }
+      if (s.score->undoStack()->active())
+            return;                             // (write() asks again after the command)
+      MasterScore* score = s.score;
+      if (score->parts().empty())
+            return;
+      const std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+      auto pl = all.find(score->parts().front());
+      std::map<QString, const Automation::Lane*> now;
+      if (pl != all.end())
+            for (const Automation::Lane& l : pl->second)
+                  if (!l.points.empty() && parseLiveTarget(l.target, nullptr, nullptr))
+                        now[l.target] = &l;
+      std::vector<EnvLane> lanes;
+      std::map<QString, QString> next;
+      for (const auto& n : now) {
+            const QString h = Automation::pointsHash(n.second->points);
+            next[n.first] = h;
+            auto was = s.envSent.find(n.first);
+            if (was != s.envSent.end() && was->second == h)
+                  continue;
+            EnvLane e;
+            parseLiveTarget(n.first, &e.d, &e.p);
+            e.events = envelopeEvents(n.second->points);
+            lanes.push_back(e);
+            }
+      for (const auto& was : s.envSent)
+            if (!now.count(was.first)) {
+                  EnvLane e;                    // (cleared)
+                  parseLiveTarget(was.first, &e.d, &e.p);
+                  lanes.push_back(e);
+                  }
+      if (lanes.empty())
+            return;
+      s.envPending = next;
+      ++s.envWrite;
+      s.envPackets = envWritePackets(key, s.envWrite, s.envTrack, s.envSlot, s.envHash, lanes);
+      s.envInFlight = true;
+      s.envTries = 1;
+      s.envSentAt = QDateTime::currentMSecsSinceEpoch();
+      log(QString("clip %1 envelope write %2: %3 lane(s)").arg(key).arg(s.envWrite).arg(lanes.size()));
+      for (const QByteArray& p : s.envPackets)
+            sendEnv(p);
+      updateStatus();
+      }
+
+void LiveClipEditor::envWritten(const QString& key, int writeNo, const QString& status, qint32 hash)
+      {
+      auto it = _sessions.find(key);
+      if (it == _sessions.end())
+            return;
+      Session& s = it->second;
+      if (!s.envInFlight || writeNo != s.envWrite)
+            return;
+      s.envInFlight = false;
+      log(QString("clip %1 envelope write %2: %3").arg(key).arg(writeNo).arg(status));
+      if (status == "ok") {
+            s.envSent = s.envPending;
+            s.envHash = hash;
+            ++s.envWrites;
+            if (s.envChangedMeanwhile) {
+                  s.envChangedMeanwhile = false;
+                  writeEnvelopes(key);
+                  }
+            }
+      else if (status == "conflict") {
+            s.envHash = hash;
+            s.state = State::CONFLICT;
+            s.inFlight = false;
+            }
+      else if (status == "gone")
+            s.state = State::GONE;
+      else {
+            s.env = EnvState::FAILED;
+            s.envError = status;
+            }
+      updateStatus();
+      }
+
+QString LiveClipEditor::envText(const MasterScore* score) const
+      {
+      const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
+      if (!s)
+            return QString();
+      switch (s->env) {
+            case EnvState::NONE:
+                  return LiveClipsLink::instance()->deviceProtocol() < PARAMS_PROTOCOL
+                         ? tr("automation lanes: update the MuseScore Link device in Live") : QString();
+            case EnvState::READING:
+                  return tr("reading the clip's envelopes…");
+            case EnvState::READY:
+                  if (!TrackParams::instance()->params(s->clip.key))
+                        return tr("waiting for the track's parameters");
+                  return s->envInFlight ? tr("writing the envelopes…")
+                                        : s->envWrites ? tr("envelopes in sync (%n write(s))", "", s->envWrites) : QString();
+            case EnvState::ARRANGEMENT:
+                  return tr("no automation lanes: an arrangement clip has no envelopes Live's API can reach (a session "
+                            "clip has)");
+            case EnvState::NO_SCRIPT:
+                  return tr("no automation lanes: the MuseScore Envelopes control surface doesn't answer (install it in "
+                            "Live and choose it in Settings › Tempo & MIDI › Control Surface: LIVE.md)");
+            case EnvState::FAILED:
+                  return tr("envelopes: %1").arg(s->envError);
+            }
+      return QString();
+      }
+
 //---------------------------------------------------------
 //   the device's messages
 //---------------------------------------------------------
@@ -271,6 +495,78 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
                   it->second.inFlight = false;
                   it->second.copy = false;
                   updateRouting();
+                  updateStatus();
+                  }
+            }
+      else if (address == "/live/clip/where") {
+            auto it = _sessions.find(key);
+            if (it == _sessions.end())
+                  return;
+            Session& s = it->second;
+            const int track = args.value(1).toInt();
+            const int slot = args.value(2).toInt();
+            const bool moved = s.envTrack != track || s.envSlot != slot;
+            s.envTrack = track;
+            s.envSlot = slot;
+            log(QString("clip %1: track %2, %3").arg(key).arg(track).arg(slot < 0 ? QString("arrangement")
+                                                                                  : QString("session slot %1").arg(slot)));
+            if (slot < 0 || track < 0) {
+                  s.env = EnvState::ARRANGEMENT;
+                  updateStatus();
+                  }
+            else if (s.env == EnvState::NONE || s.env == EnvState::ARRANGEMENT || s.env == EnvState::NO_SCRIPT)
+                  readEnvelopes(key);
+            else if (moved && s.env == EnvState::READY)
+                  log(QString("clip %1 moved in Live: its envelopes are written there").arg(key));
+            }
+      else if (address == "/live/env/begin") {
+            auto it = _sessions.find(key);
+            if (it == _sessions.end() || it->second.env != EnvState::READING)
+                  return;
+            Session& s = it->second;
+            const QString status = args.value(1).toString();
+            if (status == "ok") {
+                  s.envHash = args.value(2).toInt();
+                  s.envExpected = args.value(3).toInt();
+                  s.envIncoming.clear();
+                  s.envChunks.clear();
+                  if (s.envExpected == 0)
+                        envelopesRead(key);
+                  }
+            else if (status == "arrangement")
+                  s.env = EnvState::ARRANGEMENT;
+            else if (status == "gone")
+                  s.env = EnvState::FAILED, s.envError = tr("the clip isn't in that slot any more");
+            else
+                  s.env = EnvState::FAILED, s.envError = status;
+            updateStatus();
+            }
+      else if (address == "/live/env/lane") {
+            auto it = _sessions.find(key);
+            if (it == _sessions.end() || it->second.env != EnvState::READING || it->second.envExpected < 0)
+                  return;
+            Session& s = it->second;
+            const std::pair<int, int> dp { args.value(1).toInt(), args.value(2).toInt() };
+            std::vector<std::pair<int, double>>& part = s.envIncoming[dp][args.value(3).toInt()];
+            part.clear();
+            for (int i = 5; i + 1 < args.size(); i += 2)
+                  part.push_back({ args[i].toInt(), args[i + 1].toDouble() });
+            s.envChunks[dp] = args.value(4).toInt();
+            int complete = 0;
+            for (const auto& in : s.envIncoming)
+                  if (int(in.second.size()) >= s.envChunks[in.first])
+                        ++complete;
+            if (complete >= s.envExpected)
+                  envelopesRead(key);
+            }
+      else if (address == "/live/env/written")
+            envWritten(key, args.value(1).toInt(), args.value(2).toString(), args.value(3).toInt());
+      else if (address == "/live/env/conflict") {
+            auto it = _sessions.find(key);
+            if (it != _sessions.end() && it->second.env == EnvState::READY && it->second.state != State::RELOADING) {
+                  it->second.state = State::CONFLICT;
+                  it->second.envInFlight = false;
+                  log(QString("clip %1: its envelopes changed in Live: no more writes until it is reloaded").arg(key));
                   updateStatus();
                   }
             }
@@ -369,8 +665,10 @@ void LiveClipEditor::flush()
       {
       const std::set<QString> keys = _dirty;
       _dirty.clear();
-      for (const QString& key : keys)
+      for (const QString& key : keys) {
             write(key);
+            writeEnvelopes(key);
+            }
       }
 
 void LiveClipEditor::write(const QString& key)
@@ -452,6 +750,31 @@ void LiveClipEditor::written(const QString& key, int writeNo, const QString& sta
 void LiveClipEditor::poll()
       {
       const qint64 now = QDateTime::currentMSecsSinceEpoch();
+      for (auto& e : _sessions) {             // the envelopes: a read or a write unanswered
+            Session& s = e.second;
+            if (s.env == EnvState::READING && now - s.envSentAt >= CONFIRM_MS) {
+                  s.env = EnvState::NO_SCRIPT;
+                  s.envSentAt = now;
+                  log(QString("clip %1: the MuseScore Envelopes script doesn't answer").arg(e.first));
+                  updateStatus();
+                  }
+            else if (s.env == EnvState::NO_SCRIPT && now - s.envSentAt >= 5000 && s.score)
+                  readEnvelopes(e.first);       // (asked again: installed meanwhile)
+            else if (s.envInFlight && now - s.envSentAt >= CONFIRM_MS) {
+                  if (s.envTries >= MAX_TRIES) {
+                        s.envInFlight = false;
+                        s.env = EnvState::FAILED;
+                        s.envError = tr("the MuseScore Envelopes script stopped answering (reload the clip)");
+                        updateStatus();
+                        }
+                  else {
+                        ++s.envTries;
+                        s.envSentAt = now;
+                        for (const QByteArray& p : s.envPackets)    // (the same write number: applied once)
+                              sendEnv(p);
+                        }
+                  }
+            }
       for (auto& e : _sessions) {
             Session& s = e.second;
             if (!s.inFlight || now - s.sentAt < CONFIRM_MS)
@@ -538,6 +861,9 @@ QString LiveClipEditor::statusText(const MasterScore* score) const
                   break;
             }
       QString text = what + ": " + state;
+      const QString env = envText(s->score);
+      if (!env.isEmpty())
+            text += " · " + env;
       if (s->base.unmatched || s->base.outside)
             text += " " + tr("(%n Live note(s) not shown here are left as they are)", "", s->base.unmatched + s->base.outside);
       // playback
@@ -566,6 +892,7 @@ void LiveClipEditor::setCurrentScore(MasterScore* score)
 
 void LiveClipEditor::updateStatus()
       {
+      TrackParams::instance()->touch();         // (the lanes a clip tab offers may have changed)
       emit statusChanged();
       if (!mscore || MScore::noGui)
             return;
@@ -587,7 +914,8 @@ void LiveClipEditor::updateStatus()
       if (!s)
             return;
       _statusLabel->setText(statusText(_current));
-      _reload->setVisible(s->state == State::CONFLICT || s->state == State::FAILED || s->state == State::NO_ANSWER);
+      _reload->setVisible(s->state == State::CONFLICT || s->state == State::FAILED || s->state == State::NO_ANSWER
+                          || s->env == EnvState::FAILED);
       }
 
 }     // namespace LiveIntegration

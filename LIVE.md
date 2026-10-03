@@ -405,10 +405,13 @@ then "why not make it so that you can edit the automation curves in both and the
 
 ### Drawing them in MuseScore
 
-In **Continuous View**, click any note (or anything) of a part the sound library plays: its automation opens under
-its staves, on the score's own time axis (a lane's point sits under its note). Header row: *+* adds a lane (Dynamics
-(CC1), Expression (CC11), and every control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5,
-Release, Tightness, Mute …), *All* shows them all, the pencil is Draw Mode, the triangle folds. Empty lanes are hidden
+In **Continuous View**, click any note (or anything) of a part the sound library plays, of a part Live plays (*Live
+plays the score*) or of an *Edit in MuseScore* clip tab: its automation opens under its staves, on the score's own time
+axis (a lane's point sits under the middle of its note's heads, the grid's bar lines on the staff's: since 2026-10-02,
+when they stood ~1 sp right of them). Header row: *+* adds a lane (Dynamics (CC1), Expression (CC11), and every
+control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5, Release, Tightness, Mute …; a part
+Live plays also its Live track's parameters, "Live: Operator › Tone"; a clip tab only its track's Live parameters:
+below), *All* shows them all, the pencil is Draw Mode, the triangle folds. Empty lanes are hidden
 until added; × hides a lane (it still plays). Editing as in Live 12 (manual 25.5): click adds a breakpoint (snapped to
 the grid, which follows the zoom; Alt: free), drag moves (Shift: fine), double-click or Delete removes, Alt-drag a
 segment curves it (Live's own Bézier: a curve drawn here is Live's curve, and back), Alt-double-click straightens,
@@ -419,9 +422,16 @@ first point (the notation still sets short notes' velocities). Page View shows n
 
 ### How they reach Live
 
-Max for Live's Object Model (Live 12.2) can neither write nor read a clip's envelopes or the arrangement's automation
-(the Clip has `has_envelopes` and `clear_envelope` only; Live's Python API has envelopes for session clips only,
-"None for Arrangement clips"). So:
+Max for Live's Object Model can neither write nor read a clip's envelopes or the arrangement's automation (the Clip
+has `has_envelopes` and `clear_envelope` only, still in Live 12.4.6; Live's Python API has envelopes for session clips
+only, "None for Arrangement clips"). So:
+
+- **Any Live parameter of the part's track** (the owner, 2026-10-02: "the automation display wouldn't only work for
+  sso, it works for any midi clip"): the device sends each route's track's parameters (`/live/params`: the mixer's
+  volume and pan, every device's, MuseScore Link's left out; again when the track's devices change). A lane on one
+  ("live:<device index>/<parameter index>") goes to the device like a plug-in parameter lane, titled by that target,
+  and the device drives that parameter of its track (no plug-in needed). Only while Live plays the score: MuseScore's
+  own playback (the hosted plug-in) can't play Live's devices (What still differs).
 
 - **MuseScore → Live, while Live plays the score**: the MuseScore Link device sets the parameters itself. MuseScore
   sends each route's parameter lanes (`/ms/params`, `/ms/pvals`: the parameter's title and plug-in id, each value from
@@ -565,8 +575,9 @@ What Live 12.2 offers, checked in the running program (`dir()` of its Python cla
 
 ### Open questions for the owner
 
-- Edit-in-MuseScore clip tabs: lanes drawn there play in MuseScore only. Writing them back as the clip's envelopes
-  needs Live's Python API (a Control Surface script; session clips only) or Live 12.4's `create_event` (allowed: 12.4 is the owner's version since 2026-10-02, CLAUDE.md › Rules). Wanted?
+- Clip tabs: their lanes are now the clip's own envelopes (Editing Live clips in MuseScore › Automation lanes in a
+  clip tab; the owner approved it 2026-10-02). Arrangement clips can't have them through Live's API: write those
+  as the track's Arrangement automation with option B's copy trick (it replaces the clip by a copy: new note ids)?
 
 ## Live against MuseScore
 
@@ -622,8 +633,11 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 - **MuseScore's automation lanes of plug-in parameters** play in Live through the device (since 2026-09-30), from a
   table of the value in force at each millisecond: a change comes up to 1 ms after MuseScore's (in Live's audio
   blocks, as MuseScore's host applies it in its own). While the device drives a parameter, Live's own automation of
-  it is overridden (live.remote~). Lanes in *Edit in MuseScore* clip tabs don't reach Live (those tabs play with
-  MuseScore's own sounds; nothing can write a clip's envelopes from Max for Live in Live 12.2).
+  it is overridden (live.remote~).
+- **Lanes on a Live track's own parameters** (an EQ, Operator, a rack's macros: "Live: …") play only in Live: MuseScore's
+  host has no Live devices. A clip tab's lanes are the clip's envelopes: Live plays them when it plays the clip, but
+  MuseScore's Play in a clip tab (notes sent to the track, the clip not launched) doesn't apply them (it could set the
+  parameters as it plays, as the device does for the score; not built).
 - **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
   panel and faders.
 - The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.
@@ -798,9 +812,67 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
 - **Starting again**: *Edit in MuseScore* on a clip already open brings its tab to the front, or reads it again
   if it changed in Live. `/ms/clip/edit` (from MuseScore) does what the button does (used by tests only).
 
+### Automation lanes in a clip tab (2026-10-02)
+
+The owner, 2026-10-02: lanes drawn in an Edit-in-MuseScore tab "must be written into the Live clip's own envelopes",
+"the automation display wouldn't only work for sso, it works for any midi clip".
+
+- **The lanes**: the clip's track's Live parameters, whatever the track plays (a Samples From Mars rack's macros,
+  Sampler's, Operator's, Kontakt's configured slots): the mixer's volume and pan, then every device's (*+* has a
+  submenu per device). The device sends them (`/live/params`, protocol 5) with the clip's place (`/live/clip/where`:
+  the track's index, the session slot's). No sound library or map is involved.
+- **Where they are kept**: in the clip, as its envelopes (Live's Clip View › Envelopes shows them, the parameter with a
+  red dot). Max for Live can't reach a clip's envelopes, even in Live 12.4.6 (a Clip has `has_envelopes`,
+  `clear_envelope`, `clear_all_envelopes` only; calling `automation_envelope` from the device fails: tried), so a small
+  **Control Surface script**, `tools/live/MuseScoreEnvelopes`, does it with Live's Python API
+  (`Clip.automation_envelope` / `create_automation_envelope`, `Envelope.create_event` (Live 12.4), `events_in_range`,
+  `value_at_time`, `delete_events_in_range`, `Clip.clear_envelope`); MuseScore talks to it directly (UDP 9005, its
+  protocol in `core.py`). When the tab opens MuseScore reads the clip's envelopes into lanes (no undo step); each edit
+  of a lane (300 ms after the last, like the notes) writes the lanes changed since: a lane replaces its envelope, a
+  removed lane clears it. One write at a time, sent again after 3 s (applied once). The script hashes the clip's
+  envelopes once a second: a change made in Live is a **conflict** like the notes' (*Reload from Live*); a write
+  against an older hash is refused.
+- **Set up once in Live** (the owner): copy `tools/live/MuseScoreEnvelopes` to `<User Library>/Remote Scripts/`
+  (Windows: `Documents\Ableton\User Library\Remote Scripts\MuseScoreEnvelopes`), restart Live, then *Settings ›
+  Tempo & MIDI › Control Surface*: `MuseScoreEnvelopes` in a free row, Input and Output None. Without it the tab
+  has no lanes and the status line says how to set it up (asked again every 5 s). It listens on 127.0.0.1 only and
+  writes `MuseScoreEnvelopes.log` next to itself.
+- **What Live 12.4.6 does** (tried on the test VM, 2026-10-02, Operator on a MIDI track): `create_event` takes the
+  parameter's value (`events_in_range` gives Live's stored one, which differs for Volume-like parameters: read with
+  `value_at_time`); two breakpoints at one time are a jump (`value_at_time` at that time gives the earlier value);
+  `delete_events_in_range` includes both ends; a breakpoint's curve (`EnvelopeEventControlCoefficients`) is ignored
+  (always read back 0.5, straight). So a step is written as its value again just before the next point, a straight
+  ramp as two breakpoints, a **curved ramp as 16 straight pieces** along MuseScore's curve (read back, the lane has
+  those points). Before a lane's first point Live's envelope holds the first value (a MuseScore lane says nothing
+  there); after the last both hold it. Played: the clip launched, Operator's *Transpose* read back four times a beat
+  followed the envelope (0 → 40 over beats 0-4, -20 from beat 4, again at the loop).
+- **Arrangement clips: no lanes.** Live's API gives no envelopes for them (`automation_envelope` None,
+  `create_automation_envelope` "Not a session clip", still in 12.4.6); in Live an arrangement clip's device automation is
+  the track's anyway. The status line says so. (Option B's copy trick could write the track's automation over the
+  clip's span, but it replaces the clip: open question.)
+- **MIDI CC lanes**: a clip's *MIDI Ctrl* envelopes (Pitch Bend, CC 1 …) are not device parameters and no API reaches
+  them. Live's own **CC Control** device on the track gives CC lanes: its controls are parameters, so they are lanes.
+- MuseScore's Play in the tab sends the notes to the track (above) but not the envelopes (What still differs).
+
 ### What is tested, and what only Live can show
 
 Tested here:
+- Clip-tab lanes: `tst_liveintegration` clipEnvelopeMapping (points → breakpoints and back, curves, the packets, the
+  parameter lists), liveParamLanes (a part Live plays: a "live:" lane to the device titled by its target, nothing in
+  MuseScore's own playback), laneTimeAxis (a point under its note's heads, the grid's bar line on the staff's);
+  `tools/live/test/test_envelopes.py` (the script against a stand-in Live with envelopes as 12.4.6 behaves: read,
+  write, a jump, a Volume-like parameter, the mixer, a quantized one, clear, chunks, once-only, conflict, arrangement,
+  gone); `test_envparams.js` (the device: the parameters and the place, a device added, the track moved, an
+  arrangement clip, a route's "live:" lanes driving a device's and the mixer's parameter). In real Live 12.4.6 (the VM,
+  the script installed, MuseScore's datagrams sent by a script): read, write, read back, a change made in Live →
+  conflict and the write refused; the new device's `/live/params` and `/live/clip/where` for a session clip on a track
+  without the device; the envelopes in Live's Clip View (Transpose: steps and a ramp; Tone: a 16-piece curve).
+  End to end on Linux: a real MuseScore GUI build (Xvfb) against `fake_live_server.js --edit-clip Keys --session` and
+  `fake_envelopes_server.py` (the script's own code over the stand-in Live): the tab opened with the clip's Drive
+  envelope as a lane ("Synth Rack › Drive"), *+* offered the track's devices as submenus (Mixer, Synth Rack › Cutoff), a
+  point clicked into a lane, a new Cutoff lane and its points were each one write of only that lane, *Undo* wrote the
+  lane back; a Cutoff breakpoint drawn "in Live": a conflict, and the next edit was not written.
+  Not tried: MuseScore's GUI against real Live (a Windows build), a route's "live:" lane in real Live.
 - `tst_liveintegration` clipEdit*: the import (Continuous View, one system, part and instrument from the track
   name, bars to the clip's end, tempo, time signature), each Live note matched; no edit → nothing sent; a pitch
   edit → one modification of that id, its humanized start, length, velocity, probability kept; velocity and
@@ -954,7 +1026,8 @@ do.
   Live saved.
 - `mscore/liveclipmodel.{h,cpp}`: editing Live clips: the import, the baseline, the diff, the messages;
   `mscore/liveclipedit.{h,cpp}`: the sessions, tabs and status line.
-- `tools/live/`: the device (`MuseScoreLink.js`, `make_device.py`) and its tests (`test/`).
+- `tools/live/`: the device (`MuseScoreLink.js`, `make_device.py`) and its tests (`test/`); `MuseScoreEnvelopes/`:
+  the Control Surface script that writes a clip tab's lanes into the clip's envelopes (`test/test_envelopes.py`).
 - `mscore/liveequivalence.{h,cpp}`: Live against MuseScore (the check, `readBack`); test `tst_liveequivalence`.
 - Tests: `mtest/libmscore/liveintegration`. Fixtures: `liveset.xml` (written by hand, gzipped by
   the test) and `violin-flute.musicxml`.

@@ -30,6 +30,15 @@
 //     instrument (nothing recorded, no arming). The hub tells MuseScore each edited clip's track and whether a
 //     copy of protocol 4+ is on it (/live/clip/track, again when that changes). Live's transport, song time and
 //     clips are never touched for it. /live/bye when the hub goes; /ms/clip/adopt: a new hub takes over a clip.
+//   - automation lanes of any Live track (protocol 5; /ms/params/ask: all of them again; the owner, 2026-10-02: "the automation display wouldn't only work
+//     for sso, it works for any midi clip"): for each edited clip and each route's track the hub sends the track's
+//     automatable parameters, /live/params key:s hash:i chunk:i chunks:i (d:i p:i name:s min:f max:f quantized:i) × n
+//     (d -1: the mixer, p 0 volume, 1 pan; else devices[d].parameters[p]; MuseScore Link itself left out), again
+//     when the track's devices change (checked once a second), and each edited clip's place, /live/clip/where key:s
+//     track:i slot:i (the track's index; the session slot's, -1 for an arrangement clip), again when it moves.
+//     A clip tab's lanes are written into the clip's own envelopes by the MuseScore Envelopes Control Surface
+//     script (tools/live/MuseScoreEnvelopes: Max for Live can't), MuseScore talking to it directly. A route's lane
+//     titled "live:<d>/<p>" is that parameter of the track (no plug-in needed), driven as below.
 //   - plug-in parameter lanes (MuseScore's automation of Kontakt's parameters): the LOM can't write clip
 //     envelopes or arrangement automation, so each copy drives its own track's plug-in parameters
 //     itself while Live plays. Below, "Parameter lanes".
@@ -77,7 +86,8 @@ outlets = 8;      // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2:
                   // 6: the lanes to keep in the Live Set ([pattr Lanes]),
                   // 7: "set msl_m<track id>" to the [receive] that plays MuseScore's notes for a clip tab
 
-var PROTOCOL = 4;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track
+var PROTOCOL = 5;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+                                        // 5: the tracks' parameters and the clips' places (automation lanes of any track)
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 var HUB_STALE_MS = 5000;
@@ -244,6 +254,7 @@ function beat() {
             if (Math.floor(now() / 1000) % 2 === 0)
                   send("/live/hello", session, PROTOCOL);
             checkEdits();
+            checkRouteParams();
             }
       else
             elect();
@@ -427,6 +438,12 @@ function handle(address, a) {
             }
       else if (address === "/ms/stop")
             new LiveAPI("live_set").call("stop_playing");
+      else if (address === "/ms/params/ask") {        // (MuseScore started again: every track's parameters, next second)
+            for (var pk in placed)
+                  placed[pk].devs = null;
+            for (var ek in edits)
+                  edits[ek].devs = null;
+            }
       else if (address === "/ms/clip/edit")
             work.push({ kind: "edit" });
       else if (address === "/ms/clip/write") {
@@ -720,8 +737,10 @@ function writeClip(t) {
       for (i = 0; i < t.notes.length; i += BATCH)
             c.call("add_new_notes", { notes: t.notes.slice(i, i + BATCH) });
       setMonitor(tr);
-      placed[t.key] = { track: num(tr.id), clip: t.clip };
+      var was = placed[t.key];
+      placed[t.key] = { track: num(tr.id), clip: t.clip, devs: was && was.track === num(tr.id) ? was.devs : null };
       send("/live/applied", t.key, t.hash, deviceCheck(tr), trackName);
+      sendParams(placed[t.key], t.key, tr);
       status("MuseScore Link: hub; last clip " + t.clip + " on " + trackName);
       }
 
@@ -951,6 +970,9 @@ function sendClip(e) {
       e.trackName = trackName;
       e.copy = copyOn(e.trackId);
       send("/live/clip/track", e.key, e.trackId, e.copy ? 1 : 0, trackName);
+      sendWhere(e, clip, tr, true);
+      e.devs = null;
+      sendParams(e, e.key, tr);
       status("MuseScore Link: " + clipName + " (" + trackName + ") sent to MuseScore");
       }
 
@@ -1099,6 +1121,9 @@ function checkEdits() {
                   delete edits[key];
                   continue;
                   }
+            var etr = trackOf(clip);
+            sendWhere(e, clip, etr, false);
+            sendParams(e, key, etr);
             var h = hashNotes(readNotes(clip));
             if (h !== e.hash) {
                   e.conflict = true;
@@ -1106,6 +1131,117 @@ function checkEdits() {
                   status("MuseScore Link: " + str(clip.get("name")) + " changed in Live: MuseScore stops writing to it");
                   }
             }
+      }
+
+//---------------------------------------------------------
+//   the tracks' parameters and the clips' places (protocol 5)
+//---------------------------------------------------------
+
+var PARAMS_PER_PACKET = 16;             // about 0.8 kB a datagram
+
+// the clip's place as Live's Python API finds it: the track's index, the session slot's (-1: an arrangement clip)
+function whereOf(clip, tr) {
+      var t = -1, s = -1;
+      if (tr) {
+            t = ids(new LiveAPI("live_set").get("tracks")).indexOf(num(tr.id));
+            var p = ids(clip.get("canonical_parent"));
+            if (p.length && str(new LiveAPI("id " + p[0]).type) === "ClipSlot")
+                  s = ids(tr.get("clip_slots")).indexOf(p[0]);
+            }
+      return { track: t, slot: s };
+      }
+
+function sendWhere(e, clip, tr, always) {
+      var w = whereOf(clip, tr);
+      if (!always && e.where && e.where.track === w.track && e.where.slot === w.slot)
+            return;
+      e.where = w;
+      send("/live/clip/where", e.key, w.track, w.slot);
+      }
+
+function isLink(dev) {
+      return /^Mx/.test(str(dev.get("class_name"))) && /^MuseScore Link/.test(str(dev.get("name")));
+      }
+
+// what a lane can automate on the track: the mixer's volume and pan, then every device's parameters (the device's
+// own name before the parameter's), MuseScore Link's left out
+function trackParams(tr) {
+      var out = [{ d: -1, p: 0, name: "Mixer › Volume", min: 0, max: 1, q: 0 },
+                 { d: -1, p: 1, name: "Mixer › Pan", min: -1, max: 1, q: 0 }];
+      var devs = ids(tr.get("devices"));
+      for (var i = 0; i < devs.length; ++i) {
+            var dv = new LiveAPI("id " + devs[i]);
+            if (isLink(dv))
+                  continue;
+            var dn = str(dv.get("name"));
+            var pl = ids(dv.get("parameters"));
+            for (var j = 0; j < pl.length; ++j) {
+                  var pa = new LiveAPI("id " + pl[j]);
+                  out.push({ d: i, p: j, name: dn + " › " + str(pa.get("name")), min: num(pa.get("min")) || 0,
+                             max: num(pa.get("max")), q: num(pa.get("is_quantized")) ? 1 : 0 });
+                  }
+            }
+      return out;
+      }
+
+function hashParams(list) {
+      var h = 2166136261;
+      var text = "";
+      for (var i = 0; i < list.length; ++i)
+            text += list[i].d + "/" + list[i].p + "/" + list[i].name + "/" + list[i].min + "/" + list[i].max + "/" + list[i].q + ";";
+      for (var k = 0; k < text.length; ++k) {
+            h ^= text.charCodeAt(k) & 0xff;
+            h = Math.imul ? (Math.imul(h, 16777619) >>> 0) : ((h * 16777619) % 4294967296) >>> 0;
+            }
+      return h | 0;
+      }
+
+// the track's parameters to MuseScore (key: an edited clip's or a route's), when its devices changed since `holder`
+// last sent them (holder.devs: the device ids then)
+function sendParams(holder, key, tr) {
+      var devs = tr ? ids(tr.get("devices")).join(",") : "-";
+      if (holder.devs === devs)
+            return;
+      holder.devs = devs;
+      var list = tr ? trackParams(tr) : [];
+      var h = hashParams(list);
+      var chunks = Math.max(1, Math.ceil(list.length / PARAMS_PER_PACKET));
+      for (var c = 0; c < chunks; ++c) {
+            var args = ["/live/params", key, h, c, chunks];
+            var part = list.slice(c * PARAMS_PER_PACKET, (c + 1) * PARAMS_PER_PACKET);
+            for (var i = 0; i < part.length; ++i)
+                  args.push(part[i].d, part[i].p, part[i].name, part[i].min, part[i].max, part[i].q);
+            send.apply(this, args);
+            }
+      }
+
+// the routes' tracks: their devices changed (a device added in Live)
+function checkRouteParams() {
+      for (var k in placed) {
+            var tr = new LiveAPI("id " + placed[k].track);
+            if (num(tr.id) > 0)
+                  sendParams(placed[k], k, tr);
+            }
+      }
+
+// a lane titled "live:<d>/<p>": that parameter of the track (protocol 5), its LOM id (0: none)
+function liveParam(tr, title) {
+      var m = /^live:(-?\d+)\/(\d+)$/.exec(str(title));
+      if (!m || !tr)
+            return 0;
+      var d = Number(m[1]), p = Number(m[2]);
+      if (d < 0) {
+            var mx = ids(tr.get("mixer_device"));
+            if (!mx.length)
+                  return 0;
+            var x = ids(new LiveAPI("id " + mx[0]).get(p === 0 ? "volume" : "panning"));
+            return x.length ? x[0] : 0;
+            }
+      var devs = ids(tr.get("devices"));
+      if (d >= devs.length)
+            return 0;
+      var pl = ids(new LiveAPI("id " + devs[d]).get("parameters"));
+      return p < pl.length ? pl[p] : 0;
       }
 
 //---------------------------------------------------------
@@ -1320,13 +1456,17 @@ function applyParams() {
             };
       var want = [], wanted = {}, results = {};
       for (var key in e.routes) {
-            var route = e.routes[key], missing = [], extra = [];
-            if (!plugin) {
-                  results[key] = { status: route.lanes.length ? "no plug-in on the track" : "ok" };
-                  continue;
-                  }
+            var route = e.routes[key], missing = [], extra = [], noPlugin = false;
             for (var l = 0; l < route.lanes.length; ++l) {
-                  var lane = route.lanes[l], id = find(lane.title, lane.pid === undefined ? -1 : num(lane.pid));
+                  var lane = route.lanes[l], id = 0;
+                  if (/^live:/.test(str(lane.title)))
+                        id = liveParam(tr, lane.title);
+                  else if (!plugin) {
+                        noPlugin = true;
+                        continue;
+                        }
+                  else
+                        id = find(lane.title, lane.pid === undefined ? -1 : num(lane.pid));
                   if (!id)
                         missing.push(lane.title);
                   else if (wanted[id])
@@ -1339,6 +1479,8 @@ function applyParams() {
                         }
                   }
             var st = [];
+            if (noPlugin)
+                  st.push("no plug-in on the track");
             if (missing.length)
                   st.push("missing: " + missing.join(", "));
             if (extra.length)

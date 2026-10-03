@@ -36,6 +36,15 @@
 //     (Seq::setLiveTrack, livemidiout.h); MuseScore's transport and cursor stay MuseScore's, Live's are never
 //     touched. Otherwise (no copy on the track, the setting off, the link lost) MuseScore's own sounds play;
 //     the status line says which, and a copy removed or the link lost is a notice (LiveClipsLink::notice).
+//   - Automation lanes (the owner, 2026-10-02): the clip's track's Live parameters (/live/params: the mixer, every
+//     device's) are the tab's lanes (automationlanes.h), and the lanes are the clip's own envelopes in Live. On
+//     /live/clip/where (a session clip) the envelopes are read from the MuseScore Envelopes script
+//     (/ms/env/read, liveclipmodel.h) into the score's lanes (no undo step); each edit of a lane (the same 300 ms
+//     debounce as the notes) writes the lanes changed since (/ms/env/write: a lane replaces its envelope, a lane
+//     removed clears it), one write at a time, sent again after 3 s. The script hashes the envelopes: a change
+//     made in Live is a conflict like the notes' (Reload from Live). An arrangement clip: no lanes (Live's API has
+//     no envelopes for it, still in 12.4.6); the script not answering: no lanes, the status line says how to set it
+//     up, asked again every 5 s.
 //   - A new hub (the old copy deleted; /live/hello with another session): each clip edited here is handed to it
 //     (/ms/clip/adopt with its last known hash), and edits made meanwhile are written.
 //---------------------------------------------------------
@@ -67,6 +76,10 @@ class LiveClipEditor : public QObject {
 
    public:
       enum class State { SYNC, SENDING, CONFLICT, RELOADING, GONE, NO_ANSWER, FAILED };
+      // the clip's automation lanes: NONE (an older device: no place known), READING (the script asked), READY (the
+      // lanes are the clip's envelopes), ARRANGEMENT (an arrangement clip: Live's API has no envelopes for it),
+      // NO_SCRIPT (the MuseScore Envelopes script doesn't answer), FAILED
+      enum class EnvState { NONE, READING, READY, ARRANGEMENT, NO_SCRIPT, FAILED };
 
    private:
       struct Session {
@@ -89,6 +102,24 @@ class LiveClipEditor : public QObject {
             int trackId { 0 };                  // the track's LOM id (0: not known yet: an older device)
             bool copy { false };                // a MuseScore Link copy (protocol 4+) is on it
             bool copyWas { false };             // (it was: its removal is a notice)
+            // the automation lanes: the clip's envelopes, through the MuseScore Envelopes script
+            EnvState env { EnvState::NONE };
+            int envTrack { -1 };                // the clip's place (/live/clip/where)
+            int envSlot { -1 };
+            qint32 envHash { 0 };               // the envelopes in Live as the script last reported them
+            int envExpected { 0 };              // lanes announced by /live/env/begin
+            std::map<std::pair<int, int>, std::map<int, std::vector<std::pair<int, double>>>> envIncoming;
+            std::map<std::pair<int, int>, int> envChunks;
+            std::map<QString, QString> envSent;  // target -> its points' hash, as Live has them
+            std::map<QString, QString> envPending;
+            int envWrite { 0 };
+            bool envInFlight { false };
+            bool envChangedMeanwhile { false };
+            std::vector<QByteArray> envPackets;
+            qint64 envSentAt { 0 };             // (a read or a write)
+            int envTries { 0 };
+            int envWrites { 0 };
+            QString envError;
             };
 
       std::map<QString, Session> _sessions;     // by the device's clip key
@@ -110,6 +141,11 @@ class LiveClipEditor : public QObject {
       void written(const QString& key, int write, const QString& status, qint32 hash, const std::vector<int>& ids);
       void poll();
       void send(const QByteArray& p);
+      void sendEnv(const QByteArray& p);
+      void readEnvelopes(const QString& key);
+      void envelopesRead(const QString& key);
+      void writeEnvelopes(const QString& key);
+      void envWritten(const QString& key, int write, const QString& status, qint32 hash);
       void updateStatus();
       void updateRouting();
       int _routed { -1 };                       // the track the sequencer was last given (-1: never)
@@ -141,6 +177,13 @@ class LiveClipEditor : public QObject {
       void reload(MasterScore* score);
       QString statusText(const MasterScore* score) const;
       State state(const MasterScore* score) const;
+      // automation lanes of a clip tab: the Live parameters its lanes can be on (nullptr: none, the reason in
+      // envText), and the clip's key; paramsChanged: the device sent a track's parameters
+      const std::vector<LiveClipEdit::LiveParam>* liveParams(const Score* score) const;
+      QString clipKey(const Score* score) const;
+      EnvState envState(const MasterScore* score) const;
+      QString envText(const MasterScore* score) const;
+      void paramsChanged(const QString& key);
       };
 
 }     // namespace LiveIntegration

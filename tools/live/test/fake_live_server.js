@@ -8,7 +8,9 @@
 // Editing a Live clip in MuseScore: --edit-clip <track> puts a clip of the owner's ("Idea", 8 beats, a
 // humanized melody with Live-only fields set) on that track and shows it in the Detail View; --edit-at <s>
 // presses the device's Edit in MuseScore button then; --live-change-at <s> changes the clip in "Live" (the
-// first note's velocity), as the owner would while it is edited in MuseScore.
+// first note's velocity), as the owner would while it is edited in MuseScore. --session: the clip in the track's first
+// session slot instead of the arrangement (its envelopes: fake_envelopes_server.py stands in for the MuseScore
+// Envelopes script); the track's Synth Rack has two macros (Live's parameters for the lanes).
 //
 // A clip tab playing through its track: /ms/midi from MuseScore is passed on as the hub's patcher does (to the
 // copies on that track) and logged with its time ("MIDI" lines; the summary's "midi"); --no-copy puts the
@@ -24,7 +26,7 @@ const { FakeLive, loadDevice } = require("./fakelive");
 
 const argv = process.argv.slice(2);
 let port = 9001, playAt = -1, playFrom = 0, stopAt = -1, quitAt = -1, editAt = -1, liveChangeAt = -1;
-let goneAt = -1, backAt = -1, noCopy = false, gone = false;
+let goneAt = -1, backAt = -1, noCopy = false, gone = false, session = false;
 let editTrack = "";
 const names = [];
 for (let i = 0; i < argv.length; ++i) {
@@ -39,6 +41,7 @@ for (let i = 0; i < argv.length; ++i) {
       else if (argv[i] === "--gone-at") goneAt = Number(argv[++i]);
       else if (argv[i] === "--back-at") backAt = Number(argv[++i]);
       else if (argv[i] === "--no-copy") noCopy = true;
+      else if (argv[i] === "--session") session = true;
       else names.push(argv[i]);
       }
 
@@ -70,9 +73,17 @@ if (editTrack) {
                   }
             else
                   deviceIds.push(live.device(t, "MxDeviceMidiEffect", "MuseScore Link").id);
-            live.device(t, "InstrumentGroupDevice", "Synth Rack");
+            const rack = live.device(t, "InstrumentGroupDevice", "Synth Rack");
+            live.param(rack, "Cutoff", 0.5, 0, 1);
+            live.param(rack, "Drive", 0, 0, 2);
             }
       editClip = live.clip(t, "Idea", 16, 24);
+      if (session) {                        // (the same clip in the first session slot)
+            t.clips = t.clips.filter((x) => x !== editClip.id);
+            const slot = live.clipSlot(t);
+            editClip.parent = slot.id;
+            slot.clip = editClip.id;
+            }
       editClip.notes = [
             live.note({ pitch: 67, start_time: 0.013, duration: 0.95, velocity: 87.3, probability: 0.75, velocity_deviation: 3.5,
                         release_velocity: 40 }),

@@ -89,6 +89,8 @@
 #include <QStringList>
 #include <QVariantList>
 
+#include "automation.h"
+
 namespace Ms {
 
 class EventMap;
@@ -168,6 +170,13 @@ struct RouteNotes {
       // the plug-in parameter events by the controller's index (the main patch's allControllers): (units, value 0-1)
       std::map<int, std::vector<std::pair<int, float>>> params;
       };
+
+// a part's lanes on parameters of its Live track ("live:<d>/<p>": the device sends the track's parameters,
+// mscore/liveclipmodel.h), in order: the renderer's parameter events for them are of controller LIVE_PARAM with
+// their index here as the second byte; their /ms/pvals title is the target, which the device resolves on the track
+constexpr int LIVE_PARAM         = 255;
+QStringList liveLanes(const std::vector<Automation::Lane>& lanes);
+constexpr int LIVE_PARAM_KEY     = 1 << 16;   // RouteNotes::params' key of live lane k: LIVE_PARAM_KEY + k
 
 // route index: port * 16 + channel (0-15), as NPlayEvent::extPort / extChannel
 std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, int endUtick);

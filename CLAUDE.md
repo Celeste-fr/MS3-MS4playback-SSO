@@ -178,7 +178,15 @@ tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Liv
 `SoundLibraryHost::knownParameterId`). The device keeps each track's lanes, packed (`packLane`, same in the device
 and `livesetwriter.cpp`), in `[pattr Lanes]` … stores in the set, so a set plays them without MuseScore; Create Live
 Set writes them; stored 2 s after edits pause. Live's own Arrangement automation can't be written in 12.2 except by
-a Control Surface script (`tools/live/research/`, not used).
+a Control Surface script (`tools/live/research/`, not used). **Lanes of any Live track** (not only SSO, owner
+2026-10-02): the device sends each route's and edited clip's track parameters (`/live/params`, protocol 5;
+`LiveClipEdit::TrackParams`); a lane `live:<device>/<param>` is that parameter (routes: driven by the device; clip
+tabs: `AutomationLanes` offers only these). A **clip tab's lanes are the clip's own envelopes**, written and read by
+the Control Surface script `tools/live/MuseScoreEnvelopes` (Python API, Live 12.4 `create_event`; Max for Live can't;
+the owner installs it once: LIVE.md › Automation lanes in a clip tab), MuseScore talking to it on UDP 9005
+(`liveclipedit.cpp` env*). Session clips only (arrangement clips have no envelopes in Live's API, 12.4.6); curves go
+as 16 straight pieces (Live ignores a breakpoint's curve). Tests: `tools/live/test/test_envelopes.py`,
+`test_envparams.js`, `tst_liveintegration` clipEnvelopeMapping / liveParamLanes / laneTimeAxis.
 
 **Playback verification** (VERIFY.md; checks in `audio/vst3/playbackverify.h`): `--verify-playback`,
 `--verify-audio`, `tools/playbackverify/read_verify_report.py`, faults via `MS_VERIFY_FAULT`.
@@ -222,7 +230,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
-  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 37, `tst_keysig` 8, `tst_tuning` 17,
+  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 40, `tst_keysig` 8, `tst_tuning` 17,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

@@ -309,7 +309,8 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                               }
                         else if (e.type() == ME_PARAMETER) {
                               ++rn.parameters;  // (an automation lane MuseScore plays: the device sets it in Live)
-                              std::vector<std::pair<int, float>>& p = rn.params[e.dataA()];
+                              const int pk = e.dataA() == LIVE_PARAM ? LIVE_PARAM_KEY + e.dataB() : e.dataA();
+                              std::vector<std::pair<int, float>>& p = rn.params[pk];
                               if (!p.empty() && p.back().first == at)
                                     p.back().second = e.tuning();
                               else if (p.empty() || p.back().second != e.tuning())
@@ -351,6 +352,15 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
 //---------------------------------------------------------
 //   tracks
 //---------------------------------------------------------
+
+QStringList liveLanes(const std::vector<Automation::Lane>& lanes)
+      {
+      QStringList out;
+      for (const Automation::Lane& l : lanes)
+            if (l.target.startsWith("live:") && !l.points.empty() && !out.contains(l.target))
+                  out << l.target;
+      return out;
+      }
 
 QString clipName(const QString& part, const QString& patch, bool main, int lane)
       {
@@ -432,7 +442,20 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
                   for (const SoundLib::Route& m : routes)
                         if (m.part == r.part && m.patch == 0 && m.lane == 0)
                               main = m.instrument;
+                  QStringList live;             // (the part's lanes on its Live track's parameters, as the renderer numbered them)
+                  if (r.part)
+                        live = liveLanes(Automation::lanes(r.part, Automation::read(score->masterScore())));
                   for (const auto& pe : n->second.params) {
+                        if (pe.first >= LIVE_PARAM_KEY) {
+                              const int k = pe.first - LIVE_PARAM_KEY;
+                              if (k < live.size() && r.patch == 0 && r.lane == 0) {
+                                    Track::ParamLane pl;
+                                    pl.title = live[k];
+                                    pl.events = pe.second;
+                                    t.params.push_back(pl);
+                                    }
+                              continue;
+                              }
                         if (!main || pe.first < 0 || pe.first >= int(main->allControllers.size()))
                               continue;
                         const QString title = main->allControllers[size_t(pe.first)].param;

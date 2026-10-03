@@ -57,6 +57,7 @@
 #include "playbacksettings.h"
 #include "tuning.h"
 #include "volta.h"
+#include "liveclips.h"
 
 #include "global/log.h"
 
@@ -2106,14 +2107,16 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                   // automation lanes: the value in force at the chunk's start, then their points and ramps
                   // (a MIDI controller to 1/127, a plug-in parameter to 1/1000, every 30 ticks along a ramp)
                   for (const LibPart::Auto& a : lp->automation) {
-                        const bool param = a.param >= 0;
+                        const bool param = a.param >= 0 || a.live >= 0;
                         for (const auto& tv : a.lane.events(tick1, tick2, int(Playback::value("automation/stepTicks", score)),
                                                             param ? 0.001 : 1.0 / 127)) {
                               for (const auto& ip : *part->instruments()) {
                                     if (!libraryPlays(ip.second))
                                           continue;
                                     const int value = int(std::lround(tv.second * 127));
-                                    NPlayEvent ev = param ? NPlayEvent(ME_PARAMETER, ip.second->channel(0)->channel(), a.param, 0)
+                                    NPlayEvent ev = a.live >= 0 ? NPlayEvent(ME_PARAMETER, ip.second->channel(0)->channel(),
+                                                                             LiveClips::LIVE_PARAM, a.live)
+                                                  : param ? NPlayEvent(ME_PARAMETER, ip.second->channel(0)->channel(), a.param, 0)
                                                           : NPlayEvent(ME_CONTROLLER, ip.second->channel(0)->channel(), a.cc,
                                                                        a.cc == CTRL_EXPRESSION ? resting(value) : value);
                                     if (param)
@@ -4539,10 +4542,19 @@ void MidiRenderer::updateState()
                         lp.text.build(score, part);
                         // automation: a lane takes its controller's place (its part value, its staff texts)
                         QSet<QString> automated;
+                        const QStringList liveTargets = LiveClips::liveLanes(Automation::lanes(part, allLanes));
                         for (const Automation::Lane& lane : Automation::lanes(part, allLanes)) {
                               LibPart::Auto a;
                               a.lane = lane;
                               a.cc = lane.cc();
+                              if (liveTargets.contains(lane.target)) {
+                                    // (a parameter of the Live track: only Live can play it)
+                                    if (!forLiveClips || lane.points.empty())
+                                          continue;
+                                    a.live = liveTargets.indexOf(lane.target);
+                                    lp.automation.push_back(a);
+                                    continue;
+                                    }
                               if (a.cc < 0) {
                                     const auto& all = r.instrument->allControllers;
                                     for (int i = 0; i < int(all.size()); ++i) {
