@@ -2018,9 +2018,12 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
       const int tick1 = chunk.tick1();
       const int tick2 = chunk.tick2();
       const int tickOffset = chunk.tickOffset();
-      for (const auto& pc : ms4Parts) {
-            const Part* part = pc.first;
-            const Ms4::PartContext& ctx = pc.second;
+      // in the score's order, not the map's (keyed by pointer): same-tick events come out the same every run
+      for (const Part* part : score->parts()) {
+            auto pc = ms4Parts.find(part);
+            if (pc == ms4Parts.end())
+                  continue;
+            const Ms4::PartContext& ctx = pc->second;
             if (!ms4Active.count(part))         // a part in MuseScore 3's mode (partplayback.h)
                   continue;
 
@@ -2051,13 +2054,16 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
             // the notes at the chunk's start, which would otherwise sound with the preset before
             // (the score's MuseScore 3 program at the start of playback)
             auto pos = events->lower_bound(tick1 + tickOffset);
-            for (const auto& is : ctx.sounds) {
-                  const Instrument* instr = is.first;
+            for (const auto& pi : *part->instruments()) {
+                  auto is = ctx.sounds.find(pi.second);
+                  if (is == ctx.sounds.end())
+                        continue;
+                  const Instrument* instr = is->first;
                   // (a kit: for the drum sounds the built-in synthesizer plays, not routed)
                   const bool kit = libraryPlays(instr) && lp->instruments.at(instr)->kit;
                   if (libraryPlays(instr) && !kit)
                         continue;
-                  for (const Ms4::Slot& slot : is.second.channelSlots) {
+                  for (const Ms4::Slot& slot : is->second.channelSlots) {
                         const int ch = score->masterScore()->playbackChannel(instr->channel(slot.channel))->channel();
                         for (const NPlayEvent& ev : { NPlayEvent(ME_CONTROLLER, ch, CTRL_HBANK, (slot.bank >> 7) & 0x7f),
                                                       NPlayEvent(ME_CONTROLLER, ch, CTRL_LBANK, slot.bank & 0x7f),

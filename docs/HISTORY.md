@@ -1069,10 +1069,13 @@ attack not yet confirmed by ear.
   Mixer, the clips' pitch bend and early legato notes, and Live against MuseScore on the test synth. All 7 pass
   (counting initTestCase and cleanup; 2026-09-30).
 - `mtest/libmscore/tuning` (`tst_tuning`): the built-in tuning (see "Tuning"). All 13 pass.
-- `mtest/libmscore/midi` (`tst_midi`): **68 of 73 fail**, and they failed before the
-  sound-library work too. The references predate the MS4 note model. Same-tick event order
-  varies between runs because `ms4Parts` is keyed by pointer. Don't read these failures as
-  regressions. Compare against a build of the previous commit instead.
+- `mtest/libmscore/midi` (`tst_midi`): 68 of 73 failed until 2026-10-04 (references older than
+  the MS4 note model, rendered with the default method 3). Since then the 3.x tests render with
+  3.6's method and pass 3.6's references except the deliberate differences (bends, fermata
+  stretch), and `eventsMs4` covers MS4 with the fork's own references; `ms4Parts` is walked in
+  score order, so same-tick events no longer follow pointer order. The export's bend range
+  RPN said 12 semitones while bends were written for 24 (exported bends played half size
+  elsewhere): fixed then.
 - There is no way to hear Kontakt, SSO or Windows here. Anything about them is either untested
   or tested with a stand-in; say which when you report.
 

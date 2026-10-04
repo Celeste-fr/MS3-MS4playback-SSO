@@ -21,8 +21,8 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
   `ab/roundtrip2.py [--mtest N] [--list file] [scores…]` (XML, PNG pages, MIDI). Where 3.7 reads or writes
   differently, follow 3.6 (legacy style defaults, `MStyle::isDefault` within 1e-6, `MStyle::notInMuseScore36`,
   tuplet `<Number>`, `updateInstrumentId`). New per-score state goes in **metaTags** (3.6 keeps them), left out
-  when default. Known leftovers: some MuseScore 1/2 imports' XML changes once (pages, MIDI identical); MIDI
-  export's same-instant event order isn't stable.
+  when default. Known leftover: some MuseScore 1/2 imports' XML changes once (pages, MIDI identical). (MIDI
+  export's same-instant order came from `ms4Parts`' pointer order, fixed 2026-10-04; round trip not re-run.)
 - **Readings of music go on a review page**: when work relies on an agent's reading of sheet music, a legend, a
   screenshot of a plug-in's key/articulation list or a contact sheet, publish a claude.ai artifact with each
   source picture (or crop) next to the reading and its use, before it changes code or the map. Symbols in
@@ -242,11 +242,12 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 57 with init and cleanup (2026-10-03, clip-tempo and clipVelocity*; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 19 passed (`speed` skipped without
-  `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig::removeRedundant`: passed when last run. Node tests in
+  `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.
-- `tst_midi`: **68 of 73 fail, and did before** the sound-library work (references predate the MS4 note model;
-  same-tick order varies, `ms4Parts` keyed by pointer). Compare with the previous commit's build instead.
-  `tst_timesig::timesig05` fails since 5f65a1d (fermata `<timeStretch>`).
+- `tst_midi`: 97 passed (2026-10-04). Its 3.x tests render with MuseScore 3.6's method (`ms3State`: the MS3 mode)
+  against 3.6's references, changed only where the fork differs on purpose (bends for a 24-semitone wheel, the
+  export's RPN says 24; a fermata without a stretch stretches by 2); `eventsMs4` renders the same scores as MS4
+  against the fork's own `-ms4-ref.txt` (regenerate those only for an intended change of the note model).
 - Untried with Kontakt / SSO unless docs say so; LIVE.md lists what only real Live can show.
 - The owner's "SSO Articulation Map" review page (https://claude.ai/artifact/Y9dDEm5gpEjtpjjQmM9qBm, collection
   `reviews`): read with ArtifactData where available, else ask for the marks; fix through `gen_spitfire_sso.py`.

@@ -275,10 +275,13 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                               // Hidden under preferences because some software
                               // crashes when receiving RPNs: https://musescore.org/en/node/37431
                               if (channel != 9 && exportRPNs) {
-                                    // set pitch bend sensitivity to 12 semitones:
+                                    // set pitch bend sensitivity to 24 semitones, the range the
+                                    // renderer's bends are written for (MuseScore 4's; rendermidi
+                                    // ms3PitchBend, Ms4::pitchBendLevel, Fluid::PITCH_WHEEL_SENS).
+                                    // MuseScore 3 wrote 12 with bends for 12
                                     track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_LRPN, 0));
                                     track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_HRPN, 0));
-                                    track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_HDATA, 12));
+                                    track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_HDATA, 24));
 
                                     // reset fine tuning
                                     /*track.insert(0, MidiEvent(ME_CONTROLLER, channel, CTRL_LRPN, 1));

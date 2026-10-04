@@ -62,6 +62,9 @@ class TestMidi : public QObject, public MTest
       void midi03();
       void events_data();
       void events();
+      void eventsMs4_data() { events_data(); }
+      void eventsMs4();
+      void renderEvents(const QString& file, const SynthesizerState& state, const QString& refSuffix);
       void midiBendsExport1() { midiExportTestRef("testBends1"); }
       void midiBendsExport2() { midiExportTestRef("testBends2"); }      // Play property test
       void midiPortExport()   { midiExportTestRef("testMidiPort"); }
@@ -159,10 +162,22 @@ void TestMidi::events_data()
 //   saveMidi
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   ms3State
+//    MuseScore 3.6's dynamics method (1: SND and changes at a segment's start) on CC2, as the
+//    fork's MS3 playback mode renders: the references are 3.6's, except where the fork differs
+//    on purpose (bends for a 24-semitone wheel; a fermata without a stretch stretches by 2)
+//---------------------------------------------------------
+
+SynthesizerState ms3State()
+      {
+      return SynthesizerState({ SynthesizerGroup("master", { { 4, "1" }, { 5, "1" } }) });
+      }
+
 bool saveMidi(Score* score, const QString& name)
       {
       ExportMidi em(score);
-      return em.write(name, true, true);
+      return em.write(name, true, true, ms3State());
       }
 
 
@@ -545,15 +560,35 @@ void TestMidi::midiSingleNoteDynamics()
 void TestMidi::events()
       {
       QFETCH(QString, file);
+      renderEvents(file, ms3State(), "-ref.txt");
+      }
 
+//---------------------------------------------------------
+//   eventsMs4
+//    the same scores as MuseScore 4 plays them (this fork's default, dynamics method 3):
+//    references of the fork itself, so a change to the MS4 note model shows here
+//---------------------------------------------------------
+
+void TestMidi::eventsMs4()
+      {
+      QFETCH(QString, file);
+      renderEvents(file, SynthesizerState(), "-ms4-ref.txt");      // no method: the MS4 default
+      }
+
+//---------------------------------------------------------
+//   renderEvents
+//---------------------------------------------------------
+
+void TestMidi::renderEvents(const QString& file, const SynthesizerState& state, const QString& refSuffix)
+      {
       QString readFile(DIR   + file + ".mscx");
-      QString writeFile(file + "-test.txt");
-      QString reference(DIR + file + "-ref.txt");
+      QString writeFile(file + refSuffix.left(refSuffix.size() - 8) + "-test.txt");
+      QString reference(DIR + file + refSuffix);
 
       MasterScore* score = readScore(readFile);
+      QVERIFY(score);
       EventMap events;
-      // a temporary, uninitialized synth state so we can render the midi - should fall back correctly
-      SynthesizerState ss;
+      SynthesizerState ss = state;
       score->renderMidi(&events, ss);
       qDebug() << "Opened score " << readFile;
       QFile filehandler(writeFile);
@@ -577,9 +612,7 @@ void TestMidi::events()
             }
       filehandler.close();
 
-      QVERIFY(score);
       QVERIFY(compareFiles(writeFile, reference));
-     // QVERIFY(saveCompareScore(score, writeFile, reference));
 
       delete score;
       }

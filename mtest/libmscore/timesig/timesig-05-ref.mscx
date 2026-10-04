@@ -126,7 +126,7 @@
         <voice>
           <Fermata>
             <subtype>fermataAbove</subtype>
-            <timeStretch>1</timeStretch>
+            <timeStretch>2</timeStretch>
             </Fermata>
           <Chord>
             <durationType>quarter</durationType>
