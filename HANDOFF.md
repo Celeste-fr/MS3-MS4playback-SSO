@@ -110,7 +110,8 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
    https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h): they don't support a limit, so S12 is now an advisory
    ("playable, may sound unclear", still yellow) with the same numbers as the owner's trigger; no register
    condition (PLAYABILITY.md).
-7. `MICRO_MIN_CENTS`: to depend on frequency from Wier, Jesteadt & Green 1977; waits for the paper (5 cents until then).
+7. Smallest microtone: by frequency from Wier, Jesteadt & Green 1977, Table IV at 40 dB SL, held at the 200 Hz value
+   below 200 Hz (option A; `microMinCents`, playabilityrules.h): 3.4-5.9 cents, was a fixed 5.
 
 ## Waiting for the owner (built, not yet confirmed on Windows / by ear)
 

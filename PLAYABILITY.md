@@ -107,6 +107,13 @@ headless test scores and their checked results are the parity tests.
   accidental, so a file saved with the view on is byte for byte the one saved without it (test
   `scordaturaView`; the round-trip rule). Edits in the view are made at sounding pitch; MusicXML
   export writes the displayed accidentals (export with the view off).
+- **Smallest microtone by frequency (the owner, 2026-10-04):** a note's own tuning (accidental, carried
+  accidental, custom key signature, its own cents; never the temperament) counts as a microtone from the smallest
+  pitch change heard at its frequency, `microMinCents(pitch)`: Wier, Jesteadt & Green 1977 (J. Acoust. Soc. Am. 61,
+  178-184), Table IV at 40 dB SL, log10 dF = 0.026 sqrt(F) - 0.533, pure tones measured 200-8000 Hz; outside that
+  the edge's value, no extrapolation (every note under 200 Hz: 5.9 cents). 4.0 cents at A4, 3.4 near 1000 Hz;
+  a fixed 5 before. Below 200 Hz a bowed note's harmonics probably make smaller changes audible (option C, not
+  taken: it would need a source on complex tones, e.g. Moore's textbook).
 - **Fast double bass runs are an advisory (S12, the owner 2026-10-04):** a run of bowed section notes of
   94 ms or less, over 1.25 s, is marked yellow as before but as verdict `advisory` ("playable, may sound
   unclear"; panel tooltip of its own), not as a limit. The books say players can play such passages and

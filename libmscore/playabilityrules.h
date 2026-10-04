@@ -91,14 +91,20 @@ class Spelling {
       QString name(double pitch) const;
       };
 
-// Microtones: within MICRO_MIN_CENTS of the equal-tempered pitch counts as that pitch (a HEJI
+// Microtones: within microMinCents(pitch) of the equal-tempered pitch counts as that pitch (a HEJI
 // schisma is not a different finger); the temperament never counts (a meantone G# is a G#).
-// The owner (2026-10-04): to depend on the note's frequency, from the pitch difference limen of Wier, Jesteadt &
-// Green 1977 (JASA 61), once the paper (or Moore, An Introduction to the Psychology of Hearing) is here; 5 until then
-// (the only figure found, Rossing 2010 p. 379, spans 2.6-58 cents over the range)
-constexpr double MICRO_MIN_CENTS = 5.0;
+// The smallest pitch change heard at the note's frequency (the owner, 2026-10-04, option A): Wier, Jesteadt & Green
+// 1977 (J. Acoust. Soc. Am. 61, 178-184), Table IV, log10 dF = a sqrt(F) + b at 40 dB SL (the paper's moderate
+// level, its Fig. 2): a 0.026, b -0.533, pulsed sinusoids, 71 % correct, measured from 200 to 8000 Hz. Outside that
+// range the value at its edge (no extrapolation: 5.9 cents for every note under 200 Hz). In cents 3.4 (1000 Hz) to
+// 5.9 (200 Hz) over the strings' range; 5 before (a fixed value)
+constexpr double MICRO_DL_A = 0.026;
+constexpr double MICRO_DL_B = -0.533;
+constexpr double MICRO_DL_MIN_HZ = 200.0;
+constexpr double MICRO_DL_MAX_HZ = 8000.0;
+double microMinCents(int pitch);
 double soundingPitch(int pitch, double cents);
-QString centsSuffix(double cents);
+QString centsSuffix(double cents, int pitch);
 QString tpcName(int tpc, int pitch);
 QString plainName(int pitch);                        // no spelling context: C C# D Eb E F F# G Ab A Bb B
 QString stringName(int openPitch);                   // "G", never "G3": every open string is a natural

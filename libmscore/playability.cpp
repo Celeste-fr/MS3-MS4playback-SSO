@@ -405,12 +405,12 @@ void Pass::addRow(int tick, int tickEnd, int track, const QString& staff, const 
       }
 
 // The microtonal part of a note's tuning (its accidental, the carried accidental, a custom key
-// signature, its own tuning), without the temperament; under MICRO_MIN_CENTS it is none.
+// signature, its own tuning), without the temperament; under microMinCents (playabilityrules.h) it is none.
 double Pass::microCents(const Note* note)
       {
       NoteTuning t = _tuning.tuning(note);
       double c = t.accidental + t.manual;
-      return std::fabs(c) >= MICRO_MIN_CENTS ? c : 0.0;
+      return std::fabs(c) >= microMinCents(note->ppitch()) ? c : 0.0;
       }
 
 static bool isHarmonicCircle(SymId id)

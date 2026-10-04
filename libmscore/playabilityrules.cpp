@@ -119,15 +119,22 @@ QString fmtReach(double x)
       return QString::number(jsRound(x * 10) / 10, 'g', 12);
       }
 
-double soundingPitch(int pitch, double cents)
+double microMinCents(int pitch)
       {
-      return std::fabs(cents) >= MICRO_MIN_CENTS ? pitch + cents / 100 : pitch;
+      const double hz = qBound(MICRO_DL_MIN_HZ, 440.0 * std::pow(2.0, (pitch - 69) / 12.0), MICRO_DL_MAX_HZ);
+      const double dF = std::pow(10.0, MICRO_DL_A * std::sqrt(hz) + MICRO_DL_B);
+      return 1200.0 * std::log2(1.0 + dF / hz);
       }
 
-QString centsSuffix(double cents)
+double soundingPitch(int pitch, double cents)
+      {
+      return std::fabs(cents) >= microMinCents(pitch) ? pitch + cents / 100 : pitch;
+      }
+
+QString centsSuffix(double cents, int pitch)
       {
       int c = int(jsRound(cents));
-      if (std::abs(c) < MICRO_MIN_CENTS)
+      if (std::abs(c) < microMinCents(pitch))
             return QString();
       return (c > 0 ? QString("+%1").arg(c) : QString(QChar(0x2212)) + QString::number(-c)) + QChar(0x00a2);
       }
@@ -276,10 +283,10 @@ QString Spelling::name(double pitch) const
       {
       auto s = _bySound.find(pitch);
       if (s != _bySound.end())
-            return tpcName(s->second.tpc, s->second.pitch) + centsSuffix(s->second.cents);
+            return tpcName(s->second.tpc, s->second.pitch) + centsSuffix(s->second.cents, s->second.pitch);
       if (pitch != std::floor(pitch)) {           // between the semitones with no note behind it
             double base = jsRound(pitch);
-            return name(base) + centsSuffix((pitch - base) * 100);
+            return name(base) + centsSuffix((pitch - base) * 100, int(base));
             }
       int p = int(pitch);
       if (!_set)

@@ -48,6 +48,7 @@ class TestPlayability : public QObject, public MTest
       void strings();
       void harmonics();
       void microtones();
+      void microThreshold();
       void marksFollowSwitches();
       void roles();
       void inspectChords();
@@ -212,6 +213,26 @@ void TestPlayability::harmonics()
       compare(rows(r), want);
       QCOMPARE(r.harmonics, 13);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   microThreshold: the smallest microtone by Wier, Jesteadt & Green 1977 at 40 dB SL (their Table
+//   IV), held at its 200 Hz value below 200 Hz
+//---------------------------------------------------------
+
+void TestPlayability::microThreshold()
+      {
+      using namespace Playability;
+      auto near = [](double a, double b) { return std::fabs(a - b) < 0.01; };
+      QVERIFY(near(microMinCents(69), 4.04));               // A4, 440 Hz
+      QVERIFY(near(microMinCents(83), 3.37));               // B5, 988 Hz: about the curve's minimum
+      QVERIFY(near(microMinCents(57), 5.60));               // A3, 220 Hz
+      QVERIFY(near(microMinCents(28), microMinCents(43)));  // E1 (41 Hz) and G2 (98 Hz): both held at 200 Hz
+      QVERIFY(near(microMinCents(28), 5.91));
+      QCOMPARE(soundingPitch(69, 4.5), 69.045);             // +4.5 cents at A4 is a microtone
+      QCOMPARE(soundingPitch(40, 5.5), 40.0);               // +5.5 cents at E2 is not
+      QCOMPARE(centsSuffix(4.4, 69), QString());            // shown rounded: 4 is under A4's 4.04
+      QCOMPARE(centsSuffix(5.0, 69), QString("+5") + QChar(0x00a2));
       }
 
 //---------------------------------------------------------
