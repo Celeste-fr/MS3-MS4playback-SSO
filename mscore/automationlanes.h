@@ -34,7 +34,7 @@
 //   ("Live: Operator › Tone"); the device plays them in Live (liveclips.h), MuseScore's own playback can't. The "+"
 //   menu has a submenu per Live device. Shown: the
 //   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
-//   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes.
+//   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes ("▸" shows them again).
 //
 //   Editing, as in Live 12 (manual 25.5.1-2):
 //     click: a breakpoint (on the envelope's line: on it; elsewhere: at the mouse's value), snapped to the
@@ -135,6 +135,7 @@ class AutomationLanes : public QObject {
 
       ScoreView* _view;
       std::set<const Part*> _unfolded;                         // view parts
+      std::set<const Part*> _folded;                           // view parts: the header row only ("▸")
       const Part* _lastSelected { nullptr };
       std::map<const Part*, std::set<QString>> _added;         // master part -> empty lanes shown
       std::map<const Part*, std::set<QString>> _hidden;

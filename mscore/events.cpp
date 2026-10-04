@@ -545,7 +545,7 @@ void ScoreView::mousePressEvent(QMouseEvent* ev)
                   }
             }
 
-      if (state == ViewState::NORMAL && _lanes->mousePress(ev))
+      if ((state == ViewState::NORMAL || noteEntryMode()) && _lanes->mousePress(ev))      // (in note input too: the lanes' clicks never enter notes)
             return;
 
       editData.startMovePixel = ev->pos();
@@ -1068,7 +1068,7 @@ void ScoreView::contextMenuEvent(QContextMenuEvent* ev)
             fotoContextPopup(ev);
             return;
             }
-      if (state == ViewState::NORMAL && ev->reason() != QContextMenuEvent::Keyboard && _lanes->contextMenu(ev->pos(), ev->globalPos()))
+      if ((state == ViewState::NORMAL || noteEntryMode()) && ev->reason() != QContextMenuEvent::Keyboard && _lanes->contextMenu(ev->pos(), ev->globalPos()))
             return;
       QPoint gp          = ev->globalPos();
       editData.startMove = toLogical(ev->pos());

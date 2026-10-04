@@ -385,7 +385,7 @@ void AutomationLanes::updateSpace()
                   const std::vector<Target> t = targets(p);
                   if (t.empty())
                         continue;
-                  const size_t n = shownTargets(PartPlaybackModes::masterPart(p), t).size();
+                  const size_t n = _folded.count(p) ? 0 : shownTargets(PartPlaybackModes::masterPart(p), t).size();
                   space[p] = HEAD_SP + double(n) * (LANE_SP + GAP_SP);
                   }
             }
@@ -427,7 +427,7 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
       const qreal sp = s->spatium();
       const QPointF origin = system->canvasPos();
       buildAnchors();
-      const double x0 = _anchors.empty() ? origin.x() : _anchors.front().second - sp;
+      const double x0 = _anchors.empty() ? origin.x() : std::min(origin.x(), _anchors.front().second - sp);    // (from the system's left edge: no gap after the header box)
       double x1 = origin.x() + system->width();
       if (!_anchors.empty())
             x1 = std::max(x1, _anchors.back().second);
@@ -451,7 +451,7 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
             head.rect = QRectF(x0, y, x1 - x0, HEAD_SP * sp);
             out.push_back(head);
             y += HEAD_SP * sp;
-            for (const QString& t : shownTargets(master, all)) {
+            for (const QString& t : _folded.count(part) ? std::vector<QString>() : shownTargets(master, all)) {
                   Row r;
                   r.part = part;
                   r.master = master;
@@ -576,7 +576,7 @@ QString AutomationLanes::valueText(const QString& target, double v) const
 // the header row's label, and its font (bold, as tall as the row allows)
 QString AutomationLanes::headLabel(const Row& r) const
       {
-      return QString::fromUtf8("▾ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
+      return QString::fromUtf8(_folded.count(r.part) ? "▸ " : "▾ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
       }
 
 static QFont headFont(double height)
@@ -878,6 +878,7 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                                     _showAll.erase(r.master);
                               else
                                     _showAll.insert(r.master);
+                              _folded.erase(r.part);
                               updateSpace();
                               }
                         else {
@@ -887,7 +888,13 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                         return true;
                         }
                   if (pixel.x() < h.left() + 20) {
-                        unfold(r.part, false);            // ▾ folds
+                        // ▾ folds the lanes away, ▸ shows them again; the header row stays (the owner, 2026-10-04: the
+                        // whole panel went, and selecting the part again didn't bring it back)
+                        if (_folded.count(r.part))
+                              _folded.erase(r.part);
+                        else
+                              _folded.insert(r.part);
+                        updateSpace();
                         return true;
                         }
                   return true;
@@ -927,8 +934,10 @@ void AutomationLanes::addLaneMenu(const Row& r, const QPoint& globalPos)
       if (menu.isEmpty())
             menu.addAction(tr("(every lane is shown)"))->setEnabled(false);
       QAction* a = menu.exec(globalPos);
-      if (a && !a->data().toString().isEmpty())
+      if (a && !a->data().toString().isEmpty()) {
+            _folded.erase(r.part);
             showLane(r.part, a->data().toString(), true);
+            }
       }
 
 bool AutomationLanes::mousePress(QMouseEvent* ev)
@@ -948,8 +957,8 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
       const Row r = *rp;
       if (r.target.isEmpty())
             return true;                  // (the header band)
-      if (score() && !score()->selection().isNone())
-            _view->deselectAll();
+      if (score() && !score()->selection().isNone() && !_view->noteEntryMode())
+            _view->deselectAll();         // (in note input the selection is the input position: kept)
       _dragRow = r;
       _pressPos = p;
       _pressPixel = ev->pos();
