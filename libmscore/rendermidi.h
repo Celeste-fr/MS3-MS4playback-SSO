@@ -163,6 +163,12 @@ class MidiRenderer {
       // fast technique (cut): the note before ends at its start (finishLibraryEvents)
       struct LibLegatoOff { const Note* from; int channel; int on; bool cut; };
       std::vector<LibLegatoOff> libLegatoOffs;
+      // fresh attacks on a legato patch (this chunk: a note that is no legato transition, as played): what sounds on its
+      // route until less than [legato] phraseGapMs before it ends that long before (finishLibraryEvents), else SSO
+      // joins the two into a transition
+      struct LibFreshAttack { const Note* note; int channel; int patch; int on; };
+      std::vector<LibFreshAttack> libFreshAttacks;
+      double libPhraseGap = 0.06;
       // a note's own level on its route by a controller (this chunk; libraryNoteLevels): a marcato's level
       // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller, and the legato level
       // balance ([legato] levelBalance: volumeDb from its arrival). Several sources on one note add up in dB

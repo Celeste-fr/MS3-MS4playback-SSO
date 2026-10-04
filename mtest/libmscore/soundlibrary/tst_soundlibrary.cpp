@@ -98,6 +98,7 @@ class TestSoundLibrary : public QObject, public MTest
       void renderPatches();
       void renderPhraseMark();
       void legatoEarly();
+      void phraseGap();
       void legatoEarlyFastRun();
       void legatoEarlyByInterval();
       void legatoOctaveByStartPitch();
@@ -777,7 +778,7 @@ void TestSoundLibrary::render()
 // numbers-measured (2026-10-03: overlapTicks 0, fastShare 50 %, fastFullMs 380 ms measured). They test the
 // mechanism, so they keep their numbers; playbackSettingsIni / Layers check the defaults.
 static const std::map<QString, QString> OLD_TIMING = { { "legato/overlapTicks", "30" }, { "legato/fastShare", "65" },
-                                                       { "legato/fastFullMs", "800" } };
+                                                       { "legato/fastFullMs", "800" }, { "legato/phraseGapMs", "0" } };
 static std::map<QString, QString> withOld(std::map<QString, QString> m)
       {
       for (const auto& v : OLD_TIMING)
@@ -1087,6 +1088,84 @@ void TestSoundLibrary::legatoEarly()
       QCOMPARE(notes[0].on, 0);
       score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
       QCOMPARE(SoundLib::legatoEarly(score, *lib), 75);
+      delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   phraseGap
+//    [legato] phraseGapMs (the owner, 2026-10-04; measured: SSO joins notes into a legato transition up to a 40 ms gap,
+//    never from 60): a note on the legato patch that is no transition (here G5, held, after the slur C5 D5 E5 F5: held
+//    notes play the legato patch, prefer='long', as SSO's Performance legato does) starts 60 ms after the note before on
+//    its route ends; transitions keep their overlap; 0 turns it off; the note before keeps at least keepMs as played
+//    (legato-early.musicxml at 60 bpm: 60 ms is 29 ticks, the quarter F5 ends at 4 Q - 29)
+//---------------------------------------------------------
+
+void TestSoundLibrary::phraseGap()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='0'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' prefer='long' legatoDelay='200' release='900'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct N { int on; int off; int pitch; int channel; };
+      auto render = [score]() {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
+                        continue;
+                  if (ev.velo() > 0)
+                        notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel() });
+                  else {
+                        for (N& n : notes)
+                              if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
+                                    n.off = te.first;
+                        }
+                  }
+            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
+            return notes;
+            };
+      const int Q = DIVISION;
+      // without the gap (0): F5, the slur's last, ends where MS4 ends it, right before G5
+      Playback::setIniValuesForTest({ { "legato/phraseGapMs", "0" } });
+      std::vector<N> off = render();
+      QVERIFY(off.size() >= 5);
+      QCOMPARE(off[3].pitch, 77);                               // F5
+      QCOMPARE(off[4].pitch, 79);                               // G5
+      QCOMPARE(off[4].on, 4 * Q);
+      QCOMPARE(off[3].channel, off[4].channel);                 // (both on the legato patch's route)
+      QVERIFY2(off[3].off > 4 * Q - 29, qPrintable(QString::number(off[3].off)));
+      // the measured default, 60 ms: F5 ends 29 ticks before G5; the slurred notes before keep MS4's end (overlapTicks 0:
+      // 5 ticks, ~10 ms, before the next: SSO joins them), not cut back by the gap
+      Playback::setIniValuesForTest({});
+      std::vector<N> gap = render();
+      QCOMPARE(int(gap.size()), int(off.size()));
+      QCOMPARE(gap[4].on, 4 * Q);
+      QVERIFY2(qAbs(gap[3].off - (4 * Q - 29)) <= 1, qPrintable(QString::number(gap[3].off)));
+      for (int i = 0; i < 3; ++i)
+            QVERIFY2(gap[size_t(i)].off == off[size_t(i)].off && gap[size_t(i)].off > gap[size_t(i + 1)].on - 29, qPrintable(QString("note %1 ends %2, next starts %3")
+                                                                           .arg(i).arg(gap[size_t(i)].off).arg(gap[size_t(i + 1)].on)));
+      // the note before keeps at least keepMs as played: a 500 ms gap with keepMs 800 leaves F5 800 ms (384 ticks)
+      Playback::setIniValuesForTest({ { "legato/phraseGapMs", "500" }, { "legato/keepMs", "800" } });
+      std::vector<N> big = render();
+      QVERIFY2(qAbs(big[3].off - (big[3].on + 384)) <= 1, qPrintable(QString("%1 %2").arg(big[3].on).arg(big[3].off)));
+      // MS4's overlap at slur ends (slurEndOverlap 1): no gap, F5 ends as without it
+      Playback::setIniValuesForTest({ { "legato/slurEndOverlap", "1" } });
+      std::vector<N> ms4 = render();
+      QCOMPARE(ms4[3].off, off[3].off);
       delete score;
       Playback::setIniValuesForTest({});
       }

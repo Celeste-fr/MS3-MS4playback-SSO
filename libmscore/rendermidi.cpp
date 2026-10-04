@@ -1690,6 +1690,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libLegatoOffs.push_back({ libTransitionFrom, noteChannel, played, false });
                               else if (libRetrigger)
                                     libLegatoOffs.push_back({ libRetrigger, noteChannel, played, true });
+                              // a fresh attack on a legato patch ([legato] phraseGapMs; not the fast technique's own
+                              // attacks, which keep their cut at the note-on): an articulation that plays legato
+                              // transitions, whatever this note asked for (SSO's held notes play it too: prefer="long")
+                              if (!libTransitionFrom && !libRetrigger && libChoice && !li->kit
+                                  && libChoice.articulation->techniques.contains("legato"))
+                                    libFreshAttacks.push_back({ note, noteChannel, libChoice.patch, played });
                               }
                         if (config.libOn && libShiftOn >= 0 && libShiftOn < libShiftWritten)
                               libShifts.push_back({ noteChannel, libChoice.patch, libShiftOn, libShiftWritten,
@@ -2359,6 +2365,53 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                         events->insert(events->lower_bound(at), std::make_pair(at, off));
                         break;
                         }
+                  }
+            }
+
+      // a phrase's new note on a legato patch ([legato] phraseGapMs): SSO plays a legato transition into a note whose
+      // note before on the patch ends less than ~40 ms before it (numbers-measured 2026-10-03: up to 20 ms always, 40 ms
+      // 80 of 336, from 60 ms never), so after a slur's end, a phrase mark or a detached note the new note would be
+      // slurred into. What sounds on its route (channel and patch) and started at least phraseGapMs before it ends
+      // phraseGapMs before it; the note before keeps at least [legato] keepMs as played. Not with slurEndOverlap (the
+      // owner asked for MS4's overlap there)
+      if (libPhraseGap > 0 && !libSlurEndOverlap) {
+            auto laneOf = [&](const Note* n) { auto l = libLanes.find(n); return l != libLanes.end() ? l->second : 0; };
+            for (const LibFreshAttack& a : libFreshAttacks) {
+                  const int at = score->utime2utick(score->utick2utime(a.on) - libPhraseGap);
+                  if (at >= a.on)
+                        continue;
+                  std::vector<std::pair<int, NPlayEvent>> moved;
+                  for (auto i = events->upper_bound(at); i != events->end() && i->first <= a.on + libOverlapTicks + 1;) {
+                        const NPlayEvent& ev = i->second;
+                        // (the same route: channel, patch and copy for other tunings; another copy is another instance)
+                        if (ev.type() != ME_NOTEON || ev.velo() != 0 || ev.librarySwitch() || ev.channel() != a.channel
+                            || ev.libraryPatch() != a.patch || laneOf(ev.note()) != laneOf(a.note)) {
+                              ++i;
+                              continue;
+                              }
+                        // its note-on: the latest one of that key on the route before the note-off
+                        int noteOn = -1;
+                        for (auto j = events->lower_bound(std::max(0, at - 64 * DIVISION)); j != i; ++j) {
+                              const NPlayEvent& o = j->second;
+                              if (o.type() == ME_NOTEON && o.velo() > 0 && !o.librarySwitch() && o.channel() == ev.channel()
+                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch())
+                                    noteOn = j->first;
+                              }
+                        if (noteOn < 0 || noteOn >= at) {         // (a note of the new chord, or one that started after)
+                              ++i;
+                              continue;
+                              }
+                        const int keep = score->utime2utick(score->utick2utime(noteOn) + libKeep);
+                        const int to = std::max(at, std::min(keep, i->first));
+                        if (to >= i->first) {
+                              ++i;
+                              continue;
+                              }
+                        moved.push_back({ to, ev });
+                        i = events->erase(i);
+                        }
+                  for (const auto& m : moved)
+                        events->insert(events->lower_bound(m.first), m);
                   }
             }
 
@@ -4442,6 +4495,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
       libOverlapTicks = int(Playback::value("legato/overlapTicks", score));
       libSlurEndOverlap = Playback::on("legato/slurEndOverlap", score);
+      libPhraseGap = Playback::value("legato/phraseGapMs", score) / 1000.0;
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libFastTechnique = Playback::on("legato/fastTechnique", score);
       libFastFirsts = Playback::on("legato/fastFirsts", score);
@@ -4454,6 +4508,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libShifts.clear();
       libPlayedOn.clear();
       libLegatoOffs.clear();
+      libFreshAttacks.clear();
       libLevels.clear();
 
       // create note & other events

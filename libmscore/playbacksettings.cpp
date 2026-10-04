@@ -40,6 +40,12 @@ static const std::vector<Definition> DEFINITIONS = {
         "a slurred note lasts this long into the next one (SSO joins notes up to 20 ms apart: 0 is enough for it)", true },
       { "legato/slurEndOverlap", 0, 0, 1, "on/off",
         "1: a slur's last note overlaps the note after it too (MuseScore 4); 0: it ends on time, so the next note gets its own attack", true },
+      // (measured, numbers-measured 2026-10-03, the same sweep as overlapTicks: SSO joins two notes into a legato transition
+      // up to a 20 ms gap, does so for 80 of 336 at 40 ms and for none from 60 ms; 60 is the smallest gap with no
+      // transition. The owner, 2026-10-04: phrases separate. Only where SSO would join: a note on a legato patch that is
+      // no transition, after a note on the same route)
+      { "legato/phraseGapMs", 60, 0, 500, "ms",
+        "a note on a legato patch that is no legato transition (a slur's end, a phrase mark, a detached note) starts at least this long after the note before on its patch ends, so it gets its own attack (0: off)", true },
       { "legato/early", MAP, 0, 200, "%",
         "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
       // (keepMs chosen by a sweep, numbers-measured 2026-10-03: 0 / 20 / 40 / 60 / 80 / 120 ms on make_fastrun_scores.py's
