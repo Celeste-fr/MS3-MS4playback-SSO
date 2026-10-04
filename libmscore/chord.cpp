@@ -2766,8 +2766,10 @@ Element* Chord::drop(EditData& data)
 
 qreal Chord::dotPosX() const
       {
+      // the staff the chord is drawn on: layoutChords1 sets it per drawn staff (a cross-staff chord's dots were placed
+      // by its own staff's chords, at 0 when that staff had none: the fork's clip tabs, 2026-10-04)
       if (parent())
-            return segment()->dotPosX(staffIdx());
+            return segment()->dotPosX(vStaffIdx());
       return -1000.0;
       }
 

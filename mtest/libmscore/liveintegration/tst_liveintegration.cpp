@@ -1175,6 +1175,25 @@ static std::vector<int> shownStaves(Score* score)
       return out;
       }
 
+// every augmentation dot right of its notehead (the owner, 2026-10-04: a cross-staff chord's dots sat at its notehead's
+// left edge, placed by its own, hidden, staff); returns the dots seen, -1 when one is misplaced
+static int dotsRightOfHeads(Score* score)
+      {
+      score->doLayout();
+      int n = 0;
+      for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+            for (int t = 0; t < score->ntracks(); ++t)
+                  if (Element* e = seg->element(t))
+                        if (e->isChord())
+                              for (Note* note : toChord(e)->notes())
+                                    for (NoteDot* d : note->dots()) {
+                                          if (d->pagePos().x() < note->pagePos().x() + note->headWidth())
+                                                return -1;
+                                          ++n;
+                                          }
+      return n;
+      }
+
 // every shown band staff reads complete: in each measure, its visible rests and the chords drawn on it cover the whole
 // measure without a gap (the owner, 2026-10-04: a dotted eighth's sixteenth rest was on the hidden staff)
 static bool bandsComplete(Score* score)
@@ -2030,6 +2049,7 @@ void TestLiveIntegration::clipEditBands()
             const Baseline b = match(clip, score);
             QCOMPARE(b.unmatched, 0);
             QVERIFY(diff(b, signatures(score)).empty());
+            QCOMPARE(dotsRightOfHeads(score), 4);         // the three dotted eighths and the dotted half
             if (qEnvironmentVariableIsSet("MS_CLIP_REPRO"))
                   QVERIFY(renderPng(score, qEnvironmentVariable("MS_CLIP_REPRO")));
             delete score;
