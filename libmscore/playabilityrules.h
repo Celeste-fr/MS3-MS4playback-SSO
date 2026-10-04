@@ -214,7 +214,9 @@ constexpr int JETE_MAX = 6;
 // threshold placed between them. 94 ms: the one criticized run's notes (Adler p. 84, Ex 3-69, Beethoven 4 finale
 // sixteenths at half = 80, "muddied"); 1.25 s: the longest run accepted (Kennan p. 26, Ex 2.22a, Beethoven 5 trio,
 // 12 eighths at dotted half = 96). Readings of Jadassohn, Prout and Forsyth on that page are from the earlier research
-// table, not re-read against the books
+// table, not re-read against the books. Re-read 2026-10-04 (https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h): the
+// books don't support these limits (Forsyth Ex 282 accepts the Beethoven 4 run Adler criticises, 3.0 s or more;
+// Prout criticises 129 ms notes and says players can play them). Shelved for the owner's review (HANDOFF.md)
 constexpr double FAST_NOTE_SECONDS = 0.094;
 constexpr double FAST_RUN_SECONDS = 1.25;
 
