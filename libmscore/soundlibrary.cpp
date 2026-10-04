@@ -1433,9 +1433,54 @@ int memoryMaxLanes(qint64 freeBytes, int parts)
       return 1 + int(freeBytes / (LANE_COPY_BYTES * std::max(1, parts)));
       }
 
-int memoryMaxLanes(const Score* score)
+// the parts whose notes play at more than one tuning (beyond the tolerance, cents): only they need copies (a part's
+// first copy takes any tuning). Needs a ScoreTuningScope (playbackTuning). A part MuseScore's own sounds play counts
+// too when it has microtones (an overcount: its share of the memory goes unused)
+int partsNeedingCopies(const Score* score, double toleranceCents)
       {
-      return memoryMaxLanes(freeMemoryBytes(), score ? int(score->masterScore()->parts().size()) : 1);
+      if (!score)
+            return 0;
+      const Score* ms = score->masterScore();
+      int count = 0;
+      for (const Part* part : ms->parts()) {
+            bool first = true;
+            double cents0 = 0;
+            bool needs = false;
+            for (const Segment* s = ms->firstSegment(SegmentType::ChordRest); s && !needs; s = s->next1(SegmentType::ChordRest)) {
+                  for (int t = part->startTrack(); t < part->endTrack() && !needs; ++t) {
+                        const Element* e = s->element(t);
+                        if (!e || !e->isChord())
+                              continue;
+                        const Chord* ch = toChord(e);
+                        std::vector<const Chord*> chords { ch };
+                        for (const Chord* g : ch->graceNotes())
+                              chords.push_back(g);
+                        for (const Chord* c : chords) {
+                              for (const Note* n : c->notes()) {
+                                    if (!n->play())
+                                          continue;
+                                    const double cents = playbackTuning(n);
+                                    if (first) {
+                                          cents0 = cents;
+                                          first = false;
+                                          }
+                                    else if (std::fabs(cents - cents0) > toleranceCents)
+                                          needs = true;
+                                    }
+                              }
+                        }
+                  }
+            if (needs)
+                  ++count;
+            }
+      return count;
+      }
+
+// the free memory split evenly between the parts that need copies (the owner, 2026-10-04: not between all the score's
+// parts; a part with one tuning needs none), at least one share
+int memoryMaxLanes(const Score* score, double toleranceCents)
+      {
+      return memoryMaxLanes(freeMemoryBytes(), std::max(1, partsNeedingCopies(score, toleranceCents)));
       }
 
 LaneSettings libraryLaneSettings(const Library& library)
@@ -1573,10 +1618,10 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
       out.count.assign(patches.size(), patches.empty() ? 0 : 1);
       if (patches.empty() || patches[0]->kit)
             return out;
-      if (maxLanes <= 0)
-            maxLanes = memoryMaxLanes(score);
       Score* sc = const_cast<Score*>(score);
       const ScoreTuningScope tuningScope(sc);
+      if (maxLanes <= 0)
+            maxLanes = memoryMaxLanes(score, toleranceCents);
       const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
       if (mode == OneInstance::SETTING)
             mode = oneInstance(score);

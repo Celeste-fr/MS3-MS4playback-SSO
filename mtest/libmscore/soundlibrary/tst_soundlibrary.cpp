@@ -3639,6 +3639,15 @@ void TestSoundLibrary::computedLaneSettings()
       QCOMPARE(SoundLib::memoryMaxLanes(qint64(245) * 1024 * 1024 * 8, 2), 5);
       QCOMPARE(SoundLib::memoryMaxLanes(qint64(100) * 1024 * 1024, 1), 1);
       QCOMPARE(SoundLib::memoryMaxLanes(-1, 1), 1);                   // (unknown: no copies)
+      // the share: only parts whose notes play at more than one tuning (the owner, 2026-10-04); quartertones.musicxml's
+      // part does, legato-early.musicxml has none
+      for (const auto& f : { std::make_pair(QString("quartertones.musicxml"), 1), std::make_pair(QString("legato-early.musicxml"), 0) }) {
+            MasterScore* sc = readScore(DIR + f.first);
+            QVERIFY(sc);
+            const ScoreTuningScope scope(sc);
+            QCOMPARE(SoundLib::partsNeedingCopies(sc, ls.tolerance), f.second);
+            delete sc;
+            }
       QVERIFY(SoundLib::freeMemoryBytes() > 0);                       // (Linux: /proc/meminfo MemAvailable)
       // playback.ini over the computed ones
       Playback::setIniValuesForTest({ { "tuning/tail", "1.5" }, { "tuning/maxLanes", "4" }, { "tuning/tolerance", "3" } });

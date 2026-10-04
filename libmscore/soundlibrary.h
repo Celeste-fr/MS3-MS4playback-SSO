@@ -544,7 +544,8 @@ double laneRing(const LibInstrument& patch, const Articulation* articulation, co
 // of a patch, 1276 with two: Kontakt shares no samples between copies, docs/HISTORY.md › tuning lanes), the free
 // memory shared by the score's parts (each may need copies): 1 + free / (245 MB × parts), at least 1. Free: the
 // system's available physical memory, read once per run (freeMemoryBytes)
-int memoryMaxLanes(const Score* score);
+int memoryMaxLanes(const Score* score, double toleranceCents);
+int partsNeedingCopies(const Score* score, double toleranceCents);
 int memoryMaxLanes(qint64 freeBytes, int parts);
 qint64 freeMemoryBytes();
 constexpr qint64 LANE_COPY_BYTES = qint64(1276 - 1031) * 1024 * 1024;
