@@ -167,7 +167,9 @@ class TestMarcatoLevel : public QObject, public MTest
 //---------------------------------------------------------
 //   defaultUnchanged
 //    marcatos without a level play as before the setting existed: the events (built-in and SSO) of
-//    main 922a4849dc (SSO's velocity marcatos regenerated 2026-10-02 without MS4's accent boost: mf 103 -> 80, f 123 -> 96), kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
+//    main 922a4849dc (SSO's velocity marcatos regenerated 2026-10-02 without MS4's accent boost: mf 103 -> 80, f 123 -> 96; regenerated
+//    2026-10-04 for [legato] phraseGapMs: five SSO note-offs before a fresh attack on the legato patch end 44-58 ticks earlier,
+//    the built-in events unchanged), kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
 //    events there instead (to make the reference again after an intended playback change)
 //---------------------------------------------------------
 
