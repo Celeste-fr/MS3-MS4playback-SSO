@@ -102,7 +102,8 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
 2. Pedal 40 / 90 ms: kept until the owner's PC measures them: an export of `Piano pedal chords` with `[pedal] upAfterMs`
    0 … 60 ms (docs/PLAYBACK_SETTINGS.md › Measured by sweeps); not urgent.
 3. Thresholds: 10 dB short length and 50 % legato arrival approved as the owner's rules (ISO 3382-1's early decay time
-   as an analogy for the first); T30 for the tuning tail approved (docs/PLAYBACK_SETTINGS.md › 3C).
+   as an analogy for the first); T30 for the tuning tail approved (docs/PLAYBACK_SETTINGS.md › 3C). The standard's text is not
+   needed (the owner, 2026-10-04): both are the owner's rules, the standard only an analogy.
 4. Velocity lane: 0-200 % and "shape" default confirmed (LIVE.md).
 5. Tuning copies: the free memory split between the parts that need copies only (8a53711).
 6. Checker fast basses: 94 ms / 1.25 s (19fedbe), re-read against the books (review page
