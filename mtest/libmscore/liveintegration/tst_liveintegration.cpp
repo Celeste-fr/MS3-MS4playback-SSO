@@ -1160,16 +1160,51 @@ static bool renderPng(MasterScore* score, const QString& path)
       return img.save(path);
       }
 
-// the band staves shown in the clip tab (0 treble 15ma, 1 treble, 2 bass, 3 bass 15mb)
+// the band staves shown in the clip tab (0 treble 15ma, 1 treble, 2 bass, 3 bass 15mb; staff 1 + band, below the
+// notes' hidden staff)
 static std::vector<int> shownStaves(Score* score)
       {
       score->doLayout();
       std::vector<int> out;
       System* sys = score->systems().front();
-      for (int i = 0; i < score->nstaves(); ++i)
+      if (sys->staff(0)->show())
+            out.push_back(-1);                  // (the notes' staff: never)
+      for (int i = 1; i < score->nstaves(); ++i)
             if (sys->staff(i)->show())
-                  out.push_back(i);
+                  out.push_back(i - 1);
       return out;
+      }
+
+// every shown band staff reads complete: in each measure, its visible rests and the chords drawn on it cover the whole
+// measure without a gap (the owner, 2026-10-04: a dotted eighth's sixteenth rest was on the hidden staff)
+static bool bandsComplete(Score* score)
+      {
+      score->doLayout();
+      System* sys = score->systems().front();
+      for (int i = 1; i < score->nstaves(); ++i) {
+            if (!sys->staff(i)->show())
+                  continue;
+            for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure()) {
+                  std::vector<std::pair<Fraction, Fraction>> spans;
+                  for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest))
+                        for (int t = 0; t < score->ntracks(); ++t)
+                              if (Element* e = seg->element(t)) {
+                                    ChordRest* cr = toChordRest(e);
+                                    if (cr->vStaffIdx() == i && (cr->isChord() || cr->visible()))
+                                          spans.push_back({ cr->tick(), cr->tick() + cr->actualTicks() });
+                                    }
+                  std::sort(spans.begin(), spans.end());
+                  Fraction at = m->tick();
+                  for (const auto& sp : spans) {
+                        if (sp.first > at)
+                              return false;           // a gap
+                        at = std::max(at, sp.second);
+                        }
+                  if (at < m->endTick())
+                        return false;
+                  }
+            }
+      return true;
       }
 
 // every note is among the elements the score draws (the owner, 2026-10-04: a low clip showed rests only, its notes
@@ -1205,7 +1240,7 @@ void TestLiveIntegration::clipEditImport()
       QCOMPARE(score->parts().size(), 1);
       QCOMPARE(score->parts()[0]->partName(), QString("Violin"));
       QCOMPARE(score->parts()[0]->instrument()->getId(), QString("violin"));
-      QCOMPARE(score->nstaves(), BANDS);                  // the band staves, treble shown
+      QCOMPARE(score->nstaves(), BANDS + 1);                  // the band staves, treble shown
       QVERIFY(shownStaves(score) == std::vector<int>({ 1 }));
       QCOMPARE(score->fileInfo()->completeBaseName(), QString("Violin › Idea"));
       QCOMPARE(score->lastMeasure()->endTick().ticks(), 12 * 480);     // up to the clip's end
@@ -1216,9 +1251,9 @@ void TestLiveIntegration::clipEditImport()
       QVERIFY(score->styleB(Sid::showMeasureNumberOne));
       QCOMPARE(score->styleI(Sid::measureNumberInterval), 1);
       QVERIFY(!score->styleB(Sid::measureNumberSystem));
-      // (on the first staff shown: treble)
+      // (on the first staff shown: treble, staff 2 below the notes' hidden staff)
       for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
-            QVERIFY2(m->noText(1) && m->noText(1)->visible(), qPrintable(QString("bar %1").arg(m->no() + 1)));
+            QVERIFY2(m->noText(2) && m->noText(2)->visible(), qPrintable(QString("bar %1").arg(m->no() + 1)));
       // quantized in the notation, each note found with its Live note
       const std::vector<Sig> sigs = signatures(score);
       QCOMPARE(int(sigs.size()), 6);
@@ -1797,9 +1832,9 @@ static Clip bandClip(const QString& track, const std::vector<int>& pitches)
 // the clefs never change: each staff's clef at every bar is its band's, no clef element anywhere
 static bool clefsFixed(Score* score)
       {
-      for (int i = 0; i < score->nstaves(); ++i)
+      for (int i = 1; i < score->nstaves(); ++i)
             for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
-                  if (score->staff(i)->clef(m->tick()) != BAND_CLEFS[i])
+                  if (score->staff(i)->clef(m->tick()) != BAND_CLEFS[i - 1])
                         return false;
       for (Segment* seg = score->firstSegment(SegmentType::All); seg; seg = seg->next1())
             for (Element* e : seg->elist())
@@ -1828,7 +1863,7 @@ static bool onBands(Score* score)
       signatures(score, &notes);
       for (Note* n : notes) {
             const std::vector<int> b = bandsOf(n->ppitch());
-            if (std::find(b.begin(), b.end(), n->chord()->vStaffIdx()) == b.end())
+            if (std::find(b.begin(), b.end(), n->chord()->vStaffIdx() - 1) == b.end())
                   return false;
             }
       return true;
@@ -1869,9 +1904,10 @@ void TestLiveIntegration::clipEditBands()
             const Clip clip = bandClip(c.track, c.pitches);
             MasterScore* score = importClip(clip, nullptr);
             QVERIFY2(score, c.what);
-            QCOMPARE(score->nstaves(), BANDS);
+            QCOMPARE(score->nstaves(), BANDS + 1);
             QVERIFY2(shownStaves(score) == c.shown, c.what);
             QVERIFY2(notesNotDrawn(score) == 0, c.what);
+            QVERIFY2(bandsComplete(score), c.what);
             QVERIFY2(clefsFixed(score), c.what);
             QVERIFY2(onBands(score), c.what);
             QCOMPARE(outOfRange(score), 0);
@@ -1893,20 +1929,21 @@ void TestLiveIntegration::clipEditBands()
             score->startCmd();
             score->undoChangePitch(n, 48, n->tpc1(), n->tpc2());
             score->endCmd();
-            QCOMPARE(n->chord()->vStaffIdx(), 2);
+            QCOMPARE(n->chord()->vStaffIdx() - 1, 2);
             QVERIFY(shownStaves(score) == std::vector<int>({ 1, 2 }));
             QCOMPARE(notesNotDrawn(score), 0);
+            QVERIFY(bandsComplete(score));
             QVERIFY(onBands(score));
             const Diff d = diff(b, signatures(score));
             QCOMPARE(int(d.ops.size()), 1);
             QCOMPARE(d.ops[0].id, 2);
             QCOMPARE(d.ops[0].pitch, 48);
             score->undoRedo(true, nullptr);
-            QCOMPARE(n->chord()->vStaffIdx(), 1);
+            QCOMPARE(n->chord()->vStaffIdx() - 1, 1);
             QVERIFY(shownStaves(score) == std::vector<int>({ 1 }));
             QVERIFY(diff(b, signatures(score)).empty());
             score->undoRedo(false, nullptr);
-            QCOMPARE(n->chord()->vStaffIdx(), 2);
+            QCOMPARE(n->chord()->vStaffIdx() - 1, 2);
             delete score;
       }
 
@@ -1924,8 +1961,8 @@ void TestLiveIntegration::clipEditBands()
             Note* hi = noteAt(score, 0, 72);
             QVERIFY(lo && hi);
             QVERIFY(lo->chord() != hi->chord());
-            QCOMPARE(lo->chord()->vStaffIdx(), 2);
-            QCOMPARE(hi->chord()->vStaffIdx(), 1);
+            QCOMPARE(lo->chord()->vStaffIdx() - 1, 2);
+            QCOMPARE(hi->chord()->vStaffIdx() - 1, 1);
             const Baseline b = match(clip, score);
             QCOMPARE(b.unmatched, 0);
             QVERIFY(diff(b, signatures(score)).empty());
@@ -1965,6 +2002,36 @@ void TestLiveIntegration::clipEditBands()
                   QFileInfo fi(dir + "/clip-bands-2-E4-to-D3.mscz");
                   QVERIFY(score->saveCompressedFile(fi, false, false));
             }
+            delete score;
+            }
+
+      // the owner's 16-BuzzWave arrangement clip (2026-10-04), its bars 1, 4 and 5: a low C after three rests, dotted
+      // eighths each followed by a sixteenth rest, a dotted half with two low eighths after it on the staff below. Every
+      // note drawn, every shown staff's bars complete (the rests were on the hidden staff); MS_CLIP_REPRO=<png>: a picture
+      {
+            Clip clip;
+            clip.key = "b";
+            clip.track = "16-BuzzWave";
+            clip.end = 20;
+            int id = 1;
+            const double seq[][3] = {          // start, length (beats), pitch
+                  { 3.5, 0.5, 36 },
+                  { 12, 0.75, 43 }, { 13, 0.75, 43 }, { 14, 0.75, 43 }, { 15, 0.5, 41 }, { 15.5, 0.5, 38 },
+                  { 16, 3.0, 38 }, { 19, 0.5, 35 }, { 19.5, 0.5, 38 },
+                  };
+            for (const auto& n : seq)
+                  clip.notes.push_back(ln(id++, int(n[2]), n[0], n[1], 90));
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY(score);
+            QVERIFY(shownStaves(score) == std::vector<int>({ 2, 3 }));
+            QCOMPARE(notesNotDrawn(score), 0);
+            QVERIFY(bandsComplete(score));
+            QVERIFY(onBands(score));
+            const Baseline b = match(clip, score);
+            QCOMPARE(b.unmatched, 0);
+            QVERIFY(diff(b, signatures(score)).empty());
+            if (qEnvironmentVariableIsSet("MS_CLIP_REPRO"))
+                  QVERIFY(renderPng(score, qEnvironmentVariable("MS_CLIP_REPRO")));
             delete score;
             }
 

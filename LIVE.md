@@ -808,12 +808,14 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   15ma, D2 on bass or 15mb) on the staff of the chord before it, else the one whose middle line is nearest the
   clip's median pitch. The notes stay where they are written (cross-staff notation, as Ctrl+Shift+↑/↓ moves
   a chord), and after every edit (note input, pitch, paste; in the same undo step) each chord is drawn on its
-  band again, so a note never has to be moved between staves. A chord over two bands is split by band into
-  another voice (free for its length: the chord's staff first, then the others), the band with most notes
-  staying; rests of voices 2-4 and those under notes drawn from another staff are hidden (View › Show
-  Invisible off in the tab). Limits: a chord with ties, a tuplet or grace notes, or with no free voice, stays
-  whole on one band; a tie or beam between notes of two bands is drawn across the staves; a staff a chord was
-  moved off shows a gap there (no rest), and a staff can't show more than its four voices. The written and
+  band again, so a note never has to be moved between staves. The notes live on a fifth staff above the bands
+  that is never shown (every chord is drawn on its band; its rests stay hidden), and each band staff's own first voice
+  is rests only: shown wherever nothing is drawn on that staff, invisible under its notes, so every shown staff's
+  bars add up (the owner, 2026-10-04: a dotted eighth's sixteenth rest, written on the hidden staff, didn't show;
+  `fillBandRests`). A chord over two bands is split by band into another voice of the notes' staff (free for its
+  length), the band with most notes staying (View › Show Invisible off in the tab). Limits: a chord with ties, a
+  tuplet or grace notes, or with no free voice, stays whole on one band; a tie or beam between notes of two bands is
+  drawn across the staves; the notes' staff has four voices for every band together. The written and
   played pitches are the same (octave clefs change only where a note is drawn), so what is sent to Live and
   played is unchanged. **Drums**: a Drum Rack (`DrumGroupDevice`) on
   the track, or a track named like drum / kit / perc / beat: channel 10 in the file, so the import uses
@@ -1044,8 +1046,8 @@ rit. / accel. follow the song (`mscore/cliptempo.{h,cpp}`, the session side in `
   text) at its start; a curved ramp (Live's Bézier) as straight pieces no further than 0.005 bpm from the curve (half
   of 0.01 bpm, the smallest step Live shows a tempo in; `LiveSet::curve`), read as one *rit.* / *accel.*. Not rit. /
   accel. lines: MuseScore 3 ends a line at the end of the note or rest it ends in (`Spanner::computeEndElement`), while
-  Live's breakpoints fall anywhere. The markings are on track 0: with the clip tab's band staves the top staff may be
-  hidden, the markings are still drawn (tested).
+  Live's breakpoints fall anywhere. The markings are on track 0: with the clip tab's band staves that staff (the notes'
+  staff) is always hidden, the markings are still drawn (tested).
   Times are rounded to the score's ticks (480 a beat). Markings like "♩ = 97.5"
   (two decimals at most, as Live shows a tempo). The marks change no note: the tab sends nothing to Live for them.
   When only values change (a ramp's end tempo, Live's tempo) they change in place without an undo step. A new shape
