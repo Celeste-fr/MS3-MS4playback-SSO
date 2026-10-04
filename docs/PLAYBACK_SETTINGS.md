@@ -177,6 +177,11 @@ check's), MuseScore 2bc46bc's `--verify-playback`, Live 12.4.6 (trial). Tools in
   median by −120 / +580 ms (43 patches): it matters (the 50 % one is what the sweeps confirmed by ear-matched arrival);
   a release to 15 / 60 dB instead of 30: Timpani Swell mf 4655 / 13305 against 7575 ms (it matters; 30 dB is ISO
   3382-1's T30 range).
+  **The owner's decisions (2026-10-04)**: the 10 dB short length is approved as the owner's rule; the supporting
+  analogy is ISO 3382-1's early decay time, which is read over the first 10 dB of a decay (an analogy only: no
+  standard defines a note's sounding length). The 50 % legato arrival is approved as the owner's rule (the neutral
+  midpoint; the sweeps' heard arrival matched it). The tuning tail's 60 dB as twice the 30 dB release (T30, ISO
+  3382-1) is approved without checking the standard's text.
 
 Not settings: the measurement definitions behind the map data (the -15 dB onset threshold, the swell rule, the
 legato grid's 50 % crossing, octaves by template fit, the release as the longest over the range) are applied when

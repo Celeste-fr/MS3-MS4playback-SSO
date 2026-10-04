@@ -93,6 +93,9 @@ class Spelling {
 
 // Microtones: within MICRO_MIN_CENTS of the equal-tempered pitch counts as that pitch (a HEJI
 // schisma is not a different finger); the temperament never counts (a meantone G# is a G#).
+// The owner (2026-10-04): to depend on the note's frequency, from the pitch difference limen of Wier, Jesteadt &
+// Green 1977 (JASA 61), once the paper (or Moore, An Introduction to the Psychology of Hearing) is here; 5 until then
+// (the only figure found, Rossing 2010 p. 379, spans 2.6-58 cents over the range)
 constexpr double MICRO_MIN_CENTS = 5.0;
 double soundingPitch(int pitch, double cents);
 QString centsSuffix(double cents);

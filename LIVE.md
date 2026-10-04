@@ -1007,8 +1007,8 @@ never scales scaled values.
   stores), `test_patch.js` (the patcher's shaper: codes, the reset, a note-off, carriers untouched, the log),
   `test_envelopes.py` › Keep (the script's side); `tst_liveintegration` clipVelocityLane, clipVelocityWrite,
   clipVelocityReopen, clipVelocityRecord.
-- **Owner decisions** (proposed, LIVE.md › Open questions): the scale range 0-200 % with 100 % at the lane's middle (the
-  owner's own example); "shape" as the default output.
+- **Owner decisions** (confirmed 2026-10-04): the scale range 0-200 % with 100 % at the lane's middle (the owner's own
+  example); "shape" (the notes untouched) as the default output.
 ### The song's tempo in a clip tab (2026-10-03)
 
 The owner, 2026-10-03: "when I play a midi clip inside musescore, it doesn't respect the song tempo automation in the
@@ -1227,9 +1227,6 @@ Only real Live can show (to check first):
   of the clip under the arrangement (unrolled), or the tempo of a chosen pass.
 - A clip tab sends notes, pedals and the pitch bend to its Live track, not the score's dynamics as controllers
   (CC 1 / 11 would change many synths' timbre) nor the Mixer's volume. Should it send any of them?
-- The Velocity lane (2026-10-03): its scale range is 0-200 % with 100 % (unchanged) at the lane's middle, the owner's
-  example ("e.g. 0-200 % with 100 = unchanged"); another range (0-400 %, or a dB scale)? "Shape while playing" is the
-  default output (the notes untouched); keep it?
 
 ## What the owner's Live set confirmed, and what it didn't
 

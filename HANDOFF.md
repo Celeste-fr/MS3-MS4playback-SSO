@@ -96,6 +96,19 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   it stays off; the tables and the CC11 path (`libraryNoteLevels`, shared with the marcato level) are there for a
   model that knows the run's context. A raise needs headroom (`levelHeadroomDb`: the part rests that much down).
 
+## The owner's decisions of 2026-10-04 (from the pause list of numbers-measured)
+
+1. Phrase gap: done, `[legato] phraseGapMs` 60 (c4c8860).
+2. Pedal 40 / 90 ms: kept until the owner's PC measures them: an export of `Piano pedal chords` with `[pedal] upAfterMs`
+   0 … 60 ms (docs/PLAYBACK_SETTINGS.md › Measured by sweeps); not urgent.
+3. Thresholds: 10 dB short length and 50 % legato arrival approved as the owner's rules (ISO 3382-1's early decay time
+   as an analogy for the first); T30 for the tuning tail approved (docs/PLAYBACK_SETTINGS.md › 3C).
+4. Velocity lane: 0-200 % and "shape" default confirmed (LIVE.md).
+5. Tuning copies: the free memory split between the parts that need copies only (8a53711).
+6. Checker fast basses: candidate A, 94 ms / 1.25 s (19fedbe); the page's Jadassohn, Prout, Forsyth rows still to be
+   re-read against the books.
+7. `MICRO_MIN_CENTS`: to depend on frequency from Wier, Jesteadt & Green 1977; waits for the paper (5 cents until then).
+
 ## Waiting for the owner (built, not yet confirmed on Windows / by ear)
 
 Each has its background in docs/HISTORY.md Part 2 under the same name.
