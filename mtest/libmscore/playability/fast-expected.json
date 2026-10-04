@@ -2,44 +2,65 @@
  "rows": [
   {
    "staff": "Contrabasses",
+   "bar": 1,
+   "verdict": "outOfReach",
+   "reason": "fast passage: 10.7 notes/s for 1.5 s (section: notes of 94 ms or less for at most 1.25 s)",
+   "notes": "E1 … G2 (16 notes)"
+  },
+  {
+   "staff": "Contrabasses",
    "bar": 3,
    "verdict": "outOfReach",
-   "reason": "fast passage: 10.7 notes/s for 1.6 s (section max 10/s for 1.5 s)",
+   "reason": "fast passage: 10.7 notes/s for 1.6 s (section: notes of 94 ms or less for at most 1.25 s)",
    "notes": "E1 … E1 (17 notes)"
   },
   {
    "staff": "Contrabasses",
    "bar": 6,
    "verdict": "outOfReach",
-   "reason": "fast passage: 10.7 notes/s for 3.8 s (section max 10/s for 1.5 s)",
+   "reason": "fast passage: 10.7 notes/s for 3.8 s (section: notes of 94 ms or less for at most 1.25 s)",
    "notes": "E1 … E2 (40 notes)"
+  },
+  {
+   "staff": "Contrabasses",
+   "bar": 10,
+   "verdict": "outOfReach",
+   "reason": "fast passage: 10.7 notes/s for 1.5 s (section: notes of 94 ms or less for at most 1.25 s)",
+   "notes": "E1 … G2 (16 notes)"
+  },
+  {
+   "staff": "Contrabasses",
+   "bar": 11,
+   "verdict": "outOfReach",
+   "reason": "fast passage: 10.7 notes/s for 1.4 s (section: notes of 94 ms or less for at most 1.25 s)",
+   "notes": "E1 … A2 (15 notes)"
   },
   {
    "staff": "Contrabasses",
    "bar": 24,
    "verdict": "outOfReach",
-   "reason": "fast passage: 10.7 notes/s for 2.3 s (section max 10/s for 1.5 s)",
+   "reason": "fast passage: 10.7 notes/s for 2.3 s (section: notes of 94 ms or less for at most 1.25 s)",
    "notes": "E1 … E2 (24 notes)"
   },
   {
    "staff": "Contrabasses",
    "bar": 27,
    "verdict": "outOfReach",
-   "reason": "fast passage: 10.7 notes/s for 1.9 s (section max 10/s for 1.5 s)",
+   "reason": "fast passage: 10.7 notes/s for 1.9 s (section: notes of 94 ms or less for at most 1.25 s)",
    "notes": "E2 … E2 (20 notes)"
   },
   {
    "staff": "Contrabasses",
    "bar": 34,
    "verdict": "outOfReach",
-   "reason": "fast passage: 10.7 notes/s for 1.9 s (section max 10/s for 1.5 s)",
+   "reason": "fast passage: 10.7 notes/s for 1.9 s (section: notes of 94 ms or less for at most 1.25 s)",
    "notes": "E1 … A1 (20 notes)"
   },
   {
    "staff": "Contrabasses",
    "bar": 45,
    "verdict": "outOfReach",
-   "reason": "fast passage: 10.7 notes/s for 3.8 s (section max 10/s for 1.5 s)",
+   "reason": "fast passage: 10.7 notes/s for 3.8 s (section: notes of 94 ms or less for at most 1.25 s)",
    "notes": "E1 … E2 (40 notes)"
   }
  ],

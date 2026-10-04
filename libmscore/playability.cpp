@@ -713,7 +713,7 @@ void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const Sta
                               markOver(n, PlayMark::OUT_OF_REACH);
                   double rate = std::floor(r.size() / secs * 10 + 0.5) / 10;
                   addRow(t0, last, trk, staffName, "fast", "outOfReach",
-                         QString("fast passage: %1 notes/s for %2 (section max 10/s for 1.5 s)").arg(QString::number(rate, 'g', 12), fmtSeconds(secs)),
+                         QString("fast passage: %1 notes/s for %2 (section: notes of 94 ms or less for at most 1.25 s)").arg(QString::number(rate, 'g', 12), fmtSeconds(secs)),
                          topName(r.front().chord) + " " + QChar(0x2026) + " " + topName(r.back().chord) + QString(" (%1 notes)").arg(r.size()));
                   };
             for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
@@ -731,7 +731,7 @@ void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const Sta
                   if (c->notes().front()->tieBack() && tick == prevEnd) {   // a tied-on note lengthens the last
                         if (!run.empty()) {
                               run.back().end = end;
-                              if (secondsBetween(run.back().tick, end) >= FAST_NOTE_SECONDS - 1e-9) {
+                              if (secondsBetween(run.back().tick, end) > FAST_NOTE_SECONDS + 1e-9) {
                                     run.pop_back();
                                     close();
                                     }
@@ -740,7 +740,7 @@ void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const Sta
                         continue;
                         }
                   bool ok = isBassSection(instrumentAt(part, s->tick())) && !tx.pizz.on(tick)
-                            && secondsBetween(tick, end) < FAST_NOTE_SECONDS - 1e-9;
+                            && secondsBetween(tick, end) <= FAST_NOTE_SECONDS + 1e-9;
                   if (!ok || tick != prevEnd)
                         close();
                   if (ok)
