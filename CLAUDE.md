@@ -66,6 +66,8 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
   batch, don't retry blindly, **don't cancel a running build**. Name a build by its **run number with its full
   GitHub link**. A map-only change also needs a build (or the owner copies the XML into the installed
   `share/soundlibraries/`).
+- **Before pushing anything meant for a Windows build, run `tools/check_windows_names.sh`**: names windows.h defines as
+  macros (`near`, `ABSOLUTE`, `ERROR`, `IN`, `OUT` …) compile on Linux and fail on MSVC (two failed runs, 2026-10-03).
 - Also: `tool_extract_library_files.yml` (ExtractLibraryFiles.exe), `verify_playback_owner_pc.yml` (optional
   self-hosted runner, not set up).
 
@@ -169,34 +171,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - Owner reports a problem: suspect Kontakt's MIDI channel (we send 1), editor sizing, sample loading in offline
   export; crackles / slow loads: memory (Kontakt's preload override at 30 kB).
 
-**Live** (LIVE.md): `libmscore/midisync.h`, `liveset.*` (automation from a set), `liveclips.*` + `mscore/liveclips.*`
-(Live plays the score; carrier notes 114-127), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
-tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
-(`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
-`libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
-`tools/live/test/compare_als_skeleton.py`), `mscore/liveequivalence.*`, `tools/live/` (Max for Live device, Node
-tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Live through the device (`/ms/params`,
-`/ms/pvals`; tables played by `live.remote~` at Live's song position; Kontakt's slots "#001" matched by
-`SoundLibraryHost::knownParameterId`). The device keeps each track's lanes, packed (`packLane`, same in the device
-and `livesetwriter.cpp`), in `[pattr Lanes]` … stores in the set, so a set plays them without MuseScore; Create Live
-Set writes them; stored 2 s after edits pause. Live's own Arrangement automation can't be written in 12.2 except by
-a Control Surface script (`tools/live/research/`, not used). **Lanes of any Live track** (not only SSO, owner
-2026-10-02): the device sends each route's and edited clip's track parameters (`/live/params`, protocol 5;
-`LiveClipEdit::TrackParams`); a lane `live:<device>/<param>` is that parameter (routes: driven by the device; clip
-tabs: `AutomationLanes` offers only these). A **clip tab's lanes are the clip's own envelopes**, written and read by
-the Control Surface script `tools/live/MuseScoreEnvelopes` (Python API, Live 12.4 `create_event`; Max for Live can't;
-the owner installs it once: LIVE.md › Automation lanes in a clip tab), MuseScore talking to it on UDP 9005
-(`liveclipedit.cpp` env*). **Live helpers** (`mscore/livehelpers.*`): at startup (and *Install Live helpers…* in the
-Mixer) MuseScore checks Live 12's User Library (its `Library.cfg`) for the device and the script shipped in `bin`
-and offers to install / update them (OneDrive-pinned); the Control Surface choice stays manual (a one-time hint). Session clips only (arrangement clips have no envelopes in Live's API, 12.4.6); curves go
-as straight pieces within one MIDI step of the curve (Live ignores a breakpoint's curve). Tests: `tools/live/test/test_envelopes.py`,
-`test_envparams.js`, `tst_liveintegration` clipEnvelopeMapping / liveParamLanes / laneTimeAxis. A clip tab's
-**Velocity lane** (protocol 7, `liveclipmodel.h` › The Velocity lane; LIVE.md): scale 0-200 % or absolute, "shape"
-(the device changes note-ons in its patcher from a ring the script fills, per playing clip; `MuseScoreLink.js` › velocity
-curves) or "write" (velocity-only edits from the notes' originals); MuseScore's own playback shaped too (rendermidi
-playNote). **Kept without undo steps**: with the MuseScore Envelopes script the device keeps a track's lanes and velocity
-curves in the track (`Track.set_data` through `/ms/keep`, the set marked changed by folding the track twice); the
-`[pattr]` stores only without it. Tests: `test_velocity.js`, `tst_liveintegration` clipVelocity*.
+**Live** (LIVE.md): Live plays the score as clips (`liveclips.*`), Create Live Set (`livesetwriter.*`,
+`livesetexport.*`), automation from a set (`liveset.*`), clip tabs that edit Live clips (`liveclipmodel.*`,
+`liveclipedit.*`, `cliptempo.*`), the Max for Live device and Control Surface script (`tools/live/`), Live helpers
+(`livehelpers.*`). **The full Live architecture map is in LIVE.md › Architecture map**: read it before changing any
+of these.
 
 **Playback verification** (VERIFY.md; checks in `audio/vst3/playbackverify.h`): `--verify-playback`,
 `--verify-audio`, `tools/playbackverify/read_verify_report.py`, faults via `MS_VERIFY_FAULT`.
@@ -217,7 +196,13 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 - Keep `BUILD_PCH` ON. mtests: `ninja tst_<name>`, run `QT_QPA_PLATFORM=offscreen ./tst_<name>` in
   `build.dir/mtest/libmscore/<name>`.
-- **Owner's dev VM**: disk is tight; reuse build dirs, delete throwaway worktrees. A `build.rel` copied from another
+- **Owner's dev VM**: disk is tight; delete throwaway worktrees. **One build dir per branch**: never point a build dir at
+  another tree's sources (stale objects from the other tree crash tests: 2026-10-04); `ninja -j2` under `nice -n 15`.
+  **Never reach a build dir through a symlink**: Qt's moc files include headers by relative path (`../../../../libmscore/
+  score.h`), which resolve through the symlink's real location to the OTHER tree's headers (and ccache, keyed by real
+  paths, keeps serving them): a mixed `Score` layout, every test crashing in `initTestCase` (2026-10-04). Bind-mount the
+  build dir onto a real directory instead; after a mix-up, delete `*/mocs_compilation.cpp.o` and rebuild with
+  `CCACHE_RECACHE=1`. A `build.rel` copied from another
   worktree keeps that worktree's absolute paths, so build and test **through the `ninja-<name>.sh` /
   `run-<name>.sh` wrappers** next to the worktrees (`~/MuseScore/ms3fork/`), which bind-mount the worktree over
   the original path, e.g. `./ninja-liveset.sh tst_soundlibrary` and `./run-liveset.sh 'cd

@@ -1302,6 +1302,39 @@ In short: as a DAW beside MuseScore, Waveform needs MTC/MMC output from MuseScor
 tracktion_engine is a large dependency for what the existing hosting plus a lane editor would
 do.
 
+## Architecture map
+
+(Moved from CLAUDE.md on 2026-10-04, to keep that file short: agents read it whole.)
+
+`libmscore/midisync.h`, `liveset.*` (automation from a set), `liveclips.*` + `mscore/liveclips.*`
+(Live plays the score; carrier notes 114-127), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
+tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
+(`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
+`libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
+`tools/live/test/compare_als_skeleton.py`), `mscore/liveequivalence.*`, `tools/live/` (Max for Live device, Node
+tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Live through the device (`/ms/params`,
+`/ms/pvals`; tables played by `live.remote~` at Live's song position; Kontakt's slots "#001" matched by
+`SoundLibraryHost::knownParameterId`). The device keeps each track's lanes, packed (`packLane`, same in the device
+and `livesetwriter.cpp`), in `[pattr Lanes]` … stores in the set, so a set plays them without MuseScore; Create Live
+Set writes them; stored 2 s after edits pause. Live's own Arrangement automation can't be written in 12.2 except by
+a Control Surface script (`tools/live/research/`, not used). **Lanes of any Live track** (not only SSO, owner
+2026-10-02): the device sends each route's and edited clip's track parameters (`/live/params`, protocol 5;
+`LiveClipEdit::TrackParams`); a lane `live:<device>/<param>` is that parameter (routes: driven by the device; clip
+tabs: `AutomationLanes` offers only these). A **clip tab's lanes are the clip's own envelopes**, written and read by
+the Control Surface script `tools/live/MuseScoreEnvelopes` (Python API, Live 12.4 `create_event`; Max for Live can't;
+the owner installs it once: LIVE.md › Automation lanes in a clip tab), MuseScore talking to it on UDP 9005
+(`liveclipedit.cpp` env*). **Live helpers** (`mscore/livehelpers.*`): at startup (and *Install Live helpers…* in the
+Mixer) MuseScore checks Live 12's User Library (its `Library.cfg`) for the device and the script shipped in `bin`
+and offers to install / update them (OneDrive-pinned); the Control Surface choice stays manual (a one-time hint). Session clips only (arrangement clips have no envelopes in Live's API, 12.4.6); curves go
+as straight pieces within one MIDI step of the curve (Live ignores a breakpoint's curve). Tests: `tools/live/test/test_envelopes.py`,
+`test_envparams.js`, `tst_liveintegration` clipEnvelopeMapping / liveParamLanes / laneTimeAxis. A clip tab's
+**Velocity lane** (protocol 7, `liveclipmodel.h` › The Velocity lane; LIVE.md): scale 0-200 % or absolute, "shape"
+(the device changes note-ons in its patcher from a ring the script fills, per playing clip; `MuseScoreLink.js` › velocity
+curves) or "write" (velocity-only edits from the notes' originals); MuseScore's own playback shaped too (rendermidi
+playNote). **Kept without undo steps**: with the MuseScore Envelopes script the device keeps a track's lanes and velocity
+curves in the track (`Track.set_data` through `/ms/keep`, the set marked changed by folding the track twice); the
+`[pattr]` stores only without it. Tests: `test_velocity.js`, `tst_liveintegration` clipVelocity*.
+
 ## Files
 
 - `libmscore/midisync.{h,cpp}`: the clock (pure scheduling; tests in `tst_liveintegration`).
