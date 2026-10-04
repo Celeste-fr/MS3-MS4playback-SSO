@@ -50,10 +50,11 @@ struct PlayabilityRow {
       QString staff;                // the part's long name
       QString staffShort;           // its short name, else an abbreviation of the long name
       QString kind;                 // "stop", "harmonic"
-      QString verdict;              // "impossible", "outOfReach", "risky"
+      QString verdict;              // "impossible", "outOfReach", "risky", "advisory" (may sound unclear; S12)
       QString reason;
       QString notes;
       bool error() const { return verdict == "impossible"; }
+      bool advisory() const { return verdict == "advisory"; }
       };
 
 struct PlayabilityResult {

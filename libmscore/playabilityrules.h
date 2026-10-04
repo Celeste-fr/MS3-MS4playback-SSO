@@ -209,14 +209,13 @@ constexpr int GROUP_STACCATO_LOUD = 3;
 // S10 jeté, SECTIONS only: more than 6 notes on one stroke is a warning on every bowed string
 // (Sevsay p. 18, Wagner p. 40; the owner's choice, 2026-09-14). A single player's jeté is timed.
 constexpr int JETE_MAX = 6;
-// S12 fast passages, double bass SECTIONS only: notes of 94 ms or less each, a run over 1.25 s. The owner's choice
-// (2026-10-04, candidate A of the review page "Checker Speed Sources"): both are the books' own examples, not a
-// threshold placed between them. 94 ms: the one criticized run's notes (Adler p. 84, Ex 3-69, Beethoven 4 finale
-// sixteenths at half = 80, "muddied"); 1.25 s: the longest run accepted (Kennan p. 26, Ex 2.22a, Beethoven 5 trio,
-// 12 eighths at dotted half = 96). Readings of Jadassohn, Prout and Forsyth on that page are from the earlier research
-// table, not re-read against the books. Re-read 2026-10-04 (https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h): the
-// books don't support these limits (Forsyth Ex 282 accepts the Beethoven 4 run Adler criticises, 3.0 s or more;
-// Prout criticises 129 ms notes and says players can play them). Shelved for the owner's review (HANDOFF.md)
+// S12 fast passages, double bass SECTIONS only: an ADVISORY (yellow), not a limit: notes of 94 ms or less each, a
+// run over 1.25 s. The owner's rule (2026-10-04), not the books': re-read against the scans
+// (https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h), Prout (1877 §40, 1897 §145) says players can play such passages
+// but they sound "confused and unclear", Jadassohn (Ex 193) "not always clear"; neither note length nor run length
+// nor register separates the passages the books criticize from those they accept (Forsyth Ex 282: 94 ms for 3 s or
+// more in the bottom register, accepted; Prout Ex 51: 129 ms, criticized). The numbers were candidate A of the page
+// "Checker Speed Sources" (Adler's 94 ms run, Kennan's 1.25 s); the owner kept them as the advisory's trigger
 constexpr double FAST_NOTE_SECONDS = 0.094;
 constexpr double FAST_RUN_SECONDS = 1.25;
 

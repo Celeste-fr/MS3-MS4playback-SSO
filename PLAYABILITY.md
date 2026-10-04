@@ -107,6 +107,14 @@ headless test scores and their checked results are the parity tests.
   accidental, so a file saved with the view on is byte for byte the one saved without it (test
   `scordaturaView`; the round-trip rule). Edits in the view are made at sounding pitch; MusicXML
   export writes the displayed accidentals (export with the view off).
+- **Fast double bass runs are an advisory (S12, the owner 2026-10-04):** a run of bowed section notes of
+  94 ms or less, over 1.25 s, is marked yellow as before but as verdict `advisory` ("playable, may sound
+  unclear"; panel tooltip of its own), not as a limit. The books say players can play such passages and
+  criticize how they sound (Prout, Jadassohn); no note length, run length or register in them separates the
+  criticized passages from the accepted ones (review page https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h),
+  so the numbers are the owner's trigger, not the books' limit. A low-register condition was looked at and
+  left out: the books give no pitch, and their accepted examples are low (Forsyth Ex 282 "in the bottom
+  register", Beethoven 5's scherzo).
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1

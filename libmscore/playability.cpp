@@ -681,9 +681,10 @@ void Pass::checkTremolos(int st, Part* part, const QString& staffName, const Sta
 
 //---------------------------------------------------------
 //   checkFastRuns (S12)
-//    double bass SECTION only: a run is a chain of bowed notes in one voice, each shorter than
-//    0.1 s and each starting where the last ended (a rest, a longer note or pizz. ends it; a
-//    tied-on note belongs to the note it continues); longer than 1.5 s is flagged
+//    double bass SECTION only: a run is a chain of bowed notes in one voice, each FAST_NOTE_SECONDS
+//    or shorter and each starting where the last ended (a rest, a longer note or pizz. ends it; a
+//    tied-on note belongs to the note it continues); longer than FAST_RUN_SECONDS is flagged as an
+//    advisory (yellow, as before): players can play it, it may sound unclear (playabilityrules.h)
 //---------------------------------------------------------
 
 void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const StaffTexts& tx)
@@ -712,8 +713,8 @@ void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const Sta
                         for (const Note* n : i.chord->notes())
                               markOver(n, PlayMark::OUT_OF_REACH);
                   double rate = std::floor(r.size() / secs * 10 + 0.5) / 10;
-                  addRow(t0, last, trk, staffName, "fast", "outOfReach",
-                         QString("fast passage: %1 notes/s for %2 (section: notes of 94 ms or less for at most 1.25 s)").arg(QString::number(rate, 'g', 12), fmtSeconds(secs)),
+                  addRow(t0, last, trk, staffName, "fast", "advisory",
+                         QString("fast passage: %1 notes/s for %2; playable, may sound unclear (Prout, Jadassohn; flagged over 1.25 s of notes of 94 ms or less)").arg(QString::number(rate, 'g', 12), fmtSeconds(secs)),
                          topName(r.front().chord) + " " + QChar(0x2026) + " " + topName(r.back().chord) + QString(" (%1 notes)").arg(r.size()));
                   };
             for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {

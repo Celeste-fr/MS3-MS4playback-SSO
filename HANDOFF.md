@@ -105,9 +105,10 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
    as an analogy for the first); T30 for the tuning tail approved (docs/PLAYBACK_SETTINGS.md › 3C).
 4. Velocity lane: 0-200 % and "shape" default confirmed (LIVE.md).
 5. Tuning copies: the free memory split between the parts that need copies only (8a53711).
-6. Checker fast basses: candidate A, 94 ms / 1.25 s (19fedbe). Re-read against the books on 2026-10-04 (review page
-   https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h): the books don't support it. **Shelved by the owner for a
-   later review**; see Waiting for the owner › Checker fast basses.
+6. Checker fast basses: 94 ms / 1.25 s (19fedbe), re-read against the books (review page
+   https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h): they don't support a limit, so S12 is now an advisory
+   ("playable, may sound unclear", still yellow) with the same numbers as the owner's trigger; no register
+   condition (PLAYABILITY.md).
 7. `MICRO_MIN_CENTS`: to depend on frequency from Wier, Jesteadt & Green 1977; waits for the paper (5 cents until then).
 
 ## Waiting for the owner (built, not yet confirmed on Windows / by ear)
@@ -134,12 +135,6 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
   default" = the library's plain marcato): the owner tries it on SSO (velocity-driven Marcato on winds / brass;
   Marcato Attack on strings by CC11 down / CC1 up). MS4's accent velocity boost no longer reaches library marcatos
   (owner, 2026-10-02): a plain note's velocity at the dynamic (mf 80), the level on top.
-- Checker fast basses (S12, shelved by the owner 2026-10-04; review page
-  https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h): candidate A stays in `main` until the owner decides. The 1.25 s
-  limit was taken as the longest run the books accept, but Forsyth's Ex 282 (Beethoven 4 finale: 32 sixteenths at
-  94 ms, at least 3.0 s) is accepted, the very passage Adler calls "muddied"; note length doesn't separate praised from criticised passages (94 ms both ways, Prout's Ex 51 criticised
-  at 129 ms); the books criticise clarity, not reach (Prout: players can play them). Options: a clarity advisory
-  (recommended), remove S12, keep it. Change nothing until the owner decides.
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
 

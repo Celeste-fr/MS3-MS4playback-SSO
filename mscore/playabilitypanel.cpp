@@ -379,7 +379,8 @@ void PlayabilityPanel::rebuildTable()
             }
             QTableWidgetItem* mark = new QTableWidgetItem(QIcon(px), "");
             mark->setData(ROLE_ROW, i);
-            mark->setToolTip(r.error() ? tr("Cannot be played") : tr("Hard to play, or over a limit"));
+            mark->setToolTip(r.error() ? tr("Cannot be played")
+                              : r.advisory() ? tr("Playable, but may sound unclear") : tr("Hard to play, or over a limit"));
             _table->setItem(i, 0, mark);
             QTableWidgetItem* bar = new QTableWidgetItem(QString::number(r.bar));
             _table->setItem(i, 1, bar);
