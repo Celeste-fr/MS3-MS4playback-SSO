@@ -1172,6 +1172,26 @@ static std::vector<int> shownStaves(Score* score)
       return out;
       }
 
+// every note is among the elements the score draws (the owner, 2026-10-04: a low clip showed rests only, its notes
+// were on the hidden home staff)
+static int notesNotDrawn(Score* score)
+      {
+      score->doLayout();
+      std::set<Element*> drawn;
+      for (Page* p : score->pages())
+            for (Element* e : p->elements())
+                  drawn.insert(e);
+      int missing = 0;
+      for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+            for (int t = 0; t < score->ntracks(); ++t)
+                  if (Element* e = seg->element(t))
+                        if (e->isChord())
+                              for (Note* n : toChord(e)->notes())
+                                    if (!drawn.count(n))
+                                          ++missing;
+      return missing;
+      }
+
 void TestLiveIntegration::clipEditImport()
       {
       const Clip clip = melody();
@@ -1851,6 +1871,7 @@ void TestLiveIntegration::clipEditBands()
             QVERIFY2(score, c.what);
             QCOMPARE(score->nstaves(), BANDS);
             QVERIFY2(shownStaves(score) == c.shown, c.what);
+            QVERIFY2(notesNotDrawn(score) == 0, c.what);
             QVERIFY2(clefsFixed(score), c.what);
             QVERIFY2(onBands(score), c.what);
             QCOMPARE(outOfRange(score), 0);
@@ -1874,6 +1895,7 @@ void TestLiveIntegration::clipEditBands()
             score->endCmd();
             QCOMPARE(n->chord()->vStaffIdx(), 2);
             QVERIFY(shownStaves(score) == std::vector<int>({ 1, 2 }));
+            QCOMPARE(notesNotDrawn(score), 0);
             QVERIFY(onBands(score));
             const Diff d = diff(b, signatures(score));
             QCOMPARE(int(d.ops.size()), 1);

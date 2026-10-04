@@ -1190,10 +1190,18 @@ Ms::Element* Segment::elementAt(int track) const
 
 void Segment::scanElements(void* data, void (*func)(void*, Element*), bool all)
       {
+      auto systemShows = [this](int idx) {
+            return system() && !system()->staves()->empty() && idx >= 0 && idx < int(system()->staves()->size())
+               && system()->staff(idx)->show();
+            };
       for (int track = 0; track < score()->nstaves() * VOICES; ++track) {
             int staffIdx = track/VOICES;
-            if (!all && !(score()->staff(staffIdx)->show() && system() && !system()->staves()->empty() && system()->staff(staffIdx)->show())) {
-                  track += VOICES - 1;
+            if (!all && !(score()->staff(staffIdx)->show() && systemShows(staffIdx))) {
+                  // a chord or rest drawn cross-staff on a shown staff is drawn though its own staff is hidden
+                  // (a clip tab's band staves: lineHidesEmptyStaves hides the staff every chord moved away from)
+                  Element* e = score()->staff(staffIdx)->show() ? element(track) : nullptr;
+                  if (e && e->isChordRest() && toChordRest(e)->staffMove() && systemShows(toChordRest(e)->vStaffIdx()))
+                        e->scanElements(data, func, all);
                   continue;
                   }
             Element* e = element(track);
