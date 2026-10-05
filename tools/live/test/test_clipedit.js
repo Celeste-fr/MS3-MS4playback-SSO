@@ -106,6 +106,31 @@ test("a session clip (the highlighted slot) on a track with a Drum Rack: a drum 
       assert.deepStrictEqual(begin.slice(2, 12), ["Beats", "Beat", 1, 96, 7, 8, 3.5, 0, 3.5, 1]);
       });
 
+test("a track's second arrangement clip clicked (its track selected, the insert marker in it): that clip, though the Detail View still shows the first", () => {
+      const s = setUp();
+      const second = s.live.clip(s.vln, "Second", 32, 40);
+      second.notes = [s.live.note({ pitch: 72, start_time: 0, duration: 1 })];
+      s.live.view.selected_track = s.vln.id;
+      s.live.song.current_song_time = 33.5;
+      s.hub.message("edit", []);
+      s.hub.work();
+      const begin = received(s.hub).begin;
+      assert.strictEqual(begin[0], "c" + second.id);
+      assert.deepStrictEqual(begin.slice(2, 4), ["Violin", "Second"]);
+      // the marker between the clips, or the Session View in front: the Detail View's clip, as before
+      for (const [time, focus] of [[30, "Arranger"], [33.5, "Session"]]) {
+            const t = setUp();
+            const c2 = t.live.clip(t.vln, "Second", 32, 40);
+            c2.notes = [t.live.note({ pitch: 72, start_time: 0, duration: 1 })];
+            t.live.view.selected_track = t.vln.id;
+            t.live.song.current_song_time = time;
+            t.live.appView.focused_document_view = focus;
+            t.hub.message("edit", []);
+            t.hub.work();
+            assert.strictEqual(received(t.hub).begin[3], "Idea");
+            }
+      });
+
 test("no clip selected: nothing sent, the status says what to do", () => {
       const s = setUp();
       s.live.view.detail_clip = 0;

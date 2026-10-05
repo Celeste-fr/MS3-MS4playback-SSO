@@ -751,7 +751,8 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
 1. The **MuseScore Link** device (the same `.amxd`, regenerated) on any track of the set; MuseScore running
    (with the setting on: *Mixer › Advanced Options… › Ableton Live › Edit Live clips in MuseScore*, on by
    default; it only listens on 127.0.0.1). "Live plays the score" and "Play through Live" don't need to be on.
-2. In Live, click the MIDI clip so its notes show in the Clip View (arrangement or session clip).
+2. In Live, click the MIDI clip (an arrangement clip: a click on it is enough; a session clip: its notes shown in
+   the Clip View).
 3. Press **Edit in MuseScore** on the device (any copy of it). A tab "<track> › <clip>" opens in Continuous View
    (an unnamed clip: "<track> › session slot n" or "<track> › arrangement clip"; "(clip)" for the moment before
    the device says where it is).
@@ -779,8 +780,12 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
 
 ### How it works
 
-- **Reading** (device): the clip shown in the Detail View (`Song.View.detail_clip`), else the highlighted
-  session slot's clip (`Song.View.highlighted_clip_slot`); `Clip.get_all_notes_extended` (Live 11.1+): every
+- **Reading** (device): in the Arrangement View (`Application.View.focused_document_view` not "Session"), the
+  selected track's arrangement clip under the insert marker (`Song.View.selected_track`, `Song.current_song_time`:
+  a click on a clip selects its track and puts the marker there; the playhead while playing). The owner, 2026-10-04:
+  a track's second clip clicked, the button opened its first: Live's Detail View keeps the clip it last showed, a
+  click in the arrangement doesn't change `detail_clip`. Else the clip shown in the Detail View
+  (`Song.View.detail_clip`), else the highlighted session slot's clip (`Song.View.highlighted_clip_slot`); `Clip.get_all_notes_extended` (Live 11.1+): every
   note with `note_id`, pitch, start, duration, velocity, mute, probability, velocity deviation, release
   velocity (MPE is not read and stays in the clip); the clip's `signature_numerator/denominator`,
   `loop_start/loop_end`, `end_marker`, `looping`; its track's name (`canonical_parent`, through the
@@ -1209,8 +1214,9 @@ Tested here:
   written. With "Live plays the score" on as well: the clip score was never sent as a "MuseScore:" clip.
 
 Only real Live can show (to check first):
-- `Song.View.detail_clip` for an arrangement clip selected in the arrangement (the LOM says "the clip currently
-  displayed in the Detail View"), and `canonical_parent` of a session clip being its `ClipSlot`;
+- that a click on an arrangement clip moves `Song.current_song_time` into it and selects its track (the owner saw
+  `detail_clip` stay on the clip shown before, 2026-10-04), and `canonical_parent` of a session clip being its
+  `ClipSlot`;
 - how Max hands `get_all_notes_extended`'s dictionary to the `v8` script (read as JSON text, an array of it, or
   an object) and `add_new_notes`' list of ids (read as an array, JSON or text; else found by matching);
 - that `apply_note_modifications` with a complete note dictionary leaves the note's MPE alone;

@@ -968,8 +968,32 @@ function hashNotes(notes) {
       return h | 0;
       }
 
-// the clip shown in the Detail View (an arrangement or a session clip), else the highlighted session slot's
+// in the Arrangement View, the selected track's arrangement clip under the insert marker (the playhead while playing):
+// a click on a clip selects its track and puts the marker there, while the Detail View keeps showing the clip it last
+// showed (the owner, 2026-10-04: a track's second clip clicked, Edit in MuseScore opened its first)
+function arrangementClip() {
+      var app = new LiveAPI("live_app view");
+      if (num(app.id) > 0 && str(app.get("focused_document_view")) === "Session")
+            return null;
+      var tr = new LiveAPI("live_set view selected_track");
+      if (!(num(tr.id) > 0))
+            return null;
+      var t = num(new LiveAPI("live_set").get("current_song_time"));
+      var l = ids(tr.get("arrangement_clips"));
+      for (var i = 0; i < l.length; ++i) {
+            var c = new LiveAPI("id " + l[i]);
+            if (num(c.get("start_time")) <= t && t < num(c.get("end_time")))
+                  return c;
+            }
+      return null;
+      }
+
+// the clip to edit: in the Arrangement View the clicked one (arrangementClip), else the clip shown in the Detail View
+// (an arrangement or a session clip), else the highlighted session slot's
 function selectedClip() {
+      var a = arrangementClip();
+      if (a)
+            return a;
       var c = new LiveAPI("live_set view detail_clip");
       if (num(c.id) > 0)
             return c;

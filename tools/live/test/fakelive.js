@@ -4,7 +4,8 @@
 // children as ["id", n, "id", m], a dictionary property as a JSON string; arrangement clips can't
 // overlap on a track (making one over another is recorded as an error here, so a test fails).
 // Notes (Live 11+): each has a note_id and every field get_all_notes_extended returns; Song.View has
-// detail_clip (the clip in the Detail View) and highlighted_clip_slot (session slots: clipSlot()).
+// detail_clip (the clip in the Detail View), highlighted_clip_slot (session slots: clipSlot()) and selected_track;
+// Application.View (live_app view) has focused_document_view ("Arranger" or "Session").
 // Parameter lanes: a device's parameters (DeviceParameter: name, value, min, max), Max's Buffer (a stub keeping
 // its size and values, by name, shared by every copy as buffer~ names are global), messnamed (to every copy's
 // [receive msl_params] -> [prepend msl_params] -> the script), Task.schedule (run by settle()).
@@ -25,7 +26,8 @@ class FakeLive {
             this.buffers = {};            // buffer~ name -> { size, data }
             this.song = this.add({ kind: "song", tempo: 120, is_playing: 0, current_song_time: 0, cues: [], tracks: [],
                                    signature_numerator: 4, signature_denominator: 4 });
-            this.view = this.add({ kind: "view", detail_clip: 0, highlighted_clip_slot: 0 });
+            this.view = this.add({ kind: "view", detail_clip: 0, highlighted_clip_slot: 0, selected_track: 0 });
+            this.appView = this.add({ kind: "appview", focused_document_view: "Arranger" });
             }
       // a note as Live keeps it (the defaults add_new_notes gives)
       note(n) {
@@ -115,6 +117,10 @@ class FakeLive {
                   return this.objects[this.view.detail_clip];
             if (p === "live_set view highlighted_clip_slot")
                   return this.objects[this.view.highlighted_clip_slot];
+            if (p === "live_set view selected_track")
+                  return this.objects[this.view.selected_track];
+            if (p === "live_app view")
+                  return this.appView;
             if ((m = /^live_set tracks (\d+)$/.exec(p)))
                   return this.objects[this.song.tracks[Number(m[1])]];
             if ((m = /^id (\d+)$/.exec(p)))
@@ -142,7 +148,7 @@ function liveApiFor(live, deviceId) {
             this.id = o ? o.id : 0;
             this.path = p;
             this.type = o ? { song: "Song", track: "Track", clip: "Clip", clipslot: "ClipSlot", device: "Device", cue: "CuePoint",
-                              view: "Song.View", param: "DeviceParameter", mixer: "MixerDevice" }[o.kind] : "";
+                              view: "Song.View", appview: "Application.View", param: "DeviceParameter", mixer: "MixerDevice" }[o.kind] : "";
             this.info = o ? "id " + o.id + "\ntype " + this.type + "\nproperty name str\ndone" : "No object";
             const self = this;
             this.getcount = function(what) {
