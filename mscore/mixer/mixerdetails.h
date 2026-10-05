@@ -54,6 +54,12 @@ class MixerDetails : public QWidget, public Ui::MixerDetails, public ChannelList
       void updatePlayback();
       void updateLibrary();               // a sound library part: what applies to it (tooltips, patch, route)
 
+      bool _stacked = false;              // MIDI and Mute Voice under the part's settings (a narrow Mixer)
+      void placeMidiColumn();
+
+protected:
+      void resizeEvent(QResizeEvent*) override;
+
 public slots:
       void partNameChanged();
       void trackColorChanged(QColor);

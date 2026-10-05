@@ -63,7 +63,7 @@ Install loopMIDI (Tobias Erichsen) and create these ports:
 - MIDI sync output: `MuseScore Sync`.
 
 **Mixer:**
-- Playback, all parts: *Sound library*.
+- Global playback: *Sound library*.
 - *Play through Live*: on. It asks first, because the patches loaded in MuseScore are released
   (their memory freed). Switching back loads them again.
 

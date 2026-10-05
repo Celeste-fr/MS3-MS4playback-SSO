@@ -52,12 +52,20 @@ MixerDetails::MixerDetails(QWidget *parent) :
       // the part's playback mode: the global one, or its own (kept in the score)
       labelPlayback = new QLabel(tr("This part plays:"), this);
       playbackCombo = new QComboBox(this);
-      playbackCombo->setToolTip(tr("How this part plays: as \"Playback, all parts\" at the top says, or MuseScore 3, MuseScore 4 or the sound library for this part only (saved in the score)"));
+      playbackCombo->setToolTip(tr("How this part plays: as \"Global playback\" at the top says, or MuseScore 3, MuseScore 4 or the sound library for this part only (saved in the score)"));
       labelPlayback->setBuddy(playbackCombo);
       const int row = gridLayout_2->rowCount();
       gridLayout_2->addWidget(labelPlayback, row, 0);
       gridLayout_2->addWidget(playbackCombo, row, 1, 1, gridLayout_2->columnCount() - 1);
       connect(playbackCombo, SIGNAL(activated(int)), SLOT(playbackChanged(int)));
+
+      // a narrow Mixer (the owner, 2026-10-05: "the mixer menu is too wide"): long sound names (a library's
+      // patch with the library's name) are cut instead of widening it, and below the width of both columns
+      // MIDI and Mute Voice go under the part's settings (placeMidiColumn)
+      for (QComboBox* c : { patchCombo, playbackCombo }) {
+            c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+            c->setMinimumContentsLength(12);
+            }
 
       connect(partNameLineEdit,    SIGNAL(editingFinished()),              SLOT(partNameChanged()));
       connect(trackColorLabel,     SIGNAL(colorChanged(QColor)),           SLOT(trackColorChanged(QColor)));
@@ -90,6 +98,33 @@ void MixerDetails::setTrack(MixerTrackItemPtr track)
       _mti = track;
       setNotifier(_mti ? _mti->focusedChan() : nullptr);
       updateFromTrack();
+      }
+
+//---------------------------------------------------------
+//   placeMidiColumn
+//    MIDI and Mute Voice beside the part's settings when both fit, else under them; the panel's
+//    minimum is the wider of the two, so the Mixer can be made as narrow as one column
+//---------------------------------------------------------
+
+void MixerDetails::placeMidiColumn()
+      {
+      const int left = gridLayout_2->minimumSize().width();
+      const int right = gridLayout->minimumSize().width();
+      if (minimumWidth() != qMax(left, right))
+            setMinimumWidth(qMax(left, right));
+      const bool stacked = width() < left + gridLayout_4->horizontalSpacing() + right;
+      if (stacked == _stacked)
+            return;
+      _stacked = stacked;
+      gridLayout_4->removeItem(gridLayout);
+      gridLayout_4->addLayout(gridLayout, stacked ? 1 : 0, stacked ? 2 : 3);
+      gridLayout_4->setVerticalSpacing(stacked ? 11 : 0);
+      }
+
+void MixerDetails::resizeEvent(QResizeEvent* e)
+      {
+      QWidget::resizeEvent(e);
+      placeMidiColumn();
       }
 
 
@@ -432,7 +467,7 @@ void MixerDetails::updatePlayback()
       {
       const QSignalBlocker block(playbackCombo);
       playbackCombo->clear();
-      playbackCombo->addItem(tr("As all parts"), int(PartPlayback::DEFAULT));
+      playbackCombo->addItem(tr("As global playback"), int(PartPlayback::DEFAULT));
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS3), int(PartPlayback::MS3));
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS4), int(PartPlayback::MS4));
       playbackCombo->addItem(playbackModeName(PlaybackMode::LIBRARY), int(PartPlayback::LIBRARY));

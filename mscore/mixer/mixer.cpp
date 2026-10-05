@@ -90,16 +90,23 @@ Mixer::Mixer(QWidget* parent)
       setupUi(this);
       setAllowedAreas(Qt::DockWidgetAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea));
       // MS3 / MS4 / sound library, and the score's sound library settings (the owner, 2026-09-28)
+      // (the buttons beside "Play part only", not beside the mode: a narrower Mixer, the owner, 2026-10-05)
       {
+            verticalLayout->insertWidget(0, PlaybackModeBox::row(dockWidgetContents));
             QWidget* top = new QWidget(dockWidgetContents);
             QHBoxLayout* h = new QHBoxLayout(top);
             h->setContentsMargins(0, 0, 0, 0);
-            h->addWidget(PlaybackModeBox::row(top), 1);
+            verticalLayout->removeWidget(partOnlyCheckBox);
+            partOnlyCheckBox->setParent(top);
+            h->addWidget(partOnlyCheckBox);
+            h->addStretch();
             // play through Ableton Live (LIVE.md): the sound library's parts to MIDI output instead of
             // the hosted plug-in, without opening Preferences (the owner, 2026-09-28)
             playThroughLive = new QPushButton(tr("Play through Live"), top);
             playThroughLive->setCheckable(true);
-            playThroughLive->setToolTip(tr("Sound library parts: through MIDI output to Ableton Live (on) or through the plug-in hosted by MuseScore (off). Switching reloads the library's patches."));
+            playThroughLive->setToolTip(tr("On: the sound library's parts play in Ableton Live. MuseScore sends their notes, switches and controllers to MIDI output A-D, and MIDI clock to the sync output, so Live follows MuseScore's tempo and position; Live's tracks host the library.\n"
+                                           "Off: they play in the library's plug-in hosted by MuseScore.\n"
+                                           "Other parts always play in MuseScore. Switching loads or releases the library's patches in MuseScore."));
             connect(playThroughLive, &QPushButton::clicked, this, [this](bool on) {
                   LiveIntegration::setPlayThroughMidi(on, this);
                   updatePlayThroughLive();
@@ -110,7 +117,7 @@ Mixer::Mixer(QWidget* parent)
             options->setToolTip(tr("This score's sound library settings (copies for other tunings, short notes' balance) and the library's"));
             connect(options, &QPushButton::clicked, this, [this]() { SoundLibraryOptions::showFor(this); });
             h->addWidget(options);
-            verticalLayout->insertWidget(0, top);
+            verticalLayout->insertWidget(1, top);
       }
 
       trackAreaLayout = new QHBoxLayout;

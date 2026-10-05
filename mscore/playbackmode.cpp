@@ -209,7 +209,7 @@ QWidget* PlaybackModeBox::row(QWidget* parent)
       QWidget* w = new QWidget(parent);
       QHBoxLayout* l = new QHBoxLayout(w);
       l->setContentsMargins(0, 0, 0, 0);
-      QLabel* label = new QLabel(tr("Playback, all parts:"), w);
+      QLabel* label = new QLabel(tr("Global playback:"), w);
       PlaybackModeBox* box = new PlaybackModeBox(w);
       label->setBuddy(box);
       l->addWidget(label);
