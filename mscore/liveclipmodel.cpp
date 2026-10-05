@@ -677,9 +677,9 @@ static bool tupletMovable(const Tuplet* t)
       return true;
       }
 
-// the rests of a band staff's first voice in a run (no chord between them, none in a tuplet): shown where nothing is
-// drawn on the staff, hidden under what is (`drawn`: the spans of the chords of its other voices or other staves drawn
-// there); rewritten only when that pattern changed. Returns the number of changes.
+// the rests of a band staff's first voice in a run (no chord between them, none in a tuplet): hidden over `drawn` (the
+// spans where they must not show), shown elsewhere; rewritten only when that pattern changed. Returns the number of
+// changes.
 static int fillBandRests(Score* score, int track, const Fraction& mStart, const Fraction& mEnd,
                          const std::vector<Rest*>& run, std::vector<std::pair<Fraction, Fraction>> drawn)
       {
@@ -912,9 +912,17 @@ int assignBands(Score* score)
                   place(c, keep, c->voice());
                   }
 
-            // rests: the hidden staff's and the band staves' other voices' never show; each band staff's first voice
-            // shows its rests where nothing is drawn on that staff (fillBandRests)
-            std::vector<std::vector<std::pair<Fraction, Fraction>>> drawn(BANDS);
+            // rests (the owner, 2026-10-05: "shouldn't there be no rest signs, because they are considered the same
+            // staff?"): the bands read as one staff, so a rest shows only where no band staff has a note, and once: on
+            // the staff of the chord before it (else the one after it; a clip without notes: treble). The hidden staff's
+            // rests and the band staves' other voices' never show; a band staff's first voice holds the rests
+            // (fillBandRests)
+            struct Span {
+                  Fraction from;
+                  Fraction to;
+                  int band;
+                  };
+            std::vector<Span> spans;
             std::vector<Rest*> hide;
             for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
                   for (int t = strack; t < etrack; ++t) {
@@ -927,8 +935,8 @@ int assignBands(Score* score)
                               if (band < 0 || t % VOICES)
                                     hide.push_back(toRest(cr));
                               }
-                        else if (band >= 0 && band < BANDS && t != bandStaff(band) * VOICES)
-                              drawn[size_t(band)].push_back({ cr->tick(), cr->tick() + cr->actualTicks() });
+                        else if (band >= 0 && band < BANDS)
+                              spans.push_back({ cr->tick(), cr->tick() + cr->actualTicks(), band });
                         }
                   }
             for (Rest* r : hide) {
@@ -937,13 +945,43 @@ int assignBands(Score* score)
                         ++changes;
                         }
                   }
+            // the staff a silence [from, to) shows its rest on
+            auto owner = [&](const Fraction& from, const Fraction& to) {
+                  const Span* before = nullptr;
+                  const Span* after = nullptr;
+                  for (const Span& sp : spans) {
+                        if (sp.to <= from && (!before || sp.to > before->to || (sp.to == before->to && sp.from > before->from)))
+                              before = &sp;
+                        if (sp.from >= to && (!after || sp.from < after->from))
+                              after = &sp;
+                        }
+                  return before ? before->band : after ? after->band : 1;
+                  };
             for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure()) {
+                  const Fraction mStart = m->tick();
+                  const Fraction mEnd = m->endTick();
+                  // where a band staff has a note in the measure, and the silences between
+                  std::vector<std::pair<Fraction, Fraction>> busy;
+                  for (const Span& sp : spans)
+                        if (sp.from < mEnd && mStart < sp.to)
+                              busy.push_back({ std::max(sp.from, mStart), std::min(sp.to, mEnd) });
+                  std::sort(busy.begin(), busy.end());
+                  std::vector<std::tuple<Fraction, Fraction, int>> silences;
+                  Fraction at = mStart;
+                  for (const auto& iv : busy) {
+                        if (iv.first > at)
+                              silences.emplace_back(at, iv.first, owner(at, iv.first));
+                        at = std::max(at, iv.second);
+                        }
+                  if (at < mEnd)
+                        silences.emplace_back(at, mEnd, owner(at, mEnd));
                   for (int b = 0; b < BANDS; ++b) {
                         const int track = bandStaff(b) * VOICES;
-                        std::vector<std::pair<Fraction, Fraction>> here;
-                        for (const auto& iv : drawn[size_t(b)])
-                              if (iv.first < m->endTick() && m->tick() < iv.second)
-                                    here.push_back(iv);
+                        // the rests hidden: under every note of the bands, and in the silences another staff shows
+                        std::vector<std::pair<Fraction, Fraction>> here = busy;
+                        for (const auto& sl : silences)
+                              if (std::get<2>(sl) != b)
+                                    here.push_back({ std::get<0>(sl), std::get<1>(sl) });
                         // the runs of rests between the first voice's chords (a tuplet's rests left as they are)
                         std::vector<std::vector<Rest*>> runs(1);
                         for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
@@ -957,7 +995,7 @@ int assignBands(Score* score)
                               }
                         for (const auto& run : runs)
                               if (!run.empty())
-                                    changes += fillBandRests(score, track, m->tick(), m->endTick(), run, here);
+                                    changes += fillBandRests(score, track, mStart, mEnd, run, here);
                         }
                   }
             }
@@ -1178,6 +1216,7 @@ MasterScore* importClip(const Clip& clip, QString* error)
             if (more > 0 && more < 10000)
                   score->appendMeasures(more);
             }
+      assignBands(score);                       // (the added bars' rests: one rest per silence)
 
       // played by MuseScore 3's rendering, never by the sound library: each note's own velocity, which the
       // import set from Live's (MuseScore 4's note model plays none: every note at the dynamic's 64), the

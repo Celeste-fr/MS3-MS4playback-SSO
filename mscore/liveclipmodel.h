@@ -207,7 +207,7 @@ QString instrumentForTrack(const QString& trackName);
 // another free one; with no free voice (or in a nested tuplet) it stays and is drawn there cross-staff
 // (ChordRest::staffMove). A chord over two bands is split by band into a free voice of the other band's staff, the
 // band with the most notes staying; a chord with ties, a tuplet or grace notes stays whole on that band.
-// Rests: a band staff's first voice's shown where nothing is drawn on the staff, the others hidden.
+// Rests: shown only where no band staff has a note, once (on the staff of the chord before), in a band staff's first voice.
 // assignBands runs after the import and at the end of every command, inside its undo step (Score::setEndCmdHook)
 constexpr int BANDS = 4;
 constexpr ClefType BAND_CLEFS[BANDS] = { ClefType::G15_MA, ClefType::G, ClefType::F, ClefType::F15_MB };

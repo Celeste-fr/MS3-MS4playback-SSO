@@ -1201,36 +1201,66 @@ static int dotsRightOfHeads(Score* score)
       return n;
       }
 
-// every shown band staff reads complete: in each measure, its visible rests and the chords drawn on it cover the whole
-// measure without a gap (the owner, 2026-10-04: a dotted eighth's sixteenth rest was on the hidden staff)
+// the band staves read as one staff: in each measure the chords drawn on them and the visible rests on shown staves cover
+// the whole measure without a gap (the owner, 2026-10-04: a dotted eighth's sixteenth rest was on the hidden staff), and
+// a visible rest overlaps no chord and no other visible rest (the owner, 2026-10-05: "shouldn't there be no rest signs,
+// because they are considered the same staff?")
 static bool bandsComplete(Score* score)
       {
       score->doLayout();
       System* sys = score->systems().front();
-      for (int i = firstBand(score); i < score->nstaves(); ++i) {
-            if (!sys->staff(i)->show())
-                  continue;
-            for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure()) {
-                  std::vector<std::pair<Fraction, Fraction>> spans;
-                  for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest))
-                        for (int t = 0; t < score->ntracks(); ++t)
-                              if (Element* e = seg->element(t)) {
-                                    ChordRest* cr = toChordRest(e);
-                                    if (cr->vStaffIdx() == i && (cr->isChord() || cr->visible()))
-                                          spans.push_back({ cr->tick(), cr->tick() + cr->actualTicks() });
+      for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure()) {
+            std::vector<std::pair<Fraction, Fraction>> chords;
+            std::vector<std::pair<Fraction, Fraction>> rests;
+            for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest))
+                  for (int t = 0; t < score->ntracks(); ++t)
+                        if (Element* e = seg->element(t)) {
+                              ChordRest* cr = toChordRest(e);
+                              const int i = cr->vStaffIdx();
+                              const std::pair<Fraction, Fraction> sp { cr->tick(), cr->tick() + cr->actualTicks() };
+                              if (i < firstBand(score))
+                                    continue;
+                              if (cr->isChord())
+                                    chords.push_back(sp);
+                              else if (cr->visible()) {
+                                    if (!sys->staff(i)->show())
+                                          continue;
+                                    for (const auto& r : rests)
+                                          if (r.first < sp.second && sp.first < r.second)
+                                                return false;         // two rests at once
+                                    rests.push_back(sp);
                                     }
-                  std::sort(spans.begin(), spans.end());
-                  Fraction at = m->tick();
-                  for (const auto& sp : spans) {
-                        if (sp.first > at)
-                              return false;           // a gap
-                        at = std::max(at, sp.second);
-                        }
-                  if (at < m->endTick())
-                        return false;
+                              }
+            for (const auto& r : rests)
+                  for (const auto& c : chords)
+                        if (r.first < c.second && c.first < r.second)
+                              return false;                 // a rest under a note
+            std::vector<std::pair<Fraction, Fraction>> all = chords;
+            all.insert(all.end(), rests.begin(), rests.end());
+            std::sort(all.begin(), all.end());
+            Fraction at = m->tick();
+            for (const auto& sp : all) {
+                  if (sp.first > at)
+                        return false;                       // a gap
+                  at = std::max(at, sp.second);
                   }
+            if (at < m->endTick())
+                  return false;
             }
       return true;
+      }
+
+// the visible rests on band b's staff in [from, to)
+static int visibleRests(Score* score, int band, int from, int to)
+      {
+      int n = 0;
+      const int staff = firstBand(score) + band;
+      for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+            for (int v = 0; v < VOICES; ++v)
+                  if (Element* e = seg->element(staff * VOICES + v))
+                        if (e->isRest() && e->visible() && seg->tick().ticks() >= from && seg->tick().ticks() < to)
+                              ++n;
+      return n;
       }
 
 // every note is among the elements the score draws (the owner, 2026-10-04: a low clip showed rests only, its notes
@@ -2214,6 +2244,28 @@ void TestLiveIntegration::clipBandsEditing()
             score->undoRedo(true, nullptr);
             QVERIFY(diff(b, signatures(score)).empty());
             QVERIFY(bandsComplete(score));
+            delete score;
+      }
+
+      // two bands taking turns (the owner's picture, 2026-10-05: A1 C2 on bass 15mb, E2 A2 on bass, each pair an eighth
+      // apart): no rest anywhere in the bar; a silence after the last note: one rest, on the staff of the note before it
+      {
+            Clip clip = bandClip("6-Vital", {});
+            clip.notes = { ln(1, 45, 0, 0.5, 90), ln(2, 48, 0.5, 0.5, 90), ln(3, 40, 1, 0.5, 90), ln(4, 45, 1.5, 0.5, 90),
+                           ln(5, 45, 2, 0.5, 90), ln(6, 48, 2.5, 0.5, 90), ln(7, 40, 3, 0.5, 90), ln(8, 45, 3.5, 0.5, 90),
+                           ln(9, 40, 4, 1, 90) };
+            for (LiveNote& n : clip.notes)
+                  if (n.pitch == 45 || n.pitch == 48)
+                        n.pitch -= 12;                    // A1 C2: bass 15mb
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY(score);
+            QVERIFY(shownStaves(score) == std::vector<int>({ 2, 3 }));
+            QCOMPARE(visibleRests(score, 2, 0, 1920) + visibleRests(score, 3, 0, 1920), 0);
+            QCOMPARE(visibleRests(score, 3, 1920, 3840), 0);
+            QVERIFY(visibleRests(score, 2, 1920 + 480, 3840) > 0);       // after E2 (bass): on bass
+            QVERIFY(bandsComplete(score));
+            if (qEnvironmentVariableIsSet("MS_CLIP_TURNS_PNG"))         // a picture of it
+                  QVERIFY(renderPng(score, qEnvironmentVariable("MS_CLIP_TURNS_PNG")));
             delete score;
       }
 

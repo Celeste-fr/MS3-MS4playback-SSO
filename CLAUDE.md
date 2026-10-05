@@ -225,7 +225,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
-  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 58 with init and cleanup (2026-10-04, clipBandsEditing; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
+  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 58 with init and cleanup (2026-10-05, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

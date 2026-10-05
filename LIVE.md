@@ -819,9 +819,11 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   same chord object (`MoveToTrack`: it stays selected, keeps its ties, slurs and tuplet), into its voice there or
   another free one; a note entered on the "wrong" staff (a low note typed on treble) is moved the same way. A chord
   whose pitch fits its staff stays (no churn between two equal staves). The staff above the bands (where the import
-  writes the notes, the tempo markings' staff) is never shown and keeps no notes. Each band staff's first voice shows
-  its rests where nothing is drawn on that staff, hidden under notes of its other voices; other voices' rests are
-  hidden, so every shown staff's bars add up (`fillBandRests`). A chord over two bands is split by band into a free
+  writes the notes, the tempo markings' staff) is never shown and keeps no notes. Rests read as on one staff (the owner,
+  2026-10-05: "shouldn't there be no rest signs, because they are considered the same staff?"): no rest shows while
+  any band staff has a note, and a silence shows one rest, on the staff of the note before it (else the note after
+  it; a clip without notes: treble), so the band staves' bars add up together, not each on its own (a band staff's
+  first voice holds the rests, other voices' rests hidden; `fillBandRests`). A chord over two bands is split by band into a free
   voice of the other band's staff, the band with most notes staying (View › Show Invisible off in the tab). Limits:
   a chord with ties, a tuplet or grace notes stays whole on one band; a chord (or a tuplet) with no free voice on its
   band's staff, or a chord in a nested tuplet, stays where it is and is drawn on its band cross-staff; a tie or beam
