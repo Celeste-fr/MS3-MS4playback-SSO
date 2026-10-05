@@ -35,7 +35,11 @@
 #include "libmscore/segment.h"
 #include "libmscore/staff.h"
 #include "libmscore/tie.h"
+#include "libmscore/beam.h"
 #include "libmscore/keysig.h"
+#include "libmscore/lyrics.h"
+#include "libmscore/spanner.h"
+#include "libmscore/tuplet.h"
 #include "libmscore/rest.h"
 #include "libmscore/undo.h"
 #include "libmscore/utils.h"
@@ -537,7 +541,7 @@ static int middlePitch(int band)
       return 60;
       }
 
-// the clip part: its first staff holds the notes (always hidden), the BANDS staves below it show them
+// the clip part: its first staff always hidden (the import's), the BANDS staves below it hold the notes
 static bool isBandPart(const Part* part)
       {
       if (part->nstaves() != BANDS + 1)
@@ -548,47 +552,162 @@ static bool isBandPart(const Part* part)
       return true;
       }
 
-// a band staff's own first voice: rests only, shown where nothing is drawn on the staff and invisible under the notes
-// drawn there (`drawn`: the spans of the chords drawn on it, in this measure), so every shown staff reads complete;
-// rewritten only when that pattern changed. Returns the number of changes.
-static int fillBandRests(Score* score, Measure* m, int track, std::vector<std::pair<Fraction, Fraction>> drawn)
-      {
-      const Fraction mStart = m->tick();
-      const Fraction mEnd = m->endTick();
-      // the wanted spans: [start, end) with "shown"
-      std::sort(drawn.begin(), drawn.end());
-      std::vector<std::tuple<Fraction, Fraction, bool>> want;
-      Fraction at = mStart;
-      for (auto iv : drawn) {
-            const Fraction a = std::max(iv.first, mStart);
-            const Fraction b = std::min(iv.second, mEnd);
-            if (b <= at)
-                  continue;
-            if (a > at)
-                  want.emplace_back(at, a, true);
-            const Fraction from = std::max(a, at);
-            if (!want.empty() && !std::get<2>(want.back()) && std::get<1>(want.back()) == from)
-                  std::get<1>(want.back()) = b;
-            else
-                  want.emplace_back(from, b, false);
-            at = b;
+//---------------------------------------------------------
+//   MoveToTrack: chords and rests moved to another track of their segments, the same objects (the selection, ties,
+//   slurs and the diff's notes keep pointing at them), with their tuplet; their slots in that track must be empty
+//---------------------------------------------------------
+
+class MoveToTrack : public UndoCommand {
+      std::vector<ChordRest*> crs;
+      Tuplet* tuplet;
+      int from;
+      int to;
+
+      void move(int a, int b)
+            {
+            Score* score = crs.front()->score();
+            for (ChordRest* cr : crs) {
+                  if (Beam* beam = cr->beam())
+                        beam->remove(cr);       // (beams are made again by the layout)
+                  Segment* seg = cr->segment();
+                  seg->setElement(a, nullptr);
+                  cr->setTrack(b);
+                  for (Lyrics* l : cr->lyrics())
+                        l->setTrack(b);
+                  seg->setElement(b, cr);
+                  for (auto i : score->spanner()) {
+                        Spanner* s = i.second;
+                        if (s->startElement() == cr)
+                              s->setTrack(b);
+                        if (s->endElement() == cr)
+                              s->setTrack2(b);
+                        }
+                  seg->measure()->checkMultiVoices(a / VOICES);
+                  seg->measure()->checkMultiVoices(b / VOICES);
+                  }
+            if (tuplet)
+                  tuplet->setTrack(b);
+            score->setLayoutAll();
             }
-      if (at < mEnd)
-            want.emplace_back(at, mEnd, true);
-      // what the track has: rests grouped by visibility (a chord there: rewrite)
-      std::vector<std::tuple<Fraction, Fraction, bool>> have;
-      std::vector<Rest*> rests;
-      bool chord = false;
+
+   public:
+      MoveToTrack(const std::vector<ChordRest*>& c, Tuplet* t, int track)
+         : crs(c), tuplet(t), from(c.front()->track()), to(track) {}
+      void undo(EditData*) override { move(to, from); }
+      void redo(EditData*) override { move(from, to); }
+      UNDO_NAME("MoveToTrack")
+      };
+
+// the track's chords and rests that overlap [from, to) in the measure
+static std::vector<ChordRest*> overlapping(Measure* m, int track, const Fraction& from, const Fraction& to)
+      {
+      std::vector<ChordRest*> out;
       for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
             Element* e = seg->element(track);
             if (!e)
                   continue;
-            if (!e->isRest()) {
-                  chord = true;
+            ChordRest* cr = toChordRest(e);
+            if (cr->tick() < to && from < cr->tick() + cr->actualTicks())
+                  out.push_back(cr);
+            }
+      return out;
+      }
+
+// [from, to) of the track can take a chord: nothing there but rests outside tuplets
+static bool spanFree(Measure* m, int track, const Fraction& from, const Fraction& to)
+      {
+      for (ChordRest* cr : overlapping(m, track, from, to))
+            if (cr->isChord() || cr->tuplet())
+                  return false;
+      return true;
+      }
+
+// the rests over [from, to) taken out of the track, the parts of them outside it filled again
+static void clearSpan(Score* score, Measure* m, int track, const Fraction& from, const Fraction& to)
+      {
+      const std::vector<ChordRest*> rests = overlapping(m, track, from, to);
+      if (rests.empty())
+            return;
+      const Fraction a = rests.front()->tick();
+      const Fraction b = rests.back()->tick() + rests.back()->actualTicks();
+      for (ChordRest* r : rests) {
+            score->deselect(r);
+            score->undoRemoveElement(r);
+            }
+      if (a < from)
+            score->setRests(a, track, from - a, true, nullptr, false);
+      if (to < b)
+            score->setRests(to, track, b - to, true, nullptr, false);
+      }
+
+// a track of the staff free over [from, to): the voice asked for first, then the others from voice 1; -1: none
+static int freeTrack(Measure* m, int staff, int voice, const Fraction& from, const Fraction& to)
+      {
+      if (spanFree(m, staff * VOICES + voice, from, to))
+            return staff * VOICES + voice;
+      for (int v = 0; v < VOICES; ++v)
+            if (v != voice && spanFree(m, staff * VOICES + v, from, to))
+                  return staff * VOICES + v;
+      return -1;
+      }
+
+// the chords and rests (one, or a tuplet's) moved to the track (free over their span); the first voice they leave
+// filled with rests
+static void moveTo(Score* score, const std::vector<ChordRest*>& crs, Tuplet* tuplet, int track)
+      {
+      ChordRest* first = crs.front();
+      Measure* m = first->measure();
+      const int old = first->track();
+      const Fraction from = tuplet ? tuplet->tick() : first->tick();
+      const Fraction to = tuplet ? from + tuplet->actualTicks() : from + first->actualTicks();
+      clearSpan(score, m, track, from, to);
+      score->undo(new MoveToTrack(crs, tuplet, track));
+      if (old % VOICES == 0)
+            score->setRests(from, old, to - from, true, nullptr, false);
+      }
+
+// a tuplet moves as one: not nested, chords and rests only
+static bool tupletMovable(const Tuplet* t)
+      {
+      if (t->tuplet())
+            return false;
+      for (DurationElement* d : t->elements())
+            if (!d->isChordRest())
+                  return false;
+      return true;
+      }
+
+// the rests of a band staff's first voice in a run (no chord between them, none in a tuplet): shown where nothing is
+// drawn on the staff, hidden under what is (`drawn`: the spans of the chords of its other voices or other staves drawn
+// there); rewritten only when that pattern changed. Returns the number of changes.
+static int fillBandRests(Score* score, int track, const Fraction& mStart, const Fraction& mEnd,
+                         const std::vector<Rest*>& run, std::vector<std::pair<Fraction, Fraction>> drawn)
+      {
+      const Fraction from = run.front()->tick();
+      const Fraction to = run.back()->tick() + run.back()->actualTicks();
+      // the wanted spans: [start, end) with "shown"
+      std::sort(drawn.begin(), drawn.end());
+      std::vector<std::tuple<Fraction, Fraction, bool>> want;
+      Fraction at = from;
+      for (auto iv : drawn) {
+            const Fraction a = std::max(iv.first, from);
+            const Fraction b = std::min(iv.second, to);
+            if (b <= at)
                   continue;
-                  }
-            Rest* r = toRest(e);
-            rests.push_back(r);
+            if (a > at)
+                  want.emplace_back(at, a, true);
+            const Fraction f = std::max(a, at);
+            if (!want.empty() && !std::get<2>(want.back()) && std::get<1>(want.back()) == f)
+                  std::get<1>(want.back()) = b;
+            else
+                  want.emplace_back(f, b, false);
+            at = b;
+            }
+      if (at < to)
+            want.emplace_back(at, to, true);
+      // what the run is: rests grouped by visibility
+      std::vector<std::tuple<Fraction, Fraction, bool>> have;
+      for (Rest* r : run) {
             const Fraction a = r->tick();
             const Fraction b = a + r->actualTicks();
             if (!have.empty() && std::get<2>(have.back()) == r->visible() && std::get<1>(have.back()) == a)
@@ -596,14 +715,12 @@ static int fillBandRests(Score* score, Measure* m, int track, std::vector<std::p
             else
                   have.emplace_back(a, b, r->visible());
             }
-      if (!chord && have == want)
+      if (have == want)
             return 0;
-      std::vector<Element*> old;
-      for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest))
-            if (Element* e = seg->element(track))
-                  old.push_back(e);
-      for (Element* e : old)
-            score->undoRemoveElement(e);
+      for (Rest* r : run) {
+            score->deselect(r);
+            score->undoRemoveElement(r);
+            }
       for (const auto& w : want) {
             const bool whole = std::get<0>(w) == mStart && std::get<1>(w) == mEnd;
             for (Rest* r : score->setRests(std::get<0>(w), track, std::get<1>(w) - std::get<0>(w), true, nullptr, whole))
@@ -611,25 +728,6 @@ static int fillBandRests(Score* score, Measure* m, int track, std::vector<std::p
                         r->undoChangeProperty(Pid::VISIBLE, std::get<2>(w));
             }
       return 1;
-      }
-
-// the track's chords and rests in [from, to) of the measure: true when only rests that start at or after
-// `from` (or nothing), none in a tuplet: a chord can go there (expandVoice, makeGap)
-static bool voiceFree(Measure* m, int track, const Fraction& from, const Fraction& to)
-      {
-      for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
-            Element* e = seg->element(track);
-            if (!e)
-                  continue;
-            ChordRest* cr = toChordRest(e);
-            const Fraction s = cr->tick();
-            const Fraction end = s + cr->actualTicks();
-            if (end <= from || s >= to)
-                  continue;
-            if (cr->isChord() || s < from || cr->tuplet())
-                  return false;
-            }
-      return true;
       }
 
 // a chord can be split into others (the same length, in another voice): no ties, tuplet, grace notes
@@ -649,9 +747,10 @@ int assignBands(Score* score)
       for (Part* part : score->parts()) {
             if (!isBandPart(part))
                   continue;
-            const int first = part->staff(0)->idx();        // the notes' staff (hidden); band b is staff first + 1 + b
+            const int first = part->staff(0)->idx();        // the hidden staff; band b is staff first + 1 + b
             const int strack = first * VOICES;
-            const int etrack = (first + 1) * VOICES;
+            const int etrack = (first + 1 + BANDS) * VOICES;
+            auto bandStaff = [&](int band) { return first + 1 + band; };
 
             // the chords in time order, and the median pitch of their notes
             std::vector<Chord*> chords;
@@ -674,7 +773,12 @@ int assignBands(Score* score)
                         nearMedian = b;
 
             int prev = -1;    // the band of the chord before
-            auto settle = [&](const std::vector<int>& cands) {
+            std::map<const Chord*, int> bandOfChord;
+            // of the bands a chord may go to: the one it is written on, else the band of the chord before, else the
+            // one nearest the median
+            auto settle = [&](const std::vector<int>& cands, int home) {
+                  if (std::find(cands.begin(), cands.end(), home) != cands.end())
+                        return home;
                   if (std::find(cands.begin(), cands.end(), prev) != cands.end())
                         return prev;
                   int best = cands.front();
@@ -683,8 +787,7 @@ int assignBands(Score* score)
                               best = b;
                   return best;
                   };
-            auto setMove = [&](Chord* c, int band) {
-                  const int move = first + 1 + band - c->staffIdx();
+            auto setMove = [&](Chord* c, int move) {
                   if (c->staffMove() != move) {
                         score->undo(new ChangeChordStaffMove(c, move));
                         ++changes;
@@ -693,8 +796,49 @@ int assignBands(Score* score)
                         if (g->staffMove() != move)
                               score->undo(new ChangeChordStaffMove(g, move));
                   };
+            // the chord written on its band's staff (moved there, with its tuplet: the selection and the notes stay
+            // the same objects), else drawn there from where it is (cross-staff: no free voice there)
+            std::set<const Tuplet*> tupletsDone;
+            auto place = [&](Chord* c, int band, int voice) {
+                  const int staff = bandStaff(band);
+                  if (c->staffIdx() != staff) {
+                        Tuplet* t = c->tuplet();
+                        if (t && !tupletsDone.count(t) && tupletMovable(t)) {
+                              tupletsDone.insert(t);
+                              const Fraction from = t->tick();
+                              const int track = freeTrack(c->measure(), staff, voice, from, from + t->actualTicks());
+                              if (track >= 0) {
+                                    std::vector<ChordRest*> crs;
+                                    for (DurationElement* d : t->elements())
+                                          crs.push_back(toChordRest(d));
+                                    moveTo(score, crs, t, track);
+                                    ++changes;
+                                    }
+                              }
+                        else if (!t) {
+                              const int track = freeTrack(c->measure(), staff, voice, c->tick(), c->tick() + c->actualTicks());
+                              if (track >= 0) {
+                                    moveTo(score, { c }, nullptr, track);
+                                    ++changes;
+                                    }
+                              }
+                        }
+                  setMove(c, staff - c->staffIdx());
+                  bandOfChord[c] = band;
+                  };
 
             for (Chord* c : chords) {
+                  const int home = c->staffIdx() - first - 1;     // -1: the hidden staff (where the import puts them)
+                  // a tied note's chord goes where the note it is tied from went, into the same voice
+                  const Chord* tiedFrom = nullptr;
+                  for (Note* n : c->notes())
+                        if (n->tieBack() && n->tieBack()->startNote() && bandOfChord.count(n->tieBack()->startNote()->chord()))
+                              tiedFrom = n->tieBack()->startNote()->chord();
+                  if (tiedFrom) {
+                        prev = bandOfChord[tiedFrom];
+                        place(c, prev, tiedFrom->voice());
+                        continue;
+                        }
                   // each note's bands (the fewest ledger lines); the chord's: the bands all its notes share
                   std::vector<std::vector<int>> nb;
                   std::set<int> common { 0, 1, 2, 3 };
@@ -707,8 +851,8 @@ int assignBands(Score* score)
                         common = keep;
                         }
                   if (!common.empty()) {
-                        prev = settle(std::vector<int>(common.begin(), common.end()));
-                        setMove(c, prev);
+                        prev = settle(std::vector<int>(common.begin(), common.end()), home);
+                        place(c, prev, c->voice());
                         continue;
                         }
                   // a chord over two or more bands: each note to its band (a note two bands hold alike: the band
@@ -725,11 +869,11 @@ int assignBands(Score* score)
                                     band = b;
                                     break;
                                     }
-                        groups[band >= 0 ? band : settle(nb[i])].push_back(c->notes()[i]);
+                        groups[band >= 0 ? band : settle(nb[i], home)].push_back(c->notes()[i]);
                         }
                   int keep = groups.begin()->first;
                   for (const auto& g : groups)
-                        if (g.second.size() > groups[keep].size())
+                        if (g.second.size() > groups[keep].size() || (g.second.size() == groups[keep].size() && g.first == home))
                               keep = g.first;
                   if (splittable(c)) {
                         Measure* m = c->measure();
@@ -738,24 +882,15 @@ int assignBands(Score* score)
                         for (const auto& g : groups) {
                               if (g.first == keep)
                                     continue;
-                              // a free voice of the notes' staff (the band staves keep only their rests)
-                              int target = -1;
-                              for (int v = 0; v < VOICES && target < 0; ++v) {
-                                    const int t = first * VOICES + v;
-                                    if (t != c->track() && voiceFree(m, t, from, to))
-                                          target = t;
-                                    }
+                              // a free voice of that band's staff
+                              const int target = freeTrack(m, bandStaff(g.first), 0, from, to);
                               if (target < 0)
                                     continue;         // (stays in the chord: shown on the chord's band)
-                              Segment* seg = c->segment();
-                              if (!seg->element(target))
-                                    score->expandVoice(seg, target);
-                              score->makeGap(seg, target, c->actualTicks(), nullptr);
+                              clearSpan(score, m, target, from, to);
                               Chord* nc = new Chord(score);
                               nc->setTrack(target);
                               nc->setDurationType(c->durationType());
                               nc->setTicks(c->ticks());
-                              nc->setStaffMove(first + 1 + g.first - target / VOICES);
                               for (Note* n : g.second) {
                                     Note* nn = new Note(score);
                                     nn->setTrack(target);
@@ -765,20 +900,22 @@ int assignBands(Score* score)
                                     nn->setPlay(n->play());
                                     nn->setTuning(n->tuning());
                                     nc->add(nn);
+                                    score->deselect(n);
                                     score->undoRemoveElement(n);
                                     }
                               score->undoAddCR(nc, m, from);
+                              bandOfChord[nc] = g.first;
                               ++changes;
                               }
                         }
                   prev = keep;
-                  setMove(c, keep);
+                  place(c, keep, c->voice());
                   }
 
-            // rests: the notes' staff's never show (it is hidden; its rests' spans are the band staves' to show); each
-            // band staff's own first voice is rests, shown where nothing is drawn on that staff (fillBandRests)
+            // rests: the hidden staff's and the band staves' other voices' never show; each band staff's first voice
+            // shows its rests where nothing is drawn on that staff (fillBandRests)
             std::vector<std::vector<std::pair<Fraction, Fraction>>> drawn(BANDS);
-            std::vector<Rest*> rests;
+            std::vector<Rest*> hide;
             for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
                   for (int t = strack; t < etrack; ++t) {
                         Element* e = seg->element(t);
@@ -786,13 +923,15 @@ int assignBands(Score* score)
                               continue;
                         ChordRest* cr = toChordRest(e);
                         const int band = cr->vStaffIdx() - first - 1;
-                        if (cr->isRest())
-                              rests.push_back(toRest(cr));
-                        else if (band >= 0 && band < BANDS)
+                        if (cr->isRest()) {
+                              if (band < 0 || t % VOICES)
+                                    hide.push_back(toRest(cr));
+                              }
+                        else if (band >= 0 && band < BANDS && t != bandStaff(band) * VOICES)
                               drawn[size_t(band)].push_back({ cr->tick(), cr->tick() + cr->actualTicks() });
                         }
                   }
-            for (Rest* r : rests) {
+            for (Rest* r : hide) {
                   if (r->visible()) {
                         r->undoChangeProperty(Pid::VISIBLE, false);
                         ++changes;
@@ -800,11 +939,25 @@ int assignBands(Score* score)
                   }
             for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure()) {
                   for (int b = 0; b < BANDS; ++b) {
+                        const int track = bandStaff(b) * VOICES;
                         std::vector<std::pair<Fraction, Fraction>> here;
                         for (const auto& iv : drawn[size_t(b)])
                               if (iv.first < m->endTick() && m->tick() < iv.second)
                                     here.push_back(iv);
-                        changes += fillBandRests(score, m, (first + 1 + b) * VOICES, here);
+                        // the runs of rests between the first voice's chords (a tuplet's rests left as they are)
+                        std::vector<std::vector<Rest*>> runs(1);
+                        for (Segment* seg = m->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest)) {
+                              Element* e = seg->element(track);
+                              if (!e)
+                                    continue;
+                              if (e->isRest() && !toRest(e)->tuplet())
+                                    runs.back().push_back(toRest(e));
+                              else if (!runs.back().empty())
+                                    runs.emplace_back();
+                              }
+                        for (const auto& run : runs)
+                              if (!run.empty())
+                                    changes += fillBandRests(score, track, m->tick(), m->endTick(), run, here);
                         }
                   }
             }
@@ -864,9 +1017,9 @@ QString clipTitle(const Clip& clip, int slot)
       }
 
 //---------------------------------------------------------
-//   makeBandStaves: the imported staff keeps the notes and is always hidden; treble 15ma, treble, bass and bass 15mb
-//   are added below it, braced, each hidden while nothing is drawn on it (treble shown in an empty clip); each chord
-//   is drawn on its band and every shown band staff gets its rests (assignBands now and at the end of every command)
+//   makeBandStaves: the imported staff is always hidden; treble 15ma, treble, bass and bass 15mb are added below it,
+//   braced, each hidden while nothing is drawn on it (treble shown in an empty clip); each chord is moved to its band's
+//   staff and every shown band staff gets its rests (assignBands now and at the end of every command)
 //---------------------------------------------------------
 
 void makeBandStaves(MasterScore* score, bool noRange)
@@ -896,7 +1049,7 @@ void makeBandStaves(MasterScore* score, bool noRange)
                   part->staff(1 + b)->setKey(tick, ke);
                   }
             }
-      home->setHideWhenEmpty(Staff::HideMode::ALWAYS);       // (nothing is ever drawn on it: every chord is moved)
+      home->setHideWhenEmpty(Staff::HideMode::ALWAYS);       // (no notes stay on it: every chord is moved)
       home->setShowIfEmpty(false);
       home->setBarLineSpan(false);
       home->setBracketType(0, BracketType::NO_BRACKET);

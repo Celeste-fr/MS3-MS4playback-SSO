@@ -806,16 +806,21 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   synth shows bass and bass 15mb, a pad treble and bass, an empty clip treble). A note is drawn on the staff
   where it needs the fewest ledger lines; where two need as many (middle C on treble or bass, B5 on treble or
   15ma, D2 on bass or 15mb) on the staff of the chord before it, else the one whose middle line is nearest the
-  clip's median pitch. The notes stay where they are written (cross-staff notation, as Ctrl+Shift+↑/↓ moves
-  a chord), and after every edit (note input, pitch, paste; in the same undo step) each chord is drawn on its
-  band again, so a note never has to be moved between staves. The notes live on a fifth staff above the bands
-  that is never shown (every chord is drawn on its band; its rests stay hidden), and each band staff's own first voice
-  is rests only: shown wherever nothing is drawn on that staff, invisible under its notes, so every shown staff's
-  bars add up (the owner, 2026-10-04: a dotted eighth's sixteenth rest, written on the hidden staff, didn't show;
-  `fillBandRests`). A chord over two bands is split by band into another voice of the notes' staff (free for its
-  length), the band with most notes staying (View › Show Invisible off in the tab). Limits: a chord with ties, a
-  tuplet or grace notes, or with no free voice, stays whole on one band; a tie or beam between notes of two bands is
-  drawn across the staves; the notes' staff has four voices for every band together. The written and
+  clip's median pitch. Each note is written on its band's staff, so clicking, range selection (a bar, shift+click),
+  copy and paste, and note input work on what is shown, as on a piano's two staves (the owner, 2026-10-04, a Vital
+  clip: "select is broken. copy paste is broken. I couldn't enter the first note": the notes then lived on a hidden
+  staff, a band staff held only rests, and a note entered there was removed). After every edit (note input, pitch,
+  paste; in the same undo step, `assignBands`) a chord whose pitch belongs to another band moves to that staff, the
+  same chord object (`MoveToTrack`: it stays selected, keeps its ties, slurs and tuplet), into its voice there or
+  another free one; a note entered on the "wrong" staff (a low note typed on treble) is moved the same way. A chord
+  whose pitch fits its staff stays (no churn between two equal staves). The staff above the bands (where the import
+  writes the notes, the tempo markings' staff) is never shown and keeps no notes. Each band staff's first voice shows
+  its rests where nothing is drawn on that staff, hidden under notes of its other voices; other voices' rests are
+  hidden, so every shown staff's bars add up (`fillBandRests`). A chord over two bands is split by band into a free
+  voice of the other band's staff, the band with most notes staying (View › Show Invisible off in the tab). Limits:
+  a chord with ties, a tuplet or grace notes stays whole on one band; a chord (or a tuplet) with no free voice on its
+  band's staff, or a chord in a nested tuplet, stays where it is and is drawn on its band cross-staff; a tie or beam
+  between notes of two bands is drawn across the staves. The written and
   played pitches are the same (octave clefs change only where a note is drawn), so what is sent to Live and
   played is unchanged. **Drums**: a Drum Rack (`DrumGroupDevice`) on
   the track, or a track named like drum / kit / perc / beat: channel 10 in the file, so the import uses
@@ -1046,8 +1051,8 @@ rit. / accel. follow the song (`mscore/cliptempo.{h,cpp}`, the session side in `
   text) at its start; a curved ramp (Live's Bézier) as straight pieces no further than 0.005 bpm from the curve (half
   of 0.01 bpm, the smallest step Live shows a tempo in; `LiveSet::curve`), read as one *rit.* / *accel.*. Not rit. /
   accel. lines: MuseScore 3 ends a line at the end of the note or rest it ends in (`Spanner::computeEndElement`), while
-  Live's breakpoints fall anywhere. The markings are on track 0: with the clip tab's band staves that staff (the notes'
-  staff) is always hidden, the markings are still drawn (tested).
+  Live's breakpoints fall anywhere. The markings are on track 0: with the clip tab's band staves that staff (above the
+  bands) is always hidden, the markings are still drawn (tested).
   Times are rounded to the score's ticks (480 a beat). Markings like "♩ = 97.5"
   (two decimals at most, as Live shows a tempo). The marks change no note: the tab sends nothing to Live for them.
   When only values change (a ramp's end tempo, Live's tempo) they change in place without an undo step. A new shape

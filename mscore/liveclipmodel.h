@@ -195,15 +195,19 @@ QString instrumentForTrack(const QString& trackName);
 // The staves of a pitched clip (the owner, 2026-10-03: "show bass, treble, bass 15mb and treble 15ma staffs
 // whenever there are any notes that fall inside them. they should act as ONE STAFF, not separate staffs that you
 // have to switch notes from one to the other"): four band staves braced together, top to bottom treble 15ma,
-// treble, bass, bass 15mb, each with one clef for the whole clip (no clef changes). The notes stay in the staff
-// and voice the import or the editing put them in; each chord is drawn on its band's staff (cross-staff,
-// ChordRest::staffMove), and a staff shows only while a chord is drawn on it (Score::lineHidesEmptyStaves).
+// treble, bass, bass 15mb, each with one clef for the whole clip (no clef changes). Each chord is written on its
+// band's staff, so selection, copy / paste and note input work on what is shown (the owner, 2026-10-04: "select is
+// broken. copy paste is broken. I couldn't enter the first note" while the notes lived on the hidden staff above the
+// bands); a staff shows only while a chord is drawn on it (Score::lineHidesEmptyStaves). The staff above the bands
+// (the import's, the tempo markings') is always hidden and keeps no notes.
 // A note's band: the staff where it needs the fewest ledger lines (ledgerLines; equal on two: C4 treble / bass,
-// B5 treble / treble 15ma, D2 bass / bass 15mb): the band of the chord before it, else the band whose middle
-// line is nearest the part's median pitch. A chord over two bands is split by band into other voices (a voice
-// free for its length: the chord's staff first, then the other band staves), the band with the most notes
-// staying; a chord with ties, a tuplet or grace notes, or with no free voice, stays whole on that band.
-// Rests: voice 1's shown where nothing is drawn on their staff, the others hidden.
+// B5 treble / treble 15ma, D2 bass / bass 15mb): the staff it is written on, else the band of the chord before it,
+// else the band whose middle line is nearest the part's median pitch. A chord on another band's staff moves there as
+// the same object (MoveToTrack, with its tuplet; a tied chord follows the one it is tied from), into its voice or
+// another free one; with no free voice (or in a nested tuplet) it stays and is drawn there cross-staff
+// (ChordRest::staffMove). A chord over two bands is split by band into a free voice of the other band's staff, the
+// band with the most notes staying; a chord with ties, a tuplet or grace notes stays whole on that band.
+// Rests: a band staff's first voice's shown where nothing is drawn on the staff, the others hidden.
 // assignBands runs after the import and at the end of every command, inside its undo step (Score::setEndCmdHook)
 constexpr int BANDS = 4;
 constexpr ClefType BAND_CLEFS[BANDS] = { ClefType::G15_MA, ClefType::G, ClefType::F, ClefType::F15_MB };
