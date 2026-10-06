@@ -34,6 +34,9 @@ class Vst3EditorWindow : public QWidget {
       bool _resizing { false };
 
       void attach();
+      // the view goes when the window closes, before its owner can destroy the plug-in (close() only schedules
+      // the window's deletion)
+      void detach();
 
    protected:
       void showEvent(QShowEvent*) override;

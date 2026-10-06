@@ -121,11 +121,20 @@ Vst3EditorWindow::Vst3EditorWindow(IPlugView* view, const QString& title, QWidge
 
 Vst3EditorWindow::~Vst3EditorWindow()
       {
+      detach();
+      delete _frame;
+      }
+
+void Vst3EditorWindow::detach()
+      {
+      if (!_view)
+            return;
       if (_attached)
             _view->removed();
       _view->setFrame(nullptr);
       _view->release();
-      delete _frame;
+      _view = nullptr;
+      _attached = false;
       }
 
 // the view's size: pixels on Windows and Linux, points on macOS
@@ -147,7 +156,7 @@ void Vst3EditorWindow::resizeToView(int width, int height)
 
 void Vst3EditorWindow::attach()
       {
-      if (_attached)
+      if (_attached || !_view)
             return;
 #if defined(Q_OS_WIN)
       FIDString type = kPlatformTypeHWND;
@@ -172,13 +181,14 @@ void Vst3EditorWindow::showEvent(QShowEvent* e)
 void Vst3EditorWindow::closeEvent(QCloseEvent* e)
       {
       emit closed();
+      detach();
       QWidget::closeEvent(e);
       }
 
 void Vst3EditorWindow::resizeEvent(QResizeEvent* e)
       {
       QWidget::resizeEvent(e);
-      if (_resizing || !_attached)
+      if (_resizing || !_attached || !_view)
             return;
 #ifdef Q_OS_MAC
       const qreal scale = 1.0;
