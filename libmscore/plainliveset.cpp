@@ -14,6 +14,8 @@
 #include <deque>
 #include <set>
 
+#include <QObject>
+
 #include "audio/midi/event.h"
 #include "instrtemplate.h"
 #include "instrument.h"
@@ -280,6 +282,178 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   }
             }
       std::sort(out.clashes.begin(), out.clashes.end(), [](const Clash& a, const Clash& b) { return a.at < b.at; });
+      return out;
+      }
+
+//---------------------------------------------------------
+//   the tracks
+//---------------------------------------------------------
+
+static double beats(int units)
+      {
+      return double(units) / LiveClips::UNITS_PER_BEAT;
+      }
+
+int restValue(const SoundLib::LibInstrument* instrument)
+      {
+      std::set<int> used;
+      if (instrument)
+            for (const SoundLib::Articulation& a : instrument->articulations)
+                  used.insert(a.value);
+      for (int v = 0; v < 128; ++v)
+            if (!used.count(v))
+                  return v;
+      return 0;
+      }
+
+LiveSetWriter::Clip switchClip(const Kontakt& kontakt, size_t technique, int length)
+      {
+      LiveSetWriter::Clip clip;
+      const Technique& tq = kontakt.techniques[technique];
+      clip.name = tq.name;
+      clip.end = beats(length);
+      for (const LiveClips::Note& n : tq.notes) {
+            if (n.muted)                  // (not played)
+                  continue;
+            clip.notes.push_back({ n.pitch, beats(n.start), beats(n.length), n.velocity });
+            }
+      const SoundLib::LibInstrument* li = kontakt.instrument;
+      if (!li || tq.value < 0 || (li->switchType != SoundLib::SwitchType::CC && li->switchType != SoundLib::SwitchType::KEYSWITCH))
+            return clip;
+
+      // the runs of this technique's notes: (first start, last start), no other technique's note starting in between
+      std::vector<std::pair<int, size_t>> starts;
+      for (size_t i = 0; i < kontakt.techniques.size(); ++i)
+            for (const LiveClips::Note& n : kontakt.techniques[i].notes)
+                  if (!n.muted)
+                        starts.push_back({ n.start, i });
+      std::sort(starts.begin(), starts.end());
+      std::vector<std::pair<int, int>> runs;
+      size_t previous = kontakt.techniques.size();
+      for (const auto& s : starts) {
+            if (s.second == technique) {
+                  if (previous != technique)
+                        runs.push_back({ s.first, s.first });
+                  runs.back().second = s.first;
+                  }
+            previous = s.second;
+            }
+      if (runs.empty())
+            return clip;
+
+      if (li->switchType == SoundLib::SwitchType::KEYSWITCH) {
+            for (const auto& r : runs)
+                  clip.notes.push_back({ tq.value, beats(std::max(0, r.first - 1)), beats(1), 100 });
+            std::stable_sort(clip.notes.begin(), clip.notes.end(), [](const LiveSetWriter::Clip::Note& a, const LiveSetWriter::Clip::Note& b) {
+                  return a.start < b.start;
+                  });
+            return clip;
+            }
+
+      const int rest = restValue(li);
+      const int v = tq.value;
+      LiveSetWriter::Clip::Envelope e;
+      e.controller = li->switchNumber;
+      std::vector<std::pair<int, int>> points;                // (units, value)
+      points.push_back({ 0, runs.front().first >= 1 ? rest : v });
+      for (const auto& r : runs) {
+            const int on = std::max(0, r.first - 1);
+            if (points.size() > 1 && points.back().first >= on)
+                  points.pop_back();                      // (back to rest no earlier than this switch: stays up)
+            else if (points.size() == 1 && on == 0)
+                  points.back().second = v;               // (at the start: the value before it too)
+            else if (points.back().second == rest) {
+                  points.push_back({ on, rest });
+                  points.push_back({ on, v });
+                  }
+            const int off = r.second + 1;
+            points.push_back({ off, v });
+            points.push_back({ off, rest });
+            }
+      for (const auto& p : points)
+            e.points.push_back({ beats(p.first), double(p.second) });
+      clip.envelopes.push_back(e);
+      return clip;
+      }
+
+std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
+      {
+      std::vector<LiveSetWriter::Track> out;
+      int partNumber = 0;
+      for (const Section& s : layout.sections) {
+            const int sectionIndex = int(out.size());
+            LiveSetWriter::Track sg;
+            sg.name = s.name;
+            sg.group = true;
+            sg.link = false;
+            sg.color = LiveSetWriter::partColor(partNumber);
+            out.push_back(sg);
+            for (const PartTracks& p : s.parts) {
+                  const int color = LiveSetWriter::partColor(partNumber++);
+                  const int partIndex = int(out.size());
+                  LiveSetWriter::Track pg;
+                  pg.name = p.name;
+                  pg.group = true;
+                  pg.link = false;
+                  pg.color = color;
+                  pg.groupIndex = sectionIndex;
+                  out.push_back(pg);
+                  const SoundLib::PartMix mix = SoundLib::partMix(p.part, false);
+                  for (const Kontakt& k : p.kontakts) {
+                        LiveSetWriter::Track kt;
+                        kt.name = LiveSetWriter::trackName(p.name, k.patch, k.patchIndex == 0, 0);
+                        kt.link = false;
+                        kt.color = color;
+                        kt.groupIndex = partIndex;
+                        kt.part = p.name;
+                        kt.patch = k.patch;
+                        kt.mainPatch = k.patchIndex == 0;
+                        kt.instrument = k.instrument;
+                        kt.partRef = p.part;
+                        kt.port = k.port;
+                        kt.channel = k.channel + 1;
+                        kt.routeKey = QString("%1:%2").arg(k.port).arg(kt.channel);
+                        kt.routePatch = k.patchIndex;
+                        kt.volume = LiveSetWriter::mixGain(mix.volume);
+                        kt.pan = LiveSetWriter::mixPan(mix.pan);
+                        kt.active = !mix.muted;
+                        if (!k.lanes.empty()) {
+                              LiveSetWriter::Clip c;
+                              c.name = QObject::tr("Controllers");
+                              c.end = beats(layout.length);
+                              for (const Lane& l : k.lanes) {
+                                    LiveSetWriter::Clip::Envelope e;
+                                    e.controller = l.cc == PITCH_BEND ? LiveSetWriter::PITCH_BEND_ENVELOPE : l.cc;
+                                    for (const auto& pt : l.points)
+                                          e.points.push_back({ beats(pt.first), double(pt.second) });
+                                    c.envelopes.push_back(e);
+                                    }
+                              kt.clips.push_back(c);
+                              }
+                        for (const ParamLane& pl : k.params) {
+                              LiveSetWriter::ParameterAutomation a;
+                              a.name = pl.title;
+                              for (const auto& pt : pl.points)
+                                    a.points.push_back({ beats(pt.first), double(pt.second) });
+                              kt.automation.push_back(a);
+                              }
+                        const int kontaktIndex = int(out.size());
+                        out.push_back(kt);
+                        for (size_t i = 0; i < k.techniques.size(); ++i) {
+                              LiveSetWriter::Track tt;
+                              tt.name = QString("%1 – %2").arg(out[size_t(kontaktIndex)].name, k.techniques[i].name);
+                              tt.link = false;
+                              tt.color = color;
+                              tt.groupIndex = partIndex;
+                              tt.midiTo = kontaktIndex;
+                              tt.part = p.name;
+                              tt.partRef = p.part;
+                              tt.clips.push_back(switchClip(k, i, layout.length));
+                              out.push_back(tt);
+                              }
+                        }
+                  }
+            }
       return out;
       }
 

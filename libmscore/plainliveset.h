@@ -47,6 +47,7 @@
 #include <QString>
 
 #include "liveclips.h"
+#include "livesetwriter.h"
 
 namespace Ms {
 
@@ -127,6 +128,21 @@ QString sectionName(const QString& instrumentId);
 
 Layout layout(const Score* score, const SoundLib::Library& library, const EventMap& events,
               const LiveClips::Timeline& tl);
+
+// the value a technique's switch controller rests at between its notes: the lowest the patch's articulations don't use
+// (see switchClip)
+int restValue(const SoundLib::LibInstrument* instrument);
+
+// a technique's clip, the whole song long: its notes and its switch. The switch goes with the notes: before each run of
+// the technique's notes (no other technique of the Kontakt starting in between) one unit before the run's first note,
+// a CC switch steps from restValue to the technique's value (Live sends a controller envelope's value when it changes)
+// and back to rest one unit after the run's last note starts; a keyswitch is a note one unit long. Times in beats.
+LiveSetWriter::Clip switchClip(const Kontakt& kontakt, size_t technique, int length);
+
+// the set's tracks (LiveSetWriter::Spec::tracks): per section a group, in it a group per part, in that per patch its
+// Kontakt track (the part's Mixer; its lanes in a "Controllers" clip, its parameters as automation; the caller adds the
+// plug-in, as for the routes' tracks) and a track per technique (switchClip, MIDI To the Kontakt)
+std::vector<LiveSetWriter::Track> tracks(const Layout& layout);
 
 }     // namespace PlainLiveSet
 }     // namespace Ms

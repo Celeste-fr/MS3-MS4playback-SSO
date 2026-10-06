@@ -88,6 +88,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveEquivalenceAutomation();
       void liveMarcatoLevel();
       void plainLayout();
+      void plainSet();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -1136,6 +1137,119 @@ void TestLiveEquivalence::plainLayout()
       QCOMPARE(int(k2.techniques.size()), 2);
       QCOMPARE(k2.techniques[1].notes[0].pitch, 76);
       QCOMPARE(k2.techniques[1].notes[0].length, tl.units(480));
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   plainSet
+//    the plain set's tracks (PlainLiveSet::tracks) and their XML: the section a group, the part a group in it, the
+//    Kontakt and a track per technique in that, each technique MIDI To the Kontakt; a technique's switch steps to its
+//    value a unit before each of its runs and back to rest a unit after
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainSet()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Tremolo' value='11' techniques='tremolo'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "<Articulation name='Trill m2' value='70' techniques='trill-m2'/>"
+         "<Articulation name='Trill M2' value='71' techniques='trill-M2'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::LibInstrument* violin = &lib->instruments[0];
+      QCOMPARE(PlainLiveSet::restValue(violin), 0);
+
+      // a hand-made Kontakt: Long at 0 and 960, Spiccato at 480, Long again at 1440 and 1920
+      const int U = LiveClips::UNITS_PER_BEAT;
+      PlainLiveSet::Kontakt k;
+      k.instrument = violin;
+      k.patch = "Violin";
+      PlainLiveSet::Technique lo { "Long", 1, {} }, sp { "Spiccato", 42, {} };
+      for (int at : { 0, 2 * U, 3 * U, 4 * U })
+            lo.notes.push_back({ 60, at, U, 80, false });
+      sp.notes.push_back({ 62, U, U / 2, 90, false });
+      k.techniques = { lo, sp };
+      const LiveSetWriter::Clip cl = PlainLiveSet::switchClip(k, 0, 5 * U);
+      QCOMPARE(int(cl.notes.size()), 4);
+      QCOMPARE(cl.end, 5.0);
+      QCOMPARE(int(cl.envelopes.size()), 1);
+      QCOMPARE(cl.envelopes[0].controller, 32);
+      // value 1 from the start; back to rest after the first run, up again a unit before 2 beats, rest after 4 beats
+      const double u = 1.0 / U;
+      const std::vector<std::pair<double, double>> longPoints {
+            { 0, 1 }, { u, 1 }, { u, 0 }, { 2 - u, 0 }, { 2 - u, 1 }, { 4 + u, 1 }, { 4 + u, 0 } };
+      QCOMPARE(cl.envelopes[0].points, longPoints);
+      const LiveSetWriter::Clip cs = PlainLiveSet::switchClip(k, 1, 5 * U);
+      const std::vector<std::pair<double, double>> spPoints {
+            { 0, 0 }, { 1 - u, 0 }, { 1 - u, 42 }, { 1 + u, 42 }, { 1 + u, 0 } };
+      QCOMPARE(cs.envelopes[0].points, spPoints);
+      QCOMPARE(cs.notes[0].length, 0.5);
+
+      // the score's tracks
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, tl);
+      LiveSetWriter::Spec spec;
+      spec.tracks = PlainLiveSet::tracks(l);
+      const size_t techniques = l.sections[0].parts[0].kontakts[0].techniques.size();
+      QCOMPARE(spec.tracks.size(), 3 + techniques);
+      QVERIFY(spec.tracks[0].group && spec.tracks[0].groupIndex == -1);
+      QCOMPARE(spec.tracks[0].name, QString("Strings"));
+      QVERIFY(spec.tracks[1].group && spec.tracks[1].groupIndex == 0);
+      QVERIFY(!spec.tracks[2].group && spec.tracks[2].groupIndex == 1 && spec.tracks[2].midiTo == -1);
+      QCOMPARE(spec.tracks[2].clips.size(), size_t(1));        // the dynamics
+      for (size_t i = 3; i < spec.tracks.size(); ++i) {
+            QCOMPARE(spec.tracks[i].groupIndex, 1);
+            QCOMPARE(spec.tracks[i].midiTo, 2);
+            QVERIFY(!spec.tracks[i].clips[0].notes.empty());
+            QVERIFY(!spec.tracks[i].link);
+            }
+
+      const QByteArray x = LiveSetWriter::xml(spec);
+      QCOMPARE(LiveSetWriter::validate(x), QString());
+      // each track's Id and its group's, as written
+      QXmlStreamReader r(x);
+      std::vector<std::tuple<QString, int, int>> written;     // (kind, Id, TrackGroupId)
+      int depth = 0, tracksDepth = -1;
+      while (!r.atEnd()) {
+            r.readNext();
+            if (r.isStartElement()) {
+                  ++depth;
+                  if (r.name() == "Tracks")
+                        tracksDepth = depth;
+                  else if (depth == tracksDepth + 1)
+                        written.emplace_back(r.name().toString(), r.attributes().value("Id").toInt(), -2);
+                  else if (r.name() == "TrackGroupId" && !written.empty() && std::get<2>(written.back()) == -2)
+                        std::get<2>(written.back()) = r.attributes().value("Value").toInt();
+                  }
+            else if (r.isEndElement()) {
+                  if (depth == tracksDepth)
+                        tracksDepth = -1;
+                  --depth;
+                  }
+            }
+      QCOMPARE(written.size(), spec.tracks.size());
+      QCOMPARE(std::get<0>(written[0]), QString("GroupTrack"));
+      QCOMPARE(std::get<2>(written[0]), -1);
+      QCOMPARE(std::get<0>(written[1]), QString("GroupTrack"));
+      QCOMPARE(std::get<2>(written[1]), std::get<1>(written[0]));
+      for (size_t i = 2; i < written.size(); ++i) {
+            QCOMPARE(std::get<0>(written[i]), QString("MidiTrack"));
+            QCOMPARE(std::get<2>(written[i]), std::get<1>(written[1]));
+            }
+      QVERIFY(x.contains(QString("MidiOut/Track.%1/DeviceIn.0").arg(std::get<1>(written[2])).toUtf8()));
       delete score;
       SoundLib::setCurrent(nullptr);
       }

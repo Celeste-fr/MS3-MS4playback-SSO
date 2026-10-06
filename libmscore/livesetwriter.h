@@ -89,6 +89,35 @@ struct LinkDevice {
       bool valid() const { return !path.isEmpty(); }
       };
 
+// an arrangement MIDI clip (the plain set: plainliveset.h)
+struct Clip {
+      QString name;
+      double start { 0 };                 // beats in the song
+      double end { 0 };
+      struct Note {
+            int pitch { 60 };
+            double start { 0 };           // beats from the clip's start
+            double length { 0 };
+            int velocity { 100 };
+            };
+      std::vector<Note> notes;
+      // a MIDI controller's envelope in the clip: (beats from the clip's start, value), by time; the first point's value
+      // is the value before it too; two points at one time are a step
+      struct Envelope {
+            int controller { 0 };         // the CC; PITCH_BEND_ENVELOPE: the bend (0-16383)
+            std::vector<std::pair<double, double>> points;
+            };
+      std::vector<Envelope> envelopes;
+      };
+constexpr int PITCH_BEND_ENVELOPE = -1;
+
+// the automation of a parameter of the track's plug-in (in Plugin::parameters by its name: the export adds the ones
+// automated): (beats in the song, value 0-1), by time
+struct ParameterAutomation {
+      QString name;
+      std::vector<std::pair<double, double>> points;
+      };
+
 struct Track {
       QString name;
       QString portName;                   // MIDI From: "MuseScore A" …; "" : All Ins
@@ -111,6 +140,13 @@ struct Track {
       std::vector<LinkLane> linkLanes;
       quint32 linkHash { 0 };
       double linkLength { 0 };            // the song's length in beats
+      // the plain set (plainliveset.h)
+      bool group { false };               // a group track: no devices, no clips
+      int groupIndex { -1 };              // the group it is in (its index in Spec::tracks, before this one); -1: none
+      bool unfolded { true };             // a group: its tracks shown
+      int midiTo { -1 };                  // MIDI To: the track (its index in Spec::tracks) whose plug-in plays this one's MIDI
+      std::vector<Clip> clips;            // arrangement clips, by start, not overlapping
+      std::vector<ParameterAutomation> automation;
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name
@@ -135,6 +171,8 @@ struct Spec {
 // A-D as Live shows them, "" when not set), a colour per part; with the device, without a plug-in (the
 // caller adds each patch's)
 std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, const QStringList& portNames);
+// Live's colour (0-69) of the n-th part: a few steps apart in Live's colour chooser
+int partColor(int n);
 // the song: the score's first tempo (as "Live plays the score" plays it: LiveClips::timeline) and time signature
 void setSong(const Score* score, Spec* spec);
 
@@ -144,7 +182,8 @@ extern const char* const MINOR_VERSION;
 
 QByteArray xml(const Spec& spec, int* nextPointeeId = nullptr);
 // Live's bookkeeping checked in a set's XML (write() checks what it writes): well formed; every pointee id
-// unique and below NextPointeeId; each track's MainSequencer and FreezeSequencer with one clip slot per scene;
+// unique and below NextPointeeId; each track's MainSequencer and FreezeSequencer with one clip slot per scene (a
+// group track's Slots one group slot per scene); a track in a group after its group;
 // a track's devices with different ids. "" : fine, else the first problem
 QString validate(const QByteArray& xml);
 QByteArray gzip(const QByteArray& data);

@@ -22,6 +22,7 @@
 #include <zlib.h>
 
 #include "liveclips.h"
+#include "livesetxml.h"
 #include "liveset.h"
 #include "part.h"
 #include "score.h"
@@ -39,302 +40,6 @@ static const int SCENES = 8;                      // a new set's
 static const int PLUGIN_PARAMETER_SLOTS = 128;    // Live's placeholders for a plug-in's configured parameters
 
 namespace {
-
-//---------------------------------------------------------
-//   Writer
-//    Live's layout: tabs, CRLF, "<Tag Value="…" />", empty elements "<Tag />"
-//---------------------------------------------------------
-
-class Writer {
-      QByteArray _b;
-      int _depth { 0 };
-      int _nextId { 1 };            // the pointee ids
-
-      void indent() { _b.append(QByteArray(_depth, '\t')); }
-
-   public:
-      Writer() { _b.reserve(1 << 20); }
-      QByteArray& data() { return _b; }
-      int nextId() const { return _nextId; }
-      int id() { return _nextId++; }
-
-      static QByteArray esc(const QString& s)
-            {
-            QString r;
-            r.reserve(s.size());
-            for (const QChar c : s) {
-                  switch (c.unicode()) {
-                        case '&': r += "&amp;"; break;
-                        case '<': r += "&lt;"; break;
-                        case '>': r += "&gt;"; break;
-                        case '"': r += "&quot;"; break;
-                        case '\'': r += "&apos;"; break;
-                        default:
-                              if (c.unicode() < 0x20 && c != '\t')
-                                    r += QString("&#x%1;").arg(int(c.unicode()), 0, 16);
-                              else
-                                    r += c;
-                        }
-                  }
-            return r.toUtf8();
-            }
-
-      void raw(const QByteArray& line) { indent(); _b.append(line); _b.append("\r\n"); }
-      void open(const char* tag, const QByteArray& attrs = QByteArray())
-            {
-            raw(QByteArray("<") + tag + (attrs.isEmpty() ? QByteArray() : " " + attrs) + ">");
-            ++_depth;
-            }
-      void close(const char* tag) { --_depth; raw(QByteArray("</") + tag + ">"); }
-      void empty(const char* tag, const QByteArray& attrs = QByteArray())
-            {
-            raw(QByteArray("<") + tag + " " + (attrs.isEmpty() ? QByteArray() : attrs + " ") + "/>");
-            }
-      void value(const char* tag, const QString& v) { empty(tag, "Value=\"" + esc(v) + "\""); }
-      void value(const char* tag, const char* v) { value(tag, QString::fromUtf8(v)); }
-      void value(const char* tag, int v) { value(tag, QString::number(v)); }
-      void value(const char* tag, qint64 v) { value(tag, QString::number(v)); }
-      void value(const char* tag, bool v) { value(tag, v ? "true" : "false"); }
-      void number(const char* tag, double v) { value(tag, num(v)); }
-      void lom(const char* tag) { empty(tag, "LomId=\"0\""); }
-      static QString num(double v)
-            {
-            if (v == std::floor(v) && std::fabs(v) < 1e15)
-                  return QString::number(qint64(v));
-            return QString::number(v, 'g', 10);
-            }
-      // binary data as Live writes it: upper-case hex, 40 bytes a line
-      void hex(const char* tag, const QByteArray& data)
-            {
-            if (data.isEmpty()) {
-                  empty(tag);
-                  return;
-                  }
-            open(tag);
-            const QByteArray h = data.toHex().toUpper();
-            for (int i = 0; i < h.size(); i += 80)
-                  raw(h.mid(i, 80));
-            close(tag);
-            }
-
-      //---------------------------------------------------------
-      //   Live's recurring pieces
-      //---------------------------------------------------------
-
-      void target(const char* tag, int fixedId = 0)   // an AutomationTarget, a ModulationTarget …
-            {
-            open(tag, "Id=\"" + QByteArray::number(fixedId ? fixedId : id()) + "\"");
-            value("LockEnvelope", 0);
-            close(tag);
-            }
-      void range(const char* tag, const QString& min, const QString& max)
-            {
-            open(tag);
-            value("Min", min);
-            value("Max", max);
-            close(tag);
-            }
-      // an on / off switch (a device's On, the Mixer's Speaker)
-      void onOff(const char* tag, bool on = true)
-            {
-            open(tag);
-            value("LomId", 0);
-            value("Manual", on);
-            target("AutomationTarget");
-            range("MidiCCOnOffThresholds", "64", "127");
-            close(tag);
-            }
-      // a continuous parameter (volume, pan …)
-      void param(const char* tag, const QString& manual, const QString& min, const QString& max, bool modulation = true,
-                 int targetId = 0)
-            {
-            open(tag);
-            value("LomId", 0);
-            value("Manual", manual);
-            range("MidiControllerRange", min, max);
-            target("AutomationTarget", targetId);
-            if (modulation)
-                  target("ModulationTarget");
-            close(tag);
-            }
-      // one whose range comes after its target (the crossfade assignment, the time signature)
-      void paramRangeAfter(const char* tag, const QString& manual, const QString& min, const QString& max, int targetId = 0)
-            {
-            open(tag);
-            value("LomId", 0);
-            value("Manual", manual);
-            target("AutomationTarget", targetId);
-            range("MidiControllerRange", min, max);
-            close(tag);
-            }
-      void routing(const char* tag, const QString& target, const QString& upper, const QString& lower)
-            {
-            open(tag);
-            value("Target", target);
-            value("UpperDisplayString", upper);
-            value("LowerDisplayString", lower);
-            mpeSettings();
-            value("MpePitchBendUsesTuning", true);
-            close(tag);
-            }
-      void mpeSettings()
-            {
-            open("MpeSettings");
-            value("ZoneType", 0);
-            value("FirstNoteChannel", 1);
-            value("LastNoteChannel", 15);
-            close("MpeSettings");
-            }
-      void emptyValue(const char* tag)                // <Tag><Value /></Tag>
-            {
-            open(tag);
-            empty("Value");
-            close(tag);
-            }
-      // what every device (and a track's mixer and sequencers) starts with
-      void deviceHeader(bool expanded, bool showPresetName)
-            {
-            value("LomId", 0);
-            value("LomIdView", 0);
-            value("IsExpanded", expanded);
-            value("BreakoutIsExpanded", false);
-            onOff("On");
-            value("ModulationSourceCount", 0);
-            lom("ParametersListWrapper");
-            empty("Pointee", "Id=\"" + QByteArray::number(id()) + "\"");
-            value("LastSelectedTimeableIndex", 0);
-            value("LastSelectedClipEnvelopeIndex", 0);
-            emptyValue("LastPresetRef");
-            empty("LockedScripts");
-            value("IsFolded", false);
-            value("ShouldShowPresetName", showPresetName);
-            value("UserName", "");
-            value("Annotation", "");
-            emptyValue("SourceContext");
-            value("MpePitchBendUsesTuning", true);
-            }
-      void arrangerAutomation(const char* tag)
-            {
-            open(tag);
-            open("ArrangerAutomation");
-            empty("Events");
-            open("AutomationTransformViewState");
-            value("IsTransformPending", false);
-            empty("TimeAndValueTransforms");
-            close("AutomationTransformViewState");
-            close("ArrangerAutomation");
-            close(tag);
-            }
-      void clipSlots(int n)
-            {
-            if (!n) {
-                  empty("ClipSlotList");
-                  return;
-                  }
-            open("ClipSlotList");
-            for (int i = 0; i < n; ++i) {
-                  open("ClipSlot", "Id=\"" + QByteArray::number(i) + "\"");
-                  value("LomId", 0);
-                  emptyValue("ClipSlot");
-                  value("HasStop", true);
-                  value("NeedRefreeze", true);
-                  close("ClipSlot");
-                  }
-            close("ClipSlotList");
-            }
-      void recorder(int takeCounter)
-            {
-            open("Recorder");
-            value("IsArmed", false);
-            value("TakeCounter", takeCounter);
-            close("Recorder");
-            }
-      // the audio sequencer's modulation targets and view state (a track's FreezeSequencer, the main track's)
-      void sampleSequencerTail()
-            {
-            arrangerAutomation("Sample");
-            target("VolumeModulationTarget");
-            target("TranspositionModulationTarget");
-            target("TransientEnvelopeModulationTarget");
-            target("GrainSizeModulationTarget");
-            target("FluxModulationTarget");
-            target("SampleOffsetModulationTarget");
-            target("ComplexProFormantsModulationTarget");
-            target("ComplexProEnvelopeModulationTarget");
-            value("PitchViewScrollPosition", -1073741824);
-            value("SampleOffsetModulationScrollPosition", -1073741824);
-            recorder(1);
-            }
-      void trackHead(const QString& effectiveName, const QString& userName, int color)
-            {
-            value("LomId", 0);
-            value("LomIdView", 0);
-            value("IsContentSelectedInDocument", false);
-            value("PreferredContentViewMode", 0);
-            open("TrackDelay");
-            value("Value", 0);
-            value("IsValueSampleBased", false);
-            close("TrackDelay");
-            open("Name");
-            value("EffectiveName", effectiveName);
-            value("UserName", userName);
-            value("Annotation", "");
-            value("MemorizedFirstClipName", "");
-            close("Name");
-            value("Color", color);
-            }
-      void trackLists(bool unfolded)
-            {
-            value("TrackGroupId", -1);
-            value("TrackUnfolded", unfolded);
-            lom("DevicesListWrapper");
-            lom("ClipSlotsListWrapper");
-            lom("ArrangementClipsListWrapper");
-            lom("TakeLanesListWrapper");
-            value("ViewData", "{}");
-            open("TakeLanes");
-            empty("TakeLanes");
-            value("AreTakeLanesFolded", true);
-            close("TakeLanes");
-            value("LinkedTrackGroupId", -1);
-            }
-      void automationLanes(int laneHeight)
-            {
-            open("AutomationLanes");
-            open("AutomationLanes");
-            open("AutomationLane", "Id=\"0\"");
-            value("SelectedDevice", 0);
-            value("SelectedEnvelope", 0);
-            value("IsContentSelectedInDocument", false);
-            value("LaneHeight", laneHeight);
-            close("AutomationLane");
-            close("AutomationLanes");
-            value("AreAdditionalAutomationLanesFolded", false);
-            close("AutomationLanes");
-            open("ClipEnvelopeChooserViewState");
-            value("SelectedDevice", 0);
-            value("SelectedEnvelope", 0);
-            value("PreferModulationVisible", false);
-            close("ClipEnvelopeChooserViewState");
-            }
-      // a track's mixer, up to its SendsListWrapper (the main track's goes on with the song's tempo …)
-      // (speaker: the Track Activator, off = the track muted; pan -1 … 1, volume a linear gain, 1 = 0 dB)
-      void mixerStart(double volume, int trackWidth, double pan = 0, bool speaker = true)
-            {
-            deviceHeader(true, false);
-            empty("Sends");                         // (no return tracks)
-            onOff("Speaker", speaker);
-            value("SoloSink", false);
-            value("PanMode", 0);
-            param("Pan", num(pan), "-1", "1");
-            param("SplitStereoPanL", "-1", "-1", "1");
-            param("SplitStereoPanR", "1", "-1", "1");
-            param("Volume", num(volume), "0.0003162277571", "1.99526238");
-            value("ViewStateSessionTrackWidth", trackWidth);
-            paramRangeAfter("CrossFadeState", "1", "0", "2");
-            lom("SendsListWrapper");
-            }
-      };
 
 //---------------------------------------------------------
 //   the devices
@@ -407,7 +112,7 @@ void uid(Writer& w, const Plugin& p)
       w.close("Uid");
       }
 
-void pluginDevice(Writer& w, const Plugin& p, int listId)
+void pluginDevice(Writer& w, const Plugin& p, int listId, const std::vector<int>& parameterTargets)
       {
       w.open("PluginDevice", "Id=\"" + QByteArray::number(listId) + "\"");
       w.deviceHeader(false, true);
@@ -459,7 +164,8 @@ void pluginDevice(Writer& w, const Plugin& p, int listId)
             w.value("ParameterId", used ? int(p.parameters[size_t(i)].id) : -1);
             w.value("ParameterIdFlankBool", false);
             w.value("VisualIndex", used ? i : 1073741823);
-            w.param("ParameterValue", used ? Writer::num(float(p.parameters[size_t(i)].value)) : QString("0.1234567687"), "0", "1");
+            w.param("ParameterValue", used ? Writer::num(float(p.parameters[size_t(i)].value)) : QString("0.1234567687"), "0", "1",
+                    true, used && size_t(i) < parameterTargets.size() ? parameterTargets[size_t(i)] : 0);
             w.open("LastUserRange");
             if (used) {
                   w.value("First", 0);
@@ -494,14 +200,25 @@ void pluginDevice(Writer& w, const Plugin& p, int listId)
 //   tracks
 //---------------------------------------------------------
 
-void midiTrack(Writer& w, const Track& t, int trackId, const LinkDevice& link)
+// a track's Id in the set: its index in Spec::tracks + 1 (a group's too: they share the numbering); -1: none
+static int trackIdOf(int index)
       {
-      w.open("MidiTrack", "Id=\"" + QByteArray::number(trackId) + "\" SelectedToolPanel=\"7\" SelectedTransformationName=\"\" SelectedGeneratorName=\"\"");
+      return index >= 0 ? index + 1 : -1;
+      }
+
+void midiTrack(Writer& w, const Spec& spec, int index)
+      {
+      const Track& t = spec.tracks[size_t(index)];
+      const LinkDevice& link = spec.link;
+      w.open("MidiTrack", "Id=\"" + QByteArray::number(trackIdOf(index)) + "\" SelectedToolPanel=\"7\" SelectedTransformationName=\"\" SelectedGeneratorName=\"\"");
       w.trackHead(t.name, t.name, t.color);
-      w.open("AutomationEnvelopes");
-      w.empty("Envelopes");
-      w.close("AutomationEnvelopes");
-      w.trackLists(true);
+      // the plug-in parameters' automation targets, known before the envelopes pointing at them
+      std::vector<int> parameterTargets;
+      if (t.hasPlugin)
+            for (size_t i = 0; i < t.plugin.parameters.size(); ++i)
+                  parameterTargets.push_back(w.id());
+      automationEnvelopes(w, t, parameterTargets);
+      w.trackLists(true, trackIdOf(t.groupIndex));
       w.value("SavedPlayingSlot", -1);
       w.value("SavedPlayingOffset", 0);
       w.value("Freeze", false);
@@ -518,8 +235,16 @@ void midiTrack(Writer& w, const Track& t, int trackId, const LinkDevice& link)
                       QString("Ch. %1").arg(t.channel));
       else
             w.routing("MidiInputRouting", "MidiIn/External.All/-1", "Ext: All Ins", "");
-      w.routing("AudioOutputRouting", "AudioOut/Main", "Master", "");
-      w.routing("MidiOutputRouting", "MidiOut/None", "None", "");
+      if (t.groupIndex >= 0)
+            w.routing("AudioOutputRouting", "AudioOut/GroupTrack", "Group", "");
+      else
+            w.routing("AudioOutputRouting", "AudioOut/Main", "Master", "");
+      if (t.midiTo >= 0 && t.midiTo < int(spec.tracks.size())) {
+            const Track& to = spec.tracks[size_t(t.midiTo)];
+            midiToRouting(w, trackIdOf(t.midiTo), to.name, to.hasPlugin ? to.plugin.name : QString());
+            }
+      else
+            w.routing("MidiOutputRouting", "MidiOut/None", "None", "");
       w.open("Mixer");
       w.mixerStart(t.volume, 93, t.pan, t.active);
       w.close("Mixer");
@@ -529,12 +254,16 @@ void midiTrack(Writer& w, const Track& t, int trackId, const LinkDevice& link)
       w.clipSlots(SCENES);
       w.value("MonitoringEnum", 1);                   // Auto: the clips play (the device sets it too)
       w.value("KeepRecordMonitoringLatency", true);
-      w.arrangerAutomation("ClipTimeable");
+      // the MIDI controllers' ids, known before the clip envelopes pointing at them
+      std::vector<int> controllerTargets;
+      for (int i = 0; i < CONTROLLER_TARGETS; ++i)
+            controllerTargets.push_back(w.id());
+      clipTimeable(w, t, controllerTargets);
       w.recorder(0);
       w.open("MidiControllers");
-      for (int i = 0; i <= 130; ++i) {                // pitch bend, pressure, CC 0-127, …
+      for (int i = 0; i < CONTROLLER_TARGETS; ++i) {
             const QByteArray tag = "ControllerTargets." + QByteArray::number(i);
-            w.open(tag.constData(), "Id=\"" + QByteArray::number(w.id()) + "\"");
+            w.open(tag.constData(), "Id=\"" + QByteArray::number(controllerTargets[size_t(i)]) + "\"");
             w.value("LockEnvelope", (i == 1 || i == 11 || i == 66) ? 1 : 0);    // (as Live writes a new track's)
             w.close(tag.constData());
             }
@@ -558,7 +287,7 @@ void midiTrack(Writer& w, const Track& t, int trackId, const LinkDevice& link)
             if (t.link && link.valid())
                   linkDevice(w, link, n++, t);
             if (t.hasPlugin)
-                  pluginDevice(w, t.plugin, n++);
+                  pluginDevice(w, t.plugin, n++, parameterTargets);
             w.close("Devices");
             }
       w.empty("SignalModulations");
@@ -982,9 +711,13 @@ QByteArray xml(const Spec& spec, int* nextPointeeId)
             w.empty("Tracks");
       else {
             w.open("Tracks");
-            int trackId = 1;
-            for (const Track& t : spec.tracks)
-                  midiTrack(w, t, trackId++, spec.link);
+            for (int i = 0; i < int(spec.tracks.size()); ++i) {
+                  const Track& t = spec.tracks[size_t(i)];
+                  if (t.group)
+                        groupTrack(w, t, trackIdOf(i), trackIdOf(t.groupIndex), SCENES);
+                  else
+                        midiTrack(w, spec, i);
+                  }
             w.close("Tracks");
             }
       mainTrack(w, tempo, ts);
@@ -1147,7 +880,8 @@ QString validate(const QByteArray& data)
       int next = -1;
       std::set<int> ids;
       int scenes = -1;
-      std::vector<int> slotLists;         // clip slots in each MainSequencer / FreezeSequencer of a MidiTrack
+      std::vector<int> slotLists;         // clip slots in each MainSequencer / FreezeSequencer of a MidiTrack, a GroupTrack's slots
+      std::set<int> groups;               // the group tracks' ids so far
       std::vector<QString> path;
       std::vector<std::set<QString>> deviceIds;
       int slotCount = 0;
@@ -1173,6 +907,17 @@ QString validate(const QByteArray& data)
                         slotCount = 0;
                   if (tag == "ClipSlot" && parent == "ClipSlotList")
                         ++slotCount;
+                  if (tag == "Slots" && parent == "GroupTrack")
+                        slotCount = 0;
+                  if (tag == "GroupTrackSlot" && parent == "Slots")
+                        ++slotCount;
+                  if (tag == "GroupTrack" && parent == "Tracks")
+                        groups.insert(a.value("Id").toInt());
+                  if (tag == "TrackGroupId" && (parent == "MidiTrack" || parent == "GroupTrack")) {
+                        const int g = a.value("Value").toInt();
+                        if (g != -1 && !groups.count(g))
+                              return QString("a track in group %1 before the group").arg(g);
+                        }
                   if (tag == "Devices")
                         deviceIds.emplace_back();
                   if (parent == "Devices" && !deviceIds.empty() && !deviceIds.back().insert(a.value("Id").toString()).second)
@@ -1185,6 +930,8 @@ QString validate(const QByteArray& data)
                         if (owner == "MainSequencer" || owner == "FreezeSequencer")
                               slotLists.push_back(slotCount);
                         }
+                  if (r.name() == "Slots" && path.size() >= 2 && path[path.size() - 2] == "GroupTrack")
+                        slotLists.push_back(slotCount);
                   if (r.name() == "Devices")
                         deviceIds.pop_back();
                   path.pop_back();
@@ -1235,9 +982,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
       std::vector<Track> out;
       if (!score)
             return out;
-      // Live's colour chooser, a colour per part, every few steps apart (0-69)
-      static const int colors[] = { 0, 3, 5, 9, 12, 15, 17, 20, 24, 26, 30, 33, 36, 39, 42, 45, 48, 52, 56, 60 };
-      std::map<const Part*, int> partColor;
+      std::map<const Part*, int> colorOf;
       for (const SoundLib::Route& r : SoundLib::routes(score, library)) {
             Track t;
             t.part = r.part ? r.part->partName() : QString();
@@ -1248,11 +993,9 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             t.channel = r.channel + 1;
             t.routeKey = QString("%1:%2").arg(r.port).arg(t.channel);
             t.portName = r.port < portNames.size() ? portNames[r.port] : QString();
-            if (!partColor.count(r.part)) {
-                  const int n = int(partColor.size());
-                  partColor[r.part] = colors[n % int(sizeof(colors) / sizeof(colors[0]))];
-                  }
-            t.color = partColor[r.part];
+            if (!colorOf.count(r.part))
+                  colorOf[r.part] = partColor(int(colorOf.size()));
+            t.color = colorOf[r.part];
             t.partRef = r.part;
             t.port = r.port;
             t.routePatch = r.patch;
@@ -1265,6 +1008,13 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             out.push_back(t);
             }
       return out;
+      }
+
+int partColor(int n)
+      {
+      // Live's colour chooser, a colour per part, every few steps apart (0-69)
+      static const int colors[] = { 0, 3, 5, 9, 12, 15, 17, 20, 24, 26, 30, 33, 36, 39, 42, 45, 48, 52, 56, 60 };
+      return colors[std::max(0, n) % int(sizeof(colors) / sizeof(colors[0]))];
       }
 
 void setSong(const Score* score, Spec* spec)
