@@ -30,7 +30,9 @@ namespace Playback {
 static const double MAP = std::numeric_limits<double>::quiet_NaN();
 
 // every adjustment this fork makes beyond MuseScore 4's playback that is a number (docs/PLAYBACK_SETTINGS.md
-// has where each one acts and how it was measured)
+// has where each one acts and how it was measured). The automatic timing and level adjustments (early starts,
+// phrase gaps, pedal timing, calibrated short velocities) are off by default since 2026-10-06 (the owner: notes
+// play as written, timing and levels are adjusted in Live); their measured values stay one setting away
 static const std::vector<Definition> DEFINITIONS = {
       // [legato]
       // (measured, numbers-measured 2026-10-03: SSO's 43 Performance patches play a legato transition whenever the note
@@ -44,8 +46,8 @@ static const std::vector<Definition> DEFINITIONS = {
       // up to a 20 ms gap, does so for 80 of 336 at 40 ms and for none from 60 ms; 60 is the smallest gap with no
       // transition. The owner, 2026-10-04: phrases separate. Only where SSO would join: a note on a legato patch that is
       // no transition, after a note on the same route)
-      { "legato/phraseGapMs", 60, 0, 500, "ms",
-        "a note on a legato patch that is no legato transition (a slur's end, a phrase mark, a detached note) starts at least this long after the note before on its patch ends, so it gets its own attack (0: off)", true },
+      { "legato/phraseGapMs", 0, 0, 500, "ms",
+        "a note on a legato patch that is no legato transition (a slur's end, a phrase mark, a detached note) starts at least this long after the note before on its patch ends, so it gets its own attack (0: off; measured: 60)", true },
       { "legato/early", MAP, 0, 200, "%",
         "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
       // (keepMs chosen by a sweep, numbers-measured 2026-10-03: 0 / 20 / 40 / 60 / 80 / 120 ms on make_fastrun_scores.py's
@@ -61,7 +63,7 @@ static const std::vector<Definition> DEFINITIONS = {
       { "legato/fastFullMs", 380, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
       { "legato/fastTechnique", 0, 0, 1, "on/off",
         "1: a slurred note after a note too short for the transition into it plays its own attack (early as the transition would be) instead of a legato transition", true },
-      { "legato/fastFirsts", 1, 0, 1, "on/off",
+      { "legato/fastFirsts", 0, 0, 1, "on/off",
         "1: a slur's first note right after a note too short for a transition (same patch, no rest) starts as early as that transition would", true },
       { "legato/fastBelowShare", 100, 0, 400, "%",
         "too short: shorter than this share of the transition's delay (the patch's measured delay, after fastShare / fastFullMs)", true },
@@ -78,6 +80,9 @@ static const std::vector<Definition> DEFINITIONS = {
       { "heldNotes/early", MAP, 0, 200, "%",
         "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },
       // [shorts]
+      { "shorts/calibratedVelocity", 0, 0, 1, "on/off",
+        "1: a short plays at the velocity at which it is as loud as the part's held note (Check articulations › Dynamics, "
+        "dynamics.json, with the Advanced Options' balance); 0: at the dynamic's velocity (the map's <Dynamics velocity>)", true },
       { "shorts/byMeantLength", 1, 0, 1, "on/off",
         "1: a short with a measured from= is chosen by how long the note is meant to sound (written length times the factors below); 0: by its written length", true },
       { "shorts/staccato", 50, 1, 100, "%",
@@ -86,9 +91,10 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/tenuto", 99, 1, 100, "%", "the same for tenuto", true },
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
       // [pedal]
-      { "pedal/upAfterMs", 40, 0, 1000, "ms",
-        "a sound library part's sustain pedal goes up this long after the chord it changes with", true },
-      { "pedal/downAfterMs", 90, 0, 1000, "ms", "and down again this long after it", true },
+      { "pedal/upAfterMs", 0, 0, 1000, "ms",
+        "a sound library part's sustain pedal goes up this long after the chord it changes with (0: one tick after, so the "
+        "chord still sounds; a pianist's: 40)", true },
+      { "pedal/downAfterMs", 0, 0, 1000, "ms", "and down again this long after it (0: one tick; a pianist's: 90)", true },
       { "pedal/upMaxShare", 25, 0, 100, "%", "the pedal goes up at most this share of the next pedal's length after its chord", true },
       { "pedal/downMaxShare", 50, 0, 100, "%", "it goes down at most this share of its own length after its start", true },
       // [notes]

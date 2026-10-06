@@ -37,11 +37,11 @@
   <Tuning method="varispeed"/>
   <!-- a slurred note on a legato articulation (legatoDelay=, a legato transition; none in this map: the owner
        plays no Performance patch) reaches its pitch legatoDelay ms after its note-on: it starts early by that
-       times early percent -->
-  <Legato early="100"/>
+       times early percent (0: notes start as written, the owner 2026-10-06; 100: as measured) -->
+  <Legato early="0"/>
   <!-- a held note that is no legato transition (slurred or not) is heard onset ms after its note-on
-       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent -->
-  <Onset early="100"/>
+       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent (0: as written) -->
+  <Onset early="0"/>
   <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>
   <Files registry="Spitfire Symphony Orchestra"/>
   <Instrument name="Violins 1" ids="violins" nki="Instruments/Symphonic Strings/Violins 1 - All techniques.nki" setup="$iooxo=3" pitch="76">

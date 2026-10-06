@@ -1235,11 +1235,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         events->registerChannel(libChannel);
                   const std::vector<const SoundLib::LibInstrument*> libPatches = li ? lp->patchesFor(li)
                                                                                      : std::vector<const SoundLib::LibInstrument*>();
-                  // a short (Spitfire: velocity, not CC1, sets its dynamics): measured (Check articulations ›
-                  // Dynamics), the velocity at which it is as loud as the part's held note at this dynamic;
+                  // a short (Spitfire: velocity, not CC1, sets its dynamics): with [shorts] calibratedVelocity (off by
+                  // default since 2026-10-06), measured (Check articulations › Dynamics), the velocity at which it is as loud as the part's held note at this dynamic;
                   // else, listed in <Dynamics velocity>, its level on the CC's scale. An accent's share
                   // (levelVelocity over the plain level) on top. -1: MS4's velocity
                   const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::dynamicsCalibration() : nullptr;
+                  const bool calibrated = cal && Playback::on("shorts/calibratedVelocity", score);
                   auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
                         if (!c)
                               return -1;
@@ -1249,7 +1250,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // library's own, plus the Marcato level offset, marcatoLevel)
                         const bool marcato = std::find(r.arts.begin(), r.arts.end(), Ms4::Art::Marcato) != r.arts.end();
                         const double accent = level > 0 && !marcato ? double(r.levelVelocity) / level : 1.0;
-                        if (cal) {
+                        if (calibrated) {
                               const SoundLib::Choice held = SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} });
                               if (held) {
                                     // as loud as the held note plays: at the dynamics CC even steps send
@@ -3084,11 +3085,11 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                   const int to = pc->second.dynamics.spannerStop(s);
                   if (to <= from)
                         continue;
-                  // a sound library part: a pedal change after the chord it comes with, as a pianist
-                  // changes it (legato pedalling: up 40 ms after the chord, down again at 90 ms). The
-                  // owner, 2026-09-28: SSO's Grand Piano dropped about 1 chord in 8 at a pedal change
-                  // (28 of 220, 1 of 2442 elsewhere, in a piano piece's export), the pedal lifted a tick
-                  // before the chord and put down with it
+                  // a sound library part: a pedal change after the chord it comes with ([pedal] upAfterMs /
+                  // downAfterMs: one tick by default since 2026-10-06; a pianist's legato pedalling: up 40 ms
+                  // after the chord, down again at 90 ms). The owner, 2026-09-28: SSO's Grand Piano dropped
+                  // about 1 chord in 8 at a pedal change (28 of 220, 1 of 2442 elsewhere, in a piano piece's
+                  // export), the pedal lifted a tick before the chord and put down with it
                   int down = from;
                   int up = to;
                   if (libParts.count(s->part())) {
@@ -3112,9 +3113,12 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               if (oFrom > from && (oFrom == to + 1 || oFrom == to))
                                     next = o.second;
                               }
+                        // (down at least a tick after the previous pedal's up, which comes upAfterMs after this chord: both
+                        // 0 ms, up one tick after the chord, down the tick after)
                         if (prev)
-                              down = from + std::min(after(from, Playback::value("pedal/downAfterMs", score)),
-                                                     std::max(1, int((to - from) * Playback::value("pedal/downMaxShare", score) / 100.0)));
+                              down = from + std::max(std::min(after(from, Playback::value("pedal/downAfterMs", score)),
+                                                              std::max(1, int((to - from) * Playback::value("pedal/downMaxShare", score) / 100.0))),
+                                                     after(from, Playback::value("pedal/upAfterMs", score)) + 1);
                         // the chord it goes up with: the next pedal's, else one of the part's starting where
                         // this one ends (up to 5 ticks on; the owner, 2026-09-28: a chord where a pedal ended,
                         // not a change, was missing too, the pedal up at its tick)

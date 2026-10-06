@@ -776,9 +776,11 @@ void TestSoundLibrary::render()
 
 // The legato timing the render tests below were computed with: the overlap and the fast-note share before
 // numbers-measured (2026-10-03: overlapTicks 0, fastShare 50 %, fastFullMs 380 ms measured). They test the
-// mechanism, so they keep their numbers; playbackSettingsIni / Layers check the defaults.
+// mechanism, so they keep their numbers; playbackSettingsIni / Layers check the defaults. fastFirsts: on as before
+// 2026-10-06 (off by default since: no automatic adjustments).
 static const std::map<QString, QString> OLD_TIMING = { { "legato/overlapTicks", "30" }, { "legato/fastShare", "65" },
-                                                       { "legato/fastFullMs", "800" }, { "legato/phraseGapMs", "0" } };
+                                                       { "legato/fastFullMs", "800" }, { "legato/phraseGapMs", "0" },
+                                                       { "legato/fastFirsts", "1" } };
 static std::map<QString, QString> withOld(std::map<QString, QString> m)
       {
       for (const auto& v : OLD_TIMING)
@@ -1148,9 +1150,15 @@ void TestSoundLibrary::phraseGap()
       QCOMPARE(off[4].on, 4 * Q);
       QCOMPARE(off[3].channel, off[4].channel);                 // (both on the legato patch's route)
       QVERIFY2(off[3].off > 4 * Q - 29, qPrintable(QString::number(off[3].off)));
-      // the measured default, 60 ms: F5 ends 29 ticks before G5; the slurred notes before keep MS4's end (overlapTicks 0:
-      // 5 ticks, ~10 ms, before the next: SSO joins them), not cut back by the gap
+      // the default since 2026-10-06 is off (notes as written)
       Playback::setIniValuesForTest({});
+      std::vector<N> byDefault = render();
+      QCOMPARE(int(byDefault.size()), int(off.size()));
+      for (size_t i = 0; i < off.size(); ++i)
+            QCOMPARE(byDefault[i].off, off[i].off);
+      // the measured value, 60 ms: F5 ends 29 ticks before G5; the slurred notes before keep MS4's end (overlapTicks 0:
+      // 5 ticks, ~10 ms, before the next: SSO joins them), not cut back by the gap
+      Playback::setIniValuesForTest({ { "legato/phraseGapMs", "60" } });
       std::vector<N> gap = render();
       QCOMPARE(int(gap.size()), int(off.size()));
       QCOMPARE(gap[4].on, 4 * Q);
@@ -4625,6 +4633,7 @@ void TestSoundLibrary::evenDynamicSteps()
       QVERIFY(lib);
       SoundLib::setCurrent(lib);
       SoundLib::setDynamicsCalibration(back);
+      Playback::setIniValuesForTest({ { "shorts/calibratedVelocity", "1" } });     // (off by default since 2026-10-06)
       MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
@@ -4674,6 +4683,7 @@ void TestSoundLibrary::evenDynamicSteps()
       QCOMPARE(rec[3].velo, SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, rec[3].cc1));
       QVERIFY(rec[3].velo < off[3].velo);
       SoundLib::setDynamicsCalibration(nullptr);
+      Playback::setIniValuesForTest({});
       delete score;
       }
 
@@ -4695,43 +4705,54 @@ void TestSoundLibrary::pedalChangeAfterChord()
                "</Instrument></SoundLibrary>");
             QVERIFY(lib);
             SoundLib::setCurrent(withLibrary ? lib : nullptr);
-            MasterScore* score = readScore(DIR + "pedal-change.musicxml");
-            QVERIFY(score);
-            score->rebuildMidiMapping();
-            const int ch = score->parts()[0]->instrument()->channel(0)->channel();
-            EventMap events;
-            SynthesizerState ss;
-            score->renderMidi(&events, false, true, ss);
-            std::vector<std::pair<int, int>> pedal;           // tick, value
-            int chord2 = -1;
-            for (const auto& te : events) {
-                  const NPlayEvent& ev = te.second;
-                  if (ev.channel() != ch)
-                        continue;
-                  if (ev.type() == ME_CONTROLLER && ev.dataA() == CTRL_SUSTAIN)
-                        pedal.push_back({ te.first, ev.dataB() });
-                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && te.first >= 1920 && chord2 < 0)
-                        chord2 = te.first;
+            for (bool pianist : { true, false }) {
+                  // a pianist's legato pedalling (the default until 2026-10-06), else the default: one tick after the chord
+                  Playback::setIniValuesForTest(pianist ? std::map<QString, QString> { { "pedal/upAfterMs", "40" }, { "pedal/downAfterMs", "90" } }
+                                                        : std::map<QString, QString>());
+                  MasterScore* score = readScore(DIR + "pedal-change.musicxml");
+                  QVERIFY(score);
+                  score->rebuildMidiMapping();
+                  const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+                  EventMap events;
+                  SynthesizerState ss;
+                  score->renderMidi(&events, false, true, ss);
+                  std::vector<std::pair<int, int>> pedal;           // tick, value
+                  int chord2 = -1;
+                  for (const auto& te : events) {
+                        const NPlayEvent& ev = te.second;
+                        if (ev.channel() != ch)
+                              continue;
+                        if (ev.type() == ME_CONTROLLER && ev.dataA() == CTRL_SUSTAIN)
+                              pedal.push_back({ te.first, ev.dataB() });
+                        else if (ev.type() == ME_NOTEON && ev.velo() > 0 && te.first >= 1920 && chord2 < 0)
+                              chord2 = te.first;
+                        }
+                  QCOMPARE(chord2, 1920);
+                  QCOMPARE(int(pedal.size()), 4);                   // down, the change (up, down), up
+                  QCOMPARE(pedal[0], std::make_pair(0, 127));
+                  if (withLibrary && pianist) {
+                        // 40 ms and 90 ms after the chord at 60 bpm: 19 and 43 ticks
+                        QCOMPARE(pedal[1], std::make_pair(1920 + 19, 0));
+                        QCOMPARE(pedal[2], std::make_pair(1920 + 43, 127));
+                        }
+                  else if (withLibrary) {
+                        QCOMPARE(pedal[1], std::make_pair(1920 + 1, 0));
+                        QCOMPARE(pedal[2], std::make_pair(1920 + 2, 127));
+                        }
+                  else {
+                        QCOMPARE(pedal[1], std::make_pair(1919, 0));
+                        QCOMPARE(pedal[2], std::make_pair(1920, 127));
+                        }
+                  QCOMPARE(pedal[3].second, 0);
+                  // the last pedal ends where the score does: no chord there, at its end
+                  QCOMPARE(pedal[3].first, 3840);
+                  delete score;
                   }
-            QCOMPARE(chord2, 1920);
-            QCOMPARE(int(pedal.size()), 4);                   // down, the change (up, down), up
-            QCOMPARE(pedal[0], std::make_pair(0, 127));
-            if (withLibrary) {
-                  // 40 ms and 90 ms after the chord at 60 bpm: 19 and 43 ticks
-                  QCOMPARE(pedal[1], std::make_pair(1920 + 19, 0));
-                  QCOMPARE(pedal[2], std::make_pair(1920 + 43, 127));
-                  }
-            else {
-                  QCOMPARE(pedal[1], std::make_pair(1919, 0));
-                  QCOMPARE(pedal[2], std::make_pair(1920, 127));
-                  }
-            QCOMPARE(pedal[3].second, 0);
-            // the last pedal ends where the score does: no chord there, at its end
-            QCOMPARE(pedal[3].first, 3840);
-            delete score;
             }
+      Playback::setIniValuesForTest({});
       // a pedal that ends where a chord starts, with no pedal after it (the owner's piece at 8:37):
-      // up 40 ms after that chord with the library, at its tick without
+      // up 40 ms after that chord with the library (a pianist's pedalling; by default one tick), at its tick without
+      Playback::setIniValuesForTest({ { "pedal/upAfterMs", "40" } });
       for (bool withLibrary : { true, false }) {
             auto lib = loadMap(
                "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
@@ -4755,6 +4776,7 @@ void TestSoundLibrary::pedalChangeAfterChord()
             QVERIFY2(withLibrary ? pedal[1].first == 1920 + 19 : pedal[1].first <= 1920, qPrintable(QString::number(pedal[1].first)));
             delete score;
             }
+      Playback::setIniValuesForTest({});
       SoundLib::setCurrent(nullptr);
       }
 
@@ -5237,6 +5259,7 @@ void TestSoundLibrary::dynamicsCalibration()
       QVERIFY(lib);
       SoundLib::setCurrent(lib);
       SoundLib::setDynamicsCalibration(back);
+      Playback::setIniValuesForTest({ { "shorts/calibratedVelocity", "1" } });     // (off by default since 2026-10-06)
       MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
@@ -5248,6 +5271,16 @@ void TestSoundLibrary::dynamicsCalibration()
       for (const auto& te : events)
             if (te.second.channel() == ch && te.second.type() == ME_NOTEON && te.second.velo() > 0)
                   velo.push_back(te.second.velo());
+      // off (the default): the first short plays at its dynamic's velocity, not the calibrated one
+      Playback::setIniValuesForTest({});
+      EventMap plainEvents;
+      score->renderMidi(&plainEvents, false, true, ss);
+      for (const auto& te : plainEvents) {
+            if (te.second.channel() == ch && te.second.type() == ME_NOTEON && te.second.velo() > 0) {
+                  QVERIFY2(te.second.velo() != 83, "calibrated velocity while calibratedVelocity is off");
+                  break;
+                  }
+            }
       SoundLib::setDynamicsCalibration(nullptr);
       QCOMPARE(int(velo.size()), 9);
       QCOMPARE(velo[0], 83);

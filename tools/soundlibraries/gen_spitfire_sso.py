@@ -137,8 +137,11 @@ I=[
 # Flute Solo Performance, slurred steps and leaps at 60 and 120 bpm, 42 transitions; the new pitch within
 # 35 cents, YIN every 5 ms): after the beat by a median of 230 ms before, 128 at 50 %, 80 at 75 %, 40 at 100 %
 # (20 of 42 within 40 ms, one 59 ms early); leaps of a fourth or fifth stay 100-280 ms late. 100 %: the
-# full arrival lands a little late, where the ear already hears the new note (docs/HISTORY.md, Legato transitions start early)
-LEGATO_EARLY = 100
+# full arrival lands a little late, where the ear already hears the new note (docs/HISTORY.md, Legato transitions start early).
+# 0 since 2026-10-06 (the owner: no automatic adjustments, timing is adjusted in Live): notes start as written;
+# 100 turns the measured early starts back on (Playback adjustments, or this)
+LEGATO_EARLY = 0
+ONSET_EARLY = 0
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
 '  Spitfire Symphony Orchestra (Kontakt), articulations switched by UACC (CC32).',
@@ -178,11 +181,11 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  <Tuning method="varispeed"/>',
 '  <!-- a slurred note on a legato articulation (legatoDelay=, a legato transition; none in this map: the owner',
 '       plays no Performance patch) reaches its pitch legatoDelay ms after its note-on: it starts early by that',
-'       times early percent -->',
+'       times early percent (0: notes start as written, the owner 2026-10-06; 100: as measured) -->',
 f'  <Legato early="{LEGATO_EARLY}"/>',
 '  <!-- a held note that is no legato transition (slurred or not) is heard onset ms after its note-on',
-'       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent -->',
-'  <Onset early="100"/>',
+'       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent (0: as written) -->',
+f'  <Onset early="{ONSET_EARLY}"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
 '  <Files registry="Spitfire Symphony Orchestra"/>']
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
