@@ -36,6 +36,8 @@
 #include "libmscore/rendermidi.h"
 #include "libmscore/livesetwriter.h"
 #include "libmscore/livesetxml.h"
+#include "libmscore/liveset.h"
+#include "libmscore/livetracks.h"
 #include "libmscore/plainliveset.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
@@ -90,6 +92,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveMarcatoLevel();
       void plainLayout();
       void plainSet();
+      void plainSetReadBack();
+      void liveTracksJson();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -1313,6 +1317,243 @@ void TestLiveEquivalence::plainSet()
             }
       delete score;
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   plainSetReadBack
+//    the plain set read back (livetracks.h): each track by its key; an unchanged set gives no lanes and keeps nothing;
+//    a changed Controllers envelope and a new parameter envelope become lanes, a technique track's mixer is kept and
+//    written again, the Kontakt's volume is the part's Mixer; without the Info texts the names find the tracks
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainSetReadBack()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Controller id='tone' name='Tone' param='Tone'/>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, LiveClips::timeline(score));
+      const Part* part = score->parts()[0];
+      // the Kontakt with a plug-in showing "Tone" (its automation's target)
+      auto make = [&l]() {
+            LiveSetWriter::Spec spec;
+            spec.tracks = PlainLiveSet::tracks(l);
+            spec.tracks[2].hasPlugin = true;
+            spec.tracks[2].plugin.name = "Kontakt 8";
+            spec.tracks[2].plugin.parameters.push_back({ 5, "Tone", 0.5 });
+            return spec;
+            };
+      LiveSetWriter::Spec spec = make();
+      QVERIFY(spec.tracks.size() >= 4);
+      QCOMPARE(PlainLiveSet::keyPath(spec.tracks[0].annotation), QStringList({ "Strings" }));
+      QCOMPARE(PlainLiveSet::keyPath(spec.tracks[2].annotation).size(), 3);
+      QCOMPARE(PlainLiveSet::keyPath(spec.tracks[3].annotation).size(), 4);
+      QCOMPARE(PlainLiveSet::keyPath(PlainLiveSet::trackKey({ "a / b", "c" })), QStringList({ "a/b", "c" }));
+      QVERIFY(PlainLiveSet::keyPath("Violin").isEmpty());
+
+      // written and read back: what Create Live Set records
+      const QByteArray x0 = LiveSetWriter::xml(spec);
+      QCOMPARE(LiveSetWriter::validate(x0), QString());
+      const LiveSet::Set set0 = LiveSet::parse(x0);
+      QVERIFY(set0.error.isEmpty());
+      QCOMPARE(set0.tracks.size(), spec.tracks.size());
+      for (size_t i = 0; i < spec.tracks.size(); ++i)
+            QCOMPARE(set0.tracks[i].annotation, spec.tracks[i].annotation);
+      QCOMPARE(set0.tracks[3].outputTarget, QString("MidiOut/Track.%1/TrackIn").arg(set0.tracks[2].id));
+      QCOMPARE(set0.tracks[3].groupId, set0.tracks[1].id);
+      QVERIFY(set0.tracks[2].hasMixer);
+      LiveTracks::Data data;
+      data.written = LiveTracks::written(score, spec.tracks, set0);
+      QCOMPARE(int(data.written.size()), int(spec.tracks.size()));
+      const LiveTracks::Written& wk = data.written.at(spec.tracks[2].annotation);
+      QCOMPARE(wk.kind, QString("kontakt"));
+      QCOMPARE(wk.part, 0);
+      QVERIFY(wk.hashes.count("cc1"));
+      QCOMPARE(data.written.at(spec.tracks[3].annotation).kind, QString("technique"));
+      QCOMPARE(data.written.at(spec.tracks[1].annotation).kind, QString("part"));
+      const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, QStringList());
+      QCOMPARE(int(parts.size()), 1);
+
+      // unchanged: no lanes, nothing kept, the Mixer as it is
+      LiveTracks::Import im = LiveTracks::import(score, set0, parts, "a.als", QDateTime(), data);
+      QVERIFY2(im.lanes.empty(), qPrintable(im.report.text()));
+      QVERIFY(im.data.tracks.empty());
+      QVERIFY(im.mixes.empty());
+      QVERIFY2(im.report.unmatched.isEmpty(), qPrintable(im.report.text()));
+
+      // changed in "Live": a CC1 point, a parameter envelope, a technique track's volume and its Volume automation, the
+      // Kontakt's volume
+      LiveSetWriter::Spec changed = make();
+      std::vector<std::pair<double, double>>& cc1 = changed.tracks[2].clips[0].envelopes[0].points;
+      QVERIFY(!cc1.empty());
+      cc1.front().second = cc1.front().second > 60 ? 20 : 100;
+      LiveSetWriter::ParameterAutomation tone;
+      tone.name = "Tone";
+      tone.points = { { 0, 0.25 }, { 2, 0.75 } };
+      changed.tracks[2].automation.push_back(tone);
+      changed.tracks[2].volume = 0.5;
+      changed.tracks[3].volume = 0.25;
+      LiveSetWriter::MixerAutomation va;
+      va.target = LiveSetWriter::MixerAutomation::Target::VOLUME;
+      va.initial = 0.25;
+      va.events = { { 1, 0.25, false, 0, 0, 0, 0 }, { 3, 0.75, true, 0.2, 0.6, 0.7, 0.9 } };
+      changed.tracks[3].mixerAutomation.push_back(va);
+      const QByteArray x1 = LiveSetWriter::xml(changed);
+      QCOMPARE(LiveSetWriter::validate(x1), QString());
+      const LiveSet::Set set1 = LiveSet::parse(x1);
+      im = LiveTracks::import(score, set1, parts, "a.als", QDateTime(), data);
+      QVERIFY2(im.report.unmatched.isEmpty(), qPrintable(im.report.text()));
+      QCOMPARE(int(im.lanes.size()), 1);
+      const Automation::PartLanes& lanes = im.lanes.at(part);
+      QCOMPARE(int(lanes.size()), 2);
+      int clipLanes = 0, paramLanes = 0;
+      for (const Automation::Lane& lane : lanes) {
+            QVERIFY(!lane.extra.value("liveHash").toString().isEmpty());
+            QVERIFY(!lane.extra.value("pointsHash").toString().isEmpty());
+            QCOMPARE(lane.extra.value("track").toString(), changed.tracks[2].name);
+            if (lane.extra.contains("clipCC")) {
+                  ++clipLanes;
+                  QCOMPARE(lane.extra.value("clipCC").toInt(), 1);
+                  }
+            else if (lane.extra.value("param").toString() == "Tone") {
+                  ++paramLanes;
+                  QCOMPARE(lane.target, QString("tone"));
+                  }
+            }
+      QCOMPARE(clipLanes, 1);
+      QCOMPARE(paramLanes, 1);
+      QCOMPARE(int(im.data.tracks.size()), 1);
+      const LiveTracks::State st = im.data.tracks.at(changed.tracks[3].annotation);
+      QVERIFY(st.hasVolume && !st.hasPan && !st.hasActive);
+      QCOMPARE(st.volume, 0.25);
+      QCOMPARE(int(st.envelopes.size()), 1);
+      QCOMPARE(st.envelopes[0].target, QString("volume"));
+      QCOMPARE(st.envelopes[0].initial, 0.25);
+      QCOMPARE(int(st.envelopes[0].events.size()), 2);
+      QVERIFY(st.envelopes[0].events[1].curved);
+      QCOMPARE(st.envelopes[0].events[1].c1y, 0.6);
+      QCOMPARE(int(im.mixes.size()), 1);
+      QCOMPARE(im.mixes.at(part).volume, LiveSetWriter::mixVolume(0.5));
+      QCOMPARE(im.mixes.at(part).pan, -1);
+      QCOMPARE(LiveSetWriter::mixVolume(0.5), 71);                // sqrt(0.5) × 100, rounded
+      for (int v : { 0, 1, 63, 64, 65, 127 })
+            QCOMPARE(LiveSetWriter::mixPanValue(LiveSetWriter::mixPan(v)), v);
+
+      // without the Info texts: by the groups' and the tracks' names
+      const QByteArray x2 = QString::fromUtf8(x1).replace(QRegularExpression("<Annotation Value=\"MuseScore: [^\"]*\" />"),
+                                                          "<Annotation Value=\"\" />").toUtf8();
+      QVERIFY(!x2.contains("MuseScore: "));
+      const LiveSet::Set set2 = LiveSet::parse(x2);
+      for (size_t i = 0; i < set2.tracks.size(); ++i)
+            QCOMPARE(LiveTracks::key(set2, i, data), changed.tracks[i].annotation);
+      const LiveTracks::Import im2 = LiveTracks::import(score, set2, parts, "a.als", QDateTime(), data);
+      QCOMPARE(int(im2.lanes.at(part).size()), 2);
+      QCOMPARE(int(im2.data.tracks.size()), 1);
+
+      // written again: the kept mixer in the new set
+      LiveSetWriter::Spec again = make();
+      LiveTracks::apply(im.data, &again.tracks);
+      QCOMPARE(again.tracks[3].volume, 0.25);
+      QCOMPARE(int(again.tracks[3].mixerAutomation.size()), 1);
+      const QByteArray x3 = LiveSetWriter::xml(again);
+      QCOMPARE(LiveSetWriter::validate(x3), QString());
+      const LiveSet::Set set3 = LiveSet::parse(x3);
+      QCOMPARE(set3.tracks[3].volume, 0.25);
+      const LiveSet::Envelope* back = nullptr;
+      for (const LiveSet::Envelope& e : set3.tracks[3].envelopes)
+            if (e.mixer == "volume")
+                  back = &e;
+      QVERIFY(back);
+      QCOMPARE(back->initial, 0.25);
+      QCOMPARE(LiveSet::eventsHash(back->initial, back->events), LiveSet::eventsHash(st.envelopes[0].initial, st.envelopes[0].events));
+      // and read back once more: the same kept, nothing else
+      const LiveTracks::Import im3 = LiveTracks::import(score, set3, parts, "a.als", QDateTime(), data);
+      QVERIFY(im3.lanes.empty());
+      QCOMPARE(LiveTracks::toJson(im3.data), LiveTracks::toJson(im.data));
+      // a group's Speaker automation (BoolEvent) and its pan
+      LiveSetWriter::Spec groups = make();
+      LiveSetWriter::MixerAutomation sp;
+      sp.target = LiveSetWriter::MixerAutomation::Target::SPEAKER;
+      sp.events = { { 4, 0, false, 0, 0, 0, 0 } };
+      sp.initial = 1;
+      groups.tracks[0].mixerAutomation.push_back(sp);
+      groups.tracks[0].pan = -0.5;
+      const QByteArray x4 = LiveSetWriter::xml(groups);
+      QCOMPARE(LiveSetWriter::validate(x4), QString());
+      QVERIFY(x4.contains("<BoolEvent Id=\"1\" Time=\"4\" Value=\"false\" />"));
+      const LiveTracks::Import im4 = LiveTracks::import(score, LiveSet::parse(x4), parts, "a.als", QDateTime(), data);
+      QVERIFY(im4.data.tracks.count(groups.tracks[0].annotation));
+      const LiveTracks::State gs = im4.data.tracks.at(groups.tracks[0].annotation);
+      QVERIFY(gs.hasPan && !gs.hasVolume);
+      QCOMPARE(gs.pan, -0.5);
+      QCOMPARE(int(gs.envelopes.size()), 1);
+      QCOMPARE(gs.envelopes[0].target, QString("speaker"));
+      QCOMPARE(gs.envelopes[0].events[0].value, 0.0);
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   liveTracksJson
+//    the metaTag "liveTracks": left out when empty, the same after a round trip
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveTracksJson()
+      {
+      QCOMPARE(LiveTracks::toJson(LiveTracks::Data()), QString());
+      LiveTracks::Data d;
+      LiveTracks::State s;
+      s.hasVolume = true;
+      s.volume = 0.316227766;
+      s.hasActive = true;
+      s.active = false;
+      LiveTracks::Envelope e;
+      e.target = "pan";
+      e.initial = -1;
+      LiveSet::Event a, b;
+      a.time = 0;
+      a.value = -0.5;
+      b.time = 2.5;
+      b.value = 0.25;
+      b.curved = true;
+      b.c1x = 0.1;
+      b.c1y = 0.4;
+      b.c2x = 0.6;
+      b.c2y = 0.95;
+      e.events = { a, b };
+      s.envelopes.push_back(e);
+      d.tracks["MuseScore: Strings / Violin / Violin / Long"] = s;
+      LiveTracks::Written w;
+      w.kind = "kontakt";
+      w.part = 2;
+      w.patch = 1;
+      w.hashes["cc1"] = "abc,def";
+      d.written["MuseScore: Strings / Violin / Violin"] = w;
+      d.tracks["MuseScore: Strings"] = LiveTracks::State();       // (nothing: left out)
+      const QString json = LiveTracks::toJson(d);
+      QVERIFY(!json.contains("\"MuseScore: Strings\":"));
+      const LiveTracks::Data r = LiveTracks::fromJson(json);
+      QCOMPARE(LiveTracks::toJson(r), json);
+      QCOMPARE(int(r.tracks.size()), 1);
+      const LiveTracks::State& rs = r.tracks.at("MuseScore: Strings / Violin / Violin / Long");
+      QVERIFY(rs.hasVolume && !rs.hasPan && rs.hasActive && !rs.active);
+      QCOMPARE(rs.envelopes[0].events[1].c2y, 0.95);
+      QVERIFY(!rs.envelopes[0].events[0].curved);
+      QCOMPARE(r.written.at("MuseScore: Strings / Violin / Violin").patch, 1);
+      QCOMPARE(r.written.at("MuseScore: Strings / Violin / Violin").hashes.at("cc1"), QString("abc,def"));
       }
 
 //---------------------------------------------------------

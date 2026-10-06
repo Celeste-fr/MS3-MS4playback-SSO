@@ -16,6 +16,7 @@
 #include <cmath>
 #include <map>
 #include <memory>
+#include <set>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -29,6 +30,7 @@
 #include <QStandardPaths>
 
 #include "libmscore/liveset.h"
+#include "libmscore/livetracks.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/plainliveset.h"
@@ -152,7 +154,10 @@ static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const S
                               if (l.cc == PlainLiveSet::PITCH_BEND)
                                     plan->notes << QObject::tr("%1 – %2: its pitch bends are not written yet").arg(p.name, k.patch);
                         }
-      return PlainLiveSet::tracks(layout);
+      std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(layout);
+      // what the score keeps of Live's tracks (livetracks.h): their mixer and its automation
+      LiveTracks::apply(LiveTracks::read(score), &tracks);
+      return tracks;
       }
 
 //---------------------------------------------------------
@@ -509,19 +514,32 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
             }
       // a new set has none of Live's automation: lanes that came from (or were marked as in) another set are
       // MuseScore's to play there now, through the MuseScore Link device (automation.h: playedByLive); one undoable step
+      // The plain set (livetracks.h): what was written, as read back (its clip controllers' hashes: an unchanged one is
+      // MuseScore's own render when the set comes back), and the parameter lanes it has as track automation (Live plays
+      // them: their liveHash); kept with the lanes in one undoable step
       int fromLive = 0;
       if (!onlyMissing) {
             std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+            std::set<std::pair<const Part*, QString>> wereLive;
             for (auto& pl : all)
                   for (Automation::Lane& l : pl.second)
                         if (l.playedByLive() || l.extra.contains("liveHash")) {
                               l.extra.remove("source");
                               l.extra.remove("liveHash");
                               l.extra.remove("pointsHash");
-                              ++fromLive;
+                              wereLive.insert({ pl.first, l.target });
                               }
-            if (fromLive)
-                  Automation::undoWrite(score, all);
+            const LiveSet::Set readBack = LiveSet::read(path);
+            LiveTracks::Data data = LiveTracks::read(score);
+            if (readBack.error.isEmpty()) {
+                  data.written = LiveTracks::written(score, plan.spec.tracks, readBack);
+                  LiveTracks::markWrittenLanes(plan.spec.tracks, readBack, &all);
+                  }
+            for (const auto& pl : all)
+                  for (const Automation::Lane& l : pl.second)
+                        if (wereLive.count({ pl.first, l.target }) && !l.extra.contains("liveHash"))
+                              ++fromLive;
+            LiveTracks::undoWrite(score, data, &all);
             }
       if (fromLive)
             plan.notes << QObject::tr("%n automation lane(s) from a Live Set are MuseScore's now: the new set has them as track "

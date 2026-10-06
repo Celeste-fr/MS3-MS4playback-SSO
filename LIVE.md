@@ -307,6 +307,31 @@ in a section collapsible at the same time".
   library). Pitch bends are left out (reported) until the scale of Live's clip bend envelope is measured. Test:
   `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>` writes its set).
 
+- **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
+  automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
+  - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
+    the Kontakt, `… / Violin / Long` for a technique (section, part, Kontakt track, technique; the groups
+    `MuseScore: Strings`, `MuseScore: Strings / Violin`). **Whether Live keeps the Info text when it saves is
+    unconfirmed** (to check on the VM); without it a track is found by its groups' names and its own (a technique
+    track also by its MIDI To), but only for keys the score recorded.
+  - **Create Live Set records what it wrote** (in `liveTracks` › written: each track's kind, part, patch and the hash
+    of each clip controller's envelopes as the reader reads the file back). An envelope of the Kontakt's Controllers
+    clip whose hash is unchanged is MuseScore's own render and comes back as nothing; a changed or new one becomes a
+    part lane (as before: `track`, `clipCC`, liveHash, pointsHash). Plug-in parameter automation on the Kontakt track
+    becomes lanes; Create Live Set gives the score's parameter lanes the written envelope's liveHash, so an unchanged
+    one keeps MuseScore's lane (Automation::merge). An extra patch's Kontakt: its changed envelopes are reported, not
+    imported.
+  - **Technique tracks**: their switch (the Sub, the switch envelope, keyswitch notes) is never a lane; another
+    clip envelope there is reported as not imported.
+  - **Mixer**: a Kontakt track's Volume / Pan / Track Activator is the part's Mixer when the part has only that
+    Kontakt (set as the Mixer sets it: not an undo step). Every other track's static mixer values (where they aren't
+    Live's defaults, or the part's Mixer for a second Kontakt) and every track's mixer automation (Volume, Pan,
+    Speaker, as Live's events with their curves) are kept in `liveTracks` › tracks, the newer import replacing a
+    track's entry; Create Live Set writes them into the next set. No sends: the plain set has no return tracks.
+  - Without the record (the score not saved after Create Live Set), the tracks match as any set's (MIDI input or
+    name) and the Controllers clip's envelopes come back as lanes.
+  - Test: `tst_liveequivalence` `plainSetReadBack`, `liveTracksJson`.
+
 The sections below describe the route set.
 
 ### How to use it
@@ -715,6 +740,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   host has no Live devices. A clip tab's lanes are the clip's envelopes: Live plays them when it plays the clip, but
   MuseScore's Play in a clip tab (notes sent to the track, the clip not launched) doesn't apply them (it could set the
   parameters as it plays, as the device does for the score; not built).
+- **The plain set's technique and group tracks' mixer** (their Volume, Pan, Track Activator and its automation, and
+  a second Kontakt track's, livetracks.h): kept in the score and written into the next set, but MuseScore doesn't play
+  them; nor any track's mixer automation (a Kontakt's static mixer is the part's Mixer).
 - **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
   panel and faders.
 - The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.
@@ -1370,7 +1398,8 @@ do.
 (Live plays the score; carrier notes 114-127), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
 tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
 (`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
-`libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
+`libmscore/plainliveset.*` (the plain set), `libmscore/livetracks.*` (the plain set read back: track keys in the
+Info text, metaTag `liveTracks`), `libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
 `tools/live/test/compare_als_skeleton.py`), `mscore/liveequivalence.*`, `tools/live/` (Max for Live device, Node
 tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Live through the device (`/ms/params`,
 `/ms/pvals`; tables played by `live.remote~` at Live's song position; Kontakt's slots "#001" matched by

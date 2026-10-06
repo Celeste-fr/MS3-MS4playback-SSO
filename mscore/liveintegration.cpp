@@ -37,6 +37,8 @@
 
 #include "libmscore/automation.h"
 #include "libmscore/liveset.h"
+#include "libmscore/livetracks.h"
+#include "libmscore/instrument.h"
 #include "libmscore/part.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
@@ -132,8 +134,8 @@ QString linkedSet(const MasterScore* score, bool* autoReimport)
       return o.value("path").toString();
       }
 
-// the score's metaTags with these two changed, as one undoable step
-static void setTags(MasterScore* score, const QString& automation, const QString& liveSet)
+// the score's metaTags with these changed (liveTracks: the read-back's, livetracks.h; null: as it is), as one undoable step
+static void setTags(MasterScore* score, const QString& automation, const QString& liveSet, const QString* liveTracks = nullptr)
       {
       QMap<QString, QString> tags = score->metaTags();
       auto put = [&tags](const char* tag, const QString& v) {
@@ -144,6 +146,8 @@ static void setTags(MasterScore* score, const QString& automation, const QString
             };
       put(Automation::metaTag, automation);
       put(linkMetaTag, liveSet);
+      if (liveTracks)
+            put(LiveTracks::metaTag, *liveTracks);
       if (tags == score->metaTags())
             return;
       if (seq && seq->isPlaying())
@@ -152,6 +156,46 @@ static void setTags(MasterScore* score, const QString& automation, const QString
       score->undo(new ChangeMetaTags(score, tags));
       score->endCmd();
       score->setPlaylistDirty();
+      }
+
+//---------------------------------------------------------
+//   setPartMix
+//    a part's Mixer from its Kontakt track in Live, as MixerTrackItem sets it (each channel of each instrument)
+//---------------------------------------------------------
+
+static QString setPartMix(MasterScore* score, const Part* part, const LiveTracks::Mix& m)
+      {
+      QStringList what;
+      if (m.volume >= 0)
+            what << QObject::tr("volume %1").arg(m.volume);
+      if (m.pan >= 0)
+            what << QObject::tr("pan %1").arg(m.pan);
+      if (m.active >= 0)
+            what << (m.active ? QObject::tr("unmuted") : QObject::tr("muted"));
+      for (const auto& ip : *part->instruments()) {
+            for (const Channel* ch : ip.second->channel()) {
+                  Channel* c = score->playbackChannel(ch);
+                  if (m.volume >= 0 && c->volume() != m.volume) {
+                        c->setVolume(char(m.volume));
+                        if (seq)
+                              seq->setController(c->channel(), CTRL_VOLUME, c->volume());
+                        }
+                  if (m.pan >= 0 && c->pan() != m.pan) {
+                        c->setPan(char(m.pan));
+                        if (seq)
+                              seq->setController(c->channel(), CTRL_PANPOT, c->pan());
+                        }
+                  if (m.active >= 0) {
+                        if (!m.active && seq)
+                              seq->stopNotes(c->channel());
+                        c->setMute(!m.active);
+                        }
+                  }
+            }
+      if (m.active >= 0 && seq)
+            seq->libraryMixerChanged(part);
+      score->setInstrumentsChanged(true);
+      return QString("%1: %2").arg(part->partName(), what.join(", "));
       }
 
 //---------------------------------------------------------
@@ -170,9 +214,11 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
             }
       const QStringList ports = outputPortNames();
       const QDateTime modified = QFileInfo(path).lastModified();
-      LiveSet::Report r;
-      const std::map<const Part*, Automation::PartLanes> live = LiveSet::lanes(score, set, LiveSet::partInfos(score, ports),
-                                                                               path, modified, &r);
+      // the plain set's tracks by their keys (livetracks.h), the others by MIDI input or name
+      const LiveTracks::Import im = LiveTracks::import(score, set, LiveSet::partInfos(score, ports), path, modified,
+                                                       LiveTracks::read(score));
+      const LiveSet::Report& r = im.report;
+      const std::map<const Part*, Automation::PartLanes>& live = im.lanes;
       // per lane the newer edit (automation.h: Automation::merge); changed on both sides: asked
       const std::map<const Part*, Automation::PartLanes> before = Automation::read(score);
       std::map<std::pair<const Part*, QString>, Automation::Keep> choices;
@@ -193,9 +239,16 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
       o["auto"] = autoReimport;
       o["setTime"] = modified.toUTC().toString(Qt::ISODate);
       o["creator"] = set.creator;
-      setTags(score, Automation::write(score, all), QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)));
+      // a Kontakt track's mixer, the part's only one: the part's Mixer (as the Mixer sets it; not an undoable step)
+      QStringList mixed;
+      for (const auto& pm : im.mixes)
+            mixed << setPartMix(score, pm.first, pm.second);
+      const QString liveTracks = LiveTracks::toJson(im.data);
+      setTags(score, Automation::write(score, all), QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)), &liveTracks);
       if (report) {
             *report = r.text();
+            if (!mixed.isEmpty())
+                  *report += "\n" + QObject::tr("Mixer as in Live:") + "\n  " + mixed.join("\n  ");
             if (!both.isEmpty())
                   *report += "\n" + QObject::tr("Changed in MuseScore and in Live:") + "\n  " + both.join("\n  ");
             }
