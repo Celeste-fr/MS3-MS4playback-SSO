@@ -110,7 +110,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   sso_*.json`. Diff the XML after: only intended entries may change.
 - Renderer (`rendermidi.cpp`): each library event carries patch, switch and route; `finishLibraryEvents` routes,
   copies controllers to every patch ahead of the notes, applies early starts, lanes and bends. Dynamics on CC1;
-  listed shorts take velocity (calibrated from `dynamics.json`). Slurred notes overlap; **legato transitions** and
+  listed shorts take velocity (calibrated from `dynamics.json`). **No Performance patches** (the owner, 2026-10-06:
+  the All techniques patches' Release, Tightness and Options): SSO slurs play the All techniques longs, each note its
+  own attack, early by its onset; a legato transition needs an articulation with `legato` first
+  (`Articulation::playsTransitions`), which the SSO map no longer has (the transition timing below stays for maps
+  that do; `sso_legato_*.json` kept). Slurred notes overlap; **legato transitions** and
   **held notes start early** by measured delays (`<Articulation legatoDelay>` by interval, `<Articulation onset>`
   by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`); the note before keeps `keepMs` of its
   length as played, so a fast slurred run starts early as a whole (after a short note a transition takes 65-100 % of
@@ -228,7 +232,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 59 with init and cleanup (2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
-  `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events of main 922a4849dc), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
+  `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.
 - `tst_midi`: 97 passed (2026-10-04). Its 3.x tests render with MuseScore 3.6's method (`ms3State`: the MS3 mode)

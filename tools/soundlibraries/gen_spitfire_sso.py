@@ -45,8 +45,9 @@ T={
  # the section strings' staccato (the owner, 2026-09-28: "if we have a trigger for short 1'0, why not
  # short 0'5?"): spiccato for staccatissimo, Short 0.5 for staccato, Short 1.0 for tenuto
  'Short 0.5':('short',''),
- # "espr.", "molto vib." (staff text) on a held note; slurred notes keep the Performance legato
- 'Long (Rachm.)':('long','espressivo'),
+ # "espr.", "molto vib." (staff text), held or slurred (as Long CS plays muted slurs; until 2026-10-06 slurred
+ # notes kept the Performance legato)
+ 'Long (Rachm.)':('long legato','espressivo'),
  'Marcato':('marcato',''), 'Marcato (Muted)':('marcato','muted'),
  'Tenuto':('tenuto',''), 'Tenuto (Muted)':('tenuto','muted'),
  'Pizzicato':('pizzicato',''), 'Pizzicato Bartok':('bartok',''), 'Col Legno':('collegno',''),
@@ -170,15 +171,16 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  <Dynamics cc="1" expression="127" velocity="short staccatissimo spiccato marcato tenuto pizzicato bartok collegno" heard="strings=-4"/>',
 '  <!-- microtones: Kontakt ignores a note\'s tuning, so notes of other tunings play on copies of the',
 '       patch (libmscore/soundlibrary.h: Lanes), each tuned by SSO\'s own pitch bend where the patch',
-'       bends cleanly (bend= on the Instrument: the Performance patches ±100 cents, from the owner\'s',
-'       extracts, sso_patch_measurements.json), else played faster or slower (varispeed); a lane is',
+'       bends cleanly (bend= on the Instrument: Solo Cello and the tuned percussion, ±194-196 cents; the',
+'       owner\'s extracts, sso_patch_measurements.json), else played faster or slower (varispeed); a lane is',
 '       retuned once its notes\' release has rung out to 60 dB under (twice release= on the Articulation, measured',
 '       to 30 dB under). Tolerance, tail and the copies\' maximum are left to MuseScore, which computes them -->',
 '  <Tuning method="varispeed"/>',
-'  <!-- a slurred note on a Performance patch (a legato transition) reaches its pitch legatoDelay ms after',
-'       its note-on (measured, sso_articulation_timing.json): it starts early by that times early percent -->',
+'  <!-- a slurred note on a legato articulation (legatoDelay=, a legato transition; none in this map: the owner',
+'       plays no Performance patch) reaches its pitch legatoDelay ms after its note-on: it starts early by that',
+'       times early percent -->',
 f'  <Legato early="{LEGATO_EARLY}"/>',
-'  <!-- a held note that is no legato transition (a lone one, a slur\'s first) is heard onset ms after its note-on',
+'  <!-- a held note that is no legato transition (slurred or not) is heard onset ms after its note-on',
 '       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent -->',
 '  <Onset early="100"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
@@ -280,42 +282,13 @@ SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), 
 # Extra patches (soundlibrary.h): other patches a part plays alongside its main one, each loaded
 # only when the part's notation asks for one of its articulations (and, hosted, once it is set
 # up). Named as the owner's .nki files. (main patch, extra patch, articulations)
-# - Performance: Spitfire's legato (the "All techniques" patches have none) for slurred notes,
-#   and for held notes too (prefer="long"; the owner, 2026-09-28: a lone held note played the All
-#   techniques patch's Long, another recording with its own level and place, quiet and slow to
-#   speak, amid the slurred notes on this patch; a note that doesn't overlap the one before plays
-#   with its own attack here). Its UACC value is not known yet (20 = the standard's legato); a
-#   single-articulation patch ignores it.
-LEGATO = [('Legato', 20, 'legato long', '', 'long')]
-PERFORMANCE = {
-    'Violins 1': 'Violins 1 - Performance', 'Violins 2': 'Violins 2 - Performance',
-    'Violas': 'Violas - Performance', 'Celli': 'Celli - Performance', 'Basses': 'Basses - Performance',
-    'Solo Violin 1': 'Solo Violin - Performance', 'Solo Violin 2': 'Solo Violin 2 - Performance',
-    'Solo Viola': 'Solo Viola - Performance', 'Solo Cello': 'Solo Cello - Performance',
-    'Piccolo': 'Piccolo Flute - Performance', 'Flute Solo': 'Flute Solo - Total Performance',
-    'Flutes a2': 'Flutes a2 - Performance', 'Alto Flute': 'Alto Flute - Performance',
-    'Bass Flute': 'Bass Flute - Performance', 'Oboe Solo': 'Oboe Solo - Performance',
-    'Oboes a2': 'Oboes a2 - Performance', 'Cor Anglais': 'Cor Anglais - Performance',
-    'Clarinet Solo': 'Clarinet Solo - Performance', 'Clarinets a2': 'Clarinets a2 - Performance',
-    'Bass Clarinet': 'Bass Clarinet - Performance', 'Contrabass Clarinet': 'ContraBass Clarinet - Performance',
-    'Bassoon Solo': 'Bassoon Solo - Performance', 'Bassoons a2': 'Bassoons a2 - Performance',
-    'Contrabassoon': 'ContraBassoon - Performance',
-    'Horn Solo': 'Horn Solo - Performance', 'Horns a2': 'Horns a2 - Performance', 'Horns a6': 'Horns a6 - Performance',
-    'Trumpet Solo': 'Trumpet Solo - Total Performance', 'Trumpets a2': 'Trumpets a2 - Performance',
-    'Trumpets a6': 'Trumpets a6 - Performance', 'Tenor Trombone Solo': 'Tenor Trombone Solo - Total Performance',
-    'Tenor Trombones a2': 'Tenor Trombones a2 - Performance', 'Trombones a6': 'Trombones a6 - Performance',
-    'Bass Trombones a2': 'Bass Trombones a2 - Performance', 'Tuba Solo': 'Tuba Solo - Performance',
-    'Motif Horns a4': 'Horns a4 - Performance', 'Motif Trumpets a3': 'Trumpets a3 - Performance',
-    'Motif Trombones a5': 'Trombones a5 - Performance',
-}
-EXTRAS = [(m, e, LEGATO) for m, e in PERFORMANCE.items()]
-EXTRAS += [
-    # on one string: legato and long ("sul G" / "sul C"); the All techniques patches' own Long
+# - No Performance patches (the owner, 2026-10-06: "NO using performance patches"; the All techniques
+#   patches have Release, Tightness and the Options page): slurred notes play the All techniques
+#   patch's own longs. Until then a slur picked the Performance legato (Spitfire's legato
+#   transitions, measured in sso_legato_*.json, which the map no longer uses; earlier commits have it).
+EXTRAS = [
+    # on one string: long ("sul G" / "sul C"); the All techniques patches' own Long
     # Sul G (Violins) and Long Sul C (Celli) play nothing (Kontakt's Voices stays 0)
-    ('Violins 1', 'Violins 1 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg')]),
-    ('Violins 2', 'Violins 2 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg')]),
-    ('Violas', 'Violas - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc')]),
-    ('Celli', 'Celli - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc')]),
     ('Violins 1', 'Strings - Violins 1 - Long Sul G', [('Long Sul G', 1, 'long legato', 'sulg')]),
     ('Violins 2', 'Strings - Violins 2 - Long Sul G', [('Long Sul G', 1, 'long legato', 'sulg')]),
     ('Celli', 'Strings - Celli - Long Sul C', [('Long Sul C', 1, 'long legato', 'sulc')]),
@@ -332,7 +305,6 @@ EXTRAS += [
     ('Trumpets a6', 'Brass - Trumpets a6 - Fanfare', [('Fanfare', 1, '', '')]),
     ('Cimbassi a2', 'Brass - Cimbassi a2 - Long Alt', [('Long Alt', 1, '', '')]),
     ('Violins 1', 'Strings - Violins 1 - Long Sul Pont Distorted', [('Long Sul Pont Distorted', 1, '', '')]),
-    ('Oboe Solo', 'Oboe Principal - Total Performance', [('Oboe Principal', 1, '', '')]),
 ]
 SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', 'long legato', 'sulpont')}
 
@@ -859,7 +831,9 @@ for nki in NKI_FILES:
     assert name.lower() not in names, name
     v = setupValues(nki)
     arts = FILE_ARTICULATIONS[nki]
-    scan = '' if len(arts) < 2 else ' scan="keys"' if '/Symphonic Percussion/' in '/' + nki else ' scan="values"'
+    # (a Performance patch is not scanned: the owner plays none, 2026-10-06)
+    scan = '' if len(arts) < 2 or 'Performance' in name else ' scan="keys"' if '/Symphonic Percussion/' in '/' + nki \
+        else ' scan="values"'
     pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
     head = f'  <Patch name={q(name)} nki={q(nki)}' + (f' setup={q(v)}' if v else '')
     if name in SCANNED:

@@ -73,6 +73,10 @@ enum class SwitchType : signed char { CC, KEYSWITCH, PROGRAM, NONE };
 struct Articulation {
       QString name;
       QStringList techniques;             // the bases it plays (none: never chosen, listed for reference)
+      // a legato patch's own articulation ("legato" first): slurred notes join by legato transitions. One that
+      // also plays slurs but lists another base first (SSO's All techniques Long, "long legato") attacks each
+      // note anew (the owner's first run, 2026-09-29, measured retriggers on it)
+      bool playsTransitions() const { return techniques.value(0) == "legato"; }
       QStringList modifiers;              // with these modifiers
       int value { -1 };                   // CC value, keyswitch pitch or program
       QString expect;                     // what Check articulations hears where it isn't "switches"

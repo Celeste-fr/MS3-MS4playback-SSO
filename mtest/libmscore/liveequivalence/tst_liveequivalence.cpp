@@ -398,7 +398,7 @@ void TestLiveEquivalence::liveClipsBend()
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
          "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
          "<Instrument name='Violin' ids='violin' bend='200'>"
-         "<Articulation name='Long' value='1' techniques='long legato'" + legato + "/>"
+         "<Articulation name='Long' value='1' techniques='legato long'" + legato + "/>"
          "</Instrument></SoundLibrary>");
       QVERIFY(lib);
       SoundLib::setCurrent(lib);

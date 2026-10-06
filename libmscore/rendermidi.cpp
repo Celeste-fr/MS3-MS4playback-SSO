@@ -1373,14 +1373,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         };
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
-                  // patch). Returns that note (nullptr: not a transition: a slur's first note, the note after its
-                  // end, the same key struck again), the earliest utick the note may start: the note before keeps
+                  // patch, an articulation that plays transitions: playsTransitions()). Returns that note (nullptr:
+                  // not a transition: a slur's first note, the note after its end, the same key struck again, a
+                  // slur on an articulation that attacks each note anew), the earliest utick the note may start: the note before keeps
                   // keepMs of its length as played (below), not before the chunk or the pass, the interval from it
                   // (semitones; of a chord before, its nearest note that goes on legato) and its written length
                   // (seconds)
                   auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest, int* interval,
                                               double* lenBefore) -> const Note* {
-                        if (!c || c.base != "legato")
+                        if (!c || c.base != "legato" || !c.articulation->playsTransitions())
                               return nullptr;
                         Chord* ch = note->chord();
                         if (note->tieBack() || ch->isGrace() || !ch->graceNotesBefore().empty())
@@ -1408,7 +1409,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const Chord* fc = first->chord();
                               const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
-                              if (!pc || pc.base != "legato" || pc.patch != c.patch)
+                              if (!pc || pc.base != "legato" || pc.patch != c.patch || !pc.articulation->playsTransitions())
                                     continue;
                               // the note before keeps keepMs of its length as played (it may itself have started
                               // early: in a fast slurred run every note starts early by about the same, so each
@@ -1692,9 +1693,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libLegatoOffs.push_back({ libRetrigger, noteChannel, played, true });
                               // a fresh attack on a legato patch ([legato] phraseGapMs; not the fast technique's own
                               // attacks, which keep their cut at the note-on): an articulation that plays legato
-                              // transitions, whatever this note asked for (SSO's held notes play it too: prefer="long")
+                              // transitions (playsTransitions()), whatever this note asked for (a held note may play it:
+                              // prefer="long")
                               if (!libTransitionFrom && !libRetrigger && libChoice && !li->kit
-                                  && libChoice.articulation->techniques.contains("legato"))
+                                  && libChoice.articulation->playsTransitions())
                                     libFreshAttacks.push_back({ note, noteChannel, libChoice.patch, played });
                               }
                         if (config.libOn && libShiftOn >= 0 && libShiftOn < libShiftWritten)

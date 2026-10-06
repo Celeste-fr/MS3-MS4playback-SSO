@@ -1641,7 +1641,7 @@ void ArticulationCheckDialog::measureTiming(const SoundLib::LibInstrument& ins, 
       // is "long legato", a note that stands for a slur there but has no legato transitions: the owner's
       // first run, 2026-09-29, measured retriggers on it)
       for (const SoundLib::Articulation& a : ins.articulations)
-            if (a.techniques.value(0) == "legato")
+            if (a.playsTransitions())
                   for (size_t i = 0; i < values.size(); ++i)
                         if (values[i] == a.value)
                               legato[i] = true;
@@ -1780,7 +1780,7 @@ void ArticulationCheckDialog::measureRest(const SoundLib::LibInstrument& ins, Vs
       auto isLegato = [&](int value) {
             for (const SoundLib::Articulation& a : ins.articulations)
                   if (a.value == value)
-                        return a.techniques.value(0) == "legato" || (a.techniques.isEmpty() && legatoPatch.match(ins.name).hasMatch());
+                        return a.playsTransitions() || (a.techniques.isEmpty() && legatoPatch.match(ins.name).hasMatch());
             return value == -1 && legatoPatch.match(ins.name).hasMatch();
             };
       // the controls: every control the map names (the patch's own first, then any other instrument's), that this

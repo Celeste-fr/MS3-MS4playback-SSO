@@ -371,7 +371,7 @@ void TestSoundLibrary::spitfireMap()
             values += p.scan == "values";
             keys += p.scan == "keys" && p.keyScan;
             }
-      QCOMPARE(int(lib->otherPatches.size()), 541 + 9);    // (+ 4 kits and 5 ensembles with every technique on)
+      QCOMPARE(int(lib->otherPatches.size()), 541 + 9 + 43);    // (+ 4 kits and 5 ensembles with every technique on, + the 43 Performance patches)
       QCOMPARE(values, 0);                                  // (every values patch's values are known)
       QCOMPARE(keys, 7);
       int scanned = 0;
@@ -572,8 +572,8 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, {} }), 1);
       // listed without techniques (silent in the owner's patch): never chosen
       QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, { "sulg" } }), 1);
-      // extra patches: slurred notes on the Performance (legato) patch, a muted slur on Long CS,
-      // legato "sul G" on the Sul G Performance patch, staccatissimo on its own patch
+      // slurred notes on the main patch's Long (no Performance patches, the owner 2026-10-06), a muted slur on
+      // Long CS; extra patches: "sul G" on the Long Sul G patch, staccatissimo on its own patch
       auto patchFor = [&](const QString& name, const SoundLib::Want& want) {
             for (const SoundLib::LibInstrument& li : lib->instruments) {
                   if (li.name == name) {
@@ -584,22 +584,22 @@ void TestSoundLibrary::spitfireMap()
                   }
             return QString("?");
             };
-      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, {} }), QString("Violins 1 - Performance: Legato"));
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, {} }), QString("Violins 1: Long"));
       QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "muted" } }), QString("Violins 1: Long CS"));
-      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "sulg" } }), QString("Violins 1 - Sul G - Performance: Legato Sul G"));
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "sulg" } }), QString("Strings - Violins 1 - Long Sul G: Long Sul G"));
       QCOMPARE(patchFor("Violins 1", { { "long" }, { "sulg" } }), QString("Strings - Violins 1 - Long Sul G: Long Sul G"));
-      // a held note on the Performance patch with the slurred ones (prefer="long"; 2026-09-28)
-      QCOMPARE(patchFor("Violins 1", { { "long" }, {} }), QString("Violins 1 - Performance: Legato"));
-      QCOMPARE(patchFor("Solo Violin 1", { { "long" }, {} }), QString("Solo Violin - Performance: Legato"));
+      // a held note on the same Long as the slurred ones
+      QCOMPARE(patchFor("Violins 1", { { "long" }, {} }), QString("Violins 1: Long"));
+      QCOMPARE(patchFor("Solo Violin 1", { { "long" }, {} }), QString("Solo Violin 1: Long"));
       QCOMPARE(patchFor("Solo Violin 1", { { "short", "staccatissimo" }, {} }), QString("Solo Violin 1: staccato"));
       // the section strings' three lengths (2026-09-28): staccatissimo, staccato, tenuto
       QCOMPARE(patchFor("Violins 1", { { "staccatissimo", "spiccato", "short" }, {} }), QString("Violins 1: Spiccato"));
       QCOMPARE(patchFor("Violins 1", { { "short" }, {} }), QString("Violins 1: Short 0.5"));
       QCOMPARE(patchFor("Violins 1", { { "tenuto", "short" }, {} }), QString("Violins 1: Short 1.0"));
       QCOMPARE(patchFor("Violins 1", { { "short" }, { "muted" } }), QString("Violins 1: Short CS"));
-      // espressivo: a held note plays Long (Rachm.), a slurred one keeps the Performance legato
+      // espressivo: a held or slurred note plays Long (Rachm.)
       QCOMPARE(patchFor("Violins 1", { { "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
-      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1 - Performance: Legato"));
+      QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
       QCOMPARE(patchFor("Violins 1", { { "short" }, { "espressivo" } }), QString("Violins 1: Short 0.5"));
       // the balance families, from the patches' folders (an extra patch: its main patch's)
       auto familyOf = [&](const QString& name) {
@@ -634,9 +634,9 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(byLength({ A::Staccato }, 0.55), QString("Violins 2: Spiccato"));          // a quarter at 110: 0.28 s meant
       QCOMPARE(byLength({ A::Staccato }, 0.9), QString("Violins 2: Short 0.5"));          // 0.45 s meant
       QCOMPARE(byLength({ A::Staccato, A::Accent }, 0.27), QString("Violins 2: Spiccato"));
-      QCOMPARE(byLength({ A::Tenuto }, 1.1), QString("Violins 2 - Performance: Legato"));   // a held note
+      QCOMPARE(byLength({ A::Tenuto }, 1.1), QString("Violins 2: Long"));                     // a held note
       QCOMPARE(byLength({ A::Tenuto }, 0.55), QString("Violins 2: Short 0.5"));
-      QCOMPARE(byLength({ A::Tenuto }, 0.3), QString("Violins 2 - Performance: Legato"));    // fast: no spiccato
+      QCOMPARE(byLength({ A::Tenuto }, 0.3), QString("Violins 2: Long"));                      // fast: no spiccato
       QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 1.1), QString("Violins 2: Short 1.0")); // portato, 0.82 s meant
       QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.8), QString("Violins 2: Short 0.5")); // portato, 0.6 s: detached
       QCOMPARE(byLength({ A::Staccato, A::Tenuto }, 0.27), QString("Violins 2: Spiccato"));
@@ -647,7 +647,7 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 2", { { "short" }, {} }), QString("Violins 2: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
                QString("Brass - Horn Solo - Short Staccatissimo: Short Staccatissimo"));
-      QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Horns a4 - Performance: Legato"));
+      QCOMPARE(patchFor("Motif Horns a4", { { "legato", "long" }, {} }), QString("Motif Horns a4: Long"));
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (li.extra())
                   QVERIFY2(li.switchType == SoundLib::SwitchType::NONE, qPrintable(li.name));
@@ -1391,32 +1391,22 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
       QCOMPARE(plain.legatoDelayAt(12, 72), 800.0);
       QCOMPARE(plain.legatoDelayAt(-12, 84), 400.0);
 
-      // the shipped map: Oboe Solo's +12 per-start values carry no sweep correction (raw 160 at 58), its -12 do (raw
-      // 110 at 70 + 60); Violins 2's take the patch's +25 and the per-direction octave correction -30 / -30 (the
-      // octave sweep of 5698181 heard both directions 30 ms early): raw 360 at 56 up, 280 at 68 down, each -5
+      // the shipped map plays no legato transitions: no Performance patches (the owner, 2026-10-06), slurs play the All
+      // techniques longs ("long legato": each note its own attack)
       {
       QString err;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
       QVERIFY2(sso, qPrintable(err));
-      int found = 0;
+      int slurred = 0;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
-            if (li.name != "Oboe Solo - Performance" && li.name != "Violins 2 - Performance")
-                  continue;
+            QVERIFY2(!li.name.contains("Performance"), qPrintable(li.name));
             for (const SoundLib::Articulation& oa : li.articulations) {
-                  if (oa.octaveUp.empty())
-                        continue;
-                  ++found;
-                  if (li.name == "Oboe Solo - Performance") {
-                        QCOMPARE(oa.legatoDelayAt(12, 58), 160.0);
-                        QCOMPARE(oa.legatoDelayAt(-12, 70), 170.0);
-                        }
-                  else {
-                        QCOMPARE(oa.legatoDelayAt(12, 56), 355.0);
-                        QCOMPARE(oa.legatoDelayAt(-12, 68), 275.0);
-                        }
+                  QVERIFY2(!oa.playsTransitions() && oa.legatoDelays.empty(), qPrintable(li.name + ": " + oa.name));
+                  if (oa.techniques.contains("legato"))
+                        ++slurred;
                   }
             }
-      QCOMPARE(found, 2);
+      QVERIFY(slurred > 0);
       }
       // the renderer passes the start pitch
       SoundLib::setCurrent(lib);
@@ -3386,7 +3376,7 @@ void TestSoundLibrary::tuningBendAtArrival()
                "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
                "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
                "<Instrument name='Violin' ids='violin' bend='200'>"
-               "<Articulation name='Long' value='1' techniques='long legato' legatoDelay='" + delay + "'/>"
+               "<Articulation name='Long' value='1' techniques='legato long' legatoDelay='" + delay + "'/>"
                "</Instrument></SoundLibrary>");
             };
       auto lib = mapWith("200");
@@ -3692,7 +3682,7 @@ void TestSoundLibrary::tuningBend()
                "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
                "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
                "<Instrument name='Violin' ids='violin'" + bend + ">"
-               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "<Articulation name='Long' value='1' techniques='legato long'/>"
                "</Instrument></SoundLibrary>");
             };
       auto lib = mapWith(" bend='200'");

@@ -169,7 +169,9 @@ class TestMarcatoLevel : public QObject, public MTest
 //    marcatos without a level play as before the setting existed: the events (built-in and SSO) of
 //    main 922a4849dc (SSO's velocity marcatos regenerated 2026-10-02 without MS4's accent boost: mf 103 -> 80, f 123 -> 96; regenerated
 //    2026-10-04 for [legato] phraseGapMs: five SSO note-offs before a fresh attack on the legato patch end 44-58 ticks earlier,
-//    the built-in events unchanged), kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
+//    the built-in events unchanged; regenerated 2026-10-06 without the Performance patches: the trumpet's and tuba's slurs play
+//    their main patch's Long (switch, onset early, the tuba on channel 2), the strings' notes before a slurred one end as written),
+//    kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
 //    events there instead (to make the reference again after an intended playback change)
 //---------------------------------------------------------
 
@@ -415,7 +417,7 @@ void TestMarcatoLevel::velocityPath()
       QCOMPARE(s->parts().at(1)->instrument()->getId(), QString("trumpet"));
       const std::vector<Ev> before = render(s, lib, 0, 1);
       QCOMPARE(noteOn(before, 72), 80);                  // mf: the plain level, no MS4 accent boost
-      QCOMPARE(noteOn(render(s, lib, 0, 3), 48), 80);    // the tuba likewise (was 103)
+      QCOMPARE(noteOn(render(s, lib, 0, 2), 48), 80);    // the tuba likewise (was 103)
       QCOMPARE(noteOn(before, 79), 96);                  // marcato-tenuto at f: the plain f (was 123)
       setLevel(marcato(s, 1, 0), -6);
       const std::vector<Ev> after = render(s, lib, 0, 1);

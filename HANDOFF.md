@@ -5,6 +5,18 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## No Performance patches (2026-10-06)
+
+The owner: "NO using performance patches. with all technique patches we have control of release, tightness, CC
+mapped vel. … and sync to tempo". The SSO map has no Performance extras; slurs play the All techniques longs, each
+note its own attack, early by its onset (`Articulation::playsTransitions`). The legato-timing items below are about
+Performance patches and wait unless a legato patch comes back. Open: the owner tried the Options page's *CC mapped
+vel.* and *Sync to tempo* (script options, not plug-in parameters: their script variables are unknown, finding them
+is a VM measurement) and Release / Tightness (plug-in parameters, settable as Controllers); values only through
+MuseScore once the owner names them. Unmeasured: how the All techniques longs sound slurred at speed. A slurred
+"espr." note now plays Long (Rachm.) as a held one does (`long legato`, as Long CS plays muted slurs; it played the
+Performance legato): offer to the owner, revert in the generator's table if they prefer plain Long.
+
 ## Where things are (2026-10-02)
 
 - `main` has everything: `live-set-export` / `claude/intelligent-volta-gx7gmw`, `automation-editor`, the

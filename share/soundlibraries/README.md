@@ -171,10 +171,14 @@ switch value of each articulation. For example:
   the technique (listed first). An extra patch is loaded only when the part's notation asks for
   one of its articulations and, hosted by MuseScore, once it is set up (*Check articulations ›
   Set up…*); until then the main patch plays those notes. A legato articulation's notes overlap
-  the next note a little, as legato patches need.
+  the next note a little, as legato patches need. An articulation whose first technique is `legato`
+  is a legato patch's own: slurred notes on it join by legato transitions (`legatoDelay`, below). One
+  that plays slurs but lists another technique first (`techniques="long legato"`) attacks each
+  slurred note anew (SSO's All techniques longs; the SSO map has no Performance patches since
+  2026-10-06, the owner's choice).
 
   ```xml
-  <Instrument name="Violins 1 - Performance" with="Violins 1">
+  <Instrument name="Strings - Violins 1 - Legato" with="Violins 1">
     <Articulation name="Legato" value="20" techniques="legato"/>   <!-- slurred notes -->
   </Instrument>
   ```
@@ -203,7 +207,8 @@ switch value of each articulation. For example:
   - `onset` on an `Articulation` (ms): a sustained note is heard this long after its note-on (its
     level 15 dB under the note's peak), one number or `pitch:ms` pairs by played MIDI pitch
     (`onset="55:65 68:55 78:65 89:40 97:80"`, linear between, the nearest end's beyond). A note that is
-    not a legato transition (a lone held note, a slur's first note) starts early by it times `<Onset
+    not a legato transition (a lone held note, a slur's first note, any slurred note on an articulation
+    that doesn't list `legato` first) starts early by it times `<Onset
     early>` percent; a chord by its notes' latest. As for transitions, the note just before on its
     track, when it plays on the same patch, loses at most a share of its length (none up to 125 ms,
     half from 250 ms), and it never starts before the chunk's or the repeat's start (a chunk of live
