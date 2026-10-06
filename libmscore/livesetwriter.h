@@ -123,6 +123,21 @@ struct ParameterAutomation {
       std::vector<std::pair<double, double>> points;
       };
 
+// an envelope of the track's own mixer as Live keeps it (the owner's, read back from a saved set: livetracks.h): its
+// events (beats in the song) with their curves, the value before the first ("initial", -1: the first event's)
+struct MixerAutomation {
+      enum class Target : signed char { VOLUME, PAN, SPEAKER };
+      Target target { Target::VOLUME };
+      double initial { -1 };
+      struct Event {
+            double time { 0 };
+            double value { 0 };           // Volume: a linear gain; Pan -1 … 1; Speaker 0 / 1 (written as Live's BoolEvent)
+            bool curved { false };        // CurveControl1X/1Y/2X/2Y written
+            double c1x { 1.0 / 3 }, c1y { 1.0 / 3 }, c2x { 2.0 / 3 }, c2y { 2.0 / 3 };
+            };
+      std::vector<Event> events;
+      };
+
 struct Track {
       QString name;
       QString portName;                   // MIDI From: "MuseScore A" …; "" : All Ins
@@ -152,6 +167,8 @@ struct Track {
       int midiTo { -1 };                  // MIDI To: the track (its index in Spec::tracks) whose plug-in plays this one's MIDI
       std::vector<Clip> clips;            // arrangement clips, by start, not overlapping
       std::vector<ParameterAutomation> automation;
+      std::vector<MixerAutomation> mixerAutomation;   // (a group's too)
+      QString annotation;                 // the track's Info text (Name/Annotation): the plain set's track key
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name
@@ -201,6 +218,9 @@ double mixGain(int volume);
 // sine/cosine laws, 0 dB at the centre and +3 dB fully panned (Live 12 manual, Audio Fact Sheet › Panning), so the
 // same position gives the same gains
 double mixPan(int pan);
+// back (a Live track's mixer read for the part's Mixer, livetracks.h): the nearest Mixer value, 0-127
+int mixVolume(double gain);
+int mixPanValue(double pan);
 
 // Live's time signature number; -1: one Live can't have (numerator 1-99, denominator 1, 2, 4, 8, 16)
 int timeSignatureId(int numerator, int denominator);

@@ -27,6 +27,13 @@
 namespace Ms {
 namespace LiveSetWriter {
 
+// the AutomationTarget ids of a track's mixer Volume, Pan and Speaker (0: given when written)
+struct MixerTargets {
+      int volume { 0 };
+      int pan { 0 };
+      int speaker { 0 };
+      };
+
 //---------------------------------------------------------
 //   Writer
 //    Live's layout: tabs, CRLF, "<Tag Value="…" />", empty elements "<Tag />"
@@ -122,12 +129,12 @@ class Writer {
             close(tag);
             }
       // an on / off switch (a device's On, the Mixer's Speaker)
-      void onOff(const char* tag, bool on = true)
+      void onOff(const char* tag, bool on = true, int targetId = 0)
             {
             open(tag);
             value("LomId", 0);
             value("Manual", on);
-            target("AutomationTarget");
+            target("AutomationTarget", targetId);
             range("MidiCCOnOffThresholds", "64", "127");
             close(tag);
             }
@@ -252,7 +259,7 @@ class Writer {
             value("SampleOffsetModulationScrollPosition", -1073741824);
             recorder(1);
             }
-      void trackHead(const QString& effectiveName, const QString& userName, int color)
+      void trackHead(const QString& effectiveName, const QString& userName, int color, const QString& annotation = QString())
             {
             value("LomId", 0);
             value("LomIdView", 0);
@@ -265,7 +272,7 @@ class Writer {
             open("Name");
             value("EffectiveName", effectiveName);
             value("UserName", userName);
-            value("Annotation", "");
+            value("Annotation", annotation);
             value("MemorizedFirstClipName", "");
             close("Name");
             value("Color", color);
@@ -305,18 +312,19 @@ class Writer {
             close("ClipEnvelopeChooserViewState");
             }
       // a track's mixer, up to its SendsListWrapper (the main track's goes on with the song's tempo …)
-      // (speaker: the Track Activator, off = the track muted; pan -1 … 1, volume a linear gain, 1 = 0 dB)
-      void mixerStart(double volume, int trackWidth, double pan = 0, bool speaker = true)
+      // (speaker: the Track Activator, off = the track muted; pan -1 … 1, volume a linear gain, 1 = 0 dB; ids: their
+      // AutomationTargets' ids when an envelope points at them, else 0: new ones)
+      void mixerStart(double volume, int trackWidth, double pan = 0, bool speaker = true, const MixerTargets& ids = MixerTargets())
             {
             deviceHeader(true, false);
             empty("Sends");                         // (no return tracks)
-            onOff("Speaker", speaker);
+            onOff("Speaker", speaker, ids.speaker);
             value("SoloSink", false);
             value("PanMode", 0);
-            param("Pan", num(pan), "-1", "1");
+            param("Pan", num(pan), "-1", "1", true, ids.pan);
             param("SplitStereoPanL", "-1", "-1", "1");
             param("SplitStereoPanR", "1", "-1", "1");
-            param("Volume", num(volume), "0.0003162277571", "1.99526238");
+            param("Volume", num(volume), "0.0003162277571", "1.99526238", true, ids.volume);
             value("ViewStateSessionTrackWidth", trackWidth);
             paramRangeAfter("CrossFadeState", "1", "0", "2");
             lom("SendsListWrapper");
@@ -330,9 +338,12 @@ class Writer {
 // a group track (Live 12.2's, as the owner's sets have them): no devices, a group slot per scene; groupTrackId: the
 // group it is in (its track Id), -1: none
 void groupTrack(Writer& w, const Track& t, int trackId, int groupTrackId, int scenes);
-// a track's AutomationEnvelopes: its plug-in parameters' automation; parameterTargets: the AutomationTarget id of each
-// of Plugin::parameters' ParameterValue (pluginDevice writes them with these ids)
-void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets);
+// a track's AutomationEnvelopes: its plug-in parameters' automation and its mixer's; parameterTargets: the AutomationTarget
+// id of each of Plugin::parameters' ParameterValue (pluginDevice writes them with these ids); mixer: its mixer's (as
+// mixerTargets gave them, mixerStart writes them)
+void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets, const MixerTargets& mixer);
+// the ids of the mixer targets the track's mixerAutomation points at (taken from the writer now), the others 0
+MixerTargets mixerTargets(Writer& w, const Track& t);
 // the MainSequencer's ClipTimeable: the track's arrangement clips; controllerTargets: the ids of the track's
 // MidiControllers (ControllerTargets.<n>, CONTROLLER_TARGETS of them), written after it with these ids
 constexpr int CONTROLLER_TARGETS = 131;

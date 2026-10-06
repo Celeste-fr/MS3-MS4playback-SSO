@@ -21,7 +21,10 @@
 //   use (DawVert's ableton parser, dawtool, WaveSabre's LiveParser) and are **unverified against
 //   a Live 12 file of the owner's** until one is tried (the tests' sets are built by hand):
 //     Ableton/LiveSet/Tracks/MidiTrack (also AudioTrack, GroupTrack, ReturnTrack)
-//       Name/EffectiveName, Name/UserName (Value=)
+//       Id=, TrackGroupId (the group track's Id, -1: none)
+//       Name/EffectiveName, Name/UserName, Name/Annotation (the track's Info text) (Value=)
+//       DeviceChain/MidiOutputRouting/Target (MIDI To another track: "MidiOut/Track.<id>/TrackIn")
+//       DeviceChain/Mixer/Volume, Pan, Speaker: Manual Value= and an AutomationTarget Id= (the track's mixer)
 //       DeviceChain/MidiInputRouting/Target (Value="MidiIn/External.<device>/<channel>" …),
 //         UpperDisplayString, LowerDisplayString
 //       DeviceChain/DeviceChain/Devices/PluginDevice: PluginDesc/Vst3PluginInfo/Name (or
@@ -94,6 +97,8 @@ struct Envelope {
       std::vector<Point> points;    // by beat; curves already made into straight segments
       std::vector<Event> events;    // as Live has them (the default event left out: initial), by time
       bool inClip { false };        // a clip's envelope (its own axis, looped: points placed in the arrangement)
+      // the track's own mixer (OTHER): "volume", "pan" or "speaker" (the Track Activator, 0 / 1); "" : not the mixer's
+      QString mixer;
       };
 
 // an arrangement MIDI clip (MainSequencer/…/ArrangerAutomation/Events/MidiClip)
@@ -117,6 +122,17 @@ struct Track {
       QStringList devices;          // its plug-ins
       std::vector<Envelope> envelopes;
       std::vector<ArrangementClip> clips;
+      // the plain set's read-back (livetracks.h): the track's Id= and its group's (TrackGroupId, -1: none), its Info
+      // text (Name/Annotation: the plain set's track key), MIDI To (MidiOutputRouting/Target: "MidiOut/Track.<id>/TrackIn")
+      int id { -1 };
+      int groupId { -1 };
+      QString annotation;
+      QString outputTarget;
+      // its mixer's static values (DeviceChain/Mixer/<Volume|Pan|Speaker>/Manual); hasMixer: read
+      bool hasMixer { false };
+      double volume { 1 };          // a linear gain (1 = 0 dB)
+      double pan { 0 };             // -1 … 1
+      bool active { true };         // the Track Activator (Speaker)
       };
 
 struct Set {
@@ -177,9 +193,18 @@ QString looseTitle(const QString& t);
 // a port name without its driver's prefix ("MMSystem,MuseScore A" -> "MuseScore A")
 QString portDisplayName(const QString& interfaceAndName);
 
-// the lanes for the score: marked "source": "live" with the set's path and time (automation.h)
+// a track whose part is already known (the plain set's, livetracks.h): its part (nullptr: none) and which of its
+// envelopes become lanes (by index in Track::envelopes)
+struct Bound {
+      const Part* part { nullptr };
+      std::vector<bool> take;
+      };
+
+// the lanes for the score: marked "source": "live" with the set's path and time (automation.h); `bound`: by index in
+// set.tracks, the tracks matched already (the others by MIDI input, else name)
 std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, const Set& set, const std::vector<PartInfo>& parts,
-                                                   const QString& path, const QDateTime& modified, Report* report);
+                                                   const QString& path, const QDateTime& modified, Report* report,
+                                                   const std::map<size_t, Bound>* bound = nullptr);
 
 }     // namespace LiveSet
 }     // namespace Ms

@@ -45,6 +45,7 @@
 #include <vector>
 
 #include <QString>
+#include <QStringList>
 
 #include "liveclips.h"
 #include "livesetwriter.h"
@@ -142,9 +143,18 @@ int restValue(const SoundLib::LibInstrument* instrument);
 //   - a keyswitch: one clip the whole song long, a key note one unit long at each run's switch.
 std::vector<LiveSetWriter::Clip> switchClips(const Kontakt& kontakt, size_t technique, int length);
 
+// a track's key (livetracks.h: what MuseScore knows the track by when the set comes back), written into its Info text
+// (Live's Name/Annotation): KEY_PREFIX and its path joined by " / ": the section; section / part; section / part /
+// Kontakt track; section / part / Kontakt track / technique. A " / " inside a name is written "/", so the path splits
+// back; a key met again in one set gets " (2)", " (3)" …
+extern const char* const KEY_PREFIX;            // "MuseScore: "
+QString trackKey(const QStringList& path);
+QStringList keyPath(const QString& annotation); // the path; empty: not a key
+
 // the set's tracks (LiveSetWriter::Spec::tracks): per section a group, in it a group per part, in that per patch its
 // Kontakt track (the part's Mixer; its lanes in a "Controllers" clip, its parameters as automation; the caller adds the
-// plug-in, as for the routes' tracks) and a track per technique (switchClips, MIDI To the Kontakt)
+// plug-in, as for the routes' tracks) and a track per technique (switchClips, MIDI To the Kontakt); each with its key
+// (trackKey) as its annotation
 std::vector<LiveSetWriter::Track> tracks(const Layout& layout);
 
 }     // namespace PlainLiveSet

@@ -159,6 +159,7 @@ struct ParamTarget {
       QString name;
       int id { -1 };
       int cc { -1 };
+      QString mixer;                // the track's mixer: "volume", "pan", "speaker"
       };
 
 struct TrackState {
@@ -276,6 +277,7 @@ static Envelope resolve(const RawEnvelope& raw, const TrackState& ts)
             e.parameter = it->second.name;
             e.parameterId = it->second.id;
             e.cc = it->second.cc;
+            e.mixer = it->second.mixer;
             }
       else
             e.parameter = QString("target %1").arg(raw.pointee);
@@ -384,6 +386,7 @@ Set parse(const QByteArray& xml)
                   if (!ts && isTrack(n) && parent() == "Tracks") {
                         ts.reset(new TrackState);
                         ts->track.kind = n.toString();
+                        ts->track.id = a.hasAttribute("Id") ? a.value("Id").toInt() : -1;
                         trackDepth = depth;
                         upper.clear();
                         lower.clear();
@@ -416,6 +419,21 @@ Set parse(const QByteArray& xml)
                         ts->effectiveName = value.toString();
                   else if (n == "UserName" && parent() == "Name" && depth == trackDepth + 2)
                         ts->userName = value.toString();
+                  else if (n == "Annotation" && parent() == "Name" && depth == trackDepth + 2)
+                        ts->track.annotation = value.toString();
+                  else if (n == "TrackGroupId" && depth == trackDepth + 1)
+                        ts->track.groupId = value.toInt();
+                  else if (n == "Target" && parent() == "MidiOutputRouting")
+                        ts->track.outputTarget = value.toString();
+                  // the track's mixer (Track/DeviceChain/Mixer/<Volume|Pan|Speaker>/Manual)
+                  else if (n == "Manual" && depth == trackDepth + 4 && parent(2) == "Mixer" && parent(3) == "DeviceChain") {
+                        if (parent() == "Volume")
+                              ts->track.volume = num(value), ts->track.hasMixer = true;
+                        else if (parent() == "Pan")
+                              ts->track.pan = num(value), ts->track.hasMixer = true;
+                        else if (parent() == "Speaker")
+                              ts->track.active = num(value) != 0, ts->track.hasMixer = true;
+                        }
                   else if (parent() == "MidiInputRouting") {
                         if (n == "Target")
                               ts->track.inputTarget = value.toString();
@@ -469,6 +487,9 @@ Set parse(const QByteArray& xml)
                               t.name = parent();
                               if (parent(2) == "Mixer" || parent(2) == "MixerDevice" || parent(3) == "Mixer")
                                     t.name = "Mixer " + t.name;
+                              if (depth == trackDepth + 4 && parent(2) == "Mixer" && parent(3) == "DeviceChain"
+                                  && (parent() == "Volume" || parent() == "Pan" || parent() == "Speaker"))
+                                    t.mixer = parent().toLower();
                               ts->targets[a.value("Id").toString()] = t;
                               }
                         }
@@ -699,7 +720,8 @@ static int firstPassTick(const MasterScore* score, int utick)
       }
 
 std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, const Set& set, const std::vector<PartInfo>& parts,
-                                                   const QString& path, const QDateTime& modified, Report* report)
+                                                   const QString& path, const QDateTime& modified, Report* report,
+                                                   const std::map<size_t, Bound>* bound)
       {
       std::map<const Part*, Automation::PartLanes> out;
       Report rep;
@@ -714,17 +736,33 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
             clipTimeline.bpm = set.tempo;
             rep.matched << QObject::tr("Live played the score as clips: its beats read at %1 bpm.").arg(set.tempo);
             }
-      for (const Track& t : set.tracks) {
+      for (size_t ti = 0; ti < set.tracks.size(); ++ti) {
+            const Track& t = set.tracks[ti];
+            const auto b = bound ? bound->find(ti) : std::map<size_t, Bound>::const_iterator();
+            const bool isBound = bound && b != bound->end();
+            if (isBound && !b->second.part)
+                  continue;
             std::vector<const Envelope*> useful;
-            for (const Envelope& e : t.envelopes)
-                  if (!e.points.empty() || e.initial >= 0)
+            for (size_t k = 0; k < t.envelopes.size(); ++k) {
+                  const Envelope& e = t.envelopes[k];
+                  if ((!e.points.empty() || e.initial >= 0) && (!isBound || (k < b->second.take.size() && b->second.take[k])))
                         useful.push_back(&e);
+                  }
             if (useful.empty())
                   continue;
-            // the part: by MIDI input (port and channel), else by name
+            // the part: known (the plain set's key), else by MIDI input (port and channel), else by name
             const PartInfo* pi = nullptr;
             QString how;
-            if (!t.inputDevice.isEmpty() && t.inputChannel > 0)
+            if (isBound) {
+                  for (const PartInfo& p : parts)
+                        if (p.part == b->second.part)
+                              pi = &p, how = QObject::tr("its key");
+                  if (!pi) {
+                        rep.unmatched << QObject::tr("Track \"%1\": its part doesn't play the sound library").arg(t.name);
+                        continue;
+                        }
+                  }
+            else if (!t.inputDevice.isEmpty() && t.inputChannel > 0)
                   for (const PartInfo& p : parts)
                         if (!p.portName.isEmpty() && loosePort(p.portName) == loosePort(t.inputDevice) && p.channel == t.inputChannel)
                               pi = &p, how = QObject::tr("MIDI input");

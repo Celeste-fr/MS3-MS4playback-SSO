@@ -52,6 +52,39 @@ static void automationEvents(Writer& w, const std::vector<std::pair<double, doub
       w.close("Automation");
       }
 
+// a mixer envelope's events as Live keeps them: FloatEvent (with its curve's control points when curved), BoolEvent for
+// the Speaker (Value true / false); the first at -63072000 its value before everything
+static void mixerEvents(Writer& w, const MixerAutomation& m)
+      {
+      w.open("Automation");
+      w.open("Events");
+      const bool speaker = m.target == MixerAutomation::Target::SPEAKER;
+      auto value = [speaker](double v) -> QByteArray {
+            if (speaker)
+                  return v >= 0.5 ? "true" : "false";
+            return Writer::num(v).toUtf8();
+            };
+      const char* tag = speaker ? "BoolEvent" : "FloatEvent";
+      int id = 0;
+      if (!m.events.empty() || m.initial >= 0)
+            w.empty(tag, "Id=\"" + QByteArray::number(id++) + "\" Time=\"" + BEFORE_EVERYTHING + "\" Value=\""
+                    + value(m.initial >= 0 || m.events.empty() ? m.initial : m.events.front().value) + "\"");
+      for (const MixerAutomation::Event& e : m.events) {
+            QByteArray a = "Id=\"" + QByteArray::number(id++) + "\" Time=\"" + Writer::num(e.time).toUtf8() + "\" Value=\""
+                           + value(e.value) + "\"";
+            if (e.curved && !speaker)
+                  a += " CurveControl1X=\"" + Writer::num(e.c1x).toUtf8() + "\" CurveControl1Y=\"" + Writer::num(e.c1y).toUtf8()
+                       + "\" CurveControl2X=\"" + Writer::num(e.c2x).toUtf8() + "\" CurveControl2Y=\"" + Writer::num(e.c2y).toUtf8() + "\"";
+            w.empty(tag, a);
+            }
+      w.close("Events");
+      w.open("AutomationTransformViewState");
+      w.value("IsTransformPending", false);
+      w.empty("TimeAndValueTransforms");
+      w.close("AutomationTransformViewState");
+      w.close("Automation");
+      }
+
 static void scroller(Writer& w, double right)
       {
       w.open("ScrollerTimePreserver");
@@ -67,10 +100,9 @@ static void scroller(Writer& w, double right)
 void groupTrack(Writer& w, const Track& t, int trackId, int groupTrackId, int scenes)
       {
       w.open("GroupTrack", "Id=\"" + QByteArray::number(trackId) + "\" SelectedToolPanel=\"7\" SelectedTransformationName=\"\" SelectedGeneratorName=\"\"");
-      w.trackHead(t.name, t.name, t.color);
-      w.open("AutomationEnvelopes");
-      w.empty("Envelopes");
-      w.close("AutomationEnvelopes");
+      w.trackHead(t.name, t.name, t.color, t.annotation);
+      const MixerTargets mixer = mixerTargets(w, t);
+      automationEnvelopes(w, t, {}, mixer);
       w.trackLists(t.unfolded, groupTrackId);
       w.open("Slots");
       for (int i = 0; i < scenes; ++i) {
@@ -91,7 +123,7 @@ void groupTrack(Writer& w, const Track& t, int trackId, int groupTrackId, int sc
             w.routing("AudioOutputRouting", "AudioOut/Main", "Master", "");
       w.routing("MidiOutputRouting", "MidiOut/None", "None", "");
       w.open("Mixer");
-      w.mixerStart(t.volume, 74, t.pan, t.active);
+      w.mixerStart(t.volume, 74, t.pan, t.active, mixer);
       w.close("Mixer");
       w.open("DeviceChain");
       w.empty("Devices");
@@ -112,7 +144,18 @@ void groupTrack(Writer& w, const Track& t, int trackId, int groupTrackId, int sc
 //   automationEnvelopes
 //---------------------------------------------------------
 
-void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets)
+MixerTargets mixerTargets(Writer& w, const Track& t)
+      {
+      MixerTargets m;
+      for (const MixerAutomation& a : t.mixerAutomation) {
+            int& id = a.target == MixerAutomation::Target::VOLUME ? m.volume : (a.target == MixerAutomation::Target::PAN ? m.pan : m.speaker);
+            if (!id)
+                  id = w.id();
+            }
+      return m;
+      }
+
+void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets, const MixerTargets& mixer)
       {
       std::vector<std::pair<int, const ParameterAutomation*>> found;      // (target id, automation)
       if (t.hasPlugin) {
@@ -124,8 +167,17 @@ void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& para
                               }
                   }
             }
+      // the mixer's: one envelope a target (the first given)
+      std::vector<std::pair<int, const MixerAutomation*>> mixed;
+      for (const MixerAutomation& a : t.mixerAutomation) {
+            const int id = a.target == MixerAutomation::Target::VOLUME ? mixer.volume
+                           : (a.target == MixerAutomation::Target::PAN ? mixer.pan : mixer.speaker);
+            if (id && (!a.events.empty() || a.initial >= 0)
+                && std::none_of(mixed.begin(), mixed.end(), [id](const std::pair<int, const MixerAutomation*>& m) { return m.first == id; }))
+                  mixed.push_back({ id, &a });
+            }
       w.open("AutomationEnvelopes");
-      if (found.empty())
+      if (found.empty() && mixed.empty())
             w.empty("Envelopes");
       else {
             w.open("Envelopes");
@@ -136,6 +188,14 @@ void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& para
                   w.value("PointeeId", f.first);
                   w.close("EnvelopeTarget");
                   automationEvents(w, f.second->points);
+                  w.close("AutomationEnvelope");
+                  }
+            for (const auto& m : mixed) {
+                  w.open("AutomationEnvelope", "Id=\"" + QByteArray::number(id++) + "\"");
+                  w.open("EnvelopeTarget");
+                  w.value("PointeeId", m.first);
+                  w.close("EnvelopeTarget");
+                  mixerEvents(w, *m.second);
                   w.close("AutomationEnvelope");
                   }
             w.close("Envelopes");

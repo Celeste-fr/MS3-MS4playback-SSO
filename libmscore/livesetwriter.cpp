@@ -211,13 +211,14 @@ void midiTrack(Writer& w, const Spec& spec, int index)
       const Track& t = spec.tracks[size_t(index)];
       const LinkDevice& link = spec.link;
       w.open("MidiTrack", "Id=\"" + QByteArray::number(trackIdOf(index)) + "\" SelectedToolPanel=\"7\" SelectedTransformationName=\"\" SelectedGeneratorName=\"\"");
-      w.trackHead(t.name, t.name, t.color);
-      // the plug-in parameters' automation targets, known before the envelopes pointing at them
+      w.trackHead(t.name, t.name, t.color, t.annotation);
+      // the plug-in parameters' and the mixer's automation targets, known before the envelopes pointing at them
       std::vector<int> parameterTargets;
       if (t.hasPlugin)
             for (size_t i = 0; i < t.plugin.parameters.size(); ++i)
                   parameterTargets.push_back(w.id());
-      automationEnvelopes(w, t, parameterTargets);
+      const MixerTargets mixer = mixerTargets(w, t);
+      automationEnvelopes(w, t, parameterTargets, mixer);
       w.trackLists(true, trackIdOf(t.groupIndex));
       w.value("SavedPlayingSlot", -1);
       w.value("SavedPlayingOffset", 0);
@@ -246,7 +247,7 @@ void midiTrack(Writer& w, const Spec& spec, int index)
       else
             w.routing("MidiOutputRouting", "MidiOut/None", "None", "");
       w.open("Mixer");
-      w.mixerStart(t.volume, 93, t.pan, t.active);
+      w.mixerStart(t.volume, 93, t.pan, t.active, mixer);
       w.close("Mixer");
 
       w.open("MainSequencer");
@@ -1046,6 +1047,17 @@ double mixPan(int pan)
       {
       pan = std::max(0, std::min(127, pan));
       return pan < 64 ? (pan - 64) / 64.0 : (pan - 64) / 63.0;
+      }
+
+int mixVolume(double gain)
+      {
+      return std::max(0, std::min(127, int(std::lround(std::sqrt(std::max(0.0, gain)) * 100))));
+      }
+
+int mixPanValue(double pan)
+      {
+      pan = std::max(-1.0, std::min(1.0, pan));
+      return std::max(0, std::min(127, int(std::lround(pan < 0 ? 64 + pan * 64 : 64 + pan * 63))));
       }
 
 int timeSignatureId(int numerator, int denominator)

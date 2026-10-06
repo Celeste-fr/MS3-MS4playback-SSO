@@ -11,6 +11,7 @@
 #include "plainliveset.h"
 
 #include <algorithm>
+#include <cstring>
 #include <deque>
 #include <set>
 
@@ -406,6 +407,23 @@ std::vector<LiveSetWriter::Clip> switchClips(const Kontakt& kontakt, size_t tech
       return { clip };
       }
 
+const char* const KEY_PREFIX = "MuseScore: ";
+
+QString trackKey(const QStringList& path)
+      {
+      QStringList l;
+      for (const QString& n : path)
+            l << QString(n).replace(" / ", "/");
+      return KEY_PREFIX + l.join(" / ");
+      }
+
+QStringList keyPath(const QString& annotation)
+      {
+      if (!annotation.startsWith(KEY_PREFIX) || annotation.size() == int(strlen(KEY_PREFIX)))
+            return QStringList();
+      return annotation.mid(int(strlen(KEY_PREFIX))).split(" / ");
+      }
+
 std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
       {
       std::vector<LiveSetWriter::Track> out;
@@ -417,6 +435,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
             sg.group = true;
             sg.link = false;
             sg.color = LiveSetWriter::partColor(partNumber);
+            sg.annotation = trackKey({ s.name });
             out.push_back(sg);
             for (const PartTracks& p : s.parts) {
                   const int color = LiveSetWriter::partColor(partNumber++);
@@ -427,6 +446,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                   pg.link = false;
                   pg.color = color;
                   pg.groupIndex = sectionIndex;
+                  pg.annotation = trackKey({ s.name, p.name });
                   out.push_back(pg);
                   const SoundLib::PartMix mix = SoundLib::partMix(p.part, false);
                   for (const Kontakt& k : p.kontakts) {
@@ -444,6 +464,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                         kt.channel = k.channel + 1;
                         kt.routeKey = QString("%1:%2").arg(k.port).arg(kt.channel);
                         kt.routePatch = k.patchIndex;
+                        kt.annotation = trackKey({ s.name, p.name, kt.name });
                         kt.volume = LiveSetWriter::mixGain(mix.volume);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
                         kt.active = !mix.muted;
@@ -482,10 +503,18 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                               tt.part = p.name;
                               tt.partRef = p.part;
                               tt.clips = switchClips(k, i, layout.length);
+                        tt.annotation = trackKey({ s.name, p.name, out[size_t(kontaktIndex)].name, k.techniques[i].name });
                               out.push_back(tt);
                               }
                         }
                   }
+            }
+      // a key met again (two parts of one name): " (2)", " (3)" …
+      std::map<QString, int> seen;
+      for (LiveSetWriter::Track& t : out) {
+            const int n = ++seen[t.annotation];
+            if (n > 1)
+                  t.annotation += QString(" (%1)").arg(n);
             }
       return out;
       }
