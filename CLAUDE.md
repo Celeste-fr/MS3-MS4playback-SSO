@@ -196,6 +196,8 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 - Keep `BUILD_PCH` ON. mtests: `ninja tst_<name>`, run `QT_QPA_PLATFORM=offscreen ./tst_<name>` in
   `build.dir/mtest/libmscore/<name>`.
+- All the fork's tests: `tools/run_fork_tests.sh <build dir>` (through the `ninja-<name>.sh`/`run-<name>.sh`
+  wrappers on the dev VM).
 - **Owner's dev VM**: disk is tight; delete throwaway worktrees. **One build dir per branch**: never point a build dir at
   another tree's sources (stale objects from the other tree crash tests: 2026-10-04); `ninja -j2` under `nice -n 15`.
   **Never reach a build dir through a symlink**: Qt's moc files include headers by relative path (`../../../../libmscore/
