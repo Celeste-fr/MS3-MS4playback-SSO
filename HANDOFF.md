@@ -10,10 +10,9 @@ a section there when you need the background of that topic. Commit messages desc
 The owner: "NO using performance patches. with all technique patches we have control of release, tightness, CC
 mapped vel. … and sync to tempo". The SSO map has no Performance extras; slurs play the All techniques longs, each
 note its own attack, early by its onset (`Articulation::playsTransitions`). The legato-timing items below are about
-Performance patches and wait unless a legato patch comes back. Open: the owner tried the Options page's *CC mapped
-vel.* and *Sync to tempo* (script options, not plug-in parameters: their script variables are unknown, finding them
-is a VM measurement) and Release / Tightness (plug-in parameters, settable as Controllers); values only through
-MuseScore once the owner names them. Unmeasured: how the All techniques longs sound slurred at speed. A slurred
+Performance patches and wait unless a legato patch comes back. Release, Tightness, *CC mapped vel.* and *Sync to
+tempo* stay at the library's defaults (the owner, 2026-10-06): adjusted in Live (the plain set's Kontakt track), not
+by MuseScore. Unmeasured: how the All techniques longs sound slurred at speed. A slurred
 "espr." note now plays Long (Rachm.) as a held one does (`long legato`, as Long CS plays muted slurs; it played the
 Performance legato): offer to the owner, revert in the generator's table if they prefer plain Long.
 
@@ -128,9 +127,8 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
 ## Waiting for the owner (built, not yet confirmed on Windows / by ear)
 
 Each has its background in docs/HISTORY.md Part 2 under the same name.
-- Even dynamic steps: the owner compares the four modes (Advanced Options › *Even dynamic steps*) and picks one.
-- Attack salience in the Recommended balance (`attack-prominence`): needs a background dynamics run with a build
-  that has it (fills the "attack" curves), then the owner judges the families' predictions by ear.
+- The plain Live set (Create Live Set, 2026-10-06): the owner's first try, with Kontakt 8.13 or later on the PC
+  (setups saved by the VM's 8.13.1 don't load in an older Kontakt).
 - The Mixer on library parts (`mixer-sso`) and Controllers / Mixer live while playing (`live-controls`): the
   owner's Windows check.
 - SSO load times (`sso-load-times`): the owner's `--measure-load-times` run; worker-thread loading stays off until
@@ -141,16 +139,17 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
 - Clip-tab automation lanes as the clip's envelopes (branch `clip-envelopes`): the owner installs the Control
   Surface script `tools/live/MuseScoreEnvelopes` once (LIVE.md › Automation lanes in a clip tab) and tries a Windows
   build (the new device, protocol 5, from that build's `tools/live`); arrangement clips get no lanes (open question).
-- One instance for a line's tunings (`[tuning] oneInstance`, branch `bend-one-instance`, off by default): the owner
-  listens to Whence with 2 (aggressive: 19 → 15 instances; a detached note's tail is bent to the next note's tuning)
-  and decides; 1 (safe) saves nothing on Whence. Only patches that bend (Performance) share; SSO's All techniques
-  patches don't bend, so detached notes keep their copies (12 instances if they did).
 - Marcato level (Inspector › Articulation › *Marcato level*, per sign, metaTag `marcatoLevels`; default "Library
   default" = the library's plain marcato): the owner tries it on SSO (velocity-driven Marcato on winds / brass;
   Marcato Attack on strings by CC11 down / CC1 up). MS4's accent velocity boost no longer reaches library marcatos
   (owner, 2026-10-02): a plain note's velocity at the dynamic (mf 80), the level on top.
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
+
+No longer waiting (moot since "no automatic adjustments", 2026-10-06; the mechanisms stay, off): even dynamic steps
+and attack salience (only with calibrated short velocities), `[tuning] oneInstance` (Performance patches only), the
+timing A/B renders, the Track Delay value, per-patch octave corrections, pedal 40 / 90 ms, audit #4 (event timing
+within a block).
 
 ## When a check zip arrives (*Check articulations* hand-back)
 
