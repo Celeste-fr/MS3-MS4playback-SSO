@@ -1198,21 +1198,48 @@ void TestLiveEquivalence::plainSet()
             lo.notes.push_back({ 60, at, U, 80, false });
       sp.notes.push_back({ 62, U, U / 2, 90, false });
       k.techniques = { lo, sp };
-      const LiveSetWriter::Clip cl = PlainLiveSet::switchClip(k, 0, 5 * U);
-      QCOMPARE(int(cl.notes.size()), 4);
-      QCOMPARE(cl.end, 5.0);
-      QCOMPARE(int(cl.envelopes.size()), 1);
-      QCOMPARE(cl.envelopes[0].controller, 32);
-      // value 1 from the start; back to rest after the first run, up again a unit before 2 beats, rest after 4 beats
+      // CC32 (UACC): a clip per run, Sub = the value, from a unit before the run to the next run's clip or its notes' end
       const double u = 1.0 / U;
+      const std::vector<LiveSetWriter::Clip> cl = PlainLiveSet::switchClips(k, 0, 5 * U);
+      QCOMPARE(int(cl.size()), 2);
+      QCOMPARE(cl[0].start, 0.0);
+      QCOMPARE(cl[0].end, 1.0);
+      QCOMPARE(int(cl[0].notes.size()), 1);
+      QCOMPARE(cl[1].start, 2 - u);
+      QCOMPARE(cl[1].end, 5.0);
+      QCOMPARE(int(cl[1].notes.size()), 3);
+      QCOMPARE(cl[1].notes[0].start, u);
+      for (const LiveSetWriter::Clip& c : cl) {
+            QCOMPARE(c.subBank, 1);
+            QCOMPARE(c.bank, -1);
+            QCOMPARE(c.program, -1);
+            QVERIFY(c.envelopes.empty());
+            }
+      const std::vector<LiveSetWriter::Clip> cs = PlainLiveSet::switchClips(k, 1, 5 * U);
+      QCOMPARE(int(cs.size()), 1);
+      QCOMPARE(cs[0].start, 1 - u);
+      QCOMPARE(cs[0].end, 1.5);
+      QCOMPARE(cs[0].subBank, 42);
+      QCOMPARE(cs[0].notes[0].length, 0.5);
+      // another CC: one clip, the switch as an envelope from the rest value
+      SoundLib::LibInstrument onCC1 = *violin;
+      onCC1.switchNumber = 1;
+      k.instrument = &onCC1;
+      const std::vector<LiveSetWriter::Clip> el = PlainLiveSet::switchClips(k, 0, 5 * U);
+      QCOMPARE(int(el.size()), 1);
+      QCOMPARE(int(el[0].notes.size()), 4);
+      QCOMPARE(el[0].end, 5.0);
+      QCOMPARE(el[0].subBank, -1);
+      QCOMPARE(int(el[0].envelopes.size()), 1);
+      QCOMPARE(el[0].envelopes[0].controller, 1);
+      // value 1 from the start; back to rest after the first run, up again a unit before 2 beats, rest after 4 beats
       const std::vector<std::pair<double, double>> longPoints {
             { 0, 1 }, { u, 1 }, { u, 0 }, { 2 - u, 0 }, { 2 - u, 1 }, { 4 + u, 1 }, { 4 + u, 0 } };
-      QCOMPARE(cl.envelopes[0].points, longPoints);
-      const LiveSetWriter::Clip cs = PlainLiveSet::switchClip(k, 1, 5 * U);
+      QCOMPARE(el[0].envelopes[0].points, longPoints);
       const std::vector<std::pair<double, double>> spPoints {
             { 0, 0 }, { 1 - u, 0 }, { 1 - u, 42 }, { 1 + u, 42 }, { 1 + u, 0 } };
-      QCOMPARE(cs.envelopes[0].points, spPoints);
-      QCOMPARE(cs.notes[0].length, 0.5);
+      QCOMPARE(PlainLiveSet::switchClips(k, 1, 5 * U)[0].envelopes[0].points, spPoints);
+      k.instrument = violin;
 
       // the score's tracks
       SoundLib::setCurrent(lib);

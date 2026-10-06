@@ -108,6 +108,11 @@ struct Clip {
             std::vector<std::pair<double, double>> points;
             };
       std::vector<Envelope> envelopes;
+      // the clip's Bank / Sub / Pgm (-1: none): Live sends CC0 (0 when Bank is none), CC32 Sub and the program change
+      // once, at the clip's start (Live 12.4.6, the VM, 2026-10-06)
+      int bank { -1 };
+      int subBank { -1 };
+      int program { -1 };
       };
 constexpr int PITCH_BEND_ENVELOPE = -1;
 

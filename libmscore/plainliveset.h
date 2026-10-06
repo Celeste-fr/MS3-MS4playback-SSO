@@ -130,18 +130,21 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
               const LiveClips::Timeline& tl);
 
 // the value a technique's switch controller rests at between its notes: the lowest the patch's articulations don't use
-// (see switchClip)
+// (see switchClips)
 int restValue(const SoundLib::LibInstrument* instrument);
 
-// a technique's clip, the whole song long: its notes and its switch. The switch goes with the notes: before each run of
-// the technique's notes (no other technique of the Kontakt starting in between) one unit before the run's first note,
-// a CC switch steps from restValue to the technique's value (Live sends a controller envelope's value when it changes)
-// and back to rest one unit after the run's last note starts; a keyswitch is a note one unit long. Times in beats.
-LiveSetWriter::Clip switchClip(const Kontakt& kontakt, size_t technique, int length);
+// a technique's clips: its notes and its switch, which goes with the notes. A run: the technique's notes with no other
+// technique of the Kontakt starting in between; its switch one unit before the run's first note. Times in beats.
+//   - CC32 (Spitfire's UACC): a clip per run, from its switch to the next run's (or its last note's end), Sub = the
+//     technique's value: Live sends CC0 0 and CC32 at the clip's start (it keeps no clip envelope on CC0 or CC32).
+//   - another CC: one clip the whole song long whose envelope steps from restValue to the technique's value at each
+//     run's switch and back one unit after the run's last note starts (Live sends an envelope's value when it changes).
+//   - a keyswitch: one clip the whole song long, a key note one unit long at each run's switch.
+std::vector<LiveSetWriter::Clip> switchClips(const Kontakt& kontakt, size_t technique, int length);
 
 // the set's tracks (LiveSetWriter::Spec::tracks): per section a group, in it a group per part, in that per patch its
 // Kontakt track (the part's Mixer; its lanes in a "Controllers" clip, its parameters as automation; the caller adds the
-// plug-in, as for the routes' tracks) and a track per technique (switchClip, MIDI To the Kontakt)
+// plug-in, as for the routes' tracks) and a track per technique (switchClips, MIDI To the Kontakt)
 std::vector<LiveSetWriter::Track> tracks(const Layout& layout);
 
 }     // namespace PlainLiveSet

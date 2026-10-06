@@ -307,9 +307,9 @@ static void midiClip(Writer& w, const Clip& c, int clipId, int color, int numera
       w.value("NextId", noteId);
       w.close("NoteIdGenerator");
       w.close("Notes");
-      w.value("BankSelectCoarse", -1);
-      w.value("BankSelectFine", -1);
-      w.value("ProgramChange", -1);
+      w.value("BankSelectCoarse", c.bank);
+      w.value("BankSelectFine", c.subBank);
+      w.value("ProgramChange", c.program);
       w.value("NoteEditorFoldInZoom", -1);
       w.value("NoteEditorFoldInScroll", 0);
       w.value("NoteEditorFoldOutZoom", 3072);

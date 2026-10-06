@@ -306,48 +306,78 @@ int restValue(const SoundLib::LibInstrument* instrument)
       return 0;
       }
 
-LiveSetWriter::Clip switchClip(const Kontakt& kontakt, size_t technique, int length)
+// the runs of a technique's notes: (first start, last start), no other technique of the Kontakt starting in between
+static std::vector<std::pair<int, int>> runs(const Kontakt& kontakt, size_t technique)
       {
-      LiveSetWriter::Clip clip;
-      const Technique& tq = kontakt.techniques[technique];
-      clip.name = tq.name;
-      clip.end = beats(length);
-      for (const LiveClips::Note& n : tq.notes) {
-            if (n.muted)                  // (not played)
-                  continue;
-            clip.notes.push_back({ n.pitch, beats(n.start), beats(n.length), n.velocity });
-            }
-      const SoundLib::LibInstrument* li = kontakt.instrument;
-      if (!li || tq.value < 0 || (li->switchType != SoundLib::SwitchType::CC && li->switchType != SoundLib::SwitchType::KEYSWITCH))
-            return clip;
-
-      // the runs of this technique's notes: (first start, last start), no other technique's note starting in between
       std::vector<std::pair<int, size_t>> starts;
       for (size_t i = 0; i < kontakt.techniques.size(); ++i)
             for (const LiveClips::Note& n : kontakt.techniques[i].notes)
                   if (!n.muted)
                         starts.push_back({ n.start, i });
       std::sort(starts.begin(), starts.end());
-      std::vector<std::pair<int, int>> runs;
+      std::vector<std::pair<int, int>> out;
       size_t previous = kontakt.techniques.size();
       for (const auto& s : starts) {
             if (s.second == technique) {
                   if (previous != technique)
-                        runs.push_back({ s.first, s.first });
-                  runs.back().second = s.first;
+                        out.push_back({ s.first, s.first });
+                  out.back().second = s.first;
                   }
             previous = s.second;
             }
-      if (runs.empty())
-            return clip;
+      return out;
+      }
 
-      if (li->switchType == SoundLib::SwitchType::KEYSWITCH) {
-            for (const auto& r : runs)
+// the clip from..to (units in the song) with the technique's notes starting in it, times from the clip's start
+static LiveSetWriter::Clip clipOf(const Technique& tq, int from, int to)
+      {
+      LiveSetWriter::Clip clip;
+      clip.name = tq.name;
+      clip.start = beats(from);
+      clip.end = beats(to);
+      for (const LiveClips::Note& n : tq.notes)
+            if (!n.muted && n.start >= from && n.start < to)      // (muted: not played)
+                  clip.notes.push_back({ n.pitch, beats(n.start - from), beats(n.length), n.velocity });
+      return clip;
+      }
+
+std::vector<LiveSetWriter::Clip> switchClips(const Kontakt& kontakt, size_t technique, int length)
+      {
+      const Technique& tq = kontakt.techniques[technique];
+      const SoundLib::LibInstrument* li = kontakt.instrument;
+      const bool cc = li && tq.value >= 0 && li->switchType == SoundLib::SwitchType::CC;
+      const bool keyswitch = li && tq.value >= 0 && li->switchType == SoundLib::SwitchType::KEYSWITCH;
+      const std::vector<std::pair<int, int>> rs = cc || keyswitch ? runs(kontakt, technique) : std::vector<std::pair<int, int>>();
+
+      // CC32 (Spitfire's UACC): Live keeps no clip envelope on CC0 or CC32 (12.4.6 drops it at load), but sends a clip's
+      // Sub at its start: a clip per run from one unit before its first note, up to the next run's clip (or the end of
+      // its last note)
+      if (cc && li->switchNumber == 32 && !rs.empty()) {
+            std::vector<LiveSetWriter::Clip> out;
+            for (size_t i = 0; i < rs.size(); ++i) {
+                  const int from = std::max(0, rs[i].first - 1);
+                  const int next = i + 1 < rs.size() ? std::max(0, rs[i + 1].first - 1) : length;
+                  int end = rs[i].second + 1;
+                  for (const LiveClips::Note& n : tq.notes)
+                        if (!n.muted && n.start >= from && n.start < next)
+                              end = std::max(end, n.start + n.length);
+                  LiveSetWriter::Clip c = clipOf(tq, from, std::min(end, next));
+                  c.subBank = tq.value;
+                  out.push_back(c);
+                  }
+            return out;
+            }
+
+      LiveSetWriter::Clip clip = clipOf(tq, 0, length);
+      if (rs.empty())
+            return { clip };
+      if (keyswitch) {
+            for (const auto& r : rs)
                   clip.notes.push_back({ tq.value, beats(std::max(0, r.first - 1)), beats(1), 100 });
             std::stable_sort(clip.notes.begin(), clip.notes.end(), [](const LiveSetWriter::Clip::Note& a, const LiveSetWriter::Clip::Note& b) {
                   return a.start < b.start;
                   });
-            return clip;
+            return { clip };
             }
 
       const int rest = restValue(li);
@@ -355,8 +385,8 @@ LiveSetWriter::Clip switchClip(const Kontakt& kontakt, size_t technique, int len
       LiveSetWriter::Clip::Envelope e;
       e.controller = li->switchNumber;
       std::vector<std::pair<int, int>> points;                // (units, value)
-      points.push_back({ 0, runs.front().first >= 1 ? rest : v });
-      for (const auto& r : runs) {
+      points.push_back({ 0, rs.front().first >= 1 ? rest : v });
+      for (const auto& r : rs) {
             const int on = std::max(0, r.first - 1);
             if (points.size() > 1 && points.back().first >= on)
                   points.pop_back();                      // (back to rest no earlier than this switch: stays up)
@@ -373,7 +403,7 @@ LiveSetWriter::Clip switchClip(const Kontakt& kontakt, size_t technique, int len
       for (const auto& p : points)
             e.points.push_back({ beats(p.first), double(p.second) });
       clip.envelopes.push_back(e);
-      return clip;
+      return { clip };
       }
 
 std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
@@ -451,7 +481,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                               tt.midiTo = kontaktIndex;
                               tt.part = p.name;
                               tt.partRef = p.part;
-                              tt.clips.push_back(switchClip(k, i, layout.length));
+                              tt.clips = switchClips(k, i, layout.length);
                               out.push_back(tt);
                               }
                         }

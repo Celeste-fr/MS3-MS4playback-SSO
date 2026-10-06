@@ -277,12 +277,14 @@ in a section collapsible at the same time".
   patch the part plays a **Kontakt track** (the library's plug-in with the patch's setup, the part's Controllers,
   the part's Mixer) and **one MIDI track per technique** ("Violin – Long", "Violin – Spiccato" …), MIDI To the
   Kontakt track. Both group levels fold.
-- **Clips**: one arrangement clip per track, the whole song. A technique track's clip holds its notes and **its own
-  switch**: UACC CC32 steps from a rest value (the lowest the patch's articulations don't use) to the technique's
-  value one unit (1/3840 beat) before each run of its notes and back after; a keyswitch patch gets a short key note
-  there. So a note moved to another technique's track plays that technique. The Kontakt track's "Controllers" clip
-  holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters MuseScore automates are automation on
-  the Kontakt track.
+- **Clips**: a technique track's clips hold its notes and **their own switch**, one unit (1/3840 beat) before each
+  run of the technique's notes (no other technique of the Kontakt starting in between), so a note moved to another
+  technique's track plays that technique. **UACC (CC32)**: a clip per run, its **Sub** (Live's clip Bank / Sub / Pgm)
+  the technique's value: Live sends CC0 0 and CC32 at the clip's start (it keeps no clip envelope on CC0 or CC32).
+  Another CC: one clip the whole song, an envelope stepping from a rest value (the lowest the patch's articulations
+  don't use) to the value and back after the run. A keyswitch patch: one clip, a key note one unit long per run. The
+  Kontakt track's "Controllers" clip holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters
+  MuseScore automates are automation on the Kontakt track.
 - **No automatic timing or levels**: what the playback settings say, off by default (docs/PLAYBACK_SETTINGS.md).
 - **Reported, not in the set**: two techniques of one Kontakt starting at the same instant (one switch can't play
   both: the report gives the beat), program-change switches, notes of a copy for another tuning (played at the key's
@@ -296,10 +298,14 @@ in a section collapsible at the same time".
   `ControllerTargets.<i>`: 0 the pitch bend, 1 channel pressure, i = CC (i-2). Two envelope points at one time are
   a step. A clip's GrooveId must be -1 (one with an empty pool: "GroovePool corrupted"). Clips carry the song's time
   signature.
-- **Open**: Live's clip-envelope chooser lists **no CC0 and no CC32**, and SSO switches on CC32 (UACC): whether Live
-  keeps and sends an envelope on `ControllerTargets.34` is being tested. Pitch bends are left out (reported) until the
-  scale of Live's clip bend envelope is measured. Test: `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>`
-  writes its set).
+- **CC32 in Live 12.4.6** (the VM, a Max for Live MIDI monitor on the tracks, 2026-10-06): the clip-envelope chooser
+  lists no CC0 and no CC32, a set's envelope on `ControllerTargets.34` is dropped at load and nothing is sent. A clip's
+  Bank / Sub / Pgm (`BankSelectCoarse` / `BankSelectFine` / `ProgramChange`, -1 none) is sent once at the clip's start,
+  also when playback starts inside the clip: CC0 (0 when Bank is none), CC32 Sub, the program change only when set;
+  not re-sent when the playhead is moved while stopped. Clips starting together send theirs in no useful order.
+- **Open**: whether SSO in Kontakt follows the clips' Sub and ignores the CC0 0 before it (to check on the VM with the
+  library). Pitch bends are left out (reported) until the scale of Live's clip bend envelope is measured. Test:
+  `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>` writes its set).
 
 The sections below describe the route set.
 
