@@ -1213,9 +1213,10 @@ void TestLiveEquivalence::plainSet()
       QCOMPARE(cl[1].end, 5.0);
       QCOMPARE(int(cl[1].notes.size()), 3);
       QCOMPARE(cl[1].notes[0].start, u);
-      for (const LiveSetWriter::Clip& c : cl) {
+      for (size_t i = 0; i < cl.size(); ++i) {
+            const LiveSetWriter::Clip& c = cl[i];
             QCOMPARE(c.subBank, 1);
-            QCOMPARE(c.bank, -1);
+            QCOMPARE(c.bank, int(i % 2));
             QCOMPARE(c.program, -1);
             QVERIFY(c.envelopes.empty());
             }
@@ -1224,6 +1225,7 @@ void TestLiveEquivalence::plainSet()
       QCOMPARE(cs[0].start, 1 - u);
       QCOMPARE(cs[0].end, 1.5);
       QCOMPARE(cs[0].subBank, 42);
+      QCOMPARE(cs[0].bank, 0);
       QCOMPARE(cs[0].notes[0].length, 0.5);
       // another CC: one clip, the switch as an envelope from the rest value
       SoundLib::LibInstrument onCC1 = *violin;

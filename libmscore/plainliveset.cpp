@@ -352,7 +352,8 @@ std::vector<LiveSetWriter::Clip> switchClips(const Kontakt& kontakt, size_t tech
 
       // CC32 (Spitfire's UACC): Live keeps no clip envelope on CC0 or CC32 (12.4.6 drops it at load), but sends a clip's
       // Sub at its start: a clip per run from one unit before its first note, up to the next run's clip (or the end of
-      // its last note)
+      // its last note). Live sends a clip's Bank / Sub only when they differ from what that track sent last (12.4.6: a
+      // track's second Long clip switched nothing), so the runs alternate Bank 0 / 1 (SSO ignores CC0)
       if (cc && li->switchNumber == 32 && !rs.empty()) {
             std::vector<LiveSetWriter::Clip> out;
             for (size_t i = 0; i < rs.size(); ++i) {
@@ -363,6 +364,7 @@ std::vector<LiveSetWriter::Clip> switchClips(const Kontakt& kontakt, size_t tech
                         if (!n.muted && n.start >= from && n.start < next)
                               end = std::max(end, n.start + n.length);
                   LiveSetWriter::Clip c = clipOf(tq, from, std::min(end, next));
+                  c.bank = int(i % 2);
                   c.subBank = tq.value;
                   out.push_back(c);
                   }

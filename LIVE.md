@@ -280,7 +280,8 @@ in a section collapsible at the same time".
 - **Clips**: a technique track's clips hold its notes and **their own switch**, one unit (1/3840 beat) before each
   run of the technique's notes (no other technique of the Kontakt starting in between), so a note moved to another
   technique's track plays that technique. **UACC (CC32)**: a clip per run, its **Sub** (Live's clip Bank / Sub / Pgm)
-  the technique's value: Live sends CC0 0 and CC32 at the clip's start (it keeps no clip envelope on CC0 or CC32).
+  the technique's value, its Bank alternating 0 / 1 run by run: Live sends CC0 Bank and CC32 Sub at the clip's start
+  (it keeps no clip envelope on CC0 or CC32), but only when they differ from what that track sent last.
   Another CC: one clip the whole song, an envelope stepping from a rest value (the lowest the patch's articulations
   don't use) to the value and back after the run. A keyswitch patch: one clip, a key note one unit long per run. The
   Kontakt track's "Controllers" clip holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters
@@ -303,16 +304,20 @@ in a section collapsible at the same time".
   Bank / Sub / Pgm (`BankSelectCoarse` / `BankSelectFine` / `ProgramChange`, -1 none) is sent once at the clip's start,
   also when playback starts inside the clip: CC0 (0 when Bank is none), CC32 Sub, the program change only when set;
   not re-sent when the playhead is moved while stopped. Clips starting together send theirs in no useful order.
-- **Open**: whether SSO in Kontakt follows the clips' Sub and ignores the CC0 0 before it (to check on the VM with the
-  library). Pitch bends are left out (reported) until the scale of Live's clip bend envelope is measured. Test:
+  **Not re-sent when the track's last Bank and Sub were the same** (per track: a Long clip after the track's first Long
+  clip sent nothing although other tracks sent other Subs in between); alternating the Bank 0 / 1 sends it.
+- **SSO in Kontakt 8 follows the Sub** (the VM, "Violins 1 - All techniques", 2026-10-06; readings:
+  https://claude.ai/artifact/TtoKjRAFT5L2NYF6HCk9B7) in **"UACC & UI only"** (`$iooxo=3`, as MuseScore's setups set it;
+  in the library's default "Normal keyswitching" 7 of 8 clips picked a wrong technique), CC0 0 or 1 changes nothing;
+  with the alternating Bank every run switched, also when playback started inside a clip. Pitch bends are left out (reported) until the scale of Live's clip bend envelope is measured. Test:
   `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>` writes its set).
 
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
     the Kontakt, `… / Violin / Long` for a technique (section, part, Kontakt track, technique; the groups
-    `MuseScore: Strings`, `MuseScore: Strings / Violin`). **Whether Live keeps the Info text when it saves is
-    unconfirmed** (to check on the VM); without it a track is found by its groups' names and its own (a technique
+    `MuseScore: Strings`, `MuseScore: Strings / Violin`). Live 12.4.6 keeps it through Save As (the VM,
+    2026-10-06, all 7 tracks' texts); without it a track is found by its groups' names and its own (a technique
     track also by its MIDI To), but only for keys the score recorded.
   - **Create Live Set records what it wrote** (in `liveTracks` › written: each track's kind, part, patch and the hash
     of each clip controller's envelopes as the reader reads the file back). An envelope of the Kontakt's Controllers
@@ -328,6 +333,9 @@ in a section collapsible at the same time".
     Live's defaults, or the part's Mixer for a second Kontakt) and every track's mixer automation (Volume, Pan,
     Speaker, as Live's events with their curves) are kept in `liveTracks` › tracks, the newer import replacing a
     track's entry; Create Live Set writes them into the next set. No sends: the plain set has no return tracks.
+    Live 12.4.6 opens such a set, plays group Volume ramps and a Speaker off, and keeps the envelopes through Save As
+    (the VM, 2026-10-06). A technique track has no instrument, so Live shows it no mixer and its Volume / Pan act on
+    nothing (kept, not heard): a technique's level is set on its notes or the Kontakt's controllers.
   - Without the record (the score not saved after Create Live Set), the tracks match as any set's (MIDI input or
     name) and the Controllers clip's envelopes come back as lanes.
   - Test: `tst_liveequivalence` `plainSetReadBack`, `liveTracksJson`.
