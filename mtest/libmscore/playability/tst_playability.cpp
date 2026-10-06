@@ -549,7 +549,12 @@ void TestPlayability::windLayouts()
       {
       MasterScore* score = readScore(DIR + "wind-tests.mscx");
       QVERIFY(score);
-      QJsonObject ref = readJson(root + "/" + DIR + "wind-layouts.json");
+      // The references came from the Playability Checker plugin until it was frozen (2026-10-06).
+      // After a deliberate change to the wind data or drawing, rewrite them from this build with
+      // PLAYABILITY_WRITE_WIND_REFS=1 ./tst_playability windLayouts, then check the diff.
+      const bool writeRefs = qEnvironmentVariableIsSet("PLAYABILITY_WRITE_WIND_REFS");
+      const QString refPath = root + "/" + DIR + "wind-layouts.json";
+      QJsonObject ref = readJson(refPath);
       std::map<QString, QJsonObject> byLabel;
       for (const QJsonValue& v : ref["layouts"].toArray())
             byLabel[v.toObject()["label"].toString()] = v.toObject();
@@ -571,7 +576,15 @@ void TestPlayability::windLayouts()
                               qWarning("no plugin layout %s", qPrintable(label));
                               continue;
                               }
-                        compareLayouts(byLabel[label]["items"].toArray(), Playability::layoutWindGraph(m, int(g), sz.first, sz.second), false, label);
+                        DisplayList items = Playability::layoutWindGraph(m, int(g), sz.first, sz.second);
+                        if (writeRefs) {
+                              QJsonArray a;
+                              for (const DrawItem& i : items)
+                                    a.append(itemJson(i));
+                              byLabel[label]["items"] = a;
+                              }
+                        else
+                              compareLayouts(byLabel[label]["items"].toArray(), items, false, label);
                         ++count;
                         }
             return count;
@@ -601,6 +614,16 @@ void TestPlayability::windLayouts()
       for (const auto& l : byLabel)
             want += !l.first.startsWith("d ");
       QCOMPARE(total, want);
+      if (writeRefs) {
+            QJsonArray layouts;
+            for (const QJsonValue& v : ref["layouts"].toArray())
+                  layouts.append(byLabel[v.toObject()["label"].toString()]);
+            ref["layouts"] = layouts;
+            QFile f(refPath);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QJsonDocument(ref).toJson(QJsonDocument::Indented));
+            qWarning("wrote %s", qPrintable(refPath));
+            }
       delete score;
       }
 
