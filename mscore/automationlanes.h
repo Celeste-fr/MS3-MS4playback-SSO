@@ -95,6 +95,7 @@ class AutomationLanes : public QObject {
             QString name;
             bool param { false };
             QRectF rect;                        // canvas
+            double dataX { 0 };                 // canvas: where bar 1 starts (the staff lines)
             };
 
       AutomationLanes(ScoreView* view);

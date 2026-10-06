@@ -48,6 +48,7 @@ static const double HEAD_SP = 2.4;        // the part's header row, spatium
 static const double LANE_SP = 5.0;        // a lane
 static const double GAP_SP = 0.4;
 static const int HEADER_PX = 150;         // the headers' width on screen
+static const int HEADER_MIN_PX = 80;      // a lane's at least, left of bar 1 (headerRect)
 static const int HEADER_MAX_PX = 420;     // the header row's at most (its label: headerRect)
 static const double POINT_PX = 4.5;       // a breakpoint's radius on screen
 static const char* SETTING = "ui/canvas/automationLanes";
@@ -467,6 +468,7 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
                               r.name = n;
                         }
                   r.rect = QRectF(x0, y, x1 - x0, LANE_SP * sp);
+                  r.dataX = m->canvasPos().x();
                   out.push_back(r);
                   y += (LANE_SP + GAP_SP) * sp;
                   }
@@ -590,8 +592,13 @@ static QFont headFont(double height)
 QRectF AutomationLanes::headerRect(const Row& r) const
       {
       const QRectF vr = _view->matrix().mapRect(r.rect);
-      if (!r.target.isEmpty())
-            return QRectF(0, vr.top(), HEADER_PX, vr.height());
+      if (!r.target.isEmpty()) {
+            // a lane's: fixed at the view's left, as wide as the room left of bar 1 when scrolled to the start (the
+            // page's left at the view's: zoomed out the box covered bar 1's points), at least HEADER_MIN_PX; by the
+            // zoom only, not the scroll position (it doesn't change while scrolling)
+            const double room = r.dataX * _view->matrix().m11() - 2;
+            return QRectF(0, vr.top(), std::max(double(HEADER_MIN_PX), std::min(double(HEADER_PX), room)), vr.height());
+            }
       // the header row as wide as its label needs (the part's name whole: "Automation · Violin" was cut to "Vio…"),
       // with room for its three buttons; at most HEADER_MAX_PX (then the name is shortened in the middle)
       const int label = QFontMetrics(headFont(vr.height())).horizontalAdvance(headLabel(r));
