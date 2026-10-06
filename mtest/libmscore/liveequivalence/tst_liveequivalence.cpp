@@ -254,7 +254,7 @@ void TestLiveEquivalence::liveSetControllersAndMix()
 
       LiveIntegration::LiveSetPlan plan;
       QString error;
-      QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, false, &plan, &error), qPrintable(error));
+      QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::ROUTES, &plan, &error), qPrintable(error));
       QVERIFY(!plan.spec.tracks.empty());
       const Track& t = plan.spec.tracks[0];
       QVERIFY(t.hasPlugin);
@@ -351,7 +351,7 @@ void TestLiveEquivalence::liveSetControllersAndMix()
       score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
       setPartMix(violin, 100, 64, true);
       LiveIntegration::LiveSetPlan plain2;
-      QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, false, &plain2, &error), qPrintable(error));
+      QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::ROUTES, &plain2, &error), qPrintable(error));
       QString name;
       QByteArray component, controller;
       QVERIFY(Vst3Plugin::splitState(SoundLibraryHost::setupState(*host.lib, "Violin", TESTSYNTH, &error), &name, &component, &controller));
@@ -363,6 +363,28 @@ void TestLiveEquivalence::liveSetControllersAndMix()
       QVERIFY(!m2[0].speaker);
       QCOMPARE(m2[0].volume, 1.0);
       QCOMPARE(m2[0].pan, 0.0);
+
+      // the plain set (Create Live Set): the plug-in on the Kontakt track only, with the part's Controllers; no device
+      values[violin] = { { "tone", 26 } };
+      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      LiveIntegration::LiveSetPlan p3;
+      QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::PLAIN, &p3, &error), qPrintable(error));
+      QVERIFY(!p3.spec.link.valid());
+      QVERIFY(p3.spec.tracks.size() >= 4);
+      int withPlugin = 0;
+      for (const Track& pt : p3.spec.tracks) {
+            QVERIFY(!pt.link);
+            if (pt.hasPlugin) {
+                  ++withPlugin;
+                  QVERIFY(!pt.group && pt.midiTo < 0);
+                  QCOMPARE(int(pt.plugin.parameters.size()), 1);
+                  QCOMPARE(pt.plugin.parameters[0].value, 26 / 127.0);
+                  }
+            }
+      QCOMPARE(withPlugin, 1);
+      QVERIFY(p3.left.isEmpty());
+      QVERIFY(LiveIntegration::reportText(p3, "x.als", false).contains("MIDI To"));
+      QCOMPARE(validate(LiveSetWriter::xml(p3.spec)), QString());
       delete score;
       }
 
@@ -1250,6 +1272,12 @@ void TestLiveEquivalence::plainSet()
             QCOMPARE(std::get<2>(written[i]), std::get<1>(written[1]));
             }
       QVERIFY(x.contains(QString("MidiOut/Track.%1/DeviceIn.0").arg(std::get<1>(written[2])).toUtf8()));
+      // MS_PLAIN_SET_OUT=<file.als>: the set written, for opening in Live (no plug-in: groups, routing, clips, envelopes)
+      const QString out = QString::fromLocal8Bit(qgetenv("MS_PLAIN_SET_OUT"));
+      if (!out.isEmpty()) {
+            QString err;
+            QVERIFY2(LiveSetWriter::write(out, spec, &err), qPrintable(err));
+            }
       delete score;
       SoundLib::setCurrent(nullptr);
       }

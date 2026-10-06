@@ -622,11 +622,8 @@ void LiveClipsLink::resolveParameterIds(std::vector<LiveClips::Track>* tracks, c
             }
       }
 
-// the score's clips as finish() makes them, rendered at once (Create Live Set: the lanes the device keeps in the set)
-std::vector<LiveClips::Track> LiveClipsLink::renderTracks(MasterScore* score, const SoundLib::Library& library,
-                                                          const QStringList& portNames)
+void LiveClipsLink::renderEvents(MasterScore* score, EventMap* events)
       {
-      EventMap events;
       MidiRenderer r(score);
       r.setForLiveClips(true);
       const SynthesizerState ss = mscore ? mscore->synthesizerState() : SynthesizerState();
@@ -637,9 +634,17 @@ std::vector<LiveClips::Track> LiveClipsLink::renderTracks(MasterScore* score, co
             const MidiRenderer::Chunk c = r.getChunkAt(utick);
             if (!c)
                   break;
-            r.renderChunk(c, &events, ctx);
+            r.renderChunk(c, events, ctx);
             utick = c.utick2();
             }
+      }
+
+// the score's clips as finish() makes them, rendered at once (Create Live Set: the lanes the device keeps in the set)
+std::vector<LiveClips::Track> LiveClipsLink::renderTracks(MasterScore* score, const SoundLib::Library& library,
+                                                          const QStringList& portNames)
+      {
+      EventMap events;
+      renderEvents(score, &events);
       std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, library, events, portNames, LiveClips::timeline(score));
       resolveParameterIds(&tracks, library);
       return tracks;

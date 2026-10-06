@@ -50,10 +50,15 @@ struct LiveSetPlan {
       int routes { 0 };             // the score's routes (onlyMissing: the rest have a track)
       };
 
-// the set for the score's sound-library routes (onlyMissing: those without a track in Live yet: from the
-// device's report when it answers for this score, else from the linked set, else all of them); false and
-// *error: none can be made (no library, no routes)
-bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool onlyMissing, LiveSetPlan* plan, QString* error);
+enum class LiveSetKind {
+      PLAIN,            // Create Live Set: the plain set (plainliveset.h), no device
+      ROUTES,           // a track per route with the MuseScore Link device (Live against MuseScore compares it)
+      MISSING_ROUTES    // ROUTES, only those without a track in Live yet: from the device's report when it answers for
+                        // this score, else from the linked set, else all of them (Add Missing Tracks)
+      };
+
+// the set for the score's sound-library routes; false and *error: none can be made (no library, no routes)
+bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKind kind, LiveSetPlan* plan, QString* error);
 // the report shown after writing
 QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissing);
 

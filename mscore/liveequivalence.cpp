@@ -243,7 +243,7 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
 
       // the set as Create Live Set writes it
       LiveIntegration::LiveSetPlan plan;
-      if (!LiveIntegration::planLiveSet(score, library, false, &plan, &error)) {
+      if (!LiveIntegration::planLiveSet(score, library, LiveIntegration::LiveSetKind::ROUTES, &plan, &error)) {
             r.error = error;
             return r;
             }

@@ -145,6 +145,8 @@ class LiveClipsLink : public QObject {
       LiveClipsLink();
       ~LiveClipsLink();
       static LiveClipsLink* instance();
+      // the score rendered as this link renders it (MidiRenderer::setForLiveClips), at once
+      static void renderEvents(MasterScore* score, EventMap* events);
       // the score's clips (notes, carriers, parameter lanes with their plug-in ids) as this link sends them, at once
       static std::vector<LiveClips::Track> renderTracks(MasterScore* score, const SoundLib::Library& library,
                                                         const QStringList& portNames);

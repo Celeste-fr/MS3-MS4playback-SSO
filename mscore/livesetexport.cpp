@@ -31,6 +31,7 @@
 #include "libmscore/liveset.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
+#include "libmscore/plainliveset.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "liveclips.h"
@@ -124,10 +125,41 @@ LiveSetWriter::LinkDevice findLinkDevice(QString* note)
       }
 
 //---------------------------------------------------------
+//   plainTracks
+//    the plain set (plainliveset.h): its tracks, and in plan->notes what it can't hold
+//---------------------------------------------------------
+
+static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const SoundLib::Library& library, LiveSetPlan* plan)
+      {
+      EventMap events;
+      LiveClipsLink::renderEvents(score, &events);
+      const PlainLiveSet::Layout layout = PlainLiveSet::layout(score, library, events, LiveClips::timeline(score));
+      for (const PlainLiveSet::Clash& c : layout.clashes)
+            plan->notes << QObject::tr("%1 – %2, beat %3: %4 start together; one switch can't play both (Live sends both "
+                                       "switches, then both notes): move one to the other's track")
+                           .arg(c.part, c.patch).arg(double(c.at) / LiveClips::UNITS_PER_BEAT + 1, 0, 'f', 2)
+                           .arg(c.techniques.join(", "));
+      for (const PlainLiveSet::Section& s : layout.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                        if (k.instrument && k.instrument->switchType == SoundLib::SwitchType::PROGRAM && k.techniques.size() > 1)
+                              plan->notes << QObject::tr("%1 – %2: switches by program change, which the technique tracks don't "
+                                                         "send yet: choose each technique in Kontakt").arg(p.name, k.patch);
+                        if (k.untuned)
+                              plan->notes << QObject::tr("%1 – %2: %n note(s) of a copy for another tuning play at the key's "
+                                                         "pitch", "", k.untuned).arg(p.name, k.patch);
+                        for (const PlainLiveSet::Lane& l : k.lanes)
+                              if (l.cc == PlainLiveSet::PITCH_BEND)
+                                    plan->notes << QObject::tr("%1 – %2: its pitch bends are not written yet").arg(p.name, k.patch);
+                        }
+      return PlainLiveSet::tracks(layout);
+      }
+
+//---------------------------------------------------------
 //   planLiveSet
 //---------------------------------------------------------
 
-bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool onlyMissing, LiveSetPlan* plan, QString* error)
+bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKind kind, LiveSetPlan* plan, QString* error)
       {
       if (!score) {
             *error = QObject::tr("No score is open.");
@@ -141,9 +173,10 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
             return false;
             }
       LiveSetWriter::setSong(score, &plan->spec);
+      const bool plain = kind == LiveSetKind::PLAIN;
 
       // only the routes without a track: the device's report, else the linked set, else all
-      if (onlyMissing) {
+      if (kind == LiveSetKind::MISSING_ROUTES) {
             bool known = false;
             const QStringList without = LiveClipsLink::instance()->keysWithoutTrack(score, &known);
             const QString linked = linkedSet(score);
@@ -168,14 +201,18 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
                   plan->source = QObject::tr("nothing (the device doesn't answer for this score and no Live Set is linked): "
                                              "all of them");
             }
+      else if (plain)
+            tracks = plainTracks(score, library, plan);
 
-      QString deviceNote;
-      plan->spec.link = findLinkDevice(&deviceNote);
-      plan->notes << deviceNote;
       int allIns = 0;
-      for (const LiveSetWriter::Track& t : tracks)
-            if (t.portName.isEmpty())
-                  ++allIns;
+      if (!plain) {
+            QString deviceNote;
+            plan->spec.link = findLinkDevice(&deviceNote);
+            plan->notes << deviceNote;
+            for (const LiveSetWriter::Track& t : tracks)
+                  if (t.portName.isEmpty())
+                        ++allIns;
+            }
       if (allIns)
             plan->notes << QObject::tr("%n track(s) listen to All Ins: their MIDI output (Preferences › I/O) isn't set. Live plays the "
                                        "score either way (the device finds tracks by name); for Play through Live set MIDI From.",
@@ -202,6 +239,8 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
       for (LiveSetWriter::Track& t : tracks) {
             if (!plugin)
                   break;
+            if (t.group || t.midiTo >= 0)       // (the plain set's groups and technique tracks)
+                  continue;
             if (!t.instrument || t.instrument->kit) {
                   plan->left << QObject::tr("%1: a kit has no patch of its own (its drums play on their own tracks)").arg(t.name);
                   continue;
@@ -297,9 +336,11 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, bool only
                         QStringList names;
                         for (const SoundLibraryHost::AppliedParameter& f : found)
                               names << (f.id >= 0 ? f.title : QObject::tr("%1: not in this patch").arg(f.title));
-                        plan->controllers << (err.isEmpty() ? QObject::tr("%1 – %2: automation lanes MuseScore plays in Live (the "
-                                                                          "MuseScore Link device), in Live's panel: %3")
-                                                                          .arg(t.part, patch, names.join(", "))
+                        const QString lanesText = plain
+                              ? QObject::tr("%1 – %2: automation lanes as the Kontakt track's automation, in Live's panel: %3")
+                              : QObject::tr("%1 – %2: automation lanes MuseScore plays in Live (the MuseScore Link device), in "
+                                            "Live's panel: %3");
+                        plan->controllers << (err.isEmpty() ? lanesText.arg(t.part, patch, names.join(", "))
                                                             : QObject::tr("%1 – %2: the automation lanes' parameters could not be "
                                                                           "found (%3)").arg(t.part, patch, err));
                         }
@@ -386,7 +427,18 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
             text += " " + QObject::tr("(of %n route(s))", "", plan.routes);
       text += QString(", %1 bpm, %2/%3.").arg(plan.spec.tempo, 0, 'f', 2).arg(plan.spec.numerator).arg(plan.spec.denominator) + "\n";
       for (const LiveSetWriter::Track& t : plan.spec.tracks) {
-            QString line = "  " + t.name;
+            QString line = "  ";
+            for (int g = t.groupIndex; g >= 0; g = plan.spec.tracks[size_t(g)].groupIndex)
+                  line += "  ";
+            line += t.name;
+            if (t.group) {
+                  text += line + " — " + QObject::tr("group") + "\n";
+                  continue;
+                  }
+            if (t.midiTo >= 0) {
+                  text += line + " — " + QObject::tr("MIDI To %1").arg(plan.spec.tracks[size_t(t.midiTo)].name) + "\n";
+                  continue;
+                  }
             QStringList devices;
             if (t.link && plan.spec.link.valid())
                   devices << "MuseScore Link";
@@ -424,7 +476,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       LiveSetPlan plan;
       QString error;
       QApplication::setOverrideCursor(Qt::WaitCursor);
-      const bool ok = planLiveSet(score, *library, onlyMissing, &plan, &error);
+      const bool ok = planLiveSet(score, *library, onlyMissing ? LiveSetKind::MISSING_ROUTES : LiveSetKind::PLAIN, &plan, &error);
       QApplication::restoreOverrideCursor();
       if (!ok) {
             QMessageBox::warning(parent, title, error);
@@ -472,8 +524,8 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
                   Automation::undoWrite(score, all);
             }
       if (fromLive)
-            plan.notes << QObject::tr("%n automation lane(s) from a Live Set are MuseScore's now: the new set doesn't have them, the "
-                                      "MuseScore Link device plays them.", "", fromLive);
+            plan.notes << QObject::tr("%n automation lane(s) from a Live Set are MuseScore's now: the new set has them as track "
+                                      "automation.", "", fromLive);
       QMessageBox box(QMessageBox::Information, title, onlyMissing ? QObject::tr("The missing tracks were written.")
                                                                    : QObject::tr("The Live Set was written."),
                       QMessageBox::Ok, parent);
