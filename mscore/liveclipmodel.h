@@ -73,6 +73,7 @@
 //---------------------------------------------------------
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include <QByteArray>
@@ -123,10 +124,10 @@ struct Clip {
       bool looping { false };
       int count { 0 };                    // notes announced
       int chunks { 0 };
-      int got { 0 };                      // chunks received
+      std::set<int> got;                  // chunk numbers received (a repeated packet counts once)
       qint32 hash { 0 };
       std::vector<LiveNote> notes;
-      bool complete() const { return got >= chunks && int(notes.size()) >= count; }
+      bool complete() const { return int(got.size()) >= chunks && int(notes.size()) >= count; }
       };
 
 // the notation's view of a note (a tie chain)

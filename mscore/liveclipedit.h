@@ -261,6 +261,8 @@ class LiveClipEditor : public QObject {
       bool isClipScore(const Score* score) const;
       bool unsavedClipScore(const MasterScore* score) const;  // closes without asking
       void received(const QString& address, const QVariantList& args);
+      // notes received so far of a clip still arriving, -1 when it isn't (the tests)
+      int incomingNotes(const QString& key) const;
       void scoreClosed(MasterScore* score);
       void setCurrentScore(MasterScore* score);
       void reload(MasterScore* score);

@@ -105,6 +105,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipTitleUnnamed();
       void clipTabClean();
       void clipTabAudible();
+      void clipEditDuplicateChunk();
       void clipVelocityLane();
       void clipVelocityWrite();
       void clipVelocityReopen();
@@ -2522,6 +2523,33 @@ void TestLiveIntegration::clipTabAudible()
       QCOMPARE(sent.size(), 1);                         // (no heartbeat after)
       QCOMPARE(ed->audible(), 0);
       LiveClipEditor::setSendHook(nullptr);
+      }
+
+//---------------------------------------------------------
+//   clipEditDuplicateChunk
+//    /live/clip/notes chunks are identified by their number: a packet delivered twice neither completes the clip
+//    early nor adds its notes again
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipEditDuplicateChunk()
+      {
+      using namespace Ms::LiveIntegration;
+      LiveClipEditor* ed = LiveClipEditor::instance();
+      const QString key = "dup1";
+      auto notes = [&](int chunk, int first, int n) {
+            QVariantList a { key, 7, chunk };
+            for (int i = 0; i < n; ++i)
+                  a << first + i << 60 + first + i << double(first + i) << 1.0 << 100.0 << 0 << 1.0 << 0.0 << 64.0;
+            return a;
+            };
+      // key gen track name drums bpm num den end loopStart loopEnd looping count chunks hash
+      ed->received("/live/clip/begin", { key, 7, "Track", "Clip", 0, 120.0, 4, 4, 8.0, 0.0, 8.0, 0, 5, 2, 1234 });
+      QCOMPARE(ed->incomingNotes(key), 0);
+      ed->received("/live/clip/notes", notes(0, 0, 3));
+      ed->received("/live/clip/notes", notes(0, 0, 3));         // (the same packet again)
+      QCOMPARE(ed->incomingNotes(key), 3);                      // still arriving, its notes once
+      ed->received("/live/clip/notes", notes(1, 3, 2));
+      QCOMPARE(ed->incomingNotes(key), -1);                     // complete: handed on
       }
 
 //---------------------------------------------------------

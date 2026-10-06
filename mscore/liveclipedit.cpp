@@ -719,6 +719,12 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             if (it == _incoming.end() || it->second.gen != args.value(1).toInt())
                   return;
             Clip& c = it->second;
+            // identified by number: a packet Live's link delivered twice has its notes in already. No timeout: a
+            // clip that never completes is replaced by the next /live/clip/begin for its key (Edit in MuseScore again)
+            const int chunk = args.value(2).toInt();
+            if (c.got.count(chunk))
+                  return;
+            c.got.insert(chunk);
             for (int i = 3; i + 8 < args.size(); i += 9) {
                   LiveNote n;
                   n.id = args[i].toInt();
@@ -732,7 +738,6 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
                   n.releaseVelocity = args[i + 8].toDouble();
                   c.notes.push_back(n);
                   }
-            ++c.got;
             if (c.complete()) {
                   const Clip done = c;
                   _incoming.erase(it);
@@ -935,6 +940,12 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             updateRouting();
             updateStatus();
             }
+      }
+
+int LiveClipEditor::incomingNotes(const QString& key) const
+      {
+      const auto it = _incoming.find(key);
+      return it == _incoming.end() ? -1 : int(it->second.notes.size());
       }
 
 // a clip read from Live: a new tab, the tab it has (unchanged), or the tab replaced (read again)
