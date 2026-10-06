@@ -35,6 +35,7 @@
 #include "libmscore/automation.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/livesetwriter.h"
+#include "libmscore/plainliveset.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
@@ -86,6 +87,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveEquivalenceLegatoLevel();
       void liveEquivalenceAutomation();
       void liveMarcatoLevel();
+      void plainLayout();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -1036,6 +1038,106 @@ void TestLiveEquivalence::liveMarcatoLevel()
       QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(report));
       qDebug("%s", qPrintable(report.section("\nThe set", 0, 0)));
       delete score;
+      }
+
+//---------------------------------------------------------
+//   plainLayout
+//    the plain set (plainliveset.h): each library note on the technique track of the switch in force at it, the
+//    dynamics a lane of its Kontakt, the switch none; the part in its section; two techniques at one instant reported
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainLayout()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Tremolo' value='11' techniques='tremolo'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "<Articulation name='Trill m2' value='70' techniques='trill-m2'/>"
+         "<Articulation name='Trill M2' value='71' techniques='trill-M2'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, tl);
+
+      QCOMPARE(int(l.sections.size()), 1);            // (the piano isn't a library part)
+      QCOMPARE(l.sections[0].name, QString("Strings"));
+      QCOMPARE(int(l.sections[0].parts.size()), 1);
+      QCOMPARE(int(l.sections[0].parts[0].kontakts.size()), 1);
+      const PlainLiveSet::Kontakt& k = l.sections[0].parts[0].kontakts[0];
+      QCOMPARE(k.patch, QString("Violin"));
+      QVERIFY(k.techniques.size() >= 3);
+      QCOMPARE(k.techniques[0].name, QString("Long"));
+      QCOMPARE(k.techniques[0].value, 1);
+
+      // the renderer's: each note's (units, pitch) with the switch in force
+      std::multimap<std::pair<int, int>, int> expected;
+      int selected = -1;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal())
+                  continue;
+            if (e.librarySwitch() && e.type() == ME_CONTROLLER)
+                  selected = e.value();
+            else if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch())
+                  expected.insert({ { tl.units(te.first), e.pitch() }, selected });
+            }
+      size_t notes = 0;
+      for (const PlainLiveSet::Technique& t : k.techniques) {
+            QVERIFY(!t.notes.empty());
+            for (const LiveClips::Note& n : t.notes) {
+                  auto e = expected.find({ n.start, n.pitch });
+                  QVERIFY2(e != expected.end(), qPrintable(QString("%1 at %2").arg(n.pitch).arg(n.start)));
+                  QCOMPARE(e->second, t.value);
+                  QVERIFY(n.length > 0);
+                  expected.erase(e);
+                  ++notes;
+                  }
+            }
+      QVERIFY(notes >= 10);
+      QVERIFY(expected.empty());
+      bool dynamics = false;
+      for (const PlainLiveSet::Lane& lane : k.lanes) {
+            QVERIFY(lane.cc != 32);
+            dynamics = dynamics || (lane.cc == 1 && !lane.points.empty());
+            }
+      QVERIFY(dynamics);
+      QVERIFY(l.clashes.empty());
+      QVERIFY(l.length > 0);
+
+      // two techniques starting together on the violin's route: one clash, both named
+      EventMap two;
+      auto put = [&](int tick, NPlayEvent e, bool sw = false) {
+            e.setExternal(0, 0);
+            e.setLibrarySwitch(sw);
+            two.insert({ tick, e });
+            };
+      put(0, NPlayEvent(ME_CONTROLLER, 0, 32, 1), true);
+      put(0, NPlayEvent(ME_NOTEON, 0, 72, 80));
+      put(0, NPlayEvent(ME_CONTROLLER, 0, 32, 42), true);
+      put(0, NPlayEvent(ME_NOTEON, 0, 76, 80));
+      put(480, NPlayEvent(ME_NOTEON, 0, 72, 0));
+      put(480, NPlayEvent(ME_NOTEON, 0, 76, 0));
+      const PlainLiveSet::Layout l2 = PlainLiveSet::layout(score, *lib, two, tl);
+      QCOMPARE(int(l2.clashes.size()), 1);
+      QCOMPARE(l2.clashes[0].at, 0);
+      QCOMPARE(l2.clashes[0].techniques, QStringList({ "Long", "Spiccato" }));
+      const PlainLiveSet::Kontakt& k2 = l2.sections[0].parts[0].kontakts[0];
+      QCOMPARE(int(k2.techniques.size()), 2);
+      QCOMPARE(k2.techniques[1].notes[0].pitch, 76);
+      QCOMPARE(k2.techniques[1].notes[0].length, tl.units(480));
+      delete score;
+      SoundLib::setCurrent(nullptr);
       }
 
 //---------------------------------------------------------
