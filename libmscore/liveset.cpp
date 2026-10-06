@@ -787,22 +787,22 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
                   // (Live's Bézier is the lane's: automation.h), a jump as two points at one tick
                   const bool exact = !clipTimeline.score && !e->inClip;
                   if (exact) {
-                        bool repeated = false;
                         for (size_t k = 0; k < e->events.size(); ++k) {
                               const Event& x = e->events[k];
                               const int tick = firstPassTick(score, int(std::lround(std::max(0.0, x.time) * 480)));
                               if (tick < 0) {
                                     ++rep.repeatedPoints;
-                                    repeated = true;
                                     continue;
                                     }
                               put(tick, x.value * scale);
-                              if (x.curved && k + 1 < e->events.size()) {
+                              // a curve shapes the segment to the next point: kept only when that one is kept too
+                              // (a jump across a repeat's left-out pass has no shape of its own)
+                              if (x.curved && k + 1 < e->events.size()
+                                  && firstPassTick(score, int(std::lround(std::max(0.0, e->events[k + 1].time) * 480))) >= 0) {
                                     Automation::Point& p = lane.points.back();
                                     p.c1x = x.c1x; p.c1y = x.c1y; p.c2x = x.c2x; p.c2y = x.c2y;
                                     }
                               }
-                        (void)repeated;
                         }
                   for (const Point& p : exact ? std::vector<Point>() : e->points) {
                         const int utick = clipTimeline.score ? std::max(0, clipTimeline.utick(std::max(0.0, p.beat)))

@@ -33,7 +33,7 @@
                   <FloatEvent Id="1" Time="-63072000" Value="0.25" />
                   <FloatEvent Id="2" Time="0" Value="0.25" />
                   <FloatEvent Id="3" Time="4" Value="1" CurveControl1X="0.2" CurveControl1Y="0.8" CurveControl2X="0.5" CurveControl2Y="1" />
-                  <FloatEvent Id="4" Time="8" Value="0.5" CurveControl1X="0.5" CurveControl1Y="0.5" CurveControl2X="0.5" CurveControl2Y="0.5" />
+                  <FloatEvent Id="4" Time="8" Value="0.5" CurveControl1X="0.3" CurveControl1Y="0.7" CurveControl2X="0.6" CurveControl2Y="0.9" />
                   <FloatEvent Id="5" Time="26" Value="0.9" />
                   <FloatEvent Id="6" Time="34" Value="0.1" />
                 </Events>

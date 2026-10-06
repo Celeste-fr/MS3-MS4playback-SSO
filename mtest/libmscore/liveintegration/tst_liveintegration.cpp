@@ -329,12 +329,15 @@ void TestLiveIntegration::liveSetRead()
       QCOMPARE(vib.parameter, QString("Vibrato"));
       QCOMPARE(vib.parameterId, 1);
       QCOMPARE(vib.initial, 0.25);                  // Live's value before everything (-63072000)
-      // 0, 4, the curve's pieces (within one MIDI step of it: LiveSet::curve) to 8, 26, 34
+      // 0, 4, the curve's pieces (within one MIDI step of it: LiveSet::curve) to 8, the pieces of 8's curve to 26, 34
       const size_t n = vib.points.size();
-      QVERIFY2(n >= 2 + 2 + 2 && n < 2 + 64 + 2, qPrintable(QString::number(n)));
+      QVERIFY2(n >= 2 + 2 + 2 && n < 2 + 128 + 2, qPrintable(QString::number(n)));
       QCOMPARE(vib.points[1].beat, 4.0);
-      QCOMPARE(vib.points[n - 3].beat, 8.0);
-      QCOMPARE(vib.points[n - 3].value, 0.5);
+      size_t at8 = 0;
+      while (at8 < n && vib.points[at8].beat != 8.0)
+            ++at8;
+      QVERIFY(at8 > 1 && at8 + 2 < n);
+      QCOMPARE(vib.points[at8].value, 0.5);
       QCOMPARE(vib.points[n - 2].beat, 26.0);
       QCOMPARE(t.envelopes[1].parameter, QString("Unknown Knob"));
       QCOMPARE(int(t.envelopes[2].kind), int(LiveSet::Envelope::Kind::OTHER));
@@ -450,6 +453,11 @@ void TestLiveIntegration::liveSetLanes()
       QCOMPARE(vib.points.back().value, 0.1);
       for (const Automation::Point& p : vib.points)
             QVERIFY(p.tick < 16 * 480 || p.tick >= 24 * 480);     // (beat 26: the repeat's second pass, left out)
+      // a curve shapes the segment to the next point: the point at beat 4 keeps its curve (the next, beat 8, is kept);
+      // beat 8 has a curve too, but its next point (beat 26) is left out: that segment stays straight
+      QVERIFY(vib.points[1].curved());
+      QCOMPARE(vib.points[2].tick, 3840);
+      QVERIFY(!vib.points[2].curved());
       const Automation::Lane& cc = violin[1];
       QCOMPARE(cc.target, QString("expr2"));              // CC 21 is the map's "expr2"
       QCOMPARE(cc.valueAt(3840), 0.0);
