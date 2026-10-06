@@ -339,15 +339,22 @@ class Vst3PluginPrivate {
       void startProcessing();
       void stopProcessing();
       void mapControllers();
+      std::vector<ParamID> controllerMap() const;
       void addParam(ParamID id, ParamValue value);
       };
 
 void Vst3PluginPrivate::mapControllers()
       {
-      ccParam.assign(16 * 130, kNoParamId);
+      ccParam = controllerMap();
+      }
+
+// the controller is asked 16 * 130 times (Kontakt's takes its time): no lock may be held meanwhile
+std::vector<ParamID> Vst3PluginPrivate::controllerMap() const
+      {
+      std::vector<ParamID> ccParam(16 * 130, kNoParamId);
       FUnknownPtr<IMidiMapping> mapping(controller);
       if (!mapping)
-            return;
+            return ccParam;
       for (int ch = 0; ch < 16; ++ch) {
             for (int cc = 0; cc < 130; ++cc) {
                   ParamID id;
@@ -355,6 +362,7 @@ void Vst3PluginPrivate::mapControllers()
                         ccParam[ch * 130 + cc] = id;
                   }
             }
+      return ccParam;
       }
 
 // the buses an instrument needs: the first event input and the main output (stereo). Runs
@@ -876,10 +884,13 @@ void Vst3Plugin::idle(std::mutex* processing)
             d->handler.midiMappingChanged = false;
       }
       if (remap) {
+            // the controller is asked outside the lock (the audio thread only try_locks it and would play
+            // silence meanwhile); the table is swapped under it (midi reads the mapping)
+            std::vector<ParamID> map = d->controllerMap();
             std::unique_lock<std::mutex> lock;
             if (processing)
-                  lock = std::unique_lock<std::mutex>(*processing);   // (midi reads the mapping)
-            d->mapControllers();
+                  lock = std::unique_lock<std::mutex>(*processing);
+            d->ccParam.swap(map);
             }
       }
 
