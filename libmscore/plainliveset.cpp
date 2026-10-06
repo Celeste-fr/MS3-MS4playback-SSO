@@ -422,13 +422,16 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                               c.name = QObject::tr("Controllers");
                               c.end = beats(layout.length);
                               for (const Lane& l : k.lanes) {
+                                    if (l.cc == PITCH_BEND)             // the scale of Live's clip bend envelope isn't measured: reported
+                                          continue;
                                     LiveSetWriter::Clip::Envelope e;
-                                    e.controller = l.cc == PITCH_BEND ? LiveSetWriter::PITCH_BEND_ENVELOPE : l.cc;
+                                    e.controller = l.cc;
                                     for (const auto& pt : l.points)
                                           e.points.push_back({ beats(pt.first), double(pt.second) });
                                     c.envelopes.push_back(e);
                                     }
-                              kt.clips.push_back(c);
+                              if (!c.envelopes.empty())
+                                    kt.clips.push_back(c);
                               }
                         for (const ParamLane& pl : k.params) {
                               LiveSetWriter::ParameterAutomation a;

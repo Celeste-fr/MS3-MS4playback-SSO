@@ -289,10 +289,17 @@ in a section collapsible at the same time".
   pitch), pitch bends (not written yet).
 - **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
   the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.
-- **Unconfirmed in Live** (the writer's guesses, checked on the VM next): the MIDI To string
-  (`MidiOut/Track.<id>/DeviceIn.0`), a CC envelope's `ControllerTargets` index (taken as the CC number), that Live
-  plays two envelope points at one time as a step, routing into the Kontakt under Auto monitoring, the clips' time
-  signature (4/4 written). Test: `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>` writes its set).
+- **Checked in Live 12.4.6** (the VM's trial, Drift standing in for Kontakt, 2026-10-06): the set opens without a
+  dialog, both group levels fold (outer group TrackGroupId -1, inner the outer's Id, AudioOut/GroupTrack). MIDI To is
+  `MidiOut/Track.<id>/TrackIn` (Upper the track's name, Lower "Track In"); the receiving track plays it only with
+  monitoring **In** (MonitoringEnum 0: Auto plays nothing unarmed), so the Kontakt track is written In.
+  `ControllerTargets.<i>`: 0 the pitch bend, 1 channel pressure, i = CC (i-2). Two envelope points at one time are
+  a step. A clip's GrooveId must be -1 (one with an empty pool: "GroovePool corrupted"). Clips carry the song's time
+  signature.
+- **Open**: Live's clip-envelope chooser lists **no CC0 and no CC32**, and SSO switches on CC32 (UACC): whether Live
+  keeps and sends an envelope on `ControllerTargets.34` is being tested. Pitch bends are left out (reported) until the
+  scale of Live's clip bend envelope is measured. Test: `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>`
+  writes its set).
 
 The sections below describe the route set.
 
