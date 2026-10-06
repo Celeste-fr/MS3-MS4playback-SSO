@@ -264,6 +264,38 @@ Only real Live can show (to check first):
 The owner, 2026-09-30, about the tracks above: "that's so many manual steps. is the creating MIDI track and
 renaming it, dragging in Kontakt 8, etc. possible to be automated?". MuseScore writes the Live Set itself.
 
+### The plain set (2026-10-06): what Create Live Set writes now
+
+The owner, 2026-10-06: "I'm done with automatic adjustments altogether … just make musescore export everything in
+the correct techniques and configured so that it's easiest for me to adjust in ableton". Choices made then: a track
+per technique, all of a section's techniques foldable under one track, one Kontakt per patch, plug-in parameters as
+track automation, "Plain set, no device"; then "make all techniques in an instrument collapsible and all instruments
+in a section collapsible at the same time".
+
+- **Layout** (`libmscore/plainliveset.*`, from MuseScore's own render as *Live plays the score* renders it):
+  a **group per section** (instruments.xml's group: Strings, Woodwinds …), in it a **group per part**, in that per
+  patch the part plays a **Kontakt track** (the library's plug-in with the patch's setup, the part's Controllers,
+  the part's Mixer) and **one MIDI track per technique** ("Violin – Long", "Violin – Spiccato" …), MIDI To the
+  Kontakt track. Both group levels fold.
+- **Clips**: one arrangement clip per track, the whole song. A technique track's clip holds its notes and **its own
+  switch**: UACC CC32 steps from a rest value (the lowest the patch's articulations don't use) to the technique's
+  value one unit (1/3840 beat) before each run of its notes and back after; a keyswitch patch gets a short key note
+  there. So a note moved to another technique's track plays that technique. The Kontakt track's "Controllers" clip
+  holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters MuseScore automates are automation on
+  the Kontakt track.
+- **No automatic timing or levels**: what the playback settings say, off by default (docs/PLAYBACK_SETTINGS.md).
+- **Reported, not in the set**: two techniques of one Kontakt starting at the same instant (one switch can't play
+  both: the report gives the beat), program-change switches, notes of a copy for another tuning (played at the key's
+  pitch), pitch bends (not written yet).
+- **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
+  the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.
+- **Unconfirmed in Live** (the writer's guesses, checked on the VM next): the MIDI To string
+  (`MidiOut/Track.<id>/DeviceIn.0`), a CC envelope's `ControllerTargets` index (taken as the CC number), that Live
+  plays two envelope points at one time as a step, routing into the Kontakt under Auto monitoring, the clips' time
+  signature (4/4 written). Test: `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>` writes its set).
+
+The sections below describe the route set.
+
 ### How to use it
 
 1. Open the score. Play it once in MuseScore with the library's plug-in (or let the patches load at score open):

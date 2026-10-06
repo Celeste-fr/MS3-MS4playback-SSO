@@ -178,7 +178,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - Owner reports a problem: suspect Kontakt's MIDI channel (we send 1), editor sizing, sample loading in offline
   export; crackles / slow loads: memory (Kontakt's preload override at 30 kB).
 
-**Live** (LIVE.md): Live plays the score as clips (`liveclips.*`), Create Live Set (`livesetwriter.*`,
+**Live** (LIVE.md): Create Live Set writes the **plain set** (the owner, 2026-10-06: no automatic adjustments, no
+device; `plainliveset.*`: section group › part group › a Kontakt track per patch + a MIDI track per technique carrying
+its own switch, MIDI To the Kontakt; XML in `livesetxml.h`, `livesetclips.cpp`; `LiveSetKind`; LIVE.md › The plain
+set lists what Live hasn't confirmed). Live plays the score as clips (`liveclips.*`), the route set (`livesetwriter.*`,
 `livesetexport.*`), automation from a set (`liveset.*`), clip tabs that edit Live clips (`liveclipmodel.*`,
 `liveclipedit.*`, `cliptempo.*`), the Max for Live device and Control Surface script (`tools/live/`), Live helpers
 (`livehelpers.*`). **The full Live architecture map is in LIVE.md › Architecture map**: read it before changing any
@@ -233,7 +236,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_soundlibrary`: 70 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-04: phraseGap added);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 15 passed, `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 17 passed (2026-10-06: plainLayout, plainSet), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 59 with init and cleanup (2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
