@@ -272,7 +272,6 @@ static bool checkRestMode = false;         // --check-rest (with --extract-libra
 static QString restParts = "range,repeats,controls,legato";   // its parts (--rest-parts)
 // a check run under the supervisor (superviseExtract): the timing check, the rest, and the dynamics check of every sound
 static bool supervisedCheck() { return checkTimingMode || checkRestMode || (checkDynamicsMode && allSoundsMode); }
-static int extractRound = 1;               // --extract-round: the processes of one run so far (extractInBackground)
 static bool scanKeysMode = false;          // --scan-keys: Check articulations' key scan, in the background (extractMode too)
 static bool picturesMode = false;          // --window-pictures: the percussion patches' windows, in the background (extractMode too)
 static bool measureLoadTimesMode = false;  // --measure-load-times: the sound library's load times (soundlibraryloadtimes.h; extractMode too)
@@ -4669,7 +4668,6 @@ struct DialogWatch {
       };
 #endif
 
-static const int MAX_EXTRACT_ROUNDS = 20;
 static const int MAX_SUPERVISED_ROUNDS = 100;
 
 //---------------------------------------------------------
@@ -5088,46 +5086,9 @@ static bool extractInBackground(const QStringList& argv)
                                                                 + "/MuseScore Sound Library Check"));
             return ok;
             }
-      // Kontakt broken for this process (a patch it can't recall, then no patch script runs, even on
-      // a new instance): a new MuseScore goes on with the patches left, without that one (the owner's
-      // run of 2026-09-27 17:20 stopped at Celli - Performance, patch 59 of 700). Each process
-      // writes its own extract and zip
-      if (extractChild)
-            return ok;          // (the supervisor goes on: a patch left out, the rest in a new MuseScore)
-      if (!dialog.brokenOn().isEmpty()) {
-            const QStringList left = dialog.patchesLeft();
-            ArticulationCheckDialog::logBackground(QString("Kontakt stopped running patch scripts on %1 (left out)")
-                                                   .arg(dialog.brokenOn()));
-            if (left.isEmpty() || extractRound >= MAX_EXTRACT_ROUNDS) {
-                  if (!left.isEmpty())
-                        ArticulationCheckDialog::logBackground(QString("%1 processes already: stopped, %2 patches not done")
-                                                               .arg(extractRound).arg(left.size()));
-                  QDesktopServices::openUrl(QUrl::fromLocalFile(root));
-                  return ok;
-                  }
-            const QString list = root + QString("/background extract round %1.txt").arg(extractRound + 1);
-            QFile f(list);
-            if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-                  ArticulationCheckDialog::logBackground(QString("cannot write %1").arg(QDir::toNativeSeparators(list)));
-                  return ok;
-                  }
-            f.write(("# left after " + dialog.brokenOn() + "\n" + left.join("\n") + "\n").toUtf8());
-            f.close();
-            QStringList args { "--extract-library", extractLibrary.isEmpty() ? library->name : extractLibrary,
-                               "--extract-patches", list, "--extract-round", QString::number(extractRound + 1) };
-            if (extractPitchBend)
-                  args << "--extract-pitch-bend";
-            if (extractControllers)
-                  args << "--extract-controllers";
-            if (!extractPlan.isEmpty())
-                  args << "--extract-plan" << extractPlan;
-            lock.unlock();                              // (the new one takes it)
-            if (QProcess::startDetached(QCoreApplication::applicationFilePath(), args))
-                  ArticulationCheckDialog::logBackground(QString("going on in a new MuseScore with %1 patches (round %2)")
-                                                         .arg(left.size()).arg(extractRound + 1));
-            else
-                  ArticulationCheckDialog::logBackground("could not start a new MuseScore; start the extract again");
-            }
+      // a child's broken Kontakt (a patch it can't recall, then no patch script runs, even on a new instance)
+      // is the supervisor's to handle: a patch left out, the rest in a new MuseScore (the owner's run of
+      // 2026-09-27 17:20 stopped at Celli - Performance, patch 59 of 700). Each process writes its own extract and zip
       return ok;
       }
 
@@ -9315,8 +9276,8 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
                                           "implies --extract-controllers", "file"));
       parser.addOption(QCommandLineOption("extract-child", "Use with --extract-library: set by the extract's supervisor for each "
                                           "process it starts"));
-      parser.addOption(QCommandLineOption("extract-round", "Use with --extract-library: set by the extract itself when it goes on in a new "
-                                          "process", "n"));
+      parser.addOption(QCommandLineOption("extract-round", "Use with --extract-library: the process's number, set by the extract's supervisor "
+                                          "(informational)", "n"));
       parser.addOption(QCommandLineOption("check-dynamics", "Use with --extract-library: measure the patches' dynamics (Check articulations › "
                                           "Dynamics only) instead of extracting; the curves go into the working MuseScore's calibration at the end"));
       parser.addOption(QCommandLineOption("all-sounds", "Use with --check-dynamics or --check-timing: every patch's every sound "
@@ -9465,8 +9426,6 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             if (parser.isSet("rest-parts"))
                   restParts = parser.value("rest-parts");
             allSoundsMode = parser.isSet("all-sounds");
-            if (parser.isSet("extract-round"))
-                  extractRound = qMax(1, parser.value("extract-round").toInt());
             }
       if ((verifyMode = parser.isSet("verify-playback"))) {
             MScore::noGui = true;
