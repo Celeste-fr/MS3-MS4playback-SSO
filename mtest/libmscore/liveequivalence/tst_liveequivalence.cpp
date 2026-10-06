@@ -35,6 +35,7 @@
 #include "libmscore/automation.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/livesetwriter.h"
+#include "libmscore/livesetxml.h"
 #include "libmscore/plainliveset.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
@@ -1271,7 +1272,12 @@ void TestLiveEquivalence::plainSet()
             QCOMPARE(std::get<0>(written[i]), QString("MidiTrack"));
             QCOMPARE(std::get<2>(written[i]), std::get<1>(written[1]));
             }
-      QVERIFY(x.contains(QString("MidiOut/Track.%1/DeviceIn.0").arg(std::get<1>(written[2])).toUtf8()));
+      // MIDI To as Live 12.4.6 saves it; only the Kontakt track monitors In (Auto plays nothing unarmed)
+      QVERIFY(x.contains(QString("MidiOut/Track.%1/TrackIn").arg(std::get<1>(written[2])).toUtf8()));
+      QCOMPARE(x.count("<MonitoringEnum Value=\"0\" />"), 1);
+      // the switch envelope on CC n points at ControllerTargets.<n+2> (Live 12.4.6: .1 channel pressure, .0 the bend)
+      QCOMPARE(LiveSetWriter::controllerTarget(1), 3);
+      QCOMPARE(LiveSetWriter::controllerTarget(LiveSetWriter::PITCH_BEND_ENVELOPE), 0);
       // MS_PLAIN_SET_OUT=<file.als>: the set written, for opening in Live (no plug-in: groups, routing, clips, envelopes)
       const QString out = QString::fromLocal8Bit(qgetenv("MS_PLAIN_SET_OUT"));
       if (!out.isEmpty()) {

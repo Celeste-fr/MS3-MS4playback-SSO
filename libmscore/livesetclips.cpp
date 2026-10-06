@@ -16,7 +16,7 @@
 //   Live 12.2 saved (a group track and its tracks; an arrangement clip with notes and a MIDI CC envelope; Kontakt 8
 //   parameters automated on its track; not in the repository). Unconfirmed until a set is opened in Live (LIVE.md ›
 //   Create Live Set › The plain set): which MidiControllers index a CC is (controllerTarget), the MIDI To string
-//   (midiToRouting: no saved set routes MIDI from one track to another).
+//   (midiToRouting, as Live 12.4.6 saves it).
 //
 //   Times: a clip's start and end and the automation in beats in the song; a clip's notes and envelopes in beats from
 //   its start. An envelope's first event at -63072000 (Live's "before everything") holds its value before the first
@@ -145,33 +145,36 @@ void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& para
 
 //---------------------------------------------------------
 //   controllerTarget
-//    UNCONFIRMED: ControllerTargets.<n> taken to be CC n (0-127), as Live's new tracks lock the envelopes of 1 and 11
-//    (modulation, expression) and 66; the pitch bend's index is not known (LIVE.md › The plain set: to check in Live)
+//    ControllerTargets.0 is the pitch bend, .1 channel pressure, .<n+2> CC n (Live 12.4.6 showed .1 as Channel
+//    Pressure, .11 as CC9, .32 as CC30: LIVE.md › The plain set). Live's clip-envelope chooser has no CC0 and no CC32.
 //---------------------------------------------------------
 
 int controllerTarget(int controller)
       {
+      if (controller == PITCH_BEND_ENVELOPE)
+            return 0;
       if (controller >= 0 && controller < 128)
-            return controller;
+            return controller + 2;
       return -1;
       }
 
 //---------------------------------------------------------
 //   midiToRouting
-//    UNCONFIRMED: no saved set routes one track's MIDI to another's; the target by analogy with Live's audio
-//    routings to a track (LIVE.md › The plain set: to check in Live)
+//    as Live 12.4.6 saves a MIDI track's MIDI To another track: "MidiOut/Track.<id>/TrackIn", the track's name,
+//    "Track In" (the receiving track plays it when its monitoring is In)
 //---------------------------------------------------------
 
-void midiToRouting(Writer& w, int trackId, const QString& trackName, const QString& pluginName)
+void midiToRouting(Writer& w, int trackId, const QString& trackName)
       {
-      w.routing("MidiOutputRouting", QString("MidiOut/Track.%1/DeviceIn.0").arg(trackId), trackName, pluginName);
+      w.routing("MidiOutputRouting", QString("MidiOut/Track.%1/TrackIn").arg(trackId), trackName, "Track In");
       }
 
 //---------------------------------------------------------
 //   clipTimeable
 //---------------------------------------------------------
 
-static void midiClip(Writer& w, const Clip& c, int clipId, int color, const std::vector<int>& controllerTargets)
+static void midiClip(Writer& w, const Clip& c, int clipId, int color, int numerator, int denominator,
+                     const std::vector<int>& controllerTargets)
       {
       const double length = std::max(0.0, c.end - c.start);
       w.open("MidiClip", "Id=\"" + QByteArray::number(clipId) + "\" Time=\"" + Writer::num(c.start).toUtf8() + "\"");
@@ -196,8 +199,8 @@ static void midiClip(Writer& w, const Clip& c, int clipId, int color, const std:
       w.open("TimeSignature");
       w.open("TimeSignatures");
       w.open("RemoteableTimeSignature", "Id=\"0\"");
-      w.value("Numerator", 4);
-      w.value("Denominator", 4);
+      w.value("Numerator", numerator);
+      w.value("Denominator", denominator);
       w.value("Time", 0);
       w.close("RemoteableTimeSignature");
       w.close("TimeSignatures");
@@ -327,7 +330,7 @@ static void midiClip(Writer& w, const Clip& c, int clipId, int color, const std:
       w.close("MidiClip");
       }
 
-void clipTimeable(Writer& w, const Track& t, const std::vector<int>& controllerTargets)
+void clipTimeable(Writer& w, const Track& t, int numerator, int denominator, const std::vector<int>& controllerTargets)
       {
       if (t.clips.empty()) {
             w.arrangerAutomation("ClipTimeable");
@@ -338,7 +341,7 @@ void clipTimeable(Writer& w, const Track& t, const std::vector<int>& controllerT
       w.open("Events");
       int id = 0;
       for (const Clip& c : t.clips)
-            midiClip(w, c, id++, t.color, controllerTargets);
+            midiClip(w, c, id++, t.color, numerator, denominator, controllerTargets);
       w.close("Events");
       w.open("AutomationTransformViewState");
       w.value("IsTransformPending", false);

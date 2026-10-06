@@ -336,11 +336,11 @@ void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& para
 // the MainSequencer's ClipTimeable: the track's arrangement clips; controllerTargets: the ids of the track's
 // MidiControllers (ControllerTargets.<n>, CONTROLLER_TARGETS of them), written after it with these ids
 constexpr int CONTROLLER_TARGETS = 131;
-void clipTimeable(Writer& w, const Track& t, const std::vector<int>& controllerTargets);
+void clipTimeable(Writer& w, const Track& t, int numerator, int denominator, const std::vector<int>& controllerTargets);
 // the MidiControllers index of a controller (a CC, PITCH_BEND_ENVELOPE); -1: none
 int controllerTarget(int controller);
 // MIDI To: the track (its Id) whose plug-in gets the MIDI
-void midiToRouting(Writer& w, int trackId, const QString& trackName, const QString& pluginName);
+void midiToRouting(Writer& w, int trackId, const QString& trackName);
 
 }     // namespace LiveSetWriter
 }     // namespace Ms

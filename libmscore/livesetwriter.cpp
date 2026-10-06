@@ -241,7 +241,7 @@ void midiTrack(Writer& w, const Spec& spec, int index)
             w.routing("AudioOutputRouting", "AudioOut/Main", "Master", "");
       if (t.midiTo >= 0 && t.midiTo < int(spec.tracks.size())) {
             const Track& to = spec.tracks[size_t(t.midiTo)];
-            midiToRouting(w, trackIdOf(t.midiTo), to.name, to.hasPlugin ? to.plugin.name : QString());
+            midiToRouting(w, trackIdOf(t.midiTo), to.name);
             }
       else
             w.routing("MidiOutputRouting", "MidiOut/None", "None", "");
@@ -252,13 +252,16 @@ void midiTrack(Writer& w, const Spec& spec, int index)
       w.open("MainSequencer");
       w.deviceHeader(true, false);
       w.clipSlots(SCENES);
-      w.value("MonitoringEnum", 1);                   // Auto: the clips play (the device sets it too)
+      // In on a track another's MIDI To plays (Auto plays nothing unarmed); else Auto: the clips play (the device sets it too)
+      const bool receives = std::any_of(spec.tracks.begin(), spec.tracks.end(), [index](const Track& o) { return o.midiTo == index; });
+      w.value("MonitoringEnum", receives ? 0 : 1);
       w.value("KeepRecordMonitoringLatency", true);
       // the MIDI controllers' ids, known before the clip envelopes pointing at them
       std::vector<int> controllerTargets;
       for (int i = 0; i < CONTROLLER_TARGETS; ++i)
             controllerTargets.push_back(w.id());
-      clipTimeable(w, t, controllerTargets);
+      const bool signature = timeSignatureId(spec.numerator, spec.denominator) >= 0;   // else 4/4, as the song's
+      clipTimeable(w, t, signature ? spec.numerator : 4, signature ? spec.denominator : 4, controllerTargets);
       w.recorder(0);
       w.open("MidiControllers");
       for (int i = 0; i < CONTROLLER_TARGETS; ++i) {
