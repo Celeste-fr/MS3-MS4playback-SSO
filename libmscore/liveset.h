@@ -133,6 +133,9 @@ struct Track {
       double volume { 1 };          // a linear gain (1 = 0 dB)
       double pan { 0 };             // -1 … 1
       bool active { true };         // the Track Activator (Speaker)
+      // its Track Delay (TrackDelay/Value; IsValueSampleBased: in samples, else ms)
+      double delay { 0 };
+      bool delayInSamples { false };
       };
 
 struct Set {

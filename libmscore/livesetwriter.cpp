@@ -211,7 +211,7 @@ void midiTrack(Writer& w, const Spec& spec, int index)
       const Track& t = spec.tracks[size_t(index)];
       const LinkDevice& link = spec.link;
       w.open("MidiTrack", "Id=\"" + QByteArray::number(trackIdOf(index)) + "\" SelectedToolPanel=\"7\" SelectedTransformationName=\"\" SelectedGeneratorName=\"\"");
-      w.trackHead(t.name, t.name, t.color, t.annotation);
+      w.trackHead(t.name, t.name, t.color, t.annotation, t.delayMs);
       // the plug-in parameters' and the mixer's automation targets, known before the envelopes pointing at them
       std::vector<int> parameterTargets;
       if (t.hasPlugin)

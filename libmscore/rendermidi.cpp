@@ -15,6 +15,7 @@
  render score into event list
 */
 
+#include <deque>
 #include <set>
 #include <tuple>
 
@@ -58,6 +59,7 @@
 #include "tuning.h"
 #include "volta.h"
 #include "liveclips.h"
+#include "plainliveset.h"
 
 #include "global/log.h"
 
@@ -2470,7 +2472,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       for (auto i = events->lower_bound(chunk.utick1()); i != events->end();) {
             NPlayEvent& ev = i->second;
             auto r = libRoutes.find(ev.channel());
-            if (r == libRoutes.end()) {
+            if (r == libRoutes.end() || ev.libraryDelayed()) {     // (an earlier chunk's, moved by its track delay)
                   ++i;
                   continue;
                   }
@@ -2549,6 +2551,87 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             }
       libraryNoteLevels(chunk, events);
       libraryPitchBends(chunk, events);
+      libraryTrackDelays(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryTrackDelays
+//    each library event of the chunk moved by its track's delay (trackdelays.h), in time: a note, its note-off and
+//    its switch by its technique's (the switch in force on the route when it starts), what else goes to the route
+//    (controllers, pitch bends, parameters) by its patch's; before the start: at the start. As the plain Live set
+//    plays it (a technique's MIDI track, the Kontakt track, the part's group, each delayed): an earlier technique's
+//    note can come before a controller sent for it, as in Live. Not for Live's clips (the set has it as the tracks'
+//    TrackDelay). Events of this chunk: those not moved yet (marked once looked at), from a while before its start
+//    (early starts move some before it); the switches in force from the score's start
+//---------------------------------------------------------
+
+void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
+      {
+      if (libTrackDelays.empty() || forLiveClips)
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
+      std::map<int, int> value;                                     // route -> the switch in force
+      std::map<std::pair<int, int>, std::deque<double>> sounding;   // (route, pitch) -> the delays of its note-ons
+      std::vector<std::pair<int, NPlayEvent>> moved;
+      // (the switches in force: from the start, as a technique set long before still holds)
+      for (auto i = events->begin(); i != events->end();) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal()) {
+                  ++i;
+                  continue;
+                  }
+            const int route = ev.extPort() * 16 + ev.extChannel();
+            auto tr = libTrackRoutes.find(route);
+            const bool keyswitch = tr != libTrackRoutes.end() && tr->second.second
+                                   && tr->second.second->switchType == SoundLib::SwitchType::KEYSWITCH;
+            const bool on = ev.type() == ME_NOTEON && ev.velo() > 0;
+            const bool off = ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && ev.velo() == 0);
+            if (ev.librarySwitch() && ((keyswitch && on) || ev.type() == ME_CONTROLLER))
+                  value[route] = keyswitch ? ev.pitch() : ev.value();
+            if (i->first < from || ev.libraryDelayed() || tr == libTrackRoutes.end()) {
+                  ++i;
+                  continue;
+                  }
+            auto d = libTrackDelays.find(tr->second.first);
+            if (d == libTrackDelays.end()) {
+                  ++i;
+                  continue;
+                  }
+            const SoundLib::LibInstrument* li = tr->second.second;
+            const QString patch = li ? li->name : QString();
+            auto technique = [&]() {
+                  auto v = value.find(route);
+                  return PlainLiveSet::techniqueName(li, v == value.end() ? -1 : v->second);
+                  };
+            double ms = 0.0;
+            if (ev.librarySwitch() || on) {
+                  ms = TrackDelays::ms(d->second, patch, technique());
+                  if (on)
+                        sounding[{ route, ev.pitch() }].push_back(ms);
+                  }
+            else if (off) {
+                  auto s = sounding.find({ route, ev.pitch() });
+                  if (s != sounding.end() && !s->second.empty()) {
+                        ms = s->second.front();
+                        s->second.pop_front();
+                        }
+                  else
+                        ms = TrackDelays::ms(d->second, patch, technique());
+                  }
+            else
+                  ms = TrackDelays::ms(d->second, patch);
+            ev.setLibraryDelayed(true);
+            if (std::fabs(ms) < 1e-6) {
+                  ++i;
+                  continue;
+                  }
+            const int to = score->utime2utick(std::max(0.0, score->utick2utime(i->first) + ms / 1000.0));
+            moved.emplace_back(std::max(0, to), ev);
+            i = events->erase(i);
+            }
+      // (in their order: at one tick a route's events keep theirs)
+      for (const auto& m : moved)
+            events->insert(m);
       }
 
 //---------------------------------------------------------
@@ -4585,6 +4668,9 @@ void MidiRenderer::updateState()
       const QString controllers = score->masterScore()->metaTag(PartControllers::metaTag);
       const QString automation = score->masterScore()->metaTag(Automation::metaTag);
       const QString settings = score->masterScore()->metaTag(Playback::metaTag);
+      const QString delays = score->masterScore()->metaTag(TrackDelays::metaTag);
+      if (delays != trackDelaysTag)
+            needUpdate = true;
       if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
           || controllers != partControllers || automation != partAutomation || settings != playbackSettingsTag
           || Playback::generation() != playbackGeneration)
@@ -4595,6 +4681,7 @@ void MidiRenderer::updateState()
             partModes = modes;
             partControllers = controllers;
             partAutomation = automation;
+            trackDelaysTag = delays;
             // Update the related structures inside score
             // to avoid doing it multiple times on chunks rendering
             score->updateSwing();
@@ -4607,6 +4694,8 @@ void MidiRenderer::updateState()
                               velocityLanes[pl.first] = l;
             libParts.clear();
             libRoutes.clear();
+            libTrackDelays.clear();
+            libTrackRoutes.clear();
             libLanes.clear();
             libLaneCents.clear();
             libBend.clear();
@@ -4618,6 +4707,14 @@ void MidiRenderer::updateState()
                   const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
                   const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
+                  const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
+                  for (const SoundLib::Route& r : routes) {
+                        const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
+                        if (d.empty())
+                              continue;
+                        libTrackDelays[r.part] = d;
+                        libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };
+                        }
                   for (const SoundLib::Route& r : routes) {
                         if (r.patch != 0 || r.lane != 0)
                               continue;

@@ -152,6 +152,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   transition arrives (note-on + its measured delay, ending before the next note-on; `[tuning] bendAtArrival`).
   `[tuning] oneInstance` (off by default) lets a bending patch's line retune one copy by the bend (fewer instances).
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
+- Track delays (`libmscore/trackdelays.*`, metaTag `trackDelays`; Mixer › Track delay / Tracks…): ms per part plus
+  per patch / technique (added up, as Live adds a group's and its tracks'); `MidiRenderer::libraryTrackDelays` moves
+  the library events (not for Live's clips); the plain set writes them as TrackDelay, `livetracks.*` reads them back.
 
 **Hosting (VST 3)** (`BUILD_VST3`, on except macOS; preference `io/soundLibrary`)
 - `audio/vst3/vst3plugin.*` (one instance; `settle()` after setState, or SSO's script resets parameters),
@@ -240,10 +243,10 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 70 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-04: phraseGap added);
+- `tst_soundlibrary`: 72 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-06: trackDelays added);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 19 passed (2026-10-06: plainLayout, plainSet, plainSetReadBack, liveTracksJson), `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 20 passed (2026-10-06: plainLayout, plainSet, plainSetReadBack, plainSetTrackDelays, liveTracksJson), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 59 with init and cleanup (2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in

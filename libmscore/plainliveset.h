@@ -52,6 +52,7 @@
 
 #include "liveclips.h"
 #include "livesetwriter.h"
+#include "trackdelays.h"
 
 namespace Ms {
 
@@ -102,6 +103,7 @@ struct PartTracks {
       const Part* part { nullptr };
       QString name;                       // the part's name
       std::vector<Kontakt> kontakts;      // the main patch first
+      TrackDelays::Delays delays;         // its track delays (trackdelays.h): the group's, the Kontakt's, the techniques'
       };
 
 struct Section {
@@ -126,6 +128,9 @@ struct Layout {
 // the controllers left out of the lanes: the switch, banks and programs, the channel mode messages, and the
 // Mixer's (CC7 / CC10 / CC91 / CC93: the Kontakt track's own volume and pan in Live)
 bool laneController(int cc, const SoundLib::LibInstrument* instrument);
+
+// a technique's name: the articulation's of the switch value on the patch; the patch's when it doesn't switch
+QString techniqueName(const SoundLib::LibInstrument* li, int value);
 
 // the section of an instrument id (instruments.xml's group, a few merged: the percussion groups are "Percussion")
 QString sectionName(const QString& instrumentId);

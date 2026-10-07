@@ -44,6 +44,7 @@
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/synthesizerstate.h"
+#include "libmscore/trackdelays.h"
 #include "mscore/liveequivalence.h"
 #include "mscore/livesetexport.h"
 #include "mscore/preferences.h"
@@ -93,6 +94,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainLayout();
       void plainSet();
       void plainSetReadBack();
+      void plainSetTrackDelays();
       void liveTracksJson();
       void dumpEvents();
       void playbackSettingsWidget();
@@ -1530,6 +1532,127 @@ void TestLiveEquivalence::plainSetReadBack()
       QCOMPARE(gs.envelopes[0].events[0].value, 0.0);
       delete score;
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   plainSetTrackDelays
+//    the score's track delays (trackdelays.h) as the plain set's TrackDelay (ms): the part's on its group, a patch's
+//    on its Kontakt track, a technique's on its MIDI track; read back as they are, a change in "Live" imported (a
+//    track set to 0 drops its value, a technique without a track keeps its own), one in samples reported, not imported
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainSetTrackDelays()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"" + part->partName() + "\",\"ms\":20,"
+                        "\"tracks\":{\"Violin\":-10.5,\"Violin / Staccato\":35,\"Violin / Gone\":7}}]");
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, LiveClips::timeline(score));
+      LiveSetWriter::Spec spec;
+      spec.tracks = PlainLiveSet::tracks(l);
+      auto find = [&spec](const QString& key) {
+            for (size_t i = 0; i < spec.tracks.size(); ++i)
+                  if (spec.tracks[i].delayKey == key)
+                        return int(i);
+            return -1;
+            };
+      const int kontakt = find("Violin");
+      const int staccato = find("Violin / Staccato");
+      const int longs = find("Violin / Long");
+      QVERIFY(kontakt >= 0 && staccato >= 0 && longs >= 0);
+      QCOMPARE(find("Violin / Gone"), -1);                       // (no such technique: no track)
+      QCOMPARE(spec.tracks[1].partRef, part);                         // the part's group
+      QCOMPARE(spec.tracks[1].delayMs, 20.0);
+      QCOMPARE(spec.tracks[size_t(kontakt)].delayMs, -10.5);
+      QCOMPARE(spec.tracks[size_t(staccato)].delayMs, 35.0);
+      QCOMPARE(spec.tracks[size_t(longs)].delayMs, 0.0);
+      QCOMPARE(spec.tracks[0].delayMs, 0.0);                          // the section's group: none
+
+      const QByteArray x0 = LiveSetWriter::xml(spec);
+      QCOMPARE(LiveSetWriter::validate(x0), QString());
+      QVERIFY(x0.contains("<TrackDelay>"));
+      const LiveSet::Set set0 = LiveSet::parse(x0);
+      QVERIFY(set0.error.isEmpty());
+      QCOMPARE(set0.tracks.size(), spec.tracks.size());
+      for (size_t i = 0; i < spec.tracks.size(); ++i) {
+            QCOMPARE(set0.tracks[i].delay, spec.tracks[i].delayMs);
+            QVERIFY(!set0.tracks[i].delayInSamples);
+            }
+
+      LiveTracks::Data data;
+      data.written = LiveTracks::written(score, spec.tracks, set0);
+      QCOMPARE(data.written.at(spec.tracks[size_t(staccato)].annotation).delayKey, QString("Violin / Staccato"));
+      QCOMPARE(data.written.at(spec.tracks[1].annotation).part, 0);
+      // (the record keeps the key)
+      const LiveTracks::Data again = LiveTracks::fromJson(LiveTracks::toJson(data));
+      QCOMPARE(again.written.at(spec.tracks[size_t(kontakt)].annotation).delayKey, QString("Violin"));
+      const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, QStringList());
+
+      // as written: the score's delays again
+      LiveTracks::Import im = LiveTracks::import(score, set0, parts, "a.als", QDateTime(), data);
+      QVERIFY2(im.report.unmatched.isEmpty(), qPrintable(im.report.text()));
+      QCOMPARE(LiveTracks::delaysTag(score, im), TrackDelays::write(score, TrackDelays::read(score)));
+
+      // changed in "Live": the group 40, the Kontakt 0, the Long track 12; Gone (no track) keeps 7
+      LiveSetWriter::Spec changed = spec;
+      changed.tracks[1].delayMs = 40;
+      changed.tracks[size_t(kontakt)].delayMs = 0;
+      changed.tracks[size_t(longs)].delayMs = 12;
+      const LiveSet::Set set1 = LiveSet::parse(LiveSetWriter::xml(changed));
+      im = LiveTracks::import(score, set1, parts, "a.als", QDateTime(), data);
+      QVERIFY2(im.report.unmatched.isEmpty(), qPrintable(im.report.text()));
+      score->setMetaTag(TrackDelays::metaTag, LiveTracks::delaysTag(score, im));
+      const TrackDelays::Delays d = TrackDelays::of(part, TrackDelays::read(score));
+      QCOMPARE(d.ms, 40.0);
+      QCOMPARE(int(d.tracks.size()), 3);
+      QCOMPARE(TrackDelays::own(d, "Violin"), 0.0);
+      QCOMPARE(TrackDelays::own(d, "Violin / Staccato"), 35.0);
+      QCOMPARE(TrackDelays::own(d, "Violin / Long"), 12.0);
+      QCOMPARE(TrackDelays::own(d, "Violin / Gone"), 7.0);
+
+      // all 0 in "Live": the metaTag goes, Gone's aside (no track to set it)
+      LiveSetWriter::Spec zero = spec;
+      for (LiveSetWriter::Track& t : zero.tracks)
+            t.delayMs = 0;
+      im = LiveTracks::import(score, LiveSet::parse(LiveSetWriter::xml(zero)), parts, "a.als", QDateTime(), data);
+      score->setMetaTag(TrackDelays::metaTag, LiveTracks::delaysTag(score, im));
+      const TrackDelays::Delays z = TrackDelays::of(part, TrackDelays::read(score));
+      QCOMPARE(z.ms, 0.0);
+      QCOMPARE(int(z.tracks.size()), 1);
+      QCOMPARE(TrackDelays::own(z, "Violin / Gone"), 7.0);
+
+      // in samples: reported, the score's value kept
+      QByteArray xs = LiveSetWriter::xml(changed);
+      int at = -1;                                                    // (the part group's, 40 ms)
+      for (int i = xs.indexOf("<TrackDelay>"); i >= 0 && at < 0; i = xs.indexOf("<TrackDelay>", i + 1))
+            if (xs.mid(i, 200).contains("Value=\"40\""))
+                  at = i;
+      QVERIFY(at > 0);
+      const int flag = xs.indexOf("<IsValueSampleBased Value=\"false\"", at);
+      QVERIFY(flag > at);
+      xs.replace(flag, int(strlen("<IsValueSampleBased Value=\"false\"")), "<IsValueSampleBased Value=\"true\"");
+      const LiveSet::Set set2 = LiveSet::parse(xs);
+      im = LiveTracks::import(score, set2, parts, "a.als", QDateTime(), data);
+      bool reported = false;
+      for (const QString& u : im.report.unmatched)
+            reported |= u.contains("samples");
+      QVERIFY2(reported, qPrintable(im.report.text()));
+      delete score;
       }
 
 //---------------------------------------------------------

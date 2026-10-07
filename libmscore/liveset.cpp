@@ -421,6 +421,10 @@ Set parse(const QByteArray& xml)
                         ts->userName = value.toString();
                   else if (n == "Annotation" && parent() == "Name" && depth == trackDepth + 2)
                         ts->track.annotation = value.toString();
+                  else if (n == "Value" && parent() == "TrackDelay" && depth == trackDepth + 2)
+                        ts->track.delay = num(value);
+                  else if (n == "IsValueSampleBased" && parent() == "TrackDelay" && depth == trackDepth + 2)
+                        ts->track.delayInSamples = value.toString() == "true";
                   else if (n == "TrackGroupId" && depth == trackDepth + 1)
                         ts->track.groupId = value.toInt();
                   else if (n == "Target" && parent() == "MidiOutputRouting")

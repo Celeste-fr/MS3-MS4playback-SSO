@@ -100,7 +100,7 @@ static void scroller(Writer& w, double right)
 void groupTrack(Writer& w, const Track& t, int trackId, int groupTrackId, int scenes)
       {
       w.open("GroupTrack", "Id=\"" + QByteArray::number(trackId) + "\" SelectedToolPanel=\"7\" SelectedTransformationName=\"\" SelectedGeneratorName=\"\"");
-      w.trackHead(t.name, t.name, t.color, t.annotation);
+      w.trackHead(t.name, t.name, t.color, t.annotation, t.delayMs);
       const MixerTargets mixer = mixerTargets(w, t);
       automationEnvelopes(w, t, {}, mixer);
       w.trackLists(t.unfolded, groupTrackId);

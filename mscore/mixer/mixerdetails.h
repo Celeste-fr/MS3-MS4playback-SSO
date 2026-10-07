@@ -25,6 +25,7 @@
 #include "ui_mixerdetails.h"
 #include "mixertrackitem.h"
 #include "libmscore/instrument.h"
+#include "libmscore/trackdelays.h"
 
 
 namespace Ms {
@@ -47,12 +48,17 @@ class MixerDetails : public QWidget, public Ui::MixerDetails, public ChannelList
       QList<QPushButton*> voiceButtons;
       QLabel* labelPlayback;
       QComboBox* playbackCombo;           // the part's own playback mode (libmscore/partplayback.h)
+      QLabel* labelDelay;
+      QDoubleSpinBox* delaySpinBox;       // a sound library part's track delay, ms (libmscore/trackdelays.h)
+      QPushButton* delayTracksButton;     // its tracks' (patches', techniques') own delays
 
       QMap<QWidget*, QString> _tips;      // the controls' own tooltips (updateLibrary changes some)
 
       void updateFromTrack();
       void updatePlayback();
       void updateLibrary();               // a sound library part: what applies to it (tooltips, patch, route)
+      void updateTrackDelay(bool library);
+      void writeTrackDelays(const Part* part, const TrackDelays::Delays& delays);
 
       bool _stacked = false;              // MIDI and Mute Voice under the part's settings (a narrow Mixer)
       void placeMidiColumn();
@@ -71,6 +77,8 @@ public slots:
       void drumkitToggled(bool);
       void midiChannelChanged(int);
       void playbackChanged(int);
+      void trackDelayChanged();
+      void editTrackDelays();
 
 public:
       explicit MixerDetails(QWidget *parent);

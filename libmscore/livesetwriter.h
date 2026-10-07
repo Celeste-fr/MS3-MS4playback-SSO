@@ -170,13 +170,15 @@ struct Track {
       std::vector<ParameterAutomation> automation;
       std::vector<MixerAutomation> mixerAutomation;   // (a group's too)
       QString annotation;                 // the track's Info text (Name/Annotation): the plain set's track key
+      double delayMs { 0 };               // Track Delay, ms (trackdelays.h; the plain set's tracks)
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name
       QString patch;                      // the patch's
       bool mainPatch { true };            // the part's main patch (its first copy): found by the part's name
       const SoundLib::LibInstrument* instrument { nullptr };  // the patch
-      const Part* partRef { nullptr };    // the route (SoundLib::Route)
+      const Part* partRef { nullptr };    // the route (SoundLib::Route); the plain set's part group: its part
+      QString delayKey;                   // the plain set's Kontakt or technique track: its trackdelays.h key
       int port { 0 };
       int routePatch { 0 };
       int lane { 0 };

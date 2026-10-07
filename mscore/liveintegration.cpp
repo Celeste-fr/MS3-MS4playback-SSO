@@ -135,7 +135,8 @@ QString linkedSet(const MasterScore* score, bool* autoReimport)
       }
 
 // the score's metaTags with these changed (liveTracks: the read-back's, livetracks.h; null: as it is), as one undoable step
-static void setTags(MasterScore* score, const QString& automation, const QString& liveSet, const QString* liveTracks = nullptr)
+static void setTags(MasterScore* score, const QString& automation, const QString& liveSet, const QString* liveTracks = nullptr,
+                    const QString* trackDelays = nullptr)
       {
       QMap<QString, QString> tags = score->metaTags();
       auto put = [&tags](const char* tag, const QString& v) {
@@ -148,6 +149,8 @@ static void setTags(MasterScore* score, const QString& automation, const QString
       put(linkMetaTag, liveSet);
       if (liveTracks)
             put(LiveTracks::metaTag, *liveTracks);
+      if (trackDelays)
+            put(TrackDelays::metaTag, *trackDelays);
       if (tags == score->metaTags())
             return;
       if (seq && seq->isPlaying())
@@ -244,7 +247,9 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
       for (const auto& pm : im.mixes)
             mixed << setPartMix(score, pm.first, pm.second);
       const QString liveTracks = LiveTracks::toJson(im.data);
-      setTags(score, Automation::write(score, all), QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)), &liveTracks);
+      const QString trackDelays = LiveTracks::delaysTag(score, im);
+      setTags(score, Automation::write(score, all), QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)), &liveTracks,
+              &trackDelays);
       if (report) {
             *report = r.text();
             if (!mixed.isEmpty())

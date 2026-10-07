@@ -262,6 +262,7 @@ class NPlayEvent : public PlayEvent {
       signed char _extChannel = -1;
       bool _libSwitch = false;            // the library's articulation switch
       signed char _libPatch = 0;          // which of the part's library patches plays it
+      bool _libDelayed = false;           // moved by its track's delay already (trackdelays.h)
 
    public:
       NPlayEvent() : PlayEvent() {}
@@ -288,6 +289,8 @@ class NPlayEvent : public PlayEvent {
       bool librarySwitch() const { return _libSwitch; }
       void setLibraryPatch(int p) { _libPatch = p; }
       int libraryPatch() const { return _libPatch; }
+      void setLibraryDelayed(bool v) { _libDelayed = v; }
+      bool libraryDelayed() const { return _libDelayed; }
       void setPortamento(bool p) { _portamento = p; }
       bool portamento() const { 
             return (_portamento == true || 

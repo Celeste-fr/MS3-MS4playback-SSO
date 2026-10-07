@@ -44,7 +44,9 @@
 //                       "envelopes": [{"target": "volume" | "pan" | "speaker", "initial": v,
 //                                      "events": [[time, value], [time, value, c1x, c1y, c2x, c2y], …]}]}},
 //      "written": {key: {"kind": "section" | "part" | "kontakt" | "technique", "part": index, "patch": n,
-//                        "hashes": {"cc1": hash, …}}}}
+//                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key}}}
+//   Track delays: each part's tracks' TrackDelay comes back as the part's delays (trackdelays.h; "part": its group's,
+//   "delayKey": a Kontakt's or technique's); one in samples (Live's toggle) is reported, not imported.
 //   (only the values a track has; "initial" -1: none; an event's control points only on a curved one.)
 //---------------------------------------------------------
 
@@ -56,6 +58,7 @@
 #include "automation.h"
 #include "liveset.h"
 #include "livesetwriter.h"
+#include "trackdelays.h"
 
 namespace Ms {
 
@@ -91,6 +94,7 @@ struct Written {
       int part { -1 };              // the part's index in the score (kontakt, technique)
       int patch { 0 };              // 0: the part's main patch, else its extra's index + 1
       std::map<QString, QString> hashes;  // "cc<n>": the eventsHash of its clips' envelopes on CC n ("," between clips)
+      QString delayKey;             // a Kontakt or technique track's trackdelays.h key ("" a part group's: the part's)
       };
 
 struct Data {
@@ -131,8 +135,13 @@ struct Import {
       std::map<const Part*, Automation::PartLanes> lanes;   // every track's (the plain set's and others')
       Data data;                    // the score's with the set's tracks replaced
       std::map<const Part*, Mix> mixes;
+      // the track delays (trackdelays.h) of the parts whose tracks the set has (their part group's TrackDelay: the
+      // part's, a Kontakt's or technique's: that track's), replacing the score's for those parts
+      std::map<const Part*, TrackDelays::Delays> delays;
       LiveSet::Report report;
       };
+// the trackDelays metaTag with the import's parts' delays as Live has them
+QString delaysTag(const MasterScore* score, const Import& im);
 Import import(const MasterScore* score, const LiveSet::Set& set, const std::vector<LiveSet::PartInfo>& parts,
               const QString& path, const QDateTime& modified, const Data& data);
 

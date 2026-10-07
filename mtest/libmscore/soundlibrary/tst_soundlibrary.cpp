@@ -35,6 +35,7 @@
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
 #include "libmscore/tuning.h"
+#include "libmscore/trackdelays.h"
 #include "libmscore/livesetwriter.h"
 #include "libmscore/synthesizerstate.h"
 #include "mtest/testutils.h"
@@ -100,6 +101,7 @@ class TestSoundLibrary : public QObject, public MTest
       void renderPhraseMark();
       void legatoEarly();
       void phraseGap();
+      void trackDelays();
       void legatoEarlyFastRun();
       void legatoEarlyByInterval();
       void legatoOctaveByStartPitch();
@@ -1177,6 +1179,106 @@ void TestSoundLibrary::phraseGap()
       QCOMPARE(ms4[3].off, off[3].off);
       delete score;
       Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   trackDelays
+//    a part's track delay (trackdelays.h) moves its library events in time, the tempo followed (legato-early.musicxml:
+//    60, then 120): +100 ms, every note-on, note-off and controller 100 ms later; -100 ms, earlier, what would go before
+//    the start at the start; a technique's own delay ("Violin / Long") adds to the part's for its notes and its switch,
+//    the patch's controllers keep the part's; a patch's own ("Violin") adds to everything on the patch
+//---------------------------------------------------------
+
+void TestSoundLibrary::trackDelays()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Articulation name='Short' value='2' techniques='staccato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      typedef std::tuple<int, int, int, int, int, bool> E;     // tick, type, a, b, channel, a switch
+      auto render = [score](const QString& tag) {
+            score->setMetaTag(TrackDelays::metaTag, tag);
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<E> out;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal())
+                        out.emplace_back(te.first, ev.type(), ev.dataA(), ev.dataB(), ev.extChannel(), ev.librarySwitch());
+                  }
+            std::sort(out.begin(), out.end());
+            return out;
+            };
+      auto at = [score](int tick, double ms) {
+            return std::max(0, score->utime2utick(std::max(0.0, score->utick2utime(tick) + ms / 1000.0)));
+            };
+      // what the delays make of the events without them: notes (and their switch) by noteMs, the rest by otherMs
+      auto expected = [&](const std::vector<E>& base, double noteMs, double otherMs) {
+            std::vector<E> out;
+            for (E e : base) {
+                  const bool note = std::get<1>(e) == ME_NOTEON || std::get<1>(e) == ME_NOTEOFF || std::get<5>(e);
+                  std::get<0>(e) = at(std::get<0>(e), note ? noteMs : otherMs);
+                  out.push_back(e);
+                  }
+            std::sort(out.begin(), out.end());
+            return out;
+            };
+      const std::vector<E> base = render(QString());
+      int notes = 0;
+      for (const E& e : base)
+            if (std::get<1>(e) == ME_NOTEON && std::get<3>(e) > 0)
+                  ++notes;
+      QVERIFY2(notes >= 5, qPrintable(QString::number(notes)));
+      QCOMPARE(std::get<0>(base.front()), 0);                         // (something at the start, for the clamp)
+
+      // +100 ms: everything later; at 60 a quarter is a second, 100 ms 48 ticks
+      const std::vector<E> later = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":100}]");
+      QCOMPARE(later.size(), base.size());
+      QVERIFY(later == expected(base, 100, 100));
+      QCOMPARE(std::get<0>(later.front()), DIVISION / 10);
+      // (and after the change to 120, 100 ms is 96 ticks: the last event)
+      QCOMPARE(std::get<0>(later.back()), at(std::get<0>(base.back()), 100));
+
+      // -100 ms: earlier; what was at the start stays there
+      const std::vector<E> earlier = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":-100}]");
+      QCOMPARE(earlier.size(), base.size());
+      QVERIFY(earlier == expected(base, -100, -100));
+      QCOMPARE(std::get<0>(earlier.front()), 0);
+      bool movedEarlier = false;
+      for (size_t i = 0; i < base.size(); ++i)
+            movedEarlier |= std::get<0>(earlier[i]) < std::get<0>(base[i]);
+      QVERIFY(movedEarlier);
+
+      // the technique's own 50 ms on top: notes 150 ms later, controllers 100
+      const std::vector<E> technique = render(
+         "[{\"part\":0,\"name\":\"Violin\",\"ms\":100,\"tracks\":{\"Violin / Long\":50}}]");
+      QVERIFY(technique == expected(base, 150, 100));
+      // the patch's own -30 ms: everything on the patch 70 ms later
+      const std::vector<E> patch = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":100,\"tracks\":{\"Violin\":-30}}]");
+      QVERIFY(patch == expected(base, 70, 70));
+      // another technique's own delay: no note of this score plays it
+      QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"tracks\":{\"Violin / Short\":200}}]") == base);
+
+      // the metaTag: written for non-zero values only, read back clamped to -1000 .. 1000
+      std::map<const Part*, TrackDelays::Delays> delays;
+      delays[score->parts()[0]].ms = 0;
+      QVERIFY(TrackDelays::write(score, delays).isEmpty());
+      delays[score->parts()[0]].ms = 2500;
+      delays[score->parts()[0]].tracks[TrackDelays::trackKey("Violin", "Long")] = -12.5;
+      score->setMetaTag(TrackDelays::metaTag, TrackDelays::write(score, delays));
+      const TrackDelays::Delays d = TrackDelays::of(score->parts()[0], TrackDelays::read(score));
+      QCOMPARE(d.ms, 1000.0);
+      QCOMPARE(TrackDelays::ms(d, "Violin", "Long"), 987.5);
+      QCOMPARE(TrackDelays::ms(d, "Violin"), 1000.0);
+      delete score;
       }
 
 //---------------------------------------------------------

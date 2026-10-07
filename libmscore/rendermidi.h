@@ -28,6 +28,7 @@
 #include "ms4playback.h"
 #include "soundlibrary.h"
 #include "automation.h"
+#include "trackdelays.h"
 #include <functional>
 #include <limits>
 
@@ -181,6 +182,10 @@ class MidiRenderer {
             double atMs { 0.0 };              // from this long after the note-on (a legato transition's arrival)
             };
       std::map<const Note*, LibLevel> libLevels;
+      // track delays (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
+      std::map<const Part*, TrackDelays::Delays> libTrackDelays;
+      std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libTrackRoutes;
+      QString trackDelaysTag;
       int minChunkSize = 0;
 
    public:
@@ -241,6 +246,7 @@ class MidiRenderer {
       void finishLibraryEvents(const Chunk&, EventMap* events);
       void libraryPitchBends(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
+      void libraryTrackDelays(const Chunk&, EventMap* events);
 
    public:
       explicit MidiRenderer(Score* s) : score(s) {}

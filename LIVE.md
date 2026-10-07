@@ -316,6 +316,18 @@ in a section collapsible at the same time".
   with the alternating Bank every run switched, also when playback started inside a clip. Pitch bends are left out (reported) until the scale of Live's clip bend envelope is measured. Test:
   `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>` writes its set).
 
+- **Track delays** (`libmscore/trackdelays.*`, metaTag `trackDelays`; the owner, 2026-10-06: "adjust all the
+  automation, dynamics, track delay, etc. needed to make a strings section sound good inside MuseScore (without having
+  to use Ableton)"): Mixer › a library part › *Track delay* (ms, negative earlier) and *Tracks…* (each patch's and
+  each technique's own, added to the part's). Written as the tracks' **TrackDelay** (`Value` ms, `IsValueSampleBased`
+  false): the part's on its part group, a patch's on its Kontakt track, a technique's on its MIDI track; the section
+  group and the clips get none. MuseScore plays the same sums: a note and its switch the part's + the patch's + the
+  technique's, the Kontakt's controllers (the Controllers clip, parameter automation) the part's + the patch's. Range
+  -1000 .. 1000 ms: Live 12's manual (18.7 Track Delays) gives none; a tutorial gives 1000 ms either way
+  (musicgurus.com, "Ableton Live delay - Track Delay time"). **Untried in Live**: that a group's delay delays the
+  tracks in it, and a MIDI track's its MIDI To output (the manual: "every track"); what Live does when an early
+  technique's switch overtakes another technique's note (MuseScore plays it as the sums say: the same clash).
+  Test: `tst_soundlibrary` `trackDelays`, `tst_liveequivalence` `plainSetTrackDelays`.
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
@@ -340,6 +352,9 @@ in a section collapsible at the same time".
     Live 12.4.6 opens such a set, plays group Volume ramps and a Speaker off, and keeps the envelopes through Save As
     (the VM, 2026-10-06). A technique track has no instrument, so Live shows it no mixer and its Volume / Pan act on
     nothing (kept, not heard): a technique's level is set on its notes or the Kontakt's controllers.
+  - **Track delays**: each recorded part group's, Kontakt's and technique track's TrackDelay comes back into
+    `trackDelays` (one undo step with the import); a technique the set has no track for keeps its value; a delay in
+    samples (Live's toggle) is reported, not imported.
   - Without the record (the score not saved after Create Live Set), the tracks match as any set's (MIDI input or
     name) and the Controllers clip's envelopes come back as lanes.
   - Test: `tst_liveequivalence` `plainSetReadBack`, `liveTracksJson`.
@@ -760,6 +775,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 - **The plain set's technique and group tracks' mixer** (their Volume, Pan, Track Activator and its automation, and
   a second Kontakt track's, livetracks.h): kept in the score and written into the next set, but MuseScore doesn't play
   them; nor any track's mixer automation (a Kontakt's static mixer is the part's Mixer).
+- **Track delays in the route set** (Add Missing Tracks, the Live-against-MuseScore check): its tracks carry none, and
+  *Live plays the score*'s clips are rendered without them; only the plain set has them (as TrackDelay).
 - **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
   panel and faders.
 - The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.

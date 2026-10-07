@@ -19,6 +19,13 @@
 
 #include "mixerdetails.h"
 
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
+#include <QScrollArea>
+#include <QVBoxLayout>
+
 #include "musescore.h"
 
 #include "libmscore/score.h"
@@ -33,6 +40,8 @@
 #include "preferences.h"
 #include "playbackmode.h"
 #include "libmscore/partplayback.h"
+#include "libmscore/plainliveset.h"
+#include "libmscore/trackdelays.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
 
@@ -58,6 +67,29 @@ MixerDetails::MixerDetails(QWidget *parent) :
       gridLayout_2->addWidget(labelPlayback, row, 0);
       gridLayout_2->addWidget(playbackCombo, row, 1, 1, gridLayout_2->columnCount() - 1);
       connect(playbackCombo, SIGNAL(activated(int)), SLOT(playbackChanged(int)));
+
+      // a sound library part's track delay (as Live's Track Delay; kept in the score), and its tracks' own
+      labelDelay = new QLabel(tr("Track delay:"), this);
+      delaySpinBox = new QDoubleSpinBox(this);
+      delaySpinBox->setRange(TrackDelays::MIN_MS, TrackDelays::MAX_MS);
+      delaySpinBox->setDecimals(1);
+      delaySpinBox->setSingleStep(1.0);
+      delaySpinBox->setSuffix(tr(" ms"));
+      delaySpinBox->setKeyboardTracking(false);
+      delaySpinBox->setToolTip(tr("The part plays this much later (negative: earlier), as Live's Track Delay: on its group "
+                                  "track in the Live set Create Live Set writes (saved in the score)"));
+      labelDelay->setBuddy(delaySpinBox);
+      delayTracksButton = new QPushButton(tr("Tracks…"), this);
+      delayTracksButton->setToolTip(tr("Each patch's and each technique's own delay, added to the part's (the Live set's "
+                                       "Kontakt and technique tracks)"));
+      const int delayRow = gridLayout_2->rowCount();
+      gridLayout_2->addWidget(labelDelay, delayRow, 0);
+      QHBoxLayout* delayBox = new QHBoxLayout();
+      delayBox->addWidget(delaySpinBox, 1);
+      delayBox->addWidget(delayTracksButton);
+      gridLayout_2->addLayout(delayBox, delayRow, 1, 1, gridLayout_2->columnCount() - 1);
+      connect(delaySpinBox, SIGNAL(editingFinished()), SLOT(trackDelayChanged()));
+      connect(delayTracksButton, SIGNAL(clicked()), SLOT(editTrackDelays()));
 
       // a narrow Mixer (the owner, 2026-10-05: "the mixer menu is too wide"): long sound names (a library's
       // patch with the library's name) are cut instead of widening it, and below the width of both columns
@@ -359,6 +391,7 @@ void MixerDetails::updateLibrary()
       {
       for (auto i = _tips.begin(); i != _tips.end(); ++i)
             i.key()->setToolTip(i.value());
+      updateTrackDelay(false);
       if (!_mti)
             return;
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
@@ -372,6 +405,7 @@ void MixerDetails::updateLibrary()
       const SoundLib::LibInstrument* li = library->match(master->instruments()->begin()->second, master);
       if (!li)
             return;
+      updateTrackDelay(true);
       const bool hosted = SoundLib::output() == SoundLib::Output::PLUGIN;
       const QString where = hosted ? tr("its instance of the library's plug-in, in MuseScore")
                                    : tr("its MIDI route (port and channel set by the library)");
@@ -506,6 +540,139 @@ void MixerDetails::playbackChanged(int index)
       score->endCmd();
       ms->setPlaylistDirty();
       updateFromTrack();                  // (what applies to a sound library part)
+      }
+
+//---------------------------------------------------------
+//   updateTrackDelay
+//    the part's track delay: only for a part the sound library plays
+//---------------------------------------------------------
+
+void MixerDetails::updateTrackDelay(bool library)
+      {
+      const Part* part = _mti ? _mti->part() : nullptr;
+      const TrackDelays::Delays d = part && library ? TrackDelays::of(part, TrackDelays::read(part->masterScore()))
+                                                    : TrackDelays::Delays();
+      const QSignalBlocker block(delaySpinBox);
+      delaySpinBox->setValue(d.ms);
+      for (QWidget* w : std::initializer_list<QWidget*> { labelDelay, delaySpinBox, delayTracksButton })
+            w->setEnabled(library);
+      delayTracksButton->setText(d.tracks.empty() ? tr("Tracks…") : tr("Tracks (%1)…").arg(d.tracks.size()));
+      }
+
+//---------------------------------------------------------
+//   writeTrackDelays
+//    a part's delays, in the master score's metaTag (one undoable step)
+//---------------------------------------------------------
+
+void MixerDetails::writeTrackDelays(const Part* part, const TrackDelays::Delays& delays)
+      {
+      MasterScore* ms = const_cast<Part*>(part)->masterScore();
+      std::map<const Part*, TrackDelays::Delays> all = TrackDelays::read(ms);
+      if (delays.empty())
+            all.erase(PartPlaybackModes::masterPart(part));
+      else
+            all[PartPlaybackModes::masterPart(part)] = delays;
+      QMap<QString, QString> tags = ms->metaTags();
+      const QString value = TrackDelays::write(ms, all);
+      if (value.isEmpty())
+            tags.remove(TrackDelays::metaTag);
+      else
+            tags.insert(TrackDelays::metaTag, value);
+      if (tags == ms->metaTags())
+            return;
+      if (seq && seq->isPlaying())
+            seq->stopWait();
+      Score* score = const_cast<Part*>(part)->score();
+      score->startCmd();
+      score->undo(new ChangeMetaTags(ms, tags));
+      score->endCmd();
+      ms->setPlaylistDirty();
+      }
+
+//---------------------------------------------------------
+//   trackDelayChanged
+//---------------------------------------------------------
+
+void MixerDetails::trackDelayChanged()
+      {
+      if (!_mti)
+            return;
+      const Part* part = _mti->part();
+      TrackDelays::Delays d = TrackDelays::of(part, TrackDelays::read(part->masterScore()));
+      d.ms = delaySpinBox->value();
+      writeTrackDelays(part, d);
+      }
+
+//---------------------------------------------------------
+//   editTrackDelays
+//    the part's tracks as the plain Live set has them: per patch (its Kontakt track) and per technique the
+//    patch can play (its MIDI tracks), each one's own delay over the part's
+//---------------------------------------------------------
+
+void MixerDetails::editTrackDelays()
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!_mti || !library)
+            return;
+      Part* part = _mti->part();
+      const Part* master = PartPlaybackModes::masterPart(part);
+      TrackDelays::Delays d = TrackDelays::of(part, TrackDelays::read(part->masterScore()));
+      std::vector<const SoundLib::LibInstrument*> patches;
+      for (const SoundLib::Route& r : SoundLib::routes(part->masterScore(), *library))
+            if (r.part == master && r.lane == 0 && r.instrument
+                && std::find(patches.begin(), patches.end(), r.instrument) == patches.end())
+                  patches.push_back(r.instrument);
+
+      QDialog dialog(this);
+      dialog.setWindowTitle(tr("Track delays: %1").arg(part->partName()));
+      QVBoxLayout* top = new QVBoxLayout(&dialog);
+      QLabel* intro = new QLabel(tr("Added to the part's %1 ms, as Live adds a Kontakt track's and a technique track's "
+                                    "delays to their group's. -1000 to 1000 ms.").arg(d.ms), &dialog);
+      intro->setWordWrap(true);
+      top->addWidget(intro);
+      QScrollArea* scroll = new QScrollArea(&dialog);
+      scroll->setWidgetResizable(true);
+      QWidget* inner = new QWidget(scroll);
+      QFormLayout* form = new QFormLayout(inner);
+      std::map<QString, QDoubleSpinBox*> boxes;
+      auto row = [&](const QString& key, const QString& label) {
+            if (boxes.count(key))
+                  return;
+            QDoubleSpinBox* b = new QDoubleSpinBox(inner);
+            b->setRange(TrackDelays::MIN_MS, TrackDelays::MAX_MS);
+            b->setDecimals(1);
+            b->setSuffix(tr(" ms"));
+            b->setValue(TrackDelays::own(d, key));
+            form->addRow(label, b);
+            boxes[key] = b;
+            };
+      for (const SoundLib::LibInstrument* li : patches) {
+            row(TrackDelays::trackKey(li->name), tr("%1 (Kontakt track)").arg(li->name));
+            if (li->switchType == SoundLib::SwitchType::NONE || li->articulations.empty())
+                  row(TrackDelays::trackKey(li->name, li->name), QString("      ") + li->name);
+            else
+                  for (const SoundLib::Articulation& a : li->articulations)
+                        row(TrackDelays::trackKey(li->name, PlainLiveSet::techniqueName(li, a.value)),
+                            QString("      ") + PlainLiveSet::techniqueName(li, a.value));
+            }
+      // (a track's value whose patch or technique the library no longer has stays, listed last)
+      for (const auto& t : d.tracks)
+            row(t.first, t.first);
+      scroll->setWidget(inner);
+      top->addWidget(scroll, 1);
+      QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+      connect(buttons, SIGNAL(accepted()), &dialog, SLOT(accept()));
+      connect(buttons, SIGNAL(rejected()), &dialog, SLOT(reject()));
+      top->addWidget(buttons);
+      dialog.resize(420, 480);
+      if (dialog.exec() != QDialog::Accepted)
+            return;
+      d.tracks.clear();
+      for (const auto& b : boxes)
+            if (b.second->value() != 0.0)
+                  d.tracks[b.first] = b.second->value();
+      writeTrackDelays(part, d);
+      updateTrackDelay(true);
       }
 
 //---------------------------------------------------------

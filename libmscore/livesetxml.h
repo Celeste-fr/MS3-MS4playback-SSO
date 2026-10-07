@@ -259,14 +259,15 @@ class Writer {
             value("SampleOffsetModulationScrollPosition", -1073741824);
             recorder(1);
             }
-      void trackHead(const QString& effectiveName, const QString& userName, int color, const QString& annotation = QString())
+      void trackHead(const QString& effectiveName, const QString& userName, int color, const QString& annotation = QString(),
+                     double delayMs = 0)
             {
             value("LomId", 0);
             value("LomIdView", 0);
             value("IsContentSelectedInDocument", false);
             value("PreferredContentViewMode", 0);
-            open("TrackDelay");
-            value("Value", 0);
+            open("TrackDelay");                 // (ms: trackdelays.h)
+            value("Value", num(delayMs));
             value("IsValueSampleBased", false);
             close("TrackDelay");
             open("Name");

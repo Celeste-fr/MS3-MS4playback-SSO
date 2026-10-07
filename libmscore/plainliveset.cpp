@@ -68,17 +68,6 @@ QString sectionName(const QString& instrumentId)
       return g->name;
       }
 
-namespace {
-
-struct Builder {
-      Kontakt* kontakt { nullptr };
-      QString part;
-      std::map<int, size_t> techniqueOf;            // switch value -> its index in techniques
-      std::map<int, std::set<int>> startsAt;        // units -> the switch values of the notes starting there
-      std::map<int, std::vector<std::pair<int, int>>> lanes;       // cc (PITCH_BEND) -> (units, value)
-      std::map<int, std::vector<std::pair<int, float>>> params;    // the event's index -> (units, value)
-      };
-
 QString techniqueName(const SoundLib::LibInstrument* li, int value)
       {
       if (!li)
@@ -90,6 +79,17 @@ QString techniqueName(const SoundLib::LibInstrument* li, int value)
                   return a.name;
       return QString("Switch %1").arg(value);
       }
+
+namespace {
+
+struct Builder {
+      Kontakt* kontakt { nullptr };
+      QString part;
+      std::map<int, size_t> techniqueOf;            // switch value -> its index in techniques
+      std::map<int, std::set<int>> startsAt;        // units -> the switch values of the notes starting there
+      std::map<int, std::vector<std::pair<int, int>>> lanes;       // cc (PITCH_BEND) -> (units, value)
+      std::map<int, std::vector<std::pair<int, float>>> params;    // the event's index -> (units, value)
+      };
 
 // a value from a time on: one at the same time replaces it, one like the value before isn't kept
 template <typename V>
@@ -118,6 +118,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
 
       // the tracks: section, part, patch (a tuning lane's route joins its patch's)
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library);
+      const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
       std::vector<std::pair<const Part*, std::pair<int, int>>> order;     // (part, (patch, route index)) of lane 0
       std::map<int, std::pair<const Part*, int>> routeTo;                   // route -> (part, patch)
       std::map<int, bool> copyRoute;                                        // route -> a tuning lane's copy
@@ -142,6 +143,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   s->parts.push_back(PartTracks());
                   s->parts.back().part = r.part;
                   s->parts.back().name = r.part ? r.part->partName() : QString();
+                  s->parts.back().delays = TrackDelays::of(r.part, delays);
                   p = s->parts.end() - 1;
                   }
             Kontakt k;
@@ -458,6 +460,8 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                   pg.color = color;
                   pg.groupIndex = sectionIndex;
                   pg.annotation = trackKey({ s.name, p.name });
+                  pg.delayMs = p.delays.ms;
+                  pg.partRef = p.part;
                   out.push_back(pg);
                   const SoundLib::PartMix mix = SoundLib::partMix(p.part, false);
                   for (const Kontakt& k : p.kontakts) {
@@ -479,6 +483,8 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                         kt.volume = LiveSetWriter::mixGain(mix.volume);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
                         kt.active = !mix.muted;
+                        kt.delayKey = TrackDelays::trackKey(k.patch);
+                        kt.delayMs = TrackDelays::own(p.delays, kt.delayKey);
                         if (!k.lanes.empty()) {
                               LiveSetWriter::Clip c;
                               c.name = QObject::tr("Controllers");
@@ -514,6 +520,8 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                               tt.part = p.name;
                               tt.partRef = p.part;
                               tt.clips = switchClips(k, i, layout.length);
+                              tt.delayKey = TrackDelays::trackKey(k.patch, k.techniques[i].name);
+                              tt.delayMs = TrackDelays::own(p.delays, tt.delayKey);
                         tt.annotation = trackKey({ s.name, p.name, out[size_t(kontaktIndex)].name, k.techniques[i].name });
                               out.push_back(tt);
                               }

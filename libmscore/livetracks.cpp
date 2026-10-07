@@ -81,6 +81,7 @@ Data fromJson(const QString& json)
             w.kind = t.value("kind").toString();
             w.part = t.value("part").toInt(-1);
             w.patch = t.value("patch").toInt(0);
+            w.delayKey = t.value("delayKey").toString();
             const QJsonObject h = t.value("hashes").toObject();
             for (auto hi = h.begin(); hi != h.end(); ++hi)
                   w.hashes[hi.key()] = hi.value().toString();
@@ -133,6 +134,8 @@ QString toJson(const Data& data)
                   w["part"] = ws.second.part;
             if (ws.second.patch)
                   w["patch"] = ws.second.patch;
+            if (!ws.second.delayKey.isEmpty())
+                  w["delayKey"] = ws.second.delayKey;
             if (!ws.second.hashes.empty()) {
                   QJsonObject h;
                   for (const auto& hs : ws.second.hashes)
@@ -260,12 +263,13 @@ std::map<QString, Written> written(const Score* score, const std::vector<LiveSet
                   w.kind = t.groupIndex < 0 ? "section" : "part";
             else
                   w.kind = t.midiTo >= 0 ? "technique" : "kontakt";
-            if (!t.group && t.partRef && score) {
+            if (t.partRef && score) {           // (a part group's: its part)
                   const QList<Part*>& parts = score->masterScore()->parts();
                   for (int i = 0; i < parts.size(); ++i)
                         if (parts[i] == t.partRef)
                               w.part = i;
                   }
+            w.delayKey = t.delayKey;
             if (w.kind == "kontakt")
                   w.patch = t.routePatch;
             else if (w.kind == "technique" && t.midiTo < int(tracks.size()))
@@ -444,6 +448,21 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         continue;               // its switch
                   notImported << QObject::tr("Track \"%1\", %2: MuseScore doesn't play it").arg(t.name, what);
                   }
+            // the track delay
+            // (from the score's: a track the set hasn't, a technique no note plays, keeps its value)
+            if (part && (w.kind == "part" || !w.delayKey.isEmpty())) {
+                  if (!im.delays.count(part))
+                        im.delays[part] = TrackDelays::of(part, TrackDelays::read(score));
+                  TrackDelays::Delays& d = im.delays[part];
+                  if (t.delayInSamples && t.delay != 0)
+                        notImported << QObject::tr("Track \"%1\": its Track Delay is in samples (MuseScore's are in ms)").arg(t.name);
+                  else if (w.kind == "part")
+                        d.ms = TrackDelays::clampMs(t.delay);
+                  else if (t.delay != 0)
+                        d.tracks[w.delayKey] = TrackDelays::clampMs(t.delay);
+                  else
+                        d.tracks.erase(w.delayKey);
+                  }
             bound[i] = b;
             if (s.empty())
                   im.data.tracks.erase(k);
@@ -453,6 +472,22 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
       im.lanes = LiveSet::lanes(score, set, parts, path, modified, &im.report, &bound);
       im.report.unmatched << notImported;
       return im;
+      }
+
+//---------------------------------------------------------
+//   delaysTag
+//---------------------------------------------------------
+
+QString delaysTag(const MasterScore* score, const Import& im)
+      {
+      std::map<const Part*, TrackDelays::Delays> all = TrackDelays::read(score);
+      for (const auto& pd : im.delays) {
+            if (pd.second.empty())
+                  all.erase(pd.first);
+            else
+                  all[pd.first] = pd.second;
+            }
+      return TrackDelays::write(score, all);
       }
 
 }     // namespace LiveTracks
