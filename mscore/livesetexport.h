@@ -62,6 +62,12 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
 // the report shown after writing
 QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissing);
 
+// where Create Live Set writes the set the file dialog returned: *chosen* itself when it is in a Live project (its
+// folder or an ancestor holds "Ableton Project Info") or its folder is already named "<name> Project", else
+// "<folder>/<name> Project/<name>.als" as Live's Save As would. *createInfo: the target's folder needs its
+// "Ableton Project Info" folder created
+QString liveProjectSetPath(const QString& chosen, bool* createInfo);
+
 // the file dialog (default name "<title>.als"), the set written, the report
 void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing);
 

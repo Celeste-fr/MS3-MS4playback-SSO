@@ -56,6 +56,7 @@
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
 #include "audio/midi/event.h"
+#include "mscore/livesetexport.h"
 #include "mtest/testutils.h"
 
 #define DIR QString("libmscore/liveintegration/")
@@ -73,6 +74,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clockFromMiddle();
       void clockFollowsTempo();
       void clockLocate();
+      void liveProjectPath();
       void liveSetRead();
       void liveSetCurve();
       void liveSetLanes();
@@ -294,6 +296,43 @@ void TestLiveIntegration::clockLocate()
       QVERIFY(!c.running());
       }
 
+
+//---------------------------------------------------------
+//   liveProjectPath
+//    Create Live Set puts the set in a Live project folder as Live's Save As does
+//---------------------------------------------------------
+
+void TestLiveIntegration::liveProjectPath()
+      {
+      QTemporaryDir tmp;
+      QVERIFY(tmp.isValid());
+      const QString root = tmp.path();
+      bool info = false;
+
+      // not in a project: wrapped
+      QCOMPARE(LiveIntegration::liveProjectSetPath(root + "/Song.als", &info), root + "/Song Project/Song.als");
+      QVERIFY(info);
+
+      // the folder is already the project folder: no double nesting, only the info folder is missing
+      QVERIFY(QDir().mkpath(root + "/Song Project"));
+      QCOMPARE(LiveIntegration::liveProjectSetPath(root + "/Song Project/Song.als", &info), root + "/Song Project/Song.als");
+      QVERIFY(info);
+      // another name in that folder is wrapped
+      QCOMPARE(LiveIntegration::liveProjectSetPath(root + "/Song Project/Other.als", &info),
+               root + "/Song Project/Other Project/Other.als");
+
+      // inside a project (its folder or a subfolder of it): unchanged
+      QVERIFY(QDir().mkpath(root + "/P/Ableton Project Info"));
+      QVERIFY(QDir().mkpath(root + "/P/sub/deeper"));
+      info = true;
+      QCOMPARE(LiveIntegration::liveProjectSetPath(root + "/P/Song.als", &info), root + "/P/Song.als");
+      QVERIFY(!info);
+      info = true;
+      QCOMPARE(LiveIntegration::liveProjectSetPath(root + "/P/sub/deeper/Song.als", &info), root + "/P/sub/deeper/Song.als");
+      QVERIFY(!info);
+      // a name that merely resembles a project folder, outside any project: wrapped
+      QCOMPARE(LiveIntegration::liveProjectSetPath(root + "/Q/My Song.als", nullptr), root + "/Q/My Song Project/My Song.als");
+      }
 
 //---------------------------------------------------------
 //   liveSetRead

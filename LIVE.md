@@ -374,7 +374,9 @@ The sections below describe the route set.
    each patch's first load resaves its setup as Kontakt's own state, which Kontakt loads about 20 times faster
    than a setup made from the `.nki` (docs/HISTORY.md › Load times). The report says how many patches were never loaded.
 2. *Mixer › Advanced Options… › Ableton Live › **Create Live Set…***. The file dialog offers
-   "<score title>.als" next to the score. A report lists the tracks, their devices and MIDI From, and what was
+   "<score title>.als" next to the score. Like Live's Save As, the set goes into its own project folder
+   "<title> Project" (with an empty "Ableton Project Info" folder) unless the chosen folder is already inside a Live
+   project or is itself named "<title> Project"; an existing set there is replaced only after asking. A report lists the tracks, their devices and MIDI From, and what was
    left out.
 3. Open it in Live 12 (*File › Open Live Set…*), save it where you like (Live may ask to save it in a project).
 4. *Live plays the score* (or playing through Live) as before: the device finds every track.
