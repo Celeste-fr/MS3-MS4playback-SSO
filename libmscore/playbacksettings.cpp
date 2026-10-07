@@ -84,6 +84,11 @@ static const std::vector<Definition> DEFINITIONS = {
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
         "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },
+      // [tracks]
+      // (the user, 2026-10-07, approving "line the sections up: one early start per instrument": a patch's map delay is its
+      // measured median arrival on a slurred run, so the sections' transitions arrive together; trackdelays.h)
+      { "tracks/mapDelays", 100, 0, 200, "%",
+        "each patch's track delay from the map (<Instrument trackDelay>, its measured median lateness) plays at this share, added to the Mixer's (0: off)", true },
       // [shorts]
       { "shorts/calibratedVelocity", 0, 0, 1, "on/off",
         "1: a short plays at the velocity at which it is as loud as the part's held note (Check articulations › Dynamics, "

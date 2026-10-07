@@ -1672,7 +1672,38 @@ void TestLiveEquivalence::plainSetTrackDelays()
       im = LiveTracks::import(score, set1, parts, "a.als", QDateTime(), data);
       score->setMetaTag(TrackDelays::metaTag, LiveTracks::delaysTag(score, im));
       QCOMPARE(TrackDelays::ownDb(TrackDelays::of(part, TrackDelays::read(score)), "Violin / Staccato"), -6.0);
+
+      // a map delay (<Instrument trackDelay>, trackdelays.h › Map delays): in the Kontakt track's TrackDelay with its
+      // own, taken off again when read back (the score keeps only its own)
+      auto mapped = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin' trackDelay='-50'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(mapped);
+      SoundLib::setCurrent(mapped);
+      score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"" + part->partName() + "\","
+                        "\"tracks\":{\"Violin\":-10.5}}]");
+      const QString mappedTag = TrackDelays::write(score, TrackDelays::read(score));
+      EventMap mappedEvents;
+      score->renderMidi(&mappedEvents, false, true, SynthesizerState());
+      LiveSetWriter::Spec ms;
+      ms.tracks = PlainLiveSet::tracks(PlainLiveSet::layout(score, *mapped, mappedEvents, LiveClips::timeline(score)));
+      int mk = -1;
+      for (size_t i = 0; i < ms.tracks.size(); ++i)
+            if (ms.tracks[i].delayKey == "Violin")
+                  mk = int(i);
+      QVERIFY(mk >= 0);
+      QCOMPARE(ms.tracks[size_t(mk)].delayMs, -60.5);
+      const LiveSet::Set setM = LiveSet::parse(LiveSetWriter::xml(ms));
+      LiveTracks::Data dataM;
+      dataM.written = LiveTracks::written(score, ms.tracks, setM);
+      im = LiveTracks::import(score, setM, parts, "a.als", QDateTime(), dataM);
+      QVERIFY2(im.report.unmatched.isEmpty(), qPrintable(im.report.text()));
+      QCOMPARE(LiveTracks::delaysTag(score, im), mappedTag);
       delete score;
+      SoundLib::setCurrent(nullptr);
       }
 
 //---------------------------------------------------------

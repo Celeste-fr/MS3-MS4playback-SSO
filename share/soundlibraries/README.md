@@ -251,6 +251,9 @@ switch value of each articulation. For example:
     tuning copy (below) is retuned only after its notes' end plus the longer of `tail` and this.
     SSO's: the longest over the articulation's range (the rest check measured every semitone; neighbouring
     semitones can ring twice as long as the rest: Violins 1 - Performance 855 ms at its test pitch, 2180 at D4).
+  - `trackDelay` on an `Instrument` (ms, negative: early): the patch's own track delay, added to its Kontakt track's
+    own (Mixer › Tracks…) times the playback setting `[tracks] mapDelays`; measured: the patch's median lateness on a
+    slurred run, so the sections arrive together (libmscore/trackdelays.h › Map delays)
   - `bend` on an `Instrument` (cents): the patch bends its pitch this far either way at full pitch
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
 

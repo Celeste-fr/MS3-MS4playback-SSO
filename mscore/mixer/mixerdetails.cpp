@@ -664,7 +664,10 @@ void MixerDetails::editTrackDelays()
             boxes[key] = { ms, db };
             };
       for (const SoundLib::LibInstrument* li : patches) {
-            row(TrackDelays::trackKey(li->name), tr("%1 (Kontakt track)").arg(li->name));
+            // (its map delay plays added to the value here, never stored: TrackDelays::played)
+            const double mapMs = TrackDelays::mapMs(li, part->score());
+            row(TrackDelays::trackKey(li->name), mapMs == 0.0 ? tr("%1 (Kontakt track)").arg(li->name)
+                : tr("%1 (Kontakt track; plus the map's %2 ms)").arg(li->name).arg(mapMs));
             if (li->switchType == SoundLib::SwitchType::NONE || li->articulations.empty())
                   row(TrackDelays::trackKey(li->name, li->name), QString("      ") + li->name);
             else

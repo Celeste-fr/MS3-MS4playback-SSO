@@ -4760,7 +4760,7 @@ void MidiRenderer::updateState()
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : routes) {
-                        const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
+                        const TrackDelays::Delays d = TrackDelays::played(r.part, delayed, routes, score);
                         if (d.empty())
                               continue;
                         libTrackDelays[r.part] = d;

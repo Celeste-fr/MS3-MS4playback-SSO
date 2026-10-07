@@ -185,6 +185,9 @@ struct LibInstrument {
       // microtones by the patch's own pitch bend (<Instrument bend>: cents at full deflection, either way, the
       // bend linear; measured): a lane's tuning within it is played by pitch bend, not varispeed. 0: it doesn't bend
       double bendCents { 0 };
+      // its track delay (<Instrument trackDelay>, ms, negative: early; measured), added to its Kontakt track's own
+      // times the playback setting tracks/mapDelays (TrackDelays::played)
+      double trackDelayMs { 0 };
       QString scan;                       // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;

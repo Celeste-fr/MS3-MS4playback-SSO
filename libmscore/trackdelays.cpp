@@ -10,6 +10,8 @@
 
 #include "trackdelays.h"
 #include "partplayback.h"
+#include "playbacksettings.h"
+#include "soundlibrary.h"
 #include "part.h"
 #include "score.h"
 
@@ -173,6 +175,46 @@ double ownDb(const Delays& d, const QString& key)
 double db(const Delays& d, const QString& patch, const QString& technique)
       {
       return ownDb(d, trackKey(patch)) + ownDb(d, trackKey(patch, technique));
+      }
+
+double mapMs(const SoundLib::LibInstrument* patch, const Score* score)
+      {
+      if (!patch || zero(patch->trackDelayMs))
+            return 0.0;
+      return clampMs(patch->trackDelayMs * Playback::value("tracks/mapDelays", score) / 100.0);
+      }
+
+double mapMs(const QString& patch, const Score* score)
+      {
+      const std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!library)
+            return 0.0;
+      for (const SoundLib::LibInstrument& li : library->instruments)
+            if (li.name == patch)
+                  return mapMs(&li, score);
+      for (const SoundLib::LibInstrument& li : library->otherPatches)
+            if (li.name == patch)
+                  return mapMs(&li, score);
+      return 0.0;
+      }
+
+Delays played(const Part* part, const std::map<const Part*, Delays>& delays, const std::vector<SoundLib::Route>& routes,
+              const Score* score)
+      {
+      Delays d = of(part, delays);
+      const Part* master = PartPlaybackModes::masterPart(part);
+      std::map<QString, bool> added;          // (a patch's tuning lanes share its Kontakt track)
+      for (const SoundLib::Route& r : routes) {
+            if (!r.instrument || PartPlaybackModes::masterPart(r.part) != master || added[r.instrument->name])
+                  continue;
+            added[r.instrument->name] = true;
+            const double x = mapMs(r.instrument, score);
+            if (zero(x))
+                  continue;
+            const QString key = trackKey(r.instrument->name);
+            d.tracks[key] = clampMs(own(d, key) + x);
+            }
+      return d;
       }
 
 }     // namespace TrackDelays

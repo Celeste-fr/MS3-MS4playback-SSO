@@ -143,7 +143,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   s->parts.push_back(PartTracks());
                   s->parts.back().part = r.part;
                   s->parts.back().name = r.part ? r.part->partName() : QString();
-                  s->parts.back().delays = TrackDelays::of(r.part, delays);
+                  s->parts.back().delays = TrackDelays::played(r.part, delays, routes, score);
                   p = s->parts.end() - 1;
                   }
             Kontakt k;

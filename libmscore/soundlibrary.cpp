@@ -487,6 +487,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.kit = a.value("kit").toString() == "1";
                   li.keyScan = a.value("keyScan").toString() == "1";
                   li.bendCents = std::max(0.0, a.value("bend").toDouble());
+                  li.trackDelayMs = a.value("trackDelay").toDouble();
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;

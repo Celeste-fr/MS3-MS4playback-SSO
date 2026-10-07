@@ -104,6 +104,7 @@ class TestSoundLibrary : public QObject, public MTest
       void phraseGap();
       void trackDelays();
       void trackLevels();
+      void mapTrackDelays();
       void legatoEarlyFastRun();
       void legatoEarlyByInterval();
       void legatoOctaveByStartPitch();
@@ -1297,6 +1298,65 @@ void TestSoundLibrary::trackDelays()
       QCOMPARE(d.ms, 1000.0);
       QCOMPARE(TrackDelays::ms(d, "Violin", "Long"), 987.5);
       QCOMPARE(TrackDelays::ms(d, "Violin"), 1000.0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   mapTrackDelays
+//    a patch's map delay (<Instrument trackDelay>, trackdelays.h › Map delays) plays added to its Kontakt track's own,
+//    times tracks/mapDelays (%); it is never in the score's metaTag
+//---------------------------------------------------------
+
+void TestSoundLibrary::mapTrackDelays()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin' trackDelay='70'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(lib->instruments[0].trackDelayMs, 70.0);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+      auto played = [&](const QString& patchMs) {
+            std::map<const Part*, TrackDelays::Delays> delays;
+            if (!patchMs.isEmpty())
+                  delays[score->parts()[0]].tracks[TrackDelays::trackKey("Violin")] = patchMs.toDouble();
+            return TrackDelays::ms(TrackDelays::played(score->parts()[0], delays, routes, score), "Violin", "Long");
+            };
+      QCOMPARE(TrackDelays::mapMs("Violin", score), 70.0);
+      QCOMPARE(played(QString()), 70.0);
+      QCOMPARE(played("-30"), 40.0);                              // the track's own added
+      Playback::setIniValuesForTest({ { "tracks/mapDelays", "50" } });
+      QCOMPARE(played(QString()), 35.0);
+      Playback::setIniValuesForTest({ { "tracks/mapDelays", "0" } });
+      QCOMPARE(played("-30"), -30.0);
+      QCOMPARE(TrackDelays::mapMs("Violin", score), 0.0);
+      Playback::setIniValuesForTest({});
+
+      // the renderer: every event on the patch 70 ms later (the score has no metaTag); at 0 % as written
+      auto render = [score]() {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::pair<int, int>> out;     // tick, type
+            for (const auto& te : events)
+                  if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.dataB() > 0)
+                        out.emplace_back(te.first, te.second.dataA());
+            return out;
+            };
+      const std::vector<std::pair<int, int>> delayed = render();
+      Playback::setIniValuesForTest({ { "tracks/mapDelays", "0" } });
+      const std::vector<std::pair<int, int>> written = render();
+      Playback::setIniValuesForTest({});
+      QCOMPARE(delayed.size(), written.size());
+      QVERIFY(!written.empty());
+      for (size_t i = 0; i < written.size(); ++i)
+            QCOMPARE(delayed[i].first, std::max(0, score->utime2utick(score->utick2utime(written[i].first) + 0.070)));
+      QVERIFY(score->metaTag(TrackDelays::metaTag).isEmpty());
       delete score;
       }
 

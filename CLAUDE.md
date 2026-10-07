@@ -160,6 +160,8 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   per patch / technique (added up, as Live adds a group's and its tracks'); `MidiRenderer::libraryTrackDelays` moves
   the library events (not for Live's clips); with a negative delay everything else plays later by the earliest one
   (`libraryDelayLead`), so nothing is clamped at the start; the plain set writes them as TrackDelay, `livetracks.*` reads them back.
+  A patch may carry a map delay (`<Instrument trackDelay>`, never stored in the score, `[tracks] mapDelays`): added by
+  `TrackDelays::played` for the renderer and the plain set, taken off on read-back; SSO has none (lateness changes with tempo).
   Track levels (same metaTag, `levels`; same dialog): dB per patch / technique, added up, by CC11 per note
   (`libLevels`, `libraryNoteLevels`), so in Live's clips and the plain set's CC11 lane too; softer only (-42.08 .. 0 dB).
 
@@ -250,7 +252,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 74 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-07: trackLevels, legatoVelocity added);
+- `tst_soundlibrary`: 75 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-07: trackLevels, legatoVelocity, mapTrackDelays added);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 20 passed (2026-10-06: plainLayout, plainSet, plainSetReadBack, plainSetTrackDelays, liveTracksJson), `dumpEvents` skipped (a
