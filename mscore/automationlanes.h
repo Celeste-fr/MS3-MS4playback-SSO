@@ -207,6 +207,9 @@ class AutomationLanes : public QObject {
       void paintLane(QPainter& p, const Row& r, const QRectF& visible) const;
       void paintHeader(QPainter& p, const Row& r) const;
       QRectF headerRect(const Row& r) const;                                 // viewport
+      QColor rowColor(const Row& r) const;                                   // a row's band
+      double textPx() const;                                                 // the headers' text size on screen
+      QRectF buttonRect(const QRectF& header, int i) const;                  // the header row's +, All, pencil
       QString headLabel(const Row& r) const;
       QString valueText(const QString& target, double v) const;     // (0-127; the Velocity lane: % or 1-127)
       void select(const Row& r, const std::vector<int>& sel);

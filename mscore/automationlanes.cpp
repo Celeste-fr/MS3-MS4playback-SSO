@@ -44,7 +44,7 @@ namespace Ms {
 
 std::vector<Automation::Point> AutomationLanes::_clipboard;
 
-static const double HEAD_SP = 2.4;        // the part's header row, spatium
+static const double HEAD_SP = 3.2;        // the part's header row, spatium (the instrument names' 10 pt fit: textPx)
 static const double LANE_SP = 5.0;        // a lane
 static const double GAP_SP = 0.4;
 static const int HEADER_PX = 150;         // the headers' width on screen
@@ -581,12 +581,30 @@ QString AutomationLanes::headLabel(const Row& r) const
       return QString::fromUtf8(_folded.count(r.part) ? "▸ " : "▾ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
       }
 
-static QFont headFont(double height)
+// the headers' text as large on screen as the score's instrument names (the owner, 2026-10-06: it was a fixed 9-13 px,
+// "too small relative to the text size of everything else"), at least 9 px
+double AutomationLanes::textPx() const
+      {
+      const Score* s = score();
+      double pt = s ? s->styleD(Sid::longInstrumentFontSize) : 10.0;
+      if (s && s->styleB(Sid::longInstrumentFontSpatiumDependent))
+            pt *= s->spatium() / SPATIUM20;
+      return std::max(9.0, pt * DPI / 72.0 * _view->matrix().m11());
+      }
+
+static QFont headFont(double px, bool bold)
       {
       QFont f = QApplication::font();
-      f.setPixelSize(std::max(9, std::min(13, int(height * 0.42))));
-      f.setBold(true);
+      f.setPixelSize(int(std::lround(px)));
+      f.setBold(bold);
       return f;
+      }
+
+// the header row's buttons (+, All, the pencil), right-aligned, as wide as the text needs
+QRectF AutomationLanes::buttonRect(const QRectF& header, int i) const
+      {
+      const double w = std::max(24.0, 2.0 * textPx());
+      return QRectF(header.right() - (w + 2) * (3 - i) - 2, header.top() + 2, w, header.height() - 4);
       }
 
 QRectF AutomationLanes::headerRect(const Row& r) const
@@ -596,13 +614,16 @@ QRectF AutomationLanes::headerRect(const Row& r) const
             // a lane's: fixed at the view's left, as wide as the room left of bar 1 when scrolled to the start (the
             // page's left at the view's: zoomed out the box covered bar 1's points), at least HEADER_MIN_PX; by the
             // zoom only, not the scroll position (it doesn't change while scrolling)
+            // (wider as the text grows: about 14 characters' room)
             const double room = r.dataX * _view->matrix().m11() - 2;
-            return QRectF(0, vr.top(), std::max(double(HEADER_MIN_PX), std::min(double(HEADER_PX), room)), vr.height());
+            const double want = std::max(double(HEADER_PX), 14 * textPx());
+            return QRectF(0, vr.top(), std::max(double(HEADER_MIN_PX), std::min(want, room)), vr.height());
             }
       // the header row as wide as its label needs (the part's name whole: "Automation · Violin" was cut to "Vio…"),
       // with room for its three buttons; at most HEADER_MAX_PX (then the name is shortened in the middle)
-      const int label = QFontMetrics(headFont(vr.height())).horizontalAdvance(headLabel(r));
-      return QRectF(0, vr.top(), std::max(HEADER_PX + 90, std::min(HEADER_MAX_PX, 6 + label + 12 + 84)), vr.height());
+      const int label = QFontMetrics(headFont(textPx(), true)).horizontalAdvance(headLabel(r));
+      const double buttons = 3 * (std::max(24.0, 2.0 * textPx()) + 2) + 6;
+      return QRectF(0, vr.top(), std::max(HEADER_PX + buttons, std::min(HEADER_MAX_PX + buttons, 6 + label + 12 + buttons)), vr.height());
       }
 
 const AutomationLanes::Row* AutomationLanes::rowAt(const QPointF& canvas) const
@@ -682,10 +703,27 @@ void AutomationLanes::paint(QPainter& p, const QRect& viewport)
       // the headers, fixed at the view's left
       p.save();
       p.resetTransform();
+      // each row's band from the view's left to the score's (the owner, 2026-10-06: the gray strip was cut in two
+      // between the header box and the system's left edge)
+      for (const Row& r : rs) {
+            const QRectF vr = _view->matrix().mapRect(r.rect);
+            const QRectF gap(0, vr.top(), vr.left(), vr.height());
+            if (vr.left() > 0 && gap.intersects(QRectF(viewport)))
+                  p.fillRect(gap, rowColor(r));
+            }
       for (const Row& r : rs)
             if (headerRect(r).intersects(QRectF(viewport)))
                   paintHeader(p, r);
       p.restore();
+      }
+
+QColor AutomationLanes::rowColor(const Row& r) const
+      {
+      if (r.target.isEmpty())
+            return QColor(222, 219, 214);
+      const Lane l = lane(r.master, r.target);
+      const bool live = !l.points.empty() && l.playedByLive();
+      return live ? QColor(246, 241, 250) : (r.param ? QColor(251, 245, 239) : QColor(242, 246, 251));
       }
 
 void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible) const
@@ -694,16 +732,15 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
       if (r.target.isEmpty()) {
             // the header row: a band
             p.setPen(Qt::NoPen);
-            p.setBrush(QColor(222, 219, 214));
+            p.setBrush(rowColor(r));
             p.drawRect(r.rect);
             return;
             }
       const Lane l = lane(r.master, r.target);
       const bool live = !l.points.empty() && l.playedByLive();
       const QColor ink = live ? QColor(118, 72, 160) : (r.param ? QColor(200, 100, 30) : QColor(47, 109, 181));
-      const QColor bg = live ? QColor(246, 241, 250) : (r.param ? QColor(251, 245, 239) : QColor(242, 246, 251));
       p.setPen(Qt::NoPen);
-      p.setBrush(bg);
+      p.setBrush(rowColor(r));
       p.drawRect(r.rect);
       // the grid: bars, beats
       const double xa = std::max(r.rect.left(), visible.left());
@@ -784,23 +821,19 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
 void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       {
       const QRectF h = headerRect(r);
-      QFont f = p.font();
-      f.setPixelSize(std::max(9, std::min(13, int(h.height() * 0.42))));
-      p.setFont(f);
+      p.setFont(headFont(textPx(), false));
       if (r.target.isEmpty()) {
             p.fillRect(h, QColor(214, 211, 206));
             p.setPen(QColor(29, 31, 34));
-            f.setBold(true);
-            p.setFont(f);
-            p.setFont(headFont(h.height()));
-            p.drawText(h.adjusted(6, 0, -84, 0), Qt::AlignVCenter | Qt::AlignLeft,
-                       QFontMetrics(p.font()).elidedText(headLabel(r), Qt::ElideMiddle, int(h.width()) - 6 - 84 - 4));
-            f.setBold(false);
-            p.setFont(f);
+            const double buttons = h.right() - buttonRect(h, 0).left();
+            p.setFont(headFont(textPx(), true));
+            p.drawText(h.adjusted(6, 0, -buttons, 0), Qt::AlignVCenter | Qt::AlignLeft,
+                       QFontMetrics(p.font()).elidedText(headLabel(r), Qt::ElideMiddle, int(h.width() - 6 - buttons - 4)));
+            p.setFont(headFont(textPx(), false));
             // + (add a lane), All, the pencil (Draw Mode)
             const char* labels[] = { "+", "All", "✎" };
             for (int i = 0; i < 3; ++i) {
-                  const QRectF b(h.right() - 26 * (3 - i) - 2, h.top() + 2, 24, h.height() - 4);
+                  const QRectF b = buttonRect(h, i);
                   const bool on = (i == 1 && _showAll.count(r.master)) || (i == 2 && _drawMode);
                   p.setPen(QColor(150, 146, 140));
                   p.setBrush(on ? QColor(220, 232, 246) : QColor(243, 242, 239));
@@ -816,7 +849,8 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       p.setPen(QColor(200, 200, 200));
       p.drawLine(h.topRight(), h.bottomRight());
       p.setPen(QColor(29, 31, 34));
-      const QRectF text = h.adjusted(10, 0, -22, 0);
+      const double close = 1.6 * textPx();                  // the × at the right
+      const QRectF text = h.adjusted(10, 0, -close - 2, 0);
       // its name, and the value where playback is (or at the mouse)
       Score* s = score();
       int at = s ? s->playPos().ticks() : 0;
@@ -832,16 +866,18 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
                     + QString::fromUtf8(" · ")
                     + (LiveClipEdit::velOutput(l) == LiveClipEdit::VelOutput::WRITE ? tr("written") : tr("shaped"));
       const QString name = QFontMetrics(p.font()).elidedText(title, Qt::ElideRight, int(text.width()));
-      if (h.height() >= 30) {
+      if (h.height() >= 2.2 * textPx()) {        // two lines
             p.drawText(text.adjusted(0, 2, 0, -h.height() / 2), Qt::AlignBottom | Qt::AlignLeft, name);
             p.setPen(QColor(85, 88, 92));
+            p.setFont(headFont(0.85 * textPx(), false));     // the value a little smaller
             p.drawText(text.adjusted(0, h.height() / 2, 0, -2), Qt::AlignTop | Qt::AlignLeft, line2);
+            p.setFont(headFont(textPx(), false));
             }
       else
             p.drawText(text, Qt::AlignVCenter | Qt::AlignLeft, QFontMetrics(p.font()).elidedText(title + "  " + line2, Qt::ElideRight, int(text.width())));
       // × hides the lane
       p.setPen(QColor(110, 110, 110));
-      p.drawText(QRectF(h.right() - 20, h.top(), 18, h.height()), Qt::AlignCenter, QString::fromUtf8("×"));
+      p.drawText(QRectF(h.right() - close - 2, h.top(), close, h.height()), Qt::AlignCenter, QString::fromUtf8("×"));
       }
 
 //---------------------------------------------------------
@@ -867,15 +903,13 @@ void AutomationLanes::dropFocus()
 
 bool AutomationLanes::headerClick(const QPoint& pixel)
       {
-      if (pixel.x() >= HEADER_MAX_PX)
-            return false;
       for (const Row& r : rows()) {
             const QRectF h = headerRect(r);
             if (!h.contains(pixel))
                   continue;
             if (r.target.isEmpty()) {
                   for (int i = 0; i < 3; ++i) {
-                        const QRectF b(h.right() - 26 * (3 - i) - 2, h.top() + 2, 24, h.height() - 4);
+                        const QRectF b = buttonRect(h, i);
                         if (!b.contains(pixel))
                               continue;
                         if (i == 0)
@@ -894,7 +928,7 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                               }
                         return true;
                         }
-                  if (pixel.x() < h.left() + 20) {
+                  if (pixel.x() < h.left() + 6 + 1.6 * textPx()) {
                         // ▾ folds the lanes away, ▸ shows them again; the header row stays (the owner, 2026-10-04: the
                         // whole panel went, and selecting the part again didn't bring it back)
                         if (_folded.count(r.part))
@@ -906,7 +940,7 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                         }
                   return true;
                   }
-            if (pixel.x() >= h.right() - 20) {
+            if (pixel.x() >= h.right() - 1.6 * textPx() - 2) {
                   showLane(r.part, r.target, false);       // × hides
                   return true;
                   }
