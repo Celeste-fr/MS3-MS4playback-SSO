@@ -41,7 +41,7 @@
   <Legato early="0"/>
   <!-- a held note that is no legato transition (slurred or not) is heard onset ms after its note-on
        (by pitch; measured: 15 dB under its peak): it starts early by that times early percent (0: as written) -->
-  <Onset early="0"/>
+  <Onset early="100"/>
   <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>
   <Files registry="Spitfire Symphony Orchestra"/>
   <Instrument name="Violins 1" ids="violins" nki="Instruments/Symphonic Strings/Violins 1 - All techniques.nki" setup="$iooxo=3" pitch="76">

@@ -139,9 +139,11 @@ I=[
 # (20 of 42 within 40 ms, one 59 ms early); leaps of a fourth or fifth stay 100-280 ms late. 100 %: the
 # full arrival lands a little late, where the ear already hears the new note (docs/HISTORY.md, Legato transitions start early).
 # 0 since 2026-10-06 (the owner: no automatic adjustments, timing is adjusted in Live): notes start as written;
-# 100 turns the measured early starts back on (Playback adjustments, or this)
+# 100 turns the measured early starts back on (Playback adjustments, or this). Held notes (and so slurred notes on the
+# All techniques longs, each its own attack) start early by their onset again since 2026-10-07 (the owner: plain Long
+# for everything, lined up within Rasch's 30-50 ms between players; [heldNotes] early 0 plays them as written)
 LEGATO_EARLY = 0
-ONSET_EARLY = 0
+ONSET_EARLY = 100
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
 '  Spitfire Symphony Orchestra (Kontakt), articulations switched by UACC (CC32).',
@@ -1192,7 +1194,6 @@ def bendRange(name):
 #   of the median (Douglas-Peucker; the fits' own error is 12-48 ms); one number where all are. Only longs and legato
 #   (what was measured): not tremolos, trills, long marcato, nor harp, keyboards and percussion.
 RANGE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_sound_range.json'), encoding='utf-8'))
-ONSET_EARLY = 100
 def onsetFamily(patch, sound):
     if re.search(r'Sul Tasto|Flautando|Harmonics', sound):
         return 'slow'

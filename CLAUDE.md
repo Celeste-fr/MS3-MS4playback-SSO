@@ -111,9 +111,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - Renderer (`rendermidi.cpp`): each library event carries patch, switch and route; `finishLibraryEvents` routes,
   copies controllers to every patch ahead of the notes, applies early starts, lanes and bends. Dynamics on CC1;
   listed shorts take velocity. **No automatic adjustments by default** (the owner, 2026-10-06: timing and levels are
-  adjusted in Live): early starts (map `<Legato early>` / `<Onset early>` 0), `fastFirsts`, `phraseGapMs`, pedal timing
+  adjusted in Live): legato early starts (map `<Legato early>` 0), `fastFirsts`, `phraseGapMs`, pedal timing
   and `[shorts] calibratedVelocity` (`dynamics.json`) are off; notes play as written, the technique still comes from
-  the notation. The mechanisms below stay, one setting away. **No Performance patches** (the owner, 2026-10-06:
+  the notation. The mechanisms below stay, one setting away. Exception: held notes start early by their measured onset
+  (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
+  players; `[heldNotes] early` 0 plays them as written). **No Performance patches** (the owner, 2026-10-06:
   the All techniques patches' Release, Tightness and Options): SSO slurs play the All techniques longs, each note its
   own attack, early by its onset; a legato transition needs an articulation with `legato` first
   (`Articulation::playsTransitions`), which the SSO map has only under staff text "performance" (modifier `performance`,
