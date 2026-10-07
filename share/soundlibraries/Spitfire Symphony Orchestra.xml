@@ -41,7 +41,7 @@
   <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>
   <Files registry="Spitfire Symphony Orchestra"/>
   <Instrument name="Violins 1" ids="violins" nki="Instruments/Symphonic Strings/Violins 1 - All techniques.nki" setup="$iooxo=3" pitch="76">
-    <Articulation name="Long" value="1" techniques="long legato" release="920" onset="55:91 57:71 58:81 59:75 60:57 61:55 62:78 63:74 64:55 65:51 66:33 67:30 68:82 71:67 72:111 73:103 74:50 76:52 79:39 80:89 81:83 82:93 83:86 84:42 85:39 87:43 88:58 89:54 90:39 93:35 94:20 95:19 96:57 97:54"/>
+    <Articulation name="Long" value="1" techniques="long legato" release="920" onset="55:84 59:74 60:56 61:56 62:72 63:72 66:32 67:32 68:77 71:66 72:101 73:101 74:49 78:40 79:40 80:81 81:87 83:85 84:40 89:53 90:38 93:33 94:19 95:19 96:52 97:54"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted" release="1135" onset="55:180 62:170 65:220 70:225 71:220 72:160 75:195 87:145 89:105 97:110"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="1215" onset="79:420 81:365 83:355 84:375 85:350 86:275 87:260 88:425 89:405 90:275 91:255 92:320 93:310 94:425 97:370 98:235 99:220 100:280 101:260 102:280 105:235 106:115 107:105"/>
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando" release="3480" onset="55:660 56:525 57:500 58:600 59:570 60:600 61:575 62:390 63:495 64:510 65:565 66:465 69:430 70:735 71:685 72:455 73:530 74:425 75:400 76:600 79:520 80:630 81:625 82:455 83:475 84:605 85:575 86:630 87:605 88:650 89:615 90:500 91:575 92:710 93:670 94:470 95:440 96:490 97:460"/>
@@ -124,7 +124,7 @@
     <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
   <Instrument name="Violas" ids="violas" nki="Instruments/Symphonic Strings/Violas - All techniques.nki" setup="$iooxo=3" pitch="69">
-    <Articulation name="Long" value="1" techniques="long legato" release="1125" onset="48:28 49:68 54:53 55:80 56:75 57:127 58:116 59:74 62:65 64:48 65:69 66:62 68:65 69:42 72:46 73:84 74:82 75:95 76:88 77:49 78:44 79:63 80:58 81:14 82:10 83:28 84:26 85:64 86:61 87:29 90:23"/>
+    <Articulation name="Long" value="1" techniques="long legato" release="1125" onset="48:46 49:66 54:57 55:73 56:78 57:115 58:115 59:72 62:64 63:51 64:51 66:67 68:64 69:41 72:46 73:80 76:86 77:48 80:57 81:12 84:27 85:59 86:59 87:27 90:22"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted" release="1095" onset="48:170 52:195 53:250 56:250 60:230 61:180 70:220 80:145 88:170 90:125"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="930" onset="72:150 74:135 75:230 76:250 78:230 79:285 82:205 83:250 86:205 87:150 88:135 89:225 92:160 93:215 96:155 97:245 100:185 101:130 102:145"/>
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando" release="1475" onset="48:245 49:545 50:535 51:600 53:510 54:525 55:325 56:305 57:620 58:600 59:445 60:440 61:610 62:605 63:375 64:360 65:510 66:475 67:740 68:695 69:465 70:440 71:655 73:745 74:700 75:540 78:460 79:640 84:475 85:615 86:580 87:465 88:440 89:615 90:590"/>
@@ -345,7 +345,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Flute Solo" ids="flute" nki="Instruments/Symphonic Woodwinds/Flute Solo - All techniques.nki" setup="$iooxo=3" pitch="77">
-    <Articulation name="Long" value="1" techniques="long legato" release="985" onset="60:119 61:90 63:72 65:76 66:68 67:44 70:43 72:28 75:62 76:63 79:40 80:36 81:49 82:46 83:29 86:22 88:22 89:46 90:42 93:60 96:51"/>
+    <Articulation name="Long" value="1" techniques="long legato" release="985" onset="60:105 63:74 66:68 67:44 70:43 71:33 74:46 75:62 76:62 79:40 82:46 83:29 87:22 88:23 89:42 92:56 96:52"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo" release="940"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="910" onset="84:125 85:80 88:70 89:220 90:205 91:490 92:460 93:50 96:45"/>
     <Articulation name="Long Hollow" value="8" techniques="" release="1030"/>
@@ -425,7 +425,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Oboe Solo" ids="oboe" nki="Instruments/Symphonic Woodwinds/Oboe Solo - All techniques.nki" setup="$iooxo=3" pitch="73">
-    <Articulation name="Long" value="1" techniques="long legato" release="935" onset="58:34 60:24 61:36 62:32 63:16 65:22 66:15 67:26 68:22 69:77 70:117 71:97 72:105 73:52 74:63 75:145 76:172 77:33 78:26 79:60 80:49 81:24 82:32 85:17 91:12"/>
+    <Articulation name="Long" value="1" techniques="long legato" release="935" onset="58:28 62:30 63:14 65:13 68:24 69:76 70:95 71:103 72:95 73:61 74:61 75:143 76:143 77:31 78:31 79:47 80:47 82:22 91:10"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo" release="895"/>
     <Articulation name="Multi Tongued" value="75" techniques="tremolo" modifiers="multitongue"/>
     <Articulation name="Marcato" value="52" techniques="marcato"/>
@@ -474,7 +474,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Clarinet Solo" ids="clarinet bb-clarinet a-clarinet c-clarinet d-clarinet eb-clarinet soprano-clarinet" nki="Instruments/Symphonic Woodwinds/Clarinet Solo - All techniques.nki" setup="$iooxo=3" pitch="67">
-    <Articulation name="Long" value="1" techniques="long legato" release="1075" onset="50:33 51:19 52:18 54:30 60:33 61:17 64:7 70:28 72:27 73:7 74:7 75:26 78:20 79:41 80:40 81:26 82:29 83:13 85:25 89:29"/>
+    <Articulation name="Long" value="1" techniques="long legato" release="1075" onset="50:25 52:18 54:29 59:31 61:16 64:7 69:26 71:26 72:22 73:6 74:6 75:23 78:19 79:40 80:40 83:14 85:24 89:28"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo" release="1015"/>
     <Articulation name="Multi Tongued" value="75" techniques="tremolo" modifiers="multitongue"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo"/>
@@ -922,7 +922,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
   <Instrument name="Tuba Solo" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba" nki="Instruments/Symphonic Brass/Tuba Solo - All techniques.nki" setup="$iooxo=3" pitch="45">
-    <Articulation name="Long" value="1" techniques="long legato" release="1130" onset="24:11 26:5 27:25 28:23 29:32 30:27 31:36 34:5 35:34 36:22 40:13 41:122 43:106 44:21 45:25 46:15 47:44 48:41 49:0 50:3 51:32 52:34 53:12 54:21 55:42 56:41 57:6 58:10 59:0 60:21 61:6 64:3"/>
+    <Articulation name="Long" value="1" techniques="long legato" release="1130" onset="24:8 26:6 27:23 30:32 32:29 33:11 36:23 40:15 41:110 42:110 43:106 44:24 46:24 47:41 48:41 49:3 50:3 51:32 54:21 55:41 56:41 57:9 64:3"/>
     <Articulation name="Long Stopped" value="7" techniques="long legato" modifiers="muted" release="2810" onset="24:30 30:65 35:65 37:95 45:60 52:70 53:40 66:40"/>
     <Articulation name="Marcato" value="52" techniques="marcato"/>
     <Articulation name="Tenuto" value="50" techniques="tenuto"/>

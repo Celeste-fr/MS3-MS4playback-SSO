@@ -20,6 +20,13 @@ notes, pairs of the 12 sections within 50 ms went 40 -> 55 of 66 (loudness), 58 
 15 of 15 (the pairs sharing 30 or more readable notes). For SHIFT only the offset (the median arrival, early under
 both detectors on the slow run): the map's own table moved by it. Basses' isolated onsets vary 0-305 ms (SD 37 over
 four repeats) and made the fit worse.
+
+--smooth 1: each pitch's isolated median is the median of those within a semitone. The isolated repeats of one
+pitch alternate between round-robin variants (Oboe 76: 140/251/158/250 ms), so a neighbour's reading steadies it.
+Replayed from the split run: slow 55 of 66 pairs within 50 ms (loudness), 62 of 66 (harmonics, was 59), fast 15 of
+15; +-2 and +-3 were worse (loudness 46 and 39, fast 14 of 15).
+Batch 6 (the unsmoothed fit rendered on the VM) matched its replay: slow 56 of 66 (loudness, median SD 29 ms),
+59 of 66 (harmonics, 28), fast 16 of 17 (25).
 """
 import argparse
 import json
@@ -37,12 +44,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--isolated', required=True)
     ap.add_argument('--split', required=True, help='folder with meta_Q_<code>.json and late_S_<code>.json')
+    ap.add_argument('--smooth', type=int, default=1, help='median of the isolated medians within this many semitones')
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_long_onset_fit.json'))
     a = ap.parse_args()
     iso = json.load(open(a.isolated))
     out = {}
     for code in FIT + SHIFT:
         table = {int(p): v['median'] for p, v in iso[code].items()}
+        table = {p: statistics.median(table[q] for q in table if abs(q - p) <= a.smooth) for p in table}
         meta = {str(x['i']): x for x in json.load(open(os.path.join(a.split, f'meta_Q_{code}.json')))}
         late = json.load(open(os.path.join(a.split, f'late_S_{code}.json')))
         if code in SHIFT:
