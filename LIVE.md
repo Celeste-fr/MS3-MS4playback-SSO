@@ -511,9 +511,12 @@ when they stood ~1 sp right of them). Header row: *+* adds a lane (Dynamics (CC1
 control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5, Release, Tightness, Mute …; a part
 Live plays also its Live track's parameters, "Live: Operator › Tone"; a clip tab only its track's Live parameters:
 below), *All* shows them all, the pencil is Draw Mode, *Even* lays the view out with every beat the same width (the
-owner, 2026-10-06; the view only, not saved; a bar line's room goes into the beat before it), the triangle folds. Empty lanes are hidden
-until added; × hides a lane (it still plays). Editing as in Live 12 (manual 25.5): click adds a breakpoint (snapped to
-the grid, which follows the zoom; Alt: free), drag moves (Shift: fine), double-click or Delete removes, Alt-drag a
+owner, 2026-10-06; the view only, not saved; a bar line's room goes into the beat before it), the last button shows the
+grid (1/4 … 1/64, Bar; Off: no snap; a click turns snap on / off), the triangle folds. Empty lanes are hidden
+until added; × hides a lane (it still plays). The grid is fixed (the owner, 2026-10-07: no adaptive grid): one step per
+beat of the time signature at first, Ctrl+1 narrower, Ctrl+2 wider, Ctrl+4 snap on / off (Live's keys; while a lane has
+the focus, where they override MuseScore's Ctrl+1 / 2 / 4). Editing as in Live 12 (manual 25.5): click adds a breakpoint
+(snapped to the grid; Alt: free), drag moves (Shift: fine), double-click or Delete removes, Alt-drag a
 segment curves it (Live's own Bézier: a curve drawn here is Live's curve, and back), Alt-double-click straightens,
 Draw Mode drags grid-wide steps (with Alt: a freehand line, made breakpoints within one MIDI step, curved where they
 fit), dragging the line moves a segment (Shift: one axis), a drag on the background selects, Ctrl+C / X / V / D copy, cut,

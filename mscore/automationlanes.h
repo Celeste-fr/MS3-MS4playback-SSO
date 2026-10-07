@@ -40,8 +40,12 @@
 //
 //   Editing, as in Live 12 (manual 25.5.1-5; the owner, 2026-10-06: "mimic the behavior of how you edit automation
 //   curves in ableton"):
+//     the grid: fixed, one step per beat of the time signature at first (the owner, 2026-10-07: no adaptive grid);
+//       Ctrl+1 narrower (halves it, down to 1/64), Ctrl+2 wider (up to the beat, then the bar), Ctrl+4 snap on / off
+//       (Live's keys for its editing grid; while a lane has the focus); the header's grid button shows the value
+//       ("Off": no snap) and turns snap on / off; the lanes draw a line at each step;
 //     click: a breakpoint (on the envelope's line: on it; elsewhere: at the mouse's value), snapped to the
-//       grid (it follows the zoom: the finest of bar … 1/64 at least 10 px apart); Alt: no snap;
+//       grid; Alt: no snap;
 //     drag a breakpoint: moves it (and the other selected ones); points passed over are removed; Shift: fine
 //       vertical, time kept; Ctrl-click: add to / remove from the selection; drag on the background: a
 //       rubber band selects;
@@ -153,6 +157,8 @@ class AutomationLanes : public QObject {
       std::map<const Part*, std::set<QString>> _hidden;
       std::set<const Part*> _showAll;
       bool _drawMode { false };
+      int _gridLevel { 0 };                                    // 0: the beat; -n: the beat / 2^n; 1: the bar
+      bool _snapOn { true };
 
       // the lanes: as stored (cached by the metaTag's text), or the working copy during a gesture
       mutable QString _cachedTag;
@@ -212,6 +218,9 @@ class AutomationLanes : public QObject {
       double pixel() const;                                                  // a screen pixel in canvas units
       int gridTicks(int tick) const;
       int snap(int tick, bool fine) const;
+      void changeGrid(int by);                                 // Ctrl+1 (-1), Ctrl+2 (+1)
+      void toggleSnap();                                       // Ctrl+4
+      QString gridLabel() const;                               // "1/16", "Bar", "Off"
       std::pair<int, int> gridCell(int tick, bool fine) const;              // the grid cell at tick (in its measure)
       double valueAtY(const Row& r, double y) const;
       double yOfValue(const Row& r, double v) const;

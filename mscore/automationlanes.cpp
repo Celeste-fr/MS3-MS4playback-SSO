@@ -517,25 +517,48 @@ double AutomationLanes::pixel() const
       return m > 0 ? 1.0 / m : 1.0;
       }
 
-// the grid: the finest of a bar, half, quarter … 1/64 whose steps are at least 10 px apart here
+// the grid (fixed, set by Ctrl+1 / Ctrl+2): the beat of the measure at tick (1920 / the time signature's
+// denominator), halved per level below 0 (at least 1/64: 30 ticks); level 1: the measure
 int AutomationLanes::gridTicks(int tick) const
       {
-      const double px = pixel();
-      const double x = tickToX(tick);
-      for (int g : { 30, 60, 120, 240, 480, 960, 1920 }) {
-            if ((tickToX(tick + g) - x) / px >= 10)
-                  return g;
-            }
       Score* s = score();
-      const Measure* m = s ? s->tick2measure(Fraction::fromTicks(tick)) : nullptr;
-      return m ? m->ticks().ticks() : 1920;
+      const Measure* m = s ? s->tick2measure(Fraction::fromTicks(std::max(0, tick))) : nullptr;
+      if (_gridLevel > 0)
+            return m ? m->ticks().ticks() : 1920;
+      const int beat = 1920 / std::max(1, m ? m->timesig().denominator() : 4);
+      return std::max(30, beat >> -_gridLevel);
+      }
+
+// (the grid's label and limits are read at the mouse's time, else at the start)
+void AutomationLanes::changeGrid(int by)
+      {
+      const int tick = _hover.x() >= 0 ? xToTick(_hover.x()) : 0;
+      if (by < 0 && _gridLevel <= 0 && gridTicks(tick) <= 30)
+            return;
+      _gridLevel = std::min(1, _gridLevel + (by < 0 ? -1 : 1));
+      _view->update();
+      }
+
+void AutomationLanes::toggleSnap()
+      {
+      _snapOn = !_snapOn;
+      _view->update();
+      }
+
+QString AutomationLanes::gridLabel() const
+      {
+      if (!_snapOn)
+            return tr("Off");
+      if (_gridLevel > 0)
+            return tr("Bar");
+      return QString("1/%1").arg(1920 / gridTicks(_hover.x() >= 0 ? xToTick(_hover.x()) : 0));
       }
 
 int AutomationLanes::snap(int tick, bool fine) const
       {
       Score* s = score();
       tick = std::max(0, tick);
-      if (fine || !s)
+      if (fine || !_snapOn || !s)
             return tick;
       const Measure* m = s->tick2measure(Fraction::fromTicks(tick));
       if (!m)
@@ -612,9 +635,10 @@ static QFont headFont(double px, bool bold)
       return f;
       }
 
-// the header row's buttons (+, All, the pencil, Even), right-aligned, as wide as the longest label needs
-static const char* const HEAD_BUTTONS[] = { "+", "All", "✎", "Even" };
-static const int HEAD_BUTTON_COUNT = 4;
+// the header row's buttons (+, All, the pencil, Even, the grid: its label from gridLabel()), right-aligned, as wide
+// as the longest label needs
+static const char* const HEAD_BUTTONS[] = { "+", "All", "✎", "Even", "" };
+static const int HEAD_BUTTON_COUNT = 5;
 
 static double headButtonWidth(double textPx)
       {
@@ -762,20 +786,26 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
       p.setPen(Qt::NoPen);
       p.setBrush(rowColor(r));
       p.drawRect(r.rect);
-      // the grid: bars, beats
+      // the grid: bars, beats and the snap grid's steps between them (those only while 3 px apart or more on screen,
+      // so a fine grid zoomed out doesn't fill the lane)
       const double xa = std::max(r.rect.left(), visible.left());
       const double xb = std::min(r.rect.right(), visible.right());
       Score* s = score();
       const int ta = xToTick(xa);
       const int tb = xToTick(xb);
       for (Measure* m = s->tick2measureMM(Fraction::fromTicks(ta)); m && m->tick().ticks() <= tb; m = m->nextMeasureMM()) {
+            const int t0 = m->tick().ticks();
             const int beat = 1920 / std::max(1, m->timesig().denominator());
-            for (int t = m->tick().ticks(); t < m->endTick().ticks(); t += beat) {
-                  // (a bar: where the staff's bar line is; the beats where their notes are)
-                  const bool bar = t == m->tick().ticks();
+            int step = std::min(beat, gridTicks(t0));
+            if ((tickToX(t0 + step) - tickToX(t0)) / px < 3)
+                  step = beat;
+            for (int t = t0; t < m->endTick().ticks(); t += step) {
+                  // (a bar: where the staff's bar line is; the beats and steps where their notes are)
+                  const bool bar = t == t0;
                   const Measure* prev = bar ? m->prevMeasureMM() : nullptr;
                   const double x = prev && prev->system() == m->system() ? Automation::barLineX(prev) : tickToX(t);
-                  p.setPen(QPen(bar ? QColor(170, 170, 170) : QColor(220, 220, 220), px));
+                  const QColor c = bar ? QColor(170, 170, 170) : (t - t0) % beat == 0 ? QColor(220, 220, 220) : QColor(232, 232, 232);
+                  p.setPen(QPen(c, px));
                   p.drawLine(QPointF(x, r.rect.top()), QPointF(x, r.rect.bottom()));
                   }
             }
@@ -855,12 +885,12 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
             for (int i = 0; i < HEAD_BUTTON_COUNT; ++i) {
                   const QRectF b = buttonRect(h, i);
                   const bool on = (i == 1 && _showAll.count(r.master)) || (i == 2 && _drawMode)
-                                  || (i == 3 && sc && sc->lineEvenBeats());
+                                  || (i == 3 && sc && sc->lineEvenBeats()) || (i == 4 && _snapOn);
                   p.setPen(QColor(150, 146, 140));
                   p.setBrush(on ? QColor(220, 232, 246) : QColor(243, 242, 239));
                   p.drawRoundedRect(b, 3, 3);
                   p.setPen(on ? QColor(29, 79, 140) : QColor(29, 31, 34));
-                  p.drawText(b, Qt::AlignCenter, QString::fromUtf8(HEAD_BUTTONS[i]));
+                  p.drawText(b, Qt::AlignCenter, i == 4 ? gridLabel() : QString::fromUtf8(HEAD_BUTTONS[i]));
                   }
             return;
             }
@@ -947,6 +977,8 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                               _drawMode = !_drawMode;
                               _view->update();
                               }
+                        else if (i == 4)
+                              toggleSnap();
                         else if (Score* sc = score()) {
                               // Even: the view only, every beat the same width (not saved, not an undo step)
                               sc->setLineEvenBeats(!sc->lineEvenBeats());
@@ -1098,7 +1130,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
       const QPointF p = _view->toLogical(ev->pos());
       const Row& r = _dragRow;
       const Qt::KeyboardModifiers mods = ev->modifiers();
-      const bool fineTime = mods & Qt::AltModifier;
+      const bool fineTime = (mods & Qt::AltModifier) || !_snapOn;
       switch (_drag) {
             case Drag::PENDING:
                   if ((ev->pos() - _pressPixel).manhattanLength() <= 4)
@@ -1530,6 +1562,9 @@ bool AutomationLanes::wantsKey(const QKeyEvent* ev) const
             case Qt::Key_X:
             case Qt::Key_V:
             case Qt::Key_D:
+            case Qt::Key_1:             // the grid: narrower, wider, snap on / off (Live's keys)
+            case Qt::Key_2:
+            case Qt::Key_4:
                   return m == Qt::ControlModifier;
             default:
                   return false;
@@ -1548,6 +1583,13 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
       switch (ev->key()) {
             case Qt::Key_Escape:
                   dropFocus();
+                  return true;
+            case Qt::Key_1:
+            case Qt::Key_2:
+                  changeGrid(ev->key() == Qt::Key_1 ? -1 : 1);
+                  return true;
+            case Qt::Key_4:
+                  toggleSnap();
                   return true;
             case Qt::Key_Delete:
             case Qt::Key_Backspace:
