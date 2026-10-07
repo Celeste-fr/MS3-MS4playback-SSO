@@ -1143,6 +1143,30 @@ void TestLiveEquivalence::plainLayout()
       QVERIFY(l.clashes.empty());
       QVERIFY(l.length > 0);
 
+      // the Mixer's solo stays out of the notes (2026-10-06: a part soloed when the set was made left the others silent)
+      std::vector<Channel*> violinChannels;
+      for (const auto& ip : *l.sections[0].parts[0].part->instruments())
+            for (const Channel* c : ip.second->channel())
+                  violinChannels.push_back(score->playbackChannel(c));
+      for (Channel* c : violinChannels)
+            c->setSoloMute(true);                     // (as when the piano is soloed)
+      EventMap soloed;
+      score->renderMidi(&soloed, false, true, SynthesizerState());
+      bool silencedInMuseScore = false;
+      for (const auto& te : soloed)
+            silencedInMuseScore = silencedInMuseScore || (te.second.isExternal() && te.second.note() && te.second.isMuted());
+      QVERIFY(silencedInMuseScore);
+      const PlainLiveSet::Layout ls = PlainLiveSet::layout(score, *lib, soloed, tl);
+      size_t soloedNotes = 0;
+      for (const PlainLiveSet::Technique& t : ls.sections[0].parts[0].kontakts[0].techniques)
+            for (const LiveClips::Note& n : t.notes) {
+                  QVERIFY(!n.muted);
+                  ++soloedNotes;
+                  }
+      QCOMPARE(soloedNotes, notes);
+      for (Channel* c : violinChannels)
+            c->setSoloMute(false);
+
       // two techniques starting together on the violin's route: one clash, both named
       EventMap two;
       auto put = [&](int tick, NPlayEvent e, bool sw = false) {

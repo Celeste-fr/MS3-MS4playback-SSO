@@ -287,6 +287,10 @@ in a section collapsible at the same time".
   Kontakt track's "Controllers" clip holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters
   MuseScore automates are automation on the Kontakt track.
 - **No automatic timing or levels**: what the playback settings say, off by default (docs/PLAYBACK_SETTINGS.md).
+- **The Mixer's mute and solo** (2026-10-06, after the owner's first set came out with only the soloed Violas' notes
+  playing): the notes are written as played whatever the Mixer says (only a voice switched off for playback leaves
+  its notes deactivated); a muted part's Kontakt track is written deactivated, a solo is left out. (*Live plays the
+  score* still follows MuseScore's mute and solo: its clips are MuseScore's playback.)
 - **Reported, not in the set**: two techniques of one Kontakt starting at the same instant (one switch can't play
   both: the report gives the beat), program-change switches, notes of a copy for another tuning (played at the key's
   pitch), pitch bends (not written yet).

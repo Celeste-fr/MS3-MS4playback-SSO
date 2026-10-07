@@ -20,9 +20,11 @@
 #include "audio/midi/event.h"
 #include "instrtemplate.h"
 #include "instrument.h"
+#include "note.h"
 #include "part.h"
 #include "score.h"
 #include "soundlibrary.h"
+#include "staff.h"
 
 namespace Ms {
 namespace PlainLiveSet {
@@ -42,6 +44,13 @@ bool laneController(int cc, const SoundLib::LibInstrument* instrument)
             default:
                   return cc >= 0 && cc < 0x78;
             }
+      }
+
+// a note of a voice not played (NPlayEvent::isMuted without the Mixer: the plain set leaves mute and solo to Live)
+static bool voiceOff(const NPlayEvent& e)
+      {
+      const Note* n = e.note();
+      return n && n->staff() && !n->staff()->playbackVoice(n->voice());
       }
 
 QString sectionName(const QString& instrumentId)
@@ -214,7 +223,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         n.pitch = e.pitch();
                         n.start = at;
                         n.velocity = e.velo();
-                        n.muted = e.note() ? e.isMuted() : false;
+                        n.muted = voiceOff(e);
                         open[n.pitch].push_back({ t->second, n });
                         b.startsAt[at].insert(value);
                         if (copy)

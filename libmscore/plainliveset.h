@@ -33,6 +33,9 @@
 //   techniques are the ones MuseScore plays; the timing and level adjustments are whatever the playback settings say
 //   (off by default since 2026-10-06: docs/PLAYBACK_SETTINGS.md). Copies of a patch for another tuning (varispeed
 //   lanes) can't be had in Live: their notes join the patch's own techniques, counted in Kontakt::untuned.
+//   The Mixer's mute and solo are not in the notes (the owner, 2026-10-06: a part soloed when the set was made left the
+//   others' clips silent): a note is muted only where its voice doesn't play (Staff::playbackVoice); a muted part's
+//   Kontakt track is written deactivated, a solo is left out (adjusted in Live).
 //
 //   One limit (said to the owner when choosing): two techniques of one Kontakt starting at the same instant can't be
 //   told apart by a single switch controller (Live sends both tracks' switches, then both notes): Layout::clashes
