@@ -1615,7 +1615,8 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
 
       // the shipped map plays legato transitions only under staff text "performance": slurs play the All techniques
       // longs ("long legato": each note its own attack; the owner, 2026-10-06), the Performance patches' Legato needs the
-      // modifier performance (2026-10-07) and plays its transitions at velocity 100 (gen_spitfire_sso.py LEGATO_VELOCITY)
+      // modifier performance (2026-10-07); its transitions keep the note's velocity except where measured tighter
+      // (gen_spitfire_sso.py LEGATO_VELOCITY: Violas - Performance 100)
       {
       QString err;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
@@ -1626,7 +1627,8 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
             for (const SoundLib::Articulation& oa : li.articulations) {
                   if (oa.playsTransitions()) {
                         QVERIFY2(li.name.contains("Performance") && !li.with.isEmpty() && oa.modifiers.contains("performance")
-                                 && oa.legatoVelocity == 100, qPrintable(li.name + ": " + oa.name));
+                                 && oa.legatoVelocity == (li.name == "Violas - Performance" ? 100 : -1),
+                                 qPrintable(li.name + ": " + oa.name));
                         ++performance;
                         }
                   else {

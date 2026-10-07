@@ -54,7 +54,7 @@ static const std::vector<Definition> DEFINITIONS = {
       // 11815986); measured 2026-10-07 on Violas - Performance, a run of 80 slurred sixteenths at 110 bpm: arrival SD 49 ms at
       // velocity 64, 41 at 100: docs/PLAYBACK_SETTINGS.md)
       { "legato/velocity", MAP, 0, 127, "velocity",
-        "a legato transition plays at this velocity (default: the map's legatoVelocity, SSO's Performance patches 100; 0: the note's own)", true },
+        "a legato transition plays at this velocity (default: the map's legatoVelocity, SSO: Violas - Performance 100; 0: the note's own)", true },
       // (keepMs chosen by a sweep, numbers-measured 2026-10-03: 0 / 20 / 40 / 60 / 80 / 120 ms on make_fastrun_scores.py's
       // scores, MuseScore 2bc46bc on the Windows VM, 3072 transitions each: median |arrival| 31 / 31 / 31 / 34 / 45 / 94
       // ms, 40 the fewest without an arrival (410 against 424-432); tools/playbackverify/choose_keep_ms.py)

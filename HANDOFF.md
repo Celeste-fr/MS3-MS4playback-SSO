@@ -30,14 +30,13 @@ old `legatoDelay` by interval, `Legato early`), which centres the run but keeps 
 but tune the note spread so that they are within the established range for professional players")**, branch
 `legato-pair-delays`, waiting for the owner (changes the 2026-10-06 decision where a score asks for it). Staff text
 "performance" (until "ord." / "non performance") plays slurred and held notes on the part's Performance patch (modifier
-`performance`, 42 Legato articulations); their transitions play at velocity 100 (map `legatoVelocity`, playback.ini
+`performance`, 42 Legato articulations); Violas - Performance plays its transitions at velocity 100, the others at the note's own (map `legatoVelocity`, playback.ini
 `[legato] velocity`, 0: the note's own). Target: Rasch 1979, between-player asynchrony SD 30-50 ms typical (string
 quartets 24-28 ms at fast tempi). Measured (same passage and VM): arrival - written SD 49 ms at velocity 64, **41 ms at
 100** (on the notes heard in every render 45-46 → 37-38); 159 of 180 transitions detected against 133; median arrival
 68 ms against 88; median note peak 1.5 dB lower. Per-note nudges toward the run's median (gain 0.5, ±60 ms) made it no
 tighter (49 → 46 at 64; 41 → 51 at 100). Inside 30-50, not down to 24-28. To hear: velocity 100 is Spitfire's "fast
-slurred with accent" (slow transitions 85-127: bowed), so offer both by ear (`[legato] velocity` 0 vs default). Only
-Violas measured; `Legato early` stays 0 (notes as written: the run's median arrives 68 ms late; an early start at
+slurred with accent" (slow transitions 85-127: bowed), so offer both by ear (`[legato] velocity` 0 vs default). Same passage on every family (moved by octaves near each patch's test note), SD at 64 / at 100 (ms): Violas 54 / 39, Violins 1 53 / 65, Celli 53 / 70, Basses 39 / 65, Flute 35 / 65, Trumpet 26 / 35; Oboe 29, Clarinet 31, Bassoon 98, Horn 29, Tenor Trombone 31, Tuba 55 render the same at both. So only Violas - Performance gets 100; the others keep the note's own (Violins 1 at 30 / 50 / 84: 53 / 50 / 53). Bassoon (98) and Tuba (55) stay outside 30-50; the sweep at 30 / 50 / 84 / 120 for Celli, Bassoon, Tuba (and Violins 1 at 120) waits for the share. `Legato early` stays 0 (notes as written: the run's median arrives 68 ms late; an early start at
 velocity 100 is unmeasured, and any start shift changes SSO's transition, above).
 
 ## Where things are (2026-10-02)

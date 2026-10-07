@@ -188,7 +188,7 @@ switch value of each articulation. For example:
   and `sso_patch_measurements.json`, written by `gen_spitfire_sso.py`):
   - `legatoVelocity` on an `Articulation` (1-127): a legato transition's velocity, whatever the note's
     (Spitfire's Performance legato picks the transition by velocity: fast 85-127 "with accent", slow 85-127
-    bowed). SSO's Performance patches: 100 (measured on Violas - Performance, 2026-10-07: a run of slurred
+    bowed). SSO: Violas - Performance 100, the other Performance patches none (measured per family, `gen_spitfire_sso.py` LEGATO_VELOCITY; on Violas - Performance, 2026-10-07: a run of slurred
     sixteenths arrives with an SD of 41 ms against the written times at 100, 49 ms at 64). playback.ini
     `[legato] velocity` overrides it (0: the note's own).
   - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long

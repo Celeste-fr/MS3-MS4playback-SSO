@@ -290,7 +290,7 @@ SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), 
 #   patch's own longs. Staff text "performance" (modifier performance, until "ord." or "non performance"; the
 #   owner, 2026-10-07: "let's use the performance patch, but tune the note spread so that they are within the
 #   established range for professional players") plays slurred and held notes on the part's Performance patch
-#   (Spitfire's legato transitions, measured in sso_legato_*.json), its transitions at LEGATO_VELOCITY.
+#   (Spitfire's legato transitions, measured in sso_legato_*.json), its transitions at LEGATO_VELOCITY where measured.
 #   Its UACC value is not known (20 = the standard's legato); a single-articulation patch ignores it.
 LEGATO = [('Legato', 20, 'legato long', 'performance', 'long')]
 PERFORMANCE = {
@@ -314,13 +314,15 @@ PERFORMANCE = {
     'Motif Horns a4': 'Horns a4 - Performance', 'Motif Trumpets a3': 'Trumpets a3 - Performance',
     'Motif Trombones a5': 'Trombones a5 - Performance',
 }
-# the velocity of a Performance patch's legato transitions (legatoVelocity=). Spitfire's Performance Legato picks
-# the transition by velocity (support.spitfireaudio.com/en/articles/11815986: slow 1-19 portamento, 20-84 slurred,
-# 85-127 bowed; fast 1-84 fast slurred, 85-127 fast slurred with accent). Measured 2026-10-07 (Violas - Performance,
-# Whence's violas, bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, kthost on the test VM; branch
-# legato-pair-delays): arrival - written SD 49 ms at velocity 64, 41 ms at 100 (Rasch 1979: 30-50 ms between players
-# is typical). Only Violas measured; the bands are Spitfire's for its Performance Legato
-LEGATO_VELOCITY = 100
+# the velocity of a Performance patch's legato transitions (legatoVelocity=), only where a measurement showed it
+# tightens the run; elsewhere the transition keeps the note's own. Spitfire's Performance Legato picks the transition
+# by velocity (support.spitfireaudio.com/en/articles/11815986: slow 1-19 portamento, 20-84 slurred, 85-127 bowed; fast
+# 1-84 fast slurred, 85-127 fast slurred with accent). Measured 2026-10-07 (kthost on the test VM; Whence's violas,
+# bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, moved by octaves into each patch's range; branch
+# legato-pair-delays), SD of arrival - written, transitions at 64 / at 100: Violas 54 / 39, Violins 1 53 / 65, Celli
+# 53 / 70, Basses 39 / 65, Flute Solo 35 / 65, Trumpet Solo 26 / 35; Oboe, Clarinet, Bassoon, Horn, Tenor Trombone and
+# Tuba Solo render the same at both (29, 31, 98, 29, 31, 55). Rasch 1979: 30-50 ms between players is typical
+LEGATO_VELOCITY = {'Violas - Performance': 100}
 EXTRAS = [(m, e, LEGATO) for m, e in PERFORMANCE.items()]
 EXTRAS += [
     # on one string, "performance": legato ("sul G" / "sul C")
@@ -1410,7 +1412,9 @@ for i, line in enumerate(out):
             extra += f' release="{r}"'
     delay = legatoDelay(current, sound, t) if t.get('legato') else None
     if delay:
-        extra += f' legatoDelay="{delay}" legatoVelocity="{LEGATO_VELOCITY}"'
+        extra += f' legatoDelay="{delay}"'
+        if current in LEGATO_VELOCITY:
+            extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
         legatoGridUsed.add(current)
         up, down = octaveDelays(current)
         if up:
