@@ -80,6 +80,7 @@ class TestSoundLibrary : public QObject, public MTest
       void automationCurves();
       void automationEditing();
       void automationMerge();
+      void automationSimplify();
       void perceivedLoudness();
       void attackSalience();
       void noteSecondsWritten();
@@ -6042,6 +6043,114 @@ void TestSoundLibrary::automation()
       Lane lane;
       lane.target = "vibrato";
       lane.points = { { 480, 0.2, Curve::STEP }, { 960, 0.2, Curve::LINEAR }, { 1920, 1.0, Curve::STEP } };
+//---------------------------------------------------------
+//   automationSimplify
+//    Simplify Envelope, Draw Mode's freehand line and Insert Shape (Live 12 manual 25.5.3-5): the fewest
+//    breakpoints within one MIDI step (CC_RESOLUTION) of what they replace
+//---------------------------------------------------------
+
+void TestSoundLibrary::automationSimplify()
+      {
+      using namespace Automation;
+      const double tol = CC_RESOLUTION;
+      auto maxDev = [](const Lane& l, int t1, int t2, const std::function<double(int)>& f) {
+            double d = 0;
+            for (int t = t1; t < t2; ++t)
+                  d = std::max(d, std::fabs(l.valueAt(t) - f(t)));
+            return d;
+            };
+      // a straight line: two points, straight
+      std::vector<std::pair<int, double>> s;
+      for (int t = 0; t <= 960; t += 10)
+            s.push_back({ t, 0.1 + 0.8 * t / 960.0 });
+      std::vector<Point> f = Edit::fitPoints(s, tol);
+      QCOMPARE(int(f.size()), 2);
+      QVERIFY(!f[0].curved());
+      // a quarter sine: one curved segment within a MIDI step
+      s.clear();
+      for (int t = 0; t <= 960; t += 10)
+            s.push_back({ t, std::sin(t / 960.0 * M_PI / 2) });
+      f = Edit::fitPoints(s, tol);
+      QCOMPARE(int(f.size()), 2);
+      QVERIFY(f[0].curved());
+      Lane q;
+      q.points = f;
+      QVERIFY(maxDev(q, 0, 960, [](int t) { return std::sin(t / 960.0 * M_PI / 2); }) <= tol);
+
+      // Simplify: 33 points on one ramp -> 2; the step after it kept
+      Lane ramp;
+      for (int i = 0; i <= 32; ++i)
+            ramp.points.push_back(Point(i * 120, i / 32.0, Curve::LINEAR));
+      ramp.points.push_back(Point(4800, 0.2, Curve::STEP));
+      ramp.points[32].curve = Curve::STEP;
+      const Lane rampWas = ramp;
+      QCOMPARE(Edit::simplify(ramp, 0, 3840), 31);
+      QCOMPARE(int(ramp.points.size()), 3);
+      QCOMPARE(ramp.points[1].curve, Curve::STEP);
+      QVERIFY(maxDev(ramp, 0, 6000, [&](int t) { return rampWas.valueAt(t); }) <= 1e-9);
+      // a half sine drawn as 49 straight points: fewer points, curved, within a MIDI step of the original
+      Lane wave;
+      for (int i = 0; i <= 48; ++i)
+            wave.points.push_back(Point(i * 40, 0.5 + 0.5 * std::sin(i / 48.0 * M_PI), Curve::LINEAR));
+      const Lane waveWas = wave;
+      const int removed = Edit::simplify(wave, 0, 1920);
+      QVERIFY(removed >= 44);
+      QVERIFY(maxDev(wave, 0, 1920, [&](int t) { return waveWas.valueAt(t); }) <= tol + 1e-12);
+      // only the span: points outside stay
+      Lane part = waveWas;
+      Edit::simplify(part, 0, 960);
+      for (int i = 25; i <= 48; ++i)
+            QVERIFY(std::find_if(part.points.begin(), part.points.end(), [i](const Point& p) { return p.tick == i * 40; }) != part.points.end());
+      // steps: nothing to simplify
+      Lane steps;
+      steps.points = { Point(0, 0.2, Curve::STEP), Point(480, 0.8, Curve::STEP), Point(960, 0.4, Curve::STEP) };
+      QCOMPARE(Edit::simplify(steps, 0, 960), 0);
+      QCOMPARE(int(steps.points.size()), 3);
+
+      // freehand: a line from 960 to 1920 over a flat 0.5; the envelope around it unchanged
+      Lane flat;
+      flat.points = { Point(0, 0.5, Curve::LINEAR), Point(3840, 0.5, Curve::LINEAR) };
+      std::vector<std::pair<int, double>> path;
+      for (int t = 960; t <= 1920; t += 7)
+            path.push_back({ t, 0.2 + 0.6 * (t - 960) / 960.0 });
+      path.push_back({ 1920, 0.8 });
+      Lane drawn = flat;
+      Edit::drawFree(drawn, path, &flat);
+      QVERIFY(drawn.points.size() <= 6);
+      QVERIFY(std::fabs(drawn.valueAt(500) - 0.5) < 1e-9);
+      QVERIFY(std::fabs(drawn.valueAt(3000) - 0.5) < 1e-9);
+      QVERIFY(std::fabs(drawn.valueAt(1440) - 0.5) <= tol);
+      QVERIFY(std::fabs(drawn.valueAt(1000) - (0.2 + 0.6 * 40 / 960.0)) <= tol);
+      // a curved line under a curve: the curve before keeps its shape
+      Lane bowed;
+      bowed.points = { Point(0, 0, Curve::LINEAR), Point(3840, 1, Curve::LINEAR) };
+      setCurvature(bowed.points[0], 0.6);
+      Lane bowedFree = bowed;
+      Edit::drawFree(bowedFree, path, &bowed);
+      QVERIFY(maxDev(bowedFree, 0, 960, [&](int t) { return bowed.valueAt(t); }) < 1e-6);
+      QVERIFY(maxDev(bowedFree, 1921, 3840, [&](int t) { return bowed.valueAt(t); }) < 1e-6);
+
+      // shapes, one cycle over [0, 1920) on an empty lane, the full range
+      for (Edit::Shape sh : { Edit::Shape::SINE, Edit::Shape::TRIANGLE, Edit::Shape::SAW, Edit::Shape::INVERSE_SAW, Edit::Shape::SQUARE }) {
+            Lane l;
+            Edit::insertShape(l, 0, 1920, sh);
+            const double d = maxDev(l, 0, 1920, [sh](int t) { return Edit::shapeAt(sh, t / 1920.0); });
+            qDebug("shape %d: %d points, max deviation %.5f (tolerance %.5f)", int(sh), int(l.points.size()), d, tol);
+            QVERIFY(d <= tol + 1e-12);
+            }
+      Lane sine;
+      Edit::insertShape(sine, 0, 1920, Edit::Shape::SINE);
+      QVERIFY(sine.points.size() <= 5);
+      // over an envelope: it goes on after the shape as before
+      Lane under;
+      under.points = { Point(0, 0.3, Curve::LINEAR), Point(3840, 0.3, Curve::LINEAR) };
+      Edit::insertShape(under, 960, 1920, Edit::Shape::SAW);
+      QVERIFY(std::fabs(under.valueAt(500) - 0.3) < 1e-9);
+      QVERIFY(std::fabs(under.valueAt(3000) - 0.3) < 1e-9);
+      QVERIFY(std::fabs(under.valueAt(1440) - 0.5) < 1e-3);
+      QVERIFY(under.valueAt(1919) > 0.99);
+      }
+
       QCOMPARE(lane.valueAt(0), -1.0);                    // before its first point: says nothing
       QCOMPARE(lane.valueAt(480), 0.2);
       QCOMPARE(lane.valueAt(700), 0.2);                   // step

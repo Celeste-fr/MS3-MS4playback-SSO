@@ -546,6 +546,18 @@ int AutomationLanes::snap(int tick, bool fine) const
       return std::min(t, m->endTick().ticks());
       }
 
+std::pair<int, int> AutomationLanes::gridCell(int tick, bool fine) const
+      {
+      Score* s = score();
+      tick = std::max(0, tick);
+      const Measure* m = s ? s->tick2measure(Fraction::fromTicks(tick)) : nullptr;
+      if (!m)
+            return { -1, -1 };
+      const int g = fine ? 30 : gridTicks(tick);
+      const int t0 = m->tick().ticks() + (tick - m->tick().ticks()) / g * g;
+      return { t0, std::min(t0 + g, m->endTick().ticks()) };
+      }
+
 QRectF AutomationLanes::valueRect(const Row& r) const
       {
       const double pad = 0.45 * (score() ? score()->spatium() : 5.0);
@@ -1008,8 +1020,11 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
       _beforeSel = sameLane ? _sel : std::vector<int>();
       const Qt::KeyboardModifiers mods = ev->modifiers();
       if (_drawMode) {
-            _drag = Drag::DRAW;
+            // Alt: freehand (the line follows the mouse; on release: breakpoints, Edit::drawFree)
+            _drag = (mods & Qt::AltModifier) ? Drag::FREE : Drag::DRAW;
             _drawCell = -1;
+            _freePath.clear();
+            _freeLast = -1;
             select(r, {});
             mouseMove(ev);
             return true;
@@ -1042,6 +1057,7 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
       const int tick = xToTick(p.x());
       const double lineV = _before.valueAt(tick);
       _nearLine = lineV >= 0 && std::fabs(yOfValue(r, lineV) - p.y()) <= 6 * pixel();
+      _lineSegment = _nearLine ? segmentAt(_before, tick) : -1;
       if ((mods & Qt::AltModifier) && segmentAt(_before, tick) >= 0) {
             _segment = segmentAt(_before, tick);
             _k0 = curvature(_before.points[size_t(_segment)]);
@@ -1071,6 +1087,15 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
             case Drag::PENDING:
                   if ((ev->pos() - _pressPixel).manhattanLength() <= 4)
                         return true;
+                  if (_lineSegment >= 0) {
+                        // pressed on the line: the segment moves (its two points; both selected: the selection)
+                        const int s = _lineSegment;
+                        const bool both = std::find(_beforeSel.begin(), _beforeSel.end(), s) != _beforeSel.end()
+                                          && std::find(_beforeSel.begin(), _beforeSel.end(), s + 1) != _beforeSel.end();
+                        _segMoved = both ? _beforeSel : std::vector<int>{ s, s + 1 };
+                        _drag = Drag::SEGMENT;
+                        return mouseMove(ev);
+                        }
                   _drag = Drag::RUBBER;
                   // fall through
             case Drag::RUBBER: {
@@ -1142,6 +1167,54 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   _view->update();
                   return true;
                   }
+            case Drag::FREE: {
+                  // the path, tick -> value; a stretch the mouse skipped (or went back over) filled in straight
+                  const int tick = std::max(0, xToTick(p.x()));
+                  const double v = valueAtY(r, p.y());
+                  if (_freeLast < 0 || _freePath.empty())
+                        _freePath[tick] = v;
+                  else {
+                        const double v0 = _freePath[_freeLast];
+                        const int n = std::abs(tick - _freeLast);
+                        const int step = std::max(1, n / 8);
+                        for (int k = step; k < n; k += step) {
+                              const int t = _freeLast + (tick > _freeLast ? k : -k);
+                              _freePath[t] = v0 + (v - v0) * k / n;
+                              }
+                        _freePath[tick] = v;
+                        }
+                  _freeLast = tick;
+                  Lane l = _before;
+                  Edit::drawFree(l, std::vector<std::pair<int, double>>(_freePath.begin(), _freePath.end()), &_before);
+                  setLane(r.master, l);
+                  _hover = p;
+                  _hoverText = valueText(r.target, v);
+                  _view->update();
+                  return true;
+                  }
+            case Drag::SEGMENT: {
+                  // both points by as much (Live: "click and drag a line segment"); Shift: one axis, the one
+                  // moved further; Alt: no snap
+                  const Point& a = _before.points[size_t(_lineSegment)];
+                  double dx = p.x() - _pressPos.x();
+                  double dy = p.y() - _pressPos.y();
+                  if (mods & Qt::ShiftModifier) {
+                        if (std::fabs(dx) > std::fabs(dy))
+                              dy = 0;
+                        else
+                              dx = 0;
+                        }
+                  const int dtick = dx == 0 ? 0 : snap(xToTick(tickToX(a.tick) + dx), fineTime) - a.tick;
+                  const double dv = valueAtY(r, yOfValue(r, a.value) + dy) - a.value;
+                  Lane l = _before;
+                  const std::vector<int> moved = Edit::movePoints(l, _segMoved, dtick, dv);
+                  setLane(r.master, l);
+                  select(r, moved);
+                  _hover = p;
+                  _hoverText = valueText(r.target, std::min(1.0, std::max(0.0, a.value + dv)));
+                  _view->update();
+                  return true;
+                  }
             case Drag::NONE:
                   break;
             }
@@ -1178,8 +1251,14 @@ bool AutomationLanes::mouseRelease(QMouseEvent* ev)
                   commit(tr("Automation: curve"));
                   return true;
             case Drag::DRAW:
+            case Drag::FREE:
                   _hoverText.clear();
+                  _freePath.clear();
                   commit(tr("Automation: drawn"));
+                  return true;
+            case Drag::SEGMENT:
+                  _hoverText.clear();
+                  commit(tr("Automation: segment moved"));
                   return true;
             case Drag::RUBBER:
             case Drag::NONE:
@@ -1303,6 +1382,27 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             shape->setChecked(LiveClipEdit::velOutput(l) == LiveClipEdit::VelOutput::SHAPE);
             writeNotes->setChecked(!shape->isChecked());
             }
+      // the selection's span (Live's time selection: the selected points' first to last tick); without one, Simplify
+      // takes the lane, a shape the grid cell under the mouse (manual 25.5.5)
+      const bool laneSel = _focus && _selPart == r.master && _selTarget == r.target && _sel.size() >= 2;
+      int selT1 = -1, selT2 = -1;
+      if (laneSel)
+            for (int i : _sel)
+                  if (i >= 0 && i < int(l.points.size())) {
+                        const int t = l.points[size_t(i)].tick;
+                        selT1 = selT1 < 0 ? t : std::min(selT1, t);
+                        selT2 = std::max(selT2, t);
+                        }
+      const bool span = selT2 > selT1;
+      menu.addSeparator();
+      QAction* simplify = l.points.size() >= 3 ? menu.addAction(span ? tr("Simplify Envelope") : tr("Simplify Lane")) : nullptr;
+      QMenu* shapes = menu.addMenu(tr("Insert Shape"));
+      std::map<QAction*, Edit::Shape> shapeOf;
+      for (const auto& sh : std::vector<std::pair<Edit::Shape, QString>> {
+            { Edit::Shape::SINE, tr("Sine") }, { Edit::Shape::TRIANGLE, tr("Triangle") },
+            { Edit::Shape::SAW, tr("Sawtooth") }, { Edit::Shape::INVERSE_SAW, tr("Inverse Sawtooth") },
+            { Edit::Shape::SQUARE, tr("Square") } })
+            shapeOf[shapes->addAction(sh.second)] = sh.first;
       menu.addSeparator();
       QAction* clear = l.points.empty() ? nullptr : menu.addAction(tr("Clear Lane"));
       QAction* hide = menu.addAction(tr("Hide Lane"));
@@ -1363,6 +1463,31 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             Edit::setSegmentCurvature(l, seg, 0);
             setLane(r.master, l);
             commit(tr("Automation: straight"));
+            }
+      else if (a == simplify) {
+            const int t1 = span ? selT1 : l.points.front().tick;
+            const int t2 = span ? selT2 : l.points.back().tick;
+            Edit::simplify(l, t1, t2);
+            setLane(r.master, l);
+            std::vector<int> sel;
+            for (int i = 0; span && i < int(l.points.size()); ++i)
+                  if (l.points[size_t(i)].tick >= t1 && l.points[size_t(i)].tick <= t2)
+                        sel.push_back(i);
+            select(r, sel);
+            commit(tr("Automation: simplified"));
+            }
+      else if (shapeOf.count(a)) {
+            const std::pair<int, int> cell = span ? std::make_pair(selT1, selT2) : gridCell(tick, false);
+            if (cell.second <= cell.first)
+                  return true;
+            Edit::insertShape(l, cell.first, cell.second, shapeOf[a]);
+            setLane(r.master, l);
+            std::vector<int> sel;
+            for (int i = 0; i < int(l.points.size()); ++i)
+                  if (l.points[size_t(i)].tick >= cell.first && l.points[size_t(i)].tick <= cell.second)
+                        sel.push_back(i);
+            select(r, sel);
+            commit(tr("Automation: shape"));
             }
       else if (a == clear) {
             l.points.clear();

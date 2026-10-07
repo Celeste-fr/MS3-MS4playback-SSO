@@ -765,6 +765,250 @@ void drawStep(Lane& lane, int tick1, int tick2, double value, const Lane* origin
             }
       }
 
+// the segment a -> b's value at tick (a jump, b at a's tick: b's)
+static double segmentValue(const Point& a, const Point& b, int tick)
+      {
+      if (a.curve == Curve::STEP || b.tick <= a.tick)
+            return tick < b.tick ? a.value : b.value;
+      const double x = std::min(1.0, std::max(0.0, double(tick - a.tick) / double(b.tick - a.tick)));
+      const double y = a.curved() ? curveAt(a.c1x, a.c1y, a.c2x, a.c2y, x) : x;
+      return a.value + (b.value - a.value) * y;
+      }
+
+// samples[i] -> samples[j] as one segment within tol of the samples between: straight, else curved (control x
+// at 1/3 and 2/3: y(x) = 3(1-x)²x c1y + 3(1-x)x² c2y + x³, c1y and c2y by least squares). p: the segment's start
+static bool fitSegment(const std::vector<std::pair<int, double>>& s, size_t i, size_t j, double tol, Point& p)
+      {
+      const double t0 = s[i].first, v0 = s[i].second;
+      const double span = s[j].first - t0, d = s[j].second - v0;
+      p = Point(s[i].first, v0, Curve::LINEAR);
+      double err = 0;
+      for (size_t k = i + 1; k < j && err <= tol; ++k)
+            err = std::max(err, std::fabs(v0 + d * (s[k].first - t0) / span - s[k].second));
+      if (err <= tol)
+            return true;
+      if (std::fabs(d) < 1e-9)
+            return false;                 // (a segment without rise: straight only)
+      double saa = 0, sab = 0, sbb = 0, sae = 0, sbe = 0;
+      for (size_t k = i + 1; k < j; ++k) {
+            const double x = (s[k].first - t0) / span;
+            const double A = 3 * (1 - x) * (1 - x) * x * d, B = 3 * (1 - x) * x * x * d;
+            const double e = s[k].second - v0 - d * x * x * x;
+            saa += A * A; sab += A * B; sbb += B * B; sae += A * e; sbe += B * e;
+            }
+      const double det = saa * sbb - sab * sab;
+      if (std::fabs(det) < 1e-18)
+            return false;
+      p.c1y = std::min(1.0, std::max(0.0, (sae * sbb - sbe * sab) / det));
+      p.c2y = std::min(1.0, std::max(0.0, (sbe * saa - sae * sab) / det));
+      for (size_t k = i + 1; k < j; ++k) {
+            const double x = (s[k].first - t0) / span;
+            const double y = 3 * (1 - x) * (1 - x) * x * p.c1y + 3 * (1 - x) * x * x * p.c2y + x * x * x;
+            if (std::fabs(v0 + d * y - s[k].second) > tol)
+                  return false;
+            }
+      return true;
+      }
+
+std::vector<Point> fitPoints(const std::vector<std::pair<int, double>>& samples, double tol)
+      {
+      // one sample per tick (the last at a tick), values 0-1
+      std::vector<std::pair<int, double>> s;
+      for (const auto& x : samples) {
+            const double v = std::min(1.0, std::max(0.0, x.second));
+            if (!s.empty() && s.back().first >= x.first)
+                  s.back().second = v;
+            else
+                  s.push_back({ x.first, v });
+            }
+      std::vector<Point> out;
+      if (s.size() < 2) {
+            for (const auto& x : s)
+                  out.push_back(Point(x.first, x.second, Curve::LINEAR));
+            return out;
+            }
+      size_t i = 0;
+      while (i + 1 < s.size()) {
+            Point best;
+            fitSegment(s, i, i + 1, tol, best);
+            size_t bestJ = i + 1;
+            for (size_t j = i + 2; j < s.size(); ++j) {
+                  Point p;
+                  if (!fitSegment(s, i, j, tol, p))
+                        break;
+                  best = p;
+                  bestJ = j;
+                  }
+            out.push_back(best);
+            i = bestJ;
+            }
+      out.push_back(Point(s.back().first, s.back().second, Curve::LINEAR));
+      return out;
+      }
+
+int simplify(Lane& lane, int tick1, int tick2, double tol)
+      {
+      const std::vector<Point>& P = lane.points;
+      int a = -1, b = -1;
+      for (int i = 0; i < int(P.size()); ++i)
+            if (P[size_t(i)].tick >= tick1 && P[size_t(i)].tick <= tick2) {
+                  if (a < 0)
+                        a = i;
+                  b = i;
+                  }
+      if (a < 0 || b - a < 2)
+            return 0;
+      std::vector<Point> out(P.begin(), P.begin() + a);
+      int k = a;
+      while (k < b) {
+            // a continuous stretch: ramps, no jump inside
+            int m = k;
+            while (m < b && P[size_t(m)].curve == Curve::LINEAR && P[size_t(m + 1)].tick > P[size_t(m)].tick)
+                  ++m;
+            if (m == k) {
+                  out.push_back(P[size_t(k)]);
+                  ++k;
+                  continue;
+                  }
+            std::vector<Point> fitted;
+            if (m - k >= 2) {
+                  // sampled densely: each segment's ends and up to 32 ticks between (a curve's shape)
+                  std::vector<std::pair<int, double>> samples;
+                  for (int i = k; i < m; ++i) {
+                        const Point& p = P[size_t(i)];
+                        const Point& n = P[size_t(i + 1)];
+                        const int step = std::max(1, (n.tick - p.tick) / 32);
+                        for (int t = p.tick; t < n.tick; t += step)
+                              samples.push_back({ t, t == p.tick ? p.value : segmentValue(p, n, t) });
+                        }
+                  samples.push_back({ P[size_t(m)].tick, P[size_t(m)].value });
+                  fitted = fitPoints(samples, tol);
+                  }
+            if (fitted.size() >= 2 && int(fitted.size()) < m - k + 1) {
+                  Point first = P[size_t(k)];
+                  first.curve = Curve::LINEAR;
+                  first.c1x = fitted[0].c1x; first.c1y = fitted[0].c1y;
+                  first.c2x = fitted[0].c2x; first.c2y = fitted[0].c2y;
+                  out.push_back(first);
+                  out.insert(out.end(), fitted.begin() + 1, fitted.end() - 1);
+                  }
+            else
+                  out.insert(out.end(), P.begin() + k, P.begin() + m);
+            k = m;
+            }
+      out.insert(out.end(), P.begin() + b, P.end());
+      const int removed = int(P.size()) - int(out.size());
+      lane.points = out;
+      return removed;
+      }
+
+void replaceSpan(Lane& lane, int tick1, int tick2, const std::vector<Point>& pts, const Lane* original)
+      {
+      tick1 = std::max(0, tick1);
+      if (tick2 < tick1)
+            return;
+      Lane w = original ? *original : lane;
+      auto at = [&w](int tick) {
+            return std::any_of(w.points.begin(), w.points.end(), [tick](const Point& p) { return p.tick == tick; });
+            };
+      const bool hasBefore = !w.points.empty() && w.points.front().tick < tick1;
+      const bool hasAfter = !w.points.empty() && w.points.back().tick > tick2;
+      // split at the ends: the curves outside keep their shapes
+      if (hasBefore && !at(tick1))
+            addPoint(w, tick1, w.valueAt(tick1));
+      if (hasAfter && !at(tick2))
+            addPoint(w, tick2, w.valueAt(tick2));
+      std::vector<Point> in;
+      for (Point p : pts) {
+            p.tick = std::min(tick2, std::max(tick1, p.tick));
+            p.value = std::min(1.0, std::max(0.0, p.value));
+            in.push_back(p);
+            }
+      std::stable_sort(in.begin(), in.end());
+      std::vector<Point> out;
+      for (const Point& p : w.points)
+            if (p.tick < tick1)
+                  out.push_back(p);
+      // arriving: the first point at tick1 ends the ramp running in (after a step the envelope is there anyway)
+      if (hasBefore && out.back().curve == Curve::LINEAR) {
+            const Point arrive = *std::find_if(w.points.begin(), w.points.end(), [tick1](const Point& p) { return p.tick == tick1; });
+            if (in.empty() || in.front().tick != tick1 || std::fabs(in.front().value - arrive.value) > 1e-9)
+                  out.push_back(arrive);
+            }
+      out.insert(out.end(), in.begin(), in.end());
+      // leaving: the last point at tick2 goes on as it was
+      if (hasAfter) {
+            const Point leave = *std::find_if(w.points.rbegin(), w.points.rend(), [tick2](const Point& p) { return p.tick == tick2; });
+            if (!in.empty() && in.back().tick == tick2 && std::fabs(in.back().value - leave.value) < 1e-9)
+                  out.back() = leave;
+            else
+                  out.push_back(leave);
+            }
+      else if (!in.empty()) {
+            // nothing later: back to the value the lane ended on (as drawStep)
+            const double after = w.valueAt(tick2);
+            if (after >= 0 && std::fabs(after - in.back().value) > 1e-9)
+                  out.push_back(Point(tick2, after, Curve::STEP));
+            }
+      for (const Point& p : w.points)
+            if (p.tick > tick2)
+                  out.push_back(p);
+      lane.points = out;
+      }
+
+void drawFree(Lane& lane, const std::vector<std::pair<int, double>>& samples, const Lane* original, double tol)
+      {
+      std::vector<Point> pts = fitPoints(samples, tol);
+      if (pts.size() < 2)
+            return;
+      replaceSpan(lane, pts.front().tick, pts.back().tick, pts, original);
+      }
+
+double shapeAt(Shape shape, double x)
+      {
+      x = std::min(1.0, std::max(0.0, x));
+      switch (shape) {
+            case Shape::SINE:        return 0.5 + 0.5 * std::sin(2 * M_PI * x);
+            case Shape::TRIANGLE:    return x < 0.25 ? 0.5 + 2 * x : x < 0.75 ? 1 - 2 * (x - 0.25) : 2 * (x - 0.75);
+            case Shape::SAW:         return x;
+            case Shape::INVERSE_SAW: return 1 - x;
+            case Shape::SQUARE:      return x < 0.5 ? 1 : 0;
+            }
+      return 0;
+      }
+
+void insertShape(Lane& lane, int tick1, int tick2, Shape shape, double tol)
+      {
+      tick1 = std::max(0, tick1);
+      if (tick2 <= tick1)
+            return;
+      const int span = tick2 - tick1;
+      auto tickAt = [&](double x) { return tick1 + int(std::lround(x * span)); };
+      std::vector<Point> pts;
+      switch (shape) {
+            case Shape::SQUARE:
+                  pts = { Point(tick1, 1, Curve::STEP), Point(tickAt(0.5), 0, Curve::STEP), Point(tick2, 0, Curve::STEP) };
+                  break;
+            case Shape::TRIANGLE:
+                  pts = { Point(tick1, 0.5, Curve::LINEAR), Point(tickAt(0.25), 1, Curve::LINEAR),
+                          Point(tickAt(0.75), 0, Curve::LINEAR), Point(tick2, 0.5, Curve::LINEAR) };
+                  break;
+            case Shape::SAW:
+            case Shape::INVERSE_SAW:
+                  pts = { Point(tick1, shapeAt(shape, 0), Curve::LINEAR), Point(tick2, shapeAt(shape, 1), Curve::LINEAR) };
+                  break;
+            case Shape::SINE: {
+                  // sampled at 256 even steps of the cycle (each quarter's peak among them), then fitted
+                  std::vector<std::pair<int, double>> s;
+                  for (int k = 0; k <= 256; ++k)
+                        s.push_back({ tickAt(k / 256.0), shapeAt(shape, k / 256.0) });
+                  pts = fitPoints(s, tol);
+                  break;
+                  }
+            }
+      replaceSpan(lane, tick1, tick2, pts);
+      }
+
 std::vector<Point> copyPoints(const Lane& lane, const std::vector<int>& indices)
       {
       std::vector<Point> out;

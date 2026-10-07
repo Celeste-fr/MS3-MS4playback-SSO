@@ -204,6 +204,35 @@ void setSegmentCurve(Lane& lane, int i, Curve c);
 // Draw Mode: a step [tick1, tick2) at value; the envelope after tick2 as before (as `original` had it: the lane
 // before the gesture, when the steps of one drag are drawn one after the other)
 void drawStep(Lane& lane, int tick1, int tick2, double value, const Lane* original = nullptr);
+// Simplify, Draw Mode's freehand line and Insert Shape (Live 12, manual 25.5.3-5). Their tolerance: one MIDI step,
+// CC_RESOLUTION (MIDI 1.0's 7-bit data: 1/127 of the range; the step Lane::events and flattenCurve already use).
+//
+// the fewest breakpoints through the first and last of `samples` (tick, value 0-1; by tick, a continuous line)
+// whose envelope is nowhere further than tol from any sample: greedy, each segment as long as one segment fits,
+// straight when a straight line does, else curved, Live's cubic Bézier with its control points' x at 1/3 and 2/3
+// (so its time runs evenly: x(t) = t) and their y fitted by least squares (closed form), kept within the box
+// (0-1). Each point LINEAR (the last one too: the caller sets its curve); a sample count under 2: as given
+std::vector<Point> fitPoints(const std::vector<std::pair<int, double>>& samples, double tol);
+// the envelope in [tick1, tick2] simplified (Live: "Simplify Envelope"): each continuous stretch (between steps
+// and jumps, which stay) refitted by fitPoints from the envelope sampled densely; returns the number of points
+// removed (negative: added, never expected)
+int simplify(Lane& lane, int tick1, int tick2, double tol = CC_RESOLUTION);
+// the envelope in [tick1, tick2] replaced by `pts` (ticks inside the span, by tick): the envelope before tick1
+// arrives where it was (a curve split, keeping its shape; a jump to pts' first value when it differs), the one
+// after tick2 goes on as it was (same; a jump back), as drawStep and pastePoints do. `original`: the envelope to
+// keep outside the span (the lane before the gesture); none: the lane itself
+void replaceSpan(Lane& lane, int tick1, int tick2, const std::vector<Point>& pts, const Lane* original = nullptr);
+// Draw Mode with Alt: the freehand line (samples, by tick: the mouse's path) as breakpoints (fitPoints), over
+// the span it covers
+void drawFree(Lane& lane, const std::vector<std::pair<int, double>>& samples, const Lane* original = nullptr,
+              double tol = CC_RESOLUTION);
+// Insert Shape: one cycle over [tick1, tick2], the parameter's full range (0-1). Sine: from the middle up,
+// sin(2πx); triangle: middle, top, bottom, middle; sawtooth: bottom to top; inverse: top to bottom; square:
+// top for the first half, bottom for the second (steps). Curves from fitPoints (sine: within tol)
+enum class Shape : signed char { SINE, TRIANGLE, SAW, INVERSE_SAW, SQUARE };
+void insertShape(Lane& lane, int tick1, int tick2, Shape shape, double tol = CC_RESOLUTION);
+// the shape's value at x (0-1 of the cycle)
+double shapeAt(Shape shape, double x);
 // copy: the points' copies with ticks from the first one's (0); paste: at tick, over the clip's span
 // (the points there replaced), the envelope after it as before
 std::vector<Point> copyPoints(const Lane& lane, const std::vector<int>& indices);

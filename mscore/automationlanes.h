@@ -36,19 +36,28 @@
 //   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
 //   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes ("▸" shows them again).
 //
-//   Editing, as in Live 12 (manual 25.5.1-2):
+//   Editing, as in Live 12 (manual 25.5.1-5; the owner, 2026-10-06: "mimic the behavior of how you edit automation
+//   curves in ableton"):
 //     click: a breakpoint (on the envelope's line: on it; elsewhere: at the mouse's value), snapped to the
 //       grid (it follows the zoom: the finest of bar … 1/64 at least 10 px apart); Alt: no snap;
 //     drag a breakpoint: moves it (and the other selected ones); points passed over are removed; Shift: fine
 //       vertical, time kept; Ctrl-click: add to / remove from the selection; drag on the background: a
 //       rubber band selects;
+//     drag the line (pressed within 6 px of it): the segment moves, both its points (both selected: the whole
+//       selection); Shift: one axis, the one moved further; Alt: no snap;
 //     double-click a breakpoint, or Delete / Backspace: removes it (them);
 //     Alt-drag a segment: curves it (Live's curve: a cubic Bézier, the same control points Live keeps);
 //       Alt-double-click: straight again;
-//     Draw Mode (the header's pencil): dragging draws steps as wide as the grid;
+//     Draw Mode (the header's pencil): dragging draws steps as wide as the grid; with Alt the line follows the
+//       mouse, as breakpoints (straight or curved) within one MIDI step of the path (Automation::Edit::drawFree);
 //     Ctrl+C / Ctrl+X: the selected points; Ctrl+V: at the mouse's time in the lane under it (another
 //       parameter too, as Live allows), else after the copied ones; Ctrl+D: duplicated after themselves;
-//     right-click: Edit Value…, Delete, Step / Linear, Straight, Clear Lane, Hide Lane.
+//     right-click: Edit Value…, Delete, Step / Linear, Straight, Simplify Envelope (the selected points' span; none
+//       selected: the lane), Insert Shape ▸ sine, triangle, sawtooth, inverse, square (one cycle over the selected
+//       points' span, else the grid cell; the full range), Clear Lane, Hide Lane.
+//   Unlike Live: a click on the background adds a breakpoint (Live: a double-click off the line), a click on a
+//   breakpoint selects it (Live: deletes it; here a double-click), a background drag selects points (Live: a time
+//   selection); no stretch / skew handles on a selection (manual 25.5.3).
 //   Values are shown 0-127 (the map's controller scale; SSO's controls are 0-127); a clip tab's Velocity lane
 //   (liveclipmodel.h, offered first, always) in % (scale) or 1-127 (absolute), its right-click menu also choosing scale /
 //   absolute and "shape while playing" / "write into the notes" (asks first).
@@ -132,7 +141,7 @@ class AutomationLanes : public QObject {
       void setDrawMode(bool on) { _drawMode = on; }
 
    private:
-      enum class Drag : signed char { NONE, PENDING, MOVE, CURVE, RUBBER, DRAW };
+      enum class Drag : signed char { NONE, PENDING, MOVE, CURVE, RUBBER, DRAW, FREE, SEGMENT };
 
       ScoreView* _view;
       std::set<const Part*> _unfolded;                         // view parts
@@ -168,6 +177,10 @@ class AutomationLanes : public QObject {
       QRectF _rubber;
       int _drawCell { -1 };
       bool _nearLine { false };
+      int _lineSegment { -1 };                // the segment under the press (on its line: dragged)
+      std::vector<int> _segMoved;             // what a segment drag moves: its two points, or the selection
+      std::map<int, double> _freePath;        // Draw Mode with Alt: the mouse's path, tick -> value
+      int _freeLast { -1 };
       QPointF _hover { -1, -1 };              // canvas
       QString _hoverText;
       // a point added by a click, kept by the double-click that follows it
@@ -197,6 +210,7 @@ class AutomationLanes : public QObject {
       double pixel() const;                                                  // a screen pixel in canvas units
       int gridTicks(int tick) const;
       int snap(int tick, bool fine) const;
+      std::pair<int, int> gridCell(int tick, bool fine) const;              // the grid cell at tick (in its measure)
       double valueAtY(const Row& r, double y) const;
       double yOfValue(const Row& r, double v) const;
       QRectF valueRect(const Row& r) const;

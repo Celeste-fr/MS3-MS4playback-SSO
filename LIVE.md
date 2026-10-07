@@ -499,8 +499,13 @@ below), *All* shows them all, the pencil is Draw Mode, the triangle folds. Empty
 until added; × hides a lane (it still plays). Editing as in Live 12 (manual 25.5): click adds a breakpoint (snapped to
 the grid, which follows the zoom; Alt: free), drag moves (Shift: fine), double-click or Delete removes, Alt-drag a
 segment curves it (Live's own Bézier: a curve drawn here is Live's curve, and back), Alt-double-click straightens,
-Draw Mode drags grid-wide steps, a drag on the background selects, Ctrl+C / X / V / D copy, cut, paste (at the mouse,
-in any lane) and duplicate, right-click for Edit Value…, Step / Ramp, Clear and Hide. Values 0-127. Every gesture is
+Draw Mode drags grid-wide steps (with Alt: a freehand line, made breakpoints within one MIDI step, curved where they
+fit), dragging the line moves a segment (Shift: one axis), a drag on the background selects, Ctrl+C / X / V / D copy, cut,
+paste (at the mouse, in any lane) and duplicate, right-click for Edit Value…, Step / Ramp, Simplify Envelope (the
+selected points' span: the fewest breakpoints within one MIDI step), Insert Shape (sine, triangle, sawtooth, inverse,
+square: one cycle over the selected points' span, else the grid cell), Clear and Hide. Unlike Live: a click adds (Live: a
+double-click off the line), a click on a breakpoint selects it (Live deletes it), a background drag selects points (Live:
+a time selection), no stretch / skew handles. Values 0-127. Every gesture is
 one undo step. *View › Automation Lanes* turns the editor off. A **Dynamics** lane replaces the notation's CC1 from its
 first point (the notation still sets short notes' velocities). Page View shows no lanes.
 
