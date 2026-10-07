@@ -328,6 +328,12 @@ in a section collapsible at the same time".
   tracks in it, and a MIDI track's its MIDI To output (the manual: "every track"); what Live does when an early
   technique's switch overtakes another technique's note (MuseScore plays it as the sums say: the same clash).
   Test: `tst_soundlibrary` `trackDelays`, `tst_liveequivalence` `plainSetTrackDelays`.
+- **Track levels** (the same metaTag's `levels`, the same *Tracks…* dialog's Level column; the owner, 2026-10-07,
+  asked for each technique's "volume offset"): a patch's and a technique's own dB, added up, played by CC11 on the
+  technique's notes (`libraryNoteLevels`, as a marcato's level). Live gets it in the notes' data, not as a track
+  setting: the plain set's Kontakt track's CC11 lane (and the clips) carry the changes, so a technique track has no
+  volume of its own in Live (a MIDI track has no fader). Softer only (CC11 rests at 127): -42.08 dB (CC11 1) .. 0.
+  Test: `tst_soundlibrary` `trackLevels`, `tst_liveequivalence` `plainSetTrackDelays`.
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for

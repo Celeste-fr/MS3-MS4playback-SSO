@@ -21,9 +21,17 @@
 //   Range: Live 12's manual (18.7 Track Delays) gives none; a tutorial says Live allows 1000 ms either way
 //   (musicgurus.com, "Ableton Live delay - Track Delay time"); each value is kept within -1000 .. 1000 ms.
 //
+//   Track levels (the owner, 2026-10-07, asked whether each technique's "volume offset" could be edited): a patch's
+//   and a technique's own level in dB, added up (the part's is the Mixer's volume). Played by CC11 per note
+//   (MidiRenderer::libraryNoteLevels, as a marcato's level: dB add up), so it is in Live's clips and the plain set's
+//   CC11 lane alike. Only softer: CC11 rests at the library's expression value (SSO: 127, its top), so a level is
+//   kept within MIN_DB .. 0, MIN_DB being CC11's least non-zero value (1 of 127: 20 log10(1/127) = -42.08 dB). A
+//   library whose dynamics are CC11 (no plain volume left) ignores levels.
+//
 //   Kept in the score as the metaTag "trackDelays" (MuseScore 3.6 keeps metaTags through a round trip), left out
 //   when every value is 0; JSON:
-//     [{"part": index, "name": part name, "ms": the part's, "tracks": {"<patch>": ms, "<patch> / <technique>": ms}}]
+//     [{"part": index, "name": part name, "ms": the part's, "tracks": {"<patch>": ms, "<patch> / <technique>": ms},
+//       "levels": {"<patch>": dB, "<patch> / <technique>": dB}}]
 //   A part is found as partplayback.h finds it; parts of an excerpt follow their master score's part.
 //
 //   MuseScore plays it (MidiRenderer::libraryTrackDelays): each library event moves by its track's delay in time
@@ -47,10 +55,13 @@ namespace TrackDelays {
 extern const char* const metaTag;
 constexpr double MIN_MS = -1000.0;
 constexpr double MAX_MS = 1000.0;
+constexpr double MIN_DB = -42.08;             // CC11 1 of 127 (header)
+constexpr double MAX_DB = 0.0;
 
 struct Delays {
       double ms { 0.0 };                      // the part's (its group track in Live)
       std::map<QString, double> tracks;       // trackKey -> ms added to the part's
+      std::map<QString, double> levels;       // trackKey -> dB (track levels)
       bool empty() const;                     // all 0
       };
 
@@ -58,6 +69,7 @@ struct Delays {
 QString trackKey(const QString& patch, const QString& technique = QString());
 
 double clampMs(double ms);
+double clampDb(double db);
 
 // the parts of the master score with delays
 std::map<const Part*, Delays> read(const MasterScore* score);
@@ -73,6 +85,10 @@ double ms(const Delays& d, const QString& patch, const QString& technique = QStr
 double own(const Delays& d, const QString& key);
 // the earliest any of the part's tracks plays at: the least of the part's, each patch's and each technique's ms()
 double earliest(const Delays& d);
+// the level a note of the technique on the patch plays at: the patch's and the technique's dB added up
+double db(const Delays& d, const QString& patch, const QString& technique);
+// one track's own level (0: none)
+double ownDb(const Delays& d, const QString& key);
 
 }     // namespace TrackDelays
 }     // namespace Ms

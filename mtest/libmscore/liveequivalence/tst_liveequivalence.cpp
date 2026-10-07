@@ -1652,6 +1652,26 @@ void TestLiveEquivalence::plainSetTrackDelays()
       for (const QString& u : im.report.unmatched)
             reported |= u.contains("samples");
       QVERIFY2(reported, qPrintable(im.report.text()));
+
+      // track levels (trackdelays.h): the technique's notes' CC11 (-6 dB: 64) in its Kontakt track's CC11 lane, and
+      // kept when the delays are read back from Live
+      score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"" + part->partName() + "\","
+                        "\"levels\":{\"Violin / Staccato\":-6}}]");
+      EventMap levelled;
+      score->renderMidi(&levelled, false, true, SynthesizerState());
+      const PlainLiveSet::Layout ll = PlainLiveSet::layout(score, *lib, levelled, LiveClips::timeline(score));
+      bool cc11 = false;
+      for (const PlainLiveSet::Section& s : ll.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                        for (const PlainLiveSet::Lane& lane : k.lanes)
+                              if (lane.cc == CTRL_EXPRESSION)
+                                    for (const auto& pt : lane.points)
+                                          cc11 |= pt.second == 64;
+      QVERIFY(cc11);
+      im = LiveTracks::import(score, set1, parts, "a.als", QDateTime(), data);
+      score->setMetaTag(TrackDelays::metaTag, LiveTracks::delaysTag(score, im));
+      QCOMPARE(TrackDelays::ownDb(TrackDelays::of(part, TrackDelays::read(score)), "Violin / Staccato"), -6.0);
       delete score;
       }
 

@@ -102,6 +102,7 @@ class TestSoundLibrary : public QObject, public MTest
       void legatoEarly();
       void phraseGap();
       void trackDelays();
+      void trackLevels();
       void legatoEarlyFastRun();
       void legatoEarlyByInterval();
       void legatoOctaveByStartPitch();
@@ -1287,6 +1288,98 @@ void TestSoundLibrary::trackDelays()
       QCOMPARE(d.ms, 1000.0);
       QCOMPARE(TrackDelays::ms(d, "Violin", "Long"), 987.5);
       QCOMPARE(TrackDelays::ms(d, "Violin"), 1000.0);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   trackLevels
+//    a technique's and a patch's own level (trackdelays.h, track levels): CC11 by the dB added up right before each of
+//    the technique's notes (127 at -6 dB: 127 x 10^(-6/20) = 63.6, 64), the value in force (127) again before the next
+//    note without one; nothing else changes. A technique no note plays changes nothing; the metaTag keeps levels
+//    within MIN_DB .. 0
+//---------------------------------------------------------
+
+void TestSoundLibrary::trackLevels()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Articulation name='Short' value='2' techniques='staccato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      typedef std::tuple<int, int, int, int, int, bool> E;     // tick, type, a, b, channel, a switch
+      auto render = [score](const QString& tag) {
+            score->setMetaTag(TrackDelays::metaTag, tag);
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<E> out;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal())
+                        out.emplace_back(te.first, ev.type(), ev.dataA(), ev.dataB(), ev.extChannel(), ev.librarySwitch());
+                  }
+            return out;                   // (in the map's order: a controller before the note-on it is for)
+            };
+      auto isCC11 = [](const E& e) { return std::get<1>(e) == ME_CONTROLLER && std::get<2>(e) == CTRL_EXPRESSION; };
+      const std::vector<E> base = render(QString());
+      for (const E& e : base)
+            QVERIFY(!isCC11(e) || std::get<3>(e) == 127);
+
+      const std::vector<E> six = render("[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin / Long\":-6}}]");
+      // without its CC11 the same events
+      std::vector<E> rest;
+      std::vector<E> baseRest;
+      for (const E& e : six)
+            if (!isCC11(e))
+                  rest.push_back(e);
+      for (const E& e : base)
+            if (!isCC11(e))
+                  baseRest.push_back(e);
+      QVERIFY(rest == baseRest);
+      // each Long note-on: CC11 64 last before it on the route
+      int switchValue = -1;
+      int cc11 = 127;
+      int longNotes = 0;
+      for (const E& e : six) {
+            if (std::get<5>(e) && std::get<1>(e) == ME_CONTROLLER)
+                  switchValue = std::get<3>(e);
+            else if (isCC11(e))
+                  cc11 = std::get<3>(e);
+            else if (std::get<1>(e) == ME_NOTEON && std::get<3>(e) > 0) {
+                  QCOMPARE(cc11, switchValue == 1 ? 64 : 127);
+                  longNotes += switchValue == 1;
+                  }
+            }
+      QVERIFY(longNotes > 0);
+      // the patch's -3 and the technique's -3 add up
+      QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin\":-3,\"Violin / Long\":-3}}]") == six);
+      // a technique no note plays
+      bool shortNotes = false;
+      switchValue = -1;
+      for (const E& e : base) {
+            if (std::get<5>(e) && std::get<1>(e) == ME_CONTROLLER)
+                  switchValue = std::get<3>(e);
+            shortNotes |= std::get<1>(e) == ME_NOTEON && std::get<3>(e) > 0 && switchValue == 2;
+            }
+      if (!shortNotes)
+            QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin / Short\":-6}}]") == base);
+
+      // the metaTag: levels within MIN_DB .. 0, a louder one dropped (0), kept with no delay at all
+      std::map<const Part*, TrackDelays::Delays> delays;
+      delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin", "Long")] = -60;
+      delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin")] = 5;
+      QVERIFY(!delays[score->parts()[0]].empty());
+      score->setMetaTag(TrackDelays::metaTag, TrackDelays::write(score, delays));
+      const TrackDelays::Delays d = TrackDelays::of(score->parts()[0], TrackDelays::read(score));
+      QCOMPARE(d.levels.size(), size_t(1));
+      QCOMPARE(TrackDelays::db(d, "Violin", "Long"), TrackDelays::MIN_DB);
+      QCOMPARE(TrackDelays::ms(d, "Violin", "Long"), 0.0);
       delete score;
       }
 

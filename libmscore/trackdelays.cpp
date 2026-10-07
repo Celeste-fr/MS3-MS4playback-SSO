@@ -37,6 +37,9 @@ bool Delays::empty() const
       for (const auto& t : tracks)
             if (!zero(t.second))
                   return false;
+      for (const auto& l : levels)
+            if (!zero(l.second))
+                  return false;
       return true;
       }
 
@@ -50,6 +53,13 @@ double clampMs(double ms)
       if (!std::isfinite(ms))
             return 0.0;
       return std::max(MIN_MS, std::min(MAX_MS, ms));
+      }
+
+double clampDb(double db)
+      {
+      if (!std::isfinite(db))
+            return 0.0;
+      return std::max(MIN_DB, std::min(MAX_DB, db));
       }
 
 //---------------------------------------------------------
@@ -73,6 +83,12 @@ std::map<const Part*, Delays> read(const MasterScore* score)
                   const double x = clampMs(it.value().toDouble(0.0));
                   if (!zero(x))
                         d.tracks[it.key()] = x;
+                  }
+            const QJsonObject lo = o.value("levels").toObject();
+            for (auto it = lo.begin(); it != lo.end(); ++it) {
+                  const double x = clampDb(it.value().toDouble(0.0));
+                  if (!zero(x))
+                        d.levels[it.key()] = x;
                   }
             if (d.empty())
                   continue;
@@ -107,6 +123,12 @@ QString write(const MasterScore* score, const std::map<const Part*, Delays>& del
                         tracks[t.first] = clampMs(t.second);
             if (!tracks.isEmpty())
                   o["tracks"] = tracks;
+            QJsonObject levels;
+            for (const auto& l : it->second.levels)
+                  if (!zero(l.second))
+                        levels[l.first] = clampDb(l.second);
+            if (!levels.isEmpty())
+                  o["levels"] = levels;
             list.append(o);
             }
       return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
@@ -140,6 +162,17 @@ double earliest(const Delays& d)
             x = std::min(x, sep < 0 ? ms(d, t.first) : ms(d, t.first.left(sep), t.first.mid(sep + 3)));
             }
       return x;
+      }
+
+double ownDb(const Delays& d, const QString& key)
+      {
+      auto it = d.levels.find(key);
+      return it == d.levels.end() ? 0.0 : it->second;
+      }
+
+double db(const Delays& d, const QString& patch, const QString& technique)
+      {
+      return ownDb(d, trackKey(patch)) + ownDb(d, trackKey(patch, technique));
       }
 
 }     // namespace TrackDelays

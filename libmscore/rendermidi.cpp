@@ -1312,7 +1312,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               };
                         libLevels[note] = l;
                         };
-                  auto librarySwitch = [&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
+                  // the track levels of the note's patch and technique (trackdelays.h; after marcatoLevel: they add up)
+                  auto trackLevel = [&](const Note* note, const SoundLib::Choice& c) {
+                        auto d = c ? libTrackDelays.find(st1->part()) : libTrackDelays.end();
+                        if (d == libTrackDelays.end() || d->second.levels.empty())
+                              return;
+                        const SoundLib::LibInstrument* patch = libPatches[c.patch];
+                        const double db = TrackDelays::db(d->second, patch->name,
+                                                          PlainLiveSet::techniqueName(patch, c.articulation->value));
+                        if (db != 0.0)
+                              libLevels[note].volumeDb += db;
+                        };
+                  auto librarySwitch =[&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
                         if (c)
                               putLibrarySwitch(events, *libPatches[c.patch], libChannel, c, start + tickOffset, st1->idx());
@@ -1556,6 +1567,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
                                     libNote.velocity = libVelocity(libChoice, r, level);
                                     marcatoLevel(note, libChoice, libNote.velocity, level);
+                                    trackLevel(note, libChoice);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {
@@ -1739,6 +1751,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libChoice = librarySwitch(note, noteArts, start, length);
                                     libNote.velocity = libVelocity(libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    trackLevel(note, libChoice);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {

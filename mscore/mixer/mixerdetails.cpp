@@ -23,6 +23,7 @@
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QScrollArea>
 #include <QVBoxLayout>
 
@@ -80,8 +81,8 @@ MixerDetails::MixerDetails(QWidget *parent) :
                                   "track in the Live set Create Live Set writes (saved in the score)"));
       labelDelay->setBuddy(delaySpinBox);
       delayTracksButton = new QPushButton(tr("Tracks…"), this);
-      delayTracksButton->setToolTip(tr("Each patch's and each technique's own delay, added to the part's (the Live set's "
-                                       "Kontakt and technique tracks)"));
+      delayTracksButton->setToolTip(tr("Each patch's and each technique's own delay, added to the part's, and own level "
+                                       "(the Live set's Kontakt and technique tracks)"));
       const int delayRow = gridLayout_2->rowCount();
       gridLayout_2->addWidget(labelDelay, delayRow, 0);
       QHBoxLayout* delayBox = new QHBoxLayout();
@@ -556,7 +557,8 @@ void MixerDetails::updateTrackDelay(bool library)
       delaySpinBox->setValue(d.ms);
       for (QWidget* w : std::initializer_list<QWidget*> { labelDelay, delaySpinBox, delayTracksButton })
             w->setEnabled(library);
-      delayTracksButton->setText(d.tracks.empty() ? tr("Tracks…") : tr("Tracks (%1)…").arg(d.tracks.size()));
+      const size_t set = d.tracks.size() + d.levels.size();
+      delayTracksButton->setText(set == 0 ? tr("Tracks…") : tr("Tracks (%1)…").arg(set));
       }
 
 //---------------------------------------------------------
@@ -606,7 +608,7 @@ void MixerDetails::trackDelayChanged()
 //---------------------------------------------------------
 //   editTrackDelays
 //    the part's tracks as the plain Live set has them: per patch (its Kontakt track) and per technique the
-//    patch can play (its MIDI tracks), each one's own delay over the part's
+//    patch can play (its MIDI tracks), each one's own delay over the part's and its own level (dB, added up)
 //---------------------------------------------------------
 
 void MixerDetails::editTrackDelays()
@@ -624,27 +626,41 @@ void MixerDetails::editTrackDelays()
                   patches.push_back(r.instrument);
 
       QDialog dialog(this);
-      dialog.setWindowTitle(tr("Track delays: %1").arg(part->partName()));
+      dialog.setWindowTitle(tr("Track delays and levels: %1").arg(part->partName()));
       QVBoxLayout* top = new QVBoxLayout(&dialog);
-      QLabel* intro = new QLabel(tr("Added to the part's %1 ms, as Live adds a Kontakt track's and a technique track's "
-                                    "delays to their group's. -1000 to 1000 ms.").arg(d.ms), &dialog);
+      QLabel* intro = new QLabel(tr("Delay: added to the part's %1 ms, as Live adds a Kontakt track's and a technique "
+                                    "track's delays to their group's (-1000 to 1000 ms). Level: a patch's and a "
+                                    "technique's, added up, played by CC11 (expression) on the technique's notes, in "
+                                    "Live's clips too; softer only (CC11 rests at its top), down to %2 dB.")
+                                 .arg(d.ms).arg(TrackDelays::MIN_DB), &dialog);
       intro->setWordWrap(true);
       top->addWidget(intro);
       QScrollArea* scroll = new QScrollArea(&dialog);
       scroll->setWidgetResizable(true);
       QWidget* inner = new QWidget(scroll);
-      QFormLayout* form = new QFormLayout(inner);
-      std::map<QString, QDoubleSpinBox*> boxes;
+      QGridLayout* grid = new QGridLayout(inner);
+      grid->addWidget(new QLabel(tr("Delay"), inner), 0, 1);
+      grid->addWidget(new QLabel(tr("Level"), inner), 0, 2);
+      std::map<QString, std::pair<QDoubleSpinBox*, QDoubleSpinBox*>> boxes;     // key -> delay, level
       auto row = [&](const QString& key, const QString& label) {
             if (boxes.count(key))
                   return;
-            QDoubleSpinBox* b = new QDoubleSpinBox(inner);
-            b->setRange(TrackDelays::MIN_MS, TrackDelays::MAX_MS);
-            b->setDecimals(1);
-            b->setSuffix(tr(" ms"));
-            b->setValue(TrackDelays::own(d, key));
-            form->addRow(label, b);
-            boxes[key] = b;
+            QDoubleSpinBox* ms = new QDoubleSpinBox(inner);
+            ms->setRange(TrackDelays::MIN_MS, TrackDelays::MAX_MS);
+            ms->setDecimals(1);
+            ms->setSuffix(tr(" ms"));
+            ms->setValue(TrackDelays::own(d, key));
+            QDoubleSpinBox* db = new QDoubleSpinBox(inner);
+            db->setRange(TrackDelays::MIN_DB, TrackDelays::MAX_DB);
+            db->setDecimals(1);
+            db->setSingleStep(0.5);
+            db->setSuffix(tr(" dB"));
+            db->setValue(TrackDelays::ownDb(d, key));
+            const int r = grid->rowCount();
+            grid->addWidget(new QLabel(label, inner), r, 0);
+            grid->addWidget(ms, r, 1);
+            grid->addWidget(db, r, 2);
+            boxes[key] = { ms, db };
             };
       for (const SoundLib::LibInstrument* li : patches) {
             row(TrackDelays::trackKey(li->name), tr("%1 (Kontakt track)").arg(li->name));
@@ -658,19 +674,26 @@ void MixerDetails::editTrackDelays()
       // (a track's value whose patch or technique the library no longer has stays, listed last)
       for (const auto& t : d.tracks)
             row(t.first, t.first);
+      for (const auto& l : d.levels)
+            row(l.first, l.first);
+      grid->setRowStretch(grid->rowCount(), 1);
       scroll->setWidget(inner);
       top->addWidget(scroll, 1);
       QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
       connect(buttons, SIGNAL(accepted()), &dialog, SLOT(accept()));
       connect(buttons, SIGNAL(rejected()), &dialog, SLOT(reject()));
       top->addWidget(buttons);
-      dialog.resize(420, 480);
+      dialog.resize(520, 480);
       if (dialog.exec() != QDialog::Accepted)
             return;
       d.tracks.clear();
-      for (const auto& b : boxes)
-            if (b.second->value() != 0.0)
-                  d.tracks[b.first] = b.second->value();
+      d.levels.clear();
+      for (const auto& b : boxes) {
+            if (b.second.first->value() != 0.0)
+                  d.tracks[b.first] = b.second.first->value();
+            if (b.second.second->value() != 0.0)
+                  d.levels[b.first] = b.second.second->value();
+            }
       writeTrackDelays(part, d);
       updateTrackDelay(true);
       }

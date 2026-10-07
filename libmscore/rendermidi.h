@@ -182,7 +182,7 @@ class MidiRenderer {
             double atMs { 0.0 };              // from this long after the note-on (a legato transition's arrival)
             };
       std::map<const Note*, LibLevel> libLevels;
-      // track delays (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
+      // track delays and levels (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
       std::map<const Part*, TrackDelays::Delays> libTrackDelays;
       std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libTrackRoutes;
       double libDelayLead { 0.0 };      // ms everything plays later by, so the earliest negative delay fits (0: none)
