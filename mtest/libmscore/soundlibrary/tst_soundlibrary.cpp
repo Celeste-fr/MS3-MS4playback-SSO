@@ -1247,15 +1247,24 @@ void TestSoundLibrary::trackDelays()
       // (and after the change to 120, 100 ms is 96 ticks: the last event)
       QCOMPARE(std::get<0>(later.back()), at(std::get<0>(base.back()), 100));
 
-      // -100 ms: earlier; what was at the start stays there
-      const std::vector<E> earlier = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":-100}]");
+      // -100 ms: everything else 100 ms later (the lead), nothing clamped at the start; the only part, so as written
+      QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"ms\":-100}]") == base);
+      // the technique's own -100 ms: its notes as written, the patch's controllers 100 ms later, from the first note
+      // on (the owner, 2026-10-07: at -40 ms the first note wasn't early)
+      const std::vector<E> earlier = render("[{\"part\":0,\"name\":\"Violin\",\"tracks\":{\"Violin / Long\":-100}}]");
       QCOMPARE(earlier.size(), base.size());
-      QVERIFY(earlier == expected(base, -100, -100));
-      QCOMPARE(std::get<0>(earlier.front()), 0);
-      bool movedEarlier = false;
-      for (size_t i = 0; i < base.size(); ++i)
-            movedEarlier |= std::get<0>(earlier[i]) < std::get<0>(base[i]);
-      QVERIFY(movedEarlier);
+      QVERIFY(earlier == expected(base, 0, 100));
+      int firstOn = -1;
+      int firstController = -1;
+      for (const E& e : earlier) {
+            if (firstOn < 0 && std::get<1>(e) == ME_NOTEON && std::get<3>(e) > 0)
+                  firstOn = std::get<0>(e);
+            if (firstController < 0 && std::get<1>(e) == ME_CONTROLLER && !std::get<5>(e))
+                  firstController = std::get<0>(e);
+            }
+      QCOMPARE(firstOn, 0);
+      QCOMPARE(firstController, DIVISION / 10);
+      QCOMPARE(TrackDelays::earliest(TrackDelays::of(score->parts()[0], TrackDelays::read(score))), -100.0);
 
       // the technique's own 50 ms on top: notes 150 ms later, controllers 100
       const std::vector<E> technique = render(

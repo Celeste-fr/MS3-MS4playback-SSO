@@ -154,7 +154,8 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
 - Track delays (`libmscore/trackdelays.*`, metaTag `trackDelays`; Mixer › Track delay / Tracks…): ms per part plus
   per patch / technique (added up, as Live adds a group's and its tracks'); `MidiRenderer::libraryTrackDelays` moves
-  the library events (not for Live's clips); the plain set writes them as TrackDelay, `livetracks.*` reads them back.
+  the library events (not for Live's clips); with a negative delay everything else plays later by the earliest one
+  (`libraryDelayLead`), so nothing is clamped at the start; the plain set writes them as TrackDelay, `livetracks.*` reads them back.
 
 **Hosting (VST 3)** (`BUILD_VST3`, on except macOS; preference `io/soundLibrary`)
 - `audio/vst3/vst3plugin.*` (one instance; `settle()` after setState, or SSO's script resets parameters),

@@ -28,7 +28,9 @@
 //
 //   MuseScore plays it (MidiRenderer::libraryTrackDelays): each library event moves by its track's delay in time
 //   (tempo changes followed), a note and its switch by its technique's, controllers, pitch bends and parameters by
-//   the patch's; an event moved before the start goes at the start. The plain Live set writes it as each track's
+//   the patch's; with a negative delay everything else plays later by the earliest one (libraryDelayLead), so the
+//   track is early from its first note (before 2026-10-07 what went before the start stayed at the start; nothing
+//   is clamped now). The plain Live set writes it as each track's
 //   TrackDelay (not into the clips) and reads it back (livetracks.h).
 //---------------------------------------------------------
 
@@ -69,6 +71,8 @@ Delays of(const Part* part, const std::map<const Part*, Delays>& delays);
 double ms(const Delays& d, const QString& patch, const QString& technique = QString());
 // one track's own value (0: none)
 double own(const Delays& d, const QString& key);
+// the earliest any of the part's tracks plays at: the least of the part's, each patch's and each technique's ms()
+double earliest(const Delays& d);
 
 }     // namespace TrackDelays
 }     // namespace Ms

@@ -132,5 +132,15 @@ double ms(const Delays& d, const QString& patch, const QString& technique)
       return x;
       }
 
+double earliest(const Delays& d)
+      {
+      double x = d.ms;
+      for (const auto& t : d.tracks) {
+            const int sep = t.first.indexOf(" / ");
+            x = std::min(x, sep < 0 ? ms(d, t.first) : ms(d, t.first.left(sep), t.first.mid(sep + 3)));
+            }
+      return x;
+      }
+
 }     // namespace TrackDelays
 }     // namespace Ms

@@ -2558,7 +2558,8 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
 //   libraryTrackDelays
 //    each library event of the chunk moved by its track's delay (trackdelays.h), in time: a note, its note-off and
 //    its switch by its technique's (the switch in force on the route when it starts), what else goes to the route
-//    (controllers, pitch bends, parameters) by its patch's; before the start: at the start. As the plain Live set
+//    (controllers, pitch bends, parameters) by its patch's; plus libDelayLead (libraryDelayLead), so nothing goes
+//    before the start. As the plain Live set
 //    plays it (a technique's MIDI track, the Kontakt track, the part's group, each delayed): an earlier technique's
 //    note can come before a controller sent for it, as in Live. Not for Live's clips (the set has it as the tracks'
 //    TrackDelay). Events of this chunk: those not moved yet (marked once looked at), from a while before its start
@@ -2620,6 +2621,7 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
                   }
             else
                   ms = TrackDelays::ms(d->second, patch);
+            ms += libDelayLead;
             ev.setLibraryDelayed(true);
             if (std::fabs(ms) < 1e-6) {
                   ++i;
@@ -2630,6 +2632,34 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
             i = events->erase(i);
             }
       // (in their order: at one tick a route's events keep theirs)
+      for (const auto& m : moved)
+            events->insert(m);
+      }
+
+//---------------------------------------------------------
+//   libraryDelayLead
+//    with a negative track delay everything else plays later by the earliest one (libDelayLead), as a negative
+//    delay can't go before the start: the delayed track's first notes are early too (the owner, 2026-10-07: at
+//    -40 ms the first note "doesn't have a negative delay"). libraryTrackDelays adds it to the delayed routes'
+//    events; here every other event of the chunk (other parts, routes without delays, the metronome), each once
+//---------------------------------------------------------
+
+void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
+      {
+      if (libDelayLead <= 0.0 || forLiveClips)
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
+      std::vector<std::pair<int, NPlayEvent>> moved;
+      for (auto i = events->lower_bound(from); i != events->end();) {
+            if (i->second.libraryDelayed()) {
+                  ++i;
+                  continue;
+                  }
+            NPlayEvent ev = i->second;
+            ev.setLibraryDelayed(true);
+            moved.emplace_back(score->utime2utick(score->utick2utime(i->first) + libDelayLead / 1000.0), ev);
+            i = events->erase(i);
+            }
       for (const auto& m : moved)
             events->insert(m);
       }
@@ -4656,6 +4686,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   i++;
                   }
             }
+      libraryDelayLead(chunk, events);
       }
 
 //---------------------------------------------------------
@@ -4696,6 +4727,7 @@ void MidiRenderer::updateState()
             libRoutes.clear();
             libTrackDelays.clear();
             libTrackRoutes.clear();
+            libDelayLead = 0.0;
             libLanes.clear();
             libLaneCents.clear();
             libBend.clear();
@@ -4714,6 +4746,7 @@ void MidiRenderer::updateState()
                               continue;
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };
+                        libDelayLead = std::max(libDelayLead, -TrackDelays::earliest(d));
                         }
                   for (const SoundLib::Route& r : routes) {
                         if (r.patch != 0 || r.lane != 0)
