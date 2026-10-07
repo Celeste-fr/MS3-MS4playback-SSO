@@ -231,6 +231,12 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   `MS_KONTAKT_MAX_VOICES`, `MS_SOUNDLIBRARY_LOAD_THREADS`, `MS_LIVESET_OUT=<file>` (liveSetWrite's set).
 - Other tests: `tools/soundlibraries/test_make_setups.py`, `test_extract_library_files.py`; Node in
   `tools/live/test/`. Test data: `test-scores/`, `share/verifyplayback/`, each mtest's folder.
+- **Standard test score**: the owner's *Whence* in 12-TET, `~/MuseScore/ms3fork/test-scores/Whence 12-TET.mscz`
+  (and `.mscx`) on the dev VM, **never in the repo** (the owner's score). Use it for dumps (`dumpEvents`), Create Live
+  Set, VM runs and test instructions unless a test needs microtones (then the original, quarter tones). Made
+  2026-10-06 by rounding each quarter tone down, as "Whence simple 2" played: the key's D / B quarter-flats → ♭, its
+  G quarter-sharp dropped (key E♭ B♭ D♭ F♯), each E quarter-sharp → E♮; checked with the fork's dump (107 D / B
+  notes a semitone lower, the other 347 and all times unchanged; 10 routes instead of 26: no tuning lanes).
 
 ## Tests and known state
 

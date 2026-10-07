@@ -18,6 +18,8 @@ Performance legato): offer to the owner, revert in the generator's table if they
 
 ## Where things are (2026-10-02)
 
+- **Standard test score** (2026-10-06): the owner's *Whence* in 12-TET, `~/MuseScore/ms3fork/test-scores/Whence
+  12-TET.mscz` on the dev VM (not in the repo; CLAUDE.md › Building and testing).
 - `main` has everything: `live-set-export` / `claude/intelligent-volta-gx7gmw`, `automation-editor`, the
   measurement branch `claude/intelligent-cray-6pd4o1` and `playability-checker` were merged on 2026-10-02 (the
   branches are kept). Work on a branch; finished work by Claude and its subagents is merged into `main` without asking (the owner, 2026-10-02), anything incomplete or changing an owner-decided value waits for the owner.
