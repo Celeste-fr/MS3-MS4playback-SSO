@@ -117,7 +117,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   the All techniques patches' Release, Tightness and Options): SSO slurs play the All techniques longs, each note its
   own attack, early by its onset; a legato transition needs an articulation with `legato` first
   (`Articulation::playsTransitions`), which the SSO map has only under staff text "performance" (modifier `performance`,
-  branch `legato-pair-delays`, waiting for the owner: the Performance patches' Legato, Violas - Performance transitions at velocity 100, map
+  branch `legato-pair-delays`, waiting for the owner: the Performance patches' Legato, transitions at velocity 100 on Violas, 50 on Violins 1 and Celli, map
   `legatoVelocity` / `[legato] velocity`: HANDOFF.md; `sso_legato_*.json` kept). Slurred notes overlap; **legato transitions** and
   **held notes start early** by measured delays (`<Articulation legatoDelay>` by interval, `<Articulation onset>`
   by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`); the note before keeps `keepMs` of its

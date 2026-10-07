@@ -321,8 +321,9 @@ PERFORMANCE = {
 # bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, moved by octaves into each patch's range; branch
 # legato-pair-delays), SD of arrival - written, transitions at 64 / at 100: Violas 54 / 39, Violins 1 53 / 65, Celli
 # 53 / 70, Basses 39 / 65, Flute Solo 35 / 65, Trumpet Solo 26 / 35; Oboe, Clarinet, Bassoon, Horn, Tenor Trombone and
-# Tuba Solo render the same at both (29, 31, 98, 29, 31, 55). Rasch 1979: 30-50 ms between players is typical
-LEGATO_VELOCITY = {'Violas - Performance': 100}
+# Tuba Solo render the same at both (29, 31, 98, 29, 31, 55). Sweep at 30 / 50 / 84 / 120: Violins 1 53 / 50 / 53 / 58,
+# Celli 44 / 35 / 47 / 64; Bassoon (98) and Tuba (55) the same at every velocity. Rasch 1979: 30-50 ms between players is typical
+LEGATO_VELOCITY = {'Violas - Performance': 100, 'Violins 1 - Performance': 50, 'Celli - Performance': 50}
 EXTRAS = [(m, e, LEGATO) for m, e in PERFORMANCE.items()]
 EXTRAS += [
     # on one string, "performance": legato ("sul G" / "sul C")
