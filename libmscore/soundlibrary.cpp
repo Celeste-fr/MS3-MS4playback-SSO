@@ -1778,7 +1778,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
 
       // back to normal first: "ord." may come with a new technique ("ord. pizz.")
       if (has("\\b(ord|ordin|ordinario|ordinary|nat|naturale|natural|norm|normale|normal|modo ordinario)\\b")) {
-            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue", "espressivo" })
+            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue", "espressivo", "brushed" })
                   s.modifiers.removeAll(m);
             s.harmonics = false;
             s.tremolo = false;
@@ -1828,6 +1828,10 @@ void TextTechniques::apply(const QString& text, TextState& s)
             addModifier(s, "espressivo");
       if (has("\\b(pres\\s+de\\s+la\\s+table|p\\.?\\s*d\\.?\\s*l\\.?\\s*t\\b)"))
             addModifier(s, "pdlt");
+      // SSO's Short Brushed for every note, held or slurred (the owner, 2026-10-07: fast slurred runs whose
+      // Long attacks differ by pitch and round robin)
+      if (has("\\bbrushed\\b"))
+            addModifier(s, "brushed");
       if (has("\\b(multi|double|triple)[\\s-]*tongu") || has("\\b(doppel|tripel)zunge"))
             addModifier(s, "multitongue");
       if (has("\\bharm(?!on)"))

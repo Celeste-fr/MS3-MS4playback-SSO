@@ -42,6 +42,9 @@ T={
  'staccato (Muted)':('short staccatissimo','muted'), 'Short Stopped':('short staccatissimo','muted'),
  'Short Harmonics':('short spiccato staccatissimo','harmonics'),
  'Short 1.0':('tenuto',''),
+ # staff text "brushed" (the owner, 2026-10-07): every note, held or slurred, until "ord."; the violas' Long
+ # attacks differ by pitch and round robin, too much for fast runs (sso_sound_onset.json, sso_sound_repeats.json)
+ 'Short Brushed':('long legato short','brushed'), 'Short Brushed CS':('long legato short','muted brushed'),
  # the section strings' staccato (the owner, 2026-09-28: "if we have a trigger for short 1'0, why not
  # short 0'5?"): spiccato for staccatissimo, Short 0.5 for staccato, Short 1.0 for tenuto
  'Short 0.5':('short',''),
@@ -163,7 +166,7 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '  techniques: long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato',
 '              bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3 fall rip',
 '  modifiers:  muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup pdlt',
-'              multitongue',
+'              multitongue brushed',
 '  An instrument with a partName is preferred for parts whose name matches it (a2, a6 …).',
 '-->',
 '<SoundLibrary name="Spitfire Symphony Orchestra">',

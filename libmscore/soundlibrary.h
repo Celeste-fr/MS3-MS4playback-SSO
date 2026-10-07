@@ -63,7 +63,7 @@ namespace SoundLib {
 //               pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
 //               fall rip
 //    modifiers: muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup pdlt
-//               multitongue
+//               multitongue brushed
 //---------------------------------------------------------
 
 // NONE: a patch that plays one articulation (Spitfire's single techniques) or picks it by itself

@@ -19,7 +19,7 @@
   techniques: long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato
               bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3 fall rip
   modifiers:  muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup pdlt
-              multitongue
+              multitongue brushed
   An instrument with a partName is preferred for parts whose name matches it (a2, a6 …).
 -->
 <SoundLibrary name="Spitfire Symphony Orchestra">
@@ -56,8 +56,8 @@
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
     <Articulation name="Short 0.5" value="50" techniques="short" length="0.5" from="0.43"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0" from="0.71"/>
-    <Articulation name="Short Brushed" value="48" techniques=""/>
-    <Articulation name="Short Brushed CS" value="62" techniques=""/>
+    <Articulation name="Short Brushed" value="48" techniques="long legato short" modifiers="brushed"/>
+    <Articulation name="Short Brushed CS" value="62" techniques="long legato short" modifiers="muted brushed"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
     <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
@@ -98,8 +98,8 @@
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
     <Articulation name="Short 0.5" value="50" techniques="short" length="0.5" from="0.42"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0" from="0.76"/>
-    <Articulation name="Short Brushed" value="48" techniques=""/>
-    <Articulation name="Short Brushed CS" value="62" techniques=""/>
+    <Articulation name="Short Brushed" value="48" techniques="long legato short" modifiers="brushed"/>
+    <Articulation name="Short Brushed CS" value="62" techniques="long legato short" modifiers="muted brushed"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
     <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
@@ -138,8 +138,8 @@
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
     <Articulation name="Short 0.5" value="50" techniques="short" length="0.5" from="0.61"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0" from="1.06"/>
-    <Articulation name="Short Brushed" value="48" techniques=""/>
-    <Articulation name="Short Brushed CS" value="62" techniques=""/>
+    <Articulation name="Short Brushed" value="48" techniques="long legato short" modifiers="brushed"/>
+    <Articulation name="Short Brushed CS" value="62" techniques="long legato short" modifiers="muted brushed"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics" release="395"/>
     <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
@@ -178,8 +178,8 @@
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo"/>
     <Articulation name="Short 0.5" value="50" techniques="short" length="0.5" from="0.51"/>
     <Articulation name="Short 1.0" value="52" techniques="tenuto" length="1.0" from="0.84"/>
-    <Articulation name="Short Brushed" value="48" techniques=""/>
-    <Articulation name="Short Brushed CS" value="62" techniques=""/>
+    <Articulation name="Short Brushed" value="48" techniques="long legato short" modifiers="brushed"/>
+    <Articulation name="Short Brushed CS" value="62" techniques="long legato short" modifiers="muted brushed"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
     <Articulation name="Short CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato"/>
@@ -256,8 +256,8 @@
     <Articulation name="Pizzicato Bartok" value="57" techniques="bartok"/>
     <Articulation name="Col Legno" value="58" techniques="collegno"/>
     <Articulation name="Short Harmonics" value="61" techniques="short spiccato staccatissimo" modifiers="harmonics"/>
-    <Articulation name="Short Brushed" value="48" techniques=""/>
-    <Articulation name="Short Brushed CS" value="62" techniques=""/>
+    <Articulation name="Short Brushed" value="48" techniques="long legato short" modifiers="brushed"/>
+    <Articulation name="Short Brushed CS" value="62" techniques="long legato short" modifiers="muted brushed"/>
     <Articulation name="Spiccato CS" value="47" techniques="short spiccato staccatissimo" modifiers="muted"/>
     <Articulation name="Long CS Blend" value="5" techniques="" release="1640"/>
     <Articulation name="Long Sul Pont" value="18" techniques="long legato" modifiers="sulpont" release="1355" onset="24:75 28:75 31:120 38:105 40:145 44:135 47:80 52:85 53:120 65:100 66:105 67:145 72:145 73:115 86:130 95:60 96:150"/>

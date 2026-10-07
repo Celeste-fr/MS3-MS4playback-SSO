@@ -213,6 +213,10 @@ void TestSoundLibrary::textTechniques()
       QVERIFY(s.modifiers.contains("sulc") && !s.modifiers.contains("sulg"));
       SoundLib::TextTechniques::apply("Bells up", s);
       QVERIFY(s.modifiers.contains("bellsup"));
+      SoundLib::TextTechniques::apply("brushed", s);
+      QVERIFY(s.modifiers.contains("brushed"));
+      SoundLib::TextTechniques::apply("ord.", s);
+      QVERIFY(!s.modifiers.contains("brushed"));
       SoundLib::TextTechniques::apply("bells down", s);
       QVERIFY(!s.modifiers.contains("bellsup"));
       SoundLib::TextTechniques::apply("Près de la table", s);
@@ -572,6 +576,14 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(valueFor("Violas", { { "long", "legato" }, { "sulc" } }), 112);
       QCOMPARE(valueFor("Celli", { { "long", "legato" }, { "sulc" } }), 1);
       QCOMPARE(valueFor("Harp", { { "long", "legato" }, { "pdlt" } }), 18);
+      // "brushed": Short Brushed for held, slurred and short notes, muted: Short Brushed CS; the basses have none
+      QCOMPARE(valueFor("Violas", { { "long", "legato" }, { "brushed" } }), 48);
+      QCOMPARE(valueFor("Violas", { { "legato", "long" }, { "brushed" } }), 48);
+      QCOMPARE(valueFor("Violas", { { "short" }, { "brushed" } }), 48);
+      QCOMPARE(valueFor("Violas", { { "long", "legato" }, { "muted", "brushed" } }), 62);
+      QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, { "brushed" } }), 48);
+      QCOMPARE(valueFor("Basses", { { "long", "legato" }, { "brushed" } }), 1);
+      QCOMPARE(valueFor("Violas", { { "long", "legato" }, {} }), 1);
       QCOMPARE(valueFor("Oboe Solo", { { "tremolo" }, { "multitongue" } }), 75);
       QCOMPARE(valueFor("Violins 1", { { "long", "legato" }, {} }), 1);
       // listed without techniques (silent in the owner's patch): never chosen

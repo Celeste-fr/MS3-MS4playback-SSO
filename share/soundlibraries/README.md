@@ -157,9 +157,9 @@ switch value of each articulation. For example:
   audio comparison can't judge but the pictures confirm). The check then counts it as passed,
   and a last check that found exactly these is shown as passed without checking again.
 - `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup
-  pdlt multitongue`. When no variant matches, the plain articulation plays. Staff text sets them:
+  pdlt multitongue brushed`. When no variant matches, the plain articulation plays. Staff text sets them:
   "sul pont.", "sul tasto", "flautando", "cuivré", "sul G", "sul C", "bells up" ("campana in
-  aria", "pavillons en l'air"), "près de la table" ("pdlt"), "double tongue" / "triple tongue";
+  aria", "pavillons en l'air"), "près de la table" ("pdlt"), "double tongue" / "triple tongue", "brushed";
   "ord." ends them all.
 - `partName` on an `Instrument` is a regular expression. That instrument is preferred for parts
   whose name matches it.
