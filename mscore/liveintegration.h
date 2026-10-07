@@ -19,7 +19,7 @@
 //   the .als read, matched to parts and controllers), so MuseScore alone, with the hosted plug-in,
 //   plays it as Live does.
 //
-//   - Mixer › Play through Live: setPlayThroughMidi (the preference io/soundLibraryOutput).
+//   - Preferences › I/O › Play through (and Live plays the score): setPlayThroughMidi (the preference io/soundLibraryOutput).
 //   - Mixer › Advanced Options… › Ableton Live: importDialog (choose the .als, import, report),
 //     re-import when the linked set is saved (watcher; metaTag "liveSet": path, auto).
 //---------------------------------------------------------

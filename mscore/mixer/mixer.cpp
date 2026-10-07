@@ -100,19 +100,8 @@ Mixer::Mixer(QWidget* parent)
             partOnlyCheckBox->setParent(top);
             h->addWidget(partOnlyCheckBox);
             h->addStretch();
-            // play through Ableton Live (LIVE.md): the sound library's parts to MIDI output instead of
-            // the hosted plug-in, without opening Preferences (the owner, 2026-09-28)
-            playThroughLive = new QPushButton(tr("Play through Live"), top);
-            playThroughLive->setCheckable(true);
-            playThroughLive->setToolTip(tr("On: the sound library's parts play in Ableton Live. MuseScore sends their notes, switches and controllers to MIDI output A-D, and MIDI clock to the sync output, so Live follows MuseScore's tempo and position; Live's tracks host the library.\n"
-                                           "Off: they play in the library's plug-in hosted by MuseScore.\n"
-                                           "Other parts always play in MuseScore. Switching loads or releases the library's patches in MuseScore."));
-            connect(playThroughLive, &QPushButton::clicked, this, [this](bool on) {
-                  LiveIntegration::setPlayThroughMidi(on, this);
-                  updatePlayThroughLive();
-                  });
-            h->addWidget(playThroughLive);
-            updatePlayThroughLive();
+            // (no Play through Live button: the owner, 2026-10-07, never plays through Live; the output stays
+            // in Preferences › I/O › Play through, LIVE.md)
             QPushButton* options = new QPushButton(tr("Advanced Options…"), top);
             options->setToolTip(tr("This score's sound library settings (copies for other tunings, short notes' balance) and the library's"));
             connect(options, &QPushButton::clicked, this, [this]() { SoundLibraryOptions::showFor(this); });
@@ -284,21 +273,8 @@ void Mixer::closeEvent(QCloseEvent* ev)
 //   showEvent
 //---------------------------------------------------------
 
-//---------------------------------------------------------
-//   updatePlayThroughLive
-//---------------------------------------------------------
-
-void Mixer::updatePlayThroughLive()
-      {
-      if (!playThroughLive)
-            return;
-      _setChecked(playThroughLive, LiveIntegration::playingThroughMidi());
-      playThroughLive->setVisible(SoundLibraryHost::available());   // (without hosting it is always MIDI)
-      }
-
 void Mixer::showEvent(QShowEvent* e)
       {
-      updatePlayThroughLive();
       if (e->spontaneous() && !isFloating()) {
             QDockWidget::showEvent(e);
             }

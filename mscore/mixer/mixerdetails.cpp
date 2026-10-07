@@ -60,9 +60,9 @@ MixerDetails::MixerDetails(QWidget *parent) :
       setupUi(this);
 
       // the part's playback mode: the global one, or its own (kept in the score)
-      labelPlayback = new QLabel(tr("This part plays:"), this);
+      labelPlayback = new QLabel(tr("Part playback:"), this);
       playbackCombo = new QComboBox(this);
-      playbackCombo->setToolTip(tr("How this part plays: as \"Global playback\" at the top says, or MuseScore 3, MuseScore 4 or the sound library for this part only (saved in the score)"));
+      playbackCombo->setToolTip(tr("How this part plays: \"Global default\" plays it as \"Global playback\" at the top says, or MuseScore 3, MuseScore 4 or the sound library for this part only (saved in the score)"));
       labelPlayback->setBuddy(playbackCombo);
       const int row = gridLayout_2->rowCount();
       gridLayout_2->addWidget(labelPlayback, row, 0);
@@ -449,7 +449,7 @@ void MixerDetails::updateLibrary()
       patchCombo->blockSignals(false);
       patchCombo->setEnabled(false);
       patchCombo->setToolTip(tr("The sound library plays this part: its patch is chosen from the instrument (View › Sound Library…). "
-                                "The General MIDI patch comes back with \"This part plays:\" set to MuseScore 3 or 4."));
+                                "The General MIDI patch comes back with \"Part playback:\" set to MuseScore 3 or 4."));
       // the route: MuseScore's port and channel don't apply
       const std::vector<std::pair<int, int>> outs = seq ? seq->libraryOuts(master) : std::vector<std::pair<int, int>>();
       portSpinBox->setEnabled(false);
@@ -502,7 +502,7 @@ void MixerDetails::updatePlayback()
       {
       const QSignalBlocker block(playbackCombo);
       playbackCombo->clear();
-      playbackCombo->addItem(tr("As global playback"), int(PartPlayback::DEFAULT));
+      playbackCombo->addItem(tr("Global default"), int(PartPlayback::DEFAULT));   // (names: the owner, 2026-10-07)
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS3), int(PartPlayback::MS3));
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS4), int(PartPlayback::MS4));
       playbackCombo->addItem(playbackModeName(PlaybackMode::LIBRARY), int(PartPlayback::LIBRARY));

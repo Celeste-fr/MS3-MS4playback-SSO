@@ -827,9 +827,9 @@ QStringList LiveClipsLink::keysWithoutTrack(const MasterScore* score, bool* know
 QString LiveClipsLink::statusText() const
       {
       if (!_on)
-            return tr("Off: MuseScore plays through Live (Mixer › Play through Live) and is the clock.");
+            return tr("Off: MuseScore plays through Live (Preferences › I/O › Play through: MIDI output) and is the clock.");
       if (!playingThroughMidi())
-            return tr("Waiting: turn on Mixer › Play through Live (Live hosts the library).");
+            return tr("Waiting: set Preferences › I/O › Play through to MIDI output (Live hosts the library).");
       if (!connected())
             return tr("Waiting for the MuseScore Link device in Live (UDP port %1).").arg(_port);
       int ok = 0, waiting = 0, dropped = 0, high = 0;

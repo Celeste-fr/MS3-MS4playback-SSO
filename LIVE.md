@@ -11,7 +11,8 @@ There are two ways to play through Live (and, besides them, [editing any Live MI
 MuseScore](#editing-live-clips-in-musescore)). For both, MuseScore can write the Live Set with every track set up:
 [Create Live Set](#create-live-set).
 
-1. **MuseScore plays through Live** (*Mixer › Play through Live*, 2026-09-28). MuseScore is the
+1. **MuseScore plays through Live** (*Preferences › I/O › Play through: MIDI output*, 2026-09-28; the Mixer's button
+   was removed 2026-10-07: the owner doesn't play through Live). MuseScore is the
    clock: it sends each part's notes, switches and controllers live to Live, plus MIDI clock and
    Song Position Pointer. Live has no notes of its own; its arrangement is in the score's
    quarter notes. Sections 1-5 below.
@@ -32,7 +33,7 @@ How the first fits together:
 - **Automation**: Live saves the automation in its set (.als). *Mixer › Advanced Options… ›
   Import automation from Live Set…* reads it into the score as lanes (editable in MuseScore too)
   (`libmscore/liveset.h`, `libmscore/automation.h`, `mscore/liveintegration.h`).
-- **Switching**: *Mixer › Play through Live* switches between Live and the plug-in hosted by
+- **Switching**: *Preferences › I/O › Play through* switches between Live and the plug-in hosted by
   MuseScore.
 
 ## Set up on Windows
@@ -64,7 +65,7 @@ Install loopMIDI (Tobias Erichsen) and create these ports:
 
 **Mixer:**
 - Global playback: *Sound library*.
-- *Play through Live*: on. It asks first, because the patches loaded in MuseScore are released
+- *Preferences › I/O › Play through*: MIDI output. When switched by *Live plays the score* it asks first, because the patches loaded in MuseScore are released
   (their memory freed). Switching back loads them again.
 
 *View › Sound Library…* lists each part's port and channel, plus the patch Live must load for it.
@@ -139,9 +140,9 @@ Install loopMIDI (Tobias Erichsen) and create these ports:
 - The lanes are stored in the score's metaTag `automation`, each marked `"source": "live"` with
   the set's path and time, the track and Live's parameter name and id. The metaTag `liveSet`
   holds the link. MuseScore 3.6 keeps both through a round trip (tested with 3.6.2).
-- With *Play through Live* on, MuseScore sends nothing for these lanes, since Live plays them
+- When playing through Live, MuseScore sends nothing for these lanes, since Live plays them
   itself. It also sends no value of its own for those controllers.
-- With *Play through Live* off, MuseScore's hosted Kontakt plays them as plug-in parameter
+- With the hosted plug-in, MuseScore's hosted Kontakt plays them as plug-in parameter
   events, the same way as in Live.
 
 ## Live plays the score
@@ -206,7 +207,7 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   set was opened again) gets the clip tabs' clips back (`/ms/clip/adopt`: in sync if their notes are as
   MuseScore knew them, else a conflict), and their unwritten edits are written. Also notices: a clip tab's clip
   deleted in Live; the MuseScore Link copy removed from (or added again to) a clip tab's track. Not detected:
-  the MIDI ports of Play through Live disappearing (loopMIDI closed) without the device.
+  the MIDI ports of playing through Live disappearing (loopMIDI closed) without the device.
 
 ### Setting it up
 
@@ -229,9 +230,9 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
      patch ("Violin – Solo Violin - Performance"; any dash) or the patch's name alone when only one track
      has it.
    The device sets each track's *Monitor* to Auto, so the clips play (it sets In when you go back to
-   *Play through Live*, where MuseScore's stream plays).
+   playing through Live, where MuseScore's stream plays).
 4. **In MuseScore:** Mixer › Advanced Options… › Ableton Live › **Live plays the score** (it also
-   turns on *Play through Live*: the library goes to MIDI output, MuseScore's Kontakt instances are
+   turns on playing through Live: the library goes to MIDI output, MuseScore's Kontakt instances are
    released). The status line should say the device answers and list no route without a track.
 5. Play from Live or from MuseScore.
 
@@ -376,7 +377,7 @@ The sections below describe the route set.
    "<score title>.als" next to the score. A report lists the tracks, their devices and MIDI From, and what was
    left out.
 3. Open it in Live 12 (*File › Open Live Set…*), save it where you like (Live may ask to save it in a project).
-4. *Live plays the score* (or *Play through Live*) as before: the device finds every track.
+4. *Live plays the score* (or playing through Live) as before: the device finds every track.
 5. **A part added later**: *Add missing tracks…* writes a small set with only the routes that have no track in
    Live yet. In Live's browser, go to that file, unfold it and drag its tracks into your set. Which routes have a
    track: the MuseScore Link device's report when it answers for this score with *Live plays the score* on
@@ -867,7 +868,7 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
 
 1. The **MuseScore Link** device (the same `.amxd`, regenerated) on any track of the set; MuseScore running
    (with the setting on: *Mixer › Advanced Options… › Ableton Live › Edit Live clips in MuseScore*, on by
-   default; it only listens on 127.0.0.1). "Live plays the score" and "Play through Live" don't need to be on.
+   default; it only listens on 127.0.0.1). "Live plays the score" and playing through Live don't need to be on.
 2. In Live, click the MIDI clip (an arrangement clip: a click on it is enough; a session clip: its notes shown in
    the Clip View).
 3. Press **Edit in MuseScore** on the device (any copy of it). A tab "<track> › <clip>" opens in Continuous View
@@ -964,7 +965,7 @@ there goes back into that clip, note by note. Notes you don't touch keep Live's 
   Live's transport, song time and clips are never touched. The hub tells MuseScore each edited clip's track and
   whether a copy of protocol 4 is on it (`/live/clip/track`, after the notes and when it changes); without one
   (or with the setting off, or the link lost) MuseScore's own sounds play and the status line says why. Every
-  part of a clip score is "This part plays: MuseScore 3" (since 2026-10-02; was MuseScore 4, whose note model
+  part of a clip score is "Part playback: MuseScore 3" (since 2026-10-02; was MuseScore 4, whose note model
   plays no note velocities: every note came at the dynamic's 64): each note plays the velocity the import took
   from Live, and a note muted in Live doesn't play (`applyMutes`: the Inspector's *Play* off, no undo step;
   turned on again in MuseScore it is unmuted in Live). Never the sound library. Live 12.3's `Track.insert_device` can't add it: "only native Live devices

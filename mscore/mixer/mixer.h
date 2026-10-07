@@ -73,8 +73,6 @@ class Mixer : public QDockWidget, public Ui::Mixer, public MixerTrackGroup
       QGridLayout* detailsLayout;
 
       bool showDetails;
-      QPushButton* playThroughLive { nullptr };   // sound library: MIDI output (Live) or the hosted plug-in
-      void updatePlayThroughLive();
       QSet<Part*> expandedParts;
       QWidget* trackHolder;
       QList<MixerTrack*> trackList;

@@ -16,7 +16,7 @@
 //   protocol). The link with the MuseScore Link device in Live:
 //
 //   - While on (Mixer › Advanced Options… › Ableton Live: "Live plays the score"; QSettings
-//     liveIntegration/clips; with Mixer › Play through Live on) and the device answers
+//     liveIntegration/clips; with Preferences › I/O › Play through: MIDI output) and the device answers
 //     (/live/hello), the score in front is rendered as playback renders it, 300 ms after its last
 //     change (every edit, undo and redo end in its playlistChanged), a few measures per turn of the
 //     event loop (~10 ms each, so typing never waits; a change meanwhile starts it again). Only
@@ -162,7 +162,7 @@ class LiveClipsLink : public QObject {
       // Seq::start / stop: in this mode MuseScore's Play and Stop act on Live (true: handled)
       bool startRequested(int utick);
       void stopRequested();
-      // the library's output changed (Mixer › Play through Live)
+      // the library's output changed (Preferences › I/O › Play through)
       void outputChanged();
       // the socket is shared with the clip editor (liveclipedit.h): bound while either is on
       void updateSocket();

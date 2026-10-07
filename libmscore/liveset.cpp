@@ -730,8 +730,8 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
       std::map<const Part*, Automation::PartLanes> out;
       Report rep;
       if (parts.empty())
-            rep.unmatched << QObject::tr("No part of this score plays the sound library (Mixer: Playback \"Sound library\", or a "
-                                         "part's \"This part plays\"), so no track has a part to go to.");
+            rep.unmatched << QObject::tr("No part of this score plays the sound library (Mixer: Global playback \"Sound library\", or a "
+                                         "part's \"Part playback\"), so no track has a part to go to.");
       std::set<const Part*> taken;
       // a set where Live plays the score as clips: its beats at its one tempo, the score's real times
       LiveClips::Timeline clipTimeline;

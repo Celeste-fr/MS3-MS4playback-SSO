@@ -174,7 +174,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
       std::vector<LiveSetWriter::Track> tracks = LiveSetWriter::tracks(score, library, ports);
       plan->routes = int(tracks.size());
       if (tracks.empty()) {
-            *error = QObject::tr("No part of this score plays %1 (Mixer: \"This part plays\").").arg(library.name);
+            *error = QObject::tr("No part of this score plays %1 (Mixer: \"Part playback\").").arg(library.name);
             return false;
             }
       LiveSetWriter::setSong(score, &plan->spec);
