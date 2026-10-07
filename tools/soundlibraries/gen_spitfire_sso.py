@@ -1249,7 +1249,7 @@ def _ratios():
                     out.setdefault((onsetFamily(patch, sound) == 'brass', articulationKind(sound)), []).append(ms / rng[pitch])
     return {k: statistics.median(v) for k, v in out.items() if len(v) >= 20}
 ONSET_RATIO = _ratios()
-def onset(patch, sound):
+def _onset(patch, sound):
     """the onset= text of a sustained sound (None: not measured or no family)"""
     family = onsetFamily(patch, sound)
     measured = MEASURED_ONSET.get(patch, {}).get(sound)
@@ -1286,6 +1286,22 @@ def onset(patch, sound):
     if all(abs(m - mid) <= tolerance for m in smooth):
         return str(int(5 * round(mid / 5)))
     return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, tolerance))
+# The All techniques patches' Long fitted so that the sections' slurred notes arrive together (the owner, 2026-10-07:
+# plain Long for everything, within Rasch's 30-50 ms between players; sso_long_onset_fit.json, onset_fit_from_split.py
+# has the measurement): "onsets", every semitone's own (kept within 5 ms: the pitch-to-pitch steps are what lines the
+# notes up), or "shift", the measured table moved by that many ms
+FIT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_long_onset_fit.json')
+ONSET_FIT = json.load(open(FIT_FILE, encoding='utf-8')) if os.path.exists(FIT_FILE) else {}
+def onset(patch, sound):
+    fit = ONSET_FIT.get(patch) if sound == 'Long' else None
+    if fit and 'onsets' in fit:
+        points = sorted((int(p), ms) for p, ms in fit['onsets'].items())
+        return ' '.join(f'{p}:{int(ms)}' for p, ms in simplify(points, 5))
+    text = _onset(patch, sound)
+    if fit and text:
+        move = lambda ms: str(max(0, int(ms) + fit['shift']))
+        return ' '.join(f'{p}:{move(ms)}' for p, ms in (x.split(':') for x in text.split())) if ':' in text else move(text)
+    return text
 # - release= (ms), by register: the rest check measured each semitone's release at mf (sso_sound_range.json, to 30 dB
 #   under its level before the note-off). It differs by pitch far more than by articulation: pairs of neighbouring
 #   semitones ring twice as long as the rest (Violins 1 - Performance Legato 855 at the test pitch, 2180 / 2055 at
