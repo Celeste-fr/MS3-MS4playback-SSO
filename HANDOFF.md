@@ -16,6 +16,17 @@ by MuseScore. Unmeasured: how the All techniques longs sound slurred at speed. A
 "espr." note now plays Long (Rachm.) as a held one does (`long legato`, as Long CS plays muted slurs; it played the
 Performance legato): offer to the owner, revert in the generator's table if they prefer plain Long.
 
+**Performance with every note shifted to a consistent arrival (the owner's "B", 2026-10-07): not reachable by shifting**
+(branch `legato-pair-delays`; Windows VM, real SSO, kthost offline, Violas - Performance at mf, *Whence* 12-TET violas
+bars 3-7 three times). Heard arrival after note-on in the run, unshifted: median 93 ms, 10-90 % 58..183 (the same note
+in the three passes within 10 ms: SSO is repeatable). (1) The pair scan (`legato_pair_scan.py`, every start x interval
+±1..12 in three contexts, `sso_legato_pairs.json`) doesn't predict the run: shifting each note by its pair's value
+leaves the 10-90 % width at 115-130 ms (was 125). (2) Closed loop on the passage itself (shift by each note's own heard
+lateness, render, measure again) diverges: width 125 → 165 → 328 ms; even notes whose predecessor kept ≥ 60 ms got no
+tighter (130 → 144). Moving a note-on changes SSO's transition about as much as the shift. Left: a uniform shift (the
+old `legatoDelay` by interval, `Legato early`), which centres the run but keeps its spread; the opt-in (staff text
+"performance" choosing the Performance extras, modifier `performance`) was written and reverted, not offered unless asked.
+
 ## Where things are (2026-10-02)
 
 - **Standard test score** (2026-10-06): the owner's *Whence* in 12-TET, `~/MuseScore/ms3fork/test-scores/Whence
