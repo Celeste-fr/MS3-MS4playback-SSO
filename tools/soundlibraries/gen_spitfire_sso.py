@@ -179,8 +179,8 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '       retuned once its notes\' release has rung out to 60 dB under (twice release= on the Articulation, measured',
 '       to 30 dB under). Tolerance, tail and the copies\' maximum are left to MuseScore, which computes them -->',
 '  <Tuning method="varispeed"/>',
-'  <!-- a slurred note on a legato articulation (legatoDelay=, a legato transition; none in this map: the owner',
-'       plays no Performance patch) reaches its pitch legatoDelay ms after its note-on: it starts early by that',
+'  <!-- a slurred note on a legato articulation (legatoDelay=, a legato transition: the Performance patches, only',
+'       under staff text "performance") reaches its pitch legatoDelay ms after its note-on: it starts early by that',
 '       times early percent (0: notes start as written, the owner 2026-10-06; 100: as measured) -->',
 f'  <Legato early="{LEGATO_EARLY}"/>',
 '  <!-- a held note that is no legato transition (slurred or not) is heard onset ms after its note-on',
@@ -285,11 +285,49 @@ SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), 
 # Extra patches (soundlibrary.h): other patches a part plays alongside its main one, each loaded
 # only when the part's notation asks for one of its articulations (and, hosted, once it is set
 # up). Named as the owner's .nki files. (main patch, extra patch, articulations)
-# - No Performance patches (the owner, 2026-10-06: "NO using performance patches"; the All techniques
-#   patches have Release, Tightness and the Options page): slurred notes play the All techniques
-#   patch's own longs. Until then a slur picked the Performance legato (Spitfire's legato
-#   transitions, measured in sso_legato_*.json, which the map no longer uses; earlier commits have it).
-EXTRAS = [
+# - No Performance patches by default (the owner, 2026-10-06: "NO using performance patches"; the All
+#   techniques patches have Release, Tightness and the Options page): slurred notes play the All techniques
+#   patch's own longs. Staff text "performance" (modifier performance, until "ord." or "non performance"; the
+#   owner, 2026-10-07: "let's use the performance patch, but tune the note spread so that they are within the
+#   established range for professional players") plays slurred and held notes on the part's Performance patch
+#   (Spitfire's legato transitions, measured in sso_legato_*.json), its transitions at LEGATO_VELOCITY.
+#   Its UACC value is not known (20 = the standard's legato); a single-articulation patch ignores it.
+LEGATO = [('Legato', 20, 'legato long', 'performance', 'long')]
+PERFORMANCE = {
+    'Violins 1': 'Violins 1 - Performance', 'Violins 2': 'Violins 2 - Performance',
+    'Violas': 'Violas - Performance', 'Celli': 'Celli - Performance', 'Basses': 'Basses - Performance',
+    'Solo Violin 1': 'Solo Violin - Performance', 'Solo Violin 2': 'Solo Violin 2 - Performance',
+    'Solo Viola': 'Solo Viola - Performance', 'Solo Cello': 'Solo Cello - Performance',
+    'Piccolo': 'Piccolo Flute - Performance', 'Flute Solo': 'Flute Solo - Total Performance',
+    'Flutes a2': 'Flutes a2 - Performance', 'Alto Flute': 'Alto Flute - Performance',
+    'Bass Flute': 'Bass Flute - Performance', 'Oboe Solo': 'Oboe Solo - Performance',
+    'Oboes a2': 'Oboes a2 - Performance', 'Cor Anglais': 'Cor Anglais - Performance',
+    'Clarinet Solo': 'Clarinet Solo - Performance', 'Clarinets a2': 'Clarinets a2 - Performance',
+    'Bass Clarinet': 'Bass Clarinet - Performance', 'Contrabass Clarinet': 'ContraBass Clarinet - Performance',
+    'Bassoon Solo': 'Bassoon Solo - Performance', 'Bassoons a2': 'Bassoons a2 - Performance',
+    'Contrabassoon': 'ContraBassoon - Performance',
+    'Horn Solo': 'Horn Solo - Performance', 'Horns a2': 'Horns a2 - Performance', 'Horns a6': 'Horns a6 - Performance',
+    'Trumpet Solo': 'Trumpet Solo - Total Performance', 'Trumpets a2': 'Trumpets a2 - Performance',
+    'Trumpets a6': 'Trumpets a6 - Performance', 'Tenor Trombone Solo': 'Tenor Trombone Solo - Total Performance',
+    'Tenor Trombones a2': 'Tenor Trombones a2 - Performance', 'Trombones a6': 'Trombones a6 - Performance',
+    'Bass Trombones a2': 'Bass Trombones a2 - Performance', 'Tuba Solo': 'Tuba Solo - Performance',
+    'Motif Horns a4': 'Horns a4 - Performance', 'Motif Trumpets a3': 'Trumpets a3 - Performance',
+    'Motif Trombones a5': 'Trombones a5 - Performance',
+}
+# the velocity of a Performance patch's legato transitions (legatoVelocity=). Spitfire's Performance Legato picks
+# the transition by velocity (support.spitfireaudio.com/en/articles/11815986: slow 1-19 portamento, 20-84 slurred,
+# 85-127 bowed; fast 1-84 fast slurred, 85-127 fast slurred with accent). Measured 2026-10-07 (Violas - Performance,
+# Whence's violas, bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, kthost on the test VM; branch
+# legato-pair-delays): arrival - written SD 49 ms at velocity 64, 41 ms at 100 (Rasch 1979: 30-50 ms between players
+# is typical). Only Violas measured; the bands are Spitfire's for its Performance Legato
+LEGATO_VELOCITY = 100
+EXTRAS = [(m, e, LEGATO) for m, e in PERFORMANCE.items()]
+EXTRAS += [
+    # on one string, "performance": legato ("sul G" / "sul C")
+    ('Violins 1', 'Violins 1 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg performance')]),
+    ('Violins 2', 'Violins 2 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg performance')]),
+    ('Violas', 'Violas - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc performance')]),
+    ('Celli', 'Celli - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc performance')]),
     # on one string: long ("sul G" / "sul C"); the All techniques patches' own Long
     # Sul G (Violins) and Long Sul C (Celli) play nothing (Kontakt's Voices stays 0)
     ('Violins 1', 'Strings - Violins 1 - Long Sul G', [('Long Sul G', 1, 'long legato', 'sulg')]),
@@ -834,7 +872,7 @@ for nki in NKI_FILES:
     assert name.lower() not in names, name
     v = setupValues(nki)
     arts = FILE_ARTICULATIONS[nki]
-    # (a Performance patch is not scanned: the owner plays none, 2026-10-06)
+    # (a Performance patch is not scanned: one articulation, played only under "performance")
     scan = '' if len(arts) < 2 or 'Performance' in name else ' scan="keys"' if '/Symphonic Percussion/' in '/' + nki \
         else ' scan="values"'
     pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
@@ -1372,7 +1410,7 @@ for i, line in enumerate(out):
             extra += f' release="{r}"'
     delay = legatoDelay(current, sound, t) if t.get('legato') else None
     if delay:
-        extra += f' legatoDelay="{delay}"'
+        extra += f' legatoDelay="{delay}" legatoVelocity="{LEGATO_VELOCITY}"'
         legatoGridUsed.add(current)
         up, down = octaveDelays(current)
         if up:

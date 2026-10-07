@@ -84,7 +84,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
-//               [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
+//               [legatoVelocity="100"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
 //               [legatoLevel="+1:49:-1.2,0.4,… -1:50:…"] [legatoLevelLong="…"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
@@ -275,6 +275,9 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
       art.fromSeconds = a.hasAttribute("from") ? a.value("from").toDouble() : -1;
       art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
+      art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
+      if (a.hasAttribute("legatoVelocity") && (art.legatoVelocity < 1 || art.legatoVelocity > 127))
+            return false;
       if (a.hasAttribute("legatoDelay") && !readKeyedMs(a.value("legatoDelay").toString(), art.legatoDelayMs, art.legatoDelays))
             return false;
       if (a.hasAttribute("onset") && !readKeyedMs(a.value("onset").toString(), art.onsetMs, art.onsets))
@@ -1778,7 +1781,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
 
       // back to normal first: "ord." may come with a new technique ("ord. pizz.")
       if (has("\\b(ord|ordin|ordinario|ordinary|nat|naturale|natural|norm|normale|normal|modo ordinario)\\b")) {
-            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue", "espressivo" })
+            for (const char* m : { "sulpont", "sultasto", "flautando", "cuivre", "sulg", "sulc", "bellsup", "pdlt", "multitongue", "espressivo", "performance" })
                   s.modifiers.removeAll(m);
             s.harmonics = false;
             s.tremolo = false;
@@ -1828,6 +1831,11 @@ void TextTechniques::apply(const QString& text, TextState& s)
             addModifier(s, "espressivo");
       if (has("\\b(pres\\s+de\\s+la\\s+table|p\\.?\\s*d\\.?\\s*l\\.?\\s*t\\b)"))
             addModifier(s, "pdlt");
+      // Spitfire's Performance legato (the owner, 2026-10-07: only where the score asks for it); "ord." ends it too
+      if (has("\\b(non|senza|no)\\s+performance\\b"))
+            s.modifiers.removeAll("performance");
+      else if (has("\\bperformance\\b"))
+            addModifier(s, "performance");
       if (has("\\b(multi|double|triple)[\\s-]*tongu") || has("\\b(doppel|tripel)zunge"))
             addModifier(s, "multitongue");
       if (has("\\bharm(?!on)"))

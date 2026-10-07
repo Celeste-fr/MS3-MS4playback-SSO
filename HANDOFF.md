@@ -24,8 +24,21 @@ in the three passes within 10 ms: SSO is repeatable). (1) The pair scan (`legato
 leaves the 10-90 % width at 115-130 ms (was 125). (2) Closed loop on the passage itself (shift by each note's own heard
 lateness, render, measure again) diverges: width 125 → 165 → 328 ms; even notes whose predecessor kept ≥ 60 ms got no
 tighter (130 → 144). Moving a note-on changes SSO's transition about as much as the shift. Left: a uniform shift (the
-old `legatoDelay` by interval, `Legato early`), which centres the run but keeps its spread; the opt-in (staff text
-"performance" choosing the Performance extras, modifier `performance`) was written and reverted, not offered unless asked.
+old `legatoDelay` by interval, `Legato early`), which centres the run but keeps its spread.
+
+**Performance as an opt-in, its spread in the players' range (the owner, 2026-10-07: "let's use the performance patch,
+but tune the note spread so that they are within the established range for professional players")**, branch
+`legato-pair-delays`, waiting for the owner (changes the 2026-10-06 decision where a score asks for it). Staff text
+"performance" (until "ord." / "non performance") plays slurred and held notes on the part's Performance patch (modifier
+`performance`, 42 Legato articulations); their transitions play at velocity 100 (map `legatoVelocity`, playback.ini
+`[legato] velocity`, 0: the note's own). Target: Rasch 1979, between-player asynchrony SD 30-50 ms typical (string
+quartets 24-28 ms at fast tempi). Measured (same passage and VM): arrival - written SD 49 ms at velocity 64, **41 ms at
+100** (on the notes heard in every render 45-46 → 37-38); 159 of 180 transitions detected against 133; median arrival
+68 ms against 88; median note peak 1.5 dB lower. Per-note nudges toward the run's median (gain 0.5, ±60 ms) made it no
+tighter (49 → 46 at 64; 41 → 51 at 100). Inside 30-50, not down to 24-28. To hear: velocity 100 is Spitfire's "fast
+slurred with accent" (slow transitions 85-127: bowed), so offer both by ear (`[legato] velocity` 0 vs default). Only
+Violas measured; `Legato early` stays 0 (notes as written: the run's median arrives 68 ms late; an early start at
+velocity 100 is unmeasured, and any start shift changes SSO's transition, above).
 
 ## Where things are (2026-10-02)
 

@@ -116,8 +116,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   the notation. The mechanisms below stay, one setting away. **No Performance patches** (the owner, 2026-10-06:
   the All techniques patches' Release, Tightness and Options): SSO slurs play the All techniques longs, each note its
   own attack, early by its onset; a legato transition needs an articulation with `legato` first
-  (`Articulation::playsTransitions`), which the SSO map no longer has (the transition timing below stays for maps
-  that do; `sso_legato_*.json` kept). Slurred notes overlap; **legato transitions** and
+  (`Articulation::playsTransitions`), which the SSO map has only under staff text "performance" (modifier `performance`,
+  branch `legato-pair-delays`, waiting for the owner: the Performance patches' Legato, transitions at velocity 100, map
+  `legatoVelocity` / `[legato] velocity`: HANDOFF.md; `sso_legato_*.json` kept). Slurred notes overlap; **legato transitions** and
   **held notes start early** by measured delays (`<Articulation legatoDelay>` by interval, `<Articulation onset>`
   by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`); the note before keeps `keepMs` of its
   length as played, so a fast slurred run starts early as a whole (after a short note a transition takes 65-100 % of
@@ -249,7 +250,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 73 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-07: trackLevels added);
+- `tst_soundlibrary`: 74 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-07: trackLevels, legatoVelocity added);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 20 passed (2026-10-06: plainLayout, plainSet, plainSetReadBack, plainSetTrackDelays, liveTracksJson), `dumpEvents` skipped (a

@@ -100,6 +100,7 @@ class TestSoundLibrary : public QObject, public MTest
       void renderPatches();
       void renderPhraseMark();
       void legatoEarly();
+      void legatoVelocity();
       void phraseGap();
       void trackDelays();
       void trackLevels();
@@ -207,6 +208,14 @@ void TestSoundLibrary::textTechniques()
       SoundLib::TextTechniques::apply("molto vib.", s);
       SoundLib::TextTechniques::apply("ord.", s);
       QVERIFY(!s.modifiers.contains("espressivo"));
+      // Spitfire's Performance legato, only where the score asks for it
+      SoundLib::TextTechniques::apply("performance", s);
+      QVERIFY(s.modifiers.contains("performance"));
+      SoundLib::TextTechniques::apply("non performance", s);
+      QVERIFY(!s.modifiers.contains("performance"));
+      SoundLib::TextTechniques::apply("Performance legato", s);
+      SoundLib::TextTechniques::apply("ord.", s);
+      QVERIFY(!s.modifiers.contains("performance"));
       SoundLib::TextTechniques::apply("sul G", s);
       QVERIFY(s.modifiers.contains("sulg"));
       SoundLib::TextTechniques::apply("sul C", s);
@@ -375,7 +384,7 @@ void TestSoundLibrary::spitfireMap()
             values += p.scan == "values";
             keys += p.scan == "keys" && p.keyScan;
             }
-      QCOMPARE(int(lib->otherPatches.size()), 541 + 9 + 43);    // (+ 4 kits and 5 ensembles with every technique on, + the 43 Performance patches)
+      QCOMPARE(int(lib->otherPatches.size()), 541 + 9 + 1);     // (+ 4 kits and 5 ensembles with every technique on, + Oboe Principal - Total Performance: the other 42 Performance patches play under "performance")
       QCOMPARE(values, 0);                                  // (every values patch's values are known)
       QCOMPARE(keys, 7);
       int scanned = 0;
@@ -1604,22 +1613,32 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
       QCOMPARE(plain.legatoDelayAt(12, 72), 800.0);
       QCOMPARE(plain.legatoDelayAt(-12, 84), 400.0);
 
-      // the shipped map plays no legato transitions: no Performance patches (the owner, 2026-10-06), slurs play the All
-      // techniques longs ("long legato": each note its own attack)
+      // the shipped map plays legato transitions only under staff text "performance": slurs play the All techniques
+      // longs ("long legato": each note its own attack; the owner, 2026-10-06), the Performance patches' Legato needs the
+      // modifier performance (2026-10-07) and plays its transitions at velocity 100 (gen_spitfire_sso.py LEGATO_VELOCITY)
       {
       QString err;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
       QVERIFY2(sso, qPrintable(err));
       int slurred = 0;
+      int performance = 0;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
-            QVERIFY2(!li.name.contains("Performance"), qPrintable(li.name));
             for (const SoundLib::Articulation& oa : li.articulations) {
-                  QVERIFY2(!oa.playsTransitions() && oa.legatoDelays.empty(), qPrintable(li.name + ": " + oa.name));
-                  if (oa.techniques.contains("legato"))
-                        ++slurred;
+                  if (oa.playsTransitions()) {
+                        QVERIFY2(li.name.contains("Performance") && !li.with.isEmpty() && oa.modifiers.contains("performance")
+                                 && oa.legatoVelocity == 100, qPrintable(li.name + ": " + oa.name));
+                        ++performance;
+                        }
+                  else {
+                        QVERIFY2(!li.name.contains("Performance") && oa.legatoDelays.empty() && oa.legatoVelocity < 0,
+                                 qPrintable(li.name + ": " + oa.name));
+                        if (oa.techniques.contains("legato"))
+                              ++slurred;
+                        }
                   }
             }
       QVERIFY(slurred > 0);
+      QCOMPARE(performance, 42);
       }
       // the renderer passes the start pitch
       SoundLib::setCurrent(lib);
@@ -1935,6 +1954,78 @@ void TestSoundLibrary::playbackSettingsIni()
       QCOMPARE(Playback::writeScoreValues({}), QString());
       QCOMPARE(Playback::writeScoreValues({ { "pedal/upAfterMs", 60 }, { "legato/overlapTicks", 40 } }),
                QString("legato/overlapTicks=40;pedal/upAfterMs=60"));
+      }
+
+//---------------------------------------------------------
+//   legatoVelocity
+//    a legato transition plays at its articulation's legatoVelocity (Spitfire's Performance legato picks the
+//    transition by velocity: SSO's map 100), whatever the note's; a slur's first note and unslurred notes keep their
+//    own; [legato] velocity overrides it by layer (ini, the score's), 0: the note's own
+//    (legato-early.musicxml, as legatoEarly)
+//---------------------------------------------------------
+
+void TestSoundLibrary::legatoVelocity()
+      {
+      Playback::setIniValuesForTest({});
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='0'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' legatoVelocity='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(lib->instruments[1].articulations[0].legatoVelocity, 100);
+      QCOMPARE(lib->instruments[0].articulations[0].legatoVelocity, -1);
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='L' value='20' techniques='legato' legatoVelocity='128'/></Instrument></SoundLibrary>"));
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto velocities = [score]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::pair<int, int>> v;       // (on, velocity)
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0)
+                        v.push_back({ te.first, ev.velo() });
+                  }
+            std::stable_sort(v.begin(), v.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  return a.first < b.first;
+                  });
+            return v;
+            };
+      // the transitions (legatoEarly's): m1 D5 E5 F5, m2 B4, m3 E5 G5 C6, the run's second to eighth
+      const std::set<size_t> transitions = { 1, 2, 3, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19 };
+      Playback::setIniValuesForTest({ { "legato/velocity", "0" } });
+      const std::vector<std::pair<int, int>> own = velocities();
+      QCOMPARE(int(own.size()), 20);
+      for (size_t i : transitions)
+            QVERIFY(own[i].second != 100);
+      Playback::setIniValuesForTest({});
+      QCOMPARE(Playback::source("legato/velocity", score, 100), Playback::Source::MAP);
+      std::vector<std::pair<int, int>> v = velocities();
+      QCOMPARE(int(v.size()), 20);
+      for (size_t i = 0; i < v.size(); ++i) {
+            QCOMPARE(v[i].first, own[i].first);                 // (the timing stays)
+            QCOMPARE(v[i].second, transitions.count(i) ? 100 : own[i].second);
+            }
+      Playback::setIniValuesForTest({ { "legato/velocity", "90" } });
+      v = velocities();
+      QCOMPARE(v[1].second, 90);
+      QCOMPARE(v[0].second, own[0].second);
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "legato/velocity", 0 } }));
+      v = velocities();
+      QCOMPARE(v[1].second, own[1].second);
+      score->setMetaTag(Playback::metaTag, "");
+      delete score;
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------

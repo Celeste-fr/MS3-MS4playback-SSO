@@ -63,7 +63,7 @@ namespace SoundLib {
 //               pizzicato bartok collegno tremolo trill-m2 trill-M2 trill-m3 trill-M3
 //               fall rip
 //    modifiers: muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup pdlt
-//               multitongue
+//               multitongue performance
 //---------------------------------------------------------
 
 // NONE: a patch that plays one articulation (Spitfire's single techniques) or picks it by itself
@@ -93,6 +93,9 @@ struct Articulation {
       double legatoDelayMs { -1 };        // a legato transition reaches the new pitch this long after its note-on:
                                           // it starts early (the renderer, legatoEarly()); -1: not a legato / unknown.
                                           // By interval (legatoDelay="-12:210 … +12:360"): their median
+      int legatoVelocity { -1 };          // a legato transition's velocity (<Articulation legatoVelocity>: Spitfire's
+                                          // Performance legato picks the transition by velocity, 85-127 "with accent";
+                                          // playback.ini [legato] velocity); -1: the note's own
       std::vector<std::pair<int, double>> legatoDelays;   // interval (semitones, the new note minus the one before)
                                           // -> ms, sorted by interval; empty: legatoDelayMs for every interval
       // octave slurs (+12 / -12) by the pitch they start from (<Articulation octaveUp="36:180 37:140 …"

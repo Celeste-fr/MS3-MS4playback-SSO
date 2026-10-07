@@ -157,9 +157,10 @@ switch value of each articulation. For example:
   audio comparison can't judge but the pictures confirm). The check then counts it as passed,
   and a last check that found exactly these is shown as passed without checking again.
 - `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup
-  pdlt multitongue`. When no variant matches, the plain articulation plays. Staff text sets them:
+  pdlt multitongue performance`. When no variant matches, the plain articulation plays. Staff text sets them:
   "sul pont.", "sul tasto", "flautando", "cuivré", "sul G", "sul C", "bells up" ("campana in
-  aria", "pavillons en l'air"), "près de la table" ("pdlt"), "double tongue" / "triple tongue";
+  aria", "pavillons en l'air"), "près de la table" ("pdlt"), "double tongue" / "triple tongue",
+  "performance" (a library's own legato patch: SSO's Performance patches; "non performance" ends it);
   "ord." ends them all.
 - `partName` on an `Instrument` is a regular expression. That instrument is preferred for parts
   whose name matches it.
@@ -174,8 +175,8 @@ switch value of each articulation. For example:
   the next note a little, as legato patches need. An articulation whose first technique is `legato`
   is a legato patch's own: slurred notes on it join by legato transitions (`legatoDelay`, below). One
   that plays slurs but lists another technique first (`techniques="long legato"`) attacks each
-  slurred note anew (SSO's All techniques longs; the SSO map has no Performance patches since
-  2026-10-06, the owner's choice).
+  slurred note anew (SSO's All techniques longs, which slurs play since 2026-10-06, the owner's
+  choice; SSO's Performance patches play only under staff text "performance", since 2026-10-07).
 
   ```xml
   <Instrument name="Strings - Violins 1 - Legato" with="Violins 1">
@@ -185,6 +186,11 @@ switch value of each articulation. For example:
 - **Measured timing.** Optional attributes come from measuring the library (SSO's come from
   the owner's background timing run and plug-in extract, `tools/soundlibraries/sso_articulation_timing.json`
   and `sso_patch_measurements.json`, written by `gen_spitfire_sso.py`):
+  - `legatoVelocity` on an `Articulation` (1-127): a legato transition's velocity, whatever the note's
+    (Spitfire's Performance legato picks the transition by velocity: fast 85-127 "with accent", slow 85-127
+    bowed). SSO's Performance patches: 100 (measured on Violas - Performance, 2026-10-07: a run of slurred
+    sixteenths arrives with an SD of 41 ms against the written times at 100, 49 ms at 64). playback.ini
+    `[legato] velocity` overrides it (0: the note's own).
   - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long
     after its note-on (SSO's Performance patches: 60–690 ms, median 190). Either one number for
     every interval or the delay by interval, `interval:ms` pairs in semitones (the new note minus the

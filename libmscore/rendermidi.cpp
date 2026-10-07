@@ -1628,6 +1628,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (from) {
                                     libGlideFrom[note] = from;
                                     libTransitionFrom = from;
+                                    // its velocity ([legato] velocity, the map's legatoVelocity; 0: the note's own):
+                                    // Spitfire's Performance legato picks the transition by velocity
+                                    const int legatoVelocity = int(Playback::value("legato/velocity", score,
+                                                                                    libChoice.articulation->legatoVelocity));
+                                    if (legatoVelocity > 0)
+                                          libNote.velocity = qBound(1, legatoVelocity, 127);
                                     if (offset == 0 && libLegatoEarly > 0 && delayMs > 0) {
                                           config.libEarly = delayMs * libLegatoEarly / 100.0 / 1000.0;
                                           config.libEarliest = earliest;
