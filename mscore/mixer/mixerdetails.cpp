@@ -534,12 +534,13 @@ void MixerDetails::playbackChanged(int index)
             tags.insert(PartPlaybackModes::metaTag, value);
       if (tags == ms->metaTags())
             return;
-      if (seq && seq->isPlaying())
-            seq->stopWait();
+      {
+      const GoOnPlaying goOn;             // (the part may play other patches or the other synthesizer)
       score->startCmd();
       score->undo(new ChangeMetaTags(ms, tags));
       score->endCmd();
       ms->setPlaylistDirty();
+      }
       updateFromTrack();                  // (what applies to a sound library part)
       }
 
@@ -582,13 +583,13 @@ void MixerDetails::writeTrackDelays(const Part* part, const TrackDelays::Delays&
             tags.insert(TrackDelays::metaTag, value);
       if (tags == ms->metaTags())
             return;
-      if (seq && seq->isPlaying())
-            seq->stopWait();
       Score* score = const_cast<Part*>(part)->score();
       score->startCmd();
       score->undo(new ChangeMetaTags(ms, tags));
       score->endCmd();
       ms->setPlaylistDirty();
+      if (seq)
+            seq->renderAgainPlaying();    // (same patches, other times and levels: heard without stopping)
       }
 
 //---------------------------------------------------------

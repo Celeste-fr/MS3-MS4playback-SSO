@@ -99,8 +99,7 @@ void setPlaybackMode(PlaybackMode mode)
       {
       if (!synti || !mscore)
             return;
-      if (seq && seq->isPlaying())
-            seq->stopWait();
+      const GoOnPlaying goOn;
 
       // the sound library: on in LIBRARY only, remembered for the next time
       const QString current = preferences.getString(PREF_IO_SOUNDLIBRARY);

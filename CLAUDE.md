@@ -152,6 +152,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   transition arrives (note-on + its measured delay, ending before the next note-on; `[tuning] bendAtArrival`).
   `[tuning] oneInstance` (off by default) lets a bending patch's line retune one copy by the bend (fewer instances).
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
+  Mixer and playback edits never leave playback stopped (the owner, 2026-10-07): track delays / levels render again
+  while playing (`Seq::renderAgainPlaying`, swapped in by the realtime thread); changes that may load patches (part
+  playback, lanes options, playback mode, Reload Playback Settings) stop and start again where they were (`GoOnPlaying`).
 - Track delays (`libmscore/trackdelays.*`, metaTag `trackDelays`; Mixer › Track delay / Tracks…): ms per part plus
   per patch / technique (added up, as Live adds a group's and its tracks'); `MidiRenderer::libraryTrackDelays` moves
   the library events (not for Live's clips); with a negative delay everything else plays later by the earliest one

@@ -3027,8 +3027,7 @@ void SoundLibraryOptions::setMetaTag(const char* tag, const QString& value)
             tags.insert(tag, value);
       if (tags == _score->metaTags())
             return;
-      if (seq && seq->isPlaying())
-            seq->stopWait();
+      const GoOnPlaying goOn;                       // (other copies may load: at the start again)
       _score->startCmd();
       _score->undo(new ChangeMetaTags(_score, tags));
       _score->endCmd();

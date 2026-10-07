@@ -175,6 +175,12 @@ class Seq : public QObject, public Sequencer {
       bool allowBackgroundRendering = false; // should be set to true only when playing, so no
                                              // score changes are possible.
       EventMap countInEvents;             // playlist of any metronome countin clicks
+      // renderAgainPlaying: the playlist rendered again while playing, taken by the realtime thread
+      // (swapEventsRT), then the old one, freed in the gui thread; _swapState 0 none, 1 waiting for the
+      // realtime thread, 2 taken
+      EventMap _swapEvents;
+      std::atomic<int> _swapState { 0 };
+      void swapEventsRT();
       QQueue<NPlayEvent> _liveEventQueue; // playlist for score editing and note entry (rendered live)
 
       int playFrame;                      // current play position in samples, relative to the first frame of playback
@@ -383,6 +389,13 @@ class Seq : public QObject, public Sequencer {
       void ensureBufferAsync(int utick);
       void guiStop();
       void stopWait();
+      // a change playback hears without stopping (the owner, 2026-10-07): rendered again from the
+      // playing position (renderAgainPlaying), or, where it may need other patches or another
+      // synthesizer, stopped while it's made and started again where it was (stopForChange: the tick
+      // to go on from or -1, then startAfterChange)
+      void renderAgainPlaying();
+      int stopForChange();
+      void startAfterChange(int tick);
       void setLoopIn();
       void setLoopOut();
       void setLoopSelection();
@@ -475,6 +488,21 @@ class Seq : public QObject, public Sequencer {
       };
 
 extern Seq* seq;
+
+//---------------------------------------------------------
+//   GoOnPlaying
+//    for a change that may need other patches or another synthesizer: playback stops for its scope
+//    and starts again where it was (Seq::stopForChange, startAfterChange)
+//---------------------------------------------------------
+
+class GoOnPlaying {
+      const int _tick;
+   public:
+      GoOnPlaying() : _tick(seq ? seq->stopForChange() : -1) {}
+      ~GoOnPlaying() { if (seq) seq->startAfterChange(_tick); }
+      GoOnPlaying(const GoOnPlaying&) = delete;
+      GoOnPlaying& operator=(const GoOnPlaying&) = delete;
+      };
 extern void initSequencer();
 extern bool initMidi();
 

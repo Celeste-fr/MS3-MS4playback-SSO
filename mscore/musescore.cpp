@@ -7494,13 +7494,12 @@ void MuseScore::realizeChordSymbols()
 //---------------------------------------------------------
 //   reloadPlaybackSettings
 //    playback.ini read again (libmscore/playbacksettings.h); the renderer renders every score again
-//    (Playback::generation), playback stopped first
+//    (Playback::generation), playback stopped meanwhile and started again where it was
 //---------------------------------------------------------
 
 void MuseScore::reloadPlaybackSettings()
       {
-      if (seq && seq->isPlaying())
-            seq->stopWait();
+      const GoOnPlaying goOn;
       Playback::reload();
       for (MasterScore* ms : qAsConst(scoreList))
             ms->setPlaylistDirty();

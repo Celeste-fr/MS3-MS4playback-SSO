@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 #include "click.h"
 #include "config.h"
@@ -38,6 +39,7 @@
 #endif
 
 #include <QFile>
+#include <QThread>
 
 #include "libmscore/audio.h"
 #include "libmscore/chord.h"
@@ -709,6 +711,8 @@ void Seq::processMessages()
       {
       if (_libLiveClear.exchange(false))
             _libLive.clear();
+      if (_swapState.load() == 1)
+            swapEventsRT();
       for (;;) {
             if (toSeq.empty())
                   break;
@@ -1560,6 +1564,119 @@ void Seq::collectEvents(int utick)
       playPos = mscore->loop() ? events.find(cs->loopInTick().ticks()) : events.cbegin();
       playlistChanged = false;
       mutex.unlock();
+      }
+
+//---------------------------------------------------------
+//   renderAgainPlaying
+//    while playing: the score rendered again from the playing position (a change of track delays or
+//    levels), into _swapEvents in the gui thread without the mutex (the realtime thread takes it for
+//    each event: it would wait for the rendering), then taken by the realtime thread at its next period
+//    (swapEventsRT). Notes sounding there end, as at a seek. Not playing: nothing (start renders it).
+//---------------------------------------------------------
+
+void Seq::renderAgainPlaying()
+      {
+      if (!cs || state != Transport::PLAY || cs->playMode() != PlayMode::SYNTHESIZER || _swapState.load() != 0)
+            return;
+      if (midiRenderFuture.isRunning())
+            midiRenderFuture.waitForFinished();
+      const int utick = getCurTick();
+      midi.setScoreChanged();
+      renderEvents.clear();
+      renderEventsStatus.clear();
+      _swapEvents.clear();
+      int unrenderedUtick = renderEventsStatus.occupiedRangeEnd(utick);
+      while (unrenderedUtick - utick < minUtickBufferSize) {
+            const MidiRenderer::Chunk chunk = midi.getChunkAt(unrenderedUtick);
+            if (!chunk)
+                  break;
+            renderChunk(chunk, &_swapEvents);
+            unrenderedUtick = renderEventsStatus.occupiedRangeEnd(utick);
+            }
+      _libLiveClear = true;               // (rendered from the score's values again: nothing to correct)
+      _swapState = 1;
+      // the realtime thread takes it within a period (half a second at most here)
+      for (int i = 0; i < 250 && _swapState.load() == 1; ++i)
+            QThread::msleep(2);
+      int waiting = 1;
+      if (_swapState.compare_exchange_strong(waiting, 0)) {
+            // not taken (the driver stopped): the old playlist plays on, all of it rendered again at the
+            // next start; nothing rendered in the background meanwhile (the render status is the new one's)
+            _swapEvents.clear();
+            allowBackgroundRendering = false;
+            playlistChanged = true;
+            return;
+            }
+      _swapEvents.clear();                // (the old playlist)
+      mutex.lock();
+      guiPos = events.lower_bound(utick);
+      mutex.unlock();
+      playlistChanged = false;
+      _swapState = 0;
+      }
+
+//---------------------------------------------------------
+//   swapEventsRT
+//    renderAgainPlaying's playlist takes over at the playing position (realtime thread): the notes
+//    sounding end, and each controller and pitch bend gets the new playlist's value in force there
+//---------------------------------------------------------
+
+void Seq::swapEventsRT()
+      {
+      mutex.lock();
+      events.swap(_swapEvents);
+      updateEventsEnd();
+      playPos = events.lower_bound(getCurTick());
+      mutex.unlock();
+      stopNotes(-1, true);
+      std::map<std::tuple<int, int, int, int, int>, const NPlayEvent*> inForce;   // channel, route, type, controller
+      for (auto i = events.cbegin(); i != playPos; ++i) {
+            const NPlayEvent& e = i->second;
+            if (e.type() == ME_CONTROLLER || e.type() == ME_PITCHBEND)
+                  inForce[std::make_tuple(e.channel(), e.extPort(), e.extChannel(), e.type(),
+                                          e.type() == ME_CONTROLLER ? e.controller() : 0)] = &e;
+            }
+      for (const auto& c : inForce)
+            playEvent(*c.second, 0);
+      _swapState = 2;
+      }
+
+//---------------------------------------------------------
+//   stopForChange / startAfterChange
+//    a change that may need other patches or another synthesizer: playback stops while it's made and
+//    starts again at the same tick (a repeat's later pass: its first)
+//---------------------------------------------------------
+
+int Seq::stopForChange()
+      {
+      if (!cs || state != Transport::PLAY)
+            return -1;
+      const int tick = cs->repeatList().utick2tick(getCurTick());
+      stopWait();
+      return tick;
+      }
+
+void Seq::startAfterChange(int tick)
+      {
+      if (tick < 0 || !cs)
+            return;
+      // started as Play starts it (the view's state, the Play button), once the stop's message from the realtime
+      // thread, still queued, has stopped the view: at stopped(), after its other receivers; dropped if that
+      // message doesn't come within a second (the score ended there)
+      auto connection = std::make_shared<QMetaObject::Connection>();
+      *connection = connect(this, &Seq::stopped, this, [this, tick, connection]() {
+            disconnect(*connection);
+            QTimer::singleShot(0, this, [this, tick]() {
+                  if (!cs || state != Transport::STOP)
+                        return;
+                  cs->setPlayPos(Fraction::fromTicks(tick));
+                  playlistChanged = true; // (the change marks the score's playlist dirty after its endCmd: no signal)
+                  QAction* play = getAction("play");
+                  if (!play->isChecked())
+                        play->trigger();
+                  });
+            });
+      QTimer::singleShot(1000, this, [connection]() { disconnect(*connection); });
       }
 
 //---------------------------------------------------------
