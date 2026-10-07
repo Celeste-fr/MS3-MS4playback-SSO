@@ -112,6 +112,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipVelocityRecord();
       void clipEnvelopeMapping();
       void laneTimeAxis();
+      void laneEvenBeats();
       void liveParamLanes();
       void clipTabMidi();
       void linkWatch();
@@ -3031,6 +3032,62 @@ void TestLiveIntegration::clipEnvelopeMapping()
       QVERIFY(tp->accept({ "c9", 56, 0, 1, -1, 1, "Mixer › Pan", -1.0, 1.0, 0 }));   // a device removed in Live
       QCOMPARE(int(tp->params("c9")->size()), 1);
       tp->clear();
+      }
+
+//---------------------------------------------------------
+//   laneEvenBeats
+//    the automation editor's Even beats (the owner, 2026-10-06: "there should be a way to make every beat the same size
+//    in the automation edit view"): Continuous View places every chord/rest at its time, the same width per tick in
+//    every measure; the lanes' time axis follows; off again, the spacing is as before
+//---------------------------------------------------------
+
+void TestLiveIntegration::laneEvenBeats()
+      {
+      MasterScore* score = readScore(DIR + "even-beats.musicxml");
+      QVERIFY(score);
+      score->setLayoutMode(LayoutMode::LINE);
+      score->doLayout();
+      std::vector<double> before;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            before.push_back(s->canvasPos().x());
+      score->setLineEvenBeats(true);
+      score->doLayout();
+      const double sp = score->spatium();
+      double perTick = -1;
+      bool differs = false;
+      size_t i = 0;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest), ++i) {
+            differs = differs || std::fabs(s->canvasPos().x() - before[i]) > 0.01 * sp;
+            Segment* first = s->measure()->first(SegmentType::ChordRest);
+            if (s == first)
+                  continue;
+            const double p = (s->x() - first->x()) / double((s->rtick() - first->rtick()).ticks());
+            if (perTick < 0)
+                  perTick = p;
+            QVERIFY2(std::fabs(p - perTick) < 1e-6 * sp, qPrintable(QString("tick %1: %2 per tick, not %3")
+                                                                    .arg(s->tick().ticks()).arg(p).arg(perTick)));
+            }
+      QVERIFY(perTick > 0);
+      QVERIFY(differs);
+      // every full measure's notes span the same width per tick up to its bar line (the first's: after the header)
+      for (Measure* m = score->firstMeasure()->nextMeasure(); m && m->nextMeasure(); m = m->nextMeasure()) {
+            const Measure* n = m->nextMeasure();
+            const double crs = n->first(SegmentType::ChordRest)->canvasPos().x() - m->first(SegmentType::ChordRest)->canvasPos().x();
+            QVERIFY2(std::fabs(crs - perTick * m->ticks().ticks()) < 1e-6 * sp, qPrintable(QString("measure at %1").arg(m->tick().ticks())));
+            }
+      // the lanes follow: a note is under its head
+      const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            Element* e = s->element(0);
+            if (e && e->isChord())
+                  QVERIFY(std::fabs(Automation::xAtTick(anchors, s->tick().ticks()) - toChord(e)->notes().front()->canvasBoundingRect().center().x()) < 0.1 * sp);
+            }
+      score->setLineEvenBeats(false);
+      score->doLayout();
+      i = 0;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest), ++i)
+            QVERIFY(std::fabs(s->canvasPos().x() - before[i]) < 0.01 * sp);
+      delete score;
       }
 
 //---------------------------------------------------------

@@ -612,11 +612,19 @@ static QFont headFont(double px, bool bold)
       return f;
       }
 
-// the header row's buttons (+, All, the pencil), right-aligned, as wide as the text needs
+// the header row's buttons (+, All, the pencil, Even), right-aligned, as wide as the longest label needs
+static const char* const HEAD_BUTTONS[] = { "+", "All", "✎", "Even" };
+static const int HEAD_BUTTON_COUNT = 4;
+
+static double headButtonWidth(double textPx)
+      {
+      return std::max(24.0, 2.6 * textPx);
+      }
+
 QRectF AutomationLanes::buttonRect(const QRectF& header, int i) const
       {
-      const double w = std::max(24.0, 2.0 * textPx());
-      return QRectF(header.right() - (w + 2) * (3 - i) - 2, header.top() + 2, w, header.height() - 4);
+      const double w = headButtonWidth(textPx());
+      return QRectF(header.right() - (w + 2) * (HEAD_BUTTON_COUNT - i) - 2, header.top() + 2, w, header.height() - 4);
       }
 
 QRectF AutomationLanes::headerRect(const Row& r) const
@@ -632,9 +640,9 @@ QRectF AutomationLanes::headerRect(const Row& r) const
             return QRectF(0, vr.top(), std::max(double(HEADER_MIN_PX), std::min(want, room)), vr.height());
             }
       // the header row as wide as its label needs (the part's name whole: "Automation · Violin" was cut to "Vio…"),
-      // with room for its three buttons; at most HEADER_MAX_PX (then the name is shortened in the middle)
+      // with room for its buttons; at most HEADER_MAX_PX (then the name is shortened in the middle)
       const int label = QFontMetrics(headFont(textPx(), true)).horizontalAdvance(headLabel(r));
-      const double buttons = 3 * (std::max(24.0, 2.0 * textPx()) + 2) + 6;
+      const double buttons = HEAD_BUTTON_COUNT * (headButtonWidth(textPx()) + 2) + 6;
       return QRectF(0, vr.top(), std::max(HEADER_PX + buttons, std::min(HEADER_MAX_PX + buttons, 6 + label + 12 + buttons)), vr.height());
       }
 
@@ -842,16 +850,17 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
             p.drawText(h.adjusted(6, 0, -buttons, 0), Qt::AlignVCenter | Qt::AlignLeft,
                        QFontMetrics(p.font()).elidedText(headLabel(r), Qt::ElideMiddle, int(h.width() - 6 - buttons - 4)));
             p.setFont(headFont(textPx(), false));
-            // + (add a lane), All, the pencil (Draw Mode)
-            const char* labels[] = { "+", "All", "✎" };
-            for (int i = 0; i < 3; ++i) {
+            // + (add a lane), All, the pencil (Draw Mode), Even (every beat the same width)
+            const Score* sc = score();
+            for (int i = 0; i < HEAD_BUTTON_COUNT; ++i) {
                   const QRectF b = buttonRect(h, i);
-                  const bool on = (i == 1 && _showAll.count(r.master)) || (i == 2 && _drawMode);
+                  const bool on = (i == 1 && _showAll.count(r.master)) || (i == 2 && _drawMode)
+                                  || (i == 3 && sc && sc->lineEvenBeats());
                   p.setPen(QColor(150, 146, 140));
                   p.setBrush(on ? QColor(220, 232, 246) : QColor(243, 242, 239));
                   p.drawRoundedRect(b, 3, 3);
                   p.setPen(on ? QColor(29, 79, 140) : QColor(29, 31, 34));
-                  p.drawText(b, Qt::AlignCenter, QString::fromUtf8(labels[i]));
+                  p.drawText(b, Qt::AlignCenter, QString::fromUtf8(HEAD_BUTTONS[i]));
                   }
             return;
             }
@@ -920,7 +929,7 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
             if (!h.contains(pixel))
                   continue;
             if (r.target.isEmpty()) {
-                  for (int i = 0; i < 3; ++i) {
+                  for (int i = 0; i < HEAD_BUTTON_COUNT; ++i) {
                         const QRectF b = buttonRect(h, i);
                         if (!b.contains(pixel))
                               continue;
@@ -934,9 +943,16 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                               _folded.erase(r.part);
                               updateSpace();
                               }
-                        else {
+                        else if (i == 2) {
                               _drawMode = !_drawMode;
                               _view->update();
+                              }
+                        else if (Score* sc = score()) {
+                              // Even: the view only, every beat the same width (not saved, not an undo step)
+                              sc->setLineEvenBeats(!sc->lineEvenBeats());
+                              sc->setLayoutAll();
+                              sc->update();
+                              updateSpace();
                               }
                         return true;
                         }

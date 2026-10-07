@@ -510,7 +510,8 @@ axis (a lane's point sits under the middle of its note's heads, the grid's bar l
 when they stood ~1 sp right of them). Header row: *+* adds a lane (Dynamics (CC1), Expression (CC11), and every
 control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5, Release, Tightness, Mute …; a part
 Live plays also its Live track's parameters, "Live: Operator › Tone"; a clip tab only its track's Live parameters:
-below), *All* shows them all, the pencil is Draw Mode, the triangle folds. Empty lanes are hidden
+below), *All* shows them all, the pencil is Draw Mode, *Even* lays the view out with every beat the same width (the
+owner, 2026-10-06; the view only, not saved; a bar line's room goes into the beat before it), the triangle folds. Empty lanes are hidden
 until added; × hides a lane (it still plays). Editing as in Live 12 (manual 25.5): click adds a breakpoint (snapped to
 the grid, which follows the zoom; Alt: free), drag moves (Shift: fine), double-click or Delete removes, Alt-drag a
 segment curves it (Live's own Bézier: a curve drawn here is Live's curve, and back), Alt-double-click straightens,

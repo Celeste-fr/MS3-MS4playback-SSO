@@ -35,6 +35,8 @@
 //   menu has a submenu per Live device. Shown: the
 //   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
 //   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes ("▸" shows them again).
+//   "Even" lays Continuous View out with every beat the same width (Score::lineEvenBeats, layoutlinear.cpp; the view
+//   only: not saved, not an undo step); the lanes follow the notes, so their grid is even too.
 //
 //   Editing, as in Live 12 (manual 25.5.1-5; the owner, 2026-10-06: "mimic the behavior of how you edit automation
 //   curves in ableton"):
@@ -223,7 +225,7 @@ class AutomationLanes : public QObject {
       QRectF headerRect(const Row& r) const;                                 // viewport
       QColor rowColor(const Row& r) const;                                   // a row's band
       double textPx() const;                                                 // the headers' text size on screen
-      QRectF buttonRect(const QRectF& header, int i) const;                  // the header row's +, All, pencil
+      QRectF buttonRect(const QRectF& header, int i) const;                  // the header row's +, All, pencil, Even
       QString headLabel(const Row& r) const;
       QString valueText(const QString& target, double v) const;     // (0-127; the Velocity lane: % or 1-127)
       void select(const Row& r, const std::vector<int>& sel);

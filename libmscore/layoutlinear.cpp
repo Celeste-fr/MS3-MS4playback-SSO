@@ -179,7 +179,43 @@ void Score::resetSystems(bool layoutAll, LayoutContext& lc)
             getNextMeasure(lc);
             }
 
+      if (_lineEvenBeats)
+            pos.rx() = spaceLinearSystemEvenly(system);
       system->setWidth(pos.x());
+      }
+
+//---------------------------------------------------------
+//   spaceLinearSystemEvenly
+//    (lineEvenBeats) every measure respaced at the width per tick the densest one needs, placed again one after
+//    the other; returns the system's width
+//---------------------------------------------------------
+
+qreal Score::spaceLinearSystemEvenly(System* system)
+      {
+      const std::vector<MeasureBase*>& mbs = system->measures();
+      // a measure's last beat runs to the first chord/rest of the measure right after it
+      auto nextLead = [&](size_t i) {
+            return i + 1 < mbs.size() && mbs[i + 1]->isMeasure() ? toMeasure(mbs[i + 1])->evenSpacingLead() : 0.0;
+            };
+      qreal perTick = 0.0;
+      for (size_t i = 0; i < mbs.size(); ++i)
+            if (mbs[i]->isMeasure())
+                  perTick = std::max(perTick, toMeasure(mbs[i])->evenSpacingNeed(nextLead(i)));
+      qreal x = mbs.empty() ? 0.0 : mbs.front()->x();
+      for (size_t i = 0; i < mbs.size(); ++i) {
+            MeasureBase* mb = mbs[i];
+            if (mb->isMeasure()) {
+                  Measure* m = toMeasure(mb);
+                  m->spaceEvenly(perTick, nextLead(i));
+                  m->stretchMeasure(m->width());      // lays the elements out again (rests centred) at the new places
+                  m->setPos(x, 0.0);
+                  m->layoutStaffLines();
+                  }
+            else if (mb->isHBox())
+                  mb->setPos(x + toHBox(mb)->topGap(), 0.0);
+            x += mb->width();
+            }
+      return x;
       }
 
 //---------------------------------------------------------

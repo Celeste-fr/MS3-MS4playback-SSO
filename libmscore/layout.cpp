@@ -5288,6 +5288,11 @@ void Score::doLayoutRange(const Fraction& st, const Fraction& et)
       Fraction stick(st);
       Fraction etick(et);
       Q_ASSERT(!(stick == Fraction(-1,1) && etick == Fraction(-1,1)));
+      if (lineMode() && _lineEvenBeats) {
+            // even beats: the width per tick is the whole score's (the densest spot's), so every measure is laid out
+            stick = Fraction(0, 1);
+            etick = Fraction(-1, 1);
+            }
 
       if (!last() || (lineMode() && !firstMeasure())) {
             qDebug("empty score");

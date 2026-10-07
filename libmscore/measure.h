@@ -160,6 +160,11 @@ class Measure final : public MeasureBase {
       void setUserStretch(qreal v)         { _userStretch = v; }
 
       void stretchMeasure(qreal stretch);
+      // (Score::lineEvenBeats) every tick the same width, after computeMinWidth. nextLead: the next measure's room before
+      // its first chord/rest, taken into this measure's last beat so the beat across the bar line is as wide as the others
+      qreal evenSpacingNeed(qreal nextLead) const;      // the width per tick the minimum spacing needs
+      void spaceEvenly(qreal perTick, qreal nextLead);
+      qreal evenSpacingLead() const;                    // the first chord/rest's x
       Fraction computeTicks();
       Fraction anacrusisOffset() const;
       void layout2();

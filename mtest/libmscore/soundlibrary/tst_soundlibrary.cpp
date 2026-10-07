@@ -6133,19 +6133,6 @@ void TestSoundLibrary::automationMerge()
       }
 
 //---------------------------------------------------------
-//   automation
-//    lanes (automation.h): their values and events, kept in the score; played, a MIDI controller's
-//    lane in place of the part's value (CC events, ramps), a plug-in parameter's as parameter events
-//    (ME_PARAMETER) that Vst3Synth hands to the instance (the test synth's Tone scales its level)
-//---------------------------------------------------------
-
-void TestSoundLibrary::automation()
-      {
-      using namespace Automation;
-      Lane lane;
-      lane.target = "vibrato";
-      lane.points = { { 480, 0.2, Curve::STEP }, { 960, 0.2, Curve::LINEAR }, { 1920, 1.0, Curve::STEP } };
-//---------------------------------------------------------
 //   automationSimplify
 //    Simplify Envelope, Draw Mode's freehand line and Insert Shape (Live 12 manual 25.5.3-5): the fewest
 //    breakpoints within one MIDI step (CC_RESOLUTION) of what they replace
@@ -6253,6 +6240,19 @@ void TestSoundLibrary::automationSimplify()
       QVERIFY(under.valueAt(1919) > 0.99);
       }
 
+//---------------------------------------------------------
+//   automation
+//    lanes (automation.h): their values and events, kept in the score; played, a MIDI controller's
+//    lane in place of the part's value (CC events, ramps), a plug-in parameter's as parameter events
+//    (ME_PARAMETER) that Vst3Synth hands to the instance (the test synth's Tone scales its level)
+//---------------------------------------------------------
+
+void TestSoundLibrary::automation()
+      {
+      using namespace Automation;
+      Lane lane;
+      lane.target = "vibrato";
+      lane.points = { { 480, 0.2, Curve::STEP }, { 960, 0.2, Curve::LINEAR }, { 1920, 1.0, Curve::STEP } };
       QCOMPARE(lane.valueAt(0), -1.0);                    // before its first point: says nothing
       QCOMPARE(lane.valueAt(480), 0.2);
       QCOMPARE(lane.valueAt(700), 0.2);                   // step

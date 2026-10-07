@@ -3825,6 +3825,103 @@ void Measure::stretchMeasure(qreal targetWidth)
             }
       }
 
+//---------------------------------------------------------
+//   Even beats (Score::lineEvenBeats, Continuous View): every tick the same width. computeMinWidth has placed the
+//   segments at their minimum spacing; the chord/rest segments move to their time at perTick per tick from the first
+//   one, the other segments keep their distance to the chord/rest segment after them (a clef, a breath), those after
+//   the last chord/rest their distance to the measure's end (the barline). The measure ends nextLead before the time
+//   of its end, so that the next measure's first chord/rest is at its time.
+//---------------------------------------------------------
+
+static bool spaced(const Segment* s)
+      {
+      return s->enabled() && s->visible() && !s->allElementsInvisible();
+      }
+
+qreal Measure::evenSpacingLead() const
+      {
+      for (const Segment* s = first(); s; s = s->next())
+            if (spaced(s) && s->isChordRestType())
+                  return s->x();
+      return 0.0;
+      }
+
+qreal Measure::evenSpacingNeed(qreal nextLead) const
+      {
+      qreal need = 0.0;
+      const Segment* prev = nullptr;
+      for (const Segment* s = first(); s; s = s->next()) {
+            if (!spaced(s) || !s->isChordRestType())
+                  continue;
+            if (prev && s->rtick() > prev->rtick())
+                  need = std::max(need, (s->x() - prev->x()) / qreal((s->rtick() - prev->rtick()).ticks()));
+            prev = s;
+            }
+      // the last beat: to the next measure's first chord/rest, over the bar line
+      if (prev && ticks() > prev->rtick())
+            need = std::max(need, (width() + nextLead - prev->x()) / qreal((ticks() - prev->rtick()).ticks()));
+      return need;
+      }
+
+void Measure::spaceEvenly(qreal perTick, qreal nextLead)
+      {
+      const Segment* firstCr = nullptr;
+      for (const Segment* s = first(); s && !firstCr; s = s->next())
+            if (spaced(s) && s->isChordRestType())
+                  firstCr = s;
+      if (!firstCr || perTick <= 0.0)
+            return;
+      const qreal x0 = firstCr->x();
+      const Fraction t0 = firstCr->rtick();
+      auto timeX = [&](const Fraction& t) { return x0 + perTick * qreal((t - t0).ticks()); };
+      // the old positions, then the new
+      std::vector<Segment*> segs;
+      std::vector<qreal> oldX;
+      for (Segment* s = first(); s; s = s->next()) {
+            segs.push_back(s);
+            oldX.push_back(s->x());
+            }
+      std::vector<qreal> newX(oldX);
+      const size_t n = segs.size();
+      size_t firstIdx = 0;
+      while (segs[firstIdx] != firstCr)
+            ++firstIdx;
+      // the end: the segments after the last chord/rest (the bar line) keep their distance to the measure's end
+      size_t lastCr = firstIdx;
+      for (size_t i = firstIdx; i < n; ++i)
+            if (spaced(segs[i]) && segs[i]->isChordRestType())
+                  lastCr = i;
+      const qreal oldEnd = width();
+      const qreal newEnd = timeX(ticks()) - nextLead;
+      for (size_t i = firstIdx; i < n; ++i) {
+            if (i > lastCr) {
+                  newX[i] = newEnd - (oldEnd - oldX[i]);
+                  continue;
+                  }
+            if (spaced(segs[i]) && segs[i]->isChordRestType()) {
+                  newX[i] = timeX(segs[i]->rtick());
+                  continue;
+                  }
+            // to the next chord/rest's new place, at the same distance as before
+            size_t j = i + 1;
+            while (j <= lastCr && !(spaced(segs[j]) && segs[j]->isChordRestType()))
+                  ++j;
+            newX[i] = timeX(segs[j]->rtick()) - (oldX[j] - oldX[i]);
+            }
+      Segment* last = nullptr;
+      for (size_t i = 0; i < n; ++i) {
+            segs[i]->rxpos() = newX[i];
+            if (!spaced(segs[i]))
+                  continue;
+            if (last)
+                  last->setWidth(newX[i] - last->x());
+            last = segs[i];
+            }
+      if (last)                                     // to the end
+            last->setWidth(newEnd - last->x());
+      bbox().setWidth(newEnd);
+      }
+
 //---------------------------------------------------
 //    computeTicks
 //    set ticks for all segments

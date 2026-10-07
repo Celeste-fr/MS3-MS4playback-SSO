@@ -577,6 +577,7 @@ class Score : public QObject, public ScoreElement {
       int _fileDivision; ///< division of current loading *.msc file
       LayoutMode _layoutMode { LayoutMode::PAGE };
       std::map<const Part*, qreal> _automationSpace;           // (setAutomationSpace)
+      bool _lineEvenBeats { false };                           // (setLineEvenBeats)
       SynthesizerState _synthesizerState;
 
       void createPlayEvents(Chord*);
@@ -1163,6 +1164,10 @@ class Score : public QObject, public ScoreElement {
       // Continuous View only; not saved (the view's state)
       void setAutomationSpace(const std::map<const Part*, qreal>& m) { _automationSpace = m; }
       const std::map<const Part*, qreal>& automationSpace() const    { return _automationSpace; }
+      // the automation editor's "Even beats": Continuous View lays every beat out the same width (notes placed by
+      // time, the score's densest spot at its minimum spacing); the view's state, not saved
+      void setLineEvenBeats(bool on)        { _lineEvenBeats = on; }
+      bool lineEvenBeats() const            { return _lineEvenBeats; }
       bool systemMode() const               { return layoutMode() == LayoutMode::SYSTEM; }
 
       Tuplet* searchTuplet(XmlReader& e, int id);
@@ -1296,6 +1301,7 @@ class Score : public QObject, public ScoreElement {
       System* getNextSystem(LayoutContext&);
       void hideEmptyStaves(System* system, bool isFirstSystem);
       void hideStavesNothingIsDrawnOn(System* system);
+      qreal spaceLinearSystemEvenly(System* system);
       void layoutLyrics(System*);
       void createBeams(LayoutContext&, Measure*);
 
