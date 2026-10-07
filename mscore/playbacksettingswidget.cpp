@@ -89,8 +89,6 @@ double PlaybackSettingsWidget::mapValue(const char* id) const
       if (!_library)
             return -1;
       const QString s = id;
-      if (s == "legato/early")
-            return _library->legatoEarly;
       if (s == "heldNotes/early")
             return _library->onsetEarly;
       if (s == "tuning/tolerance")
@@ -108,8 +106,8 @@ void PlaybackSettingsWidget::setScoreValue(const char* id, double value, bool re
       if (!_score || !_setMetaTag)
             return;
       const QString s = id;
-      if (s == "legato/early" || s == "heldNotes/early") {
-            _setMetaTag(s == "legato/early" ? SoundLib::legatoEarlyMetaTag : SoundLib::onsetEarlyMetaTag,
+      if (s == "heldNotes/early") {
+            _setMetaTag(SoundLib::onsetEarlyMetaTag,
                         remove ? QString() : QString::number(int(std::lround(value))));
             return;
             }

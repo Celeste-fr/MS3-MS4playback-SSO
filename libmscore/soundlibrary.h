@@ -91,11 +91,11 @@ struct Articulation {
       double releaseMs { -1 };            // a sustained note rings this long after its note-off (a tuning lane
                                           // stays busy until then: Lanes); -1: unknown (the tail only)
       double legatoDelayMs { -1 };        // a legato transition reaches the new pitch this long after its note-on:
-                                          // it starts early (the renderer, legatoEarly()); -1: not a legato / unknown.
-                                          // By interval (legatoDelay="-12:210 … +12:360"): their median
+                                          // its bend glides then (the renderer, [tuning] bendAtArrival); -1: not a
+                                          // legato / unknown. By interval (legatoDelay="-12:210 … +12:360"): their median
       int legatoVelocity { -1 };          // a legato transition's velocity (<Articulation legatoVelocity>: Spitfire's
-                                          // Performance legato picks the transition by velocity, 85-127 "with accent";
-                                          // playback.ini [legato] velocity); -1: the note's own
+                                          // Performance legato picks the transition by velocity, 85-127 "with accent");
+                                          // -1: the note's own
       std::vector<std::pair<int, double>> legatoDelays;   // interval (semitones, the new note minus the one before)
                                           // -> ms, sorted by interval; empty: legatoDelayMs for every interval
       // octave slurs (+12 / -12) by the pitch they start from (<Articulation octaveUp="36:180 37:140 …"
@@ -115,18 +115,6 @@ struct Articulation {
       double onsetMs { -1 };
       std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
       double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
-      // the level a legato transition arrives at, dB against what the patch plays at that pitch (<Articulation
-      // legatoLevel legatoLevelLong>: per interval, from its first start pitch up, one value per start pitch:
-      // "+1:49:-1.2,0.4,,2 -1:50:…", an empty value unmeasured), heard in a run of sixteenths (legatoLevel) and
-      // settled, half a second in (legatoLevelLong); SSO's transitions are recorded per start and interval and
-      // arrive 2-6 dB louder or softer than their neighbours (measured 2026-10-02, branch legato-level-balance).
-      // Empty: unknown (the renderer leaves the level). The renderer's [legato] levelBalance plays them even
-      using LevelTable = std::map<int, std::pair<int, std::vector<double>>>;   // interval -> first start, dB (NaN: none)
-      LevelTable legatoLevels;
-      LevelTable legatoLevelsLong;
-      // the transition's level (dB, NaN unknown) for a note lasting seconds as played: a run's (legatoLevel) up to
-      // 0.15 s, the settled one (legatoLevelLong) from 0.5 s, mixed linearly between; one table missing: the other
-      double legatoLevelAt(int interval, int fromPitch, double seconds) const;
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;
@@ -185,9 +173,6 @@ struct LibInstrument {
       // microtones by the patch's own pitch bend (<Instrument bend>: cents at full deflection, either way, the
       // bend linear; measured): a lane's tuning within it is played by pitch bend, not varispeed. 0: it doesn't bend
       double bendCents { 0 };
-      // its track delay (<Instrument trackDelay>, ms, negative: early; measured), added to its Kontakt track's own
-      // times the playback setting tracks/mapDelays (TrackDelays::played)
-      double trackDelayMs { 0 };
       QString scan;                       // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;
@@ -232,11 +217,6 @@ class Library {
       // (<Dynamics velocity="short spiccato …">; Spitfire's shorts): those notes' velocity is their
       // level on the dynamics CC's scale (pp 32, mf 80) instead of MS4's soundfont velocity
       QStringList velocityDynamics;
-      // the short notes' balance per family that sounded right to the owner's ear (<Dynamics
-      // heard="strings=-4">; the owner, 2026-09-28, "Whence": strings -4 dB): the references the
-      // recommendation's attack salience weight is fitted to (recommendedBalance); dynamics.json's
-      // heardBalanceDb adds to them or replaces them
-      std::map<QString, double> heardBalance;
       // microtones (<Tuning method="varispeed" tolerance tail>): the plug-in ignores a note's tuning
       // (Kontakt), so a part's notes are spread over copies of its patch ("lanes", Lanes below),
       // each played faster or slower by its tuning (Vst3Plugin::setPitch). A lane changes its
@@ -248,9 +228,6 @@ class Library {
       double laneTolerance { -1 };        // cents; < 0: defaultLaneTolerance()
       double laneTail { -1 };             // seconds; < 0: measured (laneRing)
       int maxLanes { 0 };                 // per patch, past it the lane quiet longest is retuned (its tail with it); 0: memoryMaxLanes
-      // a legato transition starts early by this share of its articulation's legatoDelayMs (<Legato early>,
-      // percent; the score's own: legatoEarly())
-      int legatoEarly { 0 };
       // a held note (not a legato transition) starts early by this share of its articulation's onset (<Onset
       // early>, percent; the score's own: onsetEarly())
       int onsetEarly { 0 };
@@ -326,10 +303,9 @@ int routesGeneration();
 //   DynamicsCalibration
 //    measured by Check articulations › Dynamics with the library's plug-in (<setups folder>/
 //    dynamics.json): each articulation's loudness (its loudest 50 ms, dB) along velocity = dynamics
-//    CC = x, and what sets it ("velocity", "controller", "both", "neither"). A short (on velocity)
-//    then plays the velocity at which it is as loud as the part's held note (the articulation a
-//    plain long note chooses) is at the note's dynamic, plus balanceDb (the owner's ear: short
-//    notes against long ones)
+//    CC = x, and what sets it ("velocity", "controller", "both", "neither"). Playback uses it for a
+//    marcato's level (articulation.h MarcatoLevel); the shorts' calibrated velocity went 2026-10-07
+//    (unused: notes play as written)
 //---------------------------------------------------------
 
 struct DynamicsCurve {
@@ -337,7 +313,6 @@ struct DynamicsCurve {
       std::vector<std::pair<int, double>> points;       // x (1 … 127, rising), dB
       std::vector<std::pair<int, double>> perceived;    // x, how loud it sounds (ArticulationCheck::perceivedLoudnessDb); may be empty
       // x, how much its onset stands out (ArticulationCheck::attackSalience's salienceDb); may be empty
-      // (measured before 2026-09-28's attack-salience build: the recommendation falls back to loudness)
       std::vector<std::pair<int, double>> attack;
       // the part's held note only: the expression controller (CC11, the plug-in's volume) at x, with the
       // dynamics CC at 80, in dB and by ear (127: the level playback leaves it at); may be empty
@@ -352,14 +327,6 @@ struct DynamicsCurve {
 class DynamicsCalibration {
       std::map<QString, std::map<int, DynamicsCurve>> _patches;    // patch name -> articulation value -> curve
    public:
-      double balanceDb { 0 };             // every family's, unless it has its own
-      // per family (family(): the owner, 2026-09-28: "why not just do this regardless"): strings,
-      // solo strings, woodwinds, brass, other
-      std::map<QString, double> familyBalanceDb;
-      // the owner's ear per family (a setting that sounded right: Advanced Options › Heard right),
-      // over the map's <Dynamics heard>: the references recommendedBalance fits its weight to
-      std::map<QString, double> heardBalanceDb;
-      double balanceFor(const QString& family) const;
       const DynamicsCurve* curve(const QString& patch, int value) const;
       void setCurve(const QString& patch, int value, const DynamicsCurve& c) { _patches[patch][value] = c; }
       const std::map<QString, std::map<int, DynamicsCurve>>& patches() const { return _patches; }
@@ -369,81 +336,8 @@ class DynamicsCalibration {
 
 void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c);
 std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
-// a short's velocity for the dynamics CC value cc: -1 when either curve is missing or the
-// articulation isn't on velocity
-int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc, const QString& family = QString(),
-                       const Score* score = nullptr);
-// the score's own short notes' balance per family (Mixer › Advanced Options…, metaTag
-// "soundLibraryShortBalance": "strings=-4 brass=-2", only what differs from the library's
-// calibration), else the calibration's
-extern const char* shortBalanceMetaTag;
-double shortNotesBalance(const Score* score, const DynamicsCalibration& cal, const QString& family);
-QString writeShortBalance(const std::map<QString, double>& byFamily, const DynamicsCalibration& cal);
-// the recommended short notes' balance for a family (Advanced Options › Recommended): with the shorts
-// matched in energy to the held note (balance 0) at pp, mf and ff, over the family's measured shorts,
-// - L: how much louder they sound (the perceived curves: short-term loudness), the median;
-// - S: how much more their attack stands out than their loudness says (the attack curves,
-//   ArticulationCheck::attackSalience: (attack - held's attack) - (perceived - held's perceived)), the median;
-// prominence = L + w S, recommended = -(L + w S) (loudness only: -L, as before the attack curves).
-// One free parameter, w, the weight of attack salience, fitted by least squares to the owner's ear
-// (heard(): each family's setting that sounded right, t): w = sum S (-L - t) / sum S^2 over the heard
-// families with attack curves, not under 0 (one reference: reproduced exactly)
-struct Recommendation {
-      bool loudness { false };            // L known (perceived curves)
-      double loudnessDb { 0 };            // -L (not rounded)
-      bool salience { false };            // S known (attack curves) and w fitted
-      double salienceDb { 0 };            // -(L + w S) (not rounded)
-      double medianLouder { 0 };          // L
-      double medianSalience { 0 };        // S
-      int notes { 0 };                    // matched notes L is from
-      int attackNotes { 0 };              // and S
-      double best() const { return salience ? salienceDb : loudnessDb; }
-      };
-struct SalienceFit {
-      bool ok { false };
-      double weight { 0 };                // w
-      std::map<QString, double> heard;    // the references (family -> dB)
-      QStringList used;                   // the families w was fitted on (heard, with attack curves)
-      };
-// the owner's references: the map's <Dynamics heard>, then dynamics.json's heardBalanceDb
-std::map<QString, double> heard(const Library& library, const DynamicsCalibration& cal);
-SalienceFit fitSalience(const Library& library, const DynamicsCalibration& cal);
-Recommendation recommendation(const Library& library, const DynamicsCalibration& cal, const QString& family,
-                              const SalienceFit& fit);
-// best() of the above, to 0.5 dB. false: nothing to go by
-bool recommendedBalance(const Library& library, const DynamicsCalibration& cal, const QString& family, double* db);
-// the balance report's lines (summary.txt "# Dynamics balance"): per family loudness only and with attack
-// salience, what was heard right, the weight and what it was fitted on; empty: nothing measured
-QString recommendationReport(const Library& library, const DynamicsCalibration& cal);
-
-// Even dynamic steps (the owner, 2026-09-28: SSO's held notes climb 5 to 12 dB from pp to mf and 1 to 4 from
-// mf to ff). Per score (Mixer › Advanced Options…, metaTag "soundLibraryEvenSteps"): the held note's own
-// range, ppp (CC 16) to fff (127), split evenly over the dynamics CC's scale (so every marking is a
-// step of the same size), judged by its perceived or its energy curve (made never to fall: one note a
-// point, round robins), reached
-// - VOLUME: the dynamics CC as before (each marking keeps the recording, the tone, Spitfire gave it)
-//   and the expression CC (CC11, a plain volume) turning down where the curve is above the step (a patch
-//   that barely follows CC11: unchanged);
-// - RECORDING: another dynamics CC value, the one whose loudness is the step (the tone moves with it).
-enum class EvenSteps : signed char { OFF, VOLUME_HEARING, VOLUME_ENERGY, RECORDING_HEARING, RECORDING_ENERGY };
-extern const char* evenStepsMetaTag;
-bool evenStepsEnabled();                        // disabled for now (MS_EVEN_DYNAMIC_STEPS turns it on)
-EvenSteps evenSteps(const Score* score);
-QString evenStepsName(EvenSteps mode);                  // as in the metaTag ("" for OFF)
-struct Step {
-      int dynamics;           // the dynamics CC to send
-      int expression { -1 };  // the expression CC to send; -1: as without even steps
-      };
-// for the dynamics CC value cc (MS4's scale: ppp 16 … fff 127; under 16, a MuseScore 3 fade to silence),
-// with the part's held note's curve (nullptr, or not measured for the mode: cc unchanged)
-Step evenStep(const DynamicsCurve* held, EvenSteps mode, int cc);
 // the part's held note's curve (the articulation a plain long note chooses), when measured
 const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches);
-// a patch's family for the balance, from its main patch's folder in the library (SSO: Symphonic
-// Strings, Solo Strings, Symphonic Woodwinds, Symphonic / Motif Brass; else "other")
-QString family(const LibInstrument& main);
-extern const char* const FAMILIES[5];
 // the dynamics CC value for a patch other than the held note's (the owner's check of 2026-09-28:
 // Violas' All techniques Long 10 dB over the Performance legato at pp): the value at which the
 // patch's own long (longValue) is as loud as the held note at cc; -1: a curve missing or not on
@@ -503,14 +397,6 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
 //    to a lane that is silent by then (its notes ended and their tail gone), retuned; else to a
 //    new lane. count: lanes per patch (1 where no note
 //    needs another), lane: each note's (0 when not listed)
-//    One instance ([tuning] oneInstance, off by default; the owner, 2026-10-02: fewer Kontakt
-//    instances for microtonal scores): on a patch tuned by pitch bend (bendCents, [tuning] pitchBend
-//    on) a lane may be retuned sooner, the bend retuning what still rings on it: 2 (aggressive) once
-//    its notes have ended (note-off), 1 (safe) once their measured release (<Articulation release>,
-//    the ring to 30 dB under the note's level, the longest over its range; else the tail) has rung
-//    out. So a single line plays all its tunings on one instance; only notes sounding together at
-//    different tunings (chords, divisi, overlaps) still need copies. A note beyond the bend range
-//    (varispeed plays it) and the patches that don't bend (SSO's All techniques) keep the rule above
 //---------------------------------------------------------
 
 struct Lanes {
@@ -520,11 +406,8 @@ struct Lanes {
       };
 // (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
 // releaseMs ([tuning] waitForRelease); < 0: plus the note's laneRing. maxLanes <= 0: memoryMaxLanes)
-// (oneInstance: SETTING the score's [tuning] oneInstance, else OFF, SAFE, AGGRESSIVE)
-enum class OneInstance : signed char { SETTING = -1, OFF = 0, SAFE = 1, AGGRESSIVE = 2 };
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
-            double toleranceCents, double tailSeconds, int maxLanes = 0, OneInstance oneInstance = OneInstance::SETTING);
-OneInstance oneInstance(const Score* score);      // [tuning] oneInstance (playback settings, per score)
+            double toleranceCents, double tailSeconds, int maxLanes = 0);
 
 //---------------------------------------------------------
 //   LaneSettings
@@ -562,17 +445,6 @@ constexpr qint64 LANE_COPY_BYTES = qint64(1276 - 1031) * 1024 * 1024;
 LaneSettings libraryLaneSettings(const Library&);
 LaneSettings laneSettings(const Score*, const Library&);
 QString writeLaneSettings(const LaneSettings& s, const Library&);      // "" when the library's
-
-//---------------------------------------------------------
-//   legatoEarly
-//    how early a legato transition starts, percent of its articulation's measured delay (SSO's
-//    Performance patches reach the new pitch 70-430 ms after the note-on, median 180): the map's
-//    <Legato early>, unless the score sets its own (Mixer › Advanced Options…, metaTag
-//    "soundLibraryLegatoEarly": "75"). 0: on the beat, as written
-//---------------------------------------------------------
-
-extern const char* legatoEarlyMetaTag;
-int legatoEarly(const Score* score, const Library& library);
 
 //---------------------------------------------------------
 //   onsetEarly

@@ -283,7 +283,7 @@ class SoundLibraryDialog : public QDialog {
 //---------------------------------------------------------
 //   SoundLibraryOptions
 //    Mixer › Advanced Options…: the score's sound library settings (the copies for other tunings,
-//    the short notes' balance per family) and the library's own (its folder, the background
+//    held notes early by their onset) and the library's own (its folder, the background
 //    measurements); the owner, 2026-09-28: "put the useful configs in there … make all these
 //    configs per score"
 //---------------------------------------------------------
@@ -296,10 +296,7 @@ class SoundLibraryOptions : public QDialog {
       QDoubleSpinBox* _tolerance { nullptr };
       QDoubleSpinBox* _tail { nullptr };
       QSpinBox* _maxLanes { nullptr };
-      QSpinBox* _legatoEarly { nullptr };
       QSpinBox* _onsetEarly { nullptr };
-      std::map<QString, QDoubleSpinBox*> _balance;
-      QComboBox* _evenSteps { nullptr };
       QLabel* _folder { nullptr };
       QLabel* _liveSet { nullptr };
       QCheckBox* _liveAuto { nullptr };
@@ -309,10 +306,6 @@ class SoundLibraryOptions : public QDialog {
 
       void load();
       void setLaneSettings(bool libraryDefaults);
-      void setBalance(bool libraryDefaults);
-      // the owner's ear: family's short notes setting db sounds right (dynamics.json heardBalanceDb); forget: drop it
-      void setHeard(const QString& family, double db, bool forget);
-      void exportEvenSteps();
       void setMetaTag(const char* tag, const QString& value);
       void startBackground(const QStringList& args, const QString& what);
 

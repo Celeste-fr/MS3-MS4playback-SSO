@@ -16,14 +16,14 @@
 //   fully configurable … and editable in an ini file"). docs/PLAYBACK_SETTINGS.md lists every adjustment.
 //
 //   Three layers, each over the one before:
-//     1. built-in defaults (definitions(); for a few, the sound library map's value: <Legato early>,
+//     1. built-in defaults (definitions(); for a few, the sound library map's value:
 //        <Onset early>, <Tuning tolerance tail maxLanes>)
 //     2. the global ini file, playback.ini in MuseScore's data folder (Windows:
 //        %LOCALAPPDATA%\MuseScore\MuseScore3Evo\playback.ini), written with every key, its default and a
 //        comment when missing; never overwritten. Read at start and by reload() (Edit › Reload Playback
 //        Settings, Mixer › Advanced Options…): a reload renders again
-//     3. the score: metaTag "playbackSettings" ("legato/overlapTicks=40;pedal/upAfterMs=60"), and the three
-//        older per-score metaTags (soundLibraryLegatoEarly, soundLibraryOnsetEarly, soundLibraryLanes),
+//     3. the score: metaTag "playbackSettings" ("legato/keepMs=60;shorts/staccato=40"), and the two
+//        older per-score metaTags (soundLibraryOnsetEarly, soundLibraryLanes; soundLibraryLegatoEarly ignored since 2026-10-07),
 //        which stay where they were. A score without overrides has no such metaTag (unchanged files)
 //   Per-patch tables (map data: legato delays, onsets, shorts' from=) can be overridden in the ini only,
 //   by patch name: [legato.delay], [heldNotes.onset], [shorts.from] (see the generated file).

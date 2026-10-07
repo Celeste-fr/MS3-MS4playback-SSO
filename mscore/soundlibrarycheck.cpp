@@ -2166,8 +2166,8 @@ bool ArticulationCheckDialog::dynamicsPatch(int index, const QString& pluginPath
 //   balanceReport
 //    from the calibration (every patch measured so far): each measured articulation's loudness
 //    against the part's held note (the articulation a plain long note plays) at pp, mf and ff, as
-//    MuseScore played it before the calibration and as it plays it now. The test of the balance
-//    instead of listening to each technique (the owner, 2026-09-28)
+//    MuseScore plays it. The test of the balance instead of listening to each technique (the owner,
+//    2026-09-28; the calibrated short velocities and their per-family balance went 2026-10-07)
 //---------------------------------------------------------
 
 QString ArticulationCheckDialog::balanceReport() const
@@ -2192,9 +2192,7 @@ QString ArticulationCheckDialog::balanceReport() const
             const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
             const QString heldPatch = held ? patches[size_t(held.patch)]->name : QString();
             const SoundLib::DynamicsCurve* ref = held ? cal->curve(heldPatch, held.articulation->value) : nullptr;
-            const QString fam = SoundLib::family(*main);
-            const double balance = cal->balanceFor(fam);
-            text += QString("## %1 (%2, short notes %3 dB)\n").arg(main->name, fam, f1(balance));
+            text += QString("## %1\n").arg(main->name);
             if (!ref) {
                   text += "   " + tr("held notes play %1 (%2), not measured yet: check it with Dynamics too")
                      .arg(heldPatch, held ? held.articulation->name : QString("?")) + "\n";
@@ -2211,33 +2209,17 @@ QString ArticulationCheckDialog::balanceReport() const
                         for (const QString& t : a.techniques)
                               listed = listed || _library->velocityDynamics.contains(t);
                         const bool onVelocity = c->drivenBy == "velocity" || c->drivenBy == "both";
-                        QStringList was, now;
-                        double worst = 0;
+                        QStringList now;
                         for (int k = 0; k < 3; ++k) {
                               const int cc = Ms4::expressionLevel(LEVELS[k]);
-                              const double refDb = ref->at(cc);
                               const int vb = !onVelocity || listed ? cc
                                  : Ms4::note(Ms4::Family(0), { Ms4::ArtRef { Ms4::Art::Standard, false } }, LEVELS[k], true).velocity;
-                              double n;
-                              if (onVelocity) {
-                                    const int v = SoundLib::calibratedVelocity(*cal, q->name, a.value, heldPatch, held.articulation->value, cc, fam);
-                                    n = (v > 0 ? c->at(v) : c->at(vb)) - refDb - balance;
-                                    }
-                              else
-                                    n = c->at(cc) - refDb;          // on the controller: the part's CC, as it is
-                              was << f1(c->at(vb) - refDb);
-                              now << f1(n);
-                              worst = std::max(worst, std::fabs(n));
+                              now << f1(c->at(vb) - ref->at(cc));
                               }
-                        // flagged: a short out of its velocity range. One on the controller keeps Spitfire's own
-                        // level (the owner, 2026-09-28: "Leave as Spitfire made them"), listed for reference
-                        const bool flag = worst > 3 && onVelocity;
                         const QString where = q == main ? QString() : q->name + ": ";
-                        QString line = QString("   %1 %2%3 (%4), on %5: %6 dB against the held note at pp / mf / ff (was %7)")
-                           .arg(flag ? "!" : "-").arg(where, a.name).arg(a.value).arg(c->drivenBy)
-                           .arg(now.join(" / "), was.join(" / "));
-                        // matched in energy at mf, how much more its attack stands out than its loudness
-                        // says (the recommendation's S, SoundLib::recommendation)
+                        QString line = QString("   - %1%2 (%3), on %4: %5 dB against the held note at pp / mf / ff")
+                           .arg(where, a.name).arg(a.value).arg(c->drivenBy).arg(now.join(" / "));
+                        // matched in energy at mf, how much more its attack stands out than its loudness says
                         if (onVelocity && !c->attack.empty() && !ref->attack.empty() && !c->perceived.empty() && !ref->perceived.empty()) {
                               const int cc = Ms4::expressionLevel(LEVELS[1]);
                               const int v = c->inverse(ref->at(cc));
@@ -2246,9 +2228,7 @@ QString ArticulationCheckDialog::balanceReport() const
                               line += tr("; at mf matched: sounds %1 dB, its attack %2 dB beyond that")
                                  .arg(f1(l)).arg((sal >= 0 ? "+" : "") + f1(sal));
                               }
-                        if (flag)
-                              line += tr(" — beyond its velocity range");
-                        else if (!onVelocity)
+                        if (!onVelocity)
                               line += tr(" (on the controller: Spitfire's own level)");
                         text += line + "\n";
                         }
@@ -2256,10 +2236,7 @@ QString ArticulationCheckDialog::balanceReport() const
             }
       if (text.isEmpty())
             return QString();
-      // the recommended short notes' settings: loudness only (how much louder the matched shorts sound)
-      // and with their attacks' salience (weighted to fit the owner's ear), per family
-      return "\n# " + tr("Dynamics balance (loudest 50 ms; against the held note plus each family's short notes setting)")
-             + SoundLib::recommendationReport(*_library, *cal) + "\n" + text;
+      return "\n# " + tr("Dynamics balance (loudest 50 ms, as played: against the held note)") + "\n" + text;
       }
 
 

@@ -733,8 +733,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What matches (2026-09-30)
 
-- Everything in the rendering reaches the clips, as the same events: notes and velocities (early legato transitions,
-  phrase marks, slur ends: tst_liveequivalence liveClipsLegatoEarly), the switches and every controller on a carrier
+- Everything in the rendering reaches the clips, as the same events: notes and velocities (legato transitions,
+  phrase marks, slur ends: tst_liveequivalence liveClipsLegato), the switches and every controller on a carrier
   key (UACC, CC1 dynamics, CC11, pedal, the map's CC controllers; 127 exact since 2026-09-30: before, CC11 127 played
   as 126 on every Live note, 0.07-0.08 dB under MuseScore on the VM), the **pitch bend** (keys 115 / 114, 14 bit:
   the microtones of patches with `bend=`, glides included; liveClipsBend).
@@ -819,8 +819,8 @@ before anything sets it.
 Tests (`tst_liveequivalence`, the test synth): liveEquivalence (quarter tones by bend with glides, a plug-in and a CC
 Controller, volume 80 / pan 32): correlation 0.99970, residual -32.2 dB, every note within 0.02 dB and 0 ms; each
 old way fails it (`MS_LIVE_EQUIVALENCE_FAULT`: no bend: correlation 0.50; no mixer: notes 4.6 dB off; the setup
-without the Controllers: 8.8 dB off). liveEquivalenceLegato (early legato transitions on an extra patch, two tempi):
-bit-identical after the start (residual -327 dB). liveSetControllersAndMix, liveClipsBend, liveClipsLegatoEarly.
+without the Controllers: 8.8 dB off). liveEquivalenceLegato (legato transitions on an extra patch, two tempi; early until 2026-10-07):
+bit-identical after the start (residual -327 dB). liveSetControllersAndMix, liveClipsBend, liveClipsLegato.
 
 ### Measured with SSO (the Windows VM, 2026-09-30)
 

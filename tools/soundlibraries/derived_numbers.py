@@ -4,7 +4,6 @@ computed by a stated algorithm, or taken from software or a book). Each subcomma
 reached; the code quotes it.
 
     derived_numbers.py marcato       Marcato level range (libmscore/articulation.h MarcatoLevel::MIN_DB / MAX_DB)
-    derived_numbers.py levelmax      [legato] levelMaxDb (libmscore/playbacksettings.cpp)
     derived_numbers.py sensitivity   how much the map's measured values move when a threshold inside the measuring
                                      algorithm is varied (the owner's decision 3C, 2026-10-03)
 
@@ -13,9 +12,6 @@ marcato) at each dynamic both were measured at (sso_sound_dynamics.json "curve":
 renderer's dynamics calibration reads), a marcato playing at its dynamic's level as a plain note does (no accent boost
 since 2026-10-02). The range they span, rounded outward to the Inspector's 0.5 dB step, is the spin box's range
 (the owner, 2026-10-03: "the range SSO's marcatos actually span").
-
-levelmax: the largest correction the legato level balance makes downwards: the loudest measured transition against the
-median of the transitions into its pitch (sso_legato_levels.json, both contexts, run and settled).
 
 sensitivity: per threshold, the map values the alternatives give against the one used.
 """
@@ -55,17 +51,6 @@ def marcato():
     print(f'lowest  {low[0]:+.1f} dB: {low[1]} {low[2]} at {low[3]}')
     print(f'highest {high[0]:+.1f} dB: {high[1]} {high[2]} at {high[3]}')
     print(f'range, rounded outward to 0.5 dB: {math.floor(low[0] * 2) / 2:+.1f} ... {math.ceil(high[0] * 2) / 2:+.1f} dB')
-
-
-def levelmax():
-    d = load('sso_legato_levels.json')
-    rows = [(v, p, c, i, first + k) for p, e in d.items() for c in ('run', 'settled')
-            for i, (first, vals) in e.get(c, {}).items() for k, v in enumerate(vals) if v is not None]
-    top = max(rows)
-    low = min(rows)
-    print(f'{len(rows)} measured transitions over {len(d)} patches')
-    print(f'loudest {top[0]:+.1f} dB ({top[1]}, {top[2]}, interval {top[3]}, from MIDI {top[4]}): levelMaxDb = {top[0]:g}')
-    print(f'softest {low[0]:+.1f} dB ({low[1]}, {low[2]}, interval {low[3]}, from MIDI {low[4]}) (raised by levelHeadroomDb)')
 
 
 # ---------------------------------------------------------------- sensitivity
@@ -177,4 +162,4 @@ def sensitivity():
 
 
 if __name__ == '__main__':
-    {'marcato': marcato, 'levelmax': levelmax, 'sensitivity': sensitivity}[sys.argv[1] if len(sys.argv) > 1 else 'marcato']()
+    {'marcato': marcato, 'sensitivity': sensitivity}[sys.argv[1] if len(sys.argv) > 1 else 'marcato']()

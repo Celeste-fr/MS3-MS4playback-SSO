@@ -110,31 +110,33 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   sso_*.json`. Diff the XML after: only intended entries may change.
 - Renderer (`rendermidi.cpp`): each library event carries patch, switch and route; `finishLibraryEvents` routes,
   copies controllers to every patch ahead of the notes, applies early starts, lanes and bends. Dynamics on CC1;
-  listed shorts take velocity. **No automatic adjustments by default** (the owner, 2026-10-06: timing and levels are
-  adjusted in Live): legato early starts (map `<Legato early>` 0), `fastFirsts`, `phraseGapMs`, pedal timing
-  and `[shorts] calibratedVelocity` (`dynamics.json`) are off; notes play as written, the technique still comes from
-  the notation. The mechanisms below stay, one setting away. Exception: held notes start early by their measured onset
+  listed shorts take velocity. **No automatic adjustments** (the owner, 2026-10-06: timing and levels are adjusted
+  in Live; 2026-10-07: "remove all settings not currently being used"): legato transitions play on their beat, pedal
+  changes one tick after their chord, shorts at the notation's velocity; the settings and code that could change that
+  (legato early, fastFirsts, phrase gap, overlap, fast technique, level balance, pedal timing, calibrated short
+  velocity, even steps, one instance, map track delays) were removed 2026-10-07 (docs/PLAYBACK_SETTINGS.md lists them;
+  old ini keys and metaTags are ignored). The technique still comes from the notation. Exception: held notes start
+  early by their measured onset
   (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
   players; `[heldNotes] early` 0 plays them as written). **No Performance patches** (the owner, 2026-10-06:
   the All techniques patches' Release, Tightness and Options): SSO slurs play the All techniques longs, each note its
   own attack, early by its onset; a legato transition needs an articulation with `legato` first
   (`Articulation::playsTransitions`), which the SSO map has only under staff text "performance" (modifier `performance`,
-  branch `legato-pair-delays`, waiting for the owner: the Performance patches' Legato, Violas - Performance transitions at velocity 100, map
-  `legatoVelocity` / `[legato] velocity`: HANDOFF.md; `sso_legato_*.json` kept). Slurred notes overlap; **legato transitions** and
-  **held notes start early** by measured delays (`<Articulation legatoDelay>` by interval, `<Articulation onset>`
-  by pitch; metaTags `soundLibraryLegatoEarly`, `soundLibraryOnsetEarly`); the note before keeps `keepMs` of its
-  length as played, so a fast slurred run starts early as a whole (after a short note a transition takes 65-100 % of
-  its delay: `libFastDelay`; a slur's first in a fast run starts like a transition: `fastFirsts`; optional fast
-  technique: own attacks instead of transitions). HANDOFF.md has the open timing items. Per-note levels
-  (a marcato's; the legato level balance `[legato] levelBalance`, off, map `legatoLevel`) share one CC11 / CC1 schedule
-  per route, `libraryNoteLevels` (`libLevels`; dB add up).
+  branch `legato-pair-delays`, waiting for the owner: the Performance patches' Legato, Violas - Performance transitions at
+  velocity 100, map `legatoVelocity`: HANDOFF.md; `sso_legato_*.json` kept). **Held notes start early** by their
+  measured onset (`<Articulation onset>` by pitch; metaTag `soundLibraryOnsetEarly`); the note before on its patch keeps
+  `keepMs` of its length as played. A transition's measured delay (`<Articulation legatoDelay>` by interval, shortened
+  after a short note: `libFastDelay`) times only a bent transition's glide. HANDOFF.md has the open timing items.
+  Per-note levels (a marcato's, track levels) share one CC11 / CC1 schedule per route, `libraryNoteLevels`
+  (`libLevels`; dB add up).
 - **Playback adjustments are configurable** (`libmscore/playbacksettings.*`; **docs/PLAYBACK_SETTINGS.md** is the
   inventory): built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
-  Playback Settings) → the score (metaTag `playbackSettings`, plus the older early / lanes metaTags). Read a
+  Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed
+  keys are listed in `REMOVED` and ignored silently). Read a
   setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
   inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`).
-- Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; per-family
-  balance, Recommended, even steps (metaTag `soundLibraryEvenSteps`). Only shorts are calibrated (the owner).
+- Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; read for a
+  marcato's level (the curve's inverse). The short balance and even steps were removed 2026-10-07.
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
   (`ControllersWindow`, `audio/vst3/librarycontrollers.*`). Automation: `libmscore/automation.*`, metaTag
   `automation` (points step / linear, a ramp may carry Live's Bézier control points). Every lane is editable;
@@ -153,7 +155,6 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `soundLibraryLanes`) play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends
   cleanly (`<Instrument bend>`; varispeed can't reach Live). A legato transition's bend glides when the
   transition arrives (note-on + its measured delay, ending before the next note-on; `[tuning] bendAtArrival`).
-  `[tuning] oneInstance` (off by default) lets a bending patch's line retune one copy by the bend (fewer instances).
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
   Mixer and playback edits never leave playback stopped (the owner, 2026-10-07): track delays / levels render again
   while playing (`Seq::renderAgainPlaying`, swapped in by the realtime thread); changes that may load patches (part
@@ -162,8 +163,6 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   per patch / technique (added up, as Live adds a group's and its tracks'); `MidiRenderer::libraryTrackDelays` moves
   the library events (not for Live's clips); with a negative delay everything else plays later by the earliest one
   (`libraryDelayLead`), so nothing is clamped at the start; the plain set writes them as TrackDelay, `livetracks.*` reads them back.
-  A patch may carry a map delay (`<Instrument trackDelay>`, never stored in the score, `[tracks] mapDelays`): added by
-  `TrackDelays::played` for the renderer and the plain set, taken off on read-back; SSO has none (lateness changes with tempo).
   Track levels (same metaTag, `levels`; same dialog): dB per patch / technique, added up, by CC11 per note
   (`libLevels`, `libraryNoteLevels`), so in Live's clips and the plain set's CC11 lane too; softer only (-42.08 .. 0 dB).
 
@@ -254,10 +253,10 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 75 passed, 4 skipped (counting initTestCase and cleanup, 2026-10-07: trackLevels, legatoVelocity, mapTrackDelays added);
+- `tst_soundlibrary`: 67 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
-  owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests; `oneInstanceCounts` also takes `MS_ROUTES_SCORE`).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 20 passed (2026-10-06: plainLayout, plainSet, plainSetReadBack, plainSetTrackDelays, liveTracksJson), `dumpEvents` skipped (a
+  owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 18 passed (2026-10-07: liveEquivalenceLegatoLevel removed), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 60 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in

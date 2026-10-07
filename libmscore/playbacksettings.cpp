@@ -30,69 +30,27 @@ namespace Playback {
 static const double MAP = std::numeric_limits<double>::quiet_NaN();
 
 // every adjustment this fork makes beyond MuseScore 4's playback that is a number (docs/PLAYBACK_SETTINGS.md
-// has where each one acts and how it was measured). The automatic timing and level adjustments (early starts,
-// phrase gaps, pedal timing, calibrated short velocities) are off by default since 2026-10-06 (the owner: notes
-// play as written, timing and levels are adjusted in Live); their measured values stay one setting away
+// has where each one acts and how it was measured). The automatic timing and level adjustments are off since
+// 2026-10-06 (the owner: notes play as written, timing and levels are adjusted in Live); the settings no longer in
+// use went on 2026-10-07 (the owner: remove settings not in use; their keys are ignored: REMOVED below)
 static const std::vector<Definition> DEFINITIONS = {
       // [legato]
-      // (measured, numbers-measured 2026-10-03: SSO's 43 Performance patches play a legato transition whenever the note
-      // before ends at most 20 ms before the next note-on, never at 40 ms or more, whatever the overlap; 0 is the smallest
-      // value with every transition: docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
-      { "legato/overlapTicks", 0, 0, 480, "ticks (480 a quarter)",
-        "a slurred note lasts this long into the next one (SSO joins notes up to 20 ms apart: 0 is enough for it)", true },
-      { "legato/slurEndOverlap", 0, 0, 1, "on/off",
-        "1: a slur's last note overlaps the note after it too (MuseScore 4); 0: it ends on time, so the next note gets its own attack", true },
-      // (measured, numbers-measured 2026-10-03, the same sweep as overlapTicks: SSO joins two notes into a legato transition
-      // up to a 20 ms gap, does so for 80 of 336 at 40 ms and for none from 60 ms; 60 is the smallest gap with no
-      // transition. The owner, 2026-10-04: phrases separate. Only where SSO would join: a note on a legato patch that is
-      // no transition, after a note on the same route)
-      { "legato/phraseGapMs", 0, 0, 500, "ms",
-        "a note on a legato patch that is no legato transition (a slur's end, a phrase mark, a detached note) starts at least this long after the note before on its patch ends, so it gets its own attack (0: off; measured: 60)", true },
-      { "legato/early", MAP, 0, 200, "%",
-        "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
-      // (Spitfire's Performance legato picks the transition by velocity, 85-127 "with accent" (Spitfire's support article
-      // 11815986); measured 2026-10-07 on Violas - Performance, a run of 80 slurred sixteenths at 110 bpm: arrival SD 49 ms at
-      // velocity 64, 41 at 100: docs/PLAYBACK_SETTINGS.md)
-      { "legato/velocity", MAP, 0, 127, "velocity",
-        "a legato transition plays at this velocity (default: the map's legatoVelocity, SSO: Violas - Performance 100; 0: the note's own)", true },
       // (keepMs chosen by a sweep, numbers-measured 2026-10-03: 0 / 20 / 40 / 60 / 80 / 120 ms on make_fastrun_scores.py's
       // scores, MuseScore 2bc46bc on the Windows VM, 3072 transitions each: median |arrival| 31 / 31 / 31 / 34 / 45 / 94
       // ms, 40 the fewest without an arrival (410 against 424-432); tools/playbackverify/choose_keep_ms.py)
       { "legato/keepMs", 40, 0, 1000, "ms",
-        "a note before a transition (or before a held note started early) on the same patch keeps at least this much of its length as played", true },
+        "a note before a held note started early on the same patch keeps at least this much of its length as played", true },
       // (fastShare / fastFullMs fitted, numbers-measured 2026-10-03: tools/playbackverify/fit_fast_share.py on 2580
       // transitions of 12 Performance patches in fast runs at 100-200 bpm, least squares over part x tempo medians;
       // docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
       { "legato/fastShare", 50, 0, 100, "%",
-        "after a very short note a transition starts early by this share of its measured delay (SSO is quicker in fast passages) ...", true },
+        "after a very short note a transition arrives after this share of its measured delay (SSO is quicker in fast passages; "
+        "times a bent transition's glide, tuning/bendAtArrival) ...", true },
       { "legato/fastFullMs", 380, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
-      { "legato/fastTechnique", 0, 0, 1, "on/off",
-        "1: a slurred note after a note too short for the transition into it plays its own attack (early as the transition would be) instead of a legato transition", true },
-      { "legato/fastFirsts", 0, 0, 1, "on/off",
-        "1: a slur's first note right after a note too short for a transition (same patch, no rest) starts as early as that transition would", true },
-      { "legato/fastBelowShare", 100, 0, 400, "%",
-        "too short: shorter than this share of the transition's delay (the patch's measured delay, after fastShare / fastFullMs)", true },
-      // (varispeed only; 30 has no source: needs a sweep on the VM. A pitch-bend glide takes one cent a tick: libraryPitchBends)
-      { "legato/levelBalance", 0, 0, 1, "on/off",
-        "1: a legato transition plays at its pitch's level (the map's measured legatoLevel: SSO's transitions alone arrive 2-6 dB louder or softer), by CC11 from its arrival; off: in runs the notes around a transition move its level as much (measured), so it didn't even them", true },
-      // (the largest measured correction: Cor Anglais - Performance, +3 settled from G4, 9.4 dB loud, of 30288 measured
-      // transitions; sso_legato_levels.json, tools/soundlibraries/derived_numbers.py levelmax)
-      { "legato/levelMaxDb", 9.4, 0, 12, "dB",
-        "the level balance turns a transition down by at most this much (and up by at most levelHeadroomDb)", true },
-      { "legato/levelHeadroomDb", 0, 0, 12, "dB",
-        "a part with measured transition levels rests this much down on CC11, so that transitions arriving softer can be raised by up to it (the whole part is that much softer)", true },
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
         "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },
-      // [tracks]
-      // (the user, 2026-10-07, approving "line the sections up: one early start per instrument": a patch's map delay is its
-      // measured median arrival on a slurred run, so the sections' transitions arrive together; trackdelays.h)
-      { "tracks/mapDelays", 100, 0, 200, "%",
-        "each patch's track delay from the map (<Instrument trackDelay>, its measured median lateness) plays at this share, added to the Mixer's (0: off)", true },
       // [shorts]
-      { "shorts/calibratedVelocity", 0, 0, 1, "on/off",
-        "1: a short plays at the velocity at which it is as loud as the part's held note (Check articulations › Dynamics, "
-        "dynamics.json, with the Advanced Options' balance); 0: at the dynamic's velocity (the map's <Dynamics velocity>)", true },
       { "shorts/byMeantLength", 1, 0, 1, "on/off",
         "1: a short with a measured from= is chosen by how long the note is meant to sound (written length times the factors below); 0: by its written length", true },
       { "shorts/staccato", 50, 1, 100, "%",
@@ -100,13 +58,6 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/staccatissimo", 25, 1, 100, "%", "the same for staccatissimo", true },
       { "shorts/tenuto", 99, 1, 100, "%", "the same for tenuto", true },
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
-      // [pedal]
-      { "pedal/upAfterMs", 0, 0, 1000, "ms",
-        "a sound library part's sustain pedal goes up this long after the chord it changes with (0: one tick after, so the "
-        "chord still sounds; a pianist's: 40)", true },
-      { "pedal/downAfterMs", 0, 0, 1000, "ms", "and down again this long after it (0: one tick; a pianist's: 90)", true },
-      { "pedal/upMaxShare", 25, 0, 100, "%", "the pedal goes up at most this share of the next pedal's length after its chord", true },
-      { "pedal/downMaxShare", 50, 0, 100, "%", "it goes down at most this share of its own length after its start", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
@@ -124,13 +75,6 @@ static const std::vector<Definition> DEFINITIONS = {
       { "tuning/bendAtArrival", 1, 0, 1, "on/off",
         "1: a legato transition's pitch bend glides when the transition arrives (note-on plus the measured legato delay), "
         "so the note before keeps its tuning while it sounds; 0: at the note-on", true },
-      { "tuning/oneInstance", 0, 0, 2, "mode",
-        "on a patch tuned by pitch bend, fewer copies (less memory): the bend may retune a copy once its notes' measured release "
-        "has rung out (1: safe) or once they have ended (2: aggressive, a detached note's tail is bent to the next note's tuning), "
-        "so a line plays its tunings on one instance; notes sounding together at different tunings still use copies; 0: off", true },
-      // [dynamics]
-      { "dynamics/evenSteps", 0, 0, 1, "on/off",
-        "1: the Advanced Options' even dynamic steps act (off since 2026-09-28; MS_EVEN_DYNAMIC_STEPS turns it on too)", true },
       // [live]
       // (measured in Live 12.4.6: 1 and 0 units keep every carrier before its note; 1 is the smallest the range allows:
       // LiveClips::EPSILON, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
@@ -214,6 +158,23 @@ static bool isTable(const QString& group)
       return false;
       }
 
+// the settings removed on 2026-10-07 (the owner: remove settings not in use; each was off or at a value that
+// changed nothing): an older playback.ini or score that has them opens as before, the key ignored without a warning
+static const char* const REMOVED[] = {
+      "legato/overlapTicks", "legato/slurEndOverlap", "legato/phraseGapMs", "legato/early", "legato/velocity",
+      "legato/fastTechnique", "legato/fastFirsts", "legato/fastBelowShare", "legato/levelBalance", "legato/levelMaxDb",
+      "legato/levelHeadroomDb", "shorts/calibratedVelocity", "pedal/upAfterMs", "pedal/downAfterMs", "pedal/upMaxShare",
+      "pedal/downMaxShare", "dynamics/evenSteps", "tuning/oneInstance", "tracks/mapDelays",
+      };
+
+static bool removed(const QString& id)
+      {
+      for (const char* r : REMOVED)
+            if (id == r)
+                  return true;
+      return false;
+      }
+
 // one key's text into the snapshot (warns of unknown keys and bad values)
 static void take(Ini& i, const QString& group, const QString& key, const QString& text)
       {
@@ -224,9 +185,11 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
       const QString id = group + "/" + key;
       const Definition* d = definition(id);
       if (!d) {
+            if (removed(id))
+                  return;     // (no longer in use since 2026-10-07: ignored silently)
             // (the fast-note ramp, replaced on 2026-10-02 by keepMs, fastShare / fastFullMs and fastTechnique: fast slurs on time)
             if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs, fastTechnique; delete the line)").arg(id);
+                  i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs; delete the line)").arg(id);
             // (the nominal short rule, 90 % of length=, had no source; every SSO short with a length= has a measured
             // from=: removed 2026-10-03, numbers-measured)
             // (varispeed's glide time: now as short as each frame's step stays within a cent, Vst3Plugin::GLIDE_CENT_STEP)
@@ -305,7 +268,7 @@ QString iniTemplate()
            "; \"patch|articulation\". A value is an offset in ms (+25, -30) added to the map's, or a whole\n"
            "; table that replaces it: legato delays by interval (-12:240 -7:280 +2:220 ... +12:440), onsets\n"
            "; by MIDI pitch (55:60 72:40 ...), or one number for all.\n"
-           "\n; a legato transition's delay (ms; the renderer starts it that much early, times legato/early)\n"
+           "\n; a legato transition's delay (ms; a bent transition's glide starts when it arrives: tuning/bendAtArrival)\n"
            "[legato.delay]\n"
            "; Violins 2 - Performance=+25\n"
            "\n; a held note's onset (ms; it starts that much early, times heldNotes/early)\n"
@@ -434,8 +397,8 @@ QString writeScoreValues(const std::map<QString, double>& values)
 bool hasOwnMetaTag(const char* id)
       {
       const QString s = id;
-      return s == "legato/early" || s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
-             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival" && s != "tuning/oneInstance";
+      return s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
+             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival";
       }
 
 static bool ownMetaTagValue(const char* id, const Score* score, double* v)
@@ -445,8 +408,8 @@ static bool ownMetaTagValue(const char* id, const Score* score, double* v)
       const MasterScore* ms = score->masterScore();
       const QString s = id;
       bool ok = false;
-      if (s == "legato/early" || s == "heldNotes/early") {
-            const QString tag = ms->metaTag(s == "legato/early" ? "soundLibraryLegatoEarly" : "soundLibraryOnsetEarly");
+      if (s == "heldNotes/early") {
+            const QString tag = ms->metaTag("soundLibraryOnsetEarly");     // (soundLibraryLegatoEarly: ignored since 2026-10-07)
             const int x = tag.trimmed().toInt(&ok);
             if (ok && x >= 0) {
                   *v = std::min(x, 200);

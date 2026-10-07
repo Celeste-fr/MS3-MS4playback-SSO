@@ -40,24 +40,15 @@
 //   track is early from its first note (before 2026-10-07 what went before the start stayed at the start; nothing
 //   is clamped now). The plain Live set writes it as each track's
 //   TrackDelay (not into the clips) and reads it back (livetracks.h).
-//
-//   Map delays (the user, 2026-10-07, approving "line the sections up: one early start per instrument"): a patch may
-//   carry its own delay in the map (<Instrument trackDelay>, ms, measured: its median lateness on a slurred run), added
-//   to its Kontakt track's own times the playback setting tracks/mapDelays (%, 0: off). It is never stored in the
-//   score: played() adds it for the renderer and the plain set (whose Kontakt track's TrackDelay so includes it), the
-//   read-back takes it off again, the Mixer shows it beside the track's own value.
 //---------------------------------------------------------
 
 #include <map>
-#include <vector>
 #include <QString>
 
 namespace Ms {
 
 class MasterScore;
 class Part;
-class Score;
-namespace SoundLib { struct LibInstrument; struct Route; }
 
 namespace TrackDelays {
 
@@ -98,14 +89,6 @@ double earliest(const Delays& d);
 double db(const Delays& d, const QString& patch, const QString& technique);
 // one track's own level (0: none)
 double ownDb(const Delays& d, const QString& key);
-
-// a patch's map delay (<Instrument trackDelay>) at the score's tracks/mapDelays share
-double mapMs(const SoundLib::LibInstrument* patch, const Score* score);
-// the same for the current library's patch of that name (0: none)
-double mapMs(const QString& patch, const Score* score);
-// what the part plays at: its delays (of()) with each of its routes' patch's map delay added to the patch's Kontakt track
-Delays played(const Part* part, const std::map<const Part*, Delays>& delays, const std::vector<SoundLib::Route>& routes,
-              const Score* score);
 
 }     // namespace TrackDelays
 }     // namespace Ms

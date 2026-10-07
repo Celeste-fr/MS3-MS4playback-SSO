@@ -131,25 +131,12 @@ class MidiRenderer {
       std::map<const Note*, const Note*> libGlideFrom;            // a legato transition's note before (its lane glides)
       std::map<const Note*, double> libGlideDelayMs;              // its measured legato delay, ms (the bend glides then)
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
-      int libLegatoEarly = 0;                                     // SoundLib::legatoEarly, percent (this chunk)
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       // playback settings (libmscore/playbacksettings.h) for this chunk
-      int libOverlapTicks = 0;           // (playback setting legato/overlapTicks)
-      bool libSlurEndOverlap = false;
-      // an early start (a legato transition, a held note's onset) after a note on the same patch: that note keeps at
-      // least libKeep seconds as played ([legato] keepMs); a transition after a short note: libFastDelay ([legato]
+      // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
+      // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
       // fastShare, fastFullMs)
       double libKeep = 0.04, libFastShare = 0.50, libFastFull = 0.38;
-      // the fast technique ([legato] fastTechnique, fastBelowShare): a slurred note after a note shorter than this share
-      // of its transition's delay plays its own attack (no legato transition)
-      bool libFastTechnique = false;
-      bool libFastFirsts = true;          // [legato] fastFirsts: a slur's first note in a fast run starts as early as a transition
-      double libFastBelow = 1.0;
-      // the legato level balance ([legato] levelBalance, levelMaxDb, levelHeadroomDb): a legato transition plays at
-      // its pitch's level (SoundLib::Articulation::legatoLevelAt, by CC11 from its arrival: libraryNoteLevels); the
-      // part's CC11 rests headroom dB down so that transitions arriving softer can be raised that much
-      bool libLevelBalance = false;
-      double libLevelMax = 6.0, libLevelHeadroom = 0.0;
       double libFastDelay(double delayMs, double lenBefore) const;
       // a library note's start as played (note, tickOffset -> utick), this chunk: what an early start after it may take
       std::map<std::pair<const Note*, int>, int> libPlayedOn;
@@ -159,27 +146,14 @@ class MidiRenderer {
       // their written start ends at the new one, and their switch and controllers move with them (finishLibraryEvents)
       struct LibShift { int channel; int patch; int on; int written; int chordTick; };
       std::vector<LibShift> libShifts;
-      // legato transitions started early (this chunk): the note before ends overlapTicks after the new start as
-      // played, not after the written one, so that only one note overlaps the next; a slurred note played by the
-      // fast technique (cut): the note before ends at its start (finishLibraryEvents)
-      struct LibLegatoOff { const Note* from; int channel; int on; bool cut; };
-      std::vector<LibLegatoOff> libLegatoOffs;
-      // fresh attacks on a legato patch (this chunk: a note that is no legato transition, as played): what sounds on its
-      // route until less than [legato] phraseGapMs before it ends that long before (finishLibraryEvents), else SSO
-      // joins the two into a transition
-      struct LibFreshAttack { const Note* note; int channel; int patch; int on; };
-      std::vector<LibFreshAttack> libFreshAttacks;
-      double libPhraseGap = 0.06;
       // a note's own level on its route by a controller (this chunk; libraryNoteLevels): a marcato's level
-      // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller, and the legato level
-      // balance ([legato] levelBalance: volumeDb from its arrival). Several sources on one note add up in dB
-      // on CC11 (volumeDb on top of a CC11 map)
+      // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller, and its track level
+      // (trackdelays.h: volumeDb). Several sources on one note add up in dB on CC11 (volumeDb on top of a CC11 map)
       struct LibLevel {
             int controller { -1 };            // CC11 (softer) or the dynamics CC (louder); -1: none
             std::function<int(int)> map;      // the controller's value in force -> the note's
             int fallback { 127 };             // the value in force when the route has none before the note
             double volumeDb { 0.0 };          // more on the expression CC (CC11, a plain volume: x 10^(dB / 20))
-            double atMs { 0.0 };              // from this long after the note-on (a legato transition's arrival)
             };
       std::map<const Note*, LibLevel> libLevels;
       // track delays and levels (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)

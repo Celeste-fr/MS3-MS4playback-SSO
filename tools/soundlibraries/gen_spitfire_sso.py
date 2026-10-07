@@ -132,17 +132,10 @@ I=[
  (None,'Tubular Bells','tubular-bells',None),
  (None,'Desk Bells','hand-bells',None),
 ]
-# Legato transitions start early (libmscore/rendermidi.cpp: libLegatoEarly): by this share of the
-# patch's measured delay (legatoDelay=). Measured with SSO on the test VM (2026-09-30, Solo Violin, Violins 1,
-# Flute Solo Performance, slurred steps and leaps at 60 and 120 bpm, 42 transitions; the new pitch within
-# 35 cents, YIN every 5 ms): after the beat by a median of 230 ms before, 128 at 50 %, 80 at 75 %, 40 at 100 %
-# (20 of 42 within 40 ms, one 59 ms early); leaps of a fourth or fifth stay 100-280 ms late. 100 %: the
-# full arrival lands a little late, where the ear already hears the new note (docs/HISTORY.md, Legato transitions start early).
-# 0 since 2026-10-06 (the owner: no automatic adjustments, timing is adjusted in Live): notes start as written;
-# 100 turns the measured early starts back on (Playback adjustments, or this). Held notes (and so slurred notes on the
-# All techniques longs, each its own attack) start early by their onset again since 2026-10-07 (the owner: plain Long
-# for everything, lined up within Rasch's 30-50 ms between players; [heldNotes] early 0 plays them as written)
-LEGATO_EARLY = 0
+# Held notes start early by their measured onset (libmscore/rendermidi.cpp: libOnsetEarly), by this percent. Since
+# 2026-10-07 again (the owner: plain Long for everything, lined up within Rasch's 30-50 ms between players; [heldNotes]
+# early 0 plays them as written). (<Legato early>, the legato transitions' early start, 0 since 2026-10-06, went
+# 2026-10-07 with the settings not in use; so did legatoLevel= / legatoLevelLong=, the legato level balance's)
 ONSET_EARLY = 100
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
@@ -181,10 +174,6 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '       retuned once its notes\' release has rung out to 60 dB under (twice release= on the Articulation, measured',
 '       to 30 dB under). Tolerance, tail and the copies\' maximum are left to MuseScore, which computes them -->',
 '  <Tuning method="varispeed"/>',
-'  <!-- a slurred note on a legato articulation (legatoDelay=, a legato transition: the Performance patches, only',
-'       under staff text "performance") reaches its pitch legatoDelay ms after its note-on: it starts early by that',
-'       times early percent (0: notes start as written, the owner 2026-10-06; 100: as measured) -->',
-f'  <Legato early="{LEGATO_EARLY}"/>',
 '  <!-- a held note that is no legato transition (slurred or not) is heard onset ms after its note-on',
 '       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent (0: as written) -->',
 f'  <Onset early="{ONSET_EARLY}"/>',
@@ -1128,22 +1117,6 @@ def octaveDelays(patch):
         return ' '.join(f'{k}:{int(round(v + corr))}' for k, v in sorted(by.items())) or None
     return text('12'), text('-12')
 octaveCount = 0
-# The level each legato transition arrives at (legatoLevel= heard in a run of sixteenths, legatoLevelLong= settled):
-# sso_legato_levels.json (legato_levels_from_scan.py: the legato level scan, kthost renders of every start pitch x
-# interval +-1 2 3 5 7 12 per Performance patch at mf, 2026-10-02, branch legato-level-balance), dB against the
-# median of the transitions into the same pitch; the renderer's [legato] levelBalance plays each at that median
-LEGATO_LEVELS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_levels.json')
-LEGATO_LEVELS = json.load(open(LEGATO_LEVELS_PATH, encoding='utf-8')) if os.path.exists(LEGATO_LEVELS_PATH) else {}
-def legatoLevels(patch, which):
-    """the legatoLevel= / legatoLevelLong= text of a patch (None: not measured)"""
-    t = LEGATO_LEVELS.get(patch, {}).get(which)
-    if not t:
-        return None
-    def v(x):
-        return '' if x is None else f'{x:g}'
-    return ' '.join(f'{int(i):+d}:{first}:' + ','.join(v(x) for x in vals)
-                    for i, (first, vals) in sorted(t.items(), key=lambda kv: int(kv[0]))) or None
-legatoLevelCount = 0
 def legatoDelay(patch, sound, t):
     """the legatoDelay= text of a patch's legato sound (None: not measured)"""
     fromPitches = legatoDelayFromPitches(patch, sound)
@@ -1424,13 +1397,6 @@ for i, line in enumerate(out):
             extra += f' octaveDown="{down}"'
         if up or down:
             octaveCount += 1
-        run, settled = legatoLevels(current, 'run'), legatoLevels(current, 'settled')
-        if run:
-            extra += f' legatoLevel="{run}"'
-        if settled:
-            extra += f' legatoLevelLong="{settled}"'
-        if run or settled:
-            legatoLevelCount += 1
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
     f = shortFrom(current, sound)
     if f:

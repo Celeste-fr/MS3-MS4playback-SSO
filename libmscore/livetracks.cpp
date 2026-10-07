@@ -458,14 +458,10 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         notImported << QObject::tr("Track \"%1\": its Track Delay is in samples (MuseScore's are in ms)").arg(t.name);
                   else if (w.kind == "part")
                         d.ms = TrackDelays::clampMs(t.delay);
-                  else {
-                        // (a Kontakt track's TrackDelay includes its patch's map delay: TrackDelays::played)
-                        const double own = t.delay - (w.kind == "kontakt" ? TrackDelays::mapMs(w.delayKey, score) : 0.0);
-                        if (std::fabs(own) > 1e-6)
-                              d.tracks[w.delayKey] = TrackDelays::clampMs(own);
-                        else
-                              d.tracks.erase(w.delayKey);
-                        }
+                  else if (t.delay != 0)
+                        d.tracks[w.delayKey] = TrackDelays::clampMs(t.delay);
+                  else
+                        d.tracks.erase(w.delayKey);
                   }
             bound[i] = b;
             if (s.empty())
