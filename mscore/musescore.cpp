@@ -2090,10 +2090,6 @@ MuseScore::MuseScore()
 
       menuEdit->addSeparator();
       menuEdit->addAction(getAction("reload-playback-settings"));
-      menuPlaybackPreset = menuEdit->addMenu(tr("Playback Preset"));
-      menuPlaybackPreset->addAction(getAction("playback-preset-recommended"));
-      menuPlaybackPreset->addAction(getAction("playback-preset-library"));
-      connect(menuPlaybackPreset, &QMenu::aboutToShow, this, &MuseScore::updatePlaybackPreset);
       pref = new QAction("", 0);
       connect(pref, SIGNAL(triggered()), this, SLOT(startPreferenceDialog()));
       menuEdit->addAction(pref);
@@ -7522,19 +7518,6 @@ void MuseScore::applyPlaybackPreset(const QString& id)
       if (!Playback::applyPreset(id))
             showMessage(tr("Could not write %1").arg(Playback::iniPath()), 8000);
       reloadPlaybackSettings();
-      updatePlaybackPreset();
-      }
-
-//---------------------------------------------------------
-//   updatePlaybackPreset
-//    the Playback Preset submenu's check marks: the preset the ini matches (none: Custom)
-//---------------------------------------------------------
-
-void MuseScore::updatePlaybackPreset()
-      {
-      const QString now = Playback::currentPreset();
-      getAction("playback-preset-recommended")->setChecked(now == "recommended");
-      getAction("playback-preset-library")->setChecked(now == "library");
       }
 
 //---------------------------------------------------------
@@ -7995,10 +7978,6 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
             setPlaybackMode(PlaybackMode::LIBRARY);
       else if (cmd == "reload-playback-settings")
             reloadPlaybackSettings();
-      else if (cmd == "playback-preset-recommended")
-            applyPlaybackPreset("recommended");
-      else if (cmd == "playback-preset-library")
-            applyPlaybackPreset("library");
       else if (cmd == "sound-library") {
             // one window, shown and closed by the View menu's check mark
             static QPointer<SoundLibraryDialog> dialog;

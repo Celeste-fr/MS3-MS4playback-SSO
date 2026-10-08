@@ -124,7 +124,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 
 **Fast slurs (2026-10-02; history: legato transitions play on their beat since 2026-10-06, the early start removed
 2026-10-07, the owner: "I want fast slurs to not sound late"; replaces the fast-note ramp of
-2026-09-30, whose keys `rampFromMs`, `rampToMs`, `rampMaxShare` are now reported as no longer used):** SSO's
+2026-09-30, whose keys `rampFromMs`, `rampToMs`, `rampMaxShare` are now ignored):** SSO's
 Performance patches sound a slurred sixteenth's pitch 100-170 ms after its note-on (strings; woodwinds and brass
 60-130) at 100-200 bpm, longer than the note itself; the ramp left them 90-125 ms late (median). Now every note of a
 fast slurred run starts early by about that much (the cascade: each note before keeps its played length, only a run's

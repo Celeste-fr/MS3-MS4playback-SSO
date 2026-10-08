@@ -289,7 +289,6 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       QMenu* menuFile;
       QMenu* openRecent;
       QMenu* menuEdit;
-      QMenu* menuPlaybackPreset { nullptr };
       QMenu* menuView;
       QMenu* menuToolbars;
       QMenu* menuWorkspaces;
@@ -627,7 +626,6 @@ class MuseScore : public QMainWindow, public MuseScoreCore {
       void checkForUpdates();
       void startPreferenceDialog();
       void applyPlaybackPreset(const QString& id);   // written into playback.ini, then reloadPlaybackSettings()
-      void updatePlaybackPreset();                   // the Playback Preset menu's check marks
       void reloadPlaybackSettings();     // playback.ini read again, every score rendered again
       void restartAudioEngine();
 

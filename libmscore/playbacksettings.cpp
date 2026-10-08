@@ -158,9 +158,14 @@ static bool isTable(const QString& group)
       return false;
       }
 
-// the settings removed on 2026-10-07 (the owner: remove settings not in use; each was off or at a value that
-// changed nothing): an older playback.ini or score that has them opens as before, the key ignored without a warning
+// settings no longer in use: an older playback.ini or score that has them opens as before, the key ignored without a
+// warning (the owner, 2026-10-07: no wall of text). 2026-10-02: the fast-note ramp (legato/ramp*); 2026-10-03: varispeed's
+// glide (a step within a cent), the nominal short (measured from=), the Mixer's glide, a fixed automation step (one MIDI
+// step at its tick); 2026-10-07 (the owner: remove settings not in use; each was off or at a value that changed nothing):
+// the rest
 static const char* const REMOVED[] = {
+      "legato/rampFromMs", "legato/rampToMs", "legato/rampMaxShare", "legato/glideMs", "shorts/nominalShare",
+      "hosting/mixSmoothingMs", "automation/stepTicks",
       "legato/overlapTicks", "legato/slurEndOverlap", "legato/phraseGapMs", "legato/early", "legato/velocity",
       "legato/fastTechnique", "legato/fastFirsts", "legato/fastBelowShare", "legato/levelBalance", "legato/levelMaxDb",
       "legato/levelHeadroomDb", "shorts/calibratedVelocity", "pedal/upAfterMs", "pedal/downAfterMs", "pedal/upMaxShare",
@@ -186,29 +191,8 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
       const Definition* d = definition(id);
       if (!d) {
             if (removed(id))
-                  return;     // (no longer in use since 2026-10-07: ignored silently)
-            // (the fast-note ramp, replaced on 2026-10-02 by keepMs, fastShare / fastFullMs and fastTechnique: fast slurs on time)
-            if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs; delete the line)").arg(id);
-            // (the nominal short rule, 90 % of length=, had no source; every SSO short with a length= has a measured
-            // from=: removed 2026-10-03, numbers-measured)
-            // (varispeed's glide time: now as short as each frame's step stays within a cent, Vst3Plugin::GLIDE_CENT_STEP)
-            else if (id == "legato/glideMs")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: a varispeed glide is as short as each step stays "
-                                        "within a cent; delete the line)").arg(id);
-            else if (id == "shorts/nominalShare")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: every short with a length= has a measured from=; delete the line)").arg(id);
-            // (a fixed ramp step, replaced on 2026-10-03: a ramp sends a value at each tick where it moves by one step of its
-            // controller's resolution, Automation::Lane::events)
-            // (the Mixer's gain glide on library slots, 5 ms: no source; removed 2026-10-03, the owner: no mixer smoothing)
-            else if (id == "hosting/mixSmoothingMs")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: the Mixer's volume, pan and mute apply at once; "
-                                        "delete the line)").arg(id);
-            else if (id == "automation/stepTicks")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: a ramp sends each change of one MIDI step, or of a "
-                                        "parameter's resolution, at the tick it happens; delete the line)").arg(id);
-            else
-                  i.warnings << QString("unknown key %1 (ignored)").arg(id);
+                  return;     // (no longer in use: ignored silently)
+            i.warnings << QString("unknown key %1 (ignored)").arg(id);
             return;
             }
       const QString t = text.trimmed();
@@ -247,7 +231,7 @@ QString iniTemplate()
            "; A key left empty (key=) uses the default; a score can override any of these in\n"
            "; Mixer > Advanced Options... > Playback adjustments. Edit > Reload Playback Settings (or the button there)\n"
            "; reads this file again, no restart. MuseScore writes this file only when it is missing.\n"
-           "; Presets (Recommended, Library default): Edit > Playback Preset, or the Preset box next to the button there; they set only the keys listed in docs/PLAYBACK_SETTINGS.md > Presets.\n"
+           "; Presets (Recommended, Library default): the Preset box there; they set only the keys listed in docs/PLAYBACK_SETTINGS.md > Presets.\n"
            "; Lines starting with ';' are comments. On/off settings: 1 or 0.\n";
       QString section;
       for (const Definition& d : DEFINITIONS) {

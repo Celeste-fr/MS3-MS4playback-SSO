@@ -1427,8 +1427,8 @@ void TestSoundLibrary::playbackSettingsIni()
       QVERIFY(text.contains("[legato]") && text.contains("[hosting]") && text.contains("[legato.delay]"));
       QCOMPARE(Playback::value("legato/fastShare"), 50.0);
       QCOMPARE(Playback::source("legato/fastShare"), Playback::Source::DEFAULT);
-      // edited by hand: an override, a bad value, an unknown key, one out of range, a table; settings removed
-      // 2026-10-07 (overlapTicks, the pedal timing) are ignored silently
+      // edited by hand: an override, a bad value, an unknown key, one out of range, a table; settings no longer
+      // in use (rampToMs since 2026-10-02, overlapTicks and the pedal timing since 2026-10-07) are ignored silently
       QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
       f.write("; edited\n[legato]\nfastShare=60\nkeepMs=abc\nrampToMs=250\nbogus=1\noverlapTicks=60\nvelocity=90\n"
               "[pedal]\nupAfterMs=5000\n[shorts]\ncalibratedVelocity=1\nstaccato=500\n"
@@ -1441,12 +1441,11 @@ void TestSoundLibrary::playbackSettingsIni()
       QCOMPARE(Playback::source("legato/fastShare"), Playback::Source::INI);
       QCOMPARE(Playback::value("legato/keepMs"), 40.0);       // (not a number: the default)
       QCOMPARE(Playback::value("shorts/staccato"), 100.0);    // (clamped)
-      QCOMPARE(Playback::warnings().size(), 4);
+      QCOMPARE(Playback::warnings().size(), 3);
       QVERIFY(Playback::warnings().join(" ").contains("legato/bogus"));
       QVERIFY(!Playback::warnings().join(" ").contains("overlapTicks"));
       QVERIFY(!Playback::warnings().join(" ").contains("upAfterMs"));
-      // (the fast-note ramp's keys, gone since 2026-10-02: said so)
-      QVERIFY(Playback::warnings().join(" ").contains("legato/rampToMs is no longer used"));
+      QVERIFY(!Playback::warnings().join(" ").contains("rampToMs"));
       QCOMPARE(Playback::adjust("legato.delay", "Violins 2 - Performance", "Legato", 2, 200), 225.0);
       QCOMPARE(Playback::adjust("legato.delay", "Celli - Performance", "Legato", 0, 200), 400.0);   // (its own table)
       QCOMPARE(Playback::adjust("legato.delay", "Violas - Performance", "Legato", 2, 200), 200.0);

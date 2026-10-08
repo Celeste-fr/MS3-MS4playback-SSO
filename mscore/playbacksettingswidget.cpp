@@ -39,7 +39,7 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       ph->addWidget(new QLabel(tr("Preset:"), this));
       _preset = new QComboBox(this);
       _preset->setToolTip(tr("Sets the presets' keys in playback.ini (comments and other values are kept) and reads it again, "
-                             "playback going on. Edit > Playback Preset does the same."));
+                             "playback going on."));
       ph->addWidget(_preset);
       _presetInfo = new QLabel(this);
       ph->addWidget(_presetInfo, 1);
@@ -232,7 +232,9 @@ void PlaybackSettingsWidget::refresh()
             _tree->setItemWidget(it, 1, box);
             }
       QStringList warn = Playback::warnings();
-      _info->setText(warn.isEmpty() ? QString() : tr("playback.ini: %1").arg(warn.join("; ")));
+      // (one line: the details on hover)
+      _info->setText(warn.isEmpty() ? QString() : tr("playback.ini: %n line(s) ignored or corrected (hover for details)", "", warn.size()));
+      _info->setToolTip(warn.join("\n"));
       _info->setVisible(!warn.isEmpty());
       _filling = false;
       }
