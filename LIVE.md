@@ -306,7 +306,11 @@ in a section collapsible at the same time".
   set (`tst_liveequivalence` `plainSetLinked`). The device passes notes, controllers, program changes and pitch bend on
   unchanged, keys 114-127 too: it converts carriers only on a track holding a "MuseScore: …" clip (protocol 8, above
   › What a clip holds), and the plain set's clips are named after their techniques. (Before protocol 8 it turned
-  every note on 114-127 into a controller.) Measured on the VM (Live
+  every note on 114-127 into a controller.) Checked on the VM (Live 12.4.6, 2026-10-07, recorder tracks taking each
+  technique track's output): a "Long" clip with keys 60 and 112-127 at velocities 1, 65 and 127 came out identical (51
+  notes: keys, velocities, lengths, times within 0.04 millibeats); a "MuseScore: …" clip's carriers on another copy came
+  out as CC1, CC11, CC64 and the pitch bend with the expected values, no key 114-127 left (CC32 can't be checked
+  this way: Live doesn't record it into a clip). Measured on the VM (Live
   12.4.6, Kontakt 8 + SSO, Whence: 10 technique tracks, 2026-10-07; numbers in the commit message): what reaches the
   Kontakt tracks has the same notes, keys and velocities, each note-on and note-off up to one sample (44.1 kHz) later;
   load, save, memory and CPU within the runs' spread (about +100 MB private memory).
