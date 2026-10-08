@@ -1580,13 +1580,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                        && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
                                     // a held note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
                                     // the note-on, sul tasto / flautando / harmonics 175-440 ms): early by its onset, the
-                                    // chord's latest so that its notes start together
+                                    // chord's latest so that its notes start together; [heldNotes] byPitch 0: the patch's
+                                    // median onset for every pitch (one shift, a run's spacing as written)
                                     double onsetMs = 0;
                                     for (const Note* n : note->chord()->notes())
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
                                                                    libPatches[libChoice.patch]->name, libChoice.articulation->name,
-                                                                   n->ppitch(), libChoice.articulation->onsetAt(n->ppitch())));
+                                                                   n->ppitch(), libOnsetByPitch ? libChoice.articulation->onsetAt(n->ppitch())
+                                                                                                : libChoice.articulation->onsetMedian()));
                                     const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
                                     const double earlyMs = onsetMs * libOnsetEarly / 100.0;
                                     if (earliest >= 0 && earlyMs > 0) {
@@ -4382,6 +4384,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 
       libChunkStart = chunk.utick1();
       libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
+      libOnsetByPitch = Playback::on("heldNotes/byPitch", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;

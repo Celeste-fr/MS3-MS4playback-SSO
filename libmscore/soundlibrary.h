@@ -115,6 +115,7 @@ struct Articulation {
       double onsetMs { -1 };
       std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
       double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
+      double onsetMedian() const;         // the median of the measured onsets (onsetMs without a table)
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;

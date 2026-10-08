@@ -132,6 +132,7 @@ class MidiRenderer {
       std::map<const Note*, double> libGlideDelayMs;              // its measured legato delay, ms (the bend glides then)
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
+      bool libOnsetByPitch = true;                                // [heldNotes] byPitch (0: the patch's median onset)
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]

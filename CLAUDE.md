@@ -134,7 +134,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed
   keys are listed in `REMOVED` and ignored silently). Read a
   setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
-  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
+  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended / Even early (`heldNotes/byPitch` 0: each patch early by its median onset) / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
 - Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; read for a
   marcato's level (the curve's inverse). The short balance and even steps were removed 2026-10-07.
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
@@ -257,7 +257,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 19 passed (2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added), `dumpEvents` skipped (a
-  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`). `tst_liveintegration` 60 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
+  tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`). `tst_liveintegration` 60 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

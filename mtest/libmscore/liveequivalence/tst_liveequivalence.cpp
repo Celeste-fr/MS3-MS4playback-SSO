@@ -1792,7 +1792,8 @@ void TestLiveEquivalence::liveTracksJson()
 
 //---------------------------------------------------------
 //   dumpEvents
-//    a tool, skipped unless MS_DUMP_SCORE, MS_DUMP_MAP and MS_DUMP_OUT are set: per route, MuseScore's events
+//    a tool, skipped unless MS_DUMP_SCORE, MS_DUMP_MAP and MS_DUMP_OUT are set (MS_DUMP_SETTINGS: the score's playback
+//    settings, "id=value;..."): per route, MuseScore's events
 //    (<route> museScore.txt) and the MIDI the device makes of the clip (<route> live.txt) as lines "seconds type a b"
 //    (on, off, cc <n> <value>, pb <14-bit> 0), for replaying both through one plug-in instance elsewhere (the kthost
 //    on the Windows VM: LIVE.md › Measured with SSO)
@@ -1810,6 +1811,8 @@ void TestLiveEquivalence::dumpEvents()
       MasterScore* score = readCreatedScore(qEnvironmentVariable("MS_DUMP_SCORE"));
       QVERIFY(score);
       score->rebuildMidiMapping();
+      if (qEnvironmentVariableIsSet("MS_DUMP_SETTINGS"))         // (the score's playback settings, e.g. heldNotes/byPitch=0)
+            score->setMetaTag(Playback::metaTag, qEnvironmentVariable("MS_DUMP_SETTINGS"));
       EventMap events;
       score->renderMidi(&events, false, true, SynthesizerState());
       const QString out = qEnvironmentVariable("MS_DUMP_OUT");

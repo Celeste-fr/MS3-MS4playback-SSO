@@ -187,6 +187,18 @@ double Articulation::onsetAt(int pitch) const
       return keyedMsAt(onsets, onsetMs, pitch);
       }
 
+double Articulation::onsetMedian() const
+      {
+      if (onsets.empty())
+            return onsetMs;
+      std::vector<double> v;
+      for (const auto& p : onsets)
+            v.push_back(p.second);
+      std::sort(v.begin(), v.end());
+      const size_t n = v.size();
+      return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+      }
+
 // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"] [technique="roll"]
 // [default="off"]/>; without pitch: a key no MuseScore sound plays (listed for reference and checked, never chosen);
 // without key (default="off", no pitch): a technique the patch has, off at its defaults, with no key (reference)

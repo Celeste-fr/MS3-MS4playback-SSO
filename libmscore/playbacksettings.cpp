@@ -50,6 +50,9 @@ static const std::vector<Definition> DEFINITIONS = {
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
         "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },
+      { "heldNotes/byPitch", 1, 0, 1, "on/off",
+        "1: by its pitch's measured onset; 0: every held note of a patch by the median of the patch's measured onsets "
+        "(one shift: a run keeps its written spacing)", true },
       // [shorts]
       { "shorts/byMeantLength", 1, 0, 1, "on/off",
         "1: a short with a measured from= is chosen by how long the note is meant to sound (written length times the factors below); 0: by its written length", true },
@@ -267,7 +270,7 @@ QString iniTemplate()
 
 //---------------------------------------------------------
 //   presets
-//    Only heldNotes/early differs between them. The other settings are not in the table because: legato/keepMs acts
+//    Only the held notes' early start differs between them (heldNotes/early, heldNotes/byPitch). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -276,7 +279,9 @@ QString iniTemplate()
 const std::vector<Preset>& presets()
       {
       static const std::vector<Preset> P = {
-            { "recommended", "Recommended", { { "heldNotes/early", 100 } } },
+            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } } },
+            // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent": early, evenly)
+            { "even", "Even early", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } } },
             { "library", "Library default", { { "heldNotes/early", 0 } } },
             };
       return P;
@@ -354,15 +359,27 @@ bool applyPreset(const QString& id, const QString& pathArg)
       return f.error() == QFile::NoError;
       }
 
+static double presetValue(const char* presetId, const char* id)
+      {
+      for (const Preset& p : presets())
+            if (QString(p.id) == presetId)
+                  for (const auto& kv : p.values)
+                        if (QString(kv.first) == id)
+                              return kv.second;
+      return NAN;
+      }
+
 QString detectPreset(const std::map<QString, double>& iniValues)
       {
       for (const Preset& p : presets()) {
             bool all = true;
             for (const auto& kv : p.values) {
                   const auto it = iniValues.find(kv.first);
-                  // (a key left out is the map's value: the Recommended preset's)
-                  const bool match = it == iniValues.end() ? QString(p.id) == "recommended"
-                                                           : std::fabs(it->second - kv.second) < 1e-6;
+                  // (a key left out is its default; the map's value is the Recommended preset's)
+                  const Definition* d = definition(kv.first);
+                  const double left = d && d->mapDefault() ? presetValue("recommended", kv.first) : d ? d->value : NAN;
+                  const double v = it != iniValues.end() ? it->second : left;
+                  const bool match = std::fabs(v - kv.second) < 1e-6;
                   all = all && match;
                   }
             if (all)
