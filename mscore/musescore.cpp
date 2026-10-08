@@ -5234,7 +5234,7 @@ static bool liveSetInBackground(const QStringList& argv)
 #endif
       if (!liveSetOut.isEmpty()) {
             LiveIntegration::LiveSetPlan plan;
-            if (!LiveIntegration::planLiveSet(score.get(), *library, LiveIntegration::LiveSetKind::PLAIN, &plan, &error)
+            if (!LiveIntegration::planLiveSet(score.get(), *library, LiveIntegration::LiveSetKind::PLAIN_LINKED, &plan, &error)
                 || !LiveSetWriter::write(liveSetOut, plan.spec, &error)) {
                   log(error);
                   ok = false;

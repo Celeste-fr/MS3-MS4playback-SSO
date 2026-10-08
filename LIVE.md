@@ -298,7 +298,7 @@ in a section collapsible at the same time".
 - **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
   the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.
 - **With MuseScore Link on each technique track** (`LiveSetKind::PLAIN_LINKED`, `PlainLiveSet::tracks(layout, true)`;
-  not the default, no menu entry yet): the same set with a MuseScore Link copy as each technique track's only device,
+  Create Live Set and `--create-live-set` write it since 2026-10-07, the owner: "make it default"): the same set with a MuseScore Link copy as each technique track's only device,
   so "Edit in MuseScore" and clip tabs playing through Live work on any track. Off, the set is byte for byte the plain
   set (`tst_liveequivalence` `plainSetLinked`). The device passes notes, controllers, program changes and pitch bend on
   unchanged, except notes on its carrier keys 114-127 (they become controllers / pitch bend, their note-offs dropped):

@@ -487,7 +487,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       LiveSetPlan plan;
       QString error;
       QApplication::setOverrideCursor(Qt::WaitCursor);
-      const bool ok = planLiveSet(score, *library, onlyMissing ? LiveSetKind::MISSING_ROUTES : LiveSetKind::PLAIN, &plan, &error);
+      const bool ok = planLiveSet(score, *library, onlyMissing ? LiveSetKind::MISSING_ROUTES : LiveSetKind::PLAIN_LINKED, &plan, &error);
       QApplication::restoreOverrideCursor();
       if (!ok) {
             QMessageBox::warning(parent, title, error);

@@ -191,8 +191,8 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - Owner reports a problem: suspect Kontakt's MIDI channel (we send 1), editor sizing, sample loading in offline
   export; crackles / slow loads: memory (Kontakt's preload override at 30 kB).
 
-**Live** (LIVE.md): Create Live Set writes the **plain set** (the owner, 2026-10-06: no automatic adjustments, no
-device; `plainliveset.*`: section group › part group › a Kontakt track per patch + a MIDI track per technique carrying
+**Live** (LIVE.md): Create Live Set writes the **plain set** (the owner, 2026-10-06: no automatic adjustments; since
+2026-10-07 a MuseScore Link copy on each technique track, `PLAIN_LINKED`, for clip editing; `plainliveset.*`: section group › part group › a Kontakt track per patch + a MIDI track per technique carrying
 its own switch, MIDI To the Kontakt; XML in `livesetxml.h`, `livesetclips.cpp`; `LiveSetKind`; LIVE.md › The plain
 set lists what Live hasn't confirmed); read back by `livetracks.*` (track keys in the Info text; metaTag `liveTracks`: the
 written hashes, other tracks' mixer and its automation). Live plays the score as clips (`liveclips.*`), the route set (`livesetwriter.*`,
