@@ -29,7 +29,8 @@
 //     libraryPitchBends: 14 bit on keys 115 (upper 7 bits) and 114 (lower 7), each written when it changes; a glide's
 //     3 ms steps each one carrier). The MuseScore Link device (tools/live/), placed before the
 //     library's plug-in on the track, turns each carrier's note-on into its controller and drops
-//     its note-off. The Live Object Model can write notes but not a clip's MIDI controller
+//     its note-off, on a track holding a clip named "MuseScore: …" (clipName; the device's protocol 8: elsewhere every
+//     note passes). The Live Object Model can write notes but not a clip's MIDI controller
 //     envelopes; carrier notes keep the controllers in the clip, played by Live's own clock:
 //     sample-exact with the notes, in an offline export and a freeze too, and chased when
 //     playback starts mid-way (Live's "Chase MIDI Notes", on by default: each carrier lasts

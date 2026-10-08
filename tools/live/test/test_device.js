@@ -125,6 +125,46 @@ test("the same clip again: notes replaced; a new length: made again; never over 
       assert.ok(s.hub.sent("/live/applied").pop()[2].startsWith("other clips"));
       });
 
+test("carriers (protocol 8): each copy's gate is 1 only while its track holds a \"MuseScore: …\" clip (arrangement or session)", () => {
+      const s = setUp();
+      const gates = (d) => d.out.filter((m) => m[0] === 9 && m[1] === "gate").map((m) => m[2]);
+      assert.deepStrictEqual(gates(s.hub), [2]);                              // loaded on a track without one: through
+      assert.deepStrictEqual(gates(s.other), [2]);
+      // the hub makes the violins' clip: their copy hears it at once (msl_carriers), the flute's doesn't change
+      sendClip(s.hub, 1, "0:1", "MuseScore A", 1, "Violins 1", "MuseScore: Violins 1", true, 30, [[127, 0, 3840, 2]], 1);
+      s.hub.work();
+      s.live.settle();
+      assert.deepStrictEqual(gates(s.hub), [2, 1]);
+      assert.deepStrictEqual(gates(s.other), [2]);
+      // the heartbeat changes nothing while it stays
+      s.hub.runTasks();
+      s.other.runTasks();
+      assert.deepStrictEqual(gates(s.hub), [2, 1]);
+      assert.deepStrictEqual(gates(s.other), [2]);
+      // the clip deleted in Live (the ids change: seen within a second)
+      s.vln.clips = [];
+      s.hub.runTasks();
+      assert.deepStrictEqual(gates(s.hub), [2, 1, 2]);
+      // a plain set's clip (named after its technique) and a session clip: through; a session clip named "MuseScore: …": 1
+      s.live.clip(s.fl, "Long", 0, 8);
+      const slot = s.live.clipSlot(s.fl);
+      slot.clip = s.live.add({ kind: "clip", name: "Spiccato", notes: [] }).id;
+      s.other.runTasks();
+      assert.deepStrictEqual(gates(s.other), [2]);
+      s.live.objects[slot.clip].name = "MuseScore: Flute";                    // (a rename: read again within 5 s)
+      s.other.call("carrierNamed = 0");
+      s.other.runTasks();
+      assert.deepStrictEqual(gates(s.other), [2, 1]);
+      // the hub clears a part (/ms/clip/clear path): the violins' copy goes back to 2 at once
+      sendClip(s.hub, 2, "0:1", "MuseScore A", 1, "Violins 1", "MuseScore: Violins 1", true, 30, [[60, 0, 3840, 90]], 2);
+      s.hub.work();
+      s.live.settle();
+      assert.deepStrictEqual(gates(s.hub).slice(-1), [1]);
+      s.hub.call("clearClip({ key: '0:1', port: 'MuseScore A', channel: 1, part: 'Violins 1', clip: 'MuseScore: Violins 1', main: true })");
+      s.live.settle();
+      assert.deepStrictEqual(gates(s.hub).slice(-1), [2]);
+      });
+
 test("a part found by name; an extra patch by \"<part> – <patch>\" or its patch alone; the device after Kontakt said", () => {
       const s = setUp();
       sendClip(s.hub, 1, "0:2", "MuseScore A", 2, "Flute", "MuseScore: Flute", true, 10, [[72, 0, 3840, 90]], 9);

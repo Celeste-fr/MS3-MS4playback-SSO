@@ -167,7 +167,10 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   when it changes (2026-09-30). The Live Object Model can write a clip's notes but not
   its MIDI controller envelopes, so the controllers travel as notes, and the **MuseScore Link**
   device, placed before Kontakt on the track, turns each carrier into its controller or the pitch bend
-  (and drops its note-off). Keys 114-127 are never played as notes. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
+  (and drops its note-off). Keys 114-127 are never played as notes. The device does so only on a track holding a
+  clip named "MuseScore: …" (protocol 8, 2026-10-07; `MuseScoreLink.js` › Carriers: a `[gate 2 2]` before the carrier
+  keys' `[route]`, set by the copy from its own track's arrangement and session clips once a second and at once
+  when the hub makes or deletes one); on any other track every note passes unchanged, keys 114-127 too. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
   also in an export or a freeze, and chased when playback starts in the middle (Live's *Chase MIDI
   Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
   placed just before it (0.26 ms at 120 bpm apart): switches first, then the controllers, the pitch bend
@@ -241,8 +244,8 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
 Tested here: the clips' contents (`tst_liveintegration` clipsTimeline, clipsControllers, clipsScore,
 clipsChanges, clipsOsc, clipsImport); the device's script against a stand-in for Live
 (`tools/live/test/test_device.js`: hub, tracks by port / name, clips replaced, the owner's clips left,
-locators, tempo, transport, Monitor) and its patcher and `.amxd` (`test_patch.js`: carrier notes to
-controllers); and the whole chain with a real MuseScore build (GUI under Xvfb) talking to the stand-in
+locators, tempo, transport, Monitor, the carriers' gate) and its patcher and `.amxd` (`test_patch.js`: carrier notes to
+controllers, every note through on other tracks); and the whole chain with a real MuseScore build (GUI under Xvfb) talking to the stand-in
 over UDP (`tools/live/test/fake_live_server.js`): a two-part score with a repeat and a tempo change
 gave four clips on four tracks found by name, locators at the right beats (60 then 120 bpm at bar 3),
 and a note moved up in MuseScore reached its clip about a second later, only that clip sent again;
@@ -301,8 +304,9 @@ in a section collapsible at the same time".
   Create Live Set and `--create-live-set` write it since 2026-10-07, the owner: "make it default"): the same set with a MuseScore Link copy as each technique track's only device,
   so "Edit in MuseScore" and clip tabs playing through Live work on any track. Off, the set is byte for byte the plain
   set (`tst_liveequivalence` `plainSetLinked`). The device passes notes, controllers, program changes and pitch bend on
-  unchanged, except notes on its carrier keys 114-127 (they become controllers / pitch bend, their note-offs dropped):
-  the plain set's notes never reach them in Whence; a score's notes there would change. Measured on the VM (Live
+  unchanged, keys 114-127 too: it converts carriers only on a track holding a "MuseScore: …" clip (protocol 8, above
+  › What a clip holds), and the plain set's clips are named after their techniques. (Before protocol 8 it turned
+  every note on 114-127 into a controller.) Measured on the VM (Live
   12.4.6, Kontakt 8 + SSO, Whence: 10 technique tracks, 2026-10-07; numbers in the commit message): what reaches the
   Kontakt tracks has the same notes, keys and velocities, each note-on and note-off up to one sample (44.1 kHz) later;
   load, save, memory and CPU within the runs' spread (about +100 MB private memory).
@@ -1449,7 +1453,7 @@ do.
 (Moved from CLAUDE.md on 2026-10-04, to keep that file short: agents read it whole.)
 
 `libmscore/midisync.h`, `liveset.*` (automation from a set), `liveclips.*` + `mscore/liveclips.*`
-(Live plays the score; carrier notes 114-127), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
+(Live plays the score; carrier notes 114-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
 tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
 (`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
 `libmscore/plainliveset.*` (the plain set), `libmscore/livetracks.*` (the plain set read back: track keys in the
