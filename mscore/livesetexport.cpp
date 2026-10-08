@@ -131,7 +131,8 @@ LiveSetWriter::LinkDevice findLinkDevice(QString* note)
 //    the plain set (plainliveset.h): its tracks, and in plan->notes what it can't hold
 //---------------------------------------------------------
 
-static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const SoundLib::Library& library, LiveSetPlan* plan)
+static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const SoundLib::Library& library, LiveSetPlan* plan,
+                                                     bool link)
       {
       EventMap events;
       LiveClipsLink::renderEvents(score, &events);
@@ -154,7 +155,7 @@ static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const S
                               if (l.cc == PlainLiveSet::PITCH_BEND)
                                     plan->notes << QObject::tr("%1 – %2: its pitch bends are not written yet").arg(p.name, k.patch);
                         }
-      std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(layout);
+      std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(layout, link);
       // what the score keeps of Live's tracks (livetracks.h): their mixer and its automation
       LiveTracks::apply(LiveTracks::read(score), &tracks);
       return tracks;
@@ -178,7 +179,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             return false;
             }
       LiveSetWriter::setSong(score, &plan->spec);
-      const bool plain = kind == LiveSetKind::PLAIN;
+      const bool plain = kind == LiveSetKind::PLAIN || kind == LiveSetKind::PLAIN_LINKED;
 
       // only the routes without a track: the device's report, else the linked set, else all
       if (kind == LiveSetKind::MISSING_ROUTES) {
@@ -207,10 +208,15 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                                              "all of them");
             }
       else if (plain)
-            tracks = plainTracks(score, library, plan);
+            tracks = plainTracks(score, library, plan, kind == LiveSetKind::PLAIN_LINKED);
 
       int allIns = 0;
-      if (!plain) {
+      if (kind == LiveSetKind::PLAIN_LINKED) {
+            QString deviceNote;
+            plan->spec.link = findLinkDevice(&deviceNote);
+            plan->notes << deviceNote;
+            }
+      else if (!plain) {
             QString deviceNote;
             plan->spec.link = findLinkDevice(&deviceNote);
             plan->notes << deviceNote;

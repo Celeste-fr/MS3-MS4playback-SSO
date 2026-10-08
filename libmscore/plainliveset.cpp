@@ -437,7 +437,7 @@ QStringList keyPath(const QString& annotation)
       return annotation.mid(int(strlen(KEY_PREFIX))).split(" / ");
       }
 
-std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
+std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
       {
       std::vector<LiveSetWriter::Track> out;
       int partNumber = 0;
@@ -513,7 +513,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                         for (size_t i = 0; i < k.techniques.size(); ++i) {
                               LiveSetWriter::Track tt;
                               tt.name = QString("%1 – %2").arg(out[size_t(kontaktIndex)].name, k.techniques[i].name);
-                              tt.link = false;
+                              tt.link = link;
                               tt.color = color;
                               tt.groupIndex = partIndex;
                               tt.midiTo = kontaktIndex;

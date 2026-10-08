@@ -52,6 +52,7 @@ struct LiveSetPlan {
 
 enum class LiveSetKind {
       PLAIN,            // Create Live Set: the plain set (plainliveset.h), no device
+      PLAIN_LINKED,     // the plain set with a MuseScore Link copy on each technique track (PlainLiveSet::tracks' link)
       ROUTES,           // a track per route with the MuseScore Link device (Live against MuseScore compares it)
       MISSING_ROUTES    // ROUTES, only those without a track in Live yet: from the device's report when it answers for
                         // this score, else from the linked set, else all of them (Add Missing Tracks)

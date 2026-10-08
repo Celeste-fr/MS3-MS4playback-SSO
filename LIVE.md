@@ -297,6 +297,15 @@ in a section collapsible at the same time".
   pitch), pitch bends (not written yet).
 - **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
   the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.
+- **With MuseScore Link on each technique track** (`LiveSetKind::PLAIN_LINKED`, `PlainLiveSet::tracks(layout, true)`;
+  not the default, no menu entry yet): the same set with a MuseScore Link copy as each technique track's only device,
+  so "Edit in MuseScore" and clip tabs playing through Live work on any track. Off, the set is byte for byte the plain
+  set (`tst_liveequivalence` `plainSetLinked`). The device passes notes, controllers, program changes and pitch bend on
+  unchanged, except notes on its carrier keys 114-127 (they become controllers / pitch bend, their note-offs dropped):
+  the plain set's notes never reach them in Whence; a score's notes there would change. Measured on the VM (Live
+  12.4.6, Kontakt 8 + SSO, Whence: 10 technique tracks, 2026-10-07; numbers in the commit message): what reaches the
+  Kontakt tracks has the same notes, keys and velocities, each note-on and note-off up to one sample (44.1 kHz) later;
+  load, save, memory and CPU within the runs' spread (about +100 MB private memory).
 - **Checked in Live 12.4.6** (the VM's trial, Drift standing in for Kontakt, 2026-10-06): the set opens without a
   dialog, both group levels fold (outer group TrackGroupId -1, inner the outer's Id, AudioOut/GroupTrack). MIDI To is
   `MidiOut/Track.<id>/TrackIn` (Upper the track's name, Lower "Track In"); the receiving track plays it only with

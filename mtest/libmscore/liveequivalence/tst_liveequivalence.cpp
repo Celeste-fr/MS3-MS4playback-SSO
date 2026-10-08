@@ -92,6 +92,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveMarcatoLevel();
       void plainLayout();
       void plainSet();
+      void plainSetLinked();
       void plainSetReadBack();
       void plainSetTrackDelays();
       void liveTracksJson();
@@ -1252,6 +1253,162 @@ void TestLiveEquivalence::plainSet()
             QVERIFY2(LiveSetWriter::write(out, spec, &err), qPrintable(err));
             }
       delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   plainSetLinked
+//    the plain set with a MuseScore Link copy on each technique track (LiveSetKind::PLAIN_LINKED): off, the set is
+//    the plain set's byte for byte (also with a device known); on, each technique track's only device is the link
+//    copy (MIDI To the Kontakt as before), the groups and the Kontakt get none, and the set reads back as unchanged
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainSetLinked()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, LiveClips::timeline(score));
+      LiveSetWriter::LinkDevice device;
+      device.path = "C:/Users/u/Music/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd";
+      device.userLibraryPath = "Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd";
+      device.size = 123456;
+      device.crc = 4321;
+      device.modified = 1759000000;
+
+      // off: as before, with or without a device known
+      LiveSetWriter::Spec plain;
+      plain.tracks = PlainLiveSet::tracks(l);
+      LiveSetWriter::Spec off;
+      off.tracks = PlainLiveSet::tracks(l, false);
+      off.link = device;
+      const QByteArray x0 = LiveSetWriter::xml(plain);
+      QCOMPARE(LiveSetWriter::xml(off), x0);
+      QVERIFY(!x0.contains("MxDeviceMidiEffect"));
+
+      // on
+      LiveSetWriter::Spec on;
+      on.tracks = PlainLiveSet::tracks(l, true);
+      on.link = device;
+      QCOMPARE(on.tracks.size(), plain.tracks.size());
+      int techniques = 0;
+      for (size_t i = 0; i < on.tracks.size(); ++i) {
+            const LiveSetWriter::Track& t = on.tracks[i];
+            QCOMPARE(t.link, t.midiTo >= 0);
+            QCOMPARE(t.annotation, plain.tracks[i].annotation);
+            QCOMPARE(t.midiTo, plain.tracks[i].midiTo);
+            if (t.midiTo >= 0)
+                  ++techniques;
+            }
+      QVERIFY(techniques >= 2);
+      const QByteArray x1 = LiveSetWriter::xml(on);
+      QCOMPARE(LiveSetWriter::validate(x1), QString());
+      QCOMPARE(x1.count("<MxDeviceMidiEffect "), techniques);
+      QCOMPARE(x1.count("<RelativePath Value=\"" + device.userLibraryPath.toUtf8() + "\" />"), techniques);
+      QCOMPARE(x1.count("<MonitoringEnum Value=\"0\" />"), 1);   // (only the Kontakt monitors In, as without)
+      const LiveSet::Set s0 = LiveSet::parse(x0);
+      const LiveSet::Set s1 = LiveSet::parse(x1);
+      QVERIFY(s1.error.isEmpty());
+      QCOMPARE(s1.tracks.size(), s0.tracks.size());
+      for (size_t i = 0; i < s1.tracks.size(); ++i) {
+            QCOMPARE(s1.tracks[i].annotation, s0.tracks[i].annotation);
+            QCOMPARE(s1.tracks[i].outputTarget, s0.tracks[i].outputTarget);
+            QCOMPARE(s1.tracks[i].groupId, s0.tracks[i].groupId);
+            }
+      // each technique track: the link copy its only device; the Kontakt's devices as without (none here: no plug-in)
+      QXmlStreamReader r(x1);
+      std::vector<QStringList> devices;       // per track, its devices' tags
+      int depth = 0, tracksDepth = -1, devicesDepth = -1;
+      while (!r.atEnd()) {
+            r.readNext();
+            if (r.isStartElement()) {
+                  ++depth;
+                  if (r.name() == "Tracks")
+                        tracksDepth = depth;
+                  else if (tracksDepth >= 0 && depth == tracksDepth + 1)
+                        devices.push_back(QStringList());
+                  else if (tracksDepth >= 0 && r.name() == "Devices")
+                        devicesDepth = depth;
+                  else if (devicesDepth >= 0 && depth == devicesDepth + 1)
+                        devices.back() << r.name().toString();
+                  }
+            else if (r.isEndElement()) {
+                  if (depth == devicesDepth)
+                        devicesDepth = -1;
+                  if (depth == tracksDepth)
+                        tracksDepth = -1;
+                  --depth;
+                  }
+            }
+      QCOMPARE(devices.size(), on.tracks.size());
+      for (size_t i = 0; i < devices.size(); ++i)
+            QCOMPARE(devices[i], on.tracks[i].midiTo >= 0 ? QStringList({ "MxDeviceMidiEffect" }) : QStringList());
+
+      // read back: unchanged, as the plain set
+      LiveTracks::Data data;
+      data.written = LiveTracks::written(score, on.tracks, s1);
+      const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, QStringList());
+      LiveTracks::Import im = LiveTracks::import(score, s1, parts, "a.als", QDateTime(), data);
+      QVERIFY2(im.lanes.empty(), qPrintable(im.report.text()));
+      QVERIFY(im.data.tracks.empty());
+      QVERIFY(im.mixes.empty());
+
+      // MS_PLAIN_LINKED_SET_OUT=<file.als>: the set written, for opening in Live
+      const QString out = QString::fromLocal8Bit(qgetenv("MS_PLAIN_LINKED_SET_OUT"));
+      if (!out.isEmpty()) {
+            QString err;
+            QVERIFY2(LiveSetWriter::write(out, on, &err), qPrintable(err));
+            }
+      delete score;
+      SoundLib::setCurrent(nullptr);
+
+      // (a tool) a score's plain set without and with the copies, as Create Live Set plans them: MS_PLAIN_SCORE, MS_PLAIN_MAP,
+      // MS_PLAIN_OUT (writes "<out> plain.als", "<out> linked.als" and their reports), MS_PLAIN_DEVICE (the .amxd: its size
+      // and CRC), MS_PLAIN_DEVICE_AT (its path as the set names it, where Live will open it)
+      if (!qEnvironmentVariableIsSet("MS_PLAIN_SCORE"))
+            return;
+      QString error;
+      std::shared_ptr<SoundLib::Library> map = SoundLib::Library::load(qEnvironmentVariable("MS_PLAIN_MAP"), &error);
+      QVERIFY2(map, qPrintable(error));
+      SoundLib::setCurrent(map);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* whole = readCreatedScore(qEnvironmentVariable("MS_PLAIN_SCORE"));
+      QVERIFY(whole);
+      whole->rebuildMidiMapping();
+      QFile amxd(qEnvironmentVariable("MS_PLAIN_DEVICE"));
+      QVERIFY(amxd.open(QIODevice::ReadOnly));
+      const QByteArray deviceData = amxd.readAll();
+      LiveSetWriter::LinkDevice at;
+      at.path = qEnvironmentVariable("MS_PLAIN_DEVICE_AT");
+      at.size = deviceData.size();
+      at.crc = LiveSetWriter::fileCrc(deviceData);
+      at.modified = QFileInfo(amxd).lastModified().toSecsSinceEpoch();
+      for (const auto& kind : { std::make_pair(LiveIntegration::LiveSetKind::PLAIN, QString("plain")),
+                                std::make_pair(LiveIntegration::LiveSetKind::PLAIN_LINKED, QString("linked")) }) {
+            LiveIntegration::LiveSetPlan plan;
+            QVERIFY2(LiveIntegration::planLiveSet(whole, *map, kind.first, &plan, &error), qPrintable(error));
+            if (kind.first == LiveIntegration::LiveSetKind::PLAIN_LINKED)
+                  plan.spec.link = at;
+            const QString file = qEnvironmentVariable("MS_PLAIN_OUT") + " " + kind.second + ".als";
+            QVERIFY2(LiveSetWriter::write(file, plan.spec, &error), qPrintable(error));
+            QFile report(file + ".txt");
+            QVERIFY(report.open(QIODevice::WriteOnly | QIODevice::Text));
+            report.write(LiveIntegration::reportText(plan, file, false).toUtf8());
+            }
+      delete whole;
       SoundLib::setCurrent(nullptr);
       }
 
