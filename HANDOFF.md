@@ -175,6 +175,14 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
   metaTag `marcatoLevels`); calibration shipped as `share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json`.
   The owner listens: Recommended against Library default (shorts, marcatos, pizzicato against Long), and decides
   whether it merges (with `legato-pair-delays` under it). docs/PLAYBACK_SETTINGS.md › Calibrated levels.
+  Measured 2026-10-08 (Windows VM, kthost offline, real SSO, All techniques Violins 1 / Flute Solo / Horn Solo, events
+  from 1bceb0b4da; each note's loudest 50 ms RMS, median of 4, minus Long at the same dynamic, p / mf / f):
+  Violins Short 0.5 off -3.6 / +1.6 / -5.2, on -4.1 / +2.5 / -1.2; Pizzicato off -13.2 / -4.2 / -5.5, on +1.4 / +2.4 /
+  -1.2; Flute staccato off -13.8 / -8.1 / -0.8, on -5.1 / -2.1 / -1.6; Flute Marcato off -15.4 / -6.6 / +0.4, on -0.6 /
+  +4.2 / +3.8 (target about +4.5); Horn staccato off -2.0 / -3.2 / -4.6, on -1.3 / -3.6 / +0.6; Horn Marcato off +4.1 /
+  +3.6 / -2.7, on +4.7 / +2.1 / +1.5. Open: at p the shipped curves are bumpy (Flute's 48 quieter than its 32), so
+  straight-line reading misses by up to 5 dB; Horn at mf picks a lower velocity than off (staccato alternates samples,
+  5 dB note to note). On a K-weighted peak, Flute Marcato on reads +4 .. +8.6 dB (may sound louder than the RMS says).
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
 
