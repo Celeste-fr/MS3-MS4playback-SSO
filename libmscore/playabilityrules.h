@@ -267,6 +267,96 @@ int divState(const QString& text);
 // a text as a player reads it: a dynamic's SMuFL symbols become their letters, other tags go
 QString plainText(const QString& xmlText);
 
+//---------------------------------------------------------
+//   H1 harp pedals, H2 harp hands, P1 timpani, K1 keyboard span: the owner's approved spec
+//   (diagrams-spec-htk.md, 2026-10-08). Severity: what a book calls impossible is red, what it
+//   calls difficult / rare / to avoid is a warning.
+//---------------------------------------------------------
+
+// letters: 0 C, 1 D, 2 E, 3 F, 4 G, 5 A, 6 B
+struct HarpNote {
+      int letter { 0 };
+      int alter { 0 };              // -2 … +2
+      int octave { 0 };             // the octave of the letter: Cb4 is on the C string of octave 4
+      };
+HarpNote harpNote(int tpc, int pitch);
+// 47 strings, C1 to G7 (Adler p. 90, Ex 4-1): with the pedals Cb1 to G#7
+bool harpHasString(const HarpNote& n);
+int harpStringIndex(const HarpNote& n);              // 0 = the C1 string; one per letter and octave
+// the C and D of octave 1 have no pedal: retuned by hand (Adler p. 90)
+bool harpHandTuned(const HarpNote& n);
+// the bottom seven strings, C1 to B1 (the string layout, Adler p. 90 Ex 4-1; Blatter p. 256)
+bool harpLowestOctave(const HarpNote& n);
+// pedal order, left to right: D C B | E F G A; the left foot works D C B (Adler p. 91)
+extern const int HARP_PEDAL_ORDER[7];                // letters
+bool harpLeftFoot(int letter);
+// the key signature's alteration of a letter (fifths: + sharps, - flats)
+int keyAlter(int fifths, int letter);
+QString letterName(int letter, int alter);           // "Cb", "F#", "D"
+// the same pitch on a neighbouring letter, a single accidental at most (Cb = B, F = E#, F# = Gb);
+// empty for D, G and A, which have none (Kennan & Grantham p. 278), and for double accidentals
+QString harpEnharmonic(int letter, int alter);
+// H2: more notes in one hand at once is red (Blatter p. 256, K&G p. 281); a chord wider than a
+// 10th in one hand a warning: ten strings, both ends counted (Blatter p. 256, K&G p. 281)
+constexpr int HARP_HAND_NOTES = 4;
+constexpr int HARP_HAND_STRINGS = 10;
+
+//---------------------------------------------------------
+//   P1 timpani: drum ranges (Adler p. 445 Ex 12-24, K&G p. 227 Ex 13.1, Blatter p. 211 Ex 5.4),
+//   four drums, a fifth (the 20″ piccolo) only when the part names one; 15 s to retune a drum
+//   (Blatter p. 210)
+//---------------------------------------------------------
+
+struct TimpaniDrum {
+      const char* size;
+      int lo, hi;                   // sounding MIDI
+      double middle() const { return (lo + hi) / 2.0; }
+      };
+std::vector<TimpaniDrum> timpaniDrums(bool fifth);   // largest first
+constexpr double TIMPANI_RETUNE_SECONDS = 15.0;
+// a text naming a fifth drum: "5 drums", "five timpani", "piccolo timpano", "timpano piccolo"
+bool timpaniFifthDrum(const QString& text);
+
+struct TimpaniMoment {
+      double start { 0 };           // seconds
+      std::vector<int> pitches;     // distinct, ascending
+      std::vector<double> ends;     // per pitch: the end of its longest note, seconds
+      };
+struct TimpaniNotePlan {
+      enum class Problem : char { NONE, RANGE, TOO_MANY, NO_DRUM, RETUNE };
+      int pitch { 0 };
+      int drum { -1 };
+      Problem problem { Problem::NONE };
+      int from { -1 };              // the drum's pitch before a retune, else -1
+      double seconds { 0 };         // the time the retune has
+      };
+struct TimpaniPlan {
+      std::vector<std::vector<TimpaniNotePlan>> moments;
+      std::vector<std::vector<int>> tuning;          // per moment, per drum after it: pitch or -1
+      };
+// The planner (K&G p. 227, Blatter p. 211): a pitch goes to a free drum already tuned to it; else
+// to a free drum whose range holds it, choosing (1) one that leaves TIMPANI_RETUNE_SECONDS from its
+// last note to this one (a drum not yet used always does), (2) a drum not yet used, so a tuned
+// drum keeps its tuning, (3) the drum whose middle is nearest the pitch, (4) the larger drum.
+// Pitches with fewer drums to choose from are placed first. A drum is free when it has no note
+// at this moment and its last note has ended.
+TimpaniPlan planTimpani(const std::vector<TimpaniMoment>& moments, bool fifth);
+
+//---------------------------------------------------------
+//   K1 keyboard hand span (Blatter p. 244): more than a 9th a warning, more than a 10th red.
+//   Intervals bands are inclusive: a 9th is up to the major 9th (14 semitones), a 10th up to
+//   the major 10th (16). Measured in semitones: keys are as wide whatever their spelling.
+//---------------------------------------------------------
+
+constexpr int KEYBOARD_NINTH = 14;
+constexpr int KEYBOARD_TENTH = 16;
+constexpr int KEYBOARD_OCTAVE = 12;
+// a keyboard with a grand staff: piano, harpsichord, celesta, clavichord, organ, harmonium,
+// virginal (not accordions); harp, timpani by their MusicXML id, else the name
+bool isKeyboard(const QString& instrumentId, const QString& name);
+bool isHarp(const QString& instrumentId, const QString& name);
+bool isTimpani(const QString& instrumentId, const QString& name);
+
 }     // namespace Playability
 }     // namespace Ms
 #endif

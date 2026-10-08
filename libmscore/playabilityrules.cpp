@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 #include <QRegularExpression>
 #include <QStringList>
 
@@ -891,6 +892,224 @@ QString plainText(const QString& xmlText)
             }
       out += xmlText.mid(at);
       return out.remove(TAG);
+      }
+
+//---------------------------------------------------------
+//   H1 / H2 harp
+//---------------------------------------------------------
+
+// natural pitch classes of C D E F G A B
+static const int LETTER_PC[7] = { 0, 2, 4, 5, 7, 9, 11 };
+
+HarpNote harpNote(int tpc, int pitch)
+      {
+      HarpNote n;
+      // tpc: F C G D A E B, then the same with sharps…; tpc 14 is C (tpcName's layout)
+      static const int FIFTHS_LETTER[7] = { 3, 0, 4, 1, 5, 2, 6 };      // F C G D A E B
+      n.letter = FIFTHS_LETTER[(((tpc + 1) % 7) + 7) % 7];
+      n.alter = floorDiv(tpc + 1, 7) - 2;
+      n.octave = floorDiv(pitch - n.alter, 12) - 1;
+      return n;
+      }
+
+int harpStringIndex(const HarpNote& n)
+      {
+      return (n.octave - 1) * 7 + n.letter;
+      }
+
+bool harpHasString(const HarpNote& n)
+      {
+      // C1 (index 0) to G7 (6 × 7 + 4 = 46): 47 strings
+      int i = harpStringIndex(n);
+      return i >= 0 && i <= 46;
+      }
+
+bool harpHandTuned(const HarpNote& n)
+      {
+      return n.octave == 1 && (n.letter == 0 || n.letter == 1);
+      }
+
+bool harpLowestOctave(const HarpNote& n)
+      {
+      return n.octave == 1;
+      }
+
+const int HARP_PEDAL_ORDER[7] = { 1, 0, 6, 2, 3, 4, 5 };    // D C B | E F G A
+
+bool harpLeftFoot(int letter)
+      {
+      return letter == 1 || letter == 0 || letter == 6;
+      }
+
+int keyAlter(int fifths, int letter)
+      {
+      static const int SHARPS[7] = { 3, 0, 4, 1, 5, 2, 6 };     // F C G D A E B
+      static const int FLATS[7] = { 6, 2, 5, 1, 4, 0, 3 };      // B E A D G C F
+      for (int i = 0; i < std::min(7, std::abs(fifths)); ++i)
+            if ((fifths > 0 ? SHARPS[i] : FLATS[i]) == letter)
+                  return fifths > 0 ? 1 : -1;
+      return 0;
+      }
+
+QString letterName(int letter, int alter)
+      {
+      QString s = QString("CDEFGAB").at(letter);
+      for (int i = 0; i < std::abs(alter); ++i)
+            s += alter > 0 ? "#" : "b";
+      return s;
+      }
+
+// the neighbouring letter that reaches the same pitch class with a single accidental at most
+QString harpEnharmonic(int letter, int alter)
+      {
+      if (std::abs(alter) > 1)
+            return QString();
+      int target = pc(LETTER_PC[letter] + alter);
+      for (int d : { -1, 1 }) {
+            int l = (letter + d + 7) % 7;
+            for (int a = -1; a <= 1; ++a)
+                  if (pc(LETTER_PC[l] + a) == target)
+                        return letterName(l, a);
+            }
+      return QString();
+      }
+
+//---------------------------------------------------------
+//   P1 timpani
+//---------------------------------------------------------
+
+std::vector<TimpaniDrum> timpaniDrums(bool fifth)
+      {
+      // 32″ D2–A2, 29″ F2–C3, 26″ Bb2–F3, 23″ D3–A3, the 20″ piccolo F3–C4
+      std::vector<TimpaniDrum> d = {
+            { "32″", 38, 45 }, { "29″", 41, 48 }, { "26″", 46, 53 }, { "23″", 50, 57 } };
+      if (fifth)
+            d.push_back({ "20″", 53, 60 });
+      return d;
+      }
+
+bool timpaniFifthDrum(const QString& text)
+      {
+      static const QRegularExpression FIFTH("\\b(5|five)\\s*(drums|timp)|piccol[oa]\\s+timp|timpan[oi]\\s+piccol",
+                                            QRegularExpression::CaseInsensitiveOption);
+      return FIFTH.match(text).hasMatch();
+      }
+
+TimpaniPlan planTimpani(const std::vector<TimpaniMoment>& moments, bool fifth)
+      {
+      const std::vector<TimpaniDrum> drums = timpaniDrums(fifth);
+      const int nd = int(drums.size());
+      std::vector<int> tuned(nd, -1);
+      std::vector<double> lastEnd(nd, -1e9);
+      TimpaniPlan plan;
+      typedef TimpaniNotePlan::Problem P;
+      for (size_t m = 0; m < moments.size(); ++m) {
+            const TimpaniMoment& mo = moments[m];
+            std::vector<TimpaniNotePlan> out;
+            for (int p : mo.pitches) {
+                  TimpaniNotePlan np;
+                  np.pitch = p;
+                  out.push_back(np);
+                  }
+            const double eps = 1e-9;
+            if (int(mo.pitches.size()) > nd) {
+                  for (auto& np : out)
+                        np.problem = P::TOO_MANY;
+                  }
+            else {
+                  std::vector<bool> used(nd, false);
+                  auto holds = [&](int d, int p) { return drums[d].lo <= p && p <= drums[d].hi; };
+                  auto rangeCount = [&](int p) { int c = 0; for (int d = 0; d < nd; ++d) c += holds(d, p); return c; };
+                  // a drum already at the pitch
+                  for (auto& np : out) {
+                        if (!rangeCount(np.pitch)) {
+                              np.problem = P::RANGE;
+                              continue;
+                              }
+                        for (int d = 0; d < nd; ++d)
+                              if (!used[d] && tuned[d] == np.pitch) {
+                                    np.drum = d;
+                                    used[d] = true;
+                                    break;
+                                    }
+                        }
+                  // the rest, the pitches with fewer drums first
+                  std::vector<int> order;
+                  for (int i = 0; i < int(out.size()); ++i)
+                        if (out[i].drum < 0 && out[i].problem == P::NONE)
+                              order.push_back(i);
+                  std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return rangeCount(out[a].pitch) < rangeCount(out[b].pitch); });
+                  for (int i : order) {
+                        TimpaniNotePlan& np = out[i];
+                        int best = -1;
+                        auto key = [&](int d) {
+                              double secs = tuned[d] < 0 ? 1e9 : mo.start - lastEnd[d];
+                              return std::make_tuple(secs + eps >= TIMPANI_RETUNE_SECONDS ? 0 : 1, tuned[d] < 0 ? 0 : 1,
+                                                     std::fabs(np.pitch - drums[d].middle()), d);
+                              };
+                        for (int d = 0; d < nd; ++d) {
+                              if (used[d] || !holds(d, np.pitch) || (tuned[d] >= 0 && lastEnd[d] > mo.start + eps))
+                                    continue;
+                              if (best < 0 || key(d) < key(best))
+                                    best = d;
+                              }
+                        if (best < 0) {
+                              np.problem = P::NO_DRUM;
+                              continue;
+                              }
+                        np.drum = best;
+                        used[best] = true;
+                        if (tuned[best] >= 0) {
+                              np.from = tuned[best];
+                              np.seconds = mo.start - lastEnd[best];
+                              if (np.seconds + eps < TIMPANI_RETUNE_SECONDS)
+                                    np.problem = P::RETUNE;
+                              }
+                        }
+                  for (size_t k = 0; k < out.size(); ++k)
+                        if (out[k].drum >= 0) {
+                              int d = out[k].drum;
+                              if (tuned[d] != out[k].pitch)
+                                    lastEnd[d] = -1e9;
+                              tuned[d] = out[k].pitch;
+                              lastEnd[d] = std::max(lastEnd[d], mo.ends[k]);
+                              }
+                  }
+            plan.moments.push_back(out);
+            plan.tuning.push_back(tuned);
+            }
+      return plan;
+      }
+
+//---------------------------------------------------------
+//   instrument families
+//---------------------------------------------------------
+
+bool isKeyboard(const QString& id, const QString& name)
+      {
+      static const QRegularExpression ID("^keyboard\\.(piano|harpsichord|celesta|clavichord|organ|harmonium|virginal)");
+      static const QRegularExpression NAME("piano|harpsichord|cembalo|clavecin|celest|clavichord|organ|orgel|harmonium|virginal",
+                                           QRegularExpression::CaseInsensitiveOption);
+      if (!id.isEmpty())
+            return ID.match(id).hasMatch();
+      return NAME.match(name).hasMatch();
+      }
+
+bool isHarp(const QString& id, const QString& name)
+      {
+      // the pedal harp: not the Celtic (lever) harp, which has no pedals
+      static const QRegularExpression NAME("^\\s*(harp|harpe|arpa|harfe)", QRegularExpression::CaseInsensitiveOption);
+      if (!id.isEmpty())
+            return id == "pluck.harp";
+      return NAME.match(name).hasMatch() && !name.contains("celtic", Qt::CaseInsensitive);
+      }
+
+bool isTimpani(const QString& id, const QString& name)
+      {
+      static const QRegularExpression NAME("timpan|\\btimp\\b|pauken", QRegularExpression::CaseInsensitiveOption);
+      if (!id.isEmpty())
+            return id == "drum.timpani";
+      return NAME.match(name).hasMatch();
       }
 
 }     // namespace Playability
