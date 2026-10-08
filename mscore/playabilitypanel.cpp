@@ -488,6 +488,8 @@ void PlayabilityPanel::updatePage()
             case ChordInfo::Kind::HARP:     boardName = tr("Pedals"); break;
             case ChordInfo::Kind::TIMPANI:  boardName = tr("Drums"); break;
             case ChordInfo::Kind::KEYBOARD: boardName = tr("Keyboard"); break;
+            case ChordInfo::Kind::SLIDE:    boardName = tr("Slide"); break;
+            case ChordInfo::Kind::VALVES:   boardName = tr("Valves"); break;
             default:                        boardName = tr("Fingerboard"); break;
             }
       _toggle->setText(_showList ? (board ? boardName : tr("Graph")) : tr("List"));

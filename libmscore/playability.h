@@ -134,8 +134,34 @@ struct KeyboardHandInfo {
       bool arpeggio { false };
       };
 
+// B4-B6: one slide position or valve fingering of a brass note (diagrams-spec-brass.md)
+struct BrassEntryInfo {
+      QString name;                 // "II", "♯IV", "F VI", "E 3"; "1+3", "T2"
+      int side { 0 };               // trombone: 0 no attachment, 1 F, 2 E
+      int position { 0 };           // trombone: the chart's position number on its side
+      bool raised { false };        // a ♯ (shortened) position
+      double slot { 0 };            // trombone: 0 = I … 6 = VII on the slide
+      int mask { 0 };               // valves: bit 0 valve 1 … bit 4 valve 5, 0x20 the horn's thumb
+      bool standard { false };      // the chart's first choice (the horn: on each side)
+      bool extra { false };         // an attachment the part does not name, shown as an extra
+      bool playable { true };       // the instrument has the valves
+      QStringList labels;           // "partial 4", "out of tune", "specialists", …
+      };
+
+struct BrassInfo {
+      QString instrument;
+      QString note;                 // the note, as the chart reads it (written for transposing brass)
+      int valves { 0 };             // 3, 4 or 5; 0 a trombone
+      bool horn { false };          // F and B♭ sides, thumb T
+      std::vector<BrassEntryInfo> entries;
+      bool hasPrevious { false };   // trombone: the previous note's standard position
+      double previousSlot { 0 };
+      QString previousName;
+      bool noTrueLegato { false };  // B4: slurred, the slide moves with the pitch
+      };
+
 struct ChordInfo {
-      enum class Kind : char { NONE, STOP, HARMONIC, HARP, TIMPANI, KEYBOARD };
+      enum class Kind : char { NONE, STOP, HARMONIC, HARP, TIMPANI, KEYBOARD, SLIDE, VALVES };
       QString text;                 // the Selected line, without "Selected: "
       bool bowedString { false };   // the chord is on a bowed string instrument
       Kind kind { Kind::NONE };     // what the fingerboard shows
@@ -153,6 +179,7 @@ struct ChordInfo {
       HarpPedalInfo harp;                           // HARP
       std::vector<TimpaniDrumInfo> drums;           // TIMPANI
       KeyboardHandInfo hand;                        // KEYBOARD
+      BrassInfo brass;                              // SLIDE, VALVES
       };
 
 namespace Playability {

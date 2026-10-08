@@ -58,7 +58,8 @@ namespace Playability {
 // a playable stop or a natural harmonic (ChordInfo::kind); empty below the minimum size
 DisplayList layoutFingerboard(const ChordInfo& geom, double w, double h);
 bool namesShown(const DisplayList& items);
-// the diagram for the chord's kind: the fingerboard, the harp's pedals, the timpani, a keyboard hand
+// the diagram for the chord's kind: the fingerboard, the harp's pedals, the timpani, a keyboard hand,
+// a trombone's slide, valve brass fingerings
 DisplayList layoutDiagram(const ChordInfo& info, double w, double h);
 // H1: harpists' pedal diagram (K&G p. 277): a line for the middle notch, a mark per pedal in the
 // order D C B | E F G A, above the line up (flat), through it middle (natural), below down (sharp);
@@ -68,6 +69,13 @@ DisplayList layoutHarpPedals(const ChordInfo& info, double w, double h);
 DisplayList layoutTimpani(const ChordInfo& info, double w, double h);
 // K1: a keyboard strip with the hand's notes, its span, and the octave, 9th and 10th from its lowest note
 DisplayList layoutKeyboard(const ChordInfo& info, double w, double h);
+// B4-B6 (diagrams-spec-brass.md): a horizontal slide strip, positions I-VII (♯ positions a little
+// toward I), the note's positions per side: the standard filled, alternatives outlined, attachment
+// extras faint; the travel from the previous note's position as an arrow
+DisplayList layoutSlide(const ChordInfo& info, double w, double h);
+// valve buttons (3, 4 or 5; the horn's thumb T first), pressed ones filled: the standard fingering
+// large (the horn: its F and B♭ sides), the alternatives small in rows below, each with its labels
+DisplayList layoutValves(const ChordInfo& info, double w, double h);
 
 //---------------------------------------------------------
 //   W1: the register graph of the selected wind notes' whole bars, every voice, one instrument

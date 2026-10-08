@@ -10,11 +10,13 @@
 
 #include "playability.h"
 #include "playabilityrules.h"
+#include "playabilitybrass.h"
 
 #include "arpeggio.h"
 #include "articulation.h"
 #include "chord.h"
 #include "fingering.h"
+#include "glissando.h"
 #include "dynamic.h"
 #include "hairpin.h"
 #include "instrument.h"
@@ -123,7 +125,14 @@ struct HarpPlan {
       bool changed[9] {};
       };
 
-enum class Family : char { NONE, HARP, TIMPANI, KEYBOARD };
+enum class Family : char { NONE, HARP, TIMPANI, KEYBOARD, BRASS };
+
+// a brass part: its type, the trombone attachments and the valves it names (else the defaults)
+struct BrassPart {
+      Brass type { Brass::NONE };
+      int attachments { 0 };
+      int valves { 0 };
+      };
 
 class Pass {
       Score* _score;
@@ -167,6 +176,11 @@ class Pass {
       std::vector<HarpPlan> checkHarp(Part* part, const QString& staffName);
       TimpaniPlan checkTimpani(Part* part, const QString& staffName, std::vector<PartMoment>* moments, bool* fifth);
       void checkKeyboard(Part* part, const QString& staffName);
+      // brass (diagrams-spec-brass.md)
+      BrassPart brassPart(Part* part) const;
+      std::vector<BrassEntry> noteEntries(const BrassPart& bp, const Note* n) const;
+      void checkBrass(Part* part, const QString& staffName);
+      ChordInfo inspectBrass(Chord* chord);
       ChordInfo inspectFamily(Chord* chord, Family f);
 
    public:
@@ -821,23 +835,32 @@ void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const Sta
 //   diagrams-spec-htk.md (2026-10-08)
 //---------------------------------------------------------
 
-static Family familyOf(Part* part)
+// the part's instrument id and long name, else the part's own
+static void partIdName(Part* part, QString* id, QString* name)
       {
       const Instrument* in = part->instrument();
-      QString id = in->instrumentId();
-      QString name = in->longNames().isEmpty() ? QString() : in->longNames().front().name();
-      if (id.isEmpty() && name.isEmpty()) {
-            id = part->instrumentId();
-            name = part->longName();
-            if (name.isEmpty())
-                  name = part->partName();
+      *id = in->instrumentId();
+      *name = in->longNames().isEmpty() ? QString() : plainText(in->longNames().front().name());
+      if (id->isEmpty() && name->isEmpty()) {
+            *id = part->instrumentId();
+            *name = plainText(part->longName());
+            if (name->isEmpty())
+                  *name = plainText(part->partName());
             }
+      }
+
+static Family familyOf(Part* part)
+      {
+      QString id, name;
+      partIdName(part, &id, &name);
       if (isHarp(id, name))
             return Family::HARP;
       if (isTimpani(id, name))
             return Family::TIMPANI;
       if (isKeyboard(id, name) && part->nstaves() >= 2)
             return Family::KEYBOARD;
+      if (brassType(id, name) != Brass::NONE)
+            return Family::BRASS;
       return Family::NONE;
       }
 
@@ -1382,6 +1405,225 @@ ChordInfo Pass::inspectFamily(Chord* chord, Family f)
       return info;
       }
 
+//---------------------------------------------------------
+//   Brass: trombone slide positions (B4-B6) and valve fingerings, the owner's approved spec,
+//   diagrams-spec-brass.md (2026-10-08). The lists are Blatter's charts (playabilitybrass.h),
+//   derived outside them (playabilityrules.cpp).
+//---------------------------------------------------------
+
+// the attachments and valves the part names: its names, or a text on its staves
+BrassPart Pass::brassPart(Part* part) const
+      {
+      BrassPart bp;
+      QString id, name;
+      partIdName(part, &id, &name);
+      bp.type = brassType(id, name);
+      QStringList texts { plainText(part->longName()), plainText(part->partName()) };
+      for (const StaffName& sn : part->instrument()->longNames())
+            texts << plainText(sn.name());
+      int st0 = part->staff(0)->idx();
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (Element* e : s->annotations())
+                  if (e->isTextBase() && e->staffIdx() >= st0 && e->staffIdx() < st0 + part->nstaves())
+                        texts << plainText(toTextBase(e)->xmlText());
+      for (const QString& t : texts) {
+            bp.attachments |= brassAttachments(t);
+            if (!bp.valves)
+                  bp.valves = brassValveText(t);
+            }
+      if (!bp.valves)
+            bp.valves = brassValves(bp.type);
+      return bp;
+      }
+
+std::vector<BrassEntry> Pass::noteEntries(const BrassPart& bp, const Note* n) const
+      {
+      int tc = n->part()->instrument(n->tick())->transpose().chromatic;
+      return brassEntries(bp.type, bp.attachments, bp.valves, brassChartPitch(bp.type, n->ppitch(), tc));
+      }
+
+// the first entry a player takes: the chart's first that is no extra and playable, or -1
+static int standardEntry(const std::vector<BrassEntry>& es)
+      {
+      for (size_t i = 0; i < es.size(); ++i)
+            if (!es[i].extra && es[i].playable)
+                  return int(i);
+      return -1;
+      }
+
+static QString chartNoteName(const BrassPart& bp, const Note* n)
+      {
+      QString nm = tpcName(n->tpc1(), n->ppitch());
+      int tc = n->part()->instrument(n->tick())->transpose().chromatic;
+      int w = brassChartPitch(bp.type, n->ppitch(), tc);
+      if (w != n->ppitch())
+            nm += " (written " + plainName(w) + ")";
+      return nm;
+      }
+
+//---------------------------------------------------------
+//   checkBrass
+//    B6: a note with no position or fingering the instrument has is red: outside every list, in
+//    a gap of the chart (the tenor's B1-E♭2 without an F attachment, Adler p. 342), or needing a
+//    valve it lacks. B5 (trombones): a glissando wider than a tritone (Adler p. 347) or whose
+//    notes share no partial in the positions offered is red; on the pedal partial a warning
+//    (Blatter p. 471). B4 (no true legato) is information: the panel shows it.
+//---------------------------------------------------------
+
+void Pass::checkBrass(Part* part, const QString& staffName)
+      {
+      const BrassPart bp = brassPart(part);
+      if (bp.type == Brass::NONE)
+            return;
+      const bool slide = isTrombone(bp.type);
+      const QString kind = slide ? "slide" : "valves";
+      for (const PartMoment& m : partMoments(part)) {
+            for (const PartNote& pn : m.notes) {
+                  if (!pn.attack)
+                        continue;
+                  std::vector<BrassEntry> es = noteEntries(bp, pn.note);
+                  QString nm = chartNoteName(bp, pn.note);
+                  if (standardEntry(es) < 0) {
+                        bool extra = false;
+                        int need = 0;                 // the fewest valves an entry needs
+                        for (const BrassEntry& e : es) {
+                              extra |= e.extra;
+                              if (!e.playable) {
+                                    int hi = (e.mask & 0x10) ? 5 : 4;
+                                    need = need ? std::min(need, hi) : hi;
+                                    }
+                              }
+                        QString r;
+                        if (slide && extra)
+                              r = "no slide position for " + nm + " without an F attachment";
+                        else if (slide)
+                              r = "no slide position for " + nm + " on the " + brassName(bp.type);
+                        else if (need)
+                              r = nm + QString(" needs a %1th valve (the %2 has %3)").arg(need).arg(brassName(bp.type)).arg(bp.valves);
+                        else
+                              r = "no fingering for " + nm + " on the " + brassName(bp.type);
+                        momentRow(m, { &pn }, staffName, kind, true, r);
+                        }
+                  // B5: slide glissandos starting here
+                  if (!slide)
+                        continue;
+                  for (Spanner* sp : pn.note->spannerFor()) {
+                        if (!sp->isGlissando() || !sp->endElement() || !sp->endElement()->isNote())
+                              continue;
+                        const Note* to = toNote(sp->endElement());
+                        QString why;
+                        int v = slideGlissando(bp.type, bp.attachments, pn.note->ppitch(), to->ppitch(), &why);
+                        if (v)
+                              momentRow(m, { &pn }, staffName, "glissando", v == 2,
+                                        why + " (" + nm + QChar(0x2013) + tpcName(to->tpc1(), to->ppitch()) + ")");
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   inspectBrass: the selected chord's top note, every position or fingering with its labels;
+//   a trombone's travel from the previous note and B4's "no true legato"
+//---------------------------------------------------------
+
+static const Note* topNote(const Chord* c)
+      {
+      const Note* t = nullptr;
+      for (const Note* n : c->notes())
+            if (!t || n->ppitch() > t->ppitch())
+                  t = n;
+      return t;
+      }
+
+ChordInfo Pass::inspectBrass(Chord* chord)
+      {
+      ChordInfo info;
+      Part* part = chord->part();
+      const BrassPart bp = brassPart(part);
+      const Note* n = topNote(chord);
+      if (bp.type == Brass::NONE || !n)
+            return info;
+      const bool slide = isTrombone(bp.type);
+      const QString dash = QString(" ") + QChar(0x2014) + " ";
+      std::vector<BrassEntry> es = noteEntries(bp, n);
+      BrassInfo& b = info.brass;
+      b.instrument = brassName(bp.type);
+      b.note = chartNoteName(bp, n);
+      b.valves = slide ? 0 : bp.valves;
+      b.horn = bp.type == Brass::HORN;
+      int std0 = standardEntry(es);
+      for (size_t i = 0; i < es.size(); ++i) {
+            const BrassEntry& e = es[i];
+            BrassEntryInfo bi;
+            bi.name = e.name;
+            bi.side = e.side;
+            bi.position = e.position;
+            bi.raised = e.raised;
+            bi.slot = e.slot();
+            bi.mask = e.mask;
+            bi.standard = int(i) == std0;
+            bi.extra = e.extra;
+            bi.playable = e.playable;
+            bi.labels = e.labels;
+            b.entries.push_back(bi);
+            }
+      if (b.horn)                               // the B♭ side's first choice too: the player chooses
+            for (BrassEntryInfo& bi : b.entries)
+                  if (bi.mask & HORN_THUMB) {
+                        bi.standard = bi.playable;
+                        break;
+                        }
+      info.kind = slide ? ChordInfo::Kind::SLIDE : ChordInfo::Kind::VALVES;
+
+      QStringList list;
+      for (const BrassEntryInfo& bi : b.entries) {
+            QString p = bi.labels.isEmpty() ? bi.name : bi.name + " (" + bi.labels.first() + ")";
+            if (bi.extra)
+                  p += " [extra]";
+            list << p;
+            }
+      QString t = b.note + dash + b.instrument + ": " + (list.isEmpty() ? QString("none") : list.join(", "));
+      if (std0 < 0)
+            t += dash + "no " + (slide ? "position" : "fingering") + " the instrument has";
+
+      // the previous note in the voice: the slide's travel, and B4
+      if (slide && std0 >= 0) {
+            Chord* main = chord->isGrace() ? toChord(chord->parent()) : chord;
+            const Chord* prev = nullptr;
+            for (Segment* s = main->segment()->prev1(SegmentType::ChordRest); s && !prev; s = s->prev1(SegmentType::ChordRest)) {
+                  Element* e = s->element(main->track());
+                  if (e && e->isChord())
+                        prev = toChord(e);
+                  }
+            const Note* pnote = prev ? topNote(prev) : nullptr;
+            std::vector<BrassEntry> pe = pnote ? noteEntries(bp, pnote) : std::vector<BrassEntry>();
+            int ps = standardEntry(pe);
+            if (ps >= 0) {
+                  b.hasPrevious = true;
+                  b.previousSlot = pe[ps].slot();
+                  b.previousName = pe[ps].name;
+                  int t0 = prev->tick().ticks(), t1 = main->tick().ticks();
+                  bool slurred = false;
+                  if (_slurs.empty())
+                        collectSpanners();          // the panel's own pass has not walked the spanners
+                  auto sl = _slurs.find(main->track());
+                  if (sl != _slurs.end())
+                        for (const auto& r : sl->second)
+                              if (r.first <= t0 && r.second >= t1)
+                                    slurred = true;
+                  int dp = n->ppitch() - pnote->ppitch();
+                  double ds = es[std0].slot() - b.previousSlot;
+                  // slide in (toward I) raises the pitch (Adler p. 342)
+                  b.noTrueLegato = slurred && dp != 0 && std::fabs(ds) > 1e-9 && ((dp > 0) == (ds < 0));
+                  t += "\nFrom " + b.previousName + " to " + es[std0].name;
+                  if (b.noTrueLegato)
+                        t += dash + "slurred with the slide moving with the pitch: no true legato";
+                  }
+            }
+      info.text = t;
+      return info;
+      }
+
 void Pass::run()
       {
       for (Measure* m = _score->firstMeasure(); m; m = m->nextMeasure())
@@ -1442,6 +1684,8 @@ void Pass::run()
                   checkHarp(part, staffName);
             else if (f == Family::TIMPANI)
                   checkTimpani(part, staffName, nullptr, nullptr);
+            else if (f == Family::BRASS)
+                  checkBrass(part, staffName);
             else
                   checkKeyboard(part, staffName);
             }
@@ -1465,6 +1709,8 @@ ChordInfo Pass::inspect(Chord* chord)
       Staff* staff = chord->staff();
       Part* part = staff->part();
       Family family = familyOf(part);
+      if (family == Family::BRASS)
+            return inspectBrass(chord);
       if (family != Family::NONE)
             return inspectFamily(chord, family);
 

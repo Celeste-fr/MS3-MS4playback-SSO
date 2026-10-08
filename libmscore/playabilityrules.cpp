@@ -1455,8 +1455,9 @@ static ValveColumn valveColumn(Brass b, int* fund)
       }
 
 // derived fingerings at an interval d above the open fundamental: the instrument's valves (up to 4),
-// partials 2-16, not the 7th (Blatter p. 459, BR8); ordered as the chart's row a whole number of
-// octaves away (else the same relative row), then the 3-valve set first, fewest valves, smallest step
+// partials 2-16, not the 7th (Blatter p. 459, BR8); ordered as the chart's row an octave away when
+// there is one (the neighbouring notes' pattern), then fewest valves, the 3-valve set first, the
+// smallest step
 static std::vector<BrassEntry> deriveValves(int rel, int valves, int thumb, int fundShift, const std::vector<int>& pattern)
       {
       std::vector<BrassEntry> out;
@@ -1475,7 +1476,7 @@ static std::vector<BrassEntry> deriveValves(int rel, int valves, int thumb, int 
             auto it = std::find(pattern.begin(), pattern.end(), e.mask);
             int pi = it == pattern.end() ? 1000 : int(it - pattern.begin());
             int m = e.mask & 0x1f;
-            return std::make_tuple(pi, (m & 8) ? 1 : 0, popcount(m), valveSteps(m));
+            return std::make_tuple(pi, popcount(m), (m & 8) ? 1 : 0, valveSteps(m));
             };
       std::stable_sort(out.begin(), out.end(), [&](const BrassEntry& a, const BrassEntry& b) { return rank(a) < rank(b); });
       return out;
@@ -1513,8 +1514,10 @@ std::vector<BrassEntry> valveEntries(Brass b, int valves, int pitch)
                               }
                         }
                   else {
-                        int ref = pitch < lo ? lo + ((pitch - lo) % 12 + 12) % 12 : hi - ((hi - pitch) % 12 + 12) % 12;
-                        std::vector<int> pattern = side ? rows[ref - lo].bb : rows[ref - lo].f;
+                        int ref = pitch < lo ? pitch + 12 : pitch - 12;
+                        std::vector<int> pattern;
+                        if (ref >= lo && ref <= hi)
+                              pattern = side ? rows[ref - lo].bb : rows[ref - lo].f;
                         for (BrassEntry e : deriveValves(pitch - fund, 3, thumb, 0, pattern))
                               finish(e);
                         }
@@ -1538,10 +1541,11 @@ std::vector<BrassEntry> valveEntries(Brass b, int valves, int pitch)
                   }
             return out;
             }
-      int ref = rel >= lo && rel <= hi ? rel : rel < lo ? lo + ((rel - lo) % 12 + 12) % 12 : hi - ((hi - rel) % 12 + 12) % 12;
+      int ref = rel >= lo && rel <= hi ? rel : rel < lo ? rel + 12 : rel - 12;
       std::vector<int> pattern;
-      for (const ValveCell& c : rows[ref - lo].fingerings)
-            pattern.push_back(c.mask);
+      if (ref >= lo && ref <= hi)
+            for (const ValveCell& c : rows[ref - lo].fingerings)
+                  pattern.push_back(c.mask);
       for (BrassEntry e : deriveValves(rel, valves, 0, 0, pattern))
             finish(e);
       return out;

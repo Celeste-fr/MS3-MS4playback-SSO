@@ -10,6 +10,7 @@
 
 #include "playabilitydiagram.h"
 #include "playabilityrules.h"
+#include "playabilitybrass.h"
 
 #include "chord.h"
 #include "instrument.h"
@@ -110,6 +111,8 @@ DisplayList layoutDiagram(const ChordInfo& info, double w, double h)
             case ChordInfo::Kind::HARP:     return layoutHarpPedals(info, w, h);
             case ChordInfo::Kind::TIMPANI:  return layoutTimpani(info, w, h);
             case ChordInfo::Kind::KEYBOARD: return layoutKeyboard(info, w, h);
+            case ChordInfo::Kind::SLIDE:    return layoutSlide(info, w, h);
+            case ChordInfo::Kind::VALVES:   return layoutValves(info, w, h);
             default:                        return layoutFingerboard(info, w, h);
             }
       }
@@ -229,6 +232,163 @@ DisplayList layoutKeyboard(const ChordInfo& g, double w, double h)
       double r = std::max(2.5, kw * 0.3);
       for (int p : ps)
             items.push_back(circle(xCentre(p), isBlackKey(p) ? top + bh - r - 3 : top + kh - r - 4, r, verdict));
+      return items;
+      }
+
+//---------------------------------------------------------
+//   trombone slide, valve brass (diagrams-spec-brass.md); sizes cosmetic
+//---------------------------------------------------------
+
+DisplayList layoutSlide(const ChordInfo& g, double w, double h)
+      {
+      DisplayList items;
+      const BrassInfo& b = g.brass;
+      if (g.kind != ChordInfo::Kind::SLIDE || w < 70 || h < 80)
+            return items;
+      items.push_back(meta(false));
+      items.push_back(text(w / 2, 14, b.note + "  " + QChar(0x2014) + "  " + b.instrument, 11, HTK::INK, 0, true));
+      double x0 = 26, x1 = w - 16;
+      double step = (x1 - x0) / 6;
+      auto xAt = [&](double slot) { return x0 + slot * step; };
+      double strip = 44;
+      // the slide: I (in) on the left to VII (out)
+      items.push_back(line(x0, strip, x1, strip, HTK::INK, 3));
+      for (int i = 0; i < 7; ++i) {
+            items.push_back(line(xAt(i), strip - 5, xAt(i), strip + 5, HTK::INK, 1.5));
+            items.push_back(text(xAt(i), strip - 9, roman(i), 9, HTK::FAINT, 0));
+            }
+      // a row per side that has entries
+      bool sides[3] = {};
+      for (const BrassEntryInfo& e : b.entries)
+            sides[e.side] = true;
+      double row = std::max(26.0, std::min(40.0, (h - strip - 30) / 3));
+      double y = strip + row * 0.8;
+      double r = std::max(4.0, std::min(8.0, step * 0.22));
+      static const char* const SIDE[3] = { "", "F", "E" };
+      for (int s = 0; s < 3; ++s) {
+            if (!sides[s])
+                  continue;
+            if (s)
+                  items.push_back(text(4, y + 4, SIDE[s], 10, HTK::FAINT, -1, true));
+            for (const BrassEntryInfo& e : b.entries) {
+                  if (e.side != s)
+                        continue;
+                  double x = xAt(e.slot);
+                  items.push_back(line(x, strip + 5, x, y - r, e.extra ? HTK::FAINT : HTK::CHANGE, 1, 0.4));
+                  if (e.standard)
+                        items.push_back(circle(x, y, r, HTK::CHANGE));
+                  else
+                        items.push_back(circle(x, y, r, HTK::WHITE, e.extra ? HTK::FAINT : HTK::CHANGE, e.extra ? 1 : 2));
+                  QColor c = e.extra ? HTK::FAINT : HTK::INK;
+                  items.push_back(text(x, y + r + 11, e.name, 9, c, 0, e.standard));
+                  if (!e.labels.isEmpty())
+                        items.push_back(text(x, y + r + 21, e.labels.first(), 8, HTK::FAINT, 0));
+                  }
+            y += row;
+            }
+      if (b.entries.empty())
+            items.push_back(text(w / 2, strip + 30, "no position", 11, IMPOSSIBLE_COLOR, 0, true));
+      // the travel from the previous note's standard position
+      for (const BrassEntryInfo& e : b.entries) {
+            if (!e.standard || !b.hasPrevious)
+                  continue;
+            double xa = xAt(b.previousSlot), xb = xAt(e.slot), ya = 26;
+            if (std::fabs(xb - xa) > 1) {
+                  items.push_back(line(xa, ya, xb, ya, HTK::INK, 1.5));
+                  items.push_back(line(xa, ya - 4, xa, ya + 4, HTK::INK, 1.5));
+                  items.push_back(text(xb, ya + 4, QString(QChar(xb > xa ? 0x25B6 : 0x25C0)), 10, HTK::INK, 0));
+                  }
+            else
+                  items.push_back(text(xb, ya + 4, QString(QChar(0x25CF)), 8, HTK::INK, 0));
+            if (b.noTrueLegato)
+                  items.push_back(text(w / 2, h - 6, "slurred, slide moving with the pitch: no true legato", 9, HTK::INK, 0));
+            break;
+            }
+      return items;
+      }
+
+// one fingering's buttons: the horn's thumb, then valves 1 to n; returns the width used
+static double valveSet(DisplayList& items, double x, double y, double r, int buttons, bool horn, const BrassEntryInfo& e)
+      {
+      QColor ink = e.playable ? HTK::INK : IMPOSSIBLE_COLOR;
+      QColor on = e.playable ? HTK::CHANGE : IMPOSSIBLE_COLOR;
+      double gap = r * 2.5;
+      double cx = x + r;
+      auto button = [&](bool pressed, const QString& label) {
+            items.push_back(circle(cx, y, r, pressed ? on : HTK::WHITE, ink, 1.5));
+            items.push_back(text(cx, y + r * 0.4, label, r * 1.1, pressed ? HTK::WHITE : ink, 0, true));
+            cx += gap;
+            };
+      if (horn)
+            button(e.mask & HORN_THUMB, "T");
+      for (int v = 0; v < buttons; ++v)
+            button(e.mask & (1 << v), QString::number(v + 1));
+      return cx - gap + r - x;
+      }
+
+DisplayList layoutValves(const ChordInfo& g, double w, double h)
+      {
+      DisplayList items;
+      const BrassInfo& b = g.brass;
+      if (g.kind != ChordInfo::Kind::VALVES || w < 70 || h < 80)
+            return items;
+      items.push_back(meta(false));
+      items.push_back(text(w / 2, 14, b.note + "  " + QChar(0x2014) + "  " + b.instrument, 11, HTK::INK, 0, true));
+      if (b.entries.empty()) {
+            items.push_back(text(w / 2, 50, "no fingering", 11, IMPOSSIBLE_COLOR, 0, true));
+            return items;
+            }
+      // buttons: the instrument's valves, more when a fingering needs them
+      auto buttonsFor = [&](const BrassEntryInfo& e) {
+            int n = b.valves;
+            for (int v = 0; v < 5; ++v)
+                  if (e.mask & (1 << v))
+                        n = std::max(n, v + 1);
+            return n + (b.horn ? 1 : 0);
+            };
+      std::vector<const BrassEntryInfo*> big, small;
+      for (const BrassEntryInfo& e : b.entries)
+            (e.standard ? big : small).push_back(&e);
+      if (big.empty()) {
+            big.push_back(small.front());
+            small.erase(small.begin());
+            }
+      // the standard set(s), large
+      double R = std::max(7.0, std::min(14.0, (w - 20) / (big.size() * 7.5)));
+      double colW = w / big.size();
+      double y = 44;
+      for (size_t i = 0; i < big.size(); ++i) {
+            const BrassEntryInfo& e = *big[i];
+            int n = buttonsFor(e);
+            double width = R * 2 + (n - 1) * R * 2.5;
+            double x = colW * i + (colW - width) / 2;
+            if (b.horn)
+                  items.push_back(text(colW * (i + 0.5), y - R - 6, (e.mask & HORN_THUMB) ? QString("B") + QChar(0x266D) + " side" : QString("F side"),
+                                       9, HTK::FAINT, 0));
+            valveSet(items, x, y, R, n - (b.horn ? 1 : 0), b.horn, e);
+            QString l = e.labels.join(", ");
+            items.push_back(text(colW * (i + 0.5), y + R + 13, l, 9, e.playable ? HTK::INK : IMPOSSIBLE_COLOR, 0));
+            }
+      // the alternatives, small, in rows
+      double r = std::max(3.5, std::min(6.0, R * 0.45));
+      double x = 8;
+      y += R + 40;
+      double rowH = r * 2 + 30;
+      for (const BrassEntryInfo* e : small) {
+            int n = buttonsFor(*e);
+            double width = std::max(r * 2 + (n - 1) * r * 2.5, 52.0);
+            if (x + width > w - 4 && x > 8) {
+                  x = 8;
+                  y += rowH;
+                  }
+            if (y + r > h)
+                  break;
+            valveSet(items, x, y, r, n - (b.horn ? 1 : 0), b.horn, *e);
+            QColor c = e->playable ? HTK::FAINT : IMPOSSIBLE_COLOR;
+            for (int k = 0; k < std::min(2, int(e->labels.size())); ++k)
+                  items.push_back(text(x, y + r + 10 + k * 10, e->labels[k], 8, c, -1));
+            x += width + 12;
+            }
       return items;
       }
 
