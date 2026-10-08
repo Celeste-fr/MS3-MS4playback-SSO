@@ -190,6 +190,9 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
   curves measured at one test pitch. Worst on: Horn F4 staccato mf -10.4, Flute E4 staccato -9.9 / -9.5 / -7.9,
   Horn F4 Marcato p +8.2, Violins D6 pizz +6.9 / +6.0, Violins A3 pizz f -7.4. A fix needs per-pitch level curves
   (a new measurement: the check at several pitches); offered to the owner, not started.
+  Also on this branch (12b6b30593, 2026-10-08): every measured technique starts early by its median onset, shorts
+  and marcato too (map onset= on 343 more articulations); untried by ear with SSO. Most shorts move 3-8 ms, marcato /
+  tenuto ~33, Short 0.5 61, Short 1.0 113 ms (docs/PLAYBACK_SETTINGS.md). Listen: slurred shorts against Longs.
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
 
