@@ -2604,18 +2604,6 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             _liveClipsStatus->setWordWrap(true);
             v->addWidget(_liveClips);
             v->addWidget(_liveClipsStatus);
-            // editing Live clips (liveclipedit.h): the device's "Edit in MuseScore" button
-            QCheckBox* editClips = new QCheckBox(tr("Edit Live clips in MuseScore (the MuseScore Link device's "
-                                                    "\"Edit in MuseScore\" button)"), liveBox);
-            editClips->setToolTip(tr("MuseScore listens for the MuseScore Link device in Live (UDP on this computer only). "
-                                     "Its \"Edit in MuseScore\" button opens the MIDI clip shown in Live's Clip View as a "
-                                     "score here, in Continuous View; each edit goes back to that clip, note by note, "
-                                     "and the notes you don't touch keep Live's exact timing and velocity."));
-            editClips->setChecked(LiveIntegration::LiveClipEditor::enabledSetting());
-            connect(editClips, &QCheckBox::toggled, this, [](bool on) {
-                  LiveIntegration::LiveClipEditor::setEnabledSetting(on);
-                  });
-            v->addWidget(editClips);
             QCheckBox* playClips = new QCheckBox(tr("Clip tabs play through Live (the clip's own track)"), liveBox);
             playClips->setToolTip(tr("Playing a Live clip's tab in MuseScore sends its notes to the clip's Live track, so its "
                                      "instrument and effects play them. MuseScore's Play, Stop and cursor stay MuseScore's; "
@@ -2651,6 +2639,7 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                                    "into your set from Live's browser."));
             sets->addWidget(create);
             sets->addWidget(missing);
+            missing->setVisible(false);       // writes the route set (LiveSetKind), not the plain set Create Live Set writes
             sets->addStretch();
             // the device and the envelopes script in Live's User Library (livehelpers.h; also asked at startup)
             QPushButton* helpers = new QPushButton(tr("Install Live helpers…"), liveBox);
@@ -2716,29 +2705,6 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                   load();
                   });
             }
-      if (SoundLibraryHost::available()) {
-            QHBoxLayout* h = new QHBoxLayout;
-            QPushButton* dyn = new QPushButton(tr("Measure dynamics in the background"), libBox);
-            dyn->setToolTip(tr("Every patch's loudness from soft to loud, with the library's plug-in and no window (a few "
-                               "minutes); the short notes are balanced from it. Progress: Documents/MuseScore Sound Library "
-                               "Check/background dynamics check.log"));
-            QPushButton* keys = new QPushButton(tr("Scan drum keys in the background"), libBox);
-            keys->setToolTip(tr("Which key plays which sound in the percussion patches whose keys aren't known yet"));
-            h->addWidget(dyn);
-            h->addWidget(keys);
-            h->addStretch();
-            lv->addLayout(h);
-            connect(dyn, &QPushButton::clicked, this, [this]() {
-                  startBackground({ "--extract-library", _library->name, "--check-dynamics", "--extract-patches", "mapped" },
-                                  tr("The dynamics are measured in the background (Documents/MuseScore Sound Library Check/"
-                                     "background dynamics check.log); MuseScore uses them from its next start."));
-                  });
-            connect(keys, &QPushButton::clicked, this, [this]() {
-                  startBackground({ "--scan-keys", _library->name },
-                                  tr("The drum keys are scanned in the background (Documents/MuseScore Sound Library Check/"
-                                     "background extract.log); hand back the zip it makes."));
-                  });
-            }
       layout->addWidget(libBox);
 
       QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
@@ -2780,6 +2746,8 @@ void SoundLibraryOptions::load()
             const QSignalBlocker g(_liveClips);
             _liveClips->setChecked(link->isOn());
             _liveClipsStatus->setText(link->statusText());
+            _liveClips->setVisible(link->isOn());
+            _liveClipsStatus->setVisible(link->isOn());
             }
       if (_folder) {
             const QString folder = SoundLibraryHost::libraryFolder(*_library);
@@ -2819,15 +2787,6 @@ void SoundLibraryOptions::setLaneSettings(bool libraryDefaults)
       s.maxLanes = _maxLanes->value();
       setMetaTag(SoundLib::laneSettingsMetaTag, libraryDefaults ? QString() : SoundLib::writeLaneSettings(s, *_library));
       load();
-      }
-
-// the MuseScore running here, with no window, doing a background job (musescore.cpp extractInBackground)
-void SoundLibraryOptions::startBackground(const QStringList& args, const QString& what)
-      {
-      if (QProcess::startDetached(QCoreApplication::applicationFilePath(), args))
-            QMessageBox::information(this, windowTitle(), what);
-      else
-            QMessageBox::warning(this, windowTitle(), tr("MuseScore could not be started in the background."));
       }
 
 } // namespace Ms

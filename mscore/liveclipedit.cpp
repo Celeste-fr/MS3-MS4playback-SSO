@@ -70,7 +70,7 @@ LiveClipEditor* LiveClipEditor::instance()
 
 bool LiveClipEditor::enabledSetting()
       {
-      return QSettings().value(SETTING, true).toBool();
+      return true;                      // always on since 2026-10-07 (the owner: no reason to turn it off)
       }
 
 void LiveClipEditor::setEnabledSetting(bool on)

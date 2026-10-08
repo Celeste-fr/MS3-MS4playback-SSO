@@ -307,7 +307,6 @@ class SoundLibraryOptions : public QDialog {
       void load();
       void setLaneSettings(bool libraryDefaults);
       void setMetaTag(const char* tag, const QString& value);
-      void startBackground(const QStringList& args, const QString& what);
 
    public:
       SoundLibraryOptions(MasterScore* score, QWidget* parent = nullptr);
