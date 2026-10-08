@@ -1164,8 +1164,9 @@ def bendRange(name):
 #   brass 0.11 full + 21 ms (rms 12), strings 0.15 full + 22 (19), woodwinds 0.28 full + 8 (27), sul tasto /
 #   flautando / harmonics 0.58 full - 118 (48; not under the strings'); 10-60 ms for most longs, 175-440 for the slow
 #   techniques. Per semitone, smoothed (a running median of 7), as few pitch:ms pairs as stay within 10 ms or 10 %
-#   of the median (Douglas-Peucker; the fits' own error is 12-48 ms); one number where all are. Only longs and legato
-#   (what was measured): not tremolos, trills, long marcato, nor harp, keyboards and percussion.
+#   of the median (Douglas-Peucker; the fits' own error is 12-48 ms); one number where all are. Longs and legato, and
+#   since 2026-10-08 every other technique the onset check measured (shorts, marcato, tremolos, trills: measured only,
+#   no fit; not rips and effects), not harp, keyboards and percussion.
 RANGE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_sound_range.json'), encoding='utf-8'))
 def onsetFamily(patch, sound):
     if re.search(r'Sul Tasto|Flautando|Harmonics', sound):
@@ -1418,7 +1419,10 @@ for i, line in enumerate(out):
     if f:
         extra += f' from="{f:g}"'
         shortFromCount += 1
-    o = onset(current, sound) if t.get('sustains') and ('long' in techniques or 'legato' in techniques) else None
+    # (every technique with measured onsets too since 2026-10-08, the owner: every sound arrives on the beat, shorts
+    # included; not rips and effects, whose -15 dB time is the gesture's, not an attack's)
+    held = t.get('sustains') and ('long' in techniques or 'legato' in techniques)
+    o = onset(current, sound) if held or (measuredOnsets(current, sound) and not re.search(r'Rip|Fx', sound)) else None
     if o:
         extra += f' onset="{o}"'
         onsetCount += 1

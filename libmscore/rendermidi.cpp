@@ -1594,8 +1594,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
                                        && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
-                                    // a held note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
-                                    // the note-on, sul tasto / flautando / harmonics 175-440 ms): early by its onset, the
+                                    // a note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
+                                    // the note-on, sul tasto / flautando / harmonics 175-440 ms; since 2026-10-08 every
+                                    // measured technique, shorts too: pizzicato 3, staccato 8, marcato 33, Short 1.0 113 ms
+                                    // median): early by its onset, the
                                     // chord's latest so that its notes start together; [heldNotes] byPitch 0: the patch's
                                     // median onset for every pitch (one shift, a run's spacing as written)
                                     double onsetMs = 0;
@@ -2206,7 +2208,8 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             return;
       const int utick2 = chunk.utick2();
 
-      // held notes started early by their onset (SSO: 10-60 ms for most longs, up to 440 for flautando or harmonics):
+      // notes started early by their onset (SSO: 10-60 ms for most longs, up to 440 for flautando or harmonics; shorts
+      // 3-113 ms):
       // a note on the same patch that ends between the new start and the written one ends at the new start (it
       // would end there anyway; on a Performance patch the overlap would play a legato transition instead of the
       // note's own attack), unless it started after the new start; the note's switch, sent at the written start,

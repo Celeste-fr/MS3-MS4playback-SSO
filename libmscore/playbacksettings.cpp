@@ -49,10 +49,11 @@ static const std::vector<Definition> DEFINITIONS = {
       { "legato/fastFullMs", 380, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
-        "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },
+        "a note that is no legato transition starts this share of its articulation's measured onset early (held notes and, since "
+        "2026-10-08, every measured technique; default: the map's <Onset early>, SSO 100)", true },
       // (the owner, 2026-10-08: "make even early the new recommended")
       { "heldNotes/byPitch", 0, 0, 1, "on/off",
-        "0: every held note of a patch by the median of the patch's measured onsets (one shift: a run keeps its written "
+        "0: every note of an articulation by the median of its measured onsets (one shift: a run keeps its written "
         "spacing); 1: each by its pitch's measured onset (attacks on the beat, a run's spacing uneven)", true },
       // [shorts]
       { "shorts/byMeantLength", 1, 0, 1, "on/off",
@@ -268,7 +269,7 @@ QString iniTemplate()
            "\n; a legato transition's delay (ms; a bent transition's glide starts when it arrives: tuning/bendAtArrival)\n"
            "[legato.delay]\n"
            "; Violins 2 - Performance=+25\n"
-           "\n; a held note's onset (ms; it starts that much early, times heldNotes/early)\n"
+           "\n; a note's onset (ms; it starts that much early, times heldNotes/early)\n"
            "[heldNotes.onset]\n"
            "; Violins 1|Long Flautando=-50\n"
            "\n; a short's from= (s: the meant sounding length from which it is chosen; an offset in s, or a number)\n"

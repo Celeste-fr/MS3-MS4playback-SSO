@@ -215,7 +215,9 @@ switch value of each articulation. For example:
     legato patch an overlap would play a transition instead of the note's attack), and the note's
     switch and the controllers sent at its tick move with it. SSO: 10-60 ms for most longs, 175-440 ms
     for sul tasto, flautando and harmonics (from the rest check's per-semitone full-level times by
-    family; `gen_spitfire_sso.py`); not on tremolos, trills, shorts, harp, keyboards or percussion.
+    family; `gen_spitfire_sso.py`); since 2026-10-08 also every other technique the onset check measured (shorts,
+    marcato, tremolos, trills, falls: measured pitches only, no family fit), not rips, effects, harp, keyboards or
+    percussion.
   - (`legatoLevel` / `legatoLevelLong`, the level each transition arrived at, played by `[legato] levelBalance`: removed
     2026-10-07, ignored in an older map; the measurement stays in `sso_legato_levels.json`.)
   - `<Onset early="100"/>` (top level): that percent (SSO: 100). A score can set its own in *Mixer ›

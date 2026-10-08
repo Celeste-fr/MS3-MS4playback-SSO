@@ -198,7 +198,8 @@ class TestMarcatoLevel : public QObject, public MTest
 //    2026-10-04 for [legato] phraseGapMs: five SSO note-offs before a fresh attack on the legato patch end 44-58 ticks earlier,
 //    the built-in events unchanged; regenerated 2026-10-06 without the Performance patches: the trumpet's and tuba's slurs play
 //    their main patch's Long (switch, onset early, the tuba on channel 2), the strings' notes before a slurred one end as written;
-//    again the same day without the automatic adjustments: the SSO notes start on their beat, no early onsets),
+//    again the same day without the automatic adjustments: the SSO notes start on their beat, no early onsets; regenerated
+//    2026-10-08: every measured technique starts early by its onset, the SSO shorts and marcatos too, the same events earlier),
 //    kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
 //    events there instead (to make the reference again after an intended playback change)
 //---------------------------------------------------------
