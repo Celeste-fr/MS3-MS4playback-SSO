@@ -2484,83 +2484,30 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             return;
             }
 
-      // this score
-      QGroupBox* scoreBox = new QGroupBox(tr("This score (saved in it)"), this);
-      QFormLayout* form = new QFormLayout(scoreBox);
-      if (_library->varispeed) {
-            QWidget* row = new QWidget(scoreBox);
-            QHBoxLayout* h = new QHBoxLayout(row);
-            h->setContentsMargins(0, 0, 0, 0);
-            _tolerance = new QDoubleSpinBox(row);
-            _tolerance->setRange(0.0, 50.0);
-            _tolerance->setDecimals(3);
-            _tolerance->setSingleStep(0.5);
-            _tolerance->setPrefix(tr("share within "));
-            _tolerance->setSuffix(tr(" cents"));
-            _tolerance->setToolTip(tr("A note this close to a copy's tuning plays on it, at its tuning (more: fewer copies, less exact)"));
-            _tail = new QDoubleSpinBox(row);
-            _tail->setRange(-0.5, 10.0);
-            _tail->setSpecialValueText(tr("ring: the measured release"));        // (-0.5: SoundLib::laneRing)
-            _tail->setDecimals(1);
-            _tail->setSingleStep(0.5);
-            _tail->setPrefix(tr("ring "));
-            _tail->setSuffix(tr(" s"));
-            _tail->setToolTip(tr("How long a copy rings after its last note (release, room) before it can be retuned"));
-            _maxLanes = new QSpinBox(row);
-            _maxLanes->setRange(0, 16);
-            _maxLanes->setSpecialValueText(tr("as the free memory allows"));     // (0: SoundLib::memoryMaxLanes)
-            _maxLanes->setPrefix(tr("at most "));
-            _maxLanes->setSuffix(tr(" per patch"));
-            _maxLanes->setToolTip(tr("Past it, the copy quiet longest is retuned, its tail with it"));
-            QPushButton* defaults = new QPushButton(tr("Library's"), row);
-            for (QWidget* w : std::initializer_list<QWidget*> { _tolerance, _tail, _maxLanes, defaults })
-                  h->addWidget(w);
-            h->addStretch();
-            QLabel* l = new QLabel(tr("Copies for other tunings:"), scoreBox);
-            l->setToolTip(tr("A patch plays microtones by copies of itself, each at one tuning: each costs the patch's memory again"));
-            form->addRow(l, row);
-            for (QDoubleSpinBox* b : { _tolerance, _tail })
-                  b->setKeyboardTracking(false);
-            _maxLanes->setKeyboardTracking(false);
-            for (QDoubleSpinBox* b : { _tolerance, _tail })
-                  connect(b, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
-            connect(_maxLanes, QOverload<int>::of(&QSpinBox::valueChanged), this, [this]() { setLaneSettings(false); });
-            connect(defaults, &QPushButton::clicked, this, [this]() { setLaneSettings(true); });
-            }
-      // held notes early by their onset (SoundLib::onsetEarly): where the library measured its onsets
-      bool onsets = false;
-      for (const SoundLib::LibInstrument& li : _library->instruments)
-            for (const SoundLib::Articulation& a : li.articulations)
-                  onsets = onsets || a.onsetMs > 0 || !a.onsets.empty();
-      if (onsets) {
-            QWidget* row = new QWidget(scoreBox);
-            QHBoxLayout* h = new QHBoxLayout(row);
-            h->setContentsMargins(0, 0, 0, 0);
-            _onsetEarly = new QSpinBox(row);
-            _onsetEarly->setRange(0, 200);
-            _onsetEarly->setSingleStep(5);
-            _onsetEarly->setSuffix(tr(" %"));
-            _onsetEarly->setKeyboardTracking(false);
-            _onsetEarly->setToolTip(tr("A held note's bow or breath takes time to be heard (Spitfire: 10-60 ms for most "
-                                       "longs, up to 440 ms for sul tasto, flautando and harmonics, measured per patch and "
-                                       "pitch): it starts this share of that before the beat.\n"
-                                       "0 %: on the beat, as written; 100 %: heard on the beat"));
-            QPushButton* defaults = new QPushButton(tr("Library's"), row);
-            h->addWidget(_onsetEarly);
-            h->addWidget(defaults);
-            h->addStretch();
-            QLabel* l = new QLabel(tr("Held notes early by:"), scoreBox);
-            l->setToolTip(_onsetEarly->toolTip());
-            form->addRow(l, row);
-            connect(_onsetEarly, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v) {
-                  setMetaTag(SoundLib::onsetEarlyMetaTag, v == _library->onsetEarly ? QString() : QString::number(v));
-                  });
-            connect(defaults, &QPushButton::clicked, this, [this]() {
-                  setMetaTag(SoundLib::onsetEarlyMetaTag, QString());
+      // the library (every score)
+      QGroupBox* libBox = new QGroupBox(tr("%1 (every score)").arg(_library->name), this);
+      QVBoxLayout* lv = new QVBoxLayout(libBox);
+      if (SoundLibraryHost::available() && SoundLibraryHost::makesSetups(*_library)) {
+            QHBoxLayout* h = new QHBoxLayout;
+            _folder = new QLabel(libBox);
+            _folder->setWordWrap(true);
+            QPushButton* folder = new QPushButton(tr("Library folder…"), libBox);
+            folder->setToolTip(tr("Where %1 is installed (its folder with Instruments and Samples)").arg(_library->name));
+            h->addWidget(_folder, 1);
+            h->addWidget(folder);
+            lv->addLayout(h);
+            connect(folder, &QPushButton::clicked, this, [this]() {
+                  const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder of %1").arg(_library->name),
+                                                                        SoundLibraryHost::libraryFolder(*_library));
+                  if (dir.isEmpty())
+                        return;
+                  if (!QFileInfo::exists(dir + "/Instruments"))
+                        QMessageBox::warning(this, windowTitle(), tr("%1 has no Instruments folder.").arg(QDir::toNativeSeparators(dir)));
+                  SoundLibraryHost::setLibraryFolder(*_library, dir);
                   load();
                   });
             }
-      layout->addWidget(scoreBox);
+      layout->addWidget(libBox);
 
       // every playback adjustment (libmscore/playbacksettings.h): default, playback.ini, this score
       QGroupBox* adjustBox = new QGroupBox(tr("Playback adjustments (this score over playback.ini over the defaults)"), this);
@@ -2682,30 +2629,6 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                   });
       }
 
-      // the library (every score)
-      QGroupBox* libBox = new QGroupBox(tr("%1 (every score)").arg(_library->name), this);
-      QVBoxLayout* lv = new QVBoxLayout(libBox);
-      if (SoundLibraryHost::available() && SoundLibraryHost::makesSetups(*_library)) {
-            QHBoxLayout* h = new QHBoxLayout;
-            _folder = new QLabel(libBox);
-            _folder->setWordWrap(true);
-            QPushButton* folder = new QPushButton(tr("Library folder…"), libBox);
-            folder->setToolTip(tr("Where %1 is installed (its folder with Instruments and Samples)").arg(_library->name));
-            h->addWidget(_folder, 1);
-            h->addWidget(folder);
-            lv->addLayout(h);
-            connect(folder, &QPushButton::clicked, this, [this]() {
-                  const QString dir = QFileDialog::getExistingDirectory(this, tr("Folder of %1").arg(_library->name),
-                                                                        SoundLibraryHost::libraryFolder(*_library));
-                  if (dir.isEmpty())
-                        return;
-                  if (!QFileInfo::exists(dir + "/Instruments"))
-                        QMessageBox::warning(this, windowTitle(), tr("%1 has no Instruments folder.").arg(QDir::toNativeSeparators(dir)));
-                  SoundLibraryHost::setLibraryFolder(*_library, dir);
-                  load();
-                  });
-            }
-      layout->addWidget(libBox);
 
       QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
       connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -2718,17 +2641,6 @@ void SoundLibraryOptions::load()
       {
       if (!_library || !_score)
             return;
-      if (_tolerance) {
-            const SoundLib::LaneSettings ls = SoundLib::laneSettings(_score, *_library);
-            const QSignalBlocker b1(_tolerance), b2(_tail), b3(_maxLanes);
-            _tolerance->setValue(ls.tolerance);
-            _tail->setValue(ls.tail < 0 ? -0.5 : ls.tail);
-            _maxLanes->setValue(ls.maxLanes);
-            }
-      if (_onsetEarly) {
-            const QSignalBlocker blocker(_onsetEarly);
-            _onsetEarly->setValue(SoundLib::onsetEarly(_score, *_library));
-            }
       if (_liveSet) {
             bool autoReimport = true;
             const QString set = LiveIntegration::linkedSet(_score, &autoReimport);
@@ -2775,18 +2687,6 @@ void SoundLibraryOptions::setMetaTag(const char* tag, const QString& value)
       _score->endCmd();
       _score->setPlaylistDirty();
       SoundLibraryHost::routesMayChange();          // (the copies it needs load at the next play)
-      }
-
-void SoundLibraryOptions::setLaneSettings(bool libraryDefaults)
-      {
-      if (!_library || !_tolerance)
-            return;
-      SoundLib::LaneSettings s;
-      s.tolerance = _tolerance->value();
-      s.tail = _tail->value() < 0 ? -1.0 : _tail->value();
-      s.maxLanes = _maxLanes->value();
-      setMetaTag(SoundLib::laneSettingsMetaTag, libraryDefaults ? QString() : SoundLib::writeLaneSettings(s, *_library));
-      load();
       }
 
 } // namespace Ms

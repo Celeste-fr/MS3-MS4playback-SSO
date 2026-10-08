@@ -1304,7 +1304,7 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
 
 void TestSoundLibrary::onsetEarly()
       {
-      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
+      Playback::setIniValuesForTest(withOld({ { "heldNotes/byPitch", "1" } }));      // (the timing these expectations were computed with: by pitch)
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
          "<Instrument name='Violin' ids='violin'>"
@@ -1545,35 +1545,31 @@ void TestSoundLibrary::playbackPresets()
       {
       const Playback::Preset* rec = nullptr;
       const Playback::Preset* lib = nullptr;
-      const Playback::Preset* even = nullptr;
       for (const Playback::Preset& p : Playback::presets()) {
             if (QString(p.id) == "recommended")
                   rec = &p;
             if (QString(p.id) == "library")
                   lib = &p;
-            if (QString(p.id) == "even")
-                  even = &p;
             }
-      QVERIFY(rec && lib && even);
+      QVERIFY(rec && lib && Playback::presets().size() == 2);
       // a file with comments, a user's edits and the key set
       const QString text =
          "; my comment\n[legato]\n; keepMs note\nkeepMs=77\n\n[heldNotes]\n; early note\nearly=30\n\n[shorts]\nstaccato=44\n";
       QString out = Playback::applyPresetToText(text, *rec);
       // (byPitch, missing: added under the section's header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1");
-      QCOMPARE(out, withPitch.arg(100).arg(1));
-      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(1));
-      QCOMPARE(Playback::applyPresetToText(out, *even), withPitch.arg(100).arg(0));
+      QCOMPARE(out, withPitch.arg(100).arg(0));
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
                QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
-      QCOMPARE(Playback::applyPresetToText(noSection, *rec), QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=1\nearly=100\n"));
+      QCOMPARE(Playback::applyPresetToText(noSection, *rec), QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
-      QCOMPARE(Playback::applyPresetToText(other, *rec), QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=1\nearly=100\n"));
+      QCOMPARE(Playback::applyPresetToText(other, *rec), QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1593,7 +1589,7 @@ void TestSoundLibrary::playbackPresets()
       f.close();
       QVERIFY(Playback::applyPreset("recommended", path));
       QVERIFY(f.open(QIODevice::ReadOnly));
-      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(1));
+      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0));
       f.close();
       // detection, from the file read and from values
       Playback::setIniPath(path);
@@ -1604,11 +1600,11 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "legato/keepMs", 10 } }), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 55 } }), QString());
-      // byPitch left out: its default 1, Recommended's; 0: Even early (Library default whatever it is)
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } }), QString("even"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 0 } }), QString("even"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 0 } }), QString("library"));
+      // byPitch left out: its default 0, Recommended's; 1 (by pitch): custom (Library default whatever it is)
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 } }), QString("library"));
       QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
       Playback::setIniPath(QString());
       Playback::setIniValuesForTest({});
@@ -1617,7 +1613,7 @@ void TestSoundLibrary::playbackPresets()
 //---------------------------------------------------------
 //   playbackSettingsLayers
 //    a setting's effect at each layer (built-in default, playback.ini, the score's metaTag), rendered:
-//    held notes early by their onset (and the older own metaTag; byPitch 0: the median), removed settings ignored; and the shorts' meant
+//    held notes early by their patch's median onset (and the older own metaTag; byPitch 1: by pitch), removed settings ignored; and the shorts' meant
 //    length; a score without overrides gets no metaTag
 //---------------------------------------------------------
 
@@ -1660,8 +1656,8 @@ void TestSoundLibrary::playbackSettingsLayers()
             return notes;
             };
       const int Q = DIVISION;
-      // G5 (unslurred, on the main patch) starts early by its onset (100 ms, 48 ticks at 60 bpm): the map's 0 %, the
-      // ini's 100 %, the score's 50 % (its own metaTag); the transitions play on the beat
+      // G5 (unslurred, on the main patch) starts early by the patch's median onset (120 ms, 57.6 ticks at 60 bpm): the
+      // map's 0 %, the ini's 100 %, the score's 50 % (its own metaTag); the transitions play on the beat
       std::vector<N> n = render();
       QCOMPARE(n.size() > 4, true);
       QCOMPARE(n[4].on, 4 * Q);
@@ -1669,17 +1665,17 @@ void TestSoundLibrary::playbackSettingsLayers()
       QCOMPARE(Playback::source("heldNotes/early", score, lib->onsetEarly), Playback::Source::MAP);
       Playback::setIniValuesForTest({ { "heldNotes/early", "100" } });
       n = render();
-      QVERIFY2(qAbs(n[4].on - (4 * Q - 48)) <= 1, qPrintable(QString::number(n[4].on)));
+      QVERIFY2(qAbs(n[4].on - (4 * Q - 58)) <= 1, qPrintable(QString::number(n[4].on)));
       QCOMPARE(n[1].on, Q);
       score->setMetaTag(SoundLib::onsetEarlyMetaTag, "50");
       QCOMPARE(Playback::source("heldNotes/early", score, lib->onsetEarly), Playback::Source::SCORE);
       n = render();
-      QVERIFY2(qAbs(n[4].on - (4 * Q - 24)) <= 1, qPrintable(QString::number(n[4].on)));
+      QVERIFY2(qAbs(n[4].on - (4 * Q - 29)) <= 1, qPrintable(QString::number(n[4].on)));
       score->setMetaTag(SoundLib::onsetEarlyMetaTag, "");
-      // byPitch 0 (the score's): the patch's median onset, (100 + 140) / 2 = 120 ms (57.6 ticks), not G5's 100
-      score->setMetaTag(Playback::metaTag, "heldNotes/byPitch=0");
+      // byPitch 1 (the score's): G5's own onset, 100 ms (48 ticks), not the patch's median 120
+      score->setMetaTag(Playback::metaTag, "heldNotes/byPitch=1");
       n = render();
-      QVERIFY2(qAbs(n[4].on - (4 * Q - 58)) <= 1, qPrintable(QString::number(n[4].on)));
+      QVERIFY2(qAbs(n[4].on - (4 * Q - 48)) <= 1, qPrintable(QString::number(n[4].on)));
       QCOMPARE(n[1].on, Q);
       score->setMetaTag(Playback::metaTag, "");
       // settings removed 2026-10-07, in the score (the older soundLibraryLegatoEarly too) or the ini: ignored

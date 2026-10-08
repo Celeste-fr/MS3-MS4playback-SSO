@@ -50,9 +50,10 @@ static const std::vector<Definition> DEFINITIONS = {
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
         "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },
-      { "heldNotes/byPitch", 1, 0, 1, "on/off",
-        "1: by its pitch's measured onset; 0: every held note of a patch by the median of the patch's measured onsets "
-        "(one shift: a run keeps its written spacing)", true },
+      // (the owner, 2026-10-08: "make even early the new recommended")
+      { "heldNotes/byPitch", 0, 0, 1, "on/off",
+        "0: every held note of a patch by the median of the patch's measured onsets (one shift: a run keeps its written "
+        "spacing); 1: each by its pitch's measured onset (attacks on the beat, a run's spacing uneven)", true },
       // [shorts]
       { "shorts/byMeantLength", 1, 0, 1, "on/off",
         "1: a short with a measured from= is chosen by how long the note is meant to sound (written length times the factors below); 0: by its written length", true },
@@ -279,9 +280,9 @@ QString iniTemplate()
 const std::vector<Preset>& presets()
       {
       static const std::vector<Preset> P = {
-            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } } },
-            // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent": early, evenly)
-            { "even", "Even early", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } } },
+            // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent"; 2026-10-08: "make
+            // even early the new recommended": early, each patch by its median onset)
+            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } } },
             { "library", "Library default", { { "heldNotes/early", 0 } } },
             };
       return P;

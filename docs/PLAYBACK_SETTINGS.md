@@ -66,8 +66,9 @@ glides, one cent a tick, are rendered and do).
 
 ## Presets
 
-Three presets switch `playback.ini` (the owner, 2026-10-07: "library default, and recommended"; then, of Library
-default: "very late, but at least it sounds consistent": Even early). The Preset box in Mixer > Advanced Options... >
+Two presets switch `playback.ini` (the owner, 2026-10-07: "library default, and recommended"; then, of Library
+default: "very late, but at least it sounds consistent": an Even early preset; 2026-10-08: "make even early the new
+recommended", so Recommended is it and the per-pitch shift is `byPitch=1` only). The Preset box in Mixer > Advanced Options... >
 Playback adjustments writes the preset's keys into the file as a text edit (comments and the other values stay; a
 missing key goes under its section's header, a missing section at the end; a missing file starts from the template)
 and then reads it as Reload Playback Settings does, playback going on. The box says "this score overrides: ..." when
@@ -76,13 +77,17 @@ selectable).
 
 | Preset | heldNotes/early | heldNotes/byPitch |
 |---|---|---|
-| Recommended | 100 | 1: each note early by its pitch's measured onset (attacks on the beat; a run's spacing follows the onsets) |
-| Even early | 100 | 0: every held note of a patch early by the median of the patch's measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms) |
+| Recommended | 100 | 0: every held note of a patch early by the median of the patch's measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms) |
 | Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | |
+
+`byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
+run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
 
 Only those keys differ. The others are left as they are because: `legato/keepMs` acts only with early starts; the shorts'
 lengths are MuseScore 4's note model; tuning and hosting are mechanics. A key missing from the ini counts as its
-default; for `heldNotes/early` that is the map's value, taken as Recommended's 100 (SSO's). The table is
+default; for `heldNotes/early` that is the map's value, taken as Recommended's 100 (SSO's).
+Advanced Options shows each of these once, in Playback adjustments (its older rows "Held notes early by" and "Copies
+for other tunings" were the same metaTags and went 2026-10-08). The table is
 `Playback::presets()` (`libmscore/playbacksettings.cpp`).
 
 ## Inventory
@@ -105,7 +110,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Legato glide of a tuning copy. Pitch bend: one cent a tick, the bend value nearest each step (a glide of d cents: ceil(d) ticks; a quarter tone ~52 ms at 120 bpm): the owner's criterion (2026-10-03) "as short as possible without audible steps: each step at most one cent" on the renderer's tick grid; no setting. Varispeed: the same criterion per output frame (it changes its speed every frame): a glide of d cents takes ceil(d × the larger ratio / the smaller) frames, each within a cent (a quarter tone 51 frames, ~1.2 ms at 44.1 kHz; `Vst3Plugin::GLIDE_CENT_STEP`); `[legato] glideMs` (30 ms, no source) retired 2026-10-03 | computed | `libraryPitchBends`, `Vst3Plugin::setPitch` | — |
 | Held notes start early by their measured onset | 100 % (map `<Onset early>`; 0 from 2026-10-06 to 2026-10-07; the owner: plain Long for every slurred note, lined up between sections; 0 plays them as written, to compare) | `collect` / `onsetEarliest`, `finishLibraryEvents` | `[heldNotes] early`; score: old metaTag |
 | Onset per patch and pitch (-15 dB perceived; swells per semitone) | map `onset` | `Articulation::onsetAt` | `[heldNotes.onset]` table; definition: generator |
-| Held notes early by their pitch's onset, or all by the patch's median onset (2026-10-07: even runs) | 1 (by pitch) | `collect` (`libOnsetByPitch`), `Articulation::onsetMedian` | `[heldNotes] byPitch`; score: `playbackSettings` |
+| Held notes early by the patch's median onset, or each by its pitch's onset (2026-10-07: even runs; the default since 2026-10-08) | 0 (median) | `collect` (`libOnsetByPitch`), `Articulation::onsetMedian` | `[heldNotes] byPitch`; score: `playbackSettings` |
 | Shorts chosen by meant sounding length | on | `SoundLib::want`, `choose` | `[shorts] byMeantLength` |
 | Meant length factors | staccato 50, staccatissimo 25, tenuto 99, portato 74.5 % (MS4's) | `want` (`Want::soundSeconds`) | `[shorts] staccato` … `portato` |
 | Measured short thresholds | map `from` | `choose` | `[shorts.from]` table |

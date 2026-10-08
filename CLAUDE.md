@@ -116,7 +116,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   (legato early, fastFirsts, phrase gap, overlap, fast technique, level balance, pedal timing, calibrated short
   velocity, even steps, one instance, map track delays) were removed 2026-10-07 (docs/PLAYBACK_SETTINGS.md lists them;
   old ini keys and metaTags are ignored). The technique still comes from the notation. Exception: held notes start
-  early by their measured onset
+  early by their patch's median measured onset (`[heldNotes] byPitch` 1: each by its pitch's)
   (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
   players; `[heldNotes] early` 0 plays them as written). **No Performance patches** (the owner, 2026-10-06:
   the All techniques patches' Release, Tightness and Options): SSO slurs play the All techniques longs, each note its
@@ -134,7 +134,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed
   keys are listed in `REMOVED` and ignored silently). Read a
   setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
-  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended / Even early (`heldNotes/byPitch` 0: each patch early by its median onset) / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
+  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended: held notes early, each patch by its median onset, `heldNotes/byPitch` 0 (1: by pitch) / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
 - Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; read for a
   marcato's level (the curve's inverse). The short balance and even steps were removed 2026-10-07.
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing

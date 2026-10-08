@@ -18,6 +18,7 @@
 #include "libmscore/undo.h"
 #include "libmscore/instrument.h"
 #include "libmscore/part.h"
+#include "libmscore/playbacksettings.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
@@ -182,6 +183,8 @@ void TestMarcatoLevel::defaultUnchanged()
       QVERIFY(lib);
       MasterScore* s = score();
       QVERIFY(s);
+      // the reference's held notes start early by their pitch's onset (heldNotes/byPitch 1, the default until 2026-10-08)
+      s->setMetaTag(Playback::metaTag, "heldNotes/byPitch=1");
       QStringList all;
       all << "# built-in" << events(s, nullptr) << "# SSO" << events(s, lib);
       const QString text = all.join('\n') + '\n';

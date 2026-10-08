@@ -293,10 +293,6 @@ class SoundLibraryOptions : public QDialog {
 
       std::shared_ptr<const SoundLib::Library> _library;
       QPointer<MasterScore> _score;
-      QDoubleSpinBox* _tolerance { nullptr };
-      QDoubleSpinBox* _tail { nullptr };
-      QSpinBox* _maxLanes { nullptr };
-      QSpinBox* _onsetEarly { nullptr };
       QLabel* _folder { nullptr };
       QLabel* _liveSet { nullptr };
       QCheckBox* _liveAuto { nullptr };
@@ -305,7 +301,6 @@ class SoundLibraryOptions : public QDialog {
       QLabel* _liveClipsStatus { nullptr };
 
       void load();
-      void setLaneSettings(bool libraryDefaults);
       void setMetaTag(const char* tag, const QString& value);
 
    public:
