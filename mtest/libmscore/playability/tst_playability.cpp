@@ -16,6 +16,7 @@
 //                       models (gen_*_tests.py, <name>-expected.json), which the plugin matched
 
 #include <QtTest/QtTest>
+#include <functional>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -60,6 +61,11 @@ class TestPlayability : public QObject, public MTest
       void bowing_data();
       void bowing();
       void speed();
+      void htkRules();
+      void harp();
+      void timpani();
+      void keyboard();
+      void htkLayouts();
       };
 
 static QString rowText(int bar, const QString& staff, const QString& verdict, const QString& reason, const QString& notes)
@@ -787,6 +793,198 @@ void TestPlayability::bowing()
       want.sort();
       got.sort();
       compare(got, want);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   harp, timpani, keyboard (H1, H2, P1, K1; tools/playability/gen_htk_tests.py)
+//---------------------------------------------------------
+
+void TestPlayability::htkRules()
+      {
+      using namespace Playability;
+      QCOMPARE(harpEnharmonic(0, -1), QString("B"));        // Cb = B
+      QCOMPARE(harpEnharmonic(0, 0), QString("B#"));        // C = B#
+      QCOMPARE(harpEnharmonic(3, 1), QString("Gb"));        // F# = Gb
+      QCOMPARE(harpEnharmonic(1, 0), QString());            // D natural: none
+      QCOMPARE(harpEnharmonic(4, 0), QString());            // G
+      QCOMPARE(harpEnharmonic(5, 0), QString());            // A
+      QCOMPARE(keyAlter(2, 3), 1);                          // D major: F#
+      QCOMPARE(keyAlter(2, 4), 0);                          // G
+      QCOMPARE(keyAlter(-3, 5), -1);                        // Eb major: Ab
+      QCOMPARE(keyAlter(-3, 1), 0);                         // D
+      QVERIFY(timpaniFifthDrum("Timpani (5 drums)"));
+      QVERIFY(timpaniFifthDrum("five timpani"));
+      QVERIFY(timpaniFifthDrum("Piccolo timpano"));
+      QVERIFY(!timpaniFifthDrum("Timpani"));
+      QCOMPARE(timpaniDrums(false).size(), size_t(4));
+      QCOMPARE(timpaniDrums(true).size(), size_t(5));
+
+      // D2 (0-1 s) on the 32"; E2 at 7 s fits only the 32": a retune with 6 s
+      TimpaniPlan p = planTimpani({ { 0, { 38 }, { 1 } }, { 7, { 40 }, { 8 } } }, false);
+      QCOMPARE(p.moments[0][0].drum, 0);
+      QCOMPARE(p.moments[1][0].drum, 0);
+      QVERIFY(p.moments[1][0].problem == TimpaniNotePlan::Problem::RETUNE);
+      QCOMPARE(p.moments[1][0].from, 38);
+      QCOMPARE(p.moments[1][0].seconds, 6.0);
+      // F2 at 5 s: nearer the 32"'s middle, but the 29" leaves the 32" its D2 (no retune)
+      p = planTimpani({ { 0, { 38 }, { 1 } }, { 5, { 41 }, { 6 } } }, false);
+      QCOMPARE(p.moments[1][0].drum, 1);
+      QVERIFY(p.moments[1][0].problem == TimpaniNotePlan::Problem::NONE);
+      // a lone F2: the drum whose middle is nearest (32" 41.5, 29" 44.5)
+      p = planTimpani({ { 0, { 41 }, { 1 } } }, false);
+      QCOMPARE(p.moments[0][0].drum, 0);
+      // C4 needs the fifth drum
+      QVERIFY(planTimpani({ { 0, { 60 }, { 1 } } }, false).moments[0][0].problem == TimpaniNotePlan::Problem::RANGE);
+      QCOMPARE(planTimpani({ { 0, { 60 }, { 1 } } }, true).moments[0][0].drum, 4);
+      }
+
+static QStringList markList(const PlayabilityResult& r)
+      {
+      QStringList out;
+      for (auto i = r.marks.begin(); i != r.marks.end(); ++i)
+            out << QString("%1 | %2 | %3").arg(i.key()->chord()->tick().ticks() / 1920 + 1).arg(i.key()->pitch()).arg(markName(i.value()));
+      out.sort();
+      return out;
+      }
+
+static QStringList htkRows(const PlayabilityResult& r, const QStringList& kinds)
+      {
+      QStringList out;
+      for (const PlayabilityRow& row : r.rows)
+            if (kinds.contains(row.kind))
+                  out << rowText(row.bar, row.staff, row.verdict, row.reason, row.notes);
+      out.sort();
+      return out;
+      }
+
+void TestPlayability::harp()
+      {
+      MasterScore* score = readScore(DIR + "harp-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "pedals", "harp hand" });
+      QStringList m = markList(r);
+      QVERIFY(m.contains("5 | 62 | impossible"));            // Ebb4
+      QVERIFY(m.contains("2 | 61 | outOfReach"));            // C#4
+      for (const QString& x : m)                            // the clean bars have no mark
+            QVERIFY2(!QRegularExpression("^(1|3|9|11|14) \\|").match(x).hasMatch(), qPrintable(x));
+      QStringList want = {
+            QString::fromUtf8("10 | Harp | risky | the right hand spans 11 strings, more than a 10th | E4 + A5"),
+            QString::fromUtf8("12 | Harp | risky | right hand in the lowest octave | E1"),
+            QString::fromUtf8("13 | Harp | risky | right hand in the lowest octave | F#1"),
+            QString::fromUtf8("2 | Harp | risky | 2 pedal changes at once on the left foot (D#, C#) | C#4 + D#4"),
+            QString::fromUtf8("4 | Harp | impossible | Cb and C together: one pedal for every C (respell Cb as B or C as B#) | Cb4 + C5"),
+            QString::fromUtf8("5 | Harp | impossible | double flat: no pedal setting for Ebb4 | Ebb4"),
+            QString::fromUtf8("6 | Harp | impossible | no string for B0 (strings C1–G7) | B0"),
+            QString::fromUtf8("7 | Harp | risky | retune D1 by hand (no pedal): Db1 | Db1"),
+            QString::fromUtf8("8 | Harp | impossible | 5 notes in the right hand: more than 4 need both hands or a roll | E4 + F#4 + G4 + A4 + Bb4") };
+      compare(got, want);
+      delete score;
+      }
+
+void TestPlayability::timpani()
+      {
+      MasterScore* score = readScore(DIR + "timp-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "timpani" });
+      QStringList want = {
+            QString::fromUtf8("10 | Timpani | impossible | C2 is outside every drum (D2–A3) | C2"),
+            QString::fromUtf8("14 | Timpani | impossible | no free drum for E2 | E2"),
+            QString::fromUtf8("3 | Timpani | risky | the 32″ retunes from D2 to E2 in 7 s (15 s needed) | E2"),
+            QString::fromUtf8("9 | Timpani | impossible | 5 pitches at once, 4 drums | D2 + F2 + A2 + D3 + A3") };
+      compare(got, want);
+      delete score;
+      }
+
+void TestPlayability::keyboard()
+      {
+      MasterScore* score = readScore(DIR + "keys-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "span" });
+      QStringList want = {
+            QString::fromUtf8("2 | Piano | risky | the right hand spans a minor 10th, more than a 9th | C4 + D#5"),
+            QString::fromUtf8("3 | Piano | impossible | the left hand spans 17 semitones, more than a 10th | C3 + F4"),
+            QString::fromUtf8("5 | Piano | impossible | the right hand spans 17 semitones, more than a 10th | C4 + E4 + F5") };
+      compare(got, want);
+      delete score;
+      }
+
+void TestPlayability::htkLayouts()
+      {
+      auto labels = [](const DisplayList& l, double size) {
+            std::vector<std::pair<double, QString>> out;      // by x
+            for (const DrawItem& i : l)
+                  if (i.kind == DrawItem::Kind::LABEL && i.size == size)
+                        out.push_back({ i.x, i.text });
+            std::sort(out.begin(), out.end());
+            QStringList t;
+            for (const auto& p : out)
+                  t << p.second;
+            return t;
+            };
+      auto count = [](const DisplayList& l, std::function<bool(const DrawItem&)> f) {
+            return int(std::count_if(l.begin(), l.end(), f));
+            };
+      auto meta = [](const DisplayList& l) {
+            return !l.empty() && l.front().kind == DrawItem::Kind::META && !l.front().namesShown;
+            };
+
+      // harp, bar 2 (C#4 + D#4): pedals in the harpists' order, C and D changed (heavier, bold)
+      MasterScore* score = readScore(DIR + "harp-tests.mscx");
+      QVERIFY(score);
+      ChordInfo ci = Playability::inspect(chordAt(score, 1920));
+      QVERIFY(ci.kind == ChordInfo::Kind::HARP);
+      DisplayList l = Playability::layoutDiagram(ci, 320, 260);
+      QVERIFY(meta(l));
+      QCOMPARE(labels(l, 11), QStringList({ "D#", "C#", "B", "E", "F", "G", "A" }));
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::LINE && i.width == 5; }), 2);
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::LABEL && i.bold; }), 2);
+      // a sharp pedal is down: its line starts lower than a natural one's
+      double yC = 0, yB = 0;
+      for (const DrawItem& i : l)
+            if (i.kind == DrawItem::Kind::LINE && (i.width == 4 || i.width == 5) && i.x1 == i.x2)
+                  (i.width == 5 && !yC ? yC : yB) = i.y1;
+      QVERIFY(yC > yB);
+      QVERIFY(Playability::layoutDiagram(ci, 60, 260).empty());
+      delete score;
+
+      // timpani, bar 3 (E2): four drums, largest left, the 32" playing E2
+      score = readScore(DIR + "timp-tests.mscx");
+      QVERIFY(score);
+      ci = Playability::inspect(chordAt(score, 2 * 1920));
+      QVERIFY(ci.kind == ChordInfo::Kind::TIMPANI);
+      l = Playability::layoutDiagram(ci, 400, 260);
+      QVERIFY(meta(l));
+      QCOMPARE(labels(l, 10).mid(0, 1), QStringList({ QString::fromUtf8("32″") }));
+      QStringList sizes;
+      for (const QString& t : labels(l, 10))
+            if (t.endsWith(QString::fromUtf8("″")))
+                  sizes << t;
+      QCOMPARE(sizes, QStringList({ QString::fromUtf8("32″"), QString::fromUtf8("29″"), QString::fromUtf8("26″"), QString::fromUtf8("23″") }));
+      QCOMPARE(labels(l, 13), QStringList({ "E2", "A2", "D3", "A3" }));
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::CIRCLE && i.stroke.isValid() && i.width == 3; }), 1);
+      double r0 = 0, r3 = 0;
+      for (const DrawItem& i : l)
+            if (i.kind == DrawItem::Kind::CIRCLE && i.stroke.isValid())
+                  (r0 ? r3 : r0) = i.r;
+      QVERIFY(r0 > r3);                                     // the 32" drawn larger than the 23"
+      // the 32"'s next retune, to F2 in bar 8
+      QVERIFY(labels(l, 10).contains(QString(QChar(0x2192)) + " F2"));
+      delete score;
+
+      // keyboard, bar 2 (C4 + D#5): the octave, 9th and 10th from C4, two note dots
+      score = readScore(DIR + "keys-tests.mscx");
+      QVERIFY(score);
+      ci = Playability::inspect(chordAt(score, 1920));
+      QVERIFY(ci.kind == ChordInfo::Kind::KEYBOARD);
+      QVERIFY(ci.text.contains("thumb"));
+      l = Playability::layoutDiagram(ci, 400, 260);
+      QVERIFY(meta(l));
+      QCOMPARE(labels(l, 9), QStringList({ "8ve", "9th", "10th" }));
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::CIRCLE; }), 2);
       delete score;
       }
 
