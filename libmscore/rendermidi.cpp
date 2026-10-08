@@ -1274,7 +1274,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const SoundLib::DynamicsCurve* own = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
                         if (velocity > 0) {
                               if (own && (own->drivenBy == "velocity" || own->drivenBy == "both") && own->points.size() >= 2) {
-                                    const int v = own->inverse(own->at(velocity) + db);
+                                    const int v = own->louder(velocity, db);
                                     velocity = db < 0 ? qMin(v, velocity) : qMax(v, velocity);
                                     }
                               else

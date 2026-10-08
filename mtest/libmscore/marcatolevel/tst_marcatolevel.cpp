@@ -619,7 +619,8 @@ void TestMarcatoLevel::textLevel()
 //    measured curve is as loud as the held note's (Long, on CC1) at mf's CC1 80, plus MS4's offset for a marcato
 //    (40 log10(103 / 80): MS4 plays it at 103 where a plain note plays at 80); the Inspector's level from there.
 //    Off, or without the held note's curve: as before (velocityPath). Test curves (straight lines: the result
-//    is worked by hand): Long -40 / -30 / -20 dB at CC1 32 / 80 / 127, Marcato 10 dB louder at the same velocities
+//    is worked by hand): Long -40 / -30 / -20 dB at CC1 32 / 80 / 127, Marcato 10 dB louder at the same velocities;
+//    then by ear (perceived curves, which win where both curves have them)
 //---------------------------------------------------------
 
 void TestMarcatoLevel::calibrated()
@@ -650,6 +651,19 @@ void TestMarcatoLevel::calibrated()
       // the Inspector's -6 dB on top: -31.6 dB, under the curve's first point: its slope goes on, 24.2
       setLevel(marcato(s, 1, 0), -6);
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 24);
+      setLevel(marcato(s, 1, 0), 0);
+
+      // by ear where both curves have it (perceived): Long -50 / -40 / -30, Marcato only 5 dB louder by ear:
+      // -40 + 4.39 dB = -35.61 on -45 .. -35 between 32 and 80: 32 + 9.39 * 4.8 = 77.1
+      held.perceived = { { 32, -50 }, { 80, -40 }, { 127, -30 } };
+      marc.perceived = { { 32, -45 }, { 80, -35 }, { 127, -25 } };
+      cal->setCurve("Trumpet Solo", 1, held);
+      cal->setCurve("Trumpet Solo", 52, marc);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(32 + (40 * std::log10(103.0 / 80) + 5) * 4.8)));
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Trumpet Solo", 52, "Trumpet Solo", 1, 80, 0.0), 56);
+      // the Inspector's -6 dB by ear too: -41.6 dB, 32 + 3.39 * 4.8 = 48.3
+      setLevel(marcato(s, 1, 0), -6);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 48);
       setLevel(marcato(s, 1, 0), 0);
 
       // off (Library default): mf's 80, as before

@@ -303,10 +303,11 @@ int routesGeneration();
 //---------------------------------------------------------
 //   DynamicsCalibration
 //    measured by Check articulations › Dynamics with the library's plug-in (<setups folder>/
-//    dynamics.json): each articulation's loudness (its loudest 50 ms, dB) along velocity = dynamics
+//    dynamics.json): each articulation's loudness (its loudest 50 ms, dB, and by ear) along velocity = dynamics
 //    CC = x, and what sets it ("velocity", "controller", "both", "neither"). Playback uses it for the
 //    velocity techniques' calibrated level ([levels] calibrated, calibratedVelocity) and an articulation's
-//    Inspector level (articulation.h MarcatoLevel). Without the user's own file: the library's shipped one
+//    Inspector level (articulation.h MarcatoLevel), both by ear (perceived) where both curves have it, else
+//    by the 50 ms level. Without the user's own file: the library's shipped one
 //    (share/soundlibraries/<library>.dynamics.json, from the measured tools/soundlibraries/sso_sound_dynamics.json)
 //---------------------------------------------------------
 
@@ -324,6 +325,9 @@ struct DynamicsCurve {
       double perceivedAt(int x) const;                  // (-200 without perceived)
       double attackAt(int x) const;                     // (-200 without attack)
       int inverse(double db) const;                     // the x that plays db (1 … 127)
+      bool byEar() const { return perceived.size() >= 2; }
+      int perceivedInverse(double db) const;            // the x that sounds db (1 … 127; -1 without perceived)
+      int louder(int x, double db) const;               // the x that sounds db louder than x (by ear where measured)
       };
 
 class DynamicsCalibration {

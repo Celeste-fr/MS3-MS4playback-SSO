@@ -103,7 +103,11 @@ spiccato, marcato, tenuto, pizzicato, Bartók, col legno) plays at the velocity 
 as the part's plain held note ("long": SSO's Long) at the same dynamic's CC1 (`SoundLib::calibratedVelocity`), plus
 MuseScore 4.7.5's offset for its articulations: 40 log10(MS4's velocity / a plain note's at that dynamic) dB
 (SoundFont 2's velocity law; MS4's articulation profiles: a marcato at mf plays at 103 against a plain note's 80: +4.4 dB),
-then the Inspector's levels (below). Where either curve is missing, or with 0: as before (the dynamic's level on CC1's
+then the Inspector's levels (below). "As loud" is by ear: both curves' perceived loudness
+(`ArticulationCheck::perceivedLoudnessDb`: ERB-band specific loudness, short-term loudness with 22 / 50 ms attack / release,
+its peak; since 2026-10-08, after the first measurements on the VM showed the loudest 50 ms RMS misjudging a slow swell
+against a short: Flute Marcato on +4.2 dB by RMS, +8.6 by ear at mf), the loudest 50 ms RMS where either curve has no
+perceived points; the Inspector's dB on velocity are by ear too (`DynamicsCurve::louder`). Where either curve is missing, or with 0: as before (the dynamic's level on CC1's
 scale, an accent's share included; a marcato at the plain level). Techniques on the dynamics CC (legato, tremolo,
 trills, swells, marcato attack ...) keep the library's balance: they follow CC1 as the held note does, and their
 measured differences from it are the library's design (louder tremolo, softer flautando), not a calibration error.

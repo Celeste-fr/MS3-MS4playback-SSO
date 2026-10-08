@@ -786,6 +786,16 @@ int DynamicsCurve::inverse(double db) const
       return inverseOf(points, db);
       }
 
+int DynamicsCurve::perceivedInverse(double db) const
+      {
+      return inverseOf(perceived, db);
+      }
+
+int DynamicsCurve::louder(int x, double db) const
+      {
+      return byEar() ? perceivedInverse(perceivedAt(x) + db) : inverse(at(x) + db);
+      }
+
 const DynamicsCurve* DynamicsCalibration::curve(const QString& patch, int value) const
       {
       auto p = _patches.find(patch);
@@ -899,6 +909,8 @@ int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int
       const DynamicsCurve* ref = cal.curve(refPatch, refValue);
       if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
             return -1;
+      if (c->byEar() && ref->byEar())                         // as loud by ear (the 50 ms level misjudges slow swells)
+            return c->perceivedInverse(ref->perceivedAt(cc) + db);
       return c->inverse(ref->at(cc) + db);
       }
 

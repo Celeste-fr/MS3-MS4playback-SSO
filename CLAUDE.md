@@ -118,7 +118,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   instance, map track delays) were removed 2026-10-07 (docs/PLAYBACK_SETTINGS.md lists them; old ini keys and metaTags
   are ignored). The technique still comes from the notation. **Calibrated levels** (the owner, 2026-10-08, shorts too
   quiet; `[levels] calibrated`, on in Recommended, off in Library default): a technique on velocity plays as loud as
-  the part's Long at the same dynamic (measured curves), plus MS4.7.5's offset for its articulations (marcato's too),
+  the part's Long at the same dynamic (measured curves, by ear: perceived loudness where measured), plus MS4.7.5's offset for its articulations (marcato's too),
   plus the Inspector's levels (`libVelocity`, `SoundLib::calibratedVelocity`; docs/PLAYBACK_SETTINGS.md › Calibrated
   levels); techniques on CC1 keep the library's balance. Exception: held notes start
   early by their patch's median measured onset (`[heldNotes] byPitch` 1: each by its pitch's)
