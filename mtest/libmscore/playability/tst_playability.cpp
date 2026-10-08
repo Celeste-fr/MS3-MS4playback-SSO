@@ -29,6 +29,7 @@
 #include "libmscore/playability.h"
 #include "libmscore/playabilitydiagram.h"
 #include "libmscore/playabilityrules.h"
+#include "libmscore/playabilitybrass.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
 #include "libmscore/select.h"
@@ -66,6 +67,9 @@ class TestPlayability : public QObject, public MTest
       void timpani();
       void keyboard();
       void htkLayouts();
+      void brassRules();
+      void brass();
+      void brassLayouts();
       };
 
 static QString rowText(int bar, const QString& staff, const QString& verdict, const QString& reason, const QString& notes)
@@ -985,6 +989,208 @@ void TestPlayability::htkLayouts()
       QVERIFY(meta(l));
       QCOMPARE(labels(l, 9), QStringList({ "8ve", "9th", "10th" }));
       QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::CIRCLE; }), 2);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   brass: trombone slide (B4-B6) and valve fingerings (tools/playability/gen_brass_tests.py)
+//---------------------------------------------------------
+
+void TestPlayability::brassRules()
+      {
+      using namespace Playability;
+      const QString sharp = QChar(0x266F), flat = QChar(0x266D);
+      // the instrument from its id and name
+      QVERIFY(brassType("brass.trombone", "Trombone") == Brass::TENOR_TROMBONE);
+      QVERIFY(brassType("brass.trombone", "Soprano Trombone") == Brass::NONE);
+      QVERIFY(brassType("brass.trombone.bass", "Bass Trombone") == Brass::BASS_TROMBONE);
+      QVERIFY(brassType("brass.french-horn", "Horn in F") == Brass::HORN);
+      QVERIFY(brassType("brass.trumpet.piccolo", "Piccolo Trumpet") == Brass::TRUMPET);
+      QVERIFY(brassType("brass.trumpet.baroque", "Baroque Trumpet") == Brass::NONE);
+      QVERIFY(brassType("brass.flugelhorn", "Flugelhorn") == Brass::TRUMPET);
+      QVERIFY(brassType("brass.tuba", "Tuba") == Brass::BBB_TUBA);
+      QVERIFY(brassType("brass.tuba", "Tuba in F") == Brass::F_TUBA);
+      QVERIFY(brassType("brass.tuba", "E" + flat + " Tuba") == Brass::EB_TUBA);
+      QVERIFY(brassType("brass.tuba", "CC Tuba") == Brass::CC_TUBA);
+      QVERIFY(brassType("", "Posaune 1") == Brass::TENOR_TROMBONE);
+      QVERIFY(brassType("brass.tuba.subcontrabass", "Subcontrabass Tuba") == Brass::NONE);
+      // attachments and valves the part names
+      QCOMPARE(brassAttachments("Tenor Trombone with F"), ATTACH_F);
+      QCOMPARE(brassAttachments("F trigger"), ATTACH_F);
+      QCOMPARE(brassAttachments("E attachment"), ATTACH_E);
+      QCOMPARE(brassAttachments("Trombone 1"), 0);
+      QCOMPARE(brassValveText("Euphonium (5 valves)"), 5);
+      QCOMPARE(brassValveText("four-valve tuba"), 4);
+      QCOMPARE(brassValveText("Tuba"), 0);
+      // partials (equal temperament within a quarter tone) and raised positions
+      QCOMPARE(partialOf(19), 3);
+      QCOMPARE(partialOf(34), 7);
+      QCOMPARE(raisedPartialOf(34), 7);                     // 33.69 lies under 34
+      QCOMPARE(raisedPartialOf(20), 3);                     // 19.02 under 20
+      QCOMPARE(raisedPartialOf(19), 0);                     // 19 lies under no partial by 0-1
+      // D3: the F attachment's six positions as I II III IV VI VII; E keeps Blatter's numbers
+      QCOMPARE(slidePositionName(1, 1, false), QString("F I"));
+      QCOMPARE(slidePositionName(1, 4, false), QString("F IV"));
+      QCOMPARE(slidePositionName(1, 5, false), QString("F VI"));
+      QCOMPARE(slidePositionName(1, 6, false), QString("F VII"));
+      QCOMPARE(slidePositionName(2, 3, false), QString("E 3"));
+      QCOMPARE(slidePositionName(0, 4, true), sharp + "IV");
+      QCOMPARE(fingeringName(0x05), QString("1+3"));
+      QCOMPARE(fingeringName(0x20 | 0x02), QString("T2"));
+      QCOMPARE(fingeringName(0), QString("0"));
+
+      // chart cells round-trip (sounding pitch; positions in printed order; + 10 raised)
+      const std::vector<SlideRow>& tenor = slideRows(SlideChart::TENOR);
+      auto rowAt = [&](int pitch) { for (const SlideRow& r : tenor) if (r.pitch == pitch) return &r; return (const SlideRow*)nullptr; };
+      QCOMPARE(rowAt(52)->side[0], std::vector<int>({ 2, 7 }));       // E3
+      QCOMPARE(rowAt(57)->side[2], std::vector<int>({ 3, 16 }));      // A3, E attachment 3, ♯6
+      QVERIFY(rowAt(35)->side[0].empty() && rowAt(35)->side[1].empty()); // B1: E attachment only
+      QVERIFY(rowAt(34)->pedal);
+      QCOMPARE(valveRows().front().rel, -6);
+      QCOMPARE(valveRows().front().fingerings.front().mask, 0x07);
+      QCOMPARE(hornRows().front().written, 36);
+      QCOMPARE(hornRows().front().bb, std::vector<int>({ 0x25 }));
+      QCOMPARE(valveFundamental(ValveColumn::BBB_TUBA), 22);
+
+      // entries: chart list kept whole, standard first, labels
+      std::vector<BrassEntry> e = slideEntries(Brass::TENOR_TROMBONE, 0, 53);        // F3
+      QCOMPARE(int(e.size()), 4);
+      QCOMPARE(e[0].name, QString("I"));
+      QCOMPARE(e[1].name, QString("VI"));
+      QVERIFY(!e[0].extra && e[2].extra && e[2].name == "F I");
+      QVERIFY(e[0].labels.contains("partial 3"));
+      e = slideEntries(Brass::BASS_TROMBONE, 0, 53);
+      QVERIFY(!e[2].extra);                                  // the bass trombone's F attachment
+      e = slideEntries(Brass::TENOR_TROMBONE, 0, 34);        // Bb1: pedal
+      QVERIFY(e[0].labels.contains("pedal, difficult"));
+      // above the chart: derived; raised positions on the out-of-tune partials, unlabelled
+      e = slideEntries(Brass::TENOR_TROMBONE, 0, 76);        // E5
+      QVERIFY(!e.empty());
+      for (const BrassEntry& x : e) {
+            QVERIFY(x.derived && x.partial >= BRASS_PARTIAL_LO && x.partial <= BRASS_PARTIAL_HI);
+            QVERIFY(x.raised == outOfTunePartial(x.partial));
+            QVERIFY(!x.labels.contains("out of tune"));
+            }
+      // valves: the 4th valve a perfect 4th, may be sharp, missing valves
+      e = valveEntries(Brass::EUPHONIUM, 0, 35);             // B1: 1+2+3+4
+      QCOMPARE(e[0].mask, 0x0f);
+      QVERIFY(e[0].playable && e[0].labels.contains("may be sharp") && e[0].partial == 2);
+      e = valveEntries(Brass::BBB_TUBA, 0, 23);              // B0 on a 3-valve tuba
+      QVERIFY(!e[0].playable && e[0].labels.contains("needs 4th valve"));
+      QVERIFY(e.back().labels.contains("needs 5th valve"));
+      // derived above the treble chart (written G4): the octave below's pattern, 0 then 1+3 (G4)
+      e = valveEntries(Brass::TRUMPET, 3, 79);               // written G5
+      QVERIFY(e.size() >= 2);
+      QCOMPARE(e[0].mask, 0);
+      QCOMPARE(e[1].mask, 0x05);
+      for (const BrassEntry& x : e)
+            QVERIFY(x.derived && x.partial != 7 && x.partial <= BRASS_PARTIAL_HI && !(x.mask & 8));
+      QVERIFY(valveEntries(Brass::TRUMPET, 3, 98).empty()); // written D7: above partial 16
+      // E♭ tuba: E♭1 open fundamental, no chart column
+      e = valveEntries(Brass::EB_TUBA, 3, 39);               // Eb2
+      QVERIFY(e[0].mask == 0 && e[0].partial == 2 && e[0].derived);
+      // the horn: both sides
+      e = valveEntries(Brass::HORN, 0, 72);                  // written C5
+      bool f = false, bb = false;
+      for (const BrassEntry& x : e)
+            (x.mask & HORN_THUMB ? bb : f) = true;
+      QVERIFY(f && bb);
+      QCOMPARE(brassChartPitch(Brass::HORN, 65, -9), 72);    // any horn read as in F
+      QCOMPARE(brassChartPitch(Brass::TRUMPET, 70, -2), 72);
+      // B5
+      QString why;
+      QCOMPARE(slideGlissando(Brass::TENOR_TROMBONE, 0, 53, 58, &why), 0);
+      QCOMPARE(slideGlissando(Brass::TENOR_TROMBONE, 0, 53, 60, &why), 2);
+      QCOMPARE(slideGlissando(Brass::TENOR_TROMBONE, 0, 46, 48, &why), 2);
+      QCOMPARE(slideGlissando(Brass::TENOR_TROMBONE, 0, 34, 28, &why), 1);
+      }
+
+void TestPlayability::brass()
+      {
+      MasterScore* score = readScore(DIR + "brass-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "slide", "valves", "glissando" });
+      QStringList want = {
+            QString::fromUtf8("1 | Alto Trombone | impossible | no slide position for F2 on the alto trombone | F2"),
+            QString::fromUtf8("2 | Bass Trombone | impossible | no slide position for B1 on the bass trombone | B1"),
+            QString::fromUtf8("2 | Tenor Trombone | impossible | no slide position for C2 without an F attachment | C2"),
+            QString::fromUtf8("2 | Trumpet in Bb | impossible | B2 (written C#3) needs a 4th valve (the trumpet has 3) | B2"),
+            QString::fromUtf8("2 | Tuba | impossible | B0 needs a 4th valve (the BB♭ tuba has 3) | B0"),
+            QString::fromUtf8("3 | Tenor Trombone | impossible | no slide position for B1 on the tenor trombone | B1"),
+            QString::fromUtf8("4 | Trumpet in Bb | impossible | no fingering for C7 (written D7) on the trumpet | C7"),
+            QString::fromUtf8("5 | Tenor Trombone | impossible | no partial holds both notes of the slide glissando (Bb2–C3) | Bb2"),
+            QString::fromUtf8("6 | Tenor Trombone | impossible | a slide glissando of 7 semitones, wider than a tritone (F3–C4) | F3"),
+            QString::fromUtf8("7 | Tenor Trombone | risky | a slide glissando on the pedal partial (Bb1–E1) | Bb1") };
+      compare(got, want);
+      // the clean bars (Tenor 1, 4, 8; Bass 1; Trombone with F 1; Alto 2; Trumpet 1, 3; Horn; Tuba 1;
+      // Euphonium) carry no mark
+      QStringList m = markList(r);
+      QCOMPARE(m.size(), 10);
+      for (const QString& x : m)
+            QVERIFY2(x.endsWith("impossible") || x.startsWith("7 |"), qPrintable(x));
+      // B4: C3 to D3 slurred, VI to IV: the slide moves in with the rising pitch
+      ChordInfo ci = Playability::inspect(chordAt(score, 7 * 1920 + 960));
+      QVERIFY(ci.kind == ChordInfo::Kind::SLIDE);
+      QVERIFY(ci.brass.noTrueLegato && ci.brass.hasPrevious);
+      QCOMPARE(ci.brass.previousName, QString("VI"));
+      QVERIFY(ci.text.contains("no true legato"));
+      // F3 after C3 in bar 6, not slurred: VI to I, no B4 note
+      ci = Playability::inspect(chordAt(score, 5 * 1920));
+      QVERIFY(!ci.brass.noTrueLegato && ci.brass.hasPrevious);
+      delete score;
+      }
+
+void TestPlayability::brassLayouts()
+      {
+      auto count = [](const DisplayList& l, std::function<bool(const DrawItem&)> f) {
+            return int(std::count_if(l.begin(), l.end(), f));
+            };
+      auto has = [](const DisplayList& l, const QString& t) {
+            for (const DrawItem& i : l)
+                  if (i.kind == DrawItem::Kind::LABEL && i.text == t)
+                        return true;
+            return false;
+            };
+      MasterScore* score = readScore(DIR + "brass-tests.mscx");
+      QVERIFY(score);
+      // slide, tenor bar 4 (F3): I standard (filled), VI outlined, F I and F VI extras (faint); the
+      // travel from bar 3's B1 has no position, so no arrow
+      ChordInfo ci = Playability::inspect(chordAt(score, 3 * 1920));
+      QVERIFY(ci.kind == ChordInfo::Kind::SLIDE);
+      DisplayList l = Playability::layoutDiagram(ci, 400, 260);
+      QVERIFY(!l.empty() && l.front().kind == DrawItem::Kind::META);
+      for (const QString& t : { "I", "II", "III", "IV", "V", "VI", "VII", "F I", "F VI" })
+            QVERIFY2(has(l, t), qPrintable(t));
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::CIRCLE && !i.stroke.isValid(); }), 1);
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::CIRCLE && i.stroke.isValid(); }), 3);
+      // the standard's circle sits left of the VI alternative's (I is in)
+      std::vector<double> xs;
+      for (const DrawItem& i : l)
+            if (i.kind == DrawItem::Kind::CIRCLE)
+                  xs.push_back(i.x);
+      QVERIFY(xs[0] < xs[1]);
+      QVERIFY(Playability::layoutDiagram(ci, 60, 260).empty());
+      // B4 bar 8, D3: the arrow from VI and the legato note
+      ci = Playability::inspect(chordAt(score, 7 * 1920 + 960));
+      l = Playability::layoutDiagram(ci, 400, 260);
+      QVERIFY(has(l, QString(QChar(0x25C0))));               // moving in, toward I
+      QVERIFY(has(l, "slurred, slide moving with the pitch: no true legato"));
+
+      // valves, the horn (bar 1, written C5): F side and B♭ side large, thumb buttons
+      int horn = 5;
+      ci = Playability::inspect(chordAt(score, 0, score->parts().at(horn)->startTrack()));
+      QVERIFY(ci.kind == ChordInfo::Kind::VALVES && ci.brass.horn);
+      l = Playability::layoutDiagram(ci, 400, 260);
+      QVERIFY(has(l, "F side") && has(l, QString("B") + QChar(0x266D) + " side"));
+      // five sets of T + 3 valves = 20 buttons; the two large ones: 0 and T0, one button pressed (T)
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::CIRCLE; }), 20);
+      QCOMPARE(count(l, [](const DrawItem& i) { return i.kind == DrawItem::Kind::LABEL && i.text == "T"; }), 5);
+      // the euphonium's B1: four valves all pressed, labelled may be sharp
+      ci = Playability::inspect(chordAt(score, 0, score->parts().at(7)->startTrack()));
+      QVERIFY(ci.kind == ChordInfo::Kind::VALVES && ci.brass.valves == 4);
+      l = Playability::layoutDiagram(ci, 400, 260);
+      QVERIFY(has(l, "partial 2, may be sharp"));
       delete score;
       }
 
