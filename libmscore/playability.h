@@ -103,8 +103,39 @@ struct HarmonicNoteInfo {
       std::vector<HarmonicOptionInfo> options;
       };
 
+// H1: the harp's pedals at a chord, in pedal order D C B | E F G A
+struct HarpPedalInfo {
+      int letter[7] {};             // the letter of each pedal (0 C … 6 B)
+      int setting[7] {};            // -1 up (flat), 0 middle (natural), 1 down (sharp)
+      bool changed[7] {};           // changed just before the chord
+      };
+
+// P1: one drum at a chord
+struct TimpaniDrumInfo {
+      QString size;                 // "32″"
+      int lo { 0 }, hi { 0 };
+      QString range;                // "D2–A2"
+      int pitch { -1 };             // its tuning after the chord, -1 none yet
+      QString name;
+      bool playing { false };       // struck at the chord
+      bool retunedHere { false };   // retuned for the chord
+      bool hasNext { false };       // its next retune
+      QString nextFrom, nextTo;
+      double nextSeconds { 0 };
+      int nextBar { 0 };
+      bool nextShort { false };     // under the 15 s
+      };
+
+// K1: one hand at a chord
+struct KeyboardHandInfo {
+      bool right { true };
+      std::vector<int> pitches;     // ascending
+      QStringList names;
+      bool arpeggio { false };
+      };
+
 struct ChordInfo {
-      enum class Kind : char { NONE, STOP, HARMONIC };
+      enum class Kind : char { NONE, STOP, HARMONIC, HARP, TIMPANI, KEYBOARD };
       QString text;                 // the Selected line, without "Selected: "
       bool bowedString { false };   // the chord is on a bowed string instrument
       Kind kind { Kind::NONE };     // what the fingerboard shows
@@ -119,6 +150,9 @@ struct ChordInfo {
       double reach { 0 };
       std::vector<HarmonicNoteInfo> harmonics;      // HARMONIC
       bool atNode { false };
+      HarpPedalInfo harp;                           // HARP
+      std::vector<TimpaniDrumInfo> drums;           // TIMPANI
+      KeyboardHandInfo hand;                        // KEYBOARD
       };
 
 namespace Playability {

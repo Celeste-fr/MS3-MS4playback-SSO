@@ -97,6 +97,142 @@ bool namesShown(const DisplayList& items)
       }
 
 //---------------------------------------------------------
+//   harp pedals, timpani, keyboard (diagrams-spec-htk.md)
+//---------------------------------------------------------
+
+namespace HTK {
+static const QColor INK("#333333"), FAINT("#8a8a8a"), CHANGE("#0065bf"), HEAD("#f3efe6"), WHITE("#ffffff"), BLACK("#222222");
+}
+
+DisplayList layoutDiagram(const ChordInfo& info, double w, double h)
+      {
+      switch (info.kind) {
+            case ChordInfo::Kind::HARP:     return layoutHarpPedals(info, w, h);
+            case ChordInfo::Kind::TIMPANI:  return layoutTimpani(info, w, h);
+            case ChordInfo::Kind::KEYBOARD: return layoutKeyboard(info, w, h);
+            default:                        return layoutFingerboard(info, w, h);
+            }
+      }
+
+DisplayList layoutHarpPedals(const ChordInfo& g, double w, double h)
+      {
+      DisplayList items;
+      if (g.kind != ChordInfo::Kind::HARP || w < 70 || h < 80)
+            return items;
+      items.push_back(meta(false));
+      // seven pedals and a gap between B and E: eight columns
+      double col = std::min(36.0, (w - 20) / 8);
+      double len = std::max(10.0, std::min(40.0, (h - 60) / 2.2));
+      double x0 = (w - col * 8) / 2 + col / 2;
+      double y0 = std::max(28 + len, h / 2 - 8);
+      auto xAt = [&](int i) { return x0 + (i < 3 ? i : i + 1) * col; };
+      items.push_back(text((xAt(0) + xAt(2)) / 2, y0 - len - 10, "left foot", 10, HTK::FAINT, 0));
+      items.push_back(text((xAt(3) + xAt(6)) / 2, y0 - len - 10, "right foot", 10, HTK::FAINT, 0));
+      items.push_back(line(xAt(0) - col / 2, y0, xAt(6) + col / 2, y0, HTK::INK, 1.5));
+      items.push_back(line(x0 + 3 * col, y0 - len * 0.7, x0 + 3 * col, y0 + len * 0.7, HTK::FAINT, 1));
+      for (int i = 0; i < 7; ++i) {
+            int set = g.harp.setting[i];
+            QColor c = g.harp.changed[i] ? HTK::CHANGE : HTK::INK;
+            double ya = set < 0 ? y0 - len : set > 0 ? y0 : y0 - len / 2;
+            items.push_back(line(xAt(i), ya, xAt(i), ya + len, c, g.harp.changed[i] ? 5 : 4));
+            items.push_back(text(xAt(i), y0 + len + 16, letterName(g.harp.letter[i], set), 11, c, 0, g.harp.changed[i]));
+            }
+      return items;
+      }
+
+DisplayList layoutTimpani(const ChordInfo& g, double w, double h)
+      {
+      DisplayList items;
+      int n = int(g.drums.size());
+      if (g.kind != ChordInfo::Kind::TIMPANI || n == 0 || w < 70 || h < 80)
+            return items;
+      items.push_back(meta(false));
+      double col = w / n;
+      // heads to scale: the drum's size in inches over the largest's
+      double rMax = std::max(6.0, std::min(col * 0.44, (h - 80) / 2));
+      double sizeMax = g.drums.front().size.left(2).toDouble();
+      double cy = 22 + rMax;
+      for (int d = 0; d < n; ++d) {
+            const TimpaniDrumInfo& di = g.drums[d];
+            double cx = col * (d + 0.5);
+            double r = rMax * di.size.left(2).toDouble() / sizeMax;
+            items.push_back(text(cx, 13, di.size, 10, HTK::FAINT, 0));
+            items.push_back(circle(cx, cy, r, HTK::HEAD));
+            items.push_back(circle(cx, cy, r, QColor(), di.playing ? HTK::CHANGE : HTK::INK, di.playing ? 3 : 1.5));
+            if (di.pitch >= 0)
+                  items.push_back(text(cx, cy + 5, di.name, 13, di.playing ? HTK::CHANGE : HTK::INK, 0, true));
+            else
+                  items.push_back(text(cx, cy + 5, QString(QChar(0x2013)), 13, HTK::FAINT, 0));
+            double y = cy + rMax + 16;
+            items.push_back(text(cx, y, di.range, 10, HTK::FAINT, 0));
+            if (di.hasNext) {
+                  QColor c = di.nextShort ? OUT_OF_REACH_COLOR : HTK::INK;
+                  items.push_back(text(cx, y + 16, QString(QChar(0x2192)) + " " + di.nextTo, 10, c, 0, di.nextShort));
+                  items.push_back(text(cx, y + 30, fmtSeconds(di.nextSeconds) + QString(", bar %1").arg(di.nextBar), 9, c, 0));
+                  }
+            }
+      return items;
+      }
+
+static bool isBlackKey(int pitch)
+      {
+      int pc = ((pitch % 12) + 12) % 12;
+      return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+      }
+
+DisplayList layoutKeyboard(const ChordInfo& g, double w, double h)
+      {
+      DisplayList items;
+      const std::vector<int>& ps = g.hand.pitches;
+      if (g.kind != ChordInfo::Kind::KEYBOARD || ps.empty() || w < 70 || h < 80)
+            return items;
+      items.push_back(meta(false));
+      int lo = ps.front(), hi = ps.back();
+      // from two keys below the lowest note to two above the 10th or the highest note, on white keys
+      int from = lo - 2, to = std::max(hi, lo + KEYBOARD_TENTH) + 2;
+      while (isBlackKey(from))
+            --from;
+      while (isBlackKey(to))
+            ++to;
+      std::vector<int> whites;
+      for (int p = from; p <= to; ++p)
+            if (!isBlackKey(p))
+                  whites.push_back(p);
+      double kw = std::min(22.0, (w - 16) / whites.size());
+      double x0 = (w - kw * whites.size()) / 2;
+      double top = 34, kh = std::max(30.0, std::min(h - top - 16, kw * 5.5));
+      double bh = kh * 0.62, bw = kw * 0.6;
+      auto whiteIndex = [&](int p) { return int(std::lower_bound(whites.begin(), whites.end(), p) - whites.begin()); };
+      auto xCentre = [&](int p) { return isBlackKey(p) ? x0 + whiteIndex(p) * kw : x0 + (whiteIndex(p) + 0.5) * kw; };
+
+      int span = hi - lo;
+      QColor verdict = g.hand.arpeggio || span <= KEYBOARD_NINTH ? HTK::CHANGE : span > KEYBOARD_TENTH ? IMPOSSIBLE_COLOR : OUT_OF_REACH_COLOR;
+      items.push_back(rect(x0, top, kw * whites.size(), kh, HTK::WHITE));
+      // the span, shaded from the lowest note to the highest
+      double sa = xCentre(lo) - kw / 2, sb = xCentre(hi) + kw / 2;
+      items.push_back(rect(sa, top, sb - sa, kh, verdict, 0.12));
+      for (size_t i = 0; i <= whites.size(); ++i)
+            items.push_back(line(x0 + i * kw, top, x0 + i * kw, top + kh, HTK::INK, 1));
+      items.push_back(line(x0, top, x0 + kw * whites.size(), top, HTK::INK, 1));
+      items.push_back(line(x0, top + kh, x0 + kw * whites.size(), top + kh, HTK::INK, 1));
+      for (int p = from; p <= to; ++p)
+            if (isBlackKey(p))
+                  items.push_back(rect(xCentre(p) - bw / 2, top, bw, bh, HTK::BLACK));
+      // octave, 9th and 10th from the lowest note: the widest of each (bands inclusive)
+      const std::pair<int, const char*> marks[3] = { { KEYBOARD_OCTAVE, "8ve" }, { KEYBOARD_NINTH, "9th" }, { KEYBOARD_TENTH, "10th" } };
+      for (const auto& m : marks) {
+            double x = xCentre(lo + m.first);
+            QColor c = m.first == KEYBOARD_OCTAVE ? HTK::FAINT : m.first == KEYBOARD_NINTH ? OUT_OF_REACH_COLOR : IMPOSSIBLE_COLOR;
+            items.push_back(line(x, top - 12, x, top + kh, c, 1.5, 0.8));
+            items.push_back(text(x, top - 16, m.second, 9, c, 0));
+            }
+      double r = std::max(2.5, kw * 0.3);
+      for (int p : ps)
+            items.push_back(circle(xCentre(p), isBlackKey(p) ? top + bh - r - 3 : top + kh - r - 4, r, verdict));
+      return items;
+      }
+
+//---------------------------------------------------------
 //   fingerboard (strings/fingerboard.js)
 //    chord-chart convention: strings vertical, lowest on the left, nut at the top; a stop n
 //    semitones up sits at L(1 − 2^(−n/12)), as in the stretch model

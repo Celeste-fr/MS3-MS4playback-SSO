@@ -16,7 +16,8 @@
 //   Checker plugin's dock. A table of the checker's problems (a red or dark yellow mark, Bar,
 //   Staff, Reason; by bar, then staff); a click selects what a row is about and scrolls to it, a
 //   selection in the score highlights its row. While a playable stop or a natural harmonic is
-//   selected, its fingerboard replaces the table; while wind notes are selected, the register
+//   selected, its fingerboard replaces the table (a harp: its pedals, timpani: the drums, a
+//   keyboard: the hand's keyboard strip); while wind notes are selected, the register
 //   graph of their bars (W1). The Selected line names the selected notes as written.
 //   The layouts are libmscore/playabilitydiagram.h's display lists.
 //---------------------------------------------------------

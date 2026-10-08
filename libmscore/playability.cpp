@@ -11,6 +11,7 @@
 #include "playability.h"
 #include "playabilityrules.h"
 
+#include "arpeggio.h"
 #include "articulation.h"
 #include "chord.h"
 #include "fingering.h"
@@ -92,6 +93,38 @@ struct BowUse {
       QStringList tiers;            // soft to loud
       };
 
+// harp, timpani, keyboards: every note of a part at one moment (a tick; grace notes before it,
+// in order, have sub < 0, grace notes after it sub > 0), all voices and staves
+struct PartNote {
+      Note* note;
+      Chord* chord;
+      int grace;                    // -1, or the chord's index among its main chord's grace notes
+      int end;                      // tick its sound ends (ties followed); a grace note: its main chord's tick
+      int hand;                     // the staff of the part it is shown on (cross-staff moves followed): 0 upper
+      bool attack;                  // not tied from before
+      };
+
+struct PartMoment {
+      int tick { 0 };
+      int sub { 0 };
+      std::vector<PartNote> notes;
+      bool attack() const {
+            for (const PartNote& n : notes)
+                  if (n.attack)
+                        return true;
+            return false;
+            }
+      };
+
+// H1 per moment: every pedal's setting after it (letters 0 C … 6 B; 7, 8 the hand-tuned C1 and D1)
+struct HarpPlan {
+      int tick { 0 }, sub { 0 };
+      int setting[9] {};
+      bool changed[9] {};
+      };
+
+enum class Family : char { NONE, HARP, TIMPANI, KEYBOARD };
+
 class Pass {
       Score* _score;
       ScoreTuning _tuning;
@@ -127,6 +160,14 @@ class Pass {
       void checkFastRuns(int st, Part* part, const QString& staffName, const StaffTexts& tx);
       void addRow(int tick, int tickEnd, int track, const QString& staff, const QString& kind, const QString& verdict,
                   const QString& reason, const QString& notes);
+      // harp, timpani, keyboards (diagrams-spec-htk.md)
+      std::vector<PartMoment> partMoments(Part* part) const;
+      void momentRow(const PartMoment& m, const std::vector<const PartNote*>& on, const QString& staff, const QString& kind,
+                     bool red, const QString& reason);
+      std::vector<HarpPlan> checkHarp(Part* part, const QString& staffName);
+      TimpaniPlan checkTimpani(Part* part, const QString& staffName, std::vector<PartMoment>* moments, bool* fifth);
+      void checkKeyboard(Part* part, const QString& staffName);
+      ChordInfo inspectFamily(Chord* chord, Family f);
 
    public:
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
@@ -775,6 +816,572 @@ void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const Sta
             }
       }
 
+//---------------------------------------------------------
+//   Harp (H1, H2), timpani (P1), keyboards (K1): the owner's approved spec,
+//   diagrams-spec-htk.md (2026-10-08)
+//---------------------------------------------------------
+
+static Family familyOf(Part* part)
+      {
+      const Instrument* in = part->instrument();
+      QString id = in->instrumentId();
+      QString name = in->longNames().isEmpty() ? QString() : in->longNames().front().name();
+      if (id.isEmpty() && name.isEmpty()) {
+            id = part->instrumentId();
+            name = part->longName();
+            if (name.isEmpty())
+                  name = part->partName();
+            }
+      if (isHarp(id, name))
+            return Family::HARP;
+      if (isTimpani(id, name))
+            return Family::TIMPANI;
+      if (isKeyboard(id, name) && part->nstaves() >= 2)
+            return Family::KEYBOARD;
+      return Family::NONE;
+      }
+
+std::vector<PartMoment> Pass::partMoments(Part* part) const
+      {
+      std::map<std::pair<int, int>, PartMoment> byKey;
+      int first = part->staff(0)->idx();
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* e = s->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  Chord* c = toChord(e);
+                  int tick = c->tick().ticks();
+                  int hand = c->vStaffIdx() - first;
+                  auto add = [&](Chord* ch, int grace, int sub, int end) {
+                        PartMoment& m = byKey[{ tick, sub }];
+                        m.tick = tick;
+                        m.sub = sub;
+                        for (Note* n : ch->notes()) {
+                              int e2 = end;
+                              if (grace < 0) {
+                                    const Chord* lc = n->lastTiedNote()->chord();
+                                    e2 = (lc->tick() + lc->actualTicks()).ticks();
+                                    }
+                              m.notes.push_back({ n, ch, grace, e2, hand, n->tieBack() == nullptr });
+                              }
+                        };
+                  const QVector<Chord*>& graces = c->graceNotes();
+                  for (int g = 0; g < graces.size(); ++g)
+                        add(graces[g], g, graces[g]->isGraceAfter() ? 1 + g : g - graces.size(), tick);
+                  add(c, -1, 0, -1);
+                  }
+            }
+      std::vector<PartMoment> out;
+      for (auto& m : byKey)
+            out.push_back(m.second);
+      return out;
+      }
+
+// a row about some notes of a moment, at the first of them; they are marked red or dark yellow
+void Pass::momentRow(const PartMoment& m, const std::vector<const PartNote*>& on, const QString& staff, const QString& kind,
+                     bool red, const QString& reason)
+      {
+      if (on.empty())
+            return;
+      std::vector<const PartNote*> sorted = on;
+      std::stable_sort(sorted.begin(), sorted.end(), [](const PartNote* a, const PartNote* b) { return a->note->ppitch() < b->note->ppitch(); });
+      QStringList names;
+      for (const PartNote* n : sorted) {
+            QString nm = tpcName(n->note->tpc1(), n->note->ppitch());
+            if (!names.contains(nm))
+                  names << nm;
+            if (red)
+                  mark(n->note, PlayMark::IMPOSSIBLE);
+            else
+                  markOver(n->note, PlayMark::OUT_OF_REACH);
+            }
+      addRow(m.tick, m.tick, on.front()->chord->track(), staff, kind, red ? "impossible" : "risky", reason, names.join(" + "));
+      _res.rows.back().grace = on.front()->grace;
+      (red ? _res.impossible : _res.outOfReach)++;
+      }
+
+// does an arpeggio sign reach the hand's staff at this moment?
+static bool arpeggioOver(const PartMoment& m, int hand)
+      {
+      for (const PartNote& n : m.notes) {
+            const Arpeggio* a = n.chord->arpeggio();
+            if (!a)
+                  continue;
+            int from = n.hand;
+            if (from <= hand && hand < from + std::max(1, a->span()))
+                  return true;
+            }
+      return false;
+      }
+
+static QString handName(int hand)
+      {
+      return hand == 0 ? QString("right hand") : QString("left hand");
+      }
+
+//---------------------------------------------------------
+//   checkHarp
+//    H1: one pedal per letter, every octave (Adler p. 90); its setting before the letter's first
+//    note is the key signature's there (K&G p. 277); a note needing another setting is a pedal
+//    change just before it (Adler p. 92), any time is enough (K&G p. 276). Red: double sharps
+//    and flats, notes without a string, two spellings of a letter sounding together (Adler
+//    p. 90). Warning: two changes at once on one foot (Adler p. 91, Blatter p. 256), and a new
+//    setting for C1 or D1, which are retuned by hand (Adler p. 90). Changes for the part's first
+//    notes are the harpist's preset: no "between two notes" there.
+//    H2 (main chords): upper staff right hand, lower left (Blatter p. 256): more than four notes
+//    in a hand red unless arpeggiated, more than a 10th a warning, the right hand in the lowest
+//    octave a warning.
+//---------------------------------------------------------
+
+std::vector<HarpPlan> Pass::checkHarp(Part* part, const QString& staffName)
+      {
+      const std::vector<PartMoment> moments = partMoments(part);
+      std::vector<HarpPlan> plans;
+      auto group = [](const HarpNote& h) { return harpHandTuned(h) ? 7 + h.letter : h.letter; };
+      auto groupName = [](int g, int alter) {
+            return g >= 7 ? letterName(g - 7, alter) + "1" : letterName(g, alter);
+            };
+      auto fifthsAt = [&](int tick) { return int(part->staff(0)->key(Fraction::fromTicks(tick))); };
+
+      // the presets: each pedal (and hand-tuned string) as the key signature at its first note
+      int state[9];
+      bool seen[9] = {};
+      for (int g = 0; g < 9; ++g)
+            state[g] = keyAlter(fifthsAt(0), g >= 7 ? g - 7 : g);
+      for (const PartMoment& m : moments)
+            for (const PartNote& pn : m.notes) {
+                  HarpNote h = harpNote(pn.note->tpc1(), pn.note->ppitch());
+                  if (!pn.attack || std::abs(h.alter) > 1 || !harpHasString(h))
+                        continue;
+                  int g = group(h);
+                  if (!seen[g]) {
+                        seen[g] = true;
+                        state[g] = keyAlter(fifthsAt(m.tick), h.letter);
+                        }
+                  }
+
+      struct Held { HarpNote h; int end; };
+      std::vector<Held> held;
+      bool oneStaff = part->nstaves() < 2;
+      for (size_t mi = 0; mi < moments.size(); ++mi) {
+            const PartMoment& m = moments[mi];
+            HarpPlan plan;
+            plan.tick = m.tick;
+            plan.sub = m.sub;
+            held.erase(std::remove_if(held.begin(), held.end(), [&](const Held& x) { return x.end <= m.tick; }), held.end());
+            std::vector<const PartNote*> byGroup[9];
+            std::vector<int> alters[9];
+            for (const Held& x : held)
+                  alters[group(x.h)].push_back(x.h.alter);
+            for (const PartNote& pn : m.notes) {
+                  if (!pn.attack)
+                        continue;
+                  HarpNote h = harpNote(pn.note->tpc1(), pn.note->ppitch());
+                  QString nm = tpcName(pn.note->tpc1(), pn.note->ppitch());
+                  if (std::abs(h.alter) > 1) {
+                        momentRow(m, { &pn }, staffName, "pedals", true,
+                                  QString(h.alter > 0 ? "double sharp" : "double flat") + ": no pedal setting for " + nm);
+                        continue;
+                        }
+                  if (!harpHasString(h)) {
+                        momentRow(m, { &pn }, staffName, "pedals", true, "no string for " + nm + " (strings C1" + QChar(0x2013) + "G7)");
+                        continue;
+                        }
+                  int g = group(h);
+                  byGroup[g].push_back(&pn);
+                  alters[g].push_back(h.alter);
+                  }
+            QStringList leftChanges, rightChanges;
+            std::vector<const PartNote*> leftNotes, rightNotes;
+            for (int g = 0; g < 9; ++g) {
+                  if (byGroup[g].empty())
+                        continue;
+                  std::vector<int> a = alters[g];
+                  std::sort(a.begin(), a.end());
+                  a.erase(std::unique(a.begin(), a.end()), a.end());
+                  // the pedal's new setting: kept if a note needs it, else the lowest new note's
+                  const PartNote* low = byGroup[g].front();
+                  for (const PartNote* pn : byGroup[g])
+                        if (pn->note->ppitch() < low->note->ppitch())
+                              low = pn;
+                  int want = std::find(a.begin(), a.end(), state[g]) != a.end() ? state[g]
+                             : harpNote(low->note->tpc1(), low->note->ppitch()).alter;
+                  if (a.size() > 1) {
+                        QStringList spell, respell;
+                        for (int x : a) {
+                              spell << groupName(g, x);
+                              QString e = harpEnharmonic(g >= 7 ? g - 7 : g, x);
+                              if (!e.isEmpty())
+                                    respell << groupName(g, x) + " as " + e;
+                              }
+                        QString r = spell.join(" and ") + " together: one " + (g >= 7 ? "string" : "pedal") + " for every "
+                                    + groupName(g, 0);
+                        if (!respell.isEmpty() && g < 7)
+                              r += " (respell " + respell.join(" or ") + ")";
+                        momentRow(m, byGroup[g], staffName, "pedals", true, r);
+                        }
+                  if (want == state[g])
+                        continue;
+                  state[g] = want;
+                  plan.changed[g] = true;
+                  if (mi == 0)
+                        continue;                     // the preset
+                  if (g >= 7) {
+                        momentRow(m, byGroup[g], staffName, "pedals", false,
+                                  "retune " + groupName(g, 0) + " by hand (no pedal): " + groupName(g, want));
+                        continue;
+                        }
+                  (harpLeftFoot(g) ? leftChanges : rightChanges) << letterName(g, want);
+                  for (const PartNote* pn : byGroup[g])
+                        (harpLeftFoot(g) ? leftNotes : rightNotes).push_back(pn);
+                  }
+            // in pedal order
+            auto ordered = [](QStringList l) {
+                  std::stable_sort(l.begin(), l.end(), [](const QString& a, const QString& b) {
+                        auto slot = [](const QString& x) {
+                              int letter = QString("CDEFGAB").indexOf(x.at(0));
+                              return int(std::find(HARP_PEDAL_ORDER, HARP_PEDAL_ORDER + 7, letter) - HARP_PEDAL_ORDER);
+                              };
+                        return slot(a) < slot(b);
+                        });
+                  return l;
+                  };
+            if (leftChanges.size() > 1)
+                  momentRow(m, leftNotes, staffName, "pedals", false,
+                            QString("%1 pedal changes at once on the left foot (%2)").arg(leftChanges.size()).arg(ordered(leftChanges).join(", ")));
+            if (rightChanges.size() > 1)
+                  momentRow(m, rightNotes, staffName, "pedals", false,
+                            QString("%1 pedal changes at once on the right foot (%2)").arg(rightChanges.size()).arg(ordered(rightChanges).join(", ")));
+            for (int g = 0; g < 9; ++g)
+                  plan.setting[g] = state[g];
+            plans.push_back(plan);
+            for (int g = 0; g < 9; ++g)
+                  for (const PartNote* pn : byGroup[g])
+                        held.push_back({ harpNote(pn->note->tpc1(), pn->note->ppitch()), pn->end });
+
+            // H2: the hands, main chords
+            if (m.sub != 0 || oneStaff || !m.attack())
+                  continue;
+            for (int hand = 0; hand < 2; ++hand) {
+                  std::vector<const PartNote*> notes, low;
+                  int lo = 1000, hi = -1000;
+                  for (const PartNote& pn : m.notes) {
+                        if (pn.hand != hand)
+                              continue;
+                        notes.push_back(&pn);
+                        HarpNote h = harpNote(pn.note->tpc1(), pn.note->ppitch());
+                        if (std::abs(h.alter) > 1 || !harpHasString(h))
+                              continue;
+                        lo = std::min(lo, harpStringIndex(h));
+                        hi = std::max(hi, harpStringIndex(h));
+                        if (hand == 0 && harpLowestOctave(h))
+                              low.push_back(&pn);
+                        }
+                  if (notes.empty())
+                        continue;
+                  if (int(notes.size()) > HARP_HAND_NOTES && !arpeggioOver(m, hand))
+                        momentRow(m, notes, staffName, "harp hand", true,
+                                  QString("%1 notes in the %2: more than %3 need both hands or a roll").arg(notes.size()).arg(handName(hand)).arg(HARP_HAND_NOTES));
+                  if (hi - lo + 1 > HARP_HAND_STRINGS)
+                        momentRow(m, notes, staffName, "harp hand", false,
+                                  QString("the %1 spans %2 strings, more than a 10th").arg(handName(hand)).arg(hi - lo + 1));
+                  if (!low.empty())
+                        momentRow(m, low, staffName, "harp hand", false, "right hand in the lowest octave");
+                  }
+            }
+      return plans;
+      }
+
+//---------------------------------------------------------
+//   checkTimpani (P1)
+//    every moment's pitches planned onto the drums (planTimpani); seconds from the tempo marks
+//---------------------------------------------------------
+
+TimpaniPlan Pass::checkTimpani(Part* part, const QString& staffName, std::vector<PartMoment>* momentsOut, bool* fifthOut)
+      {
+      // a fifth drum when the part names one: its names, or a text on its staves
+      bool fifth = timpaniFifthDrum(part->longName()) || timpaniFifthDrum(part->partName());
+      for (const StaffName& sn : part->instrument()->longNames())
+            fifth |= timpaniFifthDrum(sn.name());
+      int st0 = part->staff(0)->idx();
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s && !fifth; s = s->next1(SegmentType::ChordRest))
+            for (Element* e : s->annotations())
+                  if (e->isTextBase() && e->staffIdx() >= st0 && e->staffIdx() < st0 + part->nstaves()
+                     && timpaniFifthDrum(plainText(toTextBase(e)->xmlText())))
+                        fifth = true;
+
+      std::vector<PartMoment> all = partMoments(part), moments;
+      std::vector<TimpaniMoment> tm;
+      for (const PartMoment& m : all) {
+            if (!m.attack())
+                  continue;
+            TimpaniMoment t;
+            t.start = secondsBetween(0, m.tick);
+            std::map<int, int> ends;
+            for (const PartNote& pn : m.notes)
+                  if (pn.attack)
+                        ends[pn.note->ppitch()] = std::max(ends.count(pn.note->ppitch()) ? ends[pn.note->ppitch()] : 0, pn.end);
+            for (const auto& e : ends) {
+                  t.pitches.push_back(e.first);
+                  t.ends.push_back(secondsBetween(0, std::max(e.second, m.tick)));
+                  }
+            tm.push_back(t);
+            moments.push_back(m);
+            }
+      TimpaniPlan plan = planTimpani(tm, fifth);
+      const std::vector<TimpaniDrum> drums = timpaniDrums(fifth);
+      std::map<int, QString> spelled;               // pitch -> its last spelling, for "from"
+      typedef TimpaniNotePlan::Problem P;
+      for (size_t mi = 0; mi < moments.size(); ++mi) {
+            const PartMoment& m = moments[mi];
+            auto notesOf = [&](int pitch) {
+                  std::vector<const PartNote*> v;
+                  for (const PartNote& pn : m.notes)
+                        if (pn.attack && (pitch < 0 || pn.note->ppitch() == pitch))
+                              v.push_back(&pn);
+                  return v;
+                  };
+            auto nameOf = [&](int pitch) {
+                  for (const PartNote& pn : m.notes)
+                        if (pn.note->ppitch() == pitch)
+                              return tpcName(pn.note->tpc1(), pitch);
+                  return spelled.count(pitch) ? spelled[pitch] : plainName(pitch);
+                  };
+            const std::vector<TimpaniNotePlan>& np = plan.moments[mi];
+            if (!np.empty() && np.front().problem == P::TOO_MANY)
+                  momentRow(m, notesOf(-1), staffName, "timpani", true,
+                            QString("%1 pitches at once, %2 drums").arg(np.size()).arg(drums.size()));
+            else
+                  for (const TimpaniNotePlan& n : np) {
+                        if (n.problem == P::RANGE)
+                              momentRow(m, notesOf(n.pitch), staffName, "timpani", true,
+                                        nameOf(n.pitch) + " is outside every drum (" + plainName(drums.front().lo) + QChar(0x2013)
+                                        + plainName(drums.back().hi) + ")");
+                        else if (n.problem == P::NO_DRUM)
+                              momentRow(m, notesOf(n.pitch), staffName, "timpani", true, "no free drum for " + nameOf(n.pitch));
+                        else if (n.problem == P::RETUNE)
+                              momentRow(m, notesOf(n.pitch), staffName, "timpani", false,
+                                        QString("the %1 retunes from %2 to %3 in %4 (%5 s needed)").arg(drums[n.drum].size)
+                                        .arg(nameOf(n.from), nameOf(n.pitch), fmtSeconds(n.seconds)).arg(TIMPANI_RETUNE_SECONDS));
+                        }
+            for (const PartNote& pn : m.notes)
+                  spelled[pn.note->ppitch()] = tpcName(pn.note->tpc1(), pn.note->ppitch());
+            }
+      if (momentsOut)
+            *momentsOut = moments;
+      if (fifthOut)
+            *fifthOut = fifth;
+      return plan;
+      }
+
+//---------------------------------------------------------
+//   checkKeyboard (K1)
+//    the notes each hand strikes at once (main chords, all voices, cross-staff moves followed;
+//    organ pedals left out): more than a 9th a warning, more than a 10th red, unless arpeggiated
+//    (Blatter p. 244). No note count: a finger can take two neighbouring keys.
+//---------------------------------------------------------
+
+static QString spanName(int semitones)
+      {
+      static const char* const NAMES[5] = { "octave", "minor 9th", "major 9th", "minor 10th", "major 10th" };
+      return semitones >= 12 && semitones <= 16 ? QString(NAMES[semitones - 12]) : intervalName(semitones);
+      }
+
+// "an octave", "a minor 9th", "18 semitones"
+static QString spanPhrase(int semitones)
+      {
+      QString n = spanName(semitones);
+      if (n.at(0).isDigit())
+            return n;
+      return (n.startsWith("o") ? "an " : "a ") + n;
+      }
+
+void Pass::checkKeyboard(Part* part, const QString& staffName)
+      {
+      for (const PartMoment& m : partMoments(part)) {
+            if (m.sub != 0 || !m.attack())
+                  continue;
+            for (int hand = 0; hand < 2; ++hand) {
+                  std::vector<const PartNote*> notes;
+                  int lo = 1000, hi = -1000;
+                  for (const PartNote& pn : m.notes)
+                        if (pn.hand == hand) {
+                              notes.push_back(&pn);
+                              lo = std::min(lo, pn.note->ppitch());
+                              hi = std::max(hi, pn.note->ppitch());
+                              }
+                  if (notes.size() < 2 || arpeggioOver(m, hand))
+                        continue;
+                  int span = hi - lo;
+                  if (span > KEYBOARD_TENTH)
+                        momentRow(m, notes, staffName, "span", true,
+                                  QString("the %1 spans %2 semitones, more than a 10th").arg(handName(hand)).arg(span));
+                  else if (span > KEYBOARD_NINTH)
+                        momentRow(m, notes, staffName, "span", false,
+                                  QString("the %1 spans %2, more than a 9th").arg(handName(hand), spanPhrase(span)));
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   inspectFamily: a harp's pedals, the timpani's drums, a keyboard hand at the chord
+//---------------------------------------------------------
+
+ChordInfo Pass::inspectFamily(Chord* chord, Family f)
+      {
+      ChordInfo info;
+      Chord* main = chord->isGrace() ? toChord(chord->parent()) : chord;
+      int tick = main->tick().ticks();
+      int sub = 0;
+      if (chord->isGrace()) {
+            int g = main->graceNotes().indexOf(chord);
+            sub = chord->isGraceAfter() ? 1 + g : g - main->graceNotes().size();
+            }
+      Part* part = chord->part();
+      QString staffName = part->longName();
+      const QString dash = QString(" ") + QChar(0x2014) + " ";
+      QStringList names;
+      {
+      std::vector<std::pair<int, QString>> ps;
+      for (const Note* n : chord->notes())
+            ps.push_back({ n->ppitch(), tpcName(n->tpc1(), n->ppitch()) });
+      std::sort(ps.begin(), ps.end());
+      for (const auto& p : ps)
+            names << p.second;
+      }
+      info.text = names.join(" + ");
+
+      if (f == Family::HARP) {
+            std::vector<HarpPlan> plans = checkHarp(part, staffName);
+            const HarpPlan* at = nullptr;
+            for (const HarpPlan& p : plans)
+                  if (p.tick == tick && p.sub == sub)
+                        at = &p;
+            if (!at)
+                  return info;
+            info.kind = ChordInfo::Kind::HARP;
+            QStringList left, right, hand;
+            for (int i = 0; i < 7; ++i) {
+                  int letter = HARP_PEDAL_ORDER[i];
+                  info.harp.letter[i] = letter;
+                  info.harp.setting[i] = at->setting[letter];
+                  info.harp.changed[i] = at->changed[letter];
+                  if (at->changed[letter])
+                        (harpLeftFoot(letter) ? left : right) << letterName(letter, at->setting[letter]);
+                  }
+            for (int g = 7; g < 9; ++g)
+                  if (at->changed[g])
+                        hand << letterName(g - 7, at->setting[g]) + "1";
+            QStringList ch;
+            if (!left.isEmpty())
+                  ch << left.join(", ") + " (left foot)";
+            if (!right.isEmpty())
+                  ch << right.join(", ") + " (right foot)";
+            if (!hand.isEmpty())
+                  ch << hand.join(", ") + " (by hand)";
+            info.text += dash + (ch.isEmpty() ? QString("no pedal change") : "pedal change: " + ch.join(", "));
+            return info;
+            }
+
+      if (f == Family::TIMPANI) {
+            std::vector<PartMoment> moments;
+            bool fifth = false;
+            TimpaniPlan plan = checkTimpani(part, staffName, &moments, &fifth);
+            int mi = -1;
+            for (size_t i = 0; i < moments.size(); ++i)
+                  if (moments[i].tick < tick || (moments[i].tick == tick && moments[i].sub <= sub))
+                        mi = int(i);
+            if (mi < 0)
+                  return info;
+            info.kind = ChordInfo::Kind::TIMPANI;
+            const std::vector<TimpaniDrum> drums = timpaniDrums(fifth);
+            std::map<int, QString> spelled;
+            for (const PartMoment& m : moments)
+                  for (const PartNote& pn : m.notes)
+                        if (!spelled.count(pn.note->ppitch()))
+                              spelled[pn.note->ppitch()] = tpcName(pn.note->tpc1(), pn.note->ppitch());
+            auto nameOf = [&](int p) { return spelled.count(p) ? spelled[p] : plainName(p); };
+            QStringList on;
+            bool here = moments[mi].tick == tick && moments[mi].sub == sub;
+            for (int d = 0; d < int(drums.size()); ++d) {
+                  TimpaniDrumInfo di;
+                  di.size = drums[d].size;
+                  di.lo = drums[d].lo;
+                  di.hi = drums[d].hi;
+                  di.range = plainName(di.lo) + QChar(0x2013) + plainName(di.hi);
+                  di.pitch = plan.tuning[mi][d];
+                  if (di.pitch >= 0)
+                        di.name = nameOf(di.pitch);
+                  if (here)
+                        for (const TimpaniNotePlan& n : plan.moments[mi])
+                              if (n.drum == d) {
+                                    di.playing = true;
+                                    di.retunedHere = n.from >= 0;
+                                    on << nameOf(n.pitch) + " on the " + di.size;
+                                    }
+                  for (size_t k = mi + 1; k < plan.moments.size() && !di.hasNext; ++k)
+                        for (const TimpaniNotePlan& n : plan.moments[k])
+                              if (n.drum == d && n.from >= 0) {
+                                    di.hasNext = true;
+                                    di.nextFrom = nameOf(n.from);
+                                    di.nextTo = nameOf(n.pitch);
+                                    di.nextSeconds = n.seconds;
+                                    di.nextBar = barOf(moments[k].tick);
+                                    di.nextShort = n.problem == TimpaniNotePlan::Problem::RETUNE;
+                                    }
+                  info.drums.push_back(di);
+                  }
+            if (!on.isEmpty())
+                  info.text += dash + on.join(", ");
+            return info;
+            }
+
+      // KEYBOARD: the hand the chord is shown in, everything it strikes at this tick
+      int hand = chord->vStaffIdx() - part->staff(0)->idx();
+      if (hand < 0 || hand > 1 || chord->isGrace())
+            return info;
+      PartMoment at;
+      for (const PartMoment& m : partMoments(part))
+            if (m.tick == tick && m.sub == 0)
+                  at = m;
+      std::vector<std::pair<int, QString>> ps;
+      for (const PartNote& pn : at.notes)
+            if (pn.hand == hand)
+                  ps.push_back({ pn.note->ppitch(), tpcName(pn.note->tpc1(), pn.note->ppitch()) });
+      std::sort(ps.begin(), ps.end());
+      ps.erase(std::unique(ps.begin(), ps.end()), ps.end());
+      if (ps.empty())
+            return info;
+      info.kind = ChordInfo::Kind::KEYBOARD;
+      info.hand.right = hand == 0;
+      info.hand.arpeggio = arpeggioOver(at, hand);
+      QStringList hn;
+      for (const auto& p : ps) {
+            info.hand.pitches.push_back(p.first);
+            info.hand.names << p.second;
+            hn << p.second;
+            }
+      int span = ps.back().first - ps.front().first;
+      QString t = QString(hand == 0 ? "Right hand: " : "Left hand: ") + hn.join(" ");
+      if (ps.size() > 1) {
+            t += dash + QString("spans %1 (%2 semitones)").arg(spanPhrase(span)).arg(span);
+            // the widest gap belongs at the thumb: lowest in the right hand, highest in the left (Blatter p. 244)
+            int wi = 0, wg = -1;
+            for (size_t k = 0; k + 1 < ps.size(); ++k)
+                  if (ps[k + 1].first - ps[k].first > wg) {
+                        wg = ps[k + 1].first - ps[k].first;
+                        wi = int(k);
+                        }
+            t += "\nWidest gap " + ps[wi].second + QChar(0x2013) + ps[wi + 1].second + ": it goes at the thumb, "
+                 + (hand == 0 ? "lowest in the right hand" : "highest in the left hand");
+            }
+      if (info.hand.arpeggio)
+            t += " (arpeggiated)";
+      info.text = t;
+      return info;
+      }
+
 void Pass::run()
       {
       for (Measure* m = _score->firstMeasure(); m; m = m->nextMeasure())
@@ -824,6 +1431,20 @@ void Pass::run()
             checkTremolos(st, part, staffName, tx, walked);
             checkFastRuns(st, part, staffName, tx);
             }
+      for (Part* part : _score->parts()) {
+            Family f = familyOf(part);
+            if (f == Family::NONE)
+                  continue;
+            QString staffName = part->longName();
+            if (staffName.isEmpty())
+                  staffName = part->partName();
+            if (f == Family::HARP)
+                  checkHarp(part, staffName);
+            else if (f == Family::TIMPANI)
+                  checkTimpani(part, staffName, nullptr, nullptr);
+            else
+                  checkKeyboard(part, staffName);
+            }
       for (PlayabilityRow& r : _res.rows)
             r.staffShort = shortStaffName(_score->staff(r.track / VOICES)->part(), r.staff, r.tick);
       }
@@ -843,6 +1464,9 @@ ChordInfo Pass::inspect(Chord* chord)
       Fraction tick = main->tick();
       Staff* staff = chord->staff();
       Part* part = staff->part();
+      Family family = familyOf(part);
+      if (family != Family::NONE)
+            return inspectFamily(chord, family);
 
       std::vector<SpelledNote> spelled;
       struct Item { int pitch; double sound; bool diamond; bool circle; };

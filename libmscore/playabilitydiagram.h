@@ -58,6 +58,16 @@ namespace Playability {
 // a playable stop or a natural harmonic (ChordInfo::kind); empty below the minimum size
 DisplayList layoutFingerboard(const ChordInfo& geom, double w, double h);
 bool namesShown(const DisplayList& items);
+// the diagram for the chord's kind: the fingerboard, the harp's pedals, the timpani, a keyboard hand
+DisplayList layoutDiagram(const ChordInfo& info, double w, double h);
+// H1: harpists' pedal diagram (K&G p. 277): a line for the middle notch, a mark per pedal in the
+// order D C B | E F G A, above the line up (flat), through it middle (natural), below down (sharp);
+// the pedals changed for the chord highlighted
+DisplayList layoutHarpPedals(const ChordInfo& info, double w, double h);
+// P1: the drums side by side, largest left: range, tuning at the chord, the next retune and its time
+DisplayList layoutTimpani(const ChordInfo& info, double w, double h);
+// K1: a keyboard strip with the hand's notes, its span, and the octave, 9th and 10th from its lowest note
+DisplayList layoutKeyboard(const ChordInfo& info, double w, double h);
 
 //---------------------------------------------------------
 //   W1: the register graph of the selected wind notes' whole bars, every voice, one instrument

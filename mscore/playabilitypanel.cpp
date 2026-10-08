@@ -356,7 +356,7 @@ void PlayabilityPanel::setScore(Score* s)
             }
       rebuildChips();
       const ChordInfo info = _info;
-      _board->setLayout([info](double w, double h) { return Playability::layoutFingerboard(info, w, h); });
+      _board->setLayout([info](double w, double h) { return Playability::layoutDiagram(info, w, h); });
       updatePage();
       syncRow();
       }
@@ -459,7 +459,8 @@ void PlayabilityPanel::showGraph(int i)
 
 //---------------------------------------------------------
 //   updatePage
-//    while a playable stop or a natural harmonic is selected, its fingerboard replaces the list;
+//    while a playable stop or a natural harmonic is selected, its fingerboard replaces the list
+//    (a harp chord: the pedals; timpani: the drums; a keyboard chord: its hand's keyboard strip);
 //    while wind notes are, their register graph; "List" goes back to the list
 //---------------------------------------------------------
 
@@ -482,7 +483,14 @@ void PlayabilityPanel::updatePage()
       else
             _stack->setCurrentWidget(_table);
       _toggle->setVisible(board || graph);
-      _toggle->setText(_showList ? (board ? tr("Fingerboard") : tr("Graph")) : tr("List"));
+      QString boardName;
+      switch (_info.kind) {
+            case ChordInfo::Kind::HARP:     boardName = tr("Pedals"); break;
+            case ChordInfo::Kind::TIMPANI:  boardName = tr("Drums"); break;
+            case ChordInfo::Kind::KEYBOARD: boardName = tr("Keyboard"); break;
+            default:                        boardName = tr("Fingerboard"); break;
+            }
+      _toggle->setText(_showList ? (board ? boardName : tr("Graph")) : tr("List"));
       updateSelectedLine();
       }
 
