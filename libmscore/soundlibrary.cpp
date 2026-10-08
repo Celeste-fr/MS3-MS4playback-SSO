@@ -236,6 +236,7 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.length = a.hasAttribute("length") ? a.value("length").toDouble() : -1;
       art.fromSeconds = a.hasAttribute("from") ? a.value("from").toDouble() : -1;
       art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
+      art.peakMs = a.hasAttribute("peak") ? a.value("peak").toDouble() : -1;
       art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
       if (a.hasAttribute("legatoVelocity") && (art.legatoVelocity < 1 || art.legatoVelocity > 127))
             return false;
@@ -628,7 +629,7 @@ Choice choose(const LibInstrument& instrument, const Want& want)
       return choose(std::vector<const LibInstrument*> { &instrument }, want);
       }
 
-Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want)
+static Choice chooseBases(const std::vector<const LibInstrument*>& patches, const Want& want)
       {
       for (const QString& base : want.bases) {
             const Articulation* best = nullptr;
@@ -672,6 +673,39 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
                   return Choice { best, base, bestPatch };
             }
       return Choice();
+      }
+
+// a slurred note shorter than its held articulation's measured peak never gets past the swell (SSO's violin Long
+// peaks after ~1.06 s: no attack is heard on 136 ms slurred notes; the owner, 2026-10-08). [slurs] quick plays it on
+// a quicker technique of the same patches with the note's modifiers: 1 the "tenuto" short (Short 1.0; its from= is
+// not applied: the slur's note-off ends it), 2 the "espressivo" long (Long (Rachm.)). Without one: the held choice.
+static Choice chooseSlurred(const std::vector<const LibInstrument*>& patches, const Want& want, const Choice& held)
+      {
+      if (want.slurQuick < 1 || want.slurQuick > 2 || !held || held.articulation->peakMs <= 0 || want.seconds <= 0
+          || want.seconds * 1000 >= held.articulation->peakMs)
+            return held;
+      QStringList modifiers = want.modifiers;
+      if (want.slurQuick == 2)
+            modifiers.append("espressivo");
+      const QString base = want.slurQuick == 1 ? "tenuto" : "long";
+      const QString needed = want.slurQuick == 1 ? QString() : QString("espressivo");
+      for (int p = 0; p < int(patches.size()); ++p) {
+            for (const Articulation& a : patches[p]->articulations) {
+                  if (!a.techniques.contains(base) || (!needed.isEmpty() && !a.modifiers.contains(needed)))
+                        continue;
+                  bool fits = true;
+                  for (const QString& m : a.modifiers)
+                        fits &= modifiers.contains(m);
+                  if (fits && a.modifiers.size() == modifiers.size())
+                        return Choice { &a, base, p };
+                  }
+            }
+      return held;
+      }
+
+Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want)
+      {
+      return chooseSlurred(patches, want, chooseBases(patches, want));
       }
 
 //---------------------------------------------------------
@@ -1617,8 +1651,10 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
                   b << "tenuto" << "short";
             b << "long";
             }
-      else if (has(Art::Legato))
+      else if (has(Art::Legato)) {
             b << "legato" << "long";
+            w.slurQuick = int(Playback::value("slurs/quick", score));
+            }
       else
             b << "long";
       return w;

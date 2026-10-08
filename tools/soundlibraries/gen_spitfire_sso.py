@@ -1232,6 +1232,15 @@ def onsetMs(r, sound):
     # after the -15 dB time, varying note to note, and the sweep of e6f44e6 heard such notes up to 399 ms early; the
     # -15 dB time leaves some of them late, 123-223 ms in the sweep of 3f0cda5, which sounds less wrong)
     return max(0, t - ONSET_LATENCY)
+# - peak= (ms): when a held articulation is loudest, the median over the measured semitones of the onset check's mf
+#   perceived peak (sso_sound_onset.json, the same lone 1.5 s notes); a slurred note shorter than it never gets past
+#   its swell, so [slurs] quick may play it on a quicker technique (SoundLib::choose)
+def swellPeak(patch, sound):
+    rows = MEASURED_ONSET.get(patch, {}).get(sound)
+    if not isinstance(rows, list):
+        return None
+    peaks = [r[7][1] for r in rows if len(r) > 7 and r[7] and r[7][1] is not None and r[7][1] > 0]
+    return round(statistics.median(peaks)) if peaks else None
 def measuredOnsets(patch, sound):
     rows = MEASURED_ONSET.get(patch, {}).get(sound)
     if not isinstance(rows, list):
@@ -1374,6 +1383,7 @@ def shortFrom(patch, sound):
     return last
 shortFromCount = 0
 onsetCount = 0
+peakCount = 0
 current = None
 legatoGridUsed = set()
 timedValues = set()
@@ -1426,6 +1436,10 @@ for i, line in enumerate(out):
     if o:
         extra += f' onset="{o}"'
         onsetCount += 1
+    p = swellPeak(current, sound) if held else None
+    if p:
+        extra += f' peak="{p}"'
+        peakCount += 1
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'

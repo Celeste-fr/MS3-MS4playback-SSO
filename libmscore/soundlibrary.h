@@ -116,6 +116,9 @@ struct Articulation {
       std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
       double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
       double onsetMedian() const;         // the median of the measured onsets (onsetMs without a table)
+      // a held note is loudest this long after its note-on (<Articulation peak>, ms, the median of the measured
+      // semitones); a slurred note shorter than it is all swell ([slurs] quick: choose); -1: unknown
+      double peakMs { -1 };
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;
@@ -201,6 +204,9 @@ struct Want {
       double soundSeconds { -1 };         // how long it is meant to sound: seconds times MS4's duration factor for its
                                           // articulations (strings: staccato 50 %, staccatissimo 25 %, tenuto 99 %,
                                           // portato their average 74.5 %); <Articulation from> is compared with this
+      // a slurred note shorter than its held articulation's peak (playback setting slurs/quick): 0 the held one,
+      // 1 a "tenuto" short (SSO's Short 1.0), 2 the "espressivo" long (SSO's Long (Rachm.)); choose()
+      int slurQuick { 0 };
       };
 
 //---------------------------------------------------------

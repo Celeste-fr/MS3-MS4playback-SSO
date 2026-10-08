@@ -585,6 +585,29 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(byLength({ A::Staccatissimo }, 1.0), QString("Violins 2: Spiccato"));
       QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.1), QString("Violas: Spiccato"));   // 0.55 s meant; Short 0'5 rings 0.84 s
       QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.3), QString("Violas: Short 0.5"));
+      // [slurs] quick (2026-10-08): a slurred note shorter than its Long's measured peak (Violins 1 1063 ms, Violas
+      // 773) on Short 1.0 (its from= not applied) or Long (Rachm.); longer, muted (no muted Short 1.0) or off: Long
+      auto slurred = [&](const QString& patch, double seconds, int quick, QStringList mods = {}) {
+            SoundLib::Want w { { "legato", "long" }, mods };
+            w.seconds = seconds;
+            w.slurQuick = quick;
+            return patchFor(patch, w);
+            };
+      QCOMPARE(slurred("Violins 1", 0.136, 0), QString("Violins 1: Long"));
+      QCOMPARE(slurred("Violins 1", 0.136, 1), QString("Violins 1: Short 1.0"));
+      QCOMPARE(slurred("Violins 1", 0.136, 2), QString("Violins 1: Long (Rachm.)"));
+      QCOMPARE(slurred("Violins 1", 1.1, 1), QString("Violins 1: Long"));
+      QCOMPARE(slurred("Violas", 0.8, 1), QString("Violas: Long"));
+      QCOMPARE(slurred("Violas", 0.7, 1), QString("Violas: Short 1.0"));
+      QCOMPARE(slurred("Violins 1", 0.136, 1, { "muted" }), QString("Violins 1: Long CS"));
+      {
+            std::vector<Ms4::ArtRef> slur { { A::Legato, false } };
+            Playback::setIniValuesForTest({ { "slurs/quick", "1" } });
+            QCOMPARE(SoundLib::want(slur, SoundLib::TextState(), 0.136, 0).slurQuick, 1);
+            QCOMPARE(SoundLib::want({}, SoundLib::TextState(), 0.136, 0).slurQuick, 0);
+            Playback::setIniValuesForTest({});
+            QCOMPARE(SoundLib::want(slur, SoundLib::TextState(), 0.136, 0).slurQuick, 0);
+      }
       // (a length unknown: as before)
       QCOMPARE(patchFor("Violins 2", { { "short" }, {} }), QString("Violins 2: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),

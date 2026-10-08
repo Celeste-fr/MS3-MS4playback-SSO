@@ -63,6 +63,12 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/staccatissimo", 25, 1, 100, "%", "the same for staccatissimo", true },
       { "shorts/tenuto", 99, 1, 100, "%", "the same for tenuto", true },
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
+      // [slurs]
+      // (the owner, 2026-10-08: slurred violins have no attack; SSO's violin Long peaks after ~1.06 s, Whence's slurred
+      // notes last 136-273 ms; off until the owner has compared both by ear)
+      { "slurs/quick", 0, 0, 2, "",
+        "a slurred note shorter than its held technique's measured peak (<Articulation peak>) plays: 0 the held technique; "
+        "1 the patch's tenuto short (SSO: Short 1.0); 2 its espressivo long (SSO: Long (Rachm.))", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
