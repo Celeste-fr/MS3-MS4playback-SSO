@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "playabilityrules.h"
+#include "playabilitybrass.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1110,6 +1111,471 @@ bool isTimpani(const QString& id, const QString& name)
       if (!id.isEmpty())
             return id == "drum.timpani";
       return NAME.match(name).hasMatch();
+      }
+
+//---------------------------------------------------------
+//   B4-B6 brass (diagrams-spec-brass.md)
+//---------------------------------------------------------
+
+static const QString SHARP = QString(QChar(0x266F));
+
+bool isTrombone(Brass b)
+      {
+      return b == Brass::TENOR_TROMBONE || b == Brass::BASS_TROMBONE || b == Brass::ALTO_TROMBONE
+             || b == Brass::CONTRABASS_TROMBONE;
+      }
+
+QString brassName(Brass b)
+      {
+      switch (b) {
+            case Brass::TENOR_TROMBONE:      return "tenor trombone";
+            case Brass::BASS_TROMBONE:       return "bass trombone";
+            case Brass::ALTO_TROMBONE:       return "alto trombone";
+            case Brass::CONTRABASS_TROMBONE: return "contrabass trombone";
+            case Brass::HORN:                return "double horn";
+            case Brass::TRUMPET:             return "trumpet";
+            case Brass::EUPHONIUM:           return "euphonium";
+            case Brass::BARITONE:            return "baritone";
+            case Brass::F_TUBA:              return "F tuba";
+            case Brass::EB_TUBA:             return QString("E") + QChar(0x266D) + " tuba";
+            case Brass::CC_TUBA:             return "CC tuba";
+            case Brass::BBB_TUBA:            return QString("BB") + QChar(0x266D) + " tuba";
+            default:                         return QString();
+            }
+      }
+
+// a tuba's key from its name: a word E♭ / Eb / E-flat, F, C / CC, B♭ / BB♭ / Bb; none: BB♭
+static Brass tubaKey(const QString& name)
+      {
+      static const QString L = "(?:^|[\\s(])(?:in\\s+)?";
+      static const QString R = "(?=$|[\\s),])";
+      static const QRegularExpression EB(L + "e(?:♭|b|-flat|\\s+flat)" + R, QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression F(L + "f" + R, QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression C(L + "cc?" + R, QRegularExpression::CaseInsensitiveOption);
+      if (EB.match(name).hasMatch())
+            return Brass::EB_TUBA;
+      if (F.match(name).hasMatch())
+            return Brass::F_TUBA;
+      if (C.match(name).hasMatch())
+            return Brass::CC_TUBA;
+      return Brass::BBB_TUBA;
+      }
+
+static Brass tromboneByName(const QString& name, Brass dflt)
+      {
+      QString n = name.toLower();
+      if (n.contains("soprano") || n.contains("sackbut"))
+            return Brass::NONE;
+      if (n.contains("contrabass") || n.contains("kontrabass"))
+            return Brass::CONTRABASS_TROMBONE;
+      if (n.contains("bass"))
+            return Brass::BASS_TROMBONE;
+      if (n.contains("alt"))
+            return Brass::ALTO_TROMBONE;
+      return dflt;
+      }
+
+Brass brassType(const QString& id, const QString& name)
+      {
+      QString n = name.toLower();
+      if (!id.isEmpty()) {
+            if (id == "brass.trombone" || id == "brass.trombone.tenor")
+                  return tromboneByName(name, Brass::TENOR_TROMBONE);
+            if (id == "brass.trombone.bass")
+                  return Brass::BASS_TROMBONE;
+            if (id == "brass.trombone.alto")
+                  return Brass::ALTO_TROMBONE;
+            if (id == "brass.trombone.contrabass")
+                  return Brass::CONTRABASS_TROMBONE;
+            if (id == "brass.french-horn")
+                  return n.contains("alto") ? Brass::NONE : Brass::HORN;
+            if ((id.startsWith("brass.trumpet") && !id.startsWith("brass.trumpet.baroque") && id != "brass.trumpet.slide")
+                || id.startsWith("brass.cornet.") || id == "brass.cornet" || id == "brass.flugelhorn")
+                  return Brass::TRUMPET;
+            if (id == "brass.euphonium" || id == "brass.bugle.euphonium-bugle")
+                  return Brass::EUPHONIUM;
+            if (id == "brass.baritone-horn")
+                  return Brass::BARITONE;
+            if (id == "brass.bugle.contrabass")
+                  return Brass::BBB_TUBA;
+            if (id == "brass.tuba" || id == "brass.tuba.bass" || id == "brass.sousaphone" || id == "brass.helicon")
+                  return tubaKey(name);
+            return Brass::NONE;
+            }
+      static const QRegularExpression TROMBONE("trombon|posaune", QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression HORN("^\\s*(french\\s+|double\\s+)?horns?\\b|^\\s*corn[oi]\\b|^\\s*cors?\\b|^\\s*waldhorn",
+                                           QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression TRUMPET("trumpet|tromba|trompet|cornet\\b|fl[uü]gelhorn", QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression TUBA("\\btuba\\b|sousaphone|helicon", QRegularExpression::CaseInsensitiveOption);
+      if (TROMBONE.match(name).hasMatch())
+            return tromboneByName(name, Brass::TENOR_TROMBONE);
+      if (n.contains("euphonium"))
+            return Brass::EUPHONIUM;
+      if (n.contains("baritone horn"))
+            return Brass::BARITONE;
+      if (TUBA.match(name).hasMatch() && !n.contains("wagner"))
+            return tubaKey(name);
+      if (TRUMPET.match(name).hasMatch() && !n.contains("baroque") && !n.contains("natural") && !n.contains("slide"))
+            return Brass::TRUMPET;
+      if (HORN.match(name).hasMatch() && !n.contains("alto") && !n.contains("natural") && !n.contains("anglais")
+          && !n.contains("ingl"))
+            return Brass::HORN;
+      return Brass::NONE;
+      }
+
+bool outOfTunePartial(int n)
+      {
+      return n == 7 || n == 11 || n == 13 || n == 14;
+      }
+
+int partialOf(int d)
+      {
+      for (int n = 1; n <= 32; ++n)
+            if (std::fabs(12.0 * std::log2(double(n)) - d) <= 0.5)
+                  return n;
+      return 0;
+      }
+
+int raisedPartialOf(int d)
+      {
+      for (int n = 1; n <= 32; ++n) {
+            double x = d - 12.0 * std::log2(double(n));
+            if (x >= 0 && x < 1)
+                  return n;
+            }
+      return 0;
+      }
+
+int brassAttachments(const QString& text)
+      {
+      static const QRegularExpression RE("\\b([FE])[\\s-]*(attachment|trigger|valve)\\b|\\bwith\\s+(?:an?\\s+)?([FE])\\b",
+                                         QRegularExpression::CaseInsensitiveOption);
+      int out = 0;
+      auto it = RE.globalMatch(text);
+      while (it.hasNext()) {
+            auto m = it.next();
+            QString l = (m.captured(1).isEmpty() ? m.captured(3) : m.captured(1)).toUpper();
+            out |= l == "F" ? ATTACH_F : ATTACH_E;
+            }
+      return out;
+      }
+
+int brassValveText(const QString& text)
+      {
+      static const QRegularExpression RE("\\b([345]|three|four|five)[\\s-]*valves?\\b", QRegularExpression::CaseInsensitiveOption);
+      auto m = RE.match(text);
+      if (!m.hasMatch())
+            return 0;
+      QString w = m.captured(1).toLower();
+      return w == "three" ? 3 : w == "four" ? 4 : w == "five" ? 5 : w.toInt();
+      }
+
+int brassValves(Brass b)
+      {
+      return b == Brass::EUPHONIUM ? 4 : isTrombone(b) || b == Brass::NONE ? 0 : 3;
+      }
+
+int brassChartPitch(Brass b, int sounding, int transposeChromatic)
+      {
+      if (b == Brass::TRUMPET)
+            return sounding - transposeChromatic;
+      if (b == Brass::HORN)
+            return sounding + 7;                  // written for horn in F, a perfect 5th above
+      return sounding;
+      }
+
+static int valveSteps(int mask)
+      {
+      int s = 0;
+      for (int v = 0; v < 4; ++v)
+            if (mask & (1 << v))
+                  s += VALVE_STEP[v];
+      return s;
+      }
+
+static int popcount(int m)
+      {
+      int c = 0;
+      for (; m; m >>= 1)
+            c += m & 1;
+      return c;
+      }
+
+QString fingeringName(int mask)
+      {
+      QStringList v;
+      for (int i = 0; i < 5; ++i)
+            if (mask & (1 << i))
+                  v << QString::number(i + 1);
+      QString s = v.isEmpty() ? QString("0") : v.join("+");
+      return (mask & HORN_THUMB) ? "T" + s : s;
+      }
+
+// D3: the F attachment's six positions as I II III IV VI VII (Adler p. 344, TB12)
+static const int F_SLOT[6] = { 0, 1, 2, 3, 5, 6 };
+
+QString slidePositionName(int side, int position, bool raised)
+      {
+      QString sh = raised ? SHARP : QString();
+      if (side == 1)
+            return "F " + sh + roman(F_SLOT[std::max(0, std::min(position, 6) - 1)]);
+      if (side == 2)
+            return "E " + sh + QString::number(position);
+      return sh + roman(position - 1);
+      }
+
+double BrassEntry::slot() const
+      {
+      double x = side == 1 ? F_SLOT[std::max(0, std::min(position, 6) - 1)] : position - 1;
+      return raised ? x - 0.4 : x;           // drawn a little toward I (cosmetic)
+      }
+
+static void labelEntry(BrassEntry& e, int valves)
+      {
+      if (e.partial > 0)
+            e.labels << QString("partial %1").arg(e.partial);
+      if (e.pedal || e.partial == 1)
+            e.labels << "pedal, difficult";
+      if (outOfTunePartial(e.partial) && !e.raised)
+            e.labels << "out of tune";
+      if (e.partial >= BRASS_SPECIALIST)
+            e.labels << "specialists";
+      if ((e.mask & 8) && popcount(e.mask & 7) >= 2)
+            e.labels << "may be sharp";                   // Blatter p. 459 (BR7)
+      if (e.mask & 0x10)
+            e.labels << "needs 5th valve";
+      else if ((e.mask & 8) && valves < 4 && valves > 0)
+            e.labels << "needs 4th valve";
+      if (e.side == 1)
+            e.labels << "F attachment";
+      else if (e.side == 2)
+            e.labels << "E attachment";
+      if (e.derived)
+            e.labels << "derived";
+      }
+
+static SlideChart slideChart(Brass b)
+      {
+      return b == Brass::ALTO_TROMBONE ? SlideChart::ALTO : b == Brass::CONTRABASS_TROMBONE ? SlideChart::CONTRABASS : SlideChart::TENOR;
+      }
+
+static int slidePartial(SlideChart c, int side, int position, bool raised, int pitch)
+      {
+      int d = pitch - (slideFundamental(c, side) - (position - 1));
+      return raised ? raisedPartialOf(d) : partialOf(d);
+      }
+
+std::vector<BrassEntry> slideEntries(Brass b, int attachments, int pitch)
+      {
+      std::vector<BrassEntry> out;
+      if (!isTrombone(b))
+            return out;
+      SlideChart c = slideChart(b);
+      // the sides: no attachment always; F on the bass trombone (TB9) or when named; E when named.
+      // The tenor shows F as an extra when not named (D4)
+      bool side[3] = { true, b == Brass::BASS_TROMBONE || (attachments & ATTACH_F), bool(attachments & ATTACH_E) };
+      bool extra[3] = { false, false, false };
+      if (b == Brass::TENOR_TROMBONE && !side[1]) {
+            side[1] = true;
+            extra[1] = true;
+            }
+      const std::vector<SlideRow>& rows = slideRows(c);
+      const SlideRow* row = nullptr;
+      for (const SlideRow& r : rows)
+            if (r.pitch == pitch)
+                  row = &r;
+      bool inRange = pitch >= rows.front().pitch && pitch <= rows.back().pitch;
+      for (int s = 0; s < 3; ++s) {
+            if (!side[s])
+                  continue;
+            std::vector<BrassEntry> plain, raised;
+            if (row) {
+                  for (int code : row->side[s]) {
+                        BrassEntry e;
+                        e.side = s;
+                        e.position = code % 10;
+                        e.raised = code > 10;
+                        e.partial = slidePartial(c, s, e.position, e.raised, pitch);
+                        e.pedal = row->pedal;
+                        plain.push_back(e);
+                        }
+                  }
+            else if (!inRange) {
+                  for (int n = 1; n <= SLIDE_SIDE_POSITIONS[s]; ++n) {
+                        int d = pitch - (slideFundamental(c, s) - (n - 1));
+                        int p = partialOf(d);
+                        if (p >= BRASS_PARTIAL_LO && p <= BRASS_PARTIAL_HI && !outOfTunePartial(p)) {
+                              BrassEntry e;
+                              e.side = s;
+                              e.position = n;
+                              e.partial = p;
+                              e.derived = true;
+                              plain.push_back(e);
+                              }
+                        // the out-of-tune partials in a raised position, II to VII (Blatter p. 460, TB20)
+                        int rp = raisedPartialOf(d);
+                        if (n > 1 && rp >= BRASS_PARTIAL_LO && rp <= BRASS_PARTIAL_HI && outOfTunePartial(rp)) {
+                              BrassEntry e;
+                              e.side = s;
+                              e.position = n;
+                              e.raised = true;
+                              e.partial = rp;
+                              e.derived = true;
+                              raised.push_back(e);
+                              }
+                        }
+                  }
+            plain.insert(plain.end(), raised.begin(), raised.end());
+            for (BrassEntry& e : plain) {
+                  e.extra = extra[s];
+                  e.name = slidePositionName(s, e.position, e.raised);
+                  labelEntry(e, 0);
+                  out.push_back(e);
+                  }
+            }
+      return out;
+      }
+
+static ValveColumn valveColumn(Brass b, int* fund)
+      {
+      ValveColumn c = ValveColumn::TREBLE;
+      switch (b) {
+            case Brass::EUPHONIUM:
+            case Brass::BARITONE: c = ValveColumn::EUPHONIUM; break;
+            case Brass::F_TUBA:   c = ValveColumn::F_TUBA; break;
+            case Brass::CC_TUBA:  c = ValveColumn::CC_TUBA; break;
+            case Brass::EB_TUBA:
+            case Brass::BBB_TUBA: c = ValveColumn::BBB_TUBA; break;
+            default: break;
+            }
+      // E♭ tuba: no chart column; its open fundamental is the E♭ named by the instrument, E♭1, between the
+      // CC and F tubas: the BB♭ fundamental (B♭0) plus 5 semitones
+      *fund = b == Brass::EB_TUBA ? valveFundamental(ValveColumn::BBB_TUBA) + 5 : valveFundamental(c);
+      return c;
+      }
+
+// derived fingerings at an interval d above the open fundamental: the instrument's valves (up to 4),
+// partials 2-16, not the 7th (Blatter p. 459, BR8); ordered as the chart's row a whole number of
+// octaves away (else the same relative row), then the 3-valve set first, fewest valves, smallest step
+static std::vector<BrassEntry> deriveValves(int rel, int valves, int thumb, int fundShift, const std::vector<int>& pattern)
+      {
+      std::vector<BrassEntry> out;
+      int n = std::min(valves, 4);
+      for (int m = 0; m < (1 << n); ++m) {
+            int p = partialOf(rel + fundShift + valveSteps(m));
+            if (p < BRASS_PARTIAL_LO || p > BRASS_PARTIAL_HI || p == 7)
+                  continue;
+            BrassEntry e;
+            e.mask = m | thumb;
+            e.partial = p;
+            e.derived = true;
+            out.push_back(e);
+            }
+      auto rank = [&](const BrassEntry& e) {
+            auto it = std::find(pattern.begin(), pattern.end(), e.mask);
+            int pi = it == pattern.end() ? 1000 : int(it - pattern.begin());
+            int m = e.mask & 0x1f;
+            return std::make_tuple(pi, (m & 8) ? 1 : 0, popcount(m), valveSteps(m));
+            };
+      std::stable_sort(out.begin(), out.end(), [&](const BrassEntry& a, const BrassEntry& b) { return rank(a) < rank(b); });
+      return out;
+      }
+
+std::vector<BrassEntry> valveEntries(Brass b, int valves, int pitch)
+      {
+      std::vector<BrassEntry> out;
+      if (b == Brass::NONE || isTrombone(b))
+            return out;
+      if (valves <= 0)
+            valves = brassValves(b);
+      auto finish = [&](BrassEntry& e) {
+            int hi = 0;
+            for (int v = 0; v < 5; ++v)
+                  if (e.mask & (1 << v))
+                        hi = v + 1;
+            e.playable = hi <= valves;
+            e.name = fingeringName(e.mask);
+            labelEntry(e, valves);
+            out.push_back(e);
+            };
+      if (b == Brass::HORN) {
+            const std::vector<HornRow>& rows = hornRows();
+            int lo = rows.front().written, hi = rows.back().written;
+            for (int side = 0; side < 2; ++side) {
+                  int fund = side ? HORN_FUNDAMENTAL_BB : HORN_FUNDAMENTAL_F;
+                  int thumb = side ? HORN_THUMB : 0;
+                  if (pitch >= lo && pitch <= hi) {
+                        for (int m : side ? rows[pitch - lo].bb : rows[pitch - lo].f) {
+                              BrassEntry e;
+                              e.mask = m;
+                              e.partial = partialOf(pitch - (fund - valveSteps(m & 0xf)));
+                              finish(e);
+                              }
+                        }
+                  else {
+                        int ref = pitch < lo ? lo + ((pitch - lo) % 12 + 12) % 12 : hi - ((hi - pitch) % 12 + 12) % 12;
+                        std::vector<int> pattern = side ? rows[ref - lo].bb : rows[ref - lo].f;
+                        for (BrassEntry e : deriveValves(pitch - fund, 3, thumb, 0, pattern))
+                              finish(e);
+                        }
+                  }
+            return out;
+            }
+      int fund = 0;
+      valveColumn(b, &fund);
+      const std::vector<ValveRow>& rows = valveRows();
+      int rel = pitch - fund;
+      int lo = rows.front().rel, hi = rows.back().rel;
+      if (b != Brass::EB_TUBA && rel >= lo && rel <= hi) {
+            const ValveRow& r = rows[rel - lo];
+            for (const ValveCell& c : r.fingerings) {
+                  BrassEntry e;
+                  e.mask = c.mask;
+                  e.chartRow = c.row;
+                  e.partial = (c.mask & 0x10) ? 0 : partialOf(rel + valveSteps(c.mask));
+                  e.pedal = r.pedal;
+                  finish(e);
+                  }
+            return out;
+            }
+      int ref = rel >= lo && rel <= hi ? rel : rel < lo ? lo + ((rel - lo) % 12 + 12) % 12 : hi - ((hi - rel) % 12 + 12) % 12;
+      std::vector<int> pattern;
+      for (const ValveCell& c : rows[ref - lo].fingerings)
+            pattern.push_back(c.mask);
+      for (BrassEntry e : deriveValves(rel, valves, 0, 0, pattern))
+            finish(e);
+      return out;
+      }
+
+std::vector<BrassEntry> brassEntries(Brass b, int attachments, int valves, int pitch)
+      {
+      return isTrombone(b) ? slideEntries(b, attachments, pitch) : valveEntries(b, valves, pitch);
+      }
+
+int slideGlissando(Brass b, int attachments, int from, int to, QString* reason)
+      {
+      int w = std::abs(to - from);
+      if (w > GLISSANDO_MAX) {
+            *reason = QString("a slide glissando of %1 semitones, wider than a tritone").arg(w);
+            return 2;
+            }
+      std::vector<BrassEntry> a = slideEntries(b, attachments, from), z = slideEntries(b, attachments, to);
+      bool pedalOnly = false;
+      for (const BrassEntry& x : a)
+            for (const BrassEntry& y : z)
+                  if (!x.extra && !y.extra && x.side == y.side && x.partial > 0 && x.partial == y.partial) {
+                        if (x.partial > 1) {
+                              reason->clear();
+                              return 0;
+                              }
+                        pedalOnly = true;
+                        }
+      if (pedalOnly) {
+            *reason = "a slide glissando on the pedal partial";
+            return 1;
+            }
+      *reason = "no partial holds both notes of the slide glissando";
+      return 2;
       }
 
 }     // namespace Playability

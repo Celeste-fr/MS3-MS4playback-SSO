@@ -357,6 +357,79 @@ bool isKeyboard(const QString& instrumentId, const QString& name);
 bool isHarp(const QString& instrumentId, const QString& name);
 bool isTimpani(const QString& instrumentId, const QString& name);
 
+//---------------------------------------------------------
+//   B4-B6 trombone slide, valve brass fingerings: the owner's approved spec (diagrams-spec-brass.md,
+//   2026-10-08). The lists come from Blatter's charts (playabilitybrass.h, generated): trombone
+//   pp. 469-470, valved brass pp. 463-464, horn pp. 461-462; where a chart covers a note its entries
+//   are the list, in printed order, the first the standard one. Outside a chart's range the list is
+//   derived: partials 2-16 (Adler p. 299, BR1) of each valve combination's or position's fundamental,
+//   valve steps 2 / 1 / 3 semitones (Adler p. 303, Blatter p. 459), the 4th valve a perfect 4th (the chart's +4 row
+//   bears it out); no 7th partial on valve brass (Blatter p. 459, BR8).
+//---------------------------------------------------------
+
+enum class Brass : char { NONE, TENOR_TROMBONE, BASS_TROMBONE, ALTO_TROMBONE, CONTRABASS_TROMBONE,
+      HORN, TRUMPET, EUPHONIUM, BARITONE, F_TUBA, EB_TUBA, CC_TUBA, BBB_TUBA };
+// by the MusicXML id (brass.trombone…, brass.french-horn, brass.trumpet…, brass.cornet…,
+// brass.flugelhorn, brass.euphonium, brass.baritone-horn, brass.tuba…), else the name; a tuba's key
+// from its name (generic: BB-flat, MuseScore's tuba range starting on that fundamental)
+Brass brassType(const QString& instrumentId, const QString& name);
+bool isTrombone(Brass b);
+QString brassName(Brass b);
+
+constexpr int VALVE_STEP[4] = { 2, 1, 3, 5 };       // valves 1-4, semitones; the 5th's is not known
+constexpr int BRASS_PARTIAL_LO = 2;                 // derived lists (BR1)
+constexpr int BRASS_PARTIAL_HI = 16;
+constexpr int BRASS_SPECIALIST = 9;                 // partials 9 and up (Blatter p. 458, BR4)
+bool outOfTunePartial(int n);                       // 7, 11, 13, 14 (Adler p. 299, BR2)
+// the harmonic n whose 12 log2 n lies within half a semitone of the interval; 0 none
+int partialOf(int semitones);
+// a raised (♯) slide position: the partial just under the note, by less than a semitone
+int raisedPartialOf(int semitones);
+
+// a text naming a trombone attachment ("F attachment", "F trigger", "with F", "E attachment"):
+// bit 1 F, bit 2 E
+int brassAttachments(const QString& text);
+constexpr int ATTACH_F = 1;
+constexpr int ATTACH_E = 2;
+// a text naming the valves ("4 valves", "five-valve"): their count, else 0
+int brassValveText(const QString& text);
+// the valves assumed without a text: trumpet group 3 (Adler p. 335), euphonium 4 (Adler p. 354),
+// baritone and tubas 3 (the chart's row for all brasses, Blatter p. 463), horn 3 and the thumb
+int brassValves(Brass b);
+
+struct BrassEntry {
+      // a slide position
+      int side { 0 };               // 0 no attachment, 1 F, 2 E
+      int position { 0 };           // as Blatter numbers it, 1-7
+      bool raised { false };
+      // a fingering
+      int mask { 0 };               // bit 0 valve 1 … bit 4 valve 5; 0x20 the horn's thumb
+      int chartRow { -1 };          // 0 the 3-valve row, 1 +4, 2 +5; -1 derived or the horn
+      // both
+      int partial { 0 };            // 0 not known (5th valve)
+      bool pedal { false };         // the chart's pedal bracket, or partial 1
+      bool extra { false };         // an attachment the part doesn't name (tenor's F)
+      bool playable { true };       // with the instrument's valves
+      bool derived { false };
+      QString name;                 // "II", "♯IV", "F VI", "E 3"; "0", "1+3", "T2+3"
+      QStringList labels;
+      double slot() const;          // on the slide: 0 = I … 6 = VII, a raised position a little toward I
+      };
+
+// B6 lists: sounding pitch for trombones, tubas, euphonium and baritone; written for the trumpet
+// group (any key) and the horn (as in F)
+std::vector<BrassEntry> slideEntries(Brass b, int attachments, int pitch);
+std::vector<BrassEntry> valveEntries(Brass b, int valves, int pitch);
+std::vector<BrassEntry> brassEntries(Brass b, int attachments, int valves, int pitch);
+// the pitch the lists are read at
+int brassChartPitch(Brass b, int sounding, int transposeChromatic);
+QString slidePositionName(int side, int position, bool raised);
+QString fingeringName(int mask);
+// B5: a glissando between two sounding pitches: 0 fine, 1 only on the pedal partial (warning), 2 red;
+// why in *reason
+int slideGlissando(Brass b, int attachments, int from, int to, QString* reason);
+constexpr int GLISSANDO_MAX = 6;                    // a tritone (Adler p. 347, TB17)
+
 }     // namespace Playability
 }     // namespace Ms
 #endif
