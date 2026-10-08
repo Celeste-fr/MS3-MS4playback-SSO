@@ -217,6 +217,10 @@ bool write(const QString& path, const Spec& spec, QString* error);
 // the Mixer's volume (0-127) as Live's track Volume: MuseScore's host gain (v / 100)² (Vst3Synth::volumeGain), within
 // Live's range (0 → -70 dB, Live's lowest; 127 → +4.15 dB)
 double mixGain(int volume);
+// a Kontakt track's Volume: the Mixer's (mixGain) times the patch's track-level headroom (TrackDelays::patchGain),
+// within Live's top (MAX_VOLUME, +6 dB: livesetxml.h's Volume range; above it Live plays the patch softer than MuseScore)
+constexpr double MAX_VOLUME = 1.99526238;
+double kontaktVolume(int volume, double patchGain);
 // the Mixer's pan (0-127, 64 centre) as Live's Pan (-1 … 1): Vst3Synth::panGains' position. Both are constant-power
 // sine/cosine laws, 0 dB at the centre and +3 dB fully panned (Live 12 manual, Audio Fact Sheet › Panning), so the
 // same position gives the same gains

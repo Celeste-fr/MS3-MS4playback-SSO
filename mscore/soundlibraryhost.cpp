@@ -71,6 +71,7 @@
 #include "playbacksettingswidget.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
+#include "libmscore/trackdelays.h"
 #include "libmscore/undo.h"
 #include "seq.h"
 
@@ -1549,12 +1550,14 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       double routesMs = 0;
       const std::vector<SoundLib::Route> routes = routesFor(score->masterScore(), library, &routesMs);
       _slotParts.fill(nullptr);
+      _slotPatches.fill(QString());
       _slotScore = score->masterScore();
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
                   continue;
             const int k = r.port * 16 + r.channel;
             _slotParts[size_t(k)] = r.part;
+            _slotPatches[size_t(k)] = r.instrument->name;
             used[k] = true;
             _slots[k].part = r.part->partName();
             needs.push_back({ k, r.instrument->name, hasSetup(*library, r.instrument->name) });
@@ -1727,6 +1730,7 @@ void SoundLibraryHost::release()
             _slots[k] = Slot();
             }
       _slotParts.fill(nullptr);
+      _slotPatches.fill(QString());
       _slotScore = nullptr;
       _spares.clear();
       _idle.stop();
@@ -1783,17 +1787,22 @@ void SoundLibraryHost::applyMixer(const Score* score)
                   return;
             }
       MasterScore* ms = const_cast<MasterScore*>(_slotScore);
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(ms);
       for (const Part* part : ms->parts()) {
             SoundLib::PartMix m;
+            TrackDelays::Delays d;
             bool computed = false;
             for (int k = 0; k < 64; ++k) {
                   if (_slotParts[size_t(k)] != part)
                         continue;
                   if (!computed) {
                         m = SoundLib::partMix(part, true);
+                        d = TrackDelays::of(part, delays);
                         computed = true;
                         }
-                  vst->setMix(k, m.volume, m.pan, m.muted);
+                  const double gain = library ? TrackDelays::patchGain(*library, d, _slotPatches[size_t(k)]) : 1.0;
+                  vst->setMix(k, m.volume, m.pan, m.muted, float(gain));
                   }
             }
 #else
@@ -1959,9 +1968,11 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
             if (library) {
                   for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
                         _vst->setExportMix(k, 100, 64, false);
+                  const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
                         const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
-                        _vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, m.muted);
+                        const double gain = TrackDelays::patchGain(*library, TrackDelays::of(r.part, delays), r.instrument->name);
+                        _vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, m.muted, float(gain));
                         }
                   }
       }

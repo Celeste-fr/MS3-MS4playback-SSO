@@ -149,6 +149,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             Kontakt k;
             k.instrument = r.instrument;
             k.patch = r.instrument ? r.instrument->name : QString();
+            k.gain = TrackDelays::patchGain(library, p->delays, k.patch);
             k.port = r.port;
             k.channel = r.channel;
             k.patchIndex = r.patch;
@@ -480,7 +481,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         kt.routeKey = QString("%1:%2").arg(k.port).arg(kt.channel);
                         kt.routePatch = k.patchIndex;
                         kt.annotation = trackKey({ s.name, p.name, kt.name });
-                        kt.volume = LiveSetWriter::mixGain(mix.volume);
+                        kt.volume = LiveSetWriter::kontaktVolume(mix.volume, k.gain);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
                         kt.active = !mix.muted;
                         kt.delayKey = TrackDelays::trackKey(k.patch);

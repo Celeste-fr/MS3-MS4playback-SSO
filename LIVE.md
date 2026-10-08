@@ -350,8 +350,13 @@ in a section collapsible at the same time".
   asked for each technique's "volume offset"): a patch's and a technique's own dB, added up, played by CC11 on the
   technique's notes (`libraryNoteLevels`, as a marcato's level). Live gets it in the notes' data, not as a track
   setting: the plain set's Kontakt track's CC11 lane (and the clips) carry the changes, so a technique track has no
-  volume of its own in Live (a MIDI track has no fader). Softer only (CC11 rests at 127): -42.08 dB (CC11 1) .. 0.
-  Test: `tst_soundlibrary` `trackLevels`, `tst_liveequivalence` `plainSetTrackDelays`.
+  volume of its own in Live (a MIDI track has no fader). -42.08 dB (CC11 1) .. +6 dB (the owner, 2026-10-08: Live's
+  track Volume top, so the set plays what MuseScore does). Louder than 0 dB: CC11 rests at 127, so a patch's loudest
+  level is its headroom (`TrackDelays::headroomDb`), played by the Kontakt track's Volume (MuseScore: the slot's,
+  `Vst3Synth::setMix`; route set and plain set: `LiveSetWriter::kontaktVolume`, the Mixer's gain times it), and every
+  note on the patch plays its level less the headroom by CC11 (`noteDb`). Read back: the Kontakt track's Volume less
+  the headroom is the Mixer's. Above the Mixer's default (100) the two add past Live's +6 dB: Live is kept at +6 (What
+  still differs). Test: `tst_soundlibrary` `trackLevels`, `tst_liveequivalence` `plainSetTrackDelays`.
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
@@ -790,6 +795,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   sounds is up to a few tenths of a millisecond off MuseScore's. On the test synth this is the whole remaining
   difference (residual -32 dB; none without such changes: -327 dB); on SSO's Performance legato, the quarter-tone
   glide notes of the VM score were within 0.36 dB.
+- **A raised track level with a loud Mixer** (trackdelays.h, 2026-10-08): a patch's headroom (up to +6 dB) and the
+  Mixer's volume above 100 (up to +4.15 dB) multiply on the Kontakt track's Volume, which stops at +6 dB in Live
+  (`LiveSetWriter::MAX_VOLUME`); MuseScore's slot has no such top. At the Mixer's default 100 they match.
 - **A carrier value of 1 plays as 0** (the UACC switch: 127 can't be carried, and it is no articulation): 128
   controller values in a note's 127 velocities.
 - **MuseScore's automation lanes of plug-in parameters** play in Live through the device (since 2026-09-30), from a

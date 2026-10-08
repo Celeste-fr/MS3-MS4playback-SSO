@@ -171,7 +171,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   the library events (not for Live's clips); with a negative delay everything else plays later by the earliest one
   (`libraryDelayLead`), so nothing is clamped at the start; the plain set writes them as TrackDelay, `livetracks.*` reads them back.
   Track levels (same metaTag, `levels`; same dialog): dB per patch / technique, added up, by CC11 per note
-  (`libLevels`, `libraryNoteLevels`), so in Live's clips and the plain set's CC11 lane too; softer only (-42.08 .. 0 dB).
+  (`libLevels`, `libraryNoteLevels`), so in Live's clips and the plain set's CC11 lane too; -42.08 .. +6 dB (Live's
+  Volume top): a patch's loudest level is its headroom, played by its volume (slot / Kontakt track: `TrackDelays::patchGain`,
+  `LiveSetWriter::kontaktVolume`), its notes' CC11 that much lower (`noteDb`).
 
 **Hosting (VST 3)** (`BUILD_VST3`, on except macOS; preference `io/soundLibrary`)
 - `audio/vst3/vst3plugin.*` (one instance; `settle()` after setState, or SSO's script resets parameters),

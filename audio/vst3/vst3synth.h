@@ -115,9 +115,10 @@ class Vst3Synth : public Synthesizer {
       // volume 100 and pan 64 play the plug-in as it is), muted: silent (mute or solo). Volume:
       // (volume / 100)^2, the General MIDI curve (40 log10) FluidSynth gives CC7, relative to the
       // default 100 (0 dB; 127 +4.2 dB, 50 -12 dB). Pan: constant power, as FluidSynth's CC10, with
-      // the middle at 0 dB (a balance: at the left end the left side +3 dB and the right silent)
-      void setMix(int slot, int volume, int pan, bool muted);
-      void setExportMix(int slot, int volume, int pan, bool muted);
+      // the middle at 0 dB (a balance: at the left end the left side +3 dB and the right silent). gain: a factor on
+      // top (a track level's headroom, TrackDelays::patchGain)
+      void setMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
+      void setExportMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
       static float volumeGain(int volume);
       static void panGains(int pan, float* left, float* right);
 

@@ -1062,7 +1062,8 @@ void TestSoundLibrary::trackDelays()
 //    a technique's and a patch's own level (trackdelays.h, track levels): CC11 by the dB added up right before each of
 //    the technique's notes (127 at -6 dB: 127 x 10^(-6/20) = 63.6, 64), the value in force (127) again before the next
 //    note without one; nothing else changes. A technique no note plays changes nothing; the metaTag keeps levels
-//    within MIN_DB .. 0
+//    within MIN_DB .. MAX_DB. Louder (+6 dB on Long): the patch's headroom (6 dB, its volume: patchGain 10^(6/20)),
+//    so Long's notes play CC11 127 and the patch's other notes 6 dB less (64)
 //---------------------------------------------------------
 
 void TestSoundLibrary::trackLevels()
@@ -1136,16 +1137,49 @@ void TestSoundLibrary::trackLevels()
       if (!shortNotes)
             QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin / Short\":-6}}]") == base);
 
-      // the metaTag: levels within MIN_DB .. 0, a louder one dropped (0), kept with no delay at all
+      // louder: Long +6 dB, the patch's headroom; Long's notes CC11 127, the patch's others 64 (-6 dB)
+      const std::vector<E> up = render("[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin / Long\":6}}]");
+      switchValue = -1;
+      cc11 = 127;
+      int upNotes = 0;
+      for (const E& e : up) {
+            if (std::get<5>(e) && std::get<1>(e) == ME_CONTROLLER)
+                  switchValue = std::get<3>(e);
+            else if (isCC11(e))
+                  cc11 = std::get<3>(e);
+            else if (std::get<1>(e) == ME_NOTEON && std::get<3>(e) > 0) {
+                  QCOMPARE(cc11, switchValue == 1 ? 127 : 64);
+                  ++upNotes;
+                  }
+            }
+      QVERIFY(upNotes > 0);
+
+      // the metaTag: levels within MIN_DB .. MAX_DB, kept with no delay at all
       std::map<const Part*, TrackDelays::Delays> delays;
       delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin", "Long")] = -60;
-      delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin")] = 5;
+      delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin")] = 9;
       QVERIFY(!delays[score->parts()[0]].empty());
       score->setMetaTag(TrackDelays::metaTag, TrackDelays::write(score, delays));
       const TrackDelays::Delays d = TrackDelays::of(score->parts()[0], TrackDelays::read(score));
-      QCOMPARE(d.levels.size(), size_t(1));
-      QCOMPARE(TrackDelays::db(d, "Violin", "Long"), TrackDelays::MIN_DB);
+      QCOMPARE(d.levels.size(), size_t(2));
+      QCOMPARE(TrackDelays::ownDb(d, TrackDelays::trackKey("Violin")), TrackDelays::MAX_DB);
+      QCOMPARE(TrackDelays::db(d, "Violin", "Long"), TrackDelays::MIN_DB + TrackDelays::MAX_DB);
       QCOMPARE(TrackDelays::ms(d, "Violin", "Long"), 0.0);
+      // the headroom: the patch's +6 (Short has no level of its own); Long's CC11 6 dB less, Short's 0
+      QCOMPARE(TrackDelays::headroomDb(d, "Violin"), 6.0);
+      QCOMPARE(TrackDelays::noteDb(d, "Violin", "Long"), TrackDelays::MIN_DB + TrackDelays::MAX_DB - 6.0);
+      QCOMPARE(TrackDelays::noteDb(d, "Violin", "Short"), 0.0);
+      QVERIFY(std::fabs(TrackDelays::patchGain(*lib, d, "Violin") - LiveSetWriter::MAX_VOLUME) < 1e-6);
+      QCOMPARE(TrackDelays::patchGain(*lib, d, "Viola"), 1.0);
+      // softer only: no headroom
+      TrackDelays::Delays soft;
+      soft.levels[TrackDelays::trackKey("Violin", "Long")] = -6;
+      QCOMPARE(TrackDelays::headroomDb(soft, "Violin"), 0.0);
+      QCOMPARE(TrackDelays::noteDb(soft, "Violin", "Long"), -6.0);
+      // Live's Kontakt track: the Mixer's gain times the headroom, within Live's +6 dB
+      QVERIFY(std::fabs(LiveSetWriter::kontaktVolume(100, LiveSetWriter::MAX_VOLUME) - LiveSetWriter::MAX_VOLUME) < 1e-9);
+      QVERIFY(std::fabs(LiveSetWriter::kontaktVolume(127, LiveSetWriter::MAX_VOLUME) - LiveSetWriter::MAX_VOLUME) < 1e-9);
+      QVERIFY(std::fabs(LiveSetWriter::kontaktVolume(50, 2.0) - 0.5) < 1e-9);
       delete score;
       }
 

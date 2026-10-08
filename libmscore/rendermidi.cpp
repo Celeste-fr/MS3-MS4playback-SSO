@@ -1306,13 +1306,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               };
                         libLevels[note] = l;
                         };
-                  // the track levels of the note's patch and technique (trackdelays.h; after marcatoLevel: they add up)
+                  // the track levels of the note's patch and technique (trackdelays.h; after marcatoLevel: they add up),
+                  // less the patch's headroom (its volume plays that: TrackDelays::patchGain)
                   auto trackLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         auto d = c ? libTrackDelays.find(st1->part()) : libTrackDelays.end();
                         if (d == libTrackDelays.end() || d->second.levels.empty())
                               return;
                         const SoundLib::LibInstrument* patch = libPatches[c.patch];
-                        const double db = TrackDelays::db(d->second, patch->name,
+                        const double db = TrackDelays::noteDb(d->second, patch->name,
                                                           PlainLiveSet::techniqueName(patch, c.articulation->value));
                         if (db != 0.0)
                               libLevels[note].volumeDb += db;

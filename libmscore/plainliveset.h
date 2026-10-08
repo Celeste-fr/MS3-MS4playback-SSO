@@ -97,6 +97,7 @@ struct Kontakt {
       std::vector<Lane> lanes;            // by controller, the pitch bend last
       std::vector<ParamLane> params;
       int untuned { 0 };                  // notes of a varispeed copy, played at the key's pitch
+      double gain { 1.0 };                // its track-level headroom (TrackDelays::patchGain): on its track's Volume
       };
 
 struct PartTracks {

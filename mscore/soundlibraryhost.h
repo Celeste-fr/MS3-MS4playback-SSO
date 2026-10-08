@@ -88,6 +88,7 @@ class SoundLibraryHost : public QObject {
       // the last sync: the Mixer's values go to the slots (applyMixer). Only compared with the score's
       // parts before use (a part deleted since isn't read)
       std::array<const Part*, 64> _slotParts {};
+      std::array<QString, 64> _slotPatches;         // (and its patch: a track level's headroom, TrackDelays::patchGain)
       const MasterScore* _slotScore { nullptr };
       // instances set aside by syncSome: a patch the score being loaded doesn't play in their slot
 #ifdef USE_VST3
