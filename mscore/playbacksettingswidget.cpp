@@ -15,11 +15,13 @@
 #include "libmscore/soundlibrary.h"
 
 #include <cmath>
+#include <QComboBox>
 #include <QDesktopServices>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QStandardItemModel>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QUrl>
@@ -33,9 +35,18 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       {
       QVBoxLayout* v = new QVBoxLayout(this);
       v->setContentsMargins(0, 0, 0, 0);
+      QHBoxLayout* ph = new QHBoxLayout;
+      ph->addWidget(new QLabel(tr("Preset:"), this));
+      _preset = new QComboBox(this);
+      _preset->setToolTip(tr("Sets the presets' keys in playback.ini (comments and other values are kept) and reads it again, "
+                             "playback going on. Edit > Playback Preset does the same."));
+      ph->addWidget(_preset);
+      _presetInfo = new QLabel(this);
+      ph->addWidget(_presetInfo, 1);
+      v->addLayout(ph);
       _tree = new QTreeWidget(this);
-      _tree->setColumnCount(4);
-      _tree->setHeaderLabels({ tr("Setting"), tr("Value"), tr("From"), tr("Unit") });
+      _tree->setColumnCount(3);
+      _tree->setHeaderLabels({ tr("Setting"), tr("Value"), tr("From") });
       _tree->setRootIsDecorated(true);
       _tree->setMinimumHeight(220);
       _tree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -56,6 +67,19 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       _info->setWordWrap(true);
       v->addWidget(_info);
 
+      connect(_preset, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+            const QString id = _preset->itemData(index).toString();
+            if (id.isEmpty())
+                  return;
+            if (mscore)
+                  mscore->applyPlaybackPreset(id);
+            else {
+                  Playback::applyPreset(id);
+                  Playback::reload();
+                  }
+            refresh();
+            emit changed();
+            });
       connect(reset, &QPushButton::clicked, this, [this]() {
             for (QTreeWidgetItem* it : _tree->selectedItems()) {
                   QList<QTreeWidgetItem*> items { it };
@@ -131,9 +155,28 @@ void PlaybackSettingsWidget::setScoreValue(const char* id, double value, bool re
       _setMetaTag(Playback::metaTag, Playback::writeScoreValues(values));
       }
 
+// the Preset box: both presets, and (Custom), not selectable, only when the ini matches neither
+void PlaybackSettingsWidget::fillPreset()
+      {
+      const QString now = Playback::currentPreset();
+      _preset->clear();
+      for (const Playback::Preset& p : Playback::presets())
+            _preset->addItem(tr(p.name), QString(p.id));
+      if (now.isEmpty()) {
+            _preset->addItem(tr("(Custom)"), QString());
+            QStandardItemModel* m = qobject_cast<QStandardItemModel*>(_preset->model());
+            if (m)
+                  m->item(_preset->count() - 1)->setFlags(Qt::NoItemFlags);
+            }
+      _preset->setCurrentIndex(now.isEmpty() ? _preset->count() - 1 : _preset->findData(now));
+      const QStringList over = Playback::presetKeysOverriddenBy(_score.data());
+      _presetInfo->setText(over.isEmpty() ? QString() : tr("this score overrides: %1").arg(over.join(", ")));
+      }
+
 void PlaybackSettingsWidget::refresh()
       {
       _filling = true;
+      fillPreset();
       QString selected;
       if (!_tree->selectedItems().isEmpty())
             selected = _tree->selectedItems().front()->data(0, Qt::UserRole).toString();
@@ -151,11 +194,9 @@ void PlaybackSettingsWidget::refresh()
             const double map = mapValue(d.id);
             const double v = Playback::value(d.id, d.perScore ? _score.data() : nullptr, map);
             const Playback::Source src = Playback::source(d.id, d.perScore ? _score.data() : nullptr, map);
-            QTreeWidgetItem* it = new QTreeWidgetItem(g, { id.section('/', 1), QString(),
-                                                           Playback::sourceName(src) + (d.perScore ? "" : tr(" (global)")),
-                                                           d.unit });
+            QTreeWidgetItem* it = new QTreeWidgetItem(g, { id.section('/', 1), QString(), Playback::sourceName(src) });
             it->setData(0, Qt::UserRole, id);
-            for (int c = 0; c < 4; ++c)
+            for (int c = 0; c < 3; ++c)
                   it->setToolTip(c, QString("%1: %2").arg(id, d.comment));
             if (id == selected)
                   it->setSelected(true);
@@ -165,6 +206,8 @@ void PlaybackSettingsWidget::refresh()
                                   && QString(d.unit) != "s" && QString(d.unit) != "cents" && id != "shorts/portato";
             box->setDecimals(id == "tuning/tolerance" ? 3 : integral ? 0 : 2);
             box->setValue(v);
+            if (*d.unit && QString(d.unit) != "on/off")
+                  box->setSuffix(QString(" ") + d.unit);
             // (computed when the map gives none: tuning tail per note, copies by the free memory)
             if (map < 0 && src != Playback::Source::SCORE && src != Playback::Source::INI
                 && (id == "tuning/tail" || id == "tuning/maxLanes")) {
@@ -189,8 +232,8 @@ void PlaybackSettingsWidget::refresh()
             _tree->setItemWidget(it, 1, box);
             }
       QStringList warn = Playback::warnings();
-      _info->setText(tr("Bold: set in this score. Global settings (hosting) only in playback.ini: %1").arg(Playback::iniPath())
-                     + (warn.isEmpty() ? QString() : "\n" + tr("playback.ini: %1").arg(warn.join("; "))));
+      _info->setText(warn.isEmpty() ? QString() : tr("playback.ini: %1").arg(warn.join("; ")));
+      _info->setVisible(!warn.isEmpty());
       _filling = false;
       }
 

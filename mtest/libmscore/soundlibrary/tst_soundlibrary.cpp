@@ -104,6 +104,7 @@ class TestSoundLibrary : public QObject, public MTest
       void onsetEarly();
       void playbackSettingsIni();
       void playbackSettingsLayers();
+      void playbackPresets();
       void renderKit();
       void renderKitRoll();
       void controllers();
@@ -1530,6 +1531,74 @@ void TestSoundLibrary::legatoVelocity()
             QCOMPARE(v[i].second, transitions.count(i) ? 100 : own[i].second);
             }
       delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   playbackPresets
+//    a preset edits playback.ini as text (comments and the other edited keys stay; a missing key or section is
+//    added; a missing file starts from the template) and the effective values are recognised as a preset or custom
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackPresets()
+      {
+      const Playback::Preset* rec = nullptr;
+      const Playback::Preset* lib = nullptr;
+      for (const Playback::Preset& p : Playback::presets()) {
+            if (QString(p.id) == "recommended")
+                  rec = &p;
+            if (QString(p.id) == "library")
+                  lib = &p;
+            }
+      QVERIFY(rec && lib);
+      // a file with comments, a user's edits and the key set
+      const QString text =
+         "; my comment\n[legato]\n; keepMs note\nkeepMs=77\n\n[heldNotes]\n; early note\nearly=30\n\n[shorts]\nstaccato=44\n";
+      QString out = Playback::applyPresetToText(text, *rec);
+      QCOMPARE(out, QString(text).replace("early=30", "early=100"));
+      QCOMPARE(Playback::applyPresetToText(out, *lib), QString(text).replace("early=30", "early=0"));
+      // a missing key: added under its section; the rest unchanged
+      const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
+      QCOMPARE(Playback::applyPresetToText(noKey, *lib),
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n"));
+      // a missing section: added at the end
+      const QString noSection = "[shorts]\nstaccato=44";
+      QCOMPARE(Playback::applyPresetToText(noSection, *rec), QString("[shorts]\nstaccato=44\n\n[heldNotes]\nearly=100\n"));
+      // another section's key of the same name is not touched
+      const QString other = "[x]\nearly=5\n";
+      QCOMPARE(Playback::applyPresetToText(other, *rec), QString("[x]\nearly=5\n\n[heldNotes]\nearly=100\n"));
+      // the file: missing starts from the template, then only the key differs
+      QTemporaryDir dir;
+      QVERIFY(dir.isValid());
+      const QString path = dir.filePath("playback.ini");
+      QVERIFY(Playback::applyPreset("library", path));
+      QFile f(path);
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      const QString written = QString::fromUtf8(f.readAll());
+      f.close();
+      QCOMPARE(written, Playback::applyPresetToText(Playback::iniTemplate(), *lib));
+      QVERIFY(written.contains("early=0\n"));
+      QVERIFY(written.contains("; Presets"));
+      QVERIFY(!Playback::applyPreset("nonsense", path));
+      // an existing file keeps the other edits
+      QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+      f.write(text.toUtf8());
+      f.close();
+      QVERIFY(Playback::applyPreset("recommended", path));
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QCOMPARE(QString::fromUtf8(f.readAll()), QString(text).replace("early=30", "early=100"));
+      f.close();
+      // detection, from the file read and from values
+      Playback::setIniPath(path);
+      QCOMPARE(Playback::currentPreset(), QString("recommended"));
+      QVERIFY(Playback::applyPreset("library", path));
+      Playback::reload();
+      QCOMPARE(Playback::currentPreset(), QString("library"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "legato/keepMs", 10 } }), QString("library"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 55 } }), QString());
+      QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
+      Playback::setIniPath(QString());
       Playback::setIniValuesForTest({});
       }
 

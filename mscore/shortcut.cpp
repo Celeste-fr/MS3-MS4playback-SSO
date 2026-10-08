@@ -3178,6 +3178,28 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+         "playback-preset-recommended",
+         QT_TRANSLATE_NOOP("action","Recommended"),
+         QT_TRANSLATE_NOOP("action","Playback preset: Recommended"),
+         QT_TRANSLATE_NOOP("action","Playback preset: Recommended (the fork's timing adjustments: held notes start early by their measured onset)"),
+         Icons::Invalid_ICON,
+         Qt::ApplicationShortcut,
+         ShortcutFlags::A_CHECKABLE
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
+         "playback-preset-library",
+         QT_TRANSLATE_NOOP("action","Library default"),
+         QT_TRANSLATE_NOOP("action","Playback preset: Library default"),
+         QT_TRANSLATE_NOOP("action","Playback preset: Library default (notes play as written, no timing adjustments of the fork)"),
+         Icons::Invalid_ICON,
+         Qt::ApplicationShortcut,
+         ShortcutFlags::A_CHECKABLE
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
          "playback-ms3",
          QT_TRANSLATE_NOOP("action","MuseScore 3"),
          QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 3"),

@@ -247,6 +247,7 @@ QString iniTemplate()
            "; A key left empty (key=) uses the default; a score can override any of these in\n"
            "; Mixer > Advanced Options... > Playback adjustments. Edit > Reload Playback Settings (or the button there)\n"
            "; reads this file again, no restart. MuseScore writes this file only when it is missing.\n"
+           "; Presets (Recommended, Library default): Edit > Playback Preset, or the Preset box next to the button there; they set only the keys listed in docs/PLAYBACK_SETTINGS.md > Presets.\n"
            "; Lines starting with ';' are comments. On/off settings: 1 or 0.\n";
       QString section;
       for (const Definition& d : DEFINITIONS) {
@@ -278,6 +279,117 @@ QString iniTemplate()
            "[shorts.from]\n"
            "; Violas|Short 0.5=0.55\n";
       return out;
+      }
+
+//---------------------------------------------------------
+//   presets
+//    Only heldNotes/early differs between them. The other settings are not in the table because: legato/keepMs acts
+//    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
+//    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
+//    choice of sound.
+//---------------------------------------------------------
+
+const std::vector<Preset>& presets()
+      {
+      static const std::vector<Preset> P = {
+            { "recommended", "Recommended", { { "heldNotes/early", 100 } } },
+            { "library", "Library default", { { "heldNotes/early", 0 } } },
+            };
+      return P;
+      }
+
+QString applyPresetToText(const QString& text, const Preset& preset)
+      {
+      const QString eol = text.contains("\r\n") ? "\r\n" : "\n";
+      QStringList lines = text.split('\n');
+      for (QString& l : lines)
+            if (l.endsWith('\r'))
+                  l.chop(1);
+      if (!lines.isEmpty() && lines.last().isEmpty())
+            lines.removeLast();
+      for (const auto& kv : preset.values) {
+            const QString id = kv.first;
+            const QString group = id.section('/', 0, 0);
+            const QString key = id.section('/', 1);
+            const QString line = key + "=" + number(kv.second);
+            int sectionLine = -1;
+            int keyLine = -1;
+            QString cur;
+            for (int i = 0; i < lines.size(); ++i) {
+                  const QString t = lines[i].trimmed();
+                  if (t.startsWith(';') || t.startsWith('#') || t.isEmpty())
+                        continue;
+                  if (t.startsWith('[') && t.endsWith(']')) {
+                        cur = t.mid(1, t.size() - 2).trimmed();
+                        if (cur == group && sectionLine < 0)
+                              sectionLine = i;
+                        continue;
+                        }
+                  if (cur == group && t.section('=', 0, 0).trimmed() == key) {
+                        keyLine = i;
+                        break;
+                        }
+                  }
+            if (keyLine >= 0)
+                  lines[keyLine] = line;
+            else if (sectionLine >= 0)
+                  lines.insert(sectionLine + 1, line);
+            else {
+                  if (!lines.isEmpty() && !lines.last().trimmed().isEmpty())
+                        lines << QString();
+                  lines << "[" + group + "]" << line;
+                  }
+            }
+      return lines.join(eol) + eol;
+      }
+
+bool applyPreset(const QString& id, const QString& pathArg)
+      {
+      const Preset* preset = nullptr;
+      for (const Preset& p : presets())
+            if (id == p.id)
+                  preset = &p;
+      const QString path = pathArg.isEmpty() ? iniPath() : pathArg;
+      if (!preset || path.isEmpty())
+            return false;
+      QString text;
+      if (QFileInfo::exists(path)) {
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+                  return false;
+            text = QString::fromUtf8(f.readAll());
+            }
+      else {
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            text = iniTemplate();
+            }
+      QFile f(path);
+      if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+      f.write(applyPresetToText(text, *preset).toUtf8());
+      return f.error() == QFile::NoError;
+      }
+
+QString detectPreset(const std::map<QString, double>& iniValues)
+      {
+      for (const Preset& p : presets()) {
+            bool all = true;
+            for (const auto& kv : p.values) {
+                  const auto it = iniValues.find(kv.first);
+                  // (a key left out is the map's value: the Recommended preset's)
+                  const bool match = it == iniValues.end() ? QString(p.id) == "recommended"
+                                                           : std::fabs(it->second - kv.second) < 1e-6;
+                  all = all && match;
+                  }
+            if (all)
+                  return p.id;
+            }
+      return QString();
+      }
+
+QString currentPreset()
+      {
+      return detectPreset(ini()->values);
       }
 
 static std::shared_ptr<Ini> read(const QString& path)
@@ -532,6 +644,22 @@ double adjust(const char* table, const QString& patch, const QString& articulati
             return b.first == a.first ? b.second : a.second + (b.second - a.second) * (key - a.first) / double(b.first - a.first);
             }
       return pts.back().second;
+      }
+
+QStringList presetKeysOverriddenBy(const Score* score)
+      {
+      QStringList out;
+      if (!score)
+            return out;
+      const std::map<QString, double> own = scoreValues(score);
+      for (const Preset& p : presets())
+            for (const auto& kv : p.values) {
+                  const QString id = kv.first;
+                  double v = 0;
+                  if ((own.count(id) || ownMetaTagValue(kv.first, score, &v)) && !out.contains(id))
+                        out << id;
+                  }
+      return out;
       }
 
 } // namespace Playback

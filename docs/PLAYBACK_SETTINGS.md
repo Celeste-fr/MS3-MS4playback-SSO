@@ -64,6 +64,24 @@ same `MidiRenderer`). `hosting/maxVoices` reaches the Live Set (its Kontakt stat
 `hosting/settleSeconds` and varispeed's glide (varispeed can't reach Live; pitch-bend
 glides, one cent a tick, are rendered and do).
 
+## Presets
+
+Two presets switch `playback.ini` (the owner, 2026-10-07: "library default, and recommended"). Edit > Playback
+Preset (checkable, shows the current one) or the Preset box in Mixer > Advanced Options... > Playback adjustments
+write the preset's keys into the file as a text edit (comments and the other values stay; a missing key or section is
+added; a missing file starts from the template) and then read it as Reload Playback Settings does, playback going on.
+The box says "this score overrides: heldNotes/early" when the open score has its own value of a preset key (not cleared).
+"(Custom)" shows when the ini matches neither (not selectable).
+
+| Preset | heldNotes/early |
+|---|---|
+| Recommended | 100 (held notes start early by their measured onset) |
+| Library default | 0 (notes play as written, no timing adjustment of the fork) |
+
+Only that key differs. The others are left as they are because: `legato/keepMs` acts only with early starts; the shorts'
+lengths are MuseScore 4's note model; tuning and hosting are mechanics. A key missing from the ini counts as the map's
+value, which is Recommended's 100 for SSO. The table is `Playback::presets()` (`libmscore/playbacksettings.cpp`).
+
 ## Inventory
 
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by

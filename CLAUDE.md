@@ -134,7 +134,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed
   keys are listed in `REMOVED` and ignored silently). Read a
   setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
-  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`).
+  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended / Library default: `Playback::presets()`, a text edit of playback.ini, Edit › Playback Preset and the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
 - Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; read for a
   marcato's level (the curve's inverse). The short balance and even steps were removed 2026-10-07.
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
@@ -253,7 +253,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 67 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went);
+- `tst_soundlibrary`: 68 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 18 passed (2026-10-07: liveEquivalenceLegatoLevel removed), `dumpEvents` skipped (a

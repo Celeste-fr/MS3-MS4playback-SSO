@@ -32,6 +32,7 @@
 #include <QString>
 #include <QStringList>
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace Ms {
@@ -72,6 +73,23 @@ QStringList warnings();                         // unknown keys, bad values (als
 QString iniTemplate();                          // the file as written when missing
 bool iniHas(const char* id);
 double iniValue(const char* id);
+
+// presets: a few settings set together in playback.ini (the owner, 2026-10-07: "library default, and recommended")
+struct Preset {
+      const char* id;                                   // "recommended", "library"
+      const char* name;                                 // for menus
+      std::vector<std::pair<const char*, double>> values;   // setting id -> value; the others are left as they are
+      };
+const std::vector<Preset>& presets();
+// the preset's keys written into the ini file's text (comments and other lines kept; a missing key or section is added)
+QString applyPresetToText(const QString& text, const Preset& preset);
+// the file edited (written from iniTemplate() first when missing); false when it can't be written. Does not reload.
+bool applyPreset(const QString& id, const QString& path = QString());
+// the preset the ini's values match ("" : custom); a key not in the ini counts as the map's (Recommended: SSO's 100)
+QString detectPreset(const std::map<QString, double>& iniValues);
+QString currentPreset();                                // for the ini now read
+// the preset's keys the score overrides (own value or the older metaTag)
+QStringList presetKeysOverriddenBy(const Score* score);
 
 // per-patch tables (ini only): text by patch ("Violins 2 - Performance") or "patch|articulation"; an
 // offset ("+25", "-30": ms added) or a whole table ("-12:240 -7:280 …" / one number)
