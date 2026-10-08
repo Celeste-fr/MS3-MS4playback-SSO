@@ -3,7 +3,8 @@
 computed by a stated algorithm, or taken from software or a book). Each subcommand prints the value and how it was
 reached; the code quotes it.
 
-    derived_numbers.py marcato       Marcato level range (libmscore/articulation.h MarcatoLevel::MIN_DB / MAX_DB)
+    derived_numbers.py marcato       Marcato level range (until 2026-10-08 libmscore/articulation.h MarcatoLevel::MIN_DB / MAX_DB)
+    derived_numbers.py levels        an articulation's or technique text's level range (MarcatoLevel::MIN_DB / MAX_DB)
     derived_numbers.py sensitivity   how much the map's measured values move when a threshold inside the measuring
                                      algorithm is varied (the owner's decision 3C, 2026-10-03)
 
@@ -12,6 +13,11 @@ marcato) at each dynamic both were measured at (sso_sound_dynamics.json "curve":
 renderer's dynamics calibration reads), a marcato playing at its dynamic's level as a plain note does (no accent boost
 since 2026-10-02). The range they span, rounded outward to the Inspector's 0.5 dB step, is the spin box's range
 (the owner, 2026-10-03: "the range SSO's marcatos actually span").
+
+levels (the owner, 2026-10-08: every notation that chose a technique gets an Inspector level): as marcato, for every
+measured sound the map plays (an Articulation with techniques=, no drum hit) against its plain held note ("Long", or "Long (X)" for a sound "... (X)"), each dynamic both
+were measured at. The range spans what SSO's techniques differ from the held note, so a level can bring any of them to
+the held note's loudness or as far beyond it again.
 
 sensitivity: per threshold, the map values the alternatives give against the one used.
 """
@@ -51,6 +57,35 @@ def marcato():
     print(f'lowest  {low[0]:+.1f} dB: {low[1]} {low[2]} at {low[3]}')
     print(f'highest {high[0]:+.1f} dB: {high[1]} {high[2]} at {high[3]}')
     print(f'range, rounded outward to 0.5 dB: {math.floor(low[0] * 2) / 2:+.1f} ... {math.ceil(high[0] * 2) / 2:+.1f} dB')
+
+
+def levels():
+    sys.path.insert(0, HERE)
+    from calibration_from_sound_dynamics import MAP, map_articulations
+    played = map_articulations(MAP)         # only what a notation plays (the map's Articulations with techniques=)
+    d = load('sso_sound_dynamics.json')
+    diffs = []
+    for patch, e in d.items():
+        for sound, v in e.items():
+            if not isinstance(v, dict) or 'curve' not in v or sound.startswith('Long') or 'key' in v:
+                continue
+            if not played.get(patch, {}).get(v.get('value', -1)):
+                continue
+            m = re.search(r'\((.*)\)', sound)
+            plain = f'Long ({m[1]})' if m and f'Long ({m[1]})' in e else 'Long'
+            if plain not in e or not isinstance(e[plain], dict) or 'curve' not in e[plain]:
+                continue
+            lo, mm = dict(e[plain]['curve']), dict(v['curve'])
+            for x in sorted(set(mm) & set(lo)):
+                diffs.append((round(mm[x] - lo[x], 1), patch, sound, x))
+    diffs.sort()
+    low, high = diffs[0], diffs[-1]
+    span = max(-low[0], high[0])
+    print(f'{len(diffs)} technique/plain pairs (patch x sound x dynamic); median {statistics.median(x[0] for x in diffs):+.1f} dB')
+    print(f'lowest  {low[0]:+.1f} dB: {low[1]} {low[2]} at {low[3]}')
+    print(f'highest {high[0]:+.1f} dB: {high[1]} {high[2]} at {high[3]}')
+    print(f'largest difference {span:.1f} dB; range +- that, rounded outward to 0.5 dB: '
+          f'{-math.ceil(span * 2) / 2:+.1f} ... {math.ceil(span * 2) / 2:+.1f} dB')
 
 
 # ---------------------------------------------------------------- sensitivity
@@ -162,4 +197,4 @@ def sensitivity():
 
 
 if __name__ == '__main__':
-    {'marcato': marcato, 'sensitivity': sensitivity}[sys.argv[1] if len(sys.argv) > 1 else 'marcato']()
+    {'marcato': marcato, 'levels': levels, 'sensitivity': sensitivity}[sys.argv[1] if len(sys.argv) > 1 else 'marcato']()

@@ -1557,19 +1557,23 @@ void TestSoundLibrary::playbackPresets()
          "; my comment\n[legato]\n; keepMs note\nkeepMs=77\n\n[heldNotes]\n; early note\nearly=30\n\n[shorts]\nstaccato=44\n";
       QString out = Playback::applyPresetToText(text, *rec);
       // (byPitch, missing: added under the section's header)
-      const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1");
-      QCOMPARE(out, withPitch.arg(100).arg(0));
-      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0));
+      // (and [levels] calibrated, missing: the section added at the end)
+      const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
+                                + "\n[levels]\ncalibrated=%3\n";
+      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1));
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ncalibrated=0\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
-      QCOMPARE(Playback::applyPresetToText(noSection, *rec), QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n"));
+      QCOMPARE(Playback::applyPresetToText(noSection, *rec),
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
-      QCOMPARE(Playback::applyPresetToText(other, *rec), QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n"));
+      QCOMPARE(Playback::applyPresetToText(other, *rec),
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1581,6 +1585,7 @@ void TestSoundLibrary::playbackPresets()
       f.close();
       QCOMPARE(written, Playback::applyPresetToText(Playback::iniTemplate(), *lib));
       QVERIFY(written.contains("early=0\n"));
+      QVERIFY(written.contains("calibrated=0\n"));
       QVERIFY(written.contains("; Presets"));
       QVERIFY(!Playback::applyPreset("nonsense", path));
       // an existing file keeps the other edits
@@ -1589,7 +1594,7 @@ void TestSoundLibrary::playbackPresets()
       f.close();
       QVERIFY(Playback::applyPreset("recommended", path));
       QVERIFY(f.open(QIODevice::ReadOnly));
-      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0));
+      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1));
       f.close();
       // detection, from the file read and from values
       Playback::setIniPath(path);
@@ -1598,13 +1603,16 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "legato/keepMs", 10 } }), QString("library"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "legato/keepMs", 10 } }), QString("library"));
+      // calibrated left out: its default 1, Recommended's; Library default needs 0
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "levels/calibrated", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 55 } }), QString());
       // byPitch left out: its default 0, Recommended's; 1 (by pitch): custom (Library default whatever it is)
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 } }), QString("library"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 } }), QString("library"));
       QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
       Playback::setIniPath(QString());
       Playback::setIniValuesForTest({});

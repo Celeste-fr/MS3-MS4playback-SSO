@@ -304,9 +304,10 @@ int routesGeneration();
 //   DynamicsCalibration
 //    measured by Check articulations › Dynamics with the library's plug-in (<setups folder>/
 //    dynamics.json): each articulation's loudness (its loudest 50 ms, dB) along velocity = dynamics
-//    CC = x, and what sets it ("velocity", "controller", "both", "neither"). Playback uses it for a
-//    marcato's level (articulation.h MarcatoLevel); the shorts' calibrated velocity went 2026-10-07
-//    (unused: notes play as written)
+//    CC = x, and what sets it ("velocity", "controller", "both", "neither"). Playback uses it for the
+//    velocity techniques' calibrated level ([levels] calibrated, calibratedVelocity) and an articulation's
+//    Inspector level (articulation.h MarcatoLevel). Without the user's own file: the library's shipped one
+//    (share/soundlibraries/<library>.dynamics.json, from the measured tools/soundlibraries/sso_sound_dynamics.json)
 //---------------------------------------------------------
 
 struct DynamicsCurve {
@@ -345,6 +346,10 @@ const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector
 // the controller
 int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
                          const QString& refPatch, int refValue, int cc);
+// a technique on velocity ([levels] calibrated): the velocity at which it is db louder than the held note
+// (refPatch, refValue) at the dynamics CC value cc; -1: a curve missing or the technique not on velocity
+int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
+                       const QString& refPatch, int refValue, int cc, double db);
 
 //---------------------------------------------------------
 //   Route
@@ -479,6 +484,13 @@ struct TextState {
       bool tremolo { false };             // trem. / flz.
       bool harmonics { false };
       QStringList modifiers;
+      // the level of the text that set the technique (Inspector, articulation.h MarcatoLevel), dB: until the next
+      // text that changes the technique
+      double db { 0.0 };
+      bool sameTechnique(const TextState& o) const {
+            return pizzicato == o.pizzicato && colLegno == o.colLegno && tremolo == o.tremolo && harmonics == o.harmonics
+                   && modifiers == o.modifiers;
+            }
       };
 
 class TextTechniques {

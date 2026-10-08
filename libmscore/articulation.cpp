@@ -11,6 +11,7 @@
 //=============================================================================
 
 #include "articulation.h"
+#include "stafftext.h"
 #include "score.h"
 #include "chordrest.h"
 #include "system.h"
@@ -763,10 +764,10 @@ double of(const Chord* chord)
       {
       if (!chord)
             return 0.0;
+      double db = 0.0;
       for (const Articulation* a : chord->articulations())
-            if (a->isMarcato() && a->marcatoLevel() != 0.0)
-                  return a->marcatoLevel();
-      return 0.0;
+            db += a->marcatoLevel();
+      return db;
       }
 
 int velocity(int v, double db)
@@ -778,8 +779,9 @@ int velocity(int v, double db)
 
 //---------------------------------------------------------
 //   read
-//    a marcato is found by its chord's tick and track (and grace index) and its symbol (else another
-//    marcato of the chord); one that MuseScore 3.6 moved or deleted has no level any more
+//    an articulation is found by its chord's tick and track (and grace index) and its symbol (a marcato else
+//    another marcato of the chord, as before 2026-10-08); one that MuseScore 3.6 moved or deleted has no level
+//    any more
 //---------------------------------------------------------
 
 void read(Score* score)
@@ -798,6 +800,29 @@ void read(Score* score)
             const double db = o.value("db").toDouble(0.0);
             if (tick < 0 || track < 0 || track >= score->ntracks() || db == 0.0)
                   continue;
+            if (o.contains("text")) {
+                  // a technique text: the staff text at the tick on the track, of that text (else the first there)
+                  StaffText* found = nullptr;
+                  const QString text = o.value("text").toString();
+                  for (Segment* s = score->tick2segment(Fraction::fromTicks(tick), true, SegmentType::All);
+                       s && s->tick().ticks() == tick; s = s->next1()) {
+                        for (Element* e : s->annotations()) {
+                              if (!e->isStaffText() || e->track() != track)
+                                    continue;
+                              if (toStaffText(e)->plainText() == text) {
+                                    found = toStaffText(e);
+                                    break;
+                                    }
+                              if (!found)
+                                    found = toStaffText(e);
+                              }
+                        }
+                  if (found)
+                        for (ScoreElement* l : found->linkList())
+                              if (l->isStaffText())
+                                    toStaffText(l)->setLevel(qBound(MIN_DB, db, MAX_DB));
+                  continue;
+                  }
             Segment* seg = score->tick2segment(Fraction::fromTicks(tick), true, SegmentType::ChordRest);
             Element* e = seg ? seg->element(track) : nullptr;
             if (!e || !e->isChord())
@@ -808,15 +833,22 @@ void read(Score* score)
             if (!chord)
                   continue;
             Articulation* found = nullptr;
+            bool marcato = false;
             for (Articulation* a : chord->articulations()) {
-                  if (!a->isMarcato())
-                        continue;
                   if (a->symId() == sym) {
                         found = a;
                         break;
                         }
-                  if (!found)
-                        found = a;
+                  if (a->isMarcato())
+                        marcato = true;
+                  }
+            if (!found && marcato && QString(Sym::id2name(sym)).startsWith("articMarcato")) {
+                  for (Articulation* a : chord->articulations()) {
+                        if (a->isMarcato()) {
+                              found = a;
+                              break;
+                              }
+                        }
                   }
             if (!found)
                   continue;
@@ -833,6 +865,18 @@ void read(Score* score)
 QString write(const Score* score)
       {
       QJsonArray list;
+      for (Segment* s = score->firstSegment(SegmentType::All); s; s = s->next1()) {
+            for (const Element* e : s->annotations()) {
+                  if (!e->isStaffText() || toStaffText(e)->level() == 0.0)
+                        continue;
+                  QJsonObject o;
+                  o["tick"] = s->tick().ticks();
+                  o["track"] = e->track();
+                  o["text"] = toStaffText(e)->plainText();
+                  o["db"] = toStaffText(e)->level();
+                  list.append(o);
+                  }
+            }
       for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
             for (int track = 0; track < score->ntracks(); ++track) {
                   Element* e = s->element(track);
@@ -841,7 +885,7 @@ QString write(const Score* score)
                   const Chord* chord = toChord(e);
                   auto add = [&](const Chord* c, int grace) {
                         for (const Articulation* a : c->articulations()) {
-                              if (!a->isMarcato() || a->marcatoLevel() == 0.0)
+                              if (a->marcatoLevel() == 0.0)
                                     continue;
                               QJsonObject o;
                               o["tick"] = s->tick().ticks();

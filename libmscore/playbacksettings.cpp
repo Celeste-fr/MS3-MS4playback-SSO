@@ -62,6 +62,14 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/staccatissimo", 25, 1, 100, "%", "the same for staccatissimo", true },
       { "shorts/tenuto", 99, 1, 100, "%", "the same for tenuto", true },
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
+      // [levels]
+      // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
+      // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
+      // balance: measured sensible, docs/PLAYBACK_SETTINGS.md › Calibrated levels)
+      { "levels/calibrated", 1, 0, 1, "on/off",
+        "1: a technique on velocity (the map's <Dynamics velocity>: shorts, pizzicato ...), where measured, plays as loud as the "
+        "part's held note at the same dynamic, plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a "
+        "plain note's); 0: at the dynamic's level, MuseScore 4's accent share on top (the library's own balance)", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
@@ -271,7 +279,8 @@ QString iniTemplate()
 
 //---------------------------------------------------------
 //   presets
-//    Only the held notes' early start differs between them (heldNotes/early, heldNotes/byPitch). The other settings are not in the table because: legato/keepMs acts
+//    Only the held notes' early start (heldNotes/early, heldNotes/byPitch) and the calibrated levels (levels/calibrated)
+//    differ between them. The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -282,8 +291,8 @@ const std::vector<Preset>& presets()
       static const std::vector<Preset> P = {
             // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent"; 2026-10-08: "make
             // even early the new recommended": early, each patch by its median onset)
-            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } } },
-            { "library", "Library default", { { "heldNotes/early", 0 } } },
+            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 } } },
+            { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 } } },
             };
       return P;
       }

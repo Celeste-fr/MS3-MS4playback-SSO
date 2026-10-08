@@ -23,6 +23,7 @@
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
 #include "libmscore/soundlibrary.h"
+#include "libmscore/stafftext.h"
 #include "libmscore/synthesizerstate.h"
 
 #define DIR QString("libmscore/marcatolevel/")
@@ -97,7 +98,7 @@ class TestMarcatoLevel : public QObject, public MTest
             const std::vector<Chord*> c = chords(score, part);
             return chord < int(c.size()) ? marcato(c[size_t(chord)]) : nullptr;
             }
-      static void setLevel(Articulation* a, double db)
+      static void setLevel(Element* a, double db)
             {
             a->score()->startCmd();
             a->undoChangeProperty(Pid::MARCATO_LEVEL, db);
@@ -112,12 +113,13 @@ class TestMarcatoLevel : public QObject, public MTest
             }
       struct Ev { int tick; NPlayEvent e; };
       // the rendered events of one MIDI-out route (library) or channel (built-in), in order
-      static std::vector<Ev> render(MasterScore* score, std::shared_ptr<SoundLib::Library> library, int port, int channel)
+      static std::vector<Ev> render(MasterScore* score, std::shared_ptr<SoundLib::Library> library, int port, int channel,
+                                    const SynthesizerState& state = SynthesizerState())
             {
             SoundLib::setCurrent(library);
             SoundLib::setOutput(SoundLib::Output::PLUGIN);
             EventMap events;
-            score->renderMidi(&events, false, true, SynthesizerState());
+            score->renderMidi(&events, false, true, state);
             SoundLib::setCurrent(nullptr);
             SoundLib::setOutput(SoundLib::Output::MIDI);
             std::vector<Ev> list;
@@ -141,6 +143,27 @@ class TestMarcatoLevel : public QObject, public MTest
                         }
             return -1;
             }
+      // a staff text on the part's first track at the measure's first chord
+      static StaffText* addText(Score* score, int part, Measure* m, const QString& text)
+            {
+            StaffText* t = new StaffText(score);
+            t->setXmlText(text);
+            t->setTrack(score->parts().at(part)->startTrack());
+            t->setParent(m->first(SegmentType::ChordRest));
+            score->startCmd();
+            score->undoAddElement(t);
+            score->endCmd();
+            return t;
+            }
+      // the note-ons' velocities by pitch and tick
+      static std::map<std::pair<int, int>, int> velocities(const std::vector<Ev>& ev)
+            {
+            std::map<std::pair<int, int>, int> v;
+            for (const Ev& e : ev)
+                  if (e.e.type() == ME_NOTEON && e.e.velo() > 0 && !e.e.librarySwitch())
+                        v[{ e.tick, e.e.pitch() }] = e.e.velo();
+            return v;
+            }
       // the value of controller cc in force right before event index (-1: none)
       static int controllerBefore(const std::vector<Ev>& ev, size_t index, int cc)
             {
@@ -163,6 +186,9 @@ class TestMarcatoLevel : public QObject, public MTest
       void builtIn();
       void velocityPath();
       void controllerPath();
+      void allArticulations();
+      void textLevel();
+      void calibrated();
       };
 
 //---------------------------------------------------------
@@ -498,6 +524,150 @@ void TestMarcatoLevel::controllerPath()
       noteOn(after, 72, &cTick, &c);
       QCOMPARE(controllerBefore(after, c, 1), 96);       // f, as before
       QCOMPARE(controllerBefore(after, c, 11), 127);
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   allArticulations
+//    every articulation sign has a level, not only a marcato; a chord's add up (the trumpet's marcato-staccato E5,
+//    built-in synthesizer: -3 dB each, -6 dB by SoundFont 2's law)
+//---------------------------------------------------------
+
+void TestMarcatoLevel::allArticulations()
+      {
+      MasterScore* s = score();
+      QVERIFY(s);
+      const int channel = s->parts().at(1)->instrument()->channel(0)->channel();
+      const std::vector<Ev> before = render(s, nullptr, 0, channel);
+      const int v = noteOn(before, 76);
+      QVERIFY(v > 0);
+      Chord* c = chords(s, 1)[2];
+      QCOMPARE(int(c->articulations().size()), 2);
+      for (Articulation* a : c->articulations())
+            setLevel(a, -3);
+      QCOMPARE(MarcatoLevel::of(c), -6.0);
+      const std::vector<Ev> after = render(s, nullptr, 0, channel);
+      QCOMPARE(noteOn(after, 76), MarcatoLevel::velocity(v, -6));
+      QCOMPARE(noteOn(after, 72), noteOn(before, 72));
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   textLevel
+//    a technique text's level (Inspector › Staff text › Level): the notes from it to the next text that changes
+//    the technique ("sul tasto" in m1 to "ord." in m2; "dolce" changes nothing, its level plays nowhere); built-in
+//    synthesizer by SoundFont 2's law; in the metaTag, read back onto the text
+//---------------------------------------------------------
+
+void TestMarcatoLevel::textLevel()
+      {
+      MasterScore* s = score();
+      QVERIFY(s);
+      Measure* m1 = s->firstMeasure();
+      Measure* m2 = m1->nextMeasure();
+      StaffText* tasto = addText(s, 0, m1, "sul tasto");
+      StaffText* dolce = addText(s, 0, m2, "dolce");
+      addText(s, 0, m2, "ord.");
+      const int channel = s->parts().at(0)->instrument()->channel(0)->channel();
+      // MuseScore 3.6's playback (tst_midi's ms3State: dynamics method 1)
+      const SynthesizerState ms3({ SynthesizerGroup("master", { { 4, "1" }, { 5, "1" } }) });
+      const auto before = velocities(render(s, nullptr, 0, channel));
+      const auto before3 = velocities(render(s, nullptr, 0, channel, ms3));
+      QCOMPARE(int(before.size()), 5);
+      QCOMPARE(int(before3.size()), 5);
+
+      QCOMPARE(tasto->getProperty(Pid::MARCATO_LEVEL).toDouble(), 0.0);
+      setLevel(tasto, -6);
+      setLevel(dolce, 9);
+      QCOMPARE(tasto->level(), -6.0);
+      const int m2Tick = m2->tick().ticks();
+      for (const auto& b : { std::make_pair(&before, SynthesizerState()), std::make_pair(&before3, ms3) }) {
+            const auto after = velocities(render(s, nullptr, 0, channel, b.second));
+            QCOMPARE(after.size(), b.first->size());
+            for (const auto& kv : *b.first)
+                  QCOMPARE(after.at(kv.first), kv.first.first < m2Tick ? MarcatoLevel::velocity(kv.second, -6) : kv.second);
+            }
+      // with an articulation's: added
+      setLevel(marcato(s, 0, 0), -3);
+      QCOMPARE(noteOn(render(s, nullptr, 0, channel), 67), MarcatoLevel::velocity(before.begin()->second, -9));
+      s->undoRedo(true, 0);
+
+      QVERIFY(saveScore(s, "marcatolevel-text.mscx"));
+      const QString text = fileText("marcatolevel-text.mscx");
+      QVERIFY2(text.contains("{&quot;db&quot;:-6,&quot;text&quot;:&quot;sul tasto&quot;,&quot;tick&quot;:0,&quot;track&quot;:0}"),
+               qPrintable(text.section("<metaTag name=\"marcatoLevels\">", 1).left(300)));
+      QVERIFY(!text.contains("<level>"));                // (the clipboard's only)
+      MasterScore* again = readCreatedScore("marcatolevel-text.mscx");
+      QVERIFY(again);
+      int found = 0;
+      for (Segment* seg = again->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+            for (Element* e : seg->annotations())
+                  if (e->isStaffText()) {
+                        const QString t = toStaffText(e)->plainText();
+                        QCOMPARE(toStaffText(e)->level(), t == "sul tasto" ? -6.0 : t == "dolce" ? 9.0 : 0.0);
+                        ++found;
+                        }
+      QCOMPARE(found, 3);
+      QVERIFY(again->metaTag(MarcatoLevel::metaTag).isEmpty());
+      delete again;
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   calibrated
+//    [levels] calibrated (on by default): SSO's Trumpet Solo marcato (Marcato, on velocity) at the velocity where its
+//    measured curve is as loud as the held note's (Long, on CC1) at mf's CC1 80, plus MS4's offset for a marcato
+//    (40 log10(103 / 80): MS4 plays it at 103 where a plain note plays at 80); the Inspector's level from there.
+//    Off, or without the held note's curve: as before (velocityPath). Test curves (straight lines: the result
+//    is worked by hand): Long -40 / -30 / -20 dB at CC1 32 / 80 / 127, Marcato 10 dB louder at the same velocities
+//---------------------------------------------------------
+
+void TestMarcatoLevel::calibrated()
+      {
+      auto lib = sso();
+      QVERIFY(lib);
+      MasterScore* s = score();
+      QVERIFY(s);
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      SoundLib::DynamicsCurve held;
+      held.drivenBy = "controller";
+      held.points = { { 32, -40 }, { 80, -30 }, { 127, -20 } };
+      cal->setCurve("Trumpet Solo", 1, held);
+      SoundLib::DynamicsCurve marc;
+      marc.drivenBy = "velocity";
+      marc.points = { { 32, -30 }, { 80, -20 }, { 127, -10 } };
+      cal->setCurve("Trumpet Solo", 52, marc);
+      SoundLib::setDynamicsCalibration(cal);
+
+      // -30 dB + 4.39 dB = -25.61 dB: velocity 32 + 4.39 * 4.8 = 53.1
+      const int expected = int(std::lround(32 + 40 * std::log10(103.0 / 80) * 4.8));
+      QCOMPARE(expected, 53);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), expected);
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Trumpet Solo", 52, "Trumpet Solo", 1, 80, 0.0), 32);
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Trumpet Solo", 1, "Trumpet Solo", 1, 80, 0.0), -1);   // (not on velocity)
+      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Trumpet Solo", 52, "Horn", 1, 80, 0.0), -1);          // (not measured)
+
+      // the Inspector's -6 dB on top: -31.6 dB, under the curve's first point: its slope goes on, 24.2
+      setLevel(marcato(s, 1, 0), -6);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 24);
+      setLevel(marcato(s, 1, 0), 0);
+
+      // off (Library default): mf's 80, as before
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=0");
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 80);
+      s->setMetaTag(Playback::metaTag, QString());
+
+      // the shipped measurements (share/soundlibraries/..dynamics.json, tools/soundlibraries/
+      // calibration_from_sound_dynamics.py): Trumpet Solo's Long and Marcato are there
+      SoundLib::DynamicsCalibration shipped;
+      QVERIFY(shipped.read(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json"));
+      QVERIFY(shipped.curve("Trumpet Solo", 1));
+      QVERIFY(shipped.curve("Trumpet Solo", 52));
+      QCOMPARE(shipped.curve("Trumpet Solo", 52)->drivenBy, QString("velocity"));
+      SoundLib::setDynamicsCalibration(std::make_shared<SoundLib::DynamicsCalibration>(shipped));
+      const int v = noteOn(render(s, lib, 0, 1), 72);
+      const int w = SoundLib::calibratedVelocity(shipped, "Trumpet Solo", 52, "Trumpet Solo", 1, 80, 40 * std::log10(103.0 / 80));
+      QCOMPARE(v, qBound(1, w, 127));
       delete s;
       }
 

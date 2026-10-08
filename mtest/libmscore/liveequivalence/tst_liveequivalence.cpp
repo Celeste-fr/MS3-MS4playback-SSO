@@ -32,6 +32,7 @@
 #include "libmscore/instrument.h"
 #include "libmscore/segment.h"
 #include "libmscore/liveclips.h"
+#include "libmscore/ms4playback.h"
 #include "libmscore/automation.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/livesetwriter.h"
@@ -89,6 +90,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveEquivalenceLegato();
       void liveEquivalenceOctave();
       void liveEquivalenceAutomation();
+      void liveMarcatoLevel_data();
       void liveMarcatoLevel();
       void plainLayout();
       void plainSet();
@@ -872,11 +874,37 @@ void TestLiveEquivalence::liveEquivalenceAutomation()
 //    chain matches on the test synth (velocity * CC1). libmscore/marcatolevel/marcatolevel.musicxml with a map
 //    whose short marcato plays on velocity ("Marcato") and long one on the dynamics CC ("Marcato Attack"): the
 //    violins' G4 (short) -6 dB by velocity, B4 (long) +6 dB by CC1, the trumpet's first note -6 dB by velocity,
-//    the tuba's E3 (long) -6 dB by CC11. Per route: the notes' velocities, the CC1 and CC11 values in order
+//    the tuba's E3 (long) -6 dB by CC11. Per route: the notes' velocities, the CC1 and CC11 values in order.
+//    "calibrated": [levels] calibrated (on by default) with measured curves (straight test lines: Long -40 / -30 / -20 dB
+//    at CC1 32 / 80 / 127, Marcato 10 dB louder at the same velocities): the short marcatos at the velocity where
+//    Marcato is as loud as Long at mf, plus MS4's marcato offset for the part's family, -6 dB: the trumpet's
+//    40 log10(103 / 80) (winds) gives 24 (tst_marcatolevel's calibrated works it out), the violins' strings marcato
+//    (MS4's pattern peaks higher: 7000 against 6000) more; Live's clips the same
 //---------------------------------------------------------
+
+void TestLiveEquivalence::liveMarcatoLevel_data()
+      {
+      QTest::addColumn<bool>("calibrated");
+      QTest::newRow("plain") << false;
+      QTest::newRow("calibrated") << true;
+      }
 
 void TestLiveEquivalence::liveMarcatoLevel()
       {
+      QFETCH(bool, calibrated);
+      struct Reset { ~Reset() { SoundLib::setDynamicsCalibration(nullptr); } } reset;
+      if (calibrated) {
+            auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+            SoundLib::DynamicsCurve held;
+            held.drivenBy = "controller";
+            held.points = { { 32, -40 }, { 80, -30 }, { 127, -20 } };
+            cal->setCurve("Violin", 1, held);
+            SoundLib::DynamicsCurve marc;
+            marc.drivenBy = "velocity";
+            marc.points = { { 32, -30 }, { 80, -20 }, { 127, -10 } };
+            cal->setCurve("Violin", 52, marc);
+            SoundLib::setDynamicsCalibration(cal);
+            }
       LiveHost host(this, "", { "Violin" },
          "<SoundLibrary name='LiveT'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='marcato'/>"
          "<Instrument name='Violin' ids='strings violins violin trumpet tuba'>"
@@ -966,6 +994,17 @@ void TestLiveEquivalence::liveMarcatoLevel()
             all += r.first + ": " + r.second.join(", ") + "\n";
       QVERIFY2(all.contains("cc11: 127 90 127"), qPrintable(all));
       QVERIFY2(all.contains("cc1: 80 113 96"), qPrintable(all));         // (f at the next note)
+      if (calibrated) {
+            const int mf = 5250;                                       // MS4's mf (ms4playback.cpp's dynamics table)
+            QCOMPARE(Ms4::note(Ms4::Family::Winds, { { Ms4::Art::Marcato, false } }, mf, true).levelVelocity, 103);
+            QCOMPARE(Ms4::note(Ms4::Family::Winds, { { Ms4::Art::Standard, false } }, mf, true).levelVelocity, 80);
+            const double strings = Ms4::note(Ms4::Family::Strings, { { Ms4::Art::Marcato, false } }, mf, true).share;
+            QVERIFY(strings > 103.0 / 80);
+            const int violin = SoundLib::calibratedVelocity(*SoundLib::dynamicsCalibration(), "Violin", 52, "Violin", 1, 80,
+                                                            40 * std::log10(strings) - 6);
+            QVERIFY2(all.contains(QString("67 %1").arg(violin)), qPrintable(all + QString::number(violin)));   // the violins' G4
+            QVERIFY2(all.contains("72 24"), qPrintable(all));            // the trumpet's C5
+            }
 
       // the whole chain, audio
       LiveEquivalence::Options o;

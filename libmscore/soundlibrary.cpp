@@ -892,6 +892,16 @@ int calibratedController(const DynamicsCalibration& cal, const QString& patch, i
       return c->inverse(ref->at(cc));
       }
 
+int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
+                       const QString& refPatch, int refValue, int cc, double db)
+      {
+      const DynamicsCurve* c = cal.curve(patch, value);
+      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
+      if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+            return -1;
+      return c->inverse(ref->at(cc) + db);
+      }
+
 const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches)
       {
       const Choice held = choose(patches, Want { { "long" }, {} });
@@ -1457,7 +1467,10 @@ void TextTechniques::build(Score* score, const Part* part)
             for (Element* e : seg->annotations()) {
                   if (!e->isStaffText() || e->track() < strack || e->track() >= etrack)
                         continue;
+                  const TextState before = state;
                   apply(toStaffText(e)->plainText(), state);
+                  if (!state.sameTechnique(before))
+                        state.db = toStaffText(e)->level();
                   _states[seg->tick().ticks()] = state;
                   }
             }

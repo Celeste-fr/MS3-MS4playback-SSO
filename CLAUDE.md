@@ -83,8 +83,9 @@ difference: an MS3 hairpin with its own velocity change plays as in 3.6 (`ms3Hai
 `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT=1` disables, `ab/trace/regress.sh` sets it).
 `mscore/playbackmode.h` (MS3 / MS4 / library, all parts) and `libmscore/partplayback.h` (per part, metaTag
 `partPlayback`). `tempochange.h` (rit./accel. lines, metaTag `tempoChanges`). `slur.h` › Phrase marks (non-legato
-slurs, Alt+S, metaTag `phraseMarks`). `articulation.h` › MarcatoLevel (a marcato's level in dB, Inspector, metaTag
-`marcatoLevels`; library: velocity by the measured curve or CC11 / CC1 per note, `libraryNoteLevels`).
+slurs, Alt+S, metaTag `phraseMarks`). `articulation.h` › MarcatoLevel (every articulation sign's and technique staff text's level in dB,
+Inspector › *Level*, ±35.5; a chord's add up, `MidiRenderer::levelOf`; metaTag `marcatoLevels`; library: velocity by the
+measured curve or CC11 / CC1 per note, `libraryNoteLevels`; built-in: SoundFont 2's law).
 
 **Notation.** Custom key signatures follow each staff's clef (`KeySigEvent::forClef`, `Staff::keySigEventForClef`,
 *Tools › Adapt Key Signatures to Clefs*, `mscore/keyedit.cpp`). Deleting a restating time signature keeps the
@@ -112,10 +113,14 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   copies controllers to every patch ahead of the notes, applies early starts, lanes and bends. Dynamics on CC1;
   listed shorts take velocity. **No automatic adjustments** (the owner, 2026-10-06: timing and levels are adjusted
   in Live; 2026-10-07: "remove all settings not currently being used"): legato transitions play on their beat, pedal
-  changes one tick after their chord, shorts at the notation's velocity; the settings and code that could change that
-  (legato early, fastFirsts, phrase gap, overlap, fast technique, level balance, pedal timing, calibrated short
-  velocity, even steps, one instance, map track delays) were removed 2026-10-07 (docs/PLAYBACK_SETTINGS.md lists them;
-  old ini keys and metaTags are ignored). The technique still comes from the notation. Exception: held notes start
+  changes one tick after their chord; the settings and code that could change that (legato early, fastFirsts, phrase
+  gap, overlap, fast technique, level balance, pedal timing, the old calibrated short velocity, even steps, one
+  instance, map track delays) were removed 2026-10-07 (docs/PLAYBACK_SETTINGS.md lists them; old ini keys and metaTags
+  are ignored). The technique still comes from the notation. **Calibrated levels** (the owner, 2026-10-08, shorts too
+  quiet; `[levels] calibrated`, on in Recommended, off in Library default): a technique on velocity plays as loud as
+  the part's Long at the same dynamic (measured curves), plus MS4.7.5's offset for its articulations (marcato's too),
+  plus the Inspector's levels (`libVelocity`, `SoundLib::calibratedVelocity`; docs/PLAYBACK_SETTINGS.md › Calibrated
+  levels); techniques on CC1 keep the library's balance. Exception: held notes start
   early by their patch's median measured onset (`[heldNotes] byPitch` 1: each by its pitch's)
   (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
   players; `[heldNotes] early` 0 plays them as written). **No Performance patches** (the owner, 2026-10-06:
@@ -134,9 +139,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed
   keys are listed in `REMOVED` and ignored silently). Read a
   setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
-  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended: held notes early, each patch by its median onset, `heldNotes/byPitch` 0 (1: by pitch) / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
-- Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; read for a
-  marcato's level (the curve's inverse). The short balance and even steps were removed 2026-10-07.
+  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended: held notes early, each patch by its median onset, `heldNotes/byPitch` 0 (1: by pitch), calibrated levels / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
+- Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; without one, the
+  shipped `share/soundlibraries/<library>.dynamics.json` (SSO's from `sso_sound_dynamics.json` by
+  `tools/soundlibraries/calibration_from_sound_dynamics.py`; `SoundLibraryHost::loadCalibration`). Read for calibrated
+  levels and the Inspector levels (the curve's inverse).
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
   (`ControllersWindow`, `audio/vst3/librarycontrollers.*`). Automation: `libmscore/automation.*`, metaTag
   `automation` (points step / linear, a ramp may carry Live's Bézier control points). Every lane is editable;
@@ -253,12 +260,14 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 68 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added);
+- `tst_soundlibrary`: 68 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 19 passed (2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added), `dumpEvents` skipped (a
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 20 passed (2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+  calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`). `tst_liveintegration` 60 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
-  `tst_phrasemark` 8, `tst_marcatolevel` 11 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
+  `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
+  allArticulations, textLevel, calibrated), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.
 - `tst_midi`: 97 passed (2026-10-04). Its 3.x tests render with MuseScore 3.6's method (`ms3State`: the MS3 mode)

@@ -13,6 +13,7 @@
 #include "measure.h"
 #include "score.h"
 #include "stafftext.h"
+#include "articulation.h"
 #include "staff.h"
 
 namespace Ms {
@@ -55,9 +56,33 @@ QVariant StaffText::propertyDefault(Pid id) const
       switch(id) {
             case Pid::SUB_STYLE:
                   return int(Tid::STAFF);
+            case Pid::MARCATO_LEVEL:
+                  return 0.0;
             default:
                   return StaffTextBase::propertyDefault(id);
             }
+      }
+
+//---------------------------------------------------------
+//   getProperty / setProperty
+//    the level of the technique the text chooses (articulation.h MarcatoLevel)
+//---------------------------------------------------------
+
+QVariant StaffText::getProperty(Pid id) const
+      {
+      if (id == Pid::MARCATO_LEVEL)
+            return level();
+      return StaffTextBase::getProperty(id);
+      }
+
+bool StaffText::setProperty(Pid id, const QVariant& v)
+      {
+      if (id == Pid::MARCATO_LEVEL) {
+            setLevel(qBound(MarcatoLevel::MIN_DB, v.toDouble(), MarcatoLevel::MAX_DB));
+            score()->setPlaylistDirty();        // (nothing to lay out)
+            return true;
+            }
+      return StaffTextBase::setProperty(id, v);
       }
 
 }

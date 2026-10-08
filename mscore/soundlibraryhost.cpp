@@ -224,13 +224,27 @@ QString SoundLibraryHost::calibrationFile(const SoundLib::Library& library)
       return setupFolder(library) + "/dynamics.json";
       }
 
+// the map's own file: its path with .xml replaced by .dynamics.json (share/soundlibraries); empty without a path
+static QString shippedCalibrationFile(const SoundLib::Library& library)
+      {
+      if (library.path.isEmpty())
+            return QString();
+      QString p = library.path;
+      if (p.endsWith(".xml", Qt::CaseInsensitive))
+            p.chop(4);
+      return p + ".dynamics.json";
+      }
+
 void SoundLibraryHost::loadCalibration()
       {
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       std::shared_ptr<SoundLib::DynamicsCalibration> c;
       if (library) {
             c = std::make_shared<SoundLib::DynamicsCalibration>();
-            if (!c->read(calibrationFile(*library)))
+            // the user's own measurement (Check articulations › Dynamics) wins; without one the map's shipped
+            // file (the owner's checks, tools/soundlibraries/calibration_from_sound_dynamics.py), so a
+            // fresh install calibrates too
+            if (!c->read(calibrationFile(*library)) && !c->read(shippedCalibrationFile(*library)))
                   c.reset();
             }
       SoundLib::setDynamicsCalibration(c);

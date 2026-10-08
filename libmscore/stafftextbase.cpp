@@ -65,6 +65,9 @@ void StaffTextBase::write(XmlWriter& xml) const
             }
       if (capo() != 0)
             xml.tagE(QString("capo fretId=\"%1\"").arg(capo()));
+      // a technique text's level: in the clipboard only; a file keeps it in the metaTag (articulation.h MarcatoLevel)
+      if (_level != 0.0 && xml.clipboardmode())
+            xml.tag("level", _level);
       TextBase::writeProperties(xml);
 
       xml.etag();
@@ -153,6 +156,8 @@ bool StaffTextBase::readProperties(XmlReader& e)
             setCapo(fretId);
             e.readNext();
             }
+      else if (tag == "level")                  // (the clipboard's only, as write)
+            _level = e.readDouble();
       else if (!TextBase::readProperties(e))
             return false;
       return true;

@@ -75,10 +75,10 @@ and then reads it as Reload Playback Settings does, playback going on. The box s
 the open score has its own value of a preset key (not cleared). "(Custom)" shows when the ini matches none (not
 selectable).
 
-| Preset | heldNotes/early | heldNotes/byPitch |
-|---|---|---|
-| Recommended | 100 | 0: every held note of a patch early by the median of the patch's measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms) |
-| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | |
+| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated |
+|---|---|---|---|
+| Recommended | 100 | 0: every held note of a patch early by the median of the patch's measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms) | 1: techniques on velocity as loud as the held note, plus MS4's offset (below, Calibrated levels; 2026-10-08) |
+| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance |
 
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
@@ -90,6 +90,38 @@ Advanced Options shows each of these once, in Playback adjustments (its older ro
 for other tunings" were the same metaTags and went 2026-10-08). The table is
 `Playback::presets()` (`libmscore/playbacksettings.cpp`).
 
+## Calibrated levels
+
+The owner, 2026-10-08, on staccatos sounding too quiet: "bring back the calibrated short velocity and include it in the
+recommended preset. adjust all techniques according to the measured value, taking into account that some techniques
+are meant to be louder", then "use MuseScore 4.7.5's articulation profiles for everything incl. marcato, with the
+requirement that whatever notation that caused the technique can change the dynamics in the inspector".
+
+`[levels] calibrated` (1 by default and in Recommended, 0 in Library default; per score through `playbackSettings`):
+a library note whose technique is on velocity (the map's `<Dynamics velocity>`: SSO's shorts, staccatissimo,
+spiccato, marcato, tenuto, pizzicato, Bartók, col legno) plays at the velocity at which its measured curve is as loud
+as the part's plain held note ("long": SSO's Long) at the same dynamic's CC1 (`SoundLib::calibratedVelocity`), plus
+MuseScore 4.7.5's offset for its articulations: 40 log10(MS4's velocity / a plain note's at that dynamic) dB
+(SoundFont 2's velocity law; MS4's articulation profiles: a marcato at mf plays at 103 against a plain note's 80: +4.4 dB),
+then the Inspector's levels (below). Where either curve is missing, or with 0: as before (the dynamic's level on CC1's
+scale, an accent's share included; a marcato at the plain level). Techniques on the dynamics CC (legato, tremolo,
+trills, swells, marcato attack ...) keep the library's balance: they follow CC1 as the held note does, and their
+measured differences from it are the library's design (louder tremolo, softer flautando), not a calibration error.
+
+The measurements: the user's `dynamics.json` (Check articulations › Dynamics) when there is one, else the shipped
+`share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json` (`SoundLibraryHost::loadCalibration`), made from the
+owner's checks in `tools/soundlibraries/sso_sound_dynamics.json` by
+`tools/soundlibraries/calibration_from_sound_dynamics.py` (105 patches, 492 curves; only what the map plays).
+
+**Levels in the Inspector** (articulation.h MarcatoLevel): every articulation sign (Inspector › Articulation ›
+*Level*) and every staff text that changes the technique (Inspector › Staff text › *Level*: pizz., col legno, sul
+tasto ..., from the text to the next one that changes the technique) has a level in dB; a chord's articulations' and
+its text's add up. −35.5 … +35.5 dB, 0.5 steps: what SSO's played techniques differ from their plain held note at
+the same dynamic, −35.1 (Violas Col Legno at 32) … +25.1 dB (Horns a2 Rip at 32), 1308 pairs, median −2.6
+(`tools/soundlibraries/derived_numbers.py levels`), widened to the larger side both ways and rounded outward to 0.5:
+a level can bring any technique to the held note's loudness. Kept in the metaTag `marcatoLevels` (its name from when
+only marcatos had one; a text's entry `{"tick","track","text","db"}`).
+
 ## Inventory
 
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by
@@ -98,7 +130,8 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Adjustment | Default | Where it acts | Configure |
 |---|---|---|---|
 | Phrase marks: a slur that plays no legato | per slur | `slur.h` Phrase marks, metaTag `phraseMarks` | per slur (Alt+S, Inspector) |
-| Marcato level: a marcato (also marcato-staccato / -tenuto) louder or softer than the library's marcato. A note on velocity (SSO's Marcato on winds / brass): the velocity at which its measured curve (dynamics.json) is that many dB away, else SoundFont 2's law 40 log10(v/127); a note on the dynamics CC (SSO's strings' Marcato Attack): softer by CC11 (the held note's expression curve, else the law), louder by CC1 (its own curve, else the law; up to 127), on its route from right before its note-on to right before the route's next note-on; built-in synthesizer: the velocity by the law. A library marcato gets no MS4 accent velocity boost (since 2026-10-02: its velocity is the dynamic's level on CC1's scale, as a plain note's; accents > keep theirs; built-in synthesizer unchanged) | "Library default" (0 dB: no change) | `articulation.h` MarcatoLevel, `rendermidi.cpp` (`marcatoLevel`, `libraryNoteLevels`, `playNote`), metaTag `marcatoLevels` | per sign: Inspector › Articulation › *Marcato level* (−18.5 … +12.5 dB, 0.5 steps; several selected: all). The range: what SSO's marcatos span against the same instrument's plain held note at the same dynamic, −18.5 (Bassoon Solo at pp) … +12.4 dB (Trumpet Solo muted at 127), 212 pairs in `sso_sound_dynamics.json`, rounded outward to 0.5 (`tools/soundlibraries/derived_numbers.py marcato`; the owner's choice of rule, 2026-10-03) |
+| Level (marcato only until 2026-10-08): an articulation sign, or a staff text that changes the technique, louder or softer than the technique plays (above, Calibrated levels). A note on velocity: the velocity at which its measured curve (dynamics.json) is that many dB away, else SoundFont 2's law 40 log10(v/127); a note on the dynamics CC (SSO's strings' Marcato Attack): softer by CC11 (the held note's expression curve, else the law), louder by CC1 (its own curve, else the law; up to 127), on its route from right before its note-on to right before the route's next note-on; built-in synthesizer (MS3 and MS4 modes): the velocity by the law | "Library default" (0 dB: no change) | `articulation.h` MarcatoLevel, `rendermidi.cpp` (`levelOf`, `marcatoLevel`, `libraryNoteLevels`, `playNote`), `SoundLib::TextState::db`, metaTag `marcatoLevels` | per sign: Inspector › Articulation › *Level*; per text: Inspector › Staff text › *Level* (−35.5 … +35.5 dB, 0.5 steps; several selected: all; the range: above). Until 2026-10-08 −18.5 … +12.5, what SSO's marcatos span (`derived_numbers.py marcato`) |
+| Calibrated levels: a technique on velocity as loud as the part's held note at the same dynamic, plus MuseScore 4's offset for its articulations (marcato's too) | on (Recommended; Library default: off) | `rendermidi.cpp` `libVelocity`, `SoundLib::calibratedVelocity`; data: dynamics.json, else the shipped `Spitfire Symphony Orchestra.dynamics.json` | `[levels] calibrated`; score: `playbackSettings` |
 | Track delay: a library part (and each of its patches and techniques, added to the part's) plays this many ms later, negative earlier, as Live's Track Delay; every library event of the track moved in time, the tempo followed; with a negative delay everything else (other parts, the metronome) plays later by the earliest one (`libraryDelayLead`), so the track is early from its first note (2026-10-07; before: clamped at the start); a note and its switch by the technique's sum, controllers by the patch's | 0 ms (none) | `trackdelays.h`, `rendermidi.cpp` `libraryTrackDelays`, metaTag `trackDelays` | per part: Mixer › *Track delay*, *Tracks…* (−1000 … 1000 ms: a tutorial's figure for Live, its manual gives none); the plain Live set writes it as TrackDelay and reads it back |
 | Track level: a library part's patch and technique each play this many dB softer (added up), by CC11 (expression) from right before each of the technique's notes, the value in force again before the next note without one; adds to a marcato's level (2026-10-07) | 0 dB (none) | `trackdelays.h`, `rendermidi.cpp` `trackLevel` / `libraryNoteLevels`, metaTag `trackDelays` (`levels`) | per part: Mixer › *Tracks…* › Level (−42.08 … 0 dB: CC11 rests at 127, its top, and 1 of 127 is −42.08 dB); in Live's clips and the plain set's CC11 lane alike |
 | Legato transition velocity: a legato transition plays at the map's velocity, whatever the note's (Spitfire's Performance legato picks the transition by velocity: fast 85-127 "with accent", slow 85-127 bowed; Spitfire support article 11815986). Measured 2026-10-07 (Violas - Performance, Whence's violas bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, kthost on the test VM): arrival - written SD 49 ms at velocity 64, 41 ms at 100 (37-38 against 45-46 on the notes heard in every render); 159 of 180 transitions detected against 133; median arrival 68 ms against 88; median note peak 1.5 dB lower. Per-note shifts made it no tighter (HANDOFF.md). Same passage on every family (moved by octaves near each patch's test note), SD at 64 / at 100 (ms): Violas 54 / 39, Violins 1 53 / 65, Celli 53 / 70, Basses 39 / 65, Flute 35 / 65, Trumpet 26 / 35; Oboe 29, Clarinet 31, Bassoon 98, Horn 29, Tenor Trombone 31, Tuba 55 render the same at both. So only Violas - Performance gets 100; the others keep the note's own (Violins 1 at 30 / 50 / 84: 53 / 50 / 53). Only under staff text "performance" (SSO) | map `legatoVelocity` (SSO: Violas - Performance 100; other maps: the note's own) | `collect` (`libTransitionFrom`) | map only (`[legato] velocity` removed 2026-10-07) |
@@ -126,7 +159,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Settle after setState before controllers (measured: below) | 0.047 s | `Vst3Plugin::settle` | `[hosting] settleSeconds` |
 | Mixer volume, pan and mute on library slots apply from the next audio block, no glide (the owner, 2026-10-03: no mixer smoothing; the 5 ms glide had no source, `[hosting] mixSmoothingMs` is retired) | at once | `Vst3Synth::process` | — |
 | MS3 hairpin with its own velocity change plays as in 3.6 | on | `ms3HairpinVelocity()` | Preferences (Advanced) `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT` |
-| Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
+| Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale (calibrated levels off, or not measured) | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
 | Live controls (Controllers window live, LiveOverrides) | always | `PartControllers::liveChanges` | not a number: no setting |
 | Chunks don't end before a slurred or library note (live playback) | always | `libSlurAcross`, `libNoteAfter` | fixed (correctness: an early start can't cross a chunk) |
 | Background loading pauses | 0 ms | `SoundLibraryHost` `INPUT_PAUSE_MS`, `PRELOAD_GAP_MS` | fixed (the owner chose 0) |

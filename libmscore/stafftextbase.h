@@ -40,6 +40,7 @@ class StaffTextBase : public TextBase  {
       int aeolusStops[4]   { 0, 0, 0, 0 };
       bool _swing          { false };
       int _capo            { 0 };
+      double _level        { 0.0 };     // dB; a technique text's level (articulation.h MarcatoLevel), 0: the library's
 
    public:
       StaffTextBase(Score*, Tid tid, ElementFlags = ElementFlag::NOTHING);
@@ -49,6 +50,8 @@ class StaffTextBase : public TextBase  {
       virtual bool readProperties(XmlReader&) override;
 
       Segment* segment() const;
+      double level() const                                { return _level; }
+      void setLevel(double db)                            { _level = db; }
       QString channelName(int voice) const                { return _channelNames[voice]; }
       void setChannelName(int v, const QString& s)        { _channelNames[v] = s;        }
       void setSwingParameters(int unit, int ratio)        { _swingParameters.swingUnit = unit; _swingParameters.swingRatio = ratio; }

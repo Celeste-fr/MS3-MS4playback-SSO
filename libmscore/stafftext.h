@@ -28,6 +28,8 @@ class StaffText final : public StaffTextBase  {
       QVariant propertyDefault(Pid id) const override;
 
    public:
+      QVariant getProperty(Pid id) const override;
+      bool setProperty(Pid id, const QVariant& v) override;
       StaffText(Score* s = 0, Tid = Tid::STAFF);
 
       StaffText* clone() const override       { return new StaffText(*this); }

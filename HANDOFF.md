@@ -168,10 +168,13 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
 - Clip-tab automation lanes as the clip's envelopes (branch `clip-envelopes`): the owner installs the Control
   Surface script `tools/live/MuseScoreEnvelopes` once (LIVE.md › Automation lanes in a clip tab) and tries a Windows
   build (the new device, protocol 5, from that build's `tools/live`); arrangement clips get no lanes (open question).
-- Marcato level (Inspector › Articulation › *Marcato level*, per sign, metaTag `marcatoLevels`; default "Library
-  default" = the library's plain marcato): the owner tries it on SSO (velocity-driven Marcato on winds / brass;
-  Marcato Attack on strings by CC11 down / CC1 up). MS4's accent velocity boost no longer reaches library marcatos
-  (owner, 2026-10-02): a plain note's velocity at the dynamic (mf 80), the level on top.
+- Calibrated levels (branch `calibrated-levels`, from `legato-pair-delays`, 2026-10-08; the owner: shorts too
+  quiet, "use MuseScore 4.7.5's articulation profiles for everything incl. marcato"): `[levels] calibrated` (on,
+  Recommended) plays SSO's velocity techniques as loud as the part's Long at the same dynamic, plus MS4's
+  articulation offset, plus the Inspector's *Level* (every articulation sign and technique staff text, ±35.5 dB;
+  metaTag `marcatoLevels`); calibration shipped as `share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json`.
+  The owner listens: Recommended against Library default (shorts, marcatos, pizzicato against Long), and decides
+  whether it merges (with `legato-pair-delays` under it). docs/PLAYBACK_SETTINGS.md › Calibrated levels.
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
 

@@ -109,6 +109,7 @@ struct SndConfig {
       int libKey = -1;            // a library kit: the patch's key that plays the drum sound
                                   // (a sound library plays the trill / tremolo: SoundLib)
       const Automation::Lane* velocityLane = nullptr;    // the part's Velocity lane (MidiRenderer::velocityLanes)
+      double textLevel = 0.0;     // MuseScore 3's playback: the technique text's level, dB (MidiRenderer::levelOf)
 
       SndConfig() {}
       SndConfig(bool use, int c, DynamicsRenderMethod me) : useSND(use), controller(c), method(me) {}
@@ -385,15 +386,15 @@ static int ms3PitchBend(int p)
 
 static void playNote(EventMap* events, const Note* note, int channel, int pitch,
    int velo, int onTime, int offTime, int staffIdx, int layer = -1, int libPatch = 0,
-   const Automation::Lane* velocityLane = nullptr)
+   const Automation::Lane* velocityLane = nullptr, double textLevel = 0.0)
       {
       if (!note->play())
             return;
       // a note's own velocity (Inspector: user value / offset); MS4 mode (layer >= 0) plays none,
-      // as MuseScore 4 ignores MuseScore 3's note velocities when it reads a score; a marcato's level
-      // (articulation.h MarcatoLevel; MS4 mode: collectMeasureEventsMs4)
+      // as MuseScore 4 ignores MuseScore 3's note velocities when it reads a score; the articulations' and the
+      // technique text's level (articulation.h MarcatoLevel, MidiRenderer::levelOf; MS4 mode: collectMeasureEventsMs4)
       if (layer < 0)
-            velo = MarcatoLevel::velocity(note->customizeVelocity(velo), MarcatoLevel::of(note->chord()));
+            velo = MarcatoLevel::velocity(note->customizeVelocity(velo), MarcatoLevel::of(note->chord()) + textLevel);
       // a clip tab's Velocity lane (automation.h): the curve's value at the note's start (its chord's tick: score time, as
       // the lane's points), as Live plays the clip with it
       if (layer < 0 && velocityLane)
@@ -597,7 +598,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   }
 
             velo *= velocityMultiplier;
-            playNote(events, note, channel, p, qBound(1, velo, 127), on, off, staffIdx, -1, 0, config.velocityLane);
+            playNote(events, note, channel, p, qBound(1, velo, 127), on, off, staffIdx, -1, 0, config.velocityLane, config.textLevel);
             }
 
       // Single-note dynamics
@@ -951,6 +952,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         }
 
                   SndConfig config;       // dummy
+                  config.textLevel = textLevel(chord);
 
                   if (!graceNotesMerged(chord))
                         for (Chord*& c : chord->graceNotesBefore())
@@ -1047,6 +1049,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                   SndConfig config = SndConfig(useSND, controller, sctx.method);
                   auto vl = velocityLanes.find(st1->part());
                   config.velocityLane = vl != velocityLanes.end() ? &vl->second : nullptr;
+                  config.textLevel = textLevel(chord);
 
                   //
                   // Add normal note events
@@ -1233,26 +1236,39 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         events->registerChannel(libChannel);
                   const std::vector<const SoundLib::LibInstrument*> libPatches = li ? lp->patchesFor(li)
                                                                                      : std::vector<const SoundLib::LibInstrument*>();
-                  // a short (Spitfire: velocity, not CC1, sets its dynamics), listed in <Dynamics velocity>: its level on
-                  // the CC's scale, an accent's included (levelVelocity). -1: MS4's velocity
+                  // a technique on velocity (Spitfire's shorts, pizzicato ...: velocity, not CC1, sets its dynamics),
+                  // listed in <Dynamics velocity>. With [levels] calibrated and both measured (dynamics.json): the
+                  // velocity at which it is as loud as the part's held note at this dynamic, plus MS4's offset for its
+                  // articulations (marcato's too: SoundFont 2's law, 40 log10 of MS4's velocity over a plain note's).
+                  // Else its level on the CC's scale, an accent's share included (levelVelocity). -1: MS4's velocity
                   const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::dynamicsCalibration() : nullptr;
+                  const bool calibrated = cal && Playback::on("levels/calibrated", score);
+                  const SoundLib::Choice libHeld = calibrated ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
+                                                              : SoundLib::Choice();
                   auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
-                        if (!c)
+                        if (!c || !lp->velocityDynamics.contains(c.base))
                               return -1;
                         const int level = Ms4::expressionLevel(dynLevel);
+                        if (libHeld && level > 0) {
+                              const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
+                                                                         libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                         level, 40.0 * std::log10(r.share));
+                              if (v > 0)
+                                    return qBound(1, v, 127);
+                              }
                         // a marcato (also with staccato / tenuto) gets no accent share: it plays as a plain note
                         // of the dynamic (MS4's accent boost is MS4's; the library's marcato level is the
                         // library's own, plus the Marcato level offset, marcatoLevel)
                         const bool marcato = std::find(r.arts.begin(), r.arts.end(), Ms4::Art::Marcato) != r.arts.end();
-                        return lp->velocityDynamics.contains(c.base) ? (marcato ? level : r.levelVelocity) : -1;
+                        return marcato ? level : r.levelVelocity;
                         };
-                  // a marcato's level (articulation.h MarcatoLevel; 0: nothing changes). A note on velocity (velocity:
+                  // the chord's articulations' and its technique text's level (articulation.h MarcatoLevel, levelOf; 0: nothing changes). A note on velocity (velocity:
                   // libVelocity's): the velocity at which its articulation's measured curve is db louder or softer
                   // (SoundFont 2's law without one); else a level of its own on its route (libraryNoteLevels): softer
                   // by the expression CC along the held note's measured expression curve, louder by the dynamics CC
                   // along the articulation's own curve (the law without them)
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
-                        const double db = MarcatoLevel::of(note->chord());
+                        const double db = levelOf(note);
                         if (db == 0.0 || !c)
                               return;
                         const SoundLib::DynamicsCurve* own = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
@@ -1537,8 +1553,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         SndConfig config;
                         config.ms4 = true;
                         config.method = DynamicsRenderMethod::MS4;
-                        // (the built-in synthesizer: a marcato's level by SoundFont 2's law, MarcatoLevel::velocity)
-                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, MarcatoLevel::of(note->chord()));
+                        // (the built-in synthesizer: the level by SoundFont 2's law, MarcatoLevel::velocity)
+                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note));
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
                         config.ms4Offset = offset;
@@ -1671,7 +1687,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         playNote(events, note, noteChannel, libNote.key >= 0 ? libNote.key : qBound(0, note->ppitch() + pitchOffset, 127),
                                  qBound(1, libNote.velocity > 0 ? libNote.velocity
-                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, MarcatoLevel::of(note->chord())), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
+                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note)), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
                         };
 
                   renderAtFn = [&](const Note* n, const std::vector<Ms4::ArtRef>& a, int st, int len, int po, int) { renderAt(n, a, st, len, po); };
@@ -4449,6 +4465,17 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 //   MidiRenderer::updateState
 //---------------------------------------------------------
 
+double MidiRenderer::textLevel(const Chord* chord) const
+      {
+      auto t = partTexts.find(chord->part());
+      return t == partTexts.end() ? 0.0 : t->second.at(chord->tick().ticks()).db;
+      }
+
+double MidiRenderer::levelOf(const Note* note) const
+      {
+      return MarcatoLevel::of(note->chord()) + textLevel(note->chord());
+      }
+
 void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
@@ -4480,6 +4507,9 @@ void MidiRenderer::updateState()
                         if (l.target == Automation::VELOCITY_TARGET && !l.points.empty())
                               velocityLanes[pl.first] = l;
             libParts.clear();
+            partTexts.clear();
+            for (Part* part : score->parts())
+                  partTexts[part].build(score, part);
             libRoutes.clear();
             libTrackDelays.clear();
             libTrackRoutes.clear();
