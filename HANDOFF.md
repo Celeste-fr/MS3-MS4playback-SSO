@@ -183,6 +183,13 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
   +3.6 / -2.7, on +4.7 / +2.1 / +1.5. Open: at p the shipped curves are bumpy (Flute's 48 quieter than its 32), so
   straight-line reading misses by up to 5 dB; Horn at mf picks a lower velocity than off (staccato alternates samples,
   5 dB note to note). On a K-weighted peak, Flute Marcato on reads +4 .. +8.6 dB (may sound louder than the RMS says).
+  Since then (d8e7aa2001, 29aca978b8): calibration by ear (perceived curves), every held Long measured at 8 CC1 points.
+  Measured again 2026-10-08 (same VM and patches, kthost, 3 pitches each: Violins A3 / E5 / D6, Flute E4 / F5 / E6,
+  Horn F3 / B♭3 / F4 sounding; perceived peak, technique minus Long, 54 rows): off 6 .. 35 dB away (low pizz -34.7),
+  on median |2.95| dB, 41 of 54 within 5 dB. The rest is pitch: one velocity per part and dynamic for every pitch, the
+  curves measured at one test pitch. Worst on: Horn F4 staccato mf -10.4, Flute E4 staccato -9.9 / -9.5 / -7.9,
+  Horn F4 Marcato p +8.2, Violins D6 pizz +6.9 / +6.0, Violins A3 pizz f -7.4. A fix needs per-pitch level curves
+  (a new measurement: the check at several pitches); offered to the owner, not started.
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
 
