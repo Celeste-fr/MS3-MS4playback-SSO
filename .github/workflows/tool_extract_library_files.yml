@@ -46,7 +46,7 @@ jobs:
         copy tools\soundlibraries\extract_library_files.py dist\ || exit /b 1
         copy tools\soundlibraries\make_setups.py dist\ || exit /b 1
     - name: Upload
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v6
       with:
         name: ExtractLibraryFiles-win64
         path: dist\

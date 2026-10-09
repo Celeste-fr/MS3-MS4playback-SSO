@@ -39,7 +39,7 @@ jobs:
     - name: Restore the last build
       id: restore
       continue-on-error: true
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: msvc.build_x64
         key: msvc-build-x64-${{ github.ref_name }}-${{ github.sha }}
@@ -147,7 +147,7 @@ jobs:
     - name: Save the build
       if: ${{ success() }}
       continue-on-error: true
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: msvc.build_x64
         key: msvc-build-x64-${{ github.ref_name }}-${{ github.sha }}
@@ -162,7 +162,7 @@ jobs:
         "SHORT_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Append
     - name: Upload MuseScore (installed)
       if: ${{ always() }}
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v6
       with:
         name: MuseScore-soundlibrary-win64-${{ env.SHORT_SHA }}
         path: msvc.install_x64\
