@@ -60,11 +60,18 @@ detectors, a reading before the note starts dropped (the overlap in bar 7); pitc
 + the offset (median of at tempo - isolated). Violas 33-129 ms (median 66), Celli 7-161 (median 107). Rendered again
 with them (the same line): the violas' Rachm. notes arrive -5 ms (loudness, SD 10; harmonics +3, SD 56), were -78
 (SD 19) and -60 (SD 50); the other notes -10. Celli: loudness reads 2 of 120, harmonics +11 (SD 32), was -11 (SD 30).
+
+The arrivals (late_S_<code>.json: loudness, hlate_S_<code>.json: harmonics) come from onset_detect.py (moved there
+from the scratch fam11.py unchanged, 2026-10-09; its accuracy against synthetic notes: onset_detect_accuracy.json).
+--wavs <folder>: measure them here first from <folder>/fam_AQ_<code>.wav and fam_BQ_<code>.wav (the two instances'
+renders of meta_Q_<code>.json) and write them into --split.
 """
 import argparse
 import json
 import os
 import statistics
+
+import onset_detect
 
 PATCH = {'vln1': 'Violins 1', 'vln2': 'Violins 2', 'vla': 'Violas', 'vc': 'Celli', 'cb': 'Basses', 'fl': 'Flute Solo', 'ob': 'Oboe Solo',
          'cl': 'Clarinet Solo', 'bn': 'Bassoon Solo', 'hn': 'Horn Solo', 'tpt': 'Trumpet Solo',
@@ -87,6 +94,8 @@ def main():
                     help='--split is a run at the score\'s own tempo: each pitch takes the median true onset of the '
                          'run\'s notes within --smooth semitones (late_S and, when there, hlate_S: both detectors; a '
                          'reading before the note starts is dropped); pitches without: isolated + offset')
+    ap.add_argument('--wavs', help='folder with fam_AQ_<code>.wav / fam_BQ_<code>.wav: measure late_S / hlate_S '
+                                   'into --split with onset_detect.py first')
     a = ap.parse_args()
     fit, shift, name = SOUNDS[a.sound]
     out_path = a.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
@@ -98,6 +107,11 @@ def main():
             continue
         table = {int(p): v['median'] for p, v in iso[code].items()}
         table = {p: statistics.median(table[q] for q in table if abs(q - p) <= a.smooth) for p in table}
+        if a.wavs:
+            args = (os.path.join(a.split, f'meta_Q_{code}.json'), os.path.join(a.wavs, f'fam_AQ_{code}.wav'),
+                    os.path.join(a.wavs, f'fam_BQ_{code}.wav'))
+            onset_detect.measure_files('loudness', *args, os.path.join(a.split, f'late_S_{code}.json'))
+            onset_detect.measure_files('harmonics', *args, os.path.join(a.split, f'hlate_S_{code}.json'))
         meta = {str(x['i']): x for x in json.load(open(os.path.join(a.split, f'meta_Q_{code}.json')))}
         late = json.load(open(os.path.join(a.split, f'late_S_{code}.json')))
         if code in shift:
