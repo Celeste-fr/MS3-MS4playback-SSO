@@ -312,7 +312,7 @@ add_library(mscoreapp STATIC
       migration/handlers/styledefaultshandler.cpp migration/handlers/lelandstylehandler.cpp
       migration/handlers/edwinstylehandler.cpp
       soundlibraryhost.cpp soundlibraryhost.h playbacksettingswidget.cpp playbacksettingswidget.h soundlibrarymemory.cpp soundlibraryloadtimes.cpp soundlibraryloadtimes.h
-      liveintegration.cpp liveintegration.h liveclips.cpp liveclips.h livesetexport.cpp livesetexport.h
+      liveintegration.cpp liveintegration.h liveclips.cpp liveclips.h livesetexport.cpp livesetexport.h livesetpath.cpp
       liveequivalence.cpp liveequivalence.h
       liveclipmodel.cpp liveclipmodel.h liveclipedit.cpp liveclipedit.h cliptempo.cpp cliptempo.h livemidiout.cpp livemidiout.h livehelpers.cpp livehelpers.h
       soundlibrarycheck.cpp soundlibrarycheck.h

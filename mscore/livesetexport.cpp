@@ -507,10 +507,26 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       QString folder = score->fileInfo()->absolutePath();
       if (folder.isEmpty() || !QFileInfo(folder).isDir())
             folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-      const QString path = QFileDialog::getSaveFileName(parent, title, folder + "/" + name + ".als",
-                                                        QObject::tr("Ableton Live Set") + " (*.als)");
+      QString path = QFileDialog::getSaveFileName(parent, title, folder + "/" + name + ".als",
+                                                  QObject::tr("Ableton Live Set") + " (*.als)");
       if (path.isEmpty())
             return;
+      if (!onlyMissing) {
+            // like Live's Save As: the set goes into a project folder "<name> Project" with its "Ableton Project Info"
+            bool createInfo = false;
+            const QString target = liveProjectSetPath(path, &createInfo);
+            if (target != path && QFileInfo::exists(target)
+                && QMessageBox::question(parent, title, QObject::tr("%1 already exists. Replace it?")
+                                         .arg(QDir::toNativeSeparators(target))) != QMessageBox::Yes)
+                  return;
+            const QString projectDir = QFileInfo(target).absolutePath();
+            if (createInfo && !QDir().mkpath(projectDir + "/Ableton Project Info")) {
+                  QMessageBox::warning(parent, title, QObject::tr("The folder %1 could not be created.")
+                                       .arg(QDir::toNativeSeparators(projectDir + "/Ableton Project Info")));
+                  return;
+                  }
+            path = target;
+            }
       QApplication::setOverrideCursor(Qt::WaitCursor);
       const bool written = LiveSetWriter::write(path, plan.spec, &error);
       QApplication::restoreOverrideCursor();
@@ -554,6 +570,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
                                                                    : QObject::tr("The Live Set was written."),
                       QMessageBox::Ok, parent);
       QString info = QObject::tr("%n track(s).", "", int(plan.spec.tracks.size()));
+      info += " " + QObject::tr("Written in %1.").arg(QDir::toNativeSeparators(QFileInfo(path).absolutePath()));
       if (!plan.left.isEmpty())
             info += "\n\n" + QObject::tr("Left out:") + "\n" + plan.left.join("\n");
       if (!plan.notes.isEmpty())
