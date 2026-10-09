@@ -8,9 +8,10 @@ a section there when you need the background of that topic. Commit messages desc
 ## Before a build goes to the owner (2026-10-09)
 
 Run the playback audit on *Whence 12-TET* with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
-with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every TIMING fail and EARLY > NOTE left must be
+with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every ARRIVAL fail and CAPPED note left must be
 named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
-LEVEL STEP has no threshold yet: the owner decides one from the values.
+LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
+Green 1977) the owner hasn't approved yet.
 
 ## No Performance patches (2026-10-06)
 

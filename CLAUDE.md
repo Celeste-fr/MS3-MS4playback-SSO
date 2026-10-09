@@ -213,8 +213,10 @@ of these.
 **Playback verification** (VERIFY.md; checks in `audio/vst3/playbackverify.h`): `--verify-playback`,
 `--verify-audio`, `tools/playbackverify/read_verify_report.py`, faults via `MS_VERIFY_FAULT`.
 **Playback audit** (VERIFY.md › Playback audit; `libmscore/playbackaudit.*`, `tst_playbackaudit`): the rendered library
-events of a whole score checked for overlaps on a route, unmeasured swapped / early techniques, early starts longer than
-the note, timing against neighbours (Rasch 1979: > 50 ms fails) and level steps under a slur (values only). The renderer
+events of a whole score checked against the map's own onsets (not the real sound) for overlaps on a route, unmeasured
+swapped / early techniques or no onset, capped early starts (the cut), predicted arrival against neighbours (sent +
+onset - written; Rasch 1979: > 50 ms fails) and level steps under a slur (values; proposed threshold 0.69 dB, Jesteadt,
+Wier & Green 1977, owner to approve). The renderer
 reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (Recommended) before any
 build goes to the owner.**
 
@@ -270,7 +272,9 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_soundlibrary`: 69 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_playbackaudit`: 4 passed, 1 skipped (2026-10-09; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md › Playback audit).
+- `tst_playbackaudit`: 5 passed, 1 skipped (2026-10-09, cappedArrival; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
+  Playback audit). Whence 12-TET, Recommended (2026-10-09): OVERLAP 0, UNMEASURED 7, CAPPED 1 and ARRIVAL 1 fail (the
+  Celli's first note, bar 1, can't start early at time 0: 144 ms late), LEVEL STEP 28 (24 over the proposed DL).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 21 passed (2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's

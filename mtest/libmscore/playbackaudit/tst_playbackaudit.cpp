@@ -15,6 +15,7 @@
 
 #include <QtTest/QtTest>
 #include <QTemporaryFile>
+#include <cmath>
 
 #include "audio/midi/event.h"
 #include "libmscore/playbackaudit.h"
@@ -46,6 +47,7 @@ class TestPlaybackAudit : public QObject, public MTest
             }
       void overlapDetected();
       void swapFindings();
+      void cappedArrival();
       void auditScore();
       };
 
@@ -167,7 +169,8 @@ void TestPlaybackAudit::overlapDetected()
 //    slurred sixteenths swapped to a quicker technique (Choice::swapped, [slurs] quick 2) whose onset (150 ms) is
 //    longer than the note (136 ms), then a half note on the held one (onset 30 ms) under the same slur
 //    (swap-violas.musicxml, as Whence bars 9-12's violas): UNMEASURED per instrument while the fit files don't list
-//    it, EARLY > NOTE, a TIMING fail at the half note (~120 ms off the note before), a LEVEL STEP value (quickLevel)
+//    it; every early start applied in full, so no CAPPED and no ARRIVAL step (the sent times differ by 120 ms, the
+//    predicted arrivals don't); a LEVEL STEP value (quickLevel)
 //---------------------------------------------------------
 
 void TestPlaybackAudit::swapFindings()
@@ -209,15 +212,8 @@ void TestPlaybackAudit::swapFindings()
                   else
                         QCOMPARE(f.technique, QString("Long"));
                   }
-      QVERIFY2(r.count(PlaybackAudit::Kind::EARLY_LONG, PlaybackAudit::Severity::WARN) >= 1, qPrintable(text));
-      bool halfNote = false;
-      for (const PlaybackAudit::Finding& f : r.findings)
-            if (f.kind == PlaybackAudit::Kind::TIMING && f.bar == 2 && f.pitch == 64) {
-                  halfNote = true;
-                  QCOMPARE(f.severity, PlaybackAudit::Severity::FAIL);
-                  QVERIFY2(f.value > 100 && f.value < 130, qPrintable(f.text));      // 150 - 30 ms
-                  }
-      QVERIFY2(halfNote, qPrintable(text));
+      QVERIFY2(r.count(PlaybackAudit::Kind::CAPPED) == 0, qPrintable(text));
+      QVERIFY2(r.count(PlaybackAudit::Kind::ARRIVAL) == 0, qPrintable(text));
       bool step = false;
       for (const PlaybackAudit::Finding& f : r.findings)
             if (f.kind == PlaybackAudit::Kind::LEVEL_STEP && f.pitch == 64) {
@@ -234,6 +230,76 @@ void TestPlaybackAudit::swapFindings()
       m.levelFits["Long (Rachm.)"].insert("Violas");
       r = PlaybackAudit::audit(score, events, trace, m);
       QVERIFY2(r.count(PlaybackAudit::Kind::UNMEASURED) == 0, qPrintable(r.text()));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   cappedArrival
+//    swap-violas.musicxml with the held technique's onset (300 ms) longer than the sixteenth before it plus the
+//    swapped one's (10 ms): the half note's early start is cut where the note before on its patch keeps [legato]
+//    keepMs, so it arrives late by the cut: CAPPED with the cut, an ARRIVAL fail of that much against the sixteenth.
+//    Without an onset for the held technique: UNMEASURED ("no onset"), no ARRIVAL number
+//---------------------------------------------------------
+
+void TestPlaybackAudit::cappedArrival()
+      {
+      recommended({ { "levels/calibrated", "0" } });
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violas' ids='viola'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='300' peak='800'/>"
+         "<Articulation name='Long (Rachm.)' value='16' techniques='long legato' modifiers='espressivo' onset='10' peak='800'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "swap-violas.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;
+      PlaybackAudit::render(score, &events, &trace);
+      PlaybackAudit::Report r = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+      QString text = r.text();
+      double cut = -1;
+      for (const PlaybackAudit::Finding& f : r.findings)
+            if (f.kind == PlaybackAudit::Kind::CAPPED && f.bar == 2 && f.pitch == 64) {
+                  cut = f.value;
+                  QVERIFY2(f.text.contains("keeps [legato] keepMs"), qPrintable(f.text));
+                  }
+      // 300 meant; the sixteenth before (136 ms as written) is sent 10 ms early and keeps keepMs from there: the half
+      // may start keepMs after it, 136 + 10 - keepMs early
+      const double expectCut = 300 - (60000.0 / 110 / 4 + 10 - r.keepMs);
+      QVERIFY2(std::abs(cut - expectCut) < 2, qPrintable(text));
+      bool late = false;
+      for (const PlaybackAudit::Finding& f : r.findings)
+            if (f.kind == PlaybackAudit::Kind::ARRIVAL && f.bar == 2 && f.pitch == 64) {
+                  late = true;
+                  QCOMPARE(f.severity, PlaybackAudit::Severity::FAIL);
+                  QVERIFY2(std::abs(f.value - expectCut) < 2, qPrintable(f.text));
+                  }
+      QVERIFY2(late, qPrintable(text));
+
+      // no onset for the held technique: its arrival unknown
+      lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violas' ids='viola'>"
+         "<Articulation name='Long' value='1' techniques='long legato' peak='800'/>"
+         "<Articulation name='Long (Rachm.)' value='16' techniques='long legato' modifiers='espressivo' onset='10' peak='800'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      events.clear();
+      trace.clear();
+      PlaybackAudit::render(score, &events, &trace);
+      r = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+      text = r.text();
+      bool none = false;
+      for (const PlaybackAudit::Finding& f : r.findings) {
+            none |= f.kind == PlaybackAudit::Kind::UNMEASURED && f.technique == "Long" && f.text.contains("no onset");
+            QVERIFY2(!(f.kind == PlaybackAudit::Kind::ARRIVAL && f.bar == 2), qPrintable(text));
+            }
+      QVERIFY2(none, qPrintable(text));
       delete score;
       }
 
@@ -295,8 +361,8 @@ void TestPlaybackAudit::auditScore()
             }
       else
             qInfo("%s", qPrintable(text));
-      for (PlaybackAudit::Kind k : { PlaybackAudit::Kind::OVERLAP, PlaybackAudit::Kind::UNMEASURED, PlaybackAudit::Kind::EARLY_LONG,
-                                     PlaybackAudit::Kind::TIMING, PlaybackAudit::Kind::LEVEL_STEP })
+      for (PlaybackAudit::Kind k : { PlaybackAudit::Kind::OVERLAP, PlaybackAudit::Kind::UNMEASURED, PlaybackAudit::Kind::CAPPED,
+                                     PlaybackAudit::Kind::ARRIVAL, PlaybackAudit::Kind::LEVEL_STEP })
             qInfo("%s: %d fail, %d warn, %d info", PlaybackAudit::kindName(k), r.count(k, PlaybackAudit::Severity::FAIL),
                   r.count(k, PlaybackAudit::Severity::WARN), r.count(k, PlaybackAudit::Severity::INFO));
       const int overlaps = r.count(PlaybackAudit::Kind::OVERLAP);
