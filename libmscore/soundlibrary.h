@@ -260,6 +260,13 @@ struct Choice {
       const Articulation* articulation { nullptr };
       QString base;
       int patch { 0 };                    // of the patches chosen from (0: the main patch)
+      // the articulation (and its patch) whose onset times the note's early start: [slurs] quick's swap keeps the held
+      // one's, so a slurred group stays on the beat of the notes around it (the owner, 2026-10-08, quick 2: "the
+      // notes don't consistently follow the same beat across measures"; Long (Rachm.) 87.5 ms early against Long's 54.5)
+      const Articulation* timing { nullptr };
+      int timingPatch { 0 };
+      const Articulation* onsetArticulation() const { return timing ? timing : articulation; }
+      int onsetPatch() const { return timing ? timingPatch : patch; }
       bool sampledOrnament() const;       // a trill or tremolo sample: play the note once
       explicit operator bool() const { return articulation; }
       };

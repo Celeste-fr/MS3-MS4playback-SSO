@@ -600,6 +600,21 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(slurred("Violas", 0.8, 1), QString("Violas: Long"));
       QCOMPARE(slurred("Violas", 0.7, 1), QString("Violas: Short 1.0"));
       QCOMPARE(slurred("Violins 1", 0.136, 1, { "muted" }), QString("Violins 1: Long CS"));
+      // the swap keeps the held technique's onset for the early start (Choice::timing): the slurred group on the beat
+      // of the Longs around it (Rachm.'s own median is 87.5 ms against Long's 54.5)
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.name == "Violins 1") {
+                  SoundLib::Want w { { "legato", "long" }, {} };
+                  w.seconds = 0.136;
+                  w.slurQuick = 2;
+                  const SoundLib::Choice c = SoundLib::choose(li.patches(), w);
+                  QVERIFY(c && c.timing);
+                  QCOMPARE(c.articulation->name, QString("Long (Rachm.)"));
+                  QCOMPARE(c.onsetArticulation()->name, QString("Long"));
+                  QVERIFY(c.onsetArticulation()->onsetMedian() != c.articulation->onsetMedian());
+                  w.slurQuick = 0;
+                  QVERIFY(!SoundLib::choose(li.patches(), w).timing);
+                  }
       {
             std::vector<Ms4::ArtRef> slur { { A::Legato, false } };
             Playback::setIniValuesForTest({ { "slurs/quick", "1" } });

@@ -696,8 +696,12 @@ static Choice chooseSlurred(const std::vector<const LibInstrument*>& patches, co
                   bool fits = true;
                   for (const QString& m : a.modifiers)
                         fits &= modifiers.contains(m);
-                  if (fits && a.modifiers.size() == modifiers.size())
-                        return Choice { &a, base, p };
+                  if (fits && a.modifiers.size() == modifiers.size()) {
+                        Choice c { &a, base, p };
+                        c.timing = held.articulation;     // (early by the held one's onset: Choice::timing)
+                        c.timingPatch = held.patch;
+                        return c;
+                        }
                   }
             }
       return held;
