@@ -354,7 +354,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const SoundLib::Choice& c = p->trace->choice;
             const SoundLib::Articulation* a = c.articulation;
             return Playback::adjust("heldNotes.onset", p->trace->patch->name, a->name, pitch,
-                                    (byPitchAll || c.swapped) ? a->onsetAt(pitch) : a->onsetMedian());
+                                    byPitchAll ? a->onsetAt(pitch) : a->onsetMedian());
             };
       std::map<const Note*, std::vector<int>> writtenOf;         // a note's rendered starts (sub-notes after the first)
       for (const auto& up : played)

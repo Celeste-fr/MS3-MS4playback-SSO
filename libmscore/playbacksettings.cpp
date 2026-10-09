@@ -54,7 +54,8 @@ static const std::vector<Definition> DEFINITIONS = {
       // (the owner, 2026-10-08: "make even early the new recommended")
       { "heldNotes/byPitch", 0, 0, 1, "on/off",
         "0: every note of an articulation by the median of its measured onsets (one shift: a run keeps its written "
-        "spacing); 1: each by its pitch's measured onset (attacks on the beat, a run's spacing uneven)", true },
+        "spacing), slurred notes [slurs] quick swaps too; 1: each by its pitch's measured onset (attacks on the beat, a "
+        "run's spacing uneven)", true },
       // [shorts]
       { "shorts/byMeantLength", 1, 0, 1, "on/off",
         "1: a short with a measured from= is chosen by how long the note is meant to sound (written length times the factors below); 0: by its written length", true },

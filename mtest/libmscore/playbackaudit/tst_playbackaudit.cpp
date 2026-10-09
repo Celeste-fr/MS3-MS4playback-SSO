@@ -47,6 +47,7 @@ class TestPlaybackAudit : public QObject, public MTest
             }
       void overlapDetected();
       void swapFindings();
+      void swapByPitch();
       void cappedArrival();
       void auditScore();
       };
@@ -161,6 +162,65 @@ void TestPlaybackAudit::overlapDetected()
       for (const PlaybackAudit::Finding& f : r.findings)
             again |= f.kind == PlaybackAudit::Kind::OVERLAP && f.text.contains("struck again");
       QVERIFY2(again, qPrintable(r.text()));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   swapByPitch
+//    slurred notes [slurs] quick swaps follow [heldNotes] byPitch (the owner, 2026-10-09): 0 every one early by the
+//    swapped technique's median onset (an even run), 1 each by its pitch's; the audit predicts the same starts
+//---------------------------------------------------------
+
+void TestPlaybackAudit::swapByPitch()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violas' ids='viola'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='30' peak='800'/>"
+         "<Articulation name='Long (Rachm.)' value='16' techniques='long legato' modifiers='espressivo' peak='800'"
+         " onset='57:20 59:40 60:60 62:80 64:100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "swap-violas.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      // how early each swapped note is sent (written tick less sent tick), by pitch
+      auto early = [score](const char* byPitch) {
+            recommended({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", byPitch } });
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            PlaybackAudit::render(score, &events, &trace);
+            std::map<int, int> e;
+            for (const MidiRenderer::LibTrace& t : trace) {
+                  if (!t.choice.swapped)
+                        continue;
+                  const int pitch = t.note->ppitch();
+                  for (const auto& te : events)
+                        if (te.second.type() == ME_NOTEON && te.second.velo() > 0 && te.second.pitch() == pitch) {
+                              e[pitch] = t.utick - te.first;
+                              break;
+                              }
+                  }
+            PlaybackAudit::Report r = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+            if (r.count(PlaybackAudit::Kind::CAPPED) || r.count(PlaybackAudit::Kind::ARRIVAL))
+                  qWarning() << r.text();
+            return e;
+            };
+      const std::map<int, int> even = early("0");
+      const std::map<int, int> each = early("1");
+      QCOMPARE(even.size(), size_t(4));
+      QCOMPARE(each.size(), size_t(4));
+      // 0: the median, 60 ms, for every pitch
+      for (const auto& p : even)
+            QVERIFY2(qAbs(p.second - even.at(60)) <= 1, qPrintable(QString("%1: %2").arg(p.first).arg(p.second)));
+      QVERIFY(even.at(60) > 0);
+      // 1: C4's own 60 ms as before, the others 20, 40 and 80 ms: in order of pitch, A3's a third of C4's
+      QVERIFY(qAbs(each.at(60) - even.at(60)) <= 1);
+      QVERIFY(each.at(57) < each.at(59) && each.at(59) < each.at(60) && each.at(60) < each.at(62));
+      QVERIFY(qAbs(3 * each.at(57) - each.at(60)) <= 3);
+      Playback::setIniValuesForTest({});
       delete score;
       }
 

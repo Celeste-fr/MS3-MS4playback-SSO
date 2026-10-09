@@ -265,9 +265,9 @@ struct Choice {
       const Articulation* articulation { nullptr };
       QString base;
       int patch { 0 };                    // of the patches chosen from (0: the main patch)
-      // [slurs] quick swapped the held articulation for this one: early by its own onset at each pitch whatever
-      // [heldNotes] byPitch says (its per-pitch fit, sso_rachm_onset_fit.json: Whence's violins SD 10.8 ms against 22.0
-      // on its median, 21.6 on Long's), at the held one's level with [slurs] quickLevel (Articulation::quickLevelAt)
+      // [slurs] quick swapped the held articulation for this one: early by its own onset (its median, or with
+      // [heldNotes] byPitch 1 at each pitch: its per-pitch fit, sso_rachm_onset_fit.json), at the held one's level with
+      // [slurs] quickLevel (Articulation::quickLevelAt)
       bool swapped { false };
       bool sampledOrnament() const;       // a trill or tremolo sample: play the note once
       explicit operator bool() const { return articulation; }

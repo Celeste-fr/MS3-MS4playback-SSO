@@ -1614,10 +1614,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // measured technique, shorts too: pizzicato 3, staccato 8, marcato 33, Short 1.0 113 ms
                                     // median): early by its onset, the
                                     // chord's latest so that its notes start together; [heldNotes] byPitch 0: the patch's
-                                    // median onset for every pitch (one shift, a run's spacing as written); a [slurs]
-                                    // quick swap always by pitch (Choice::swapped)
+                                    // median onset for every pitch (one shift, a run's spacing as written), a [slurs]
+                                    // quick swap (Choice::swapped) too (the owner, 2026-10-09: per-pitch Rachm. made
+                                    // Whence's first bars uneven); 1: each by its pitch's
                                     const SoundLib::Articulation* oa = libChoice.articulation;
-                                    const bool byPitch = libOnsetByPitch || libChoice.swapped;
+                                    const bool byPitch = libOnsetByPitch;
                                     double onsetMs = 0;
                                     for (const Note* n : note->chord()->notes())
                                           if (n->play())

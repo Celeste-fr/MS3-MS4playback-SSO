@@ -602,7 +602,8 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(slurred("Violas", 0.8, 1), QString("Violas: Long"));
       QCOMPARE(slurred("Violas", 0.7, 1), QString("Violas: Short 1.0"));
       QCOMPARE(slurred("Violins 1", 0.136, 1, { "muted" }), QString("Violins 1: Long CS"));
-      // the swap is marked (Choice::swapped): early by Rachm.'s own onset at each pitch (its fit, sso_rachm_onset_fit.json)
+      // the swap is marked (Choice::swapped): early by Rachm.'s own onset (its median; byPitch 1: its fit at each pitch,
+      // sso_rachm_onset_fit.json; tst_playbackaudit::swapByPitch)
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (li.name == "Violins 1") {
                   SoundLib::Want w { { "legato", "long" }, {} };

@@ -120,7 +120,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   quiet; `[levels] calibrated`, on in Recommended, off in Library default): a technique on velocity plays as loud as
   the part's Long at the same dynamic (measured curves, by ear: perceived loudness where measured), plus MS4.7.5's offset for its articulations (marcato's too),
   plus the Inspector's levels (`libVelocity`, `SoundLib::calibratedVelocity`; docs/PLAYBACK_SETTINGS.md › Calibrated
-  levels); techniques on CC1 keep the library's balance. `[slurs] quick` (2 in Recommended, the default; 0 in Library default) plays short slurred notes on a quicker technique (Long (Rachm.)), early by its own onset at each pitch (`Choice::swapped`, `sso_rachm_onset_fit.json`) and, with `[slurs] quickLevel` (1 in Recommended, the default), as loud as the held one (map `quickLevel`: perceived, `sso_rachm_levels.json`; `quickDb`). Exception: notes start
+  levels); techniques on CC1 keep the library's balance. `[slurs] quick` (2 in Recommended, the default; 0 in Library default) plays short slurred notes on a quicker technique (Long (Rachm.)), early by its own onset, by `[heldNotes] byPitch` as every note (since 2026-10-09; `Choice::swapped`, `sso_rachm_onset_fit.json`) and, with `[slurs] quickLevel` (1 in Recommended, the default), as loud as the held one (map `quickLevel`: perceived, `sso_rachm_levels.json`; `quickDb`). Exception: notes start
   early by their articulation's median measured onset (held notes, and since 2026-10-08 every measured technique, shorts too) (`[heldNotes] byPitch` 1: each by its pitch's)
   (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
   players; `[heldNotes] early` 0 plays them as written). **No Performance patches** (the owner, 2026-10-06:
@@ -275,7 +275,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_soundlibrary`: 70 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_playbackaudit`: 5 passed, 1 skipped (2026-10-09, cappedArrival; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
+- `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
   Playback audit). Whence 12-TET, Recommended (2026-10-09): OVERLAP 0, UNMEASURED 7, CAPPED 1 and ARRIVAL 1 fail (the
   Celli's first note, bar 1, can't start early at time 0: 144 ms late), LEVEL STEP 28 (24 over the proposed DL).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
