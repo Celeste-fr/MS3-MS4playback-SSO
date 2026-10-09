@@ -72,10 +72,11 @@ static const std::vector<Definition> DEFINITIONS = {
       // (the owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured on the Windows VM, perceived peaks at
       // mf held 100-273 ms: Violins 1 about 6 dB under Long, Violins 2 about 3; by pitch and length, not one number;
       // then, at 1: "not the correct volume. violin 1 in bar 5 now sounds really loud relative to the viola and cello":
-      // off until re-measured)
-      { "slurs/quickLevel", 0, 0, 1, "on/off",
+      // re-measured in the passage (in-context levels, 0.6-2.1 dB); 2026-10-09, on build 37882502550: "1 is the right
+      // balance, make it the recommended preset")
+      { "slurs/quickLevel", 1, 0, 1, "on/off",
         "1: a note [slurs] quick swaps plays as loud as its held technique would at its pitch and written length (map "
-        "quickLevel: perceived peaks at mf, held 100-273 ms); 0: at the swapped technique's own level", true },
+        "quickLevel: the boost that matches Long in the passage, per register); 0: at the swapped technique's own level", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -305,9 +306,10 @@ const std::vector<Preset>& presets()
       static const std::vector<Preset> P = {
             // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent"; 2026-10-08: "make
             // even early the new recommended": early, each patch by its median onset)
-            // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel off: its levels are re-measured)
+            // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
+            // "1 is the right balance, make it the recommended preset")
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
-                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 0 } } },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 } } },
             };
       return P;
