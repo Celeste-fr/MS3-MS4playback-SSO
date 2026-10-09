@@ -1267,15 +1267,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // (SoundFont 2's law without one); else a level of its own on its route (libraryNoteLevels): softer
                   // by the expression CC along the held note's measured expression curve, louder by the dynamics CC
                   // along the articulation's own curve (the law without them)
-                  // a note [slurs] quick swapped (Choice::timing): the held technique's measured level at its pitch and
-                  // written length less the swapped one's ([slurs] quickLevel; 0 without both measured)
+                  // a note [slurs] quick swapped: as loud as the held technique at its pitch and written length
+                  // ([slurs] quickLevel; the map's quickLevel, 0 where not measured)
                   const bool quickLevel = Playback::on("slurs/quickLevel", score);
                   auto quickDb = [&](const Note* note, const SoundLib::Choice& c) {
-                        if (!quickLevel || !c || !c.timing)
-                              return 0.0;
-                        const double ms = SoundLib::noteSeconds(note) * 1000;
-                        const double db = c.timing->levelAt(note->ppitch(), ms) - c.articulation->levelAt(note->ppitch(), ms);
-                        return std::isnan(db) ? 0.0 : db;
+                        return quickLevel && c && c.swapped
+                               ? c.articulation->quickLevelAt(note->ppitch(), SoundLib::noteSeconds(note) * 1000) : 0.0;
                         };
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
                         const double db = levelOf(note) + quickDb(note, c);
@@ -1604,22 +1601,22 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                                          lenBefore);
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
-                                       && (libChoice.onsetArticulation()->onsetMs > 0
-                                           || !libChoice.onsetArticulation()->onsets.empty())) {
+                                       && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
                                     // a note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
                                     // the note-on, sul tasto / flautando / harmonics 175-440 ms; since 2026-10-08 every
                                     // measured technique, shorts too: pizzicato 3, staccato 8, marcato 33, Short 1.0 113 ms
                                     // median): early by its onset, the
                                     // chord's latest so that its notes start together; [heldNotes] byPitch 0: the patch's
                                     // median onset for every pitch (one shift, a run's spacing as written); a [slurs]
-                                    // quick swap by the held technique's (Choice::timing)
-                                    const SoundLib::Articulation* oa = libChoice.onsetArticulation();
+                                    // quick swap always by pitch (Choice::swapped)
+                                    const SoundLib::Articulation* oa = libChoice.articulation;
+                                    const bool byPitch = libOnsetByPitch || libChoice.swapped;
                                     double onsetMs = 0;
                                     for (const Note* n : note->chord()->notes())
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
-                                                                   libPatches[libChoice.onsetPatch()]->name, oa->name,
-                                                                   n->ppitch(), libOnsetByPitch ? oa->onsetAt(n->ppitch())
+                                                                   libPatches[libChoice.patch]->name, oa->name,
+                                                                   n->ppitch(), byPitch ? oa->onsetAt(n->ppitch())
                                                                                                 : oa->onsetMedian()));
                                     const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
                                     const double earlyMs = onsetMs * libOnsetEarly / 100.0;

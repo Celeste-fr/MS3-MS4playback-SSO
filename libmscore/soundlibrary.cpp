@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
-#include <limits>
 #include <mutex>
 #include <set>
 
@@ -200,31 +199,31 @@ double Articulation::onsetMedian() const
       return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
       }
 
-double Articulation::levelAt(int pitch, double ms) const
+double Articulation::quickLevelAt(int pitch, double ms) const
       {
       // each measured pitch's level at ms, then between the two pitches around the note
       std::vector<std::pair<int, double>> byPitch;
       const double x = std::log(qMax(ms, 1.0));
-      for (size_t i = 0; i < lengthLevels.size(); ) {
+      for (size_t i = 0; i < quickLevels.size(); ) {
             size_t j = i;
-            while (j < lengthLevels.size() && lengthLevels[j].pitch == lengthLevels[i].pitch)
+            while (j < quickLevels.size() && quickLevels[j].pitch == quickLevels[i].pitch)
                   ++j;
-            double db = lengthLevels[i].db;
+            double db = quickLevels[i].db;
             for (size_t k = i; k < j; ++k) {
-                  if (x <= std::log(lengthLevels[k].ms) || k + 1 == j) {
-                        db = lengthLevels[k].db;
-                        if (k > i && x < std::log(lengthLevels[k].ms)) {
-                              const double x0 = std::log(lengthLevels[k - 1].ms), x1 = std::log(lengthLevels[k].ms);
-                              db = lengthLevels[k - 1].db + (lengthLevels[k].db - lengthLevels[k - 1].db) * (x - x0) / (x1 - x0);
+                  if (x <= std::log(quickLevels[k].ms) || k + 1 == j) {
+                        db = quickLevels[k].db;
+                        if (k > i && x < std::log(quickLevels[k].ms)) {
+                              const double x0 = std::log(quickLevels[k - 1].ms), x1 = std::log(quickLevels[k].ms);
+                              db = quickLevels[k - 1].db + (quickLevels[k].db - quickLevels[k - 1].db) * (x - x0) / (x1 - x0);
                               }
                         break;
                         }
                   }
-            byPitch.push_back({ lengthLevels[i].pitch, db });
+            byPitch.push_back({ quickLevels[i].pitch, db });
             i = j;
             }
       if (byPitch.empty())
-            return std::numeric_limits<double>::quiet_NaN();
+            return 0.0;
       if (pitch <= byPitch.front().first)
             return byPitch.front().second;
       for (size_t i = 1; i < byPitch.size(); ++i)
@@ -274,16 +273,16 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.fromSeconds = a.hasAttribute("from") ? a.value("from").toDouble() : -1;
       art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
       art.peakMs = a.hasAttribute("peak") ? a.value("peak").toDouble() : -1;
-      for (const QString& t : a.value("lengthLevels").toString().split(' ', QString::SkipEmptyParts)) {
+      for (const QString& t : a.value("quickLevel").toString().split(' ', QString::SkipEmptyParts)) {
             const int slash = t.indexOf('/'), colon = t.indexOf(':');
             bool ok1 = false, ok2 = false, ok3 = false;
-            const Articulation::LengthLevel l { t.left(slash).toInt(&ok1), t.mid(slash + 1, colon - slash - 1).toDouble(&ok2),
+            const Articulation::QuickLevel l { t.left(slash).toInt(&ok1), t.mid(slash + 1, colon - slash - 1).toDouble(&ok2),
                                                 t.mid(colon + 1).toDouble(&ok3) };
             if (slash < 0 || colon < slash || !ok1 || !ok2 || !ok3 || l.ms <= 0)
                   return false;
-            art.lengthLevels.push_back(l);
+            art.quickLevels.push_back(l);
             }
-      std::sort(art.lengthLevels.begin(), art.lengthLevels.end(), [](const Articulation::LengthLevel& x, const Articulation::LengthLevel& y) {
+      std::sort(art.quickLevels.begin(), art.quickLevels.end(), [](const Articulation::QuickLevel& x, const Articulation::QuickLevel& y) {
             return x.pitch != y.pitch ? x.pitch < y.pitch : x.ms < y.ms;
             });
       art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
@@ -747,8 +746,7 @@ static Choice chooseSlurred(const std::vector<const LibInstrument*>& patches, co
                         fits &= modifiers.contains(m);
                   if (fits && a.modifiers.size() == modifiers.size()) {
                         Choice c { &a, base, p };
-                        c.timing = held.articulation;     // (early by the held one's onset: Choice::timing)
-                        c.timingPatch = held.patch;
+                        c.swapped = true;
                         return c;
                         }
                   }

@@ -120,7 +120,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   quiet; `[levels] calibrated`, on in Recommended, off in Library default): a technique on velocity plays as loud as
   the part's Long at the same dynamic (measured curves, by ear: perceived loudness where measured), plus MS4.7.5's offset for its articulations (marcato's too),
   plus the Inspector's levels (`libVelocity`, `SoundLib::calibratedVelocity`; docs/PLAYBACK_SETTINGS.md › Calibrated
-  levels); techniques on CC1 keep the library's balance. `[slurs] quick` (off by default) plays short slurred notes on a quicker technique (Long (Rachm.)), early by the held one's onset (`Choice::timing`) and, with `[slurs] quickLevel`, at the held one's measured level (map `lengthLevels`, `quickDb`). Exception: notes start
+  levels); techniques on CC1 keep the library's balance. `[slurs] quick` (off by default) plays short slurred notes on a quicker technique (Long (Rachm.)), early by its own onset at each pitch (`Choice::swapped`, `sso_rachm_onset_fit.json`) and, with `[slurs] quickLevel`, as loud as the held one (map `quickLevel`: perceived, `sso_rachm_levels.json`; `quickDb`). Exception: notes start
   early by their articulation's median measured onset (held notes, and since 2026-10-08 every measured technique, shorts too) (`[heldNotes] byPitch` 1: each by its pitch's)
   (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
   players; `[heldNotes] early` 0 plays them as written). **No Performance patches** (the owner, 2026-10-06:

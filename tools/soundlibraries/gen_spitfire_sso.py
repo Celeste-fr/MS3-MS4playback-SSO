@@ -1300,10 +1300,15 @@ def _onset(patch, sound):
 # plain Long for everything, within Rasch's 30-50 ms between players; sso_long_onset_fit.json, onset_fit_from_split.py
 # has the measurement): "onsets", every semitone's own (kept within 5 ms: the pitch-to-pitch steps are what lines the
 # notes up), or "shift", the measured table moved by that many ms
-FIT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_long_onset_fit.json')
-ONSET_FIT = json.load(open(FIT_FILE, encoding='utf-8')) if os.path.exists(FIT_FILE) else {}
+# Long (Rachm.), what [slurs] quick plays short slurred violin notes on, fitted the same way per pitch
+# (sso_rachm_onset_fit.json, Violins 1 and 2, 2026-10-08): on Whence's violin passage its own per-pitch onsets arrive
+# steadier (SD 10.8 / 11.4 ms) than its fit's median (22.0 / 22.6) or Long's median (21.6 / 26.5, Violins 2 97 ms early)
+def loadFit(name):
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+    return json.load(open(f, encoding='utf-8')) if os.path.exists(f) else {}
+ONSET_FITS = {'Long': loadFit('sso_long_onset_fit.json'), 'Long (Rachm.)': loadFit('sso_rachm_onset_fit.json')}
 def onset(patch, sound):
-    fit = ONSET_FIT.get(patch) if sound == 'Long' else None
+    fit = ONSET_FITS.get(sound, {}).get(patch)
     if fit and 'onsets' in fit:
         points = sorted((int(p), ms) for p, ms in fit['onsets'].items())
         return ' '.join(f'{p}:{int(ms)}' for p, ms in simplify(points, 5))
@@ -1381,21 +1386,21 @@ def shortFrom(patch, sound):
             break
         w = round(w - 0.01, 2)
     return last
-# - lengthLevels= ("pitch/heldMs:dB ..."): how loud the articulation is at mf when held that long (sso_short_lengths.json:
-#   the loudest 50 ms in dB, held 50 / 100 / 250 / 500 / 1000 / 2000 ms at the test pitch and an octave either side), on
-#   held articulations with a peak=: [slurs] quickLevel plays a swapped slurred note (Long (Rachm.) for Long) by the held
-#   one's level at its pitch and length (the owner, 2026-10-08: Rachm. "sounds quieter than plain long"; Violins 1 at
-#   50-100 ms: 4-6 dB under Long, from 500 ms up 1-3 dB over)
-def lengthLevels(patch, sound):
-    rows = SHORT_LENGTHS.get(patch, {}).get(sound)
-    if not isinstance(rows, list):
+# - quickLevel= ("pitch/heldMs:dB ..."): on Long (Rachm.), the dB that plays it as loud as the patch's Long when [slurs]
+#   quick swaps a short slurred note to it ([slurs] quickLevel): Long minus Rachm. (sso_rachm_levels.json, the Windows
+#   VM 2026-10-08: each semitone held 100 / 136 / 250 / 273 ms at mf, the perceived peak in the first second; Violins 1
+#   about 6 dB at 100-136 ms, Violins 2 about 3; the owner, 2026-10-08: Rachm. "sounds quieter than plain long")
+RACHM_LEVELS = loadFit('sso_rachm_levels.json')
+def quickLevel(patch, sound):
+    by = RACHM_LEVELS.get(patch) if sound == 'Long (Rachm.)' else None
+    if not by:
         return None
-    pts = sorted((r[0], r[1], r[5]) for r in rows if len(r) > 5 and r[5] is not None)
-    return ' '.join(f'{p}/{ms:g}:{db:g}' for p, ms, db in pts) or None
+    return ' '.join(f'{p}/{ms}:{-db:g}' for p, per in sorted(by.items(), key=lambda x: int(x[0]))
+                    for ms, db in sorted(per.items(), key=lambda x: int(x[0])) if db is not None) or None
 shortFromCount = 0
 onsetCount = 0
 peakCount = 0
-lengthLevelCount = 0
+quickLevelCount = 0
 current = None
 legatoGridUsed = set()
 timedValues = set()
@@ -1452,10 +1457,10 @@ for i, line in enumerate(out):
     if p:
         extra += f' peak="{p}"'
         peakCount += 1
-        ll = lengthLevels(current, sound)
-        if ll:
-            extra += f' lengthLevels="{ll}"'
-            lengthLevelCount += 1
+        q = quickLevel(current, sound)
+        if q:
+            extra += f' quickLevel="{q}"'
+            quickLevelCount += 1
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'

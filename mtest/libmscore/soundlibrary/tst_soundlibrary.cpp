@@ -600,31 +600,28 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(slurred("Violas", 0.8, 1), QString("Violas: Long"));
       QCOMPARE(slurred("Violas", 0.7, 1), QString("Violas: Short 1.0"));
       QCOMPARE(slurred("Violins 1", 0.136, 1, { "muted" }), QString("Violins 1: Long CS"));
-      // the swap keeps the held technique's onset for the early start (Choice::timing): the slurred group on the beat
-      // of the Longs around it (Rachm.'s own median is 87.5 ms against Long's 54.5)
+      // the swap is marked (Choice::swapped): early by Rachm.'s own onset at each pitch (its fit, sso_rachm_onset_fit.json)
       for (const SoundLib::LibInstrument& li : lib->instruments)
             if (li.name == "Violins 1") {
                   SoundLib::Want w { { "legato", "long" }, {} };
                   w.seconds = 0.136;
                   w.slurQuick = 2;
                   const SoundLib::Choice c = SoundLib::choose(li.patches(), w);
-                  QVERIFY(c && c.timing);
+                  QVERIFY(c && c.swapped);
                   QCOMPARE(c.articulation->name, QString("Long (Rachm.)"));
-                  QCOMPARE(c.onsetArticulation()->name, QString("Long"));
-                  QVERIFY(c.onsetArticulation()->onsetMedian() != c.articulation->onsetMedian());
-                  // [slurs] quickLevel: the measured levels (lengthLevels, mf) at the swapped note's pitch and length;
-                  // a measured point as measured, log-linear in length, linear in pitch, the nearest end's beyond
-                  const SoundLib::Articulation* longA = c.timing;
+                  QVERIFY(!c.articulation->onsets.empty());
+                  // [slurs] quickLevel: Long less Rachm. (map quickLevel, perceived peaks at mf) at the note's pitch and
+                  // length; a measured point as measured, log-linear in length, linear in pitch, the nearest end's beyond
                   const SoundLib::Articulation* rachm = c.articulation;
-                  QCOMPARE(longA->levelAt(64, 50), -33.0);
-                  QCOMPARE(rachm->levelAt(64, 50), -36.9);
-                  QVERIFY(qAbs(longA->levelAt(64, std::sqrt(50.0 * 100.0)) - (-33.1)) < 1e-9);
-                  QVERIFY(qAbs(rachm->levelAt(70, 50) - (-36.9 + (-42.8 + 36.9) / 2)) < 1e-9);
-                  QCOMPARE(rachm->levelAt(40, 20), -36.9);
-                  QCOMPARE(rachm->levelAt(100, 5000), -32.5);
-                  QVERIFY(std::isnan(SoundLib::Articulation().levelAt(64, 50)));
+                  QCOMPARE(rachm->quickLevelAt(55, 100), 8.4);
+                  QCOMPARE(rachm->quickLevelAt(64, 136), 5.9);
+                  QVERIFY(qAbs(rachm->quickLevelAt(64, std::sqrt(100.0 * 136.0)) - 5.8) < 1e-9);
+                  QVERIFY(qAbs((rachm->quickLevelAt(64, 100) + rachm->quickLevelAt(65, 100)) / 2 - 5.85) < 1e-9);
+                  QCOMPARE(rachm->quickLevelAt(40, 20), 8.4);
+                  QCOMPARE(rachm->quickLevelAt(100, 5000), 1.1);
+                  QCOMPARE(SoundLib::Articulation().quickLevelAt(64, 50), 0.0);
                   w.slurQuick = 0;
-                  QVERIFY(!SoundLib::choose(li.patches(), w).timing);
+                  QVERIFY(!SoundLib::choose(li.patches(), w).swapped);
                   }
       {
             std::vector<Ms4::ArtRef> slur { { A::Legato, false } };

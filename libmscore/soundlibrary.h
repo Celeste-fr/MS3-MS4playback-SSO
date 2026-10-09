@@ -119,11 +119,11 @@ struct Articulation {
       // a held note is loudest this long after its note-on (<Articulation peak>, ms, the median of the measured
       // semitones); a slurred note shorter than it is all swell ([slurs] quick: choose); -1: unknown
       double peakMs { -1 };
-      // how loud it is at mf held that long (<Articulation lengthLevels="pitch/heldMs:dB …">: the loudest 50 ms, measured
-      // at three pitches): [slurs] quickLevel plays a swapped slurred note at its held articulation's level
-      struct LengthLevel { int pitch; double ms; double db; };
-      std::vector<LengthLevel> lengthLevels;      // sorted by pitch, then ms
-      double levelAt(int pitch, double ms) const; // log-linear in ms, linear in pitch, the nearest end's beyond; NaN: none
+      // swapped in by [slurs] quick, the dB that plays it as loud as the held articulation at that pitch and held length
+      // (<Articulation quickLevel="pitch/heldMs:dB …">: measured, perceived peaks at mf; [slurs] quickLevel)
+      struct QuickLevel { int pitch; double ms; double db; };
+      std::vector<QuickLevel> quickLevels;          // sorted by pitch, then ms
+      double quickLevelAt(int pitch, double ms) const; // log-linear in ms, linear in pitch, the nearest end's beyond; 0: none
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;
@@ -265,13 +265,10 @@ struct Choice {
       const Articulation* articulation { nullptr };
       QString base;
       int patch { 0 };                    // of the patches chosen from (0: the main patch)
-      // the articulation (and its patch) whose onset times the note's early start: [slurs] quick's swap keeps the held
-      // one's, so a slurred group stays on the beat of the notes around it (the owner, 2026-10-08, quick 2: "the
-      // notes don't consistently follow the same beat across measures"; Long (Rachm.) 87.5 ms early against Long's 54.5)
-      const Articulation* timing { nullptr };
-      int timingPatch { 0 };
-      const Articulation* onsetArticulation() const { return timing ? timing : articulation; }
-      int onsetPatch() const { return timing ? timingPatch : patch; }
+      // [slurs] quick swapped the held articulation for this one: early by its own onset at each pitch whatever
+      // [heldNotes] byPitch says (its per-pitch fit, sso_rachm_onset_fit.json: Whence's violins SD 10.8 ms against 22.0
+      // on its median, 21.6 on Long's), at the held one's level with [slurs] quickLevel (Articulation::quickLevelAt)
+      bool swapped { false };
       bool sampledOrnament() const;       // a trill or tremolo sample: play the note once
       explicit operator bool() const { return articulation; }
       };

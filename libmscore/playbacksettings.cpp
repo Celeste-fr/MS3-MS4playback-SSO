@@ -69,11 +69,11 @@ static const std::vector<Definition> DEFINITIONS = {
       { "slurs/quick", 0, 0, 2, "",
         "a slurred note shorter than its held technique's measured peak (<Articulation peak>) plays: 0 the held technique; "
         "1 the patch's tenuto short (SSO: Short 1.0); 2 its espressivo long (SSO: Long (Rachm.))", true },
-      // (the owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured at mf, Violins 1 at 50-100 ms 4-6 dB
-      // under Long, from 500 ms up 1-3 dB over: by pitch and length, not one number)
+      // (the owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured on the Windows VM, perceived peaks at
+      // mf held 100-273 ms: Violins 1 about 6 dB under Long, Violins 2 about 3; by pitch and length, not one number)
       { "slurs/quickLevel", 1, 0, 1, "on/off",
         "1: a note [slurs] quick swaps plays as loud as its held technique would at its pitch and written length (map "
-        "lengthLevels: the loudest 50 ms at mf, held 50 ms to 2 s); 0: at the swapped technique's own level", true },
+        "quickLevel: perceived peaks at mf, held 100-273 ms); 0: at the swapped technique's own level", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
