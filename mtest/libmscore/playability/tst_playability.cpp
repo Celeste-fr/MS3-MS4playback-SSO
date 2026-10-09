@@ -70,6 +70,8 @@ class TestPlayability : public QObject, public MTest
       void brassRules();
       void brass();
       void brassLayouts();
+      void windDynRules();
+      void windDynamics();
       };
 
 static QString rowText(int bar, const QString& staff, const QString& verdict, const QString& reason, const QString& notes)
@@ -1198,6 +1200,172 @@ void TestPlayability::brassLayouts()
       QVERIFY(ci.kind == ChordInfo::Kind::VALVES && ci.brass.valves == 4);
       l = Playability::layoutDiagram(ci, 400, 260);
       QVERIFY(has(l, "partial 2, may be sharp"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   W2/B1 woodwind and brass register x dynamic (SPEC-w2b1; tools/playability/gen_winddyn_tests.py)
+//---------------------------------------------------------
+
+static const WindDynRule* windRule(const char* id)
+      {
+      for (const WindDynRule& r : Ms::windDynRules())
+            if (QString(r.id) == id)
+                  return &r;
+      return nullptr;
+      }
+
+void TestPlayability::windDynRules()
+      {
+      // the generated table: 11 marks and 6 panel notes, the spec's bands
+      int marks = 0, notes = 0;
+      for (const WindDynRule& r : Ms::windDynRules())
+            (r.kind == WindDynKind::NOTE ? notes : marks)++;
+      QCOMPARE(marks, 11);
+      QCOMPARE(notes, 6);
+      const WindDynRule* r = windRule("W2-OB-HIGH");
+      QVERIFY(r && r->lo == 89 && r->hi == 93 && r->level == WindLevel::FFF && r->kind == WindDynKind::RED && !r->written);
+      r = windRule("B1-TPT-LOW");
+      QVERIFY(r && r->lo == 54 && r->hi == 59 && r->written && r->instruments.size() == 3);
+      r = windRule("W2-CL-HIGH");
+      QVERIFY(r && r->lo == 93 && r->hi == 127 && r->written && r->level == WindLevel::SOFT);
+      // levels: soft = pp or softer, p/mp = exactly p or mp, fff = past halfway between ff 112 and fff 126
+      using Playability::windLevelMatches;
+      for (int v : { 16, 33, 40 })
+            QVERIFY(windLevelMatches(WindLevel::SOFT, v) && !windLevelMatches(WindLevel::P_MP, v));
+      for (int v : { 41, 49, 64, 72 })
+            QVERIFY(!windLevelMatches(WindLevel::SOFT, v) && windLevelMatches(WindLevel::P_MP, v));
+      for (int v : { 73, 80, 96 })
+            QVERIFY(!windLevelMatches(WindLevel::SOFT, v) && !windLevelMatches(WindLevel::P_MP, v) && !windLevelMatches(WindLevel::FFF, v));
+      QVERIFY(!windLevelMatches(WindLevel::FFF, 112) && !windLevelMatches(WindLevel::FFF, 119));
+      QVERIFY(windLevelMatches(WindLevel::FFF, 120) && windLevelMatches(WindLevel::FFF, 126) && windLevelMatches(WindLevel::FFF, 127));
+      QVERIFY(windLevelMatches(WindLevel::ANY, 1) && windLevelMatches(WindLevel::ANY, 127));
+      }
+
+void TestPlayability::windDynamics()
+      {
+      MasterScore* score = readScore(DIR + "wind-dyn-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      auto row = [](int bar, const char* staff, const char* id, const char* notes) {
+            const WindDynRule* w = windRule(id);
+            return rowText(bar, staff, w->kind == WindDynKind::RED ? "impossible" : "risky",
+                           QString(w->text) + " (" + w->source + ")", notes);
+            };
+      QStringList got = htkRows(r, { "dynamic" });
+      QStringList want = {
+            // flute B6-D7 soft: the band's edges (A#6, D#7 outside), p clean
+            row(1, "Flute", "W2-FL-HIGH", "B6"), row(1, "Flute", "W2-FL-HIGH", "D7"),
+            // oboe: Bb3-D4 red at pp, dark yellow at mp; Eb4-F4 soft only; F6-A6 at fff only
+            row(1, "Oboe", "W2-OB-LOW-B", "Bb3"), row(1, "Oboe", "W2-OB-LOW-B", "D4"), row(1, "Oboe", "W2-OB-LOW-C", "Eb4"),
+            row(2, "Oboe", "W2-OB-LOW-C", "F4"),
+            row(3, "Oboe", "W2-OB-LOW-A", "Bb3"), row(3, "Oboe", "W2-OB-LOW-A", "D4"),
+            row(5, "Oboe", "W2-OB-HIGH", "F6"), row(5, "Oboe", "W2-OB-HIGH", "A6"),
+            // the diminuendo p -> pp: 49, 45, 41 (still p), 37 (pp)
+            row(7, "Oboe", "W2-OB-LOW-A", "Bb3"), row(7, "Oboe", "W2-OB-LOW-A", "Bb3"), row(7, "Oboe", "W2-OB-LOW-A", "Bb3"),
+            row(7, "Oboe", "W2-OB-LOW-B", "Bb3"),
+            row(10, "Oboe", "W2-OB-LOW-B", "Bb3"),
+            row(1, "Bassoon", "W2-BSN-LOW", "Bb1"), row(1, "Bassoon", "W2-BSN-LOW", "F2"),
+            // saxophones by written pitch (Bb3-F4), named sounding
+            row(1, "Alto Saxophone", "W2-SAX-LOW-B", "Db3"), row(1, "Alto Saxophone", "W2-SAX-LOW-B", "Ab3"),
+            row(2, "Alto Saxophone", "W2-SAX-LOW-A", "Db3"), row(2, "Alto Saxophone", "W2-SAX-LOW-A", "Ab3"),
+            row(1, "Tenor Saxophone", "W2-SAX-LOW-B", "Ab2"), row(1, "Tenor Saxophone", "W2-SAX-LOW-B", "Eb3"),
+            row(2, "Tenor Saxophone", "W2-SAX-LOW-A", "Ab2"),
+            row(1, "Baritone Saxophone", "W2-SAX-LOW-B", "Ab2"),
+            row(2, "Baritone Saxophone", "W2-SAX-LOW-A", "Db2"),
+            row(1, "Soprano Saxophone", "W2-SAX-LOW-B", "Ab3"),
+            // horn D5-F5 sounding (written A5-C6)
+            row(1, "Horn in F", "B1-HN-HIGH", "D5"), row(1, "Horn in F", "B1-HN-HIGH", "F5"),
+            // trumpets by written pitch: B5-D6 red, F#3-B3 dark yellow, both soft only
+            row(1, "Trumpet in Bb", "B1-TPT-HIGH", "A5"), row(1, "Trumpet in Bb", "B1-TPT-HIGH", "C6"),
+            row(2, "Trumpet in Bb", "B1-TPT-LOW", "E3"), row(2, "Trumpet in Bb", "B1-TPT-LOW", "A3"),
+            row(1, "Trumpet in C", "B1-TPT-HIGH", "B5"), row(1, "Trumpet in C", "B1-TPT-HIGH", "D6"),
+            row(2, "Trumpet in C", "B1-TPT-LOW", "F#3"), row(2, "Trumpet in C", "B1-TPT-LOW", "B3") };
+      want.sort();
+      compare(got, want);
+      QCOMPARE(got, want);
+
+      // the marks of the woodwind staves (the brass staves also carry the valve check's)
+      QStringList m;
+      for (const QString& x : marks(score, r))
+            if (!x.startsWith("Horn") && !x.startsWith("Trumpet") && !x.startsWith("Cornet"))
+                  m << x;
+      QStringList wantMarks = {
+            "Flute | 480 | 95 | outOfReach", "Flute | 960 | 98 | outOfReach",
+            "Oboe | 480 | 58 | impossible", "Oboe | 960 | 62 | impossible", "Oboe | 1440 | 63 | outOfReach",
+            "Oboe | 1920 | 65 | outOfReach",
+            "Oboe | 4320 | 58 | outOfReach", "Oboe | 4800 | 62 | outOfReach",
+            "Oboe | 8160 | 89 | impossible", "Oboe | 8640 | 93 | impossible",
+            "Oboe | 11520 | 58 | outOfReach", "Oboe | 12000 | 58 | outOfReach", "Oboe | 12480 | 58 | outOfReach",
+            "Oboe | 12960 | 58 | impossible", "Oboe | 17280 | 58 | impossible",
+            "Bassoon | 480 | 34 | outOfReach", "Bassoon | 960 | 41 | outOfReach",
+            "Alto Saxophone | 480 | 49 | impossible", "Alto Saxophone | 960 | 56 | impossible",
+            "Alto Saxophone | 2400 | 49 | outOfReach", "Alto Saxophone | 2880 | 56 | outOfReach",
+            "Tenor Saxophone | 0 | 44 | impossible", "Tenor Saxophone | 480 | 51 | impossible",
+            "Tenor Saxophone | 1920 | 44 | outOfReach",
+            "Baritone Saxophone | 0 | 44 | impossible", "Baritone Saxophone | 2400 | 37 | outOfReach",
+            "Soprano Saxophone | 0 | 56 | impossible" };
+      wantMarks.sort();
+      compare(m, wantMarks);
+      QCOMPARE(m, wantMarks);
+      // the brass staves: the W2/B1 marks are there; the cornet (not covered) has none
+      QStringList all = marks(score, r);
+      for (const char* x : { "Horn in F | 480 | 74 | outOfReach", "Horn in F | 960 | 77 | outOfReach",
+                             "Trumpet in Bb | 480 | 81 | impossible", "Trumpet in Bb | 960 | 84 | impossible",
+                             "Trumpet in Bb | 2400 | 52 | outOfReach", "Trumpet in Bb | 2880 | 57 | outOfReach",
+                             "Trumpet in C | 480 | 83 | impossible", "Trumpet in C | 960 | 86 | impossible",
+                             "Trumpet in C | 2400 | 54 | outOfReach", "Trumpet in C | 2880 | 59 | outOfReach" })
+            QVERIFY2(all.contains(x), x);
+      for (const QString& x : all)
+            QVERIFY2(!x.startsWith("Cornet"), qPrintable(x));
+
+      // the panel: every rule a note falls under, panel notes at any level unless the rule names one
+      auto notesAt = [&](int staff, int tick) {
+            return Playability::inspect(chordAt(score, tick, staff * VOICES)).windNotes;
+            };
+      auto line = [](const char* note, const char* id) {
+            const WindDynRule* w = windRule(id);
+            return QString(note) + ": " + w->text + " (" + w->source + ")";
+            };
+      const int BAR = 1920, Q = 480;
+      // flute B3-B4 (A#3 and C5 outside)
+      QVERIFY(notesAt(0, 2 * BAR).isEmpty());
+      QCOMPARE(notesAt(0, 2 * BAR + Q), QStringList({ line("B3", "W2-FL-LOW") }));
+      QCOMPARE(notesAt(0, 2 * BAR + 2 * Q), QStringList({ line("B4", "W2-FL-LOW") }));
+      QVERIFY(notesAt(0, 2 * BAR + 3 * Q).isEmpty());
+      // a marked note names its rule too (oboe Bb3 at pp)
+      QCOMPARE(notesAt(1, Q), QStringList({ line("Bb3", "W2-OB-LOW-B") }));
+      // bassoon Ab4-Eb5
+      QVERIFY(notesAt(2, 2 * BAR).isEmpty());
+      QCOMPARE(notesAt(2, 2 * BAR + Q), QStringList({ line("Ab4", "W2-BSN-TOP") }));
+      QCOMPARE(notesAt(2, 2 * BAR + 2 * Q), QStringList({ line("Eb5", "W2-BSN-TOP") }));
+      QVERIFY(notesAt(2, 2 * BAR + 3 * Q).isEmpty());
+      // piccolo D5-E6 sounding (written D4-E5)
+      QVERIFY(notesAt(11, 0).isEmpty());
+      QCOMPARE(notesAt(11, Q), QStringList({ line("D5", "W2-PIC-LOW") }));
+      QCOMPARE(notesAt(11, 2 * Q), QStringList({ line("E6", "W2-PIC-LOW") }));
+      QVERIFY(notesAt(11, 3 * Q).isEmpty());
+      // alto flute G3-F4 sounding
+      QVERIFY(notesAt(12, 0).isEmpty());
+      QCOMPARE(notesAt(12, Q), QStringList({ line("G3", "W2-AFL-LOW") }));
+      QCOMPARE(notesAt(12, 2 * Q), QStringList({ line("F4", "W2-AFL-LOW") }));
+      QVERIFY(notesAt(12, 3 * Q).isEmpty());
+      // clarinet written A6 and up, soft only (G#6 outside; p: no note)
+      QVERIFY(notesAt(13, 0).isEmpty());
+      QCOMPARE(notesAt(13, Q), QStringList({ line("G6", "W2-CL-HIGH") }));
+      QVERIFY(notesAt(13, BAR).isEmpty());
+      QCOMPARE(notesAt(14, 0), QStringList({ line("F#6", "W2-CL-HIGH") }));
+      // E-flat clarinet Ab6-C7 sounding (written F6-A6)
+      QVERIFY(notesAt(15, 0).isEmpty());
+      QCOMPARE(notesAt(15, Q), QStringList({ line("Ab6", "W2-ECL-TOP") }));
+      QCOMPARE(notesAt(15, 2 * Q), QStringList({ line("C7", "W2-ECL-TOP") }));
+      QVERIFY(notesAt(15, 3 * Q).isEmpty());
+      // the cornet is not covered
+      QVERIFY(notesAt(10, 0).isEmpty());
+      // panel notes make no mark (the rows are all listed above)
+      for (const QString& x : all)
+            QVERIFY2(!x.startsWith("Piccolo") && !x.startsWith("Alto Flute") && !x.startsWith("Clarinet")
+                     && !x.startsWith("Eb Clarinet"), qPrintable(x));
       delete score;
       }
 
