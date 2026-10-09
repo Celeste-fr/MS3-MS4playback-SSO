@@ -65,13 +65,15 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
       // [slurs]
       // (the owner, 2026-10-08: slurred violins have no attack; SSO's violin Long peaks after ~1.06 s, Whence's slurred
-      // notes last 136-273 ms; off until the owner has compared both by ear)
-      { "slurs/quick", 0, 0, 2, "",
+      // notes last 136-273 ms; 2026-10-08, after comparing by ear: "let's make slurs quick = 2 the recommended preset")
+      { "slurs/quick", 2, 0, 2, "",
         "a slurred note shorter than its held technique's measured peak (<Articulation peak>) plays: 0 the held technique; "
         "1 the patch's tenuto short (SSO: Short 1.0); 2 its espressivo long (SSO: Long (Rachm.))", true },
       // (the owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured on the Windows VM, perceived peaks at
-      // mf held 100-273 ms: Violins 1 about 6 dB under Long, Violins 2 about 3; by pitch and length, not one number)
-      { "slurs/quickLevel", 1, 0, 1, "on/off",
+      // mf held 100-273 ms: Violins 1 about 6 dB under Long, Violins 2 about 3; by pitch and length, not one number;
+      // then, at 1: "not the correct volume. violin 1 in bar 5 now sounds really loud relative to the viola and cello":
+      // off until re-measured)
+      { "slurs/quickLevel", 0, 0, 1, "on/off",
         "1: a note [slurs] quick swaps plays as loud as its held technique would at its pitch and written length (map "
         "quickLevel: perceived peaks at mf, held 100-273 ms); 0: at the swapped technique's own level", true },
       // [levels]
@@ -291,8 +293,8 @@ QString iniTemplate()
 
 //---------------------------------------------------------
 //   presets
-//    Only the held notes' early start (heldNotes/early, heldNotes/byPitch) and the calibrated levels (levels/calibrated)
-//    differ between them. The other settings are not in the table because: legato/keepMs acts
+//    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated) and
+//    the slurred notes' quicker technique (slurs/quick, slurs/quickLevel) differ between them. The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -303,8 +305,10 @@ const std::vector<Preset>& presets()
       static const std::vector<Preset> P = {
             // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent"; 2026-10-08: "make
             // even early the new recommended": early, each patch by its median onset)
-            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 } } },
-            { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 } } },
+            // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel off: its levels are re-measured)
+            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 0 } } },
+            { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 } } },
             };
       return P;
       }
