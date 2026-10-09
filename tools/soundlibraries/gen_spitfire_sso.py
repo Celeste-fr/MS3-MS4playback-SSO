@@ -1307,8 +1307,13 @@ def loadFit(name):
     f = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
     return json.load(open(f, encoding='utf-8')) if os.path.exists(f) else {}
 ONSET_FITS = {'Long': loadFit('sso_long_onset_fit.json'), 'Long (Rachm.)': loadFit('sso_rachm_onset_fit.json')}
+# Violas and Celli: their entries in sso_rachm_onset_fit.json and sso_rachm_levels.json (in-context fits, bdaaed4aa7,
+# 1f6f09bdeb) are kept as measured data but not used (the owner, 2026-10-09: the in-context Violas / Celli fits made
+# Whence bars 1-2 Celli ~8 dB louder and pulsing; back to the 25a3dcbbeb values): their Long (Rachm.) takes the
+# timing check's onsets and no quickLevel
+RACHM_UNUSED = {'Violas', 'Celli'}
 def onset(patch, sound):
-    fit = ONSET_FITS.get(sound, {}).get(patch)
+    fit = None if sound == 'Long (Rachm.)' and patch in RACHM_UNUSED else ONSET_FITS.get(sound, {}).get(patch)
     if fit and 'onsets' in fit:
         points = sorted((int(p), ms) for p, ms in fit['onsets'].items())
         return ' '.join(f'{p}:{int(ms)}' for p, ms in simplify(points, 5))
@@ -1392,7 +1397,7 @@ def shortFrom(patch, sound):
 #   about 6 dB at 100-136 ms, Violins 2 about 3; the owner, 2026-10-08: Rachm. "sounds quieter than plain long")
 RACHM_LEVELS = loadFit('sso_rachm_levels.json')
 def quickLevel(patch, sound):
-    by = RACHM_LEVELS.get(patch) if sound == 'Long (Rachm.)' else None
+    by = RACHM_LEVELS.get(patch) if sound == 'Long (Rachm.)' and patch not in RACHM_UNUSED else None
     if not by:
         return None
     return ' '.join(f'{p}/{ms}:{-db:g}' for p, per in sorted(by.items(), key=lambda x: int(x[0]))
