@@ -102,6 +102,7 @@ class TestSoundLibrary : public QObject, public MTest
       void legatoDelayByInterval();
       void legatoOctaveByStartPitch();
       void onsetEarly();
+      void onsetLongerThanNote();
       void playbackSettingsIni();
       void playbackSettingsLayers();
       void playbackPresets();
@@ -1493,6 +1494,63 @@ void TestSoundLibrary::onsetEarly()
       QCOMPARE(notes[1].on, Q);
       QVERIFY(notes[7].off > 8 * Q - 48);                       // (B4 keeps its end)
       score->setMetaTag(SoundLib::onsetEarlyMetaTag, "");
+      delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   onsetLongerThanNote
+//    an onset longer than the note before (200 ms against sixteenths of 136 ms at 110 bpm, as SSO's Long
+//    (Rachm.) on the violas' Whence bar 7): each note starts early, capped by the one before (legato/keepMs),
+//    and still ends where the next note on its patch starts, also when the key after next is its own (A B-flat
+//    A G: the second A's early start falls inside B-flat's window; before 2026-10-09 that kept the first A's
+//    note off, and each A sounded through the next note). onset-longer.musicxml
+//---------------------------------------------------------
+
+void TestSoundLibrary::onsetLongerThanNote()
+      {
+      Playback::setIniValuesForTest(withOld({ { "heldNotes/byPitch", "1" } }));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='200'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "onset-longer.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      struct N { int on; int off; int pitch; };
+      std::vector<N> notes;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal() || ev.type() != ME_NOTEON)
+                  continue;
+            if (ev.velo() > 0)
+                  notes.push_back({ te.first, -1, ev.pitch() });
+            else {
+                  for (N& n : notes)                  // (the key's earliest note still on)
+                        if (n.pitch == ev.pitch() && n.off < 0) {
+                              n.off = te.first;
+                              break;
+                              }
+                  }
+            }
+      QCOMPARE(int(notes.size()), 8);
+      const std::vector<int> pitches = { 69, 70, 69, 67, 69, 70, 69, 67 };
+      const int S = DIVISION / 4;
+      for (size_t i = 0; i < notes.size(); ++i) {
+            QCOMPARE(notes[i].pitch, pitches[i]);
+            QVERIFY2(notes[i].on < DIVISION + int(i) * S && notes[i].off > notes[i].on,
+                     qPrintable(QString("note %1 at %2-%3").arg(i).arg(notes[i].on).arg(notes[i].off)));
+            if (i + 1 < notes.size())
+                  QVERIFY2(notes[i].off <= notes[i + 1].on,
+                           qPrintable(QString("note %1 (pitch %2) ends at %3, the next starts at %4")
+                                      .arg(i).arg(notes[i].pitch).arg(notes[i].off).arg(notes[i + 1].on)));
+            }
       delete score;
       Playback::setIniValuesForTest({});
       }

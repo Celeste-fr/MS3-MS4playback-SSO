@@ -2225,7 +2225,12 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       // would end there anyway; on a Performance patch the overlap would play a legato transition instead of the
       // note's own attack), unless it started after the new start; the note's switch, sent at the written start,
       // and the controllers sent at the chord's tick (the dynamic it starts on) go with it, the controllers only
-      // when no other note of the channel starts in between
+      // when no other note of the channel starts in between.
+      // "It started after the new start" asks about the note off's own note (the note on carrying the same Note),
+      // not any note on of its key: an onset longer than the note before (SSO Violas Long (Rachm.) 105-185 ms
+      // against a 16th at 110 bpm, 136 ms) puts the next note of that key's early start inside this window, and
+      // taking that for the off's note kept the note sounding through the next one (the owner, 2026-10-09:
+      // Whence bar 7, violas 57 58 57 55, each 57 overlapping the 58 / 55 after it)
       for (const LibShift& s : libShifts) {
             std::vector<NPlayEvent> moved;
             for (auto i = events->upper_bound(s.on); i != events->end() && i->first <= std::max(s.written, s.chordTick);) {
@@ -2236,11 +2241,12 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                               move = ev.libraryPatch() == s.patch && i->first <= s.written;
                         else if (ev.type() == ME_NOTEON && ev.velo() == 0 && ev.libraryPatch() == s.patch && i->first <= s.written) {
                               move = true;
-                              for (auto j = events->lower_bound(s.on); j != i; ++j) {
+                              for (auto j = events->upper_bound(s.on); j != i; ++j) {
                                     const NPlayEvent& o = j->second;
                                     if (o.type() == ME_NOTEON && o.velo() > 0 && !o.librarySwitch() && o.channel() == ev.channel()
-                                        && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch() && j->first > s.on)
-                                          move = false;       // (a note that started after the new start)
+                                        && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch()
+                                        && (!ev.note() || o.note() == ev.note()))
+                                          move = false;       // (its note started after the new start)
                                     }
                               }
                         else if (ev.type() == ME_CONTROLLER && i->first == s.chordTick) {
