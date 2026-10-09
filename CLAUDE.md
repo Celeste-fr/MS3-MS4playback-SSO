@@ -143,7 +143,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; without one, the
   shipped `share/soundlibraries/<library>.dynamics.json` (SSO's from `sso_sound_dynamics.json` by
   `tools/soundlibraries/calibration_from_sound_dynamics.py`; `SoundLibraryHost::loadCalibration`). Read for calibrated
-  levels and the Inspector levels (the curve's inverse).
+  levels and the Inspector levels (the curve's inverse). A curve may carry per-pitch curves (`"pitches"`; SSO's
+  strings' Long (Rachm.), `sso_rachm_register_curves.json`, `-r` of the script): `DynamicsCurve::atPitch` (linear in dB
+  between the nearest measured pitches), `raise` (the lowest CC1 reaching the level: crosses dips); quickLevel from
+  `sso_rachm_context_match.json` by `rachm_quick_levels.py` (docs/PLAYBACK_SETTINGS.md › Calibrated levels).
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
   (`ControllersWindow`, `audio/vst3/librarycontrollers.*`). Automation: `libmscore/automation.*`, metaTag
   `automation` (points step / linear, a ramp may carry Live's Bézier control points). Every lane is editable;
@@ -262,7 +265,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 69 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote);
+- `tst_soundlibrary`: 70 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 21 passed (2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's

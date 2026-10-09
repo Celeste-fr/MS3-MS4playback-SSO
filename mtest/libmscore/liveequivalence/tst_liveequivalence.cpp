@@ -39,11 +39,14 @@
 #include "libmscore/livesetxml.h"
 #include "libmscore/liveset.h"
 #include "libmscore/livetracks.h"
+#include "libmscore/measure.h"
 #include "libmscore/plainliveset.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
+#include "libmscore/spanner.h"
+#include "libmscore/tie.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/trackdelays.h"
 #include "mscore/liveequivalence.h"
@@ -1920,7 +1923,7 @@ void TestLiveEquivalence::liveTracksJson()
 //---------------------------------------------------------
 //   dumpEvents
 //    a tool, skipped unless MS_DUMP_SCORE, MS_DUMP_MAP and MS_DUMP_OUT are set (MS_DUMP_SETTINGS: the score's playback
-//    settings, "id=value;..."): per route, MuseScore's events
+//    settings, "id=value;..."; MS_DUMP_CALIBRATION: a dynamics.json to load): per route, MuseScore's events
 //    (<route> museScore.txt) and the MIDI the device makes of the clip (<route> live.txt) as lines "seconds type a b"
 //    (on, off, cc <n> <value>, pb <14-bit> 0), for replaying both through one plug-in instance elsewhere (the kthost
 //    on the Windows VM: LIVE.md › Measured with SSO)
@@ -1935,6 +1938,14 @@ void TestLiveEquivalence::dumpEvents()
       QVERIFY2(lib, qPrintable(error));
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      // MS_DUMP_CALIBRATION=<dynamics.json>: the calibration the app loads (SoundLibraryHost::loadCalibration: the
+      // user's own or the map's shipped one), for calibrated levels and quickLevel as the app plays them
+      struct ResetCal { ~ResetCal() { SoundLib::setDynamicsCalibration(nullptr); } } resetCal;
+      if (qEnvironmentVariableIsSet("MS_DUMP_CALIBRATION")) {
+            auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+            QVERIFY(cal->read(qEnvironmentVariable("MS_DUMP_CALIBRATION")));
+            SoundLib::setDynamicsCalibration(cal);
+            }
       MasterScore* score = readCreatedScore(qEnvironmentVariable("MS_DUMP_SCORE"));
       QVERIFY(score);
       score->rebuildMidiMapping();
@@ -1980,6 +1991,51 @@ void TestLiveEquivalence::dumpEvents()
             QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
             f.write((m.second.join("\n") + "\n").toUtf8());
             }
+      // the written notes (notes.txt: "part|seconds|end|pitch|bar|slur", slur: the index of the slur it lies under,
+      // -1 none; tied notes once) and the bars' starts (bars.txt), for in-context levels per slurred group
+      {
+            QStringList bars, notes;
+            for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
+                  bars << QString::number(score->utick2utime(m->tick().ticks()), 'f', 6);
+            std::vector<const Spanner*> slurs;
+            for (const auto& sp : score->spanner())
+                  if (sp.second->isSlur())
+                        slurs.push_back(sp.second);
+            int bar = 0;
+            for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure(), ++bar) {
+                  for (Segment* s = m->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest)) {
+                        for (int track = 0; track < score->ntracks(); ++track) {
+                              Element* e = s->element(track);
+                              if (!e || !e->isChord())
+                                    continue;
+                              const Chord* c = toChord(e);
+                              const int tick = c->tick().ticks();
+                              int slur = -1;
+                              for (size_t i = 0; i < slurs.size(); ++i)
+                                    if (slurs[i]->track() == track && slurs[i]->tick().ticks() <= tick && tick <= slurs[i]->tick2().ticks()
+                                        && (slur < 0 || slurs[i]->tick() > slurs[size_t(slur)]->tick()))
+                                          slur = int(i);
+                              for (const Note* n : c->notes()) {
+                                    if (n->tieBack())
+                                          continue;
+                                    const Note* last = n;
+                                    while (last->tieFor() && last->tieFor()->endNote())
+                                          last = last->tieFor()->endNote();
+                                    const int end = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks();
+                                    notes << QString("%1|%2|%3|%4|%5|%6").arg(c->part()->partName())
+                                             .arg(score->utick2utime(tick), 0, 'f', 6).arg(score->utick2utime(end), 0, 'f', 6)
+                                             .arg(n->ppitch()).arg(bar).arg(slur);
+                                    }
+                              }
+                        }
+                  }
+            QFile fb(out + "/bars.txt");
+            QVERIFY(fb.open(QIODevice::WriteOnly | QIODevice::Text));
+            fb.write((bars.join("\n") + "\n").toUtf8());
+            QFile fn(out + "/notes.txt");
+            QVERIFY(fn.open(QIODevice::WriteOnly | QIODevice::Text));
+            fn.write((notes.join("\n") + "\n").toUtf8());
+      }
       const LiveClips::Timeline tl = LiveClips::timeline(score);
       const int rate = 1000000;           // (microseconds: the times as exact as the frames allow)
       for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl)) {

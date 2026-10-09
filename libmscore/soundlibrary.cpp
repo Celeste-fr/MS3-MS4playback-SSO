@@ -881,6 +881,63 @@ int DynamicsCurve::louder(int x, double db) const
       return byEar() ? perceivedInverse(perceivedAt(x) + db) : inverse(at(x) + db);
       }
 
+int DynamicsCurve::raise(int x, double db) const
+      {
+      const double target = at(x) + db;
+      const int first = inverse(target);              // the first crossing (as before where the curve rises)
+      if (first >= x)
+            return first;
+      for (int y = std::max(1, x); y <= 127; ++y) {   // it lies under x: the curve dips; the first one over x
+            if (at(y) >= target - 1e-9)
+                  return y;
+            }
+      return 127;
+      }
+
+// two pitches' curves mixed in dB, w of b's (0 … 1), on the x of both
+static std::vector<std::pair<int, double>> mixPoints(const std::vector<std::pair<int, double>>& a,
+                                                     const std::vector<std::pair<int, double>>& b, double w)
+      {
+      if (a.empty() || b.empty())
+            return w < 0.5 ? a : b;
+      std::vector<int> xs;
+      for (const auto& p : a)
+            xs.push_back(p.first);
+      for (const auto& p : b)
+            xs.push_back(p.first);
+      std::sort(xs.begin(), xs.end());
+      xs.erase(std::unique(xs.begin(), xs.end()), xs.end());
+      std::vector<std::pair<int, double>> out;
+      for (int x : xs)
+            out.push_back({ x, (1 - w) * interpolate(a, x) + w * interpolate(b, x) });
+      return out;
+      }
+
+DynamicsCurve DynamicsCurve::atPitch(int pitch) const
+      {
+      if (pitches.empty() || pitch < 0)
+            return *this;
+      DynamicsCurve c = *this;
+      c.pitches.clear();
+      auto hi = pitches.lower_bound(pitch);
+      const PitchCurve* a;
+      const PitchCurve* b;
+      double w = 0;
+      if (hi == pitches.end())                        // over the highest measured pitch: the highest
+            a = b = &std::prev(hi)->second;
+      else if (hi->first == pitch || hi == pitches.begin())
+            a = b = &hi->second;                      // a measured pitch, or under the lowest: the lowest
+      else {
+            auto lo = std::prev(hi);
+            a = &lo->second;
+            b = &hi->second;
+            w = double(pitch - lo->first) / (hi->first - lo->first);
+            }
+      c.points = mixPoints(a->points, b->points, w);
+      c.perceived = mixPoints(a->perceived, b->perceived, w);
+      return c;
+      }
+
 const DynamicsCurve* DynamicsCalibration::curve(const QString& patch, int value) const
       {
       auto p = _patches.find(patch);
@@ -918,6 +975,19 @@ bool DynamicsCalibration::read(const QString& file)
                   readPoints("expression", &curve.expression);
                   readPoints("expressionPerceived", &curve.expressionPerceived);
                   std::sort(curve.points.begin(), curve.points.end());
+                  const QJsonObject pitches = c.value("pitches").toObject();
+                  for (auto pp = pitches.begin(); pp != pitches.end(); ++pp) {
+                        const QJsonObject pc = pp.value().toObject();
+                        PitchCurve& out = curve.pitches[pp.key().toInt()];
+                        for (const char* key : { "curve", "perceived" }) {
+                              auto& pts = key[0] == 'c' ? out.points : out.perceived;
+                              for (const QJsonValue& pt : pc.value(key).toArray())
+                                    pts.push_back({ pt.toArray().at(0).toInt(), pt.toArray().at(1).toDouble() });
+                              std::sort(pts.begin(), pts.end());
+                              }
+                        if (out.points.size() < 2)
+                              curve.pitches.erase(pp.key().toInt());
+                        }
                   _patches[p.key()][a.key().toInt()] = curve;
                   }
             }
@@ -946,6 +1016,23 @@ bool DynamicsCalibration::write(const QString& file) const
                   writePoints("attack", a.second.attack);
                   writePoints("expression", a.second.expression);
                   writePoints("expressionPerceived", a.second.expressionPerceived);
+                  if (!a.second.pitches.empty()) {
+                        QJsonObject pitches;
+                        for (const auto& pc : a.second.pitches) {
+                              QJsonObject po;
+                              for (const char* key : { "curve", "perceived" }) {
+                                    const auto& in = key[0] == 'c' ? pc.second.points : pc.second.perceived;
+                                    if (in.empty())
+                                          continue;
+                                    QJsonArray pts;
+                                    for (const auto& pt : in)
+                                          pts.append(QJsonArray({ pt.first, std::round(pt.second * 10) / 10 }));
+                                    po[key] = pts;
+                                    }
+                              pitches[QString::number(pc.first)] = po;
+                              }
+                        o["pitches"] = pitches;
+                        }
                   arts[QString::number(a.first)] = o;
                   }
             patches[p.first] = arts;
@@ -988,15 +1075,19 @@ int calibratedController(const DynamicsCalibration& cal, const QString& patch, i
       }
 
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc, double db)
+                       const QString& refPatch, int refValue, int cc, double db, int pitch)
       {
-      const DynamicsCurve* c = cal.curve(patch, value);
-      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
-      if (!c || !ref || (c->drivenBy != "velocity" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+      const DynamicsCurve* cp = cal.curve(patch, value);
+      const DynamicsCurve* rp = cal.curve(refPatch, refValue);
+      if (!cp || !rp || (cp->drivenBy != "velocity" && cp->drivenBy != "both"))
             return -1;
-      if (c->byEar() && ref->byEar())                         // as loud by ear (the 50 ms level misjudges slow swells)
-            return c->perceivedInverse(ref->perceivedAt(cc) + db);
-      return c->inverse(ref->at(cc) + db);
+      const DynamicsCurve c = cp->atPitch(pitch);
+      const DynamicsCurve ref = rp->atPitch(pitch);
+      if (c.points.size() < 2 || ref.points.size() < 2)
+            return -1;
+      if (c.byEar() && ref.byEar())                           // as loud by ear (the 50 ms level misjudges slow swells)
+            return c.perceivedInverse(ref.perceivedAt(cc) + db);
+      return c.inverse(ref.at(cc) + db);
       }
 
 const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches)

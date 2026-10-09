@@ -85,6 +85,7 @@ class TestSoundLibrary : public QObject, public MTest
       void attackSalience();
       void noteSecondsWritten();
       void dynamicsCalibration();
+      void dynamicsCalibrationPitches();
       void heldOnPerformance();
       void dynamicsCheck();
       void timingCheck();
@@ -611,16 +612,17 @@ void TestSoundLibrary::spitfireMap()
                   QVERIFY(c && c.swapped);
                   QCOMPARE(c.articulation->name, QString("Long (Rachm.)"));
                   QVERIFY(!c.articulation->onsets.empty());
-                  // [slurs] quickLevel: the boost that matches Long in the passage (map quickLevel, re-measured
-                  // 2026-10-08 in context, per register, the same at every length); the nearest end's beyond the measured
+                  // [slurs] quickLevel: the boost that matches Long in the passage (map quickLevel, per register in
+                  // context, 2026-10-08; since 2026-10-09 per pitch along that pitch's Long (Rachm.) curve, the same at
+                  // every length); the nearest end's beyond the measured
                   const SoundLib::Articulation* rachm = c.articulation;
-                  QCOMPARE(rachm->quickLevelAt(55, 100), 1.3);
-                  QCOMPARE(rachm->quickLevelAt(75, 273), 1.3);
-                  QCOMPARE(rachm->quickLevelAt(76, 136), 2.1);
-                  QCOMPARE(rachm->quickLevelAt(82, 250), 0.6);
-                  QVERIFY(qAbs(rachm->quickLevelAt(78, std::sqrt(100.0 * 136.0)) - 2.1) < 1e-9);
-                  QCOMPARE(rachm->quickLevelAt(40, 20), 1.3);
-                  QCOMPARE(rachm->quickLevelAt(100, 5000), 0.6);
+                  QCOMPARE(rachm->quickLevelAt(55, 100), 4.0);
+                  QCOMPARE(rachm->quickLevelAt(75, 273), 3.3);
+                  QCOMPARE(rachm->quickLevelAt(76, 136), 5.9);
+                  QCOMPARE(rachm->quickLevelAt(82, 250), 1.1);
+                  QVERIFY(qAbs(rachm->quickLevelAt(78, std::sqrt(100.0 * 136.0)) - 3.8) < 1e-9);
+                  QCOMPARE(rachm->quickLevelAt(40, 20), 4.0);
+                  QCOMPARE(rachm->quickLevelAt(100, 5000), 1.9);
                   QCOMPARE(SoundLib::Articulation().quickLevelAt(64, 50), 0.0);
                   w.slurQuick = 0;
                   QVERIFY(!SoundLib::choose(li.patches(), w).swapped);
@@ -4927,6 +4929,76 @@ void TestSoundLibrary::dynamicsCalibration()
       cal2->setCurve("Violin", 1, line("controller", -45, 0.2));
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 32), 41);
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 80), 65);
+      }
+
+//---------------------------------------------------------
+//   dynamicsCalibrationPitches
+//    a technique measured at several pitches (sso_rachm_register_curves.json: Long (Rachm.)): each note's own
+//    pitch's curve (atPitch: linear in dB between the two nearest measured pitches, the nearest beyond them);
+//    louder on the dynamics CC past a dip (raise); a file without pitches plays as before
+//---------------------------------------------------------
+
+void TestSoundLibrary::dynamicsCalibrationPitches()
+      {
+      // Violas Long (Rachm.) as measured (loud50, dB) at CC1 64 .. 127: 55 rises, 69 dips between 64 and 80
+      SoundLib::DynamicsCurve c;
+      c.drivenBy = "controller";
+      c.points = { { 32, -29.7 }, { 80, -30.6 }, { 112, -27.1 }, { 127, -26.7 } };     // the one curve (at 69)
+      c.pitches[55].points = { { 64, -31.3 }, { 68, -31.1 }, { 72, -30.7 }, { 76, -29.9 }, { 80, -29.0 }, { 88, -27.6 }, { 127, -25.3 } };
+      c.pitches[69].points = { { 64, -31.1 }, { 68, -31.6 }, { 72, -32.1 }, { 76, -31.4 }, { 80, -30.6 }, { 88, -29.1 }, { 127, -26.6 } };
+      c.pitches[69].perceived = { { 64, 52.7 }, { 127, 58.8 } };
+      // pitch 55: 1 dB over CC1 64 (-31.3) is reached between 72 and 76 (-30.3: 74), inside 64 .. 89
+      const SoundLib::DynamicsCurve c55 = c.atPitch(55);
+      QCOMPARE(c55.raise(64, 1.0), 74);
+      QVERIFY(c55.raise(64, 1.0) > 64 && c55.raise(64, 1.0) < 89);
+      QCOMPARE(c55.perceived.size(), size_t(0));
+      // the one curve (measured at 69) can't: from 64 (-30.3) it reaches -29.3 only past its dip, at 92
+      QCOMPARE(c.raise(64, 1.0), 92);
+      // pitch 69 at the dip: from 72 (-32.1), +0.5 dB: the first crossing (64, under 72) doesn't count; the first
+      // CC over 72 that reaches -31.6 does (75; before: 72, nothing louder); from 64 +0.5: past the dip, 80
+      const SoundLib::DynamicsCurve c69 = c.atPitch(69);
+      QCOMPARE(c69.inverse(-31.6), 64);
+      QCOMPARE(c69.raise(72, 0.5), 75);
+      QCOMPARE(c69.raise(64, 0.5), 80);
+      QCOMPARE(c69.raise(64, 10.0), 127);                    // never reached: the top
+      QCOMPARE(c69.perceived.size(), size_t(2));
+      // between: linear in pitch at each CC (62: halfway, at both curves' points); beyond: the nearest
+      const SoundLib::DynamicsCurve c62 = c.atPitch(62);
+      QVERIFY(std::fabs(c62.at(64) - (-31.2)) < 1e-9);
+      QVERIFY(std::fabs(c62.at(72) - (-31.4)) < 1e-9);
+      QVERIFY(std::fabs(c.atPitch(40).at(76) - (-29.9)) < 1e-9);
+      QVERIFY(std::fabs(c.atPitch(90).at(76) - (-31.4)) < 1e-9);
+      QVERIFY(std::fabs(c.atPitch(-1).at(80) - (-30.6)) < 1e-9);      // no pitch: the one curve
+      // written and read back
+      SoundLib::DynamicsCalibration cal;
+      cal.setCurve("Violas", 16, c);
+      QTemporaryDir dir;
+      QVERIFY(cal.write(dir.path() + "/dynamics.json"));
+      SoundLib::DynamicsCalibration back;
+      QVERIFY(back.read(dir.path() + "/dynamics.json"));
+      QCOMPARE(back.curve("Violas", 16)->pitches.size(), size_t(2));
+      QCOMPARE(back.curve("Violas", 16)->atPitch(69).raise(72, 0.5), 75);
+      QCOMPARE(back.curve("Violas", 16)->atPitch(55).raise(64, 1.0), 74);
+
+      // an older file (no pitches): every pitch the one curve, inverse and calibratedVelocity as before
+      QFile f(dir.path() + "/old.json");
+      QVERIFY(f.open(QIODevice::WriteOnly));
+      f.write("{\"patches\":{\"Violin\":{\"1\":{\"drivenBy\":\"controller\",\"curve\":[[16,-38.4],[64,-33.6],[127,-27.3]]},"
+              "\"40\":{\"drivenBy\":\"velocity\",\"curve\":[[16,-63.6],[64,-44.4],[127,-19.2]]}}}}");
+      f.close();
+      SoundLib::DynamicsCalibration old;
+      QVERIFY(old.read(dir.path() + "/old.json"));
+      const SoundLib::DynamicsCurve* l = old.curve("Violin", 1);
+      QVERIFY(l && l->pitches.empty());
+      for (int pitch : { -1, 40, 69, 100 }) {
+            const SoundLib::DynamicsCurve p = l->atPitch(pitch);
+            QCOMPARE(p.points, l->points);
+            for (int x : { 20, 64, 90 })
+                  for (double db : { 0.5, 2.0, 6.0 })
+                        QCOMPARE(p.raise(x, db), qMax(l->inverse(l->at(x) + db), x));      // (as marcatoLevel's map did)
+            QCOMPARE(SoundLib::calibratedVelocity(old, "Violin", 40, "Violin", 1, 80, 1.5, pitch),
+                     SoundLib::calibratedVelocity(old, "Violin", 40, "Violin", 1, 80, 1.5));
+            }
       }
 
 //---------------------------------------------------------
