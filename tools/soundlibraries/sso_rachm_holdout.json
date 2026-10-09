@@ -1,0 +1,5945 @@
+{
+ "about": "Long (Rachm.) hold-out test: tools/soundlibraries/make_rachm_holdout.py scores rendered with the real SSO in Kontakt 8 on the Windows test VM (kthost offline renders, 2026-10-09). q2 = Recommended preset ([slurs] quick 2, quickLevel 1, calibrated levels); q0 = quick 0 (plain Long, the reference). Events from tst_liveequivalence dumpEvents; CC1 replaced by the app's calibrated values (inverse of value 16's curve in the shipped dynamics.json, max(y, x), 1..127). Basses have no Rachm.: q0 only.",
+ "method": {
+  "arrival": "ms of measured arrival minus written time (negative = early). Harm: analyze_sweep.arrival on the odd+even sum, window from the previous note's written start -0.05 s to the written end +0.15 s, only after an adjacent note of a different pitch. Loud: the note's own instance (odd/even notes rendered separately), perceived envelope t15 - 30 ms; dropped when masked (envelope at the window start within 15 dB of the peak).",
+  "rasch": "warn: |arrival| above 30 up to 50 ms; fail: above 50 ms (Rasch: 30-50 ms between players)",
+  "failsBoth": "notes where both detectors exceed 50 ms in magnitude",
+  "pitchModelCV": "per-pitch median offset fitted on even slur groups, tested on odd ones",
+  "levelDb": "perceived envelope power-averaged over each slur group's written span, q2 minus q0, dB",
+  "unsplitCheck": "levels of the unsplit violas q2 render against the odd+even sum"
+ },
+ "parts": {
+  "Violins 1": {
+   "q2": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 191,
+      "median": 36.5,
+      "sd": 52.5,
+      "worst": 227.7,
+      "warn": 36,
+      "fail": 88
+     },
+     "swapped held out": {
+      "n": 616,
+      "median": 78.0,
+      "sd": 90.4,
+      "worst": -813.3,
+      "warn": 120,
+      "fail": 405
+     },
+     "slurred not swapped": {
+      "n": 39,
+      "median": 66.3,
+      "sd": 182.4,
+      "worst": -1011.2,
+      "warn": 8,
+      "fail": 25
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 18,
+      "median": 2.3,
+      "sd": 21.9,
+      "worst": 53.9,
+      "warn": 2,
+      "fail": 1
+     },
+     "swapped held out": {
+      "n": 118,
+      "median": -6.8,
+      "sd": 30.3,
+      "worst": -77.2,
+      "warn": 14,
+      "fail": 23
+     },
+     "slurred not swapped": {
+      "n": 32,
+      "median": 1.9,
+      "sd": 28.1,
+      "worst": 67.9,
+      "warn": 3,
+      "fail": 6
+     },
+     "reference (unslurred)": {
+      "n": 22,
+      "median": 38.8,
+      "sd": 21.9,
+      "worst": 98.6,
+      "warn": 15,
+      "fail": 3
+     }
+    }
+   },
+   "q0": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 201,
+      "median": 91.3,
+      "sd": 57.1,
+      "worst": 280.9,
+      "warn": 22,
+      "fail": 175
+     },
+     "swapped held out": {
+      "n": 652,
+      "median": 73.8,
+      "sd": 61.6,
+      "worst": -943.0,
+      "warn": 94,
+      "fail": 450
+     },
+     "slurred not swapped": {
+      "n": 39,
+      "median": 81.3,
+      "sd": 56.2,
+      "worst": 265.9,
+      "warn": 8,
+      "fail": 28
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 18,
+      "median": -5.3,
+      "sd": 26.9,
+      "worst": 64.1,
+      "warn": 2,
+      "fail": 2
+     },
+     "swapped held out": {
+      "n": 121,
+      "median": 4.7,
+      "sd": 26.6,
+      "worst": 69.7,
+      "warn": 21,
+      "fail": 11
+     },
+     "slurred not swapped": {
+      "n": 32,
+      "median": 2.3,
+      "sd": 28.5,
+      "worst": 67.9,
+      "warn": 5,
+      "fail": 6
+     },
+     "reference (unslurred)": {
+      "n": 22,
+      "median": 36.7,
+      "sd": 22.2,
+      "worst": 98.6,
+      "warn": 9,
+      "fail": 3
+     }
+    }
+   },
+   "byPitch": {
+    "55": {
+     "Loud": {
+      "n": 20,
+      "median": -64.2
+     },
+     "inWhence": false
+    },
+    "56": {
+     "Harm": {
+      "n": 13,
+      "median": 131.2
+     },
+     "Loud": {
+      "n": 7,
+      "median": -46.1
+     },
+     "inWhence": false
+    },
+    "57": {
+     "Harm": {
+      "n": 22,
+      "median": 101.3
+     },
+     "Loud": {
+      "n": 8,
+      "median": -14.0
+     },
+     "inWhence": false
+    },
+    "58": {
+     "Harm": {
+      "n": 13,
+      "median": 132.9
+     },
+     "Loud": {
+      "n": 2,
+      "median": -45.3
+     },
+     "inWhence": false
+    },
+    "59": {
+     "Harm": {
+      "n": 22,
+      "median": 104.6
+     },
+     "Loud": {
+      "n": 5,
+      "median": -19.4
+     },
+     "inWhence": false
+    },
+    "60": {
+     "Harm": {
+      "n": 12,
+      "median": 12.3
+     },
+     "Loud": {
+      "n": 1,
+      "median": -36.0
+     },
+     "inWhence": false
+    },
+    "61": {
+     "Harm": {
+      "n": 24,
+      "median": 80.5
+     },
+     "Loud": {
+      "n": 4,
+      "median": -2.5
+     },
+     "inWhence": false
+    },
+    "62": {
+     "Harm": {
+      "n": 17,
+      "median": 48.1
+     },
+     "Loud": {
+      "n": 1,
+      "median": -61.3
+     },
+     "inWhence": false
+    },
+    "63": {
+     "Harm": {
+      "n": 22,
+      "median": 48.1
+     },
+     "Loud": {
+      "n": 6,
+      "median": -22.2
+     },
+     "inWhence": false
+    },
+    "64": {
+     "Harm": {
+      "n": 14,
+      "median": 117.9
+     },
+     "inWhence": false
+    },
+    "65": {
+     "Harm": {
+      "n": 21,
+      "median": 136.2
+     },
+     "Loud": {
+      "n": 3,
+      "median": 2.7
+     },
+     "inWhence": false
+    },
+    "66": {
+     "Harm": {
+      "n": 14,
+      "median": 172.8
+     },
+     "inWhence": false
+    },
+    "67": {
+     "Harm": {
+      "n": 26,
+      "median": 137.9
+     },
+     "Loud": {
+      "n": 5,
+      "median": -4.6
+     },
+     "inWhence": false
+    },
+    "68": {
+     "Harm": {
+      "n": 16,
+      "median": 125.4
+     },
+     "inWhence": false
+    },
+    "69": {
+     "Harm": {
+      "n": 26,
+      "median": 88.0
+     },
+     "Loud": {
+      "n": 6,
+      "median": 17.5
+     },
+     "inWhence": false
+    },
+    "70": {
+     "Harm": {
+      "n": 15,
+      "median": 11.5
+     },
+     "inWhence": true
+    },
+    "71": {
+     "Harm": {
+      "n": 22,
+      "median": 58.1
+     },
+     "Loud": {
+      "n": 3,
+      "median": -7.4
+     },
+     "inWhence": false
+    },
+    "72": {
+     "Harm": {
+      "n": 13,
+      "median": 93.0
+     },
+     "inWhence": true
+    },
+    "73": {
+     "Harm": {
+      "n": 25,
+      "median": 71.4
+     },
+     "Loud": {
+      "n": 4,
+      "median": -6.9
+     },
+     "inWhence": true
+    },
+    "74": {
+     "Harm": {
+      "n": 8,
+      "median": 106.3
+     },
+     "inWhence": false
+    },
+    "75": {
+     "Harm": {
+      "n": 23,
+      "median": 83.0
+     },
+     "Loud": {
+      "n": 6,
+      "median": 7.3
+     },
+     "inWhence": true
+    },
+    "76": {
+     "Harm": {
+      "n": 14,
+      "median": 49.8
+     },
+     "inWhence": true
+    },
+    "77": {
+     "Harm": {
+      "n": 20,
+      "median": 39.8
+     },
+     "Loud": {
+      "n": 3,
+      "median": -0.9
+     },
+     "inWhence": false
+    },
+    "78": {
+     "Harm": {
+      "n": 13,
+      "median": 31.5
+     },
+     "inWhence": true
+    },
+    "79": {
+     "Harm": {
+      "n": 28,
+      "median": 47.2
+     },
+     "Loud": {
+      "n": 4,
+      "median": -20.4
+     },
+     "inWhence": true
+    },
+    "80": {
+     "Harm": {
+      "n": 16,
+      "median": 48.1
+     },
+     "inWhence": false
+    },
+    "81": {
+     "Harm": {
+      "n": 26,
+      "median": 101.3
+     },
+     "Loud": {
+      "n": 6,
+      "median": 18.0
+     },
+     "inWhence": false
+    },
+    "82": {
+     "Harm": {
+      "n": 15,
+      "median": 61.4
+     },
+     "inWhence": true
+    },
+    "83": {
+     "Harm": {
+      "n": 22,
+      "median": 49.8
+     },
+     "Loud": {
+      "n": 3,
+      "median": 2.2
+     },
+     "inWhence": false
+    },
+    "84": {
+     "Harm": {
+      "n": 14,
+      "median": 28.1
+     },
+     "inWhence": true
+    },
+    "85": {
+     "Harm": {
+      "n": 31,
+      "median": 23.1
+     },
+     "Loud": {
+      "n": 4,
+      "median": -1.4
+     },
+     "inWhence": true
+    },
+    "86": {
+     "Harm": {
+      "n": 17,
+      "median": 46.4
+     },
+     "inWhence": false
+    },
+    "87": {
+     "Harm": {
+      "n": 26,
+      "median": 33.1
+     },
+     "Loud": {
+      "n": 6,
+      "median": -2.0
+     },
+     "inWhence": false
+    },
+    "88": {
+     "Harm": {
+      "n": 17,
+      "median": 43.1
+     },
+     "inWhence": false
+    },
+    "89": {
+     "Harm": {
+      "n": 22,
+      "median": 29.8
+     },
+     "Loud": {
+      "n": 3,
+      "median": -2.9
+     },
+     "inWhence": false
+    },
+    "90": {
+     "Harm": {
+      "n": 15,
+      "median": 31.5
+     },
+     "inWhence": false
+    },
+    "91": {
+     "Harm": {
+      "n": 28,
+      "median": 30.6
+     },
+     "Loud": {
+      "n": 4,
+      "median": 0.2
+     },
+     "inWhence": false
+    },
+    "92": {
+     "Harm": {
+      "n": 17,
+      "median": 127.9
+     },
+     "inWhence": false
+    },
+    "93": {
+     "Harm": {
+      "n": 28,
+      "median": 70.5
+     },
+     "Loud": {
+      "n": 9,
+      "median": 21.9
+     },
+     "inWhence": false
+    },
+    "94": {
+     "Harm": {
+      "n": 15,
+      "median": 176.1
+     },
+     "inWhence": false
+    },
+    "95": {
+     "Harm": {
+      "n": 30,
+      "median": 114.6
+     },
+     "Loud": {
+      "n": 9,
+      "median": 16.7
+     },
+     "inWhence": false
+    },
+    "96": {
+     "Harm": {
+      "n": 11,
+      "median": 103.0
+     },
+     "inWhence": false
+    },
+    "97": {
+     "Harm": {
+      "n": 14,
+      "median": 127.9
+     },
+     "Loud": {
+      "n": 4,
+      "median": 29.9
+     },
+     "inWhence": false
+    }
+   },
+   "byLine": {
+    "A 32nd": {
+     "Harm": {
+      "n": 71,
+      "median": 71.4,
+      "sd": 48.8,
+      "worst": 191.1,
+      "warn": 13,
+      "fail": 44
+     },
+     "Loud": {
+      "n": 1,
+      "median": -77.2,
+      "sd": 0.0,
+      "worst": -77.2,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "A 16th": {
+     "Harm": {
+      "n": 81,
+      "median": 63.1,
+      "sd": 58.4,
+      "worst": 227.7,
+      "warn": 17,
+      "fail": 49
+     },
+     "Loud": {
+      "n": 2,
+      "median": -55.2,
+      "sd": 9.2,
+      "worst": -64.4,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "A 8th": {
+     "Harm": {
+      "n": 83,
+      "median": 61.4,
+      "sd": 58.2,
+      "worst": 186.1,
+      "warn": 20,
+      "fail": 49
+     },
+     "Loud": {
+      "n": 2,
+      "median": -43.5,
+      "sd": 18.3,
+      "worst": -61.8,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "B 1": {
+     "Harm": {
+      "n": 20,
+      "median": 68.8,
+      "sd": 57.8,
+      "worst": 186.1,
+      "warn": 3,
+      "fail": 12
+     },
+     "Loud": {
+      "n": 1,
+      "median": -73.1,
+      "sd": 0.0,
+      "worst": -73.1,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "B 2": {
+     "Harm": {
+      "n": 26,
+      "median": 80.5,
+      "sd": 73.3,
+      "worst": 262.6,
+      "warn": 6,
+      "fail": 17
+     },
+     "Loud": {
+      "n": 2,
+      "median": -60.0,
+      "sd": 1.7,
+      "worst": -61.7,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "B 4": {
+     "Harm": {
+      "n": 30,
+      "median": 78.9,
+      "sd": 61.2,
+      "worst": 241.0,
+      "warn": 5,
+      "fail": 22
+     },
+     "Loud": {
+      "n": 2,
+      "median": -46.2,
+      "sd": 15.8,
+      "worst": -62.0,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "B 8": {
+     "Harm": {
+      "n": 31,
+      "median": 58.1,
+      "sd": 104.0,
+      "worst": -336.1,
+      "warn": 6,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 32,
+      "median": -5.8,
+      "sd": 15.5,
+      "worst": -39.4,
+      "warn": 3,
+      "fail": 0
+     }
+    },
+    "B 12": {
+     "Harm": {
+      "n": 31,
+      "median": 64.7,
+      "sd": 172.4,
+      "worst": -608.8,
+      "warn": 3,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 32,
+      "median": 2.5,
+      "sd": 14.7,
+      "worst": 36.7,
+      "warn": 1,
+      "fail": 0
+     }
+    },
+    "B 15": {
+     "Harm": {
+      "n": 31,
+      "median": 64.7,
+      "sd": 221.1,
+      "worst": -813.3,
+      "warn": 4,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 32,
+      "median": 7.0,
+      "sd": 16.4,
+      "worst": 53.9,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "C 3": {
+     "Harm": {
+      "n": 25,
+      "median": 73.0,
+      "sd": 90.5,
+      "worst": 207.7,
+      "warn": 3,
+      "fail": 16
+     },
+     "Loud": {
+      "n": 2,
+      "median": -57.0,
+      "sd": 6.7,
+      "worst": -63.6,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "C 4": {
+     "Harm": {
+      "n": 21,
+      "median": 73.0,
+      "sd": 68.2,
+      "worst": 212.7,
+      "warn": 3,
+      "fail": 14
+     },
+     "Loud": {
+      "n": 2,
+      "median": -59.9,
+      "sd": 9.1,
+      "worst": -69.0,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "C 5": {
+     "Harm": {
+      "n": 17,
+      "median": 83.0,
+      "sd": 60.1,
+      "worst": 212.7,
+      "warn": 2,
+      "fail": 13
+     },
+     "Loud": {
+      "n": 2,
+      "median": -50.1,
+      "sd": 14.1,
+      "worst": -64.3,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "C 7": {
+     "Harm": {
+      "n": 20,
+      "median": 95.5,
+      "sd": 67.7,
+      "worst": 207.7,
+      "warn": 3,
+      "fail": 13
+     },
+     "Loud": {
+      "n": 2,
+      "median": -62.9,
+      "sd": 1.6,
+      "worst": -64.6,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "C 12": {
+     "Harm": {
+      "n": 13,
+      "median": 33.1,
+      "sd": 109.6,
+      "worst": 177.8,
+      "warn": 1,
+      "fail": 10
+     },
+     "Loud": {
+      "n": 2,
+      "median": -38.4,
+      "sd": 26.6,
+      "worst": -65.0,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "D": {
+     "Harm": {
+      "n": 43,
+      "median": 58.1,
+      "sd": 49.8,
+      "worst": 182.8,
+      "warn": 8,
+      "fail": 25
+     },
+     "Loud": {
+      "n": 2,
+      "median": -46.1,
+      "sd": 5.9,
+      "worst": -52.0,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "E 2": {
+     "Harm": {
+      "n": 40,
+      "median": 60.5,
+      "sd": 60.0,
+      "worst": 207.7,
+      "warn": 8,
+      "fail": 23
+     },
+     "Loud": {
+      "n": 2,
+      "median": -55.0,
+      "sd": 9.2,
+      "worst": -64.2,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "E 8": {
+     "Harm": {
+      "n": 41,
+      "median": 68.1,
+      "sd": 59.3,
+      "worst": 207.7,
+      "warn": 7,
+      "fail": 25
+     },
+     "Loud": {
+      "n": 2,
+      "median": -57.1,
+      "sd": 9.1,
+      "worst": -66.3,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "E long end": {
+     "Harm": {
+      "n": 61,
+      "median": 48.1,
+      "sd": 65.0,
+      "worst": 245.9,
+      "warn": 16,
+      "fail": 29
+     },
+     "Loud": {
+      "n": 9,
+      "median": -40.2,
+      "sd": 19.2,
+      "worst": -63.4,
+      "warn": 4,
+      "fail": 1
+     }
+    },
+    "F p": {
+     "Harm": {
+      "n": 41,
+      "median": 78.0,
+      "sd": 43.0,
+      "worst": 197.7,
+      "warn": 11,
+      "fail": 25
+     },
+     "Loud": {
+      "n": 1,
+      "median": -64.4,
+      "sd": 0.0,
+      "worst": -64.4,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "F f": {
+     "Harm": {
+      "n": 41,
+      "median": 68.1,
+      "sd": 59.3,
+      "worst": 207.7,
+      "warn": 9,
+      "fail": 24
+     },
+     "Loud": {
+      "n": 2,
+      "median": -57.4,
+      "sd": 9.1,
+      "worst": -66.5,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "F cresc": {
+     "Harm": {
+      "n": 40,
+      "median": 55.6,
+      "sd": 57.0,
+      "worst": 232.7,
+      "warn": 8,
+      "fail": 23
+     },
+     "Loud": {
+      "n": 2,
+      "median": -59.5,
+      "sd": 4.2,
+      "worst": -63.6,
+      "warn": 0,
+      "fail": 2
+     }
+    }
+   },
+   "failsBoth": [
+    {
+     "bar": 27,
+     "pitch": 57,
+     "line": "B 2",
+     "harmMs": 157.8,
+     "loudMs": -58.4,
+     "inWhence": false
+    },
+    {
+     "bar": 65,
+     "pitch": 79,
+     "line": "B 15",
+     "harmMs": 179.4,
+     "loudMs": 53.9,
+     "inWhence": true
+    },
+    {
+     "bar": 90,
+     "pitch": 58,
+     "line": "C 3",
+     "harmMs": 132.9,
+     "loudMs": -50.3,
+     "inWhence": false
+    },
+    {
+     "bar": 93,
+     "pitch": 59,
+     "line": "C 4",
+     "harmMs": 88.0,
+     "loudMs": -50.7,
+     "inWhence": false
+    },
+    {
+     "bar": 99,
+     "pitch": 62,
+     "line": "C 7",
+     "harmMs": 117.9,
+     "loudMs": -61.3,
+     "inWhence": false
+    },
+    {
+     "bar": 105,
+     "pitch": 59,
+     "line": "D",
+     "harmMs": 127.9,
+     "loudMs": -52.0,
+     "inWhence": false
+    },
+    {
+     "bar": 135,
+     "pitch": 56,
+     "line": "F cresc",
+     "harmMs": 98.0,
+     "loudMs": -55.3,
+     "inWhence": false
+    }
+   ],
+   "pitchModelCV": {
+    "Harm": {
+     "before": {
+      "n": 410,
+      "median": 64.7,
+      "sd": 62.4,
+      "worst": 262.6,
+      "warn": 66,
+      "fail": 250
+     },
+     "after": {
+      "n": 410,
+      "median": -2.1,
+      "sd": 55.6,
+      "worst": -254.4,
+      "warn": 50,
+      "fail": 119
+     }
+    },
+    "Loud": {
+     "before": {
+      "n": 69,
+      "median": -5.0,
+      "sd": 29.5,
+      "worst": -77.2,
+      "warn": 8,
+      "fail": 13
+     },
+     "after": {
+      "n": 69,
+      "median": -2.9,
+      "sd": 20.6,
+      "worst": 62.7,
+      "warn": 7,
+      "fail": 3
+     }
+    }
+   },
+   "levelDb": {
+    "reference (noise)": {
+     "n": 22,
+     "median": -0.0,
+     "sd": 0.33,
+     "min": -0.72,
+     "max": 0.01
+    },
+    "swapped all": {
+     "n": 225,
+     "median": 1.2,
+     "sd": 1.45,
+     "min": -5.59,
+     "max": 4.4
+    },
+    "swapped held out": {
+     "n": 117,
+     "median": 0.96,
+     "sd": 1.46,
+     "min": -5.59,
+     "max": 2.93
+    },
+    "dyn mf": {
+     "n": 192,
+     "median": 1.36,
+     "sd": 0.99,
+     "min": -1.43,
+     "max": 4.4
+    },
+    "swapped mixed": {
+     "n": 105,
+     "median": 1.55,
+     "sd": 1.38,
+     "min": -3.24,
+     "max": 4.4
+    },
+    "length 1": {
+     "n": 8,
+     "median": 0.67,
+     "sd": 0.72,
+     "min": 0.08,
+     "max": 2.55
+    },
+    "length 2": {
+     "n": 8,
+     "median": 1.38,
+     "sd": 0.44,
+     "min": 0.5,
+     "max": 1.94
+    },
+    "length 4": {
+     "n": 8,
+     "median": 1.67,
+     "sd": 0.78,
+     "min": 0.5,
+     "max": 2.94
+    },
+    "length 8": {
+     "n": 8,
+     "median": 1.97,
+     "sd": 0.86,
+     "min": 1.06,
+     "max": 3.65
+    },
+    "length 12": {
+     "n": 8,
+     "median": 2.24,
+     "sd": 0.64,
+     "min": 1.46,
+     "max": 3.43
+    },
+    "length 15": {
+     "n": 8,
+     "median": 2.23,
+     "sd": 0.57,
+     "min": 1.39,
+     "max": 3.31
+    },
+    "slurred not swapped": {
+     "n": 8,
+     "median": -0.15,
+     "sd": 0.23,
+     "min": -0.65,
+     "max": 0.2
+    },
+    "swapped in Whence": {
+     "n": 3,
+     "median": 1.92,
+     "sd": 0.68,
+     "min": 0.9,
+     "max": 2.54
+    },
+    "dyn p": {
+     "n": 11,
+     "median": -2.44,
+     "sd": 1.42,
+     "min": -5.59,
+     "max": -0.65
+    },
+    "dyn f": {
+     "n": 11,
+     "median": 0.9,
+     "sd": 0.61,
+     "min": 0.23,
+     "max": 2.09
+    },
+    "dyn p cresc": {
+     "n": 11,
+     "median": 0.81,
+     "sd": 2.36,
+     "min": -4.91,
+     "max": 1.99
+    }
+   }
+  },
+  "Violins 2": {
+   "q2": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 0
+     },
+     "swapped held out": {
+      "n": 795,
+      "median": 56.4,
+      "sd": 69.6,
+      "worst": 262.6,
+      "warn": 120,
+      "fail": 443
+     },
+     "slurred not swapped": {
+      "n": 39,
+      "median": 58.0,
+      "sd": 188.7,
+      "worst": -1084.4,
+      "warn": 6,
+      "fail": 24
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 0
+     },
+     "swapped held out": {
+      "n": 139,
+      "median": -19.5,
+      "sd": 27.3,
+      "worst": -89.6,
+      "warn": 23,
+      "fail": 25
+     },
+     "slurred not swapped": {
+      "n": 32,
+      "median": -17.9,
+      "sd": 36.8,
+      "worst": 100.7,
+      "warn": 9,
+      "fail": 7
+     },
+     "reference (unslurred)": {
+      "n": 22,
+      "median": -98.1,
+      "sd": 44.1,
+      "worst": -102.3,
+      "warn": 3,
+      "fail": 17
+     }
+    }
+   },
+   "q0": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 0
+     },
+     "swapped held out": {
+      "n": 838,
+      "median": 18.2,
+      "sd": 74.2,
+      "worst": -1129.3,
+      "warn": 128,
+      "fail": 212
+     },
+     "slurred not swapped": {
+      "n": 39,
+      "median": 73.0,
+      "sd": 54.0,
+      "worst": 132.9,
+      "warn": 6,
+      "fail": 22
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 0
+     },
+     "swapped held out": {
+      "n": 135,
+      "median": -61.2,
+      "sd": 48.3,
+      "worst": 193.6,
+      "warn": 29,
+      "fail": 80
+     },
+     "slurred not swapped": {
+      "n": 32,
+      "median": -17.5,
+      "sd": 40.5,
+      "worst": 100.7,
+      "warn": 9,
+      "fail": 9
+     },
+     "reference (unslurred)": {
+      "n": 22,
+      "median": -42.7,
+      "sd": 53.2,
+      "worst": 116.1,
+      "warn": 4,
+      "fail": 12
+     }
+    }
+   },
+   "byPitch": {
+    "55": {
+     "Loud": {
+      "n": 20,
+      "median": -29.8
+     },
+     "inWhence": false
+    },
+    "56": {
+     "Loud": {
+      "n": 9,
+      "median": -26.8
+     },
+     "Harm": {
+      "n": 12,
+      "median": 212.7
+     },
+     "inWhence": false
+    },
+    "57": {
+     "Harm": {
+      "n": 23,
+      "median": 84.6
+     },
+     "Loud": {
+      "n": 9,
+      "median": -11.1
+     },
+     "inWhence": false
+    },
+    "58": {
+     "Harm": {
+      "n": 14,
+      "median": 8.2
+     },
+     "Loud": {
+      "n": 2,
+      "median": -54.6
+     },
+     "inWhence": false
+    },
+    "59": {
+     "Harm": {
+      "n": 19,
+      "median": -16.8
+     },
+     "Loud": {
+      "n": 5,
+      "median": -64.3
+     },
+     "inWhence": false
+    },
+    "60": {
+     "Harm": {
+      "n": 14,
+      "median": 68.0
+     },
+     "Loud": {
+      "n": 1,
+      "median": -32.8
+     },
+     "inWhence": false
+    },
+    "61": {
+     "Harm": {
+      "n": 24,
+      "median": 39.8
+     },
+     "Loud": {
+      "n": 4,
+      "median": 0.0
+     },
+     "inWhence": false
+    },
+    "62": {
+     "Harm": {
+      "n": 17,
+      "median": 146.2
+     },
+     "Loud": {
+      "n": 1,
+      "median": -48.1
+     },
+     "inWhence": false
+    },
+    "63": {
+     "Harm": {
+      "n": 23,
+      "median": 147.9
+     },
+     "Loud": {
+      "n": 6,
+      "median": 15.1
+     },
+     "inWhence": false
+    },
+    "64": {
+     "Harm": {
+      "n": 14,
+      "median": -1.8
+     },
+     "inWhence": false
+    },
+    "65": {
+     "Harm": {
+      "n": 20,
+      "median": 28.1
+     },
+     "Loud": {
+      "n": 3,
+      "median": -7.3
+     },
+     "inWhence": false
+    },
+    "66": {
+     "Harm": {
+      "n": 14,
+      "median": 78.0
+     },
+     "inWhence": false
+    },
+    "67": {
+     "Harm": {
+      "n": 27,
+      "median": 202.7
+     },
+     "Loud": {
+      "n": 5,
+      "median": -9.6
+     },
+     "inWhence": false
+    },
+    "68": {
+     "Harm": {
+      "n": 16,
+      "median": 43.1
+     },
+     "inWhence": false
+    },
+    "69": {
+     "Harm": {
+      "n": 26,
+      "median": 33.9
+     },
+     "Loud": {
+      "n": 6,
+      "median": 13.4
+     },
+     "inWhence": false
+    },
+    "70": {
+     "Harm": {
+      "n": 14,
+      "median": 192.8
+     },
+     "inWhence": false
+    },
+    "71": {
+     "Harm": {
+      "n": 21,
+      "median": 73.0
+     },
+     "Loud": {
+      "n": 3,
+      "median": 7.5
+     },
+     "inWhence": false
+    },
+    "72": {
+     "Harm": {
+      "n": 12,
+      "median": 13.2
+     },
+     "inWhence": false
+    },
+    "73": {
+     "Harm": {
+      "n": 27,
+      "median": 13.2
+     },
+     "Loud": {
+      "n": 4,
+      "median": -9.4
+     },
+     "inWhence": false
+    },
+    "74": {
+     "Harm": {
+      "n": 7,
+      "median": 68.0
+     },
+     "inWhence": false
+    },
+    "75": {
+     "Harm": {
+      "n": 22,
+      "median": 34.8
+     },
+     "Loud": {
+      "n": 6,
+      "median": -58.5
+     },
+     "inWhence": false
+    },
+    "76": {
+     "Harm": {
+      "n": 15,
+      "median": 13.2
+     },
+     "inWhence": false
+    },
+    "77": {
+     "Harm": {
+      "n": 22,
+      "median": 53.1
+     },
+     "Loud": {
+      "n": 3,
+      "median": -2.6
+     },
+     "inWhence": false
+    },
+    "78": {
+     "Harm": {
+      "n": 13,
+      "median": 18.2
+     },
+     "inWhence": false
+    },
+    "79": {
+     "Harm": {
+      "n": 28,
+      "median": 23.1
+     },
+     "Loud": {
+      "n": 4,
+      "median": -10.4
+     },
+     "inWhence": false
+    },
+    "80": {
+     "Harm": {
+      "n": 16,
+      "median": 18.2
+     },
+     "inWhence": false
+    },
+    "81": {
+     "Harm": {
+      "n": 21,
+      "median": -21.8
+     },
+     "Loud": {
+      "n": 6,
+      "median": -77.7
+     },
+     "inWhence": false
+    },
+    "82": {
+     "Harm": {
+      "n": 15,
+      "median": 33.1
+     },
+     "inWhence": false
+    },
+    "83": {
+     "Harm": {
+      "n": 19,
+      "median": 13.2
+     },
+     "Loud": {
+      "n": 3,
+      "median": -7.8
+     },
+     "inWhence": false
+    },
+    "84": {
+     "Harm": {
+      "n": 14,
+      "median": 70.5
+     },
+     "inWhence": false
+    },
+    "85": {
+     "Harm": {
+      "n": 27,
+      "median": 76.4
+     },
+     "Loud": {
+      "n": 4,
+      "median": 1.1
+     },
+     "inWhence": false
+    },
+    "86": {
+     "Harm": {
+      "n": 17,
+      "median": 103.0
+     },
+     "inWhence": false
+    },
+    "87": {
+     "Harm": {
+      "n": 25,
+      "median": 91.3
+     },
+     "Loud": {
+      "n": 6,
+      "median": -8.0
+     },
+     "inWhence": false
+    },
+    "88": {
+     "Harm": {
+      "n": 15,
+      "median": 13.2
+     },
+     "inWhence": false
+    },
+    "89": {
+     "Harm": {
+      "n": 23,
+      "median": 23.1
+     },
+     "Loud": {
+      "n": 3,
+      "median": -12.9
+     },
+     "inWhence": false
+    },
+    "90": {
+     "Harm": {
+      "n": 15,
+      "median": 142.9
+     },
+     "inWhence": false
+    },
+    "91": {
+     "Harm": {
+      "n": 24,
+      "median": 172.8
+     },
+     "Loud": {
+      "n": 4,
+      "median": -2.4
+     },
+     "inWhence": false
+    },
+    "92": {
+     "Harm": {
+      "n": 16,
+      "median": 59.8
+     },
+     "inWhence": false
+    },
+    "93": {
+     "Harm": {
+      "n": 30,
+      "median": 49.8
+     },
+     "Loud": {
+      "n": 9,
+      "median": 18.5
+     },
+     "inWhence": false
+    },
+    "94": {
+     "Harm": {
+      "n": 15,
+      "median": 107.9
+     },
+     "inWhence": false
+    },
+    "95": {
+     "Harm": {
+      "n": 30,
+      "median": 100.5
+     },
+     "Loud": {
+      "n": 9,
+      "median": -51.4
+     },
+     "inWhence": false
+    },
+    "96": {
+     "Harm": {
+      "n": 12,
+      "median": 93.0
+     },
+     "inWhence": false
+    },
+    "97": {
+     "Harm": {
+      "n": 17,
+      "median": 109.6
+     },
+     "Loud": {
+      "n": 4,
+      "median": -30.8
+     },
+     "inWhence": false
+    }
+   },
+   "byLine": {
+    "A 32nd": {
+     "Harm": {
+      "n": 65,
+      "median": 56.4,
+      "sd": 55.7,
+      "worst": 191.1,
+      "warn": 7,
+      "fail": 37
+     },
+     "Loud": {
+      "n": 2,
+      "median": -41.5,
+      "sd": 4.2,
+      "worst": -45.6,
+      "warn": 2,
+      "fail": 0
+     }
+    },
+    "A 16th": {
+     "Harm": {
+      "n": 81,
+      "median": 43.1,
+      "sd": 68.2,
+      "worst": 257.6,
+      "warn": 12,
+      "fail": 40
+     },
+     "Loud": {
+      "n": 2,
+      "median": -27.8,
+      "sd": 1.7,
+      "worst": -29.5,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "A 8th": {
+     "Harm": {
+      "n": 83,
+      "median": 41.4,
+      "sd": 61.1,
+      "worst": 260.9,
+      "warn": 13,
+      "fail": 40
+     },
+     "Loud": {
+      "n": 2,
+      "median": -13.6,
+      "sd": 3.3,
+      "worst": -16.9,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "B 1": {
+     "Harm": {
+      "n": 19,
+      "median": 61.4,
+      "sd": 61.3,
+      "worst": 196.1,
+      "warn": 4,
+      "fail": 11
+     },
+     "Loud": {
+      "n": 2,
+      "median": -47.4,
+      "sd": 9.1,
+      "worst": -56.5,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "B 2": {
+     "Harm": {
+      "n": 27,
+      "median": 93.0,
+      "sd": 75.4,
+      "worst": 257.6,
+      "warn": 5,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 2,
+      "median": -35.1,
+      "sd": 3.3,
+      "worst": -38.4,
+      "warn": 2,
+      "fail": 0
+     }
+    },
+    "B 4": {
+     "Harm": {
+      "n": 31,
+      "median": 71.4,
+      "sd": 63.5,
+      "worst": 231.0,
+      "warn": 5,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 2,
+      "median": -21.3,
+      "sd": 4.2,
+      "worst": -25.5,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "B 8": {
+     "Harm": {
+      "n": 31,
+      "median": 63.0,
+      "sd": 58.0,
+      "worst": 227.7,
+      "warn": 12,
+      "fail": 16
+     },
+     "Loud": {
+      "n": 32,
+      "median": -16.6,
+      "sd": 28.1,
+      "worst": -89.6,
+      "warn": 1,
+      "fail": 8
+     }
+    },
+    "B 12": {
+     "Harm": {
+      "n": 31,
+      "median": 69.7,
+      "sd": 60.2,
+      "worst": 224.3,
+      "warn": 9,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 32,
+      "median": -7.2,
+      "sd": 29.8,
+      "worst": -77.7,
+      "warn": 2,
+      "fail": 6
+     }
+    },
+    "B 15": {
+     "Harm": {
+      "n": 31,
+      "median": 79.6,
+      "sd": 60.0,
+      "worst": 224.3,
+      "warn": 9,
+      "fail": 19
+     },
+     "Loud": {
+      "n": 32,
+      "median": -3.2,
+      "sd": 28.7,
+      "worst": -66.0,
+      "warn": 2,
+      "fail": 6
+     }
+    },
+    "C 3": {
+     "Harm": {
+      "n": 20,
+      "median": 35.6,
+      "sd": 77.9,
+      "worst": 247.7,
+      "warn": 2,
+      "fail": 9
+     },
+     "Loud": {
+      "n": 2,
+      "median": -43.8,
+      "sd": 13.3,
+      "worst": -57.1,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "C 4": {
+     "Harm": {
+      "n": 21,
+      "median": 58.1,
+      "sd": 64.8,
+      "worst": 197.8,
+      "warn": 2,
+      "fail": 11
+     },
+     "Loud": {
+      "n": 2,
+      "median": -56.6,
+      "sd": 25.8,
+      "worst": -82.4,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "C 5": {
+     "Harm": {
+      "n": 21,
+      "median": 58.1,
+      "sd": 80.3,
+      "worst": 207.7,
+      "warn": 4,
+      "fail": 15
+     },
+     "Loud": {
+      "n": 2,
+      "median": -31.9,
+      "sd": 0.8,
+      "worst": -32.8,
+      "warn": 2,
+      "fail": 0
+     }
+    },
+    "C 7": {
+     "Harm": {
+      "n": 15,
+      "median": 117.9,
+      "sd": 74.5,
+      "worst": 242.6,
+      "warn": 1,
+      "fail": 12
+     },
+     "Loud": {
+      "n": 2,
+      "median": -39.8,
+      "sd": 8.3,
+      "worst": -48.1,
+      "warn": 2,
+      "fail": 0
+     }
+    },
+    "C 12": {
+     "Harm": {
+      "n": 11,
+      "median": -31.7,
+      "sd": 110.3,
+      "worst": 207.7,
+      "warn": 3,
+      "fail": 7
+     },
+     "Loud": {
+      "n": 2,
+      "median": -32.6,
+      "sd": 0.8,
+      "worst": -33.5,
+      "warn": 2,
+      "fail": 0
+     }
+    },
+    "D": {
+     "Harm": {
+      "n": 44,
+      "median": 43.1,
+      "sd": 61.9,
+      "worst": 192.8,
+      "warn": 6,
+      "fail": 21
+     },
+     "Loud": {
+      "n": 2,
+      "median": -65.4,
+      "sd": 13.3,
+      "worst": -78.7,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "E 2": {
+     "Harm": {
+      "n": 40,
+      "median": 40.6,
+      "sd": 72.7,
+      "worst": 262.6,
+      "warn": 5,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 2,
+      "median": -26.9,
+      "sd": 0.8,
+      "worst": -27.7,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "E 8": {
+     "Harm": {
+      "n": 41,
+      "median": 53.1,
+      "sd": 73.4,
+      "worst": 257.6,
+      "warn": 3,
+      "fail": 22
+     },
+     "Loud": {
+      "n": 2,
+      "median": -26.5,
+      "sd": 1.7,
+      "worst": -28.1,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "E long end": {
+     "Harm": {
+      "n": 59,
+      "median": 68.0,
+      "sd": 66.0,
+      "worst": 262.6,
+      "warn": 5,
+      "fail": 33
+     },
+     "Loud": {
+      "n": 9,
+      "median": -26.9,
+      "sd": 11.2,
+      "worst": -46.0,
+      "warn": 4,
+      "fail": 0
+     }
+    },
+    "F p": {
+     "Harm": {
+      "n": 42,
+      "median": 103.0,
+      "sd": 69.3,
+      "worst": 262.6,
+      "warn": 3,
+      "fail": 34
+     },
+     "Loud": {
+      "n": 2,
+      "median": -21.4,
+      "sd": 3.3,
+      "worst": -24.7,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "F f": {
+     "Harm": {
+      "n": 41,
+      "median": 33.1,
+      "sd": 74.5,
+      "worst": 262.6,
+      "warn": 7,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 2,
+      "median": -28.5,
+      "sd": 1.7,
+      "worst": -30.1,
+      "warn": 1,
+      "fail": 0
+     }
+    },
+    "F cresc": {
+     "Harm": {
+      "n": 41,
+      "median": 58.1,
+      "sd": 73.3,
+      "worst": 262.6,
+      "warn": 3,
+      "fail": 24
+     },
+     "Loud": {
+      "n": 2,
+      "median": -25.5,
+      "sd": 3.3,
+      "worst": -28.9,
+      "warn": 0,
+      "fail": 0
+     }
+    }
+   },
+   "failsBoth": [
+    {
+     "bar": 25,
+     "pitch": 57,
+     "line": "B 1",
+     "harmMs": 91.3,
+     "loudMs": -56.5,
+     "inWhence": false
+    },
+    {
+     "bar": 38,
+     "pitch": 75,
+     "line": "B 8",
+     "harmMs": 83.0,
+     "loudMs": -82.9,
+     "inWhence": false
+    },
+    {
+     "bar": 42,
+     "pitch": 95,
+     "line": "B 8",
+     "harmMs": 107.9,
+     "loudMs": -60.0,
+     "inWhence": false
+    },
+    {
+     "bar": 49,
+     "pitch": 75,
+     "line": "B 12",
+     "harmMs": 79.7,
+     "loudMs": -62.4,
+     "inWhence": false
+    },
+    {
+     "bar": 54,
+     "pitch": 95,
+     "line": "B 12",
+     "harmMs": 64.7,
+     "loudMs": -53.0,
+     "inWhence": false
+    },
+    {
+     "bar": 63,
+     "pitch": 75,
+     "line": "B 15",
+     "harmMs": 79.6,
+     "loudMs": -55.7,
+     "inWhence": false
+    },
+    {
+     "bar": 69,
+     "pitch": 95,
+     "line": "B 15",
+     "harmMs": 54.7,
+     "loudMs": -51.4,
+     "inWhence": false
+    },
+    {
+     "bar": 91,
+     "pitch": 58,
+     "line": "C 3",
+     "harmMs": 88.0,
+     "loudMs": -57.1,
+     "inWhence": false
+    }
+   ],
+   "pitchModelCV": {
+    "Harm": {
+     "before": {
+      "n": 403,
+      "median": 63.0,
+      "sd": 66.7,
+      "worst": 262.6,
+      "warn": 57,
+      "fail": 227
+     },
+     "after": {
+      "n": 403,
+      "median": 0.0,
+      "sd": 61.7,
+      "worst": 273.6,
+      "warn": 81,
+      "fail": 110
+     }
+    },
+    "Loud": {
+     "before": {
+      "n": 71,
+      "median": -22.2,
+      "sd": 25.2,
+      "worst": -82.9,
+      "warn": 13,
+      "fail": 11
+     },
+     "after": {
+      "n": 71,
+      "median": -2.7,
+      "sd": 25.4,
+      "worst": -82.9,
+      "warn": 6,
+      "fail": 7
+     }
+    }
+   },
+   "levelDb": {
+    "reference (noise)": {
+     "n": 22,
+     "median": -0.0,
+     "sd": 0.9,
+     "min": -2.01,
+     "max": 0.01
+    },
+    "swapped all": {
+     "n": 225,
+     "median": 2.7,
+     "sd": 2.29,
+     "min": -2.88,
+     "max": 8.12
+    },
+    "swapped held out": {
+     "n": 225,
+     "median": 2.7,
+     "sd": 2.29,
+     "min": -2.88,
+     "max": 8.12
+    },
+    "dyn mf": {
+     "n": 192,
+     "median": 2.81,
+     "sd": 2.09,
+     "min": -2.81,
+     "max": 8.12
+    },
+    "length 1": {
+     "n": 8,
+     "median": 1.26,
+     "sd": 2.82,
+     "min": -2.52,
+     "max": 6.59
+    },
+    "length 2": {
+     "n": 8,
+     "median": 2.33,
+     "sd": 1.92,
+     "min": 0.1,
+     "max": 6.15
+    },
+    "length 4": {
+     "n": 8,
+     "median": 4.05,
+     "sd": 1.39,
+     "min": 2.21,
+     "max": 6.29
+    },
+    "length 8": {
+     "n": 8,
+     "median": 4.32,
+     "sd": 0.8,
+     "min": 2.77,
+     "max": 5.59
+    },
+    "length 12": {
+     "n": 8,
+     "median": 3.52,
+     "sd": 0.68,
+     "min": 2.57,
+     "max": 4.59
+    },
+    "length 15": {
+     "n": 8,
+     "median": 3.12,
+     "sd": 0.46,
+     "min": 2.44,
+     "max": 3.86
+    },
+    "slurred not swapped": {
+     "n": 8,
+     "median": -0.22,
+     "sd": 0.24,
+     "min": -0.71,
+     "max": 0.1
+    },
+    "dyn p": {
+     "n": 11,
+     "median": -0.79,
+     "sd": 2.39,
+     "min": -2.88,
+     "max": 4.13
+    },
+    "dyn f": {
+     "n": 11,
+     "median": 2.29,
+     "sd": 2.53,
+     "min": -0.73,
+     "max": 7.5
+    },
+    "dyn p cresc": {
+     "n": 11,
+     "median": 2.32,
+     "sd": 3.28,
+     "min": -2.85,
+     "max": 7.18
+    }
+   }
+  },
+  "Violas": {
+   "q2": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 235,
+      "median": 132.9,
+      "sd": 60.7,
+      "worst": 247.6,
+      "warn": 9,
+      "fail": 212
+     },
+     "swapped held out": {
+      "n": 540,
+      "median": 112.9,
+      "sd": 83.0,
+      "worst": -565.6,
+      "warn": 13,
+      "fail": 507
+     },
+     "slurred not swapped": {
+      "n": 38,
+      "median": 89.6,
+      "sd": 61.9,
+      "worst": 209.4,
+      "warn": 5,
+      "fail": 26
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 29,
+      "median": -32.8,
+      "sd": 51.9,
+      "worst": 102.3,
+      "warn": 9,
+      "fail": 13
+     },
+     "swapped held out": {
+      "n": 76,
+      "median": 10.8,
+      "sd": 45.0,
+      "worst": 100.2,
+      "warn": 26,
+      "fail": 24
+     },
+     "slurred not swapped": {
+      "n": 33,
+      "median": 6.5,
+      "sd": 27.1,
+      "worst": 60.7,
+      "warn": 10,
+      "fail": 1
+     },
+     "reference (unslurred)": {
+      "n": 21,
+      "median": -33.3,
+      "sd": 14.8,
+      "worst": -49.0,
+      "warn": 15,
+      "fail": 0
+     }
+    }
+   },
+   "q0": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 243,
+      "median": 48.1,
+      "sd": 46.1,
+      "worst": 222.7,
+      "warn": 61,
+      "fail": 118
+     },
+     "swapped held out": {
+      "n": 553,
+      "median": 43.1,
+      "sd": 60.1,
+      "worst": -765.1,
+      "warn": 90,
+      "fail": 250
+     },
+     "slurred not swapped": {
+      "n": 39,
+      "median": 64.7,
+      "sd": 62.0,
+      "worst": 209.4,
+      "warn": 6,
+      "fail": 24
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 33,
+      "median": -26.4,
+      "sd": 29.2,
+      "worst": -61.1,
+      "warn": 13,
+      "fail": 4
+     },
+     "swapped held out": {
+      "n": 99,
+      "median": -30.4,
+      "sd": 28.2,
+      "worst": -62.4,
+      "warn": 29,
+      "fail": 25
+     },
+     "slurred not swapped": {
+      "n": 33,
+      "median": 6.2,
+      "sd": 26.2,
+      "worst": 60.7,
+      "warn": 10,
+      "fail": 1
+     },
+     "reference (unslurred)": {
+      "n": 21,
+      "median": -33.5,
+      "sd": 13.5,
+      "worst": -48.0,
+      "warn": 18,
+      "fail": 0
+     }
+    }
+   },
+   "byPitch": {
+    "48": {
+     "Loud": {
+      "n": 19,
+      "median": -49.4
+     },
+     "inWhence": false
+    },
+    "49": {
+     "Harm": {
+      "n": 13,
+      "median": 132.9
+     },
+     "Loud": {
+      "n": 8,
+      "median": -70.8
+     },
+     "inWhence": true
+    },
+    "50": {
+     "Harm": {
+      "n": 21,
+      "median": 136.2
+     },
+     "Loud": {
+      "n": 6,
+      "median": 10.5
+     },
+     "inWhence": false
+    },
+    "51": {
+     "Harm": {
+      "n": 15,
+      "median": 142.9
+     },
+     "Loud": {
+      "n": 2,
+      "median": -60.5
+     },
+     "inWhence": true
+    },
+    "52": {
+     "Harm": {
+      "n": 18,
+      "median": 134.6
+     },
+     "Loud": {
+      "n": 4,
+      "median": -37.0
+     },
+     "inWhence": true
+    },
+    "53": {
+     "Harm": {
+      "n": 8,
+      "median": 130.4
+     },
+     "Loud": {
+      "n": 1,
+      "median": -48.7
+     },
+     "inWhence": false
+    },
+    "54": {
+     "Harm": {
+      "n": 23,
+      "median": 146.2
+     },
+     "Loud": {
+      "n": 3,
+      "median": -32.8
+     },
+     "inWhence": true
+    },
+    "55": {
+     "Harm": {
+      "n": 13,
+      "median": 182.8
+     },
+     "Loud": {
+      "n": 1,
+      "median": -39.0
+     },
+     "inWhence": true
+    },
+    "56": {
+     "Harm": {
+      "n": 22,
+      "median": 131.2
+     },
+     "Loud": {
+      "n": 4,
+      "median": 60.6
+     },
+     "inWhence": false
+    },
+    "57": {
+     "Harm": {
+      "n": 15,
+      "median": 88.0
+     },
+     "inWhence": true
+    },
+    "58": {
+     "Harm": {
+      "n": 21,
+      "median": 93.0
+     },
+     "Loud": {
+      "n": 2,
+      "median": 48.2
+     },
+     "inWhence": true
+    },
+    "59": {
+     "Harm": {
+      "n": 13,
+      "median": 127.9
+     },
+     "inWhence": false
+    },
+    "60": {
+     "Harm": {
+      "n": 22,
+      "median": 129.6
+     },
+     "Loud": {
+      "n": 4,
+      "median": 35.4
+     },
+     "inWhence": true
+    },
+    "61": {
+     "Harm": {
+      "n": 16,
+      "median": 152.1
+     },
+     "inWhence": true
+    },
+    "62": {
+     "Harm": {
+      "n": 22,
+      "median": 184.4
+     },
+     "Loud": {
+      "n": 4,
+      "median": 3.9
+     },
+     "inWhence": false
+    },
+    "63": {
+     "Harm": {
+      "n": 14,
+      "median": 47.2
+     },
+     "inWhence": true
+    },
+    "64": {
+     "Harm": {
+      "n": 22,
+      "median": 89.7
+     },
+     "Loud": {
+      "n": 2,
+      "median": 18.9
+     },
+     "inWhence": true
+    },
+    "65": {
+     "Harm": {
+      "n": 13,
+      "median": 141.2
+     },
+     "inWhence": false
+    },
+    "66": {
+     "Harm": {
+      "n": 27,
+      "median": 147.9
+     },
+     "Loud": {
+      "n": 3,
+      "median": 33.5
+     },
+     "inWhence": true
+    },
+    "67": {
+     "Harm": {
+      "n": 16,
+      "median": 127.9
+     },
+     "inWhence": true
+    },
+    "68": {
+     "Harm": {
+      "n": 21,
+      "median": 88.0
+     },
+     "Loud": {
+      "n": 4,
+      "median": 33.8
+     },
+     "inWhence": false
+    },
+    "69": {
+     "Harm": {
+      "n": 12,
+      "median": 190.2
+     },
+     "inWhence": false
+    },
+    "70": {
+     "Harm": {
+      "n": 20,
+      "median": 42.2
+     },
+     "Loud": {
+      "n": 2,
+      "median": -17.8
+     },
+     "inWhence": false
+    },
+    "71": {
+     "Harm": {
+      "n": 13,
+      "median": 73.0
+     },
+     "inWhence": false
+    },
+    "72": {
+     "Harm": {
+      "n": 24,
+      "median": 127.9
+     },
+     "Loud": {
+      "n": 3,
+      "median": 11.8
+     },
+     "inWhence": false
+    },
+    "73": {
+     "Harm": {
+      "n": 16,
+      "median": 103.0
+     },
+     "inWhence": false
+    },
+    "74": {
+     "Harm": {
+      "n": 22,
+      "median": 117.9
+     },
+     "Loud": {
+      "n": 4,
+      "median": 22.8
+     },
+     "inWhence": false
+    },
+    "75": {
+     "Harm": {
+      "n": 16,
+      "median": 78.0
+     },
+     "inWhence": false
+    },
+    "76": {
+     "Harm": {
+      "n": 20,
+      "median": 99.7
+     },
+     "Loud": {
+      "n": 2,
+      "median": 37.8
+     },
+     "inWhence": false
+    },
+    "77": {
+     "Harm": {
+      "n": 14,
+      "median": 122.9
+     },
+     "inWhence": false
+    },
+    "78": {
+     "Harm": {
+      "n": 28,
+      "median": 88.0
+     },
+     "Loud": {
+      "n": 3,
+      "median": 40.0
+     },
+     "inWhence": false
+    },
+    "79": {
+     "Harm": {
+      "n": 16,
+      "median": 194.4
+     },
+     "inWhence": false
+    },
+    "80": {
+     "Harm": {
+      "n": 24,
+      "median": 88.0
+     },
+     "Loud": {
+      "n": 4,
+      "median": 23.5
+     },
+     "inWhence": false
+    },
+    "81": {
+     "Harm": {
+      "n": 17,
+      "median": 88.0
+     },
+     "inWhence": false
+    },
+    "82": {
+     "Harm": {
+      "n": 22,
+      "median": 107.9
+     },
+     "Loud": {
+      "n": 2,
+      "median": 58.4
+     },
+     "inWhence": false
+    },
+    "83": {
+     "Harm": {
+      "n": 15,
+      "median": 103.0
+     },
+     "inWhence": false
+    },
+    "84": {
+     "Harm": {
+      "n": 29,
+      "median": 126.2
+     },
+     "Loud": {
+      "n": 3,
+      "median": 53.2
+     },
+     "inWhence": false
+    },
+    "85": {
+     "Harm": {
+      "n": 17,
+      "median": 127.9
+     },
+     "inWhence": false
+    },
+    "86": {
+     "Harm": {
+      "n": 26,
+      "median": 117.1
+     },
+     "Loud": {
+      "n": 6,
+      "median": 58.4
+     },
+     "inWhence": false
+    },
+    "87": {
+     "Harm": {
+      "n": 16,
+      "median": 113.0
+     },
+     "inWhence": false
+    },
+    "88": {
+     "Harm": {
+      "n": 25,
+      "median": 106.3
+     },
+     "Loud": {
+      "n": 6,
+      "median": 31.6
+     },
+     "inWhence": false
+    },
+    "89": {
+     "Harm": {
+      "n": 13,
+      "median": 93.0
+     },
+     "inWhence": false
+    },
+    "90": {
+     "Harm": {
+      "n": 15,
+      "median": 113.0
+     },
+     "Loud": {
+      "n": 3,
+      "median": -23.4
+     },
+     "inWhence": false
+    }
+   },
+   "byLine": {
+    "A 32nd": {
+     "Harm": {
+      "n": 69,
+      "median": 86.3,
+      "sd": 53.5,
+      "worst": 201.1,
+      "warn": 2,
+      "fail": 58
+     },
+     "Loud": {
+      "n": 1,
+      "median": -62.3,
+      "sd": 0.0,
+      "worst": -62.3,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "A 16th": {
+     "Harm": {
+      "n": 80,
+      "median": 120.4,
+      "sd": 63.2,
+      "worst": 237.7,
+      "warn": 1,
+      "fail": 74
+     },
+     "Loud": {
+      "n": 2,
+      "median": -60.2,
+      "sd": 10.8,
+      "worst": -71.0,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "A 8th": {
+     "Harm": {
+      "n": 83,
+      "median": 111.3,
+      "sd": 47.2,
+      "worst": 260.9,
+      "warn": 4,
+      "fail": 78
+     },
+     "Loud": {
+      "n": 2,
+      "median": -56.0,
+      "sd": 9.2,
+      "worst": -65.2,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "B 1": {
+     "Harm": {
+      "n": 21,
+      "median": 81.3,
+      "sd": 51.6,
+      "worst": 176.1,
+      "warn": 3,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 1,
+      "median": -63.1,
+      "sd": 0.0,
+      "worst": -63.1,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "B 2": {
+     "Harm": {
+      "n": 29,
+      "median": 127.9,
+      "sd": 54.0,
+      "worst": 232.7,
+      "warn": 0,
+      "fail": 28
+     },
+     "Loud": {
+      "n": 2,
+      "median": -67.5,
+      "sd": 15.8,
+      "worst": -83.3,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "B 4": {
+     "Harm": {
+      "n": 31,
+      "median": 116.3,
+      "sd": 77.9,
+      "worst": 251.0,
+      "warn": 0,
+      "fail": 29
+     },
+     "Loud": {
+      "n": 2,
+      "median": -56.2,
+      "sd": 9.2,
+      "worst": -65.4,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "B 8": {
+     "Harm": {
+      "n": 31,
+      "median": 117.9,
+      "sd": 127.6,
+      "worst": -361.0,
+      "warn": 1,
+      "fail": 30
+     },
+     "Loud": {
+      "n": 32,
+      "median": 16.9,
+      "sd": 26.1,
+      "worst": 65.2,
+      "warn": 10,
+      "fail": 2
+     }
+    },
+    "B 11": {
+     "Harm": {
+      "n": 31,
+      "median": 117.9,
+      "sd": 177.3,
+      "worst": -565.6,
+      "warn": 0,
+      "fail": 31
+     },
+     "Loud": {
+      "n": 32,
+      "median": 40.3,
+      "sd": 32.6,
+      "worst": 102.3,
+      "warn": 9,
+      "fail": 14
+     }
+    },
+    "C 3": {
+     "Harm": {
+      "n": 24,
+      "median": 113.0,
+      "sd": 117.2,
+      "worst": 227.7,
+      "warn": 1,
+      "fail": 22
+     },
+     "Loud": {
+      "n": 2,
+      "median": -62.2,
+      "sd": 10.8,
+      "worst": -73.0,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "C 4": {
+     "Harm": {
+      "n": 21,
+      "median": 117.9,
+      "sd": 80.1,
+      "worst": 222.7,
+      "warn": 0,
+      "fail": 19
+     },
+     "Loud": {
+      "n": 2,
+      "median": -55.0,
+      "sd": 8.3,
+      "worst": -63.3,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "C 5": {
+     "Harm": {
+      "n": 23,
+      "median": 122.9,
+      "sd": 52.6,
+      "worst": 247.6,
+      "warn": 1,
+      "fail": 21
+     },
+     "Loud": {
+      "n": 2,
+      "median": -50.4,
+      "sd": 1.6,
+      "worst": -52.0,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "C 7": {
+     "Harm": {
+      "n": 15,
+      "median": 142.9,
+      "sd": 89.7,
+      "worst": 262.6,
+      "warn": 1,
+      "fail": 14
+     },
+     "Loud": {
+      "n": 2,
+      "median": -43.1,
+      "sd": 4.1,
+      "worst": -47.3,
+      "warn": 2,
+      "fail": 0
+     }
+    },
+    "C 12": {
+     "Harm": {
+      "n": 13,
+      "median": 53.1,
+      "sd": 126.1,
+      "worst": 222.7,
+      "warn": 0,
+      "fail": 12
+     },
+     "Loud": {
+      "n": 2,
+      "median": -23.6,
+      "sd": 29.1,
+      "worst": -52.7,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "D": {
+     "Harm": {
+      "n": 43,
+      "median": 127.9,
+      "sd": 45.8,
+      "worst": 247.6,
+      "warn": 0,
+      "fail": 43
+     },
+     "Loud": {
+      "n": 2,
+      "median": -51.4,
+      "sd": 3.4,
+      "worst": -54.7,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "E 2": {
+     "Harm": {
+      "n": 40,
+      "median": 120.4,
+      "sd": 56.6,
+      "worst": 237.6,
+      "warn": 1,
+      "fail": 37
+     },
+     "Loud": {
+      "n": 2,
+      "median": -62.7,
+      "sd": 10.8,
+      "worst": -73.5,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "E 8": {
+     "Harm": {
+      "n": 41,
+      "median": 122.9,
+      "sd": 61.2,
+      "worst": 247.6,
+      "warn": 1,
+      "fail": 38
+     },
+     "Loud": {
+      "n": 2,
+      "median": -59.8,
+      "sd": 10.8,
+      "worst": -70.6,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "E long end": {
+     "Harm": {
+      "n": 57,
+      "median": 122.9,
+      "sd": 73.7,
+      "worst": 254.3,
+      "warn": 0,
+      "fail": 55
+     },
+     "Loud": {
+      "n": 9,
+      "median": -36.7,
+      "sd": 26.7,
+      "worst": -72.7,
+      "warn": 3,
+      "fail": 3
+     }
+    },
+    "F p": {
+     "Harm": {
+      "n": 41,
+      "median": 113.0,
+      "sd": 49.7,
+      "worst": 237.7,
+      "warn": 2,
+      "fail": 37
+     },
+     "Loud": {
+      "n": 2,
+      "median": -38.7,
+      "sd": 3.3,
+      "worst": -42.0,
+      "warn": 2,
+      "fail": 0
+     }
+    },
+    "F f": {
+     "Harm": {
+      "n": 40,
+      "median": 125.4,
+      "sd": 54.3,
+      "worst": 247.6,
+      "warn": 1,
+      "fail": 37
+     },
+     "Loud": {
+      "n": 2,
+      "median": -63.2,
+      "sd": 10.8,
+      "worst": -74.0,
+      "warn": 0,
+      "fail": 2
+     }
+    },
+    "F cresc": {
+     "Harm": {
+      "n": 42,
+      "median": 122.9,
+      "sd": 42.4,
+      "worst": 212.7,
+      "warn": 3,
+      "fail": 38
+     },
+     "Loud": {
+      "n": 2,
+      "median": -40.4,
+      "sd": 5.8,
+      "worst": -46.2,
+      "warn": 2,
+      "fail": 0
+     }
+    }
+   },
+   "failsBoth": [
+    {
+     "bar": 6,
+     "pitch": 49,
+     "line": "A 16th",
+     "harmMs": 132.9,
+     "loudMs": -71.0,
+     "inWhence": true
+    },
+    {
+     "bar": 13,
+     "pitch": 49,
+     "line": "A 8th",
+     "harmMs": 116.3,
+     "loudMs": -65.2,
+     "inWhence": true
+    },
+    {
+     "bar": 27,
+     "pitch": 50,
+     "line": "B 2",
+     "harmMs": 107.9,
+     "loudMs": -83.3,
+     "inWhence": false
+    },
+    {
+     "bar": 30,
+     "pitch": 50,
+     "line": "B 4",
+     "harmMs": 146.2,
+     "loudMs": -65.4,
+     "inWhence": false
+    },
+    {
+     "bar": 37,
+     "pitch": 60,
+     "line": "B 8",
+     "harmMs": 197.7,
+     "loudMs": 65.2,
+     "inWhence": true
+    },
+    {
+     "bar": 41,
+     "pitch": 84,
+     "line": "B 8",
+     "harmMs": 137.9,
+     "loudMs": 53.2,
+     "inWhence": false
+    },
+    {
+     "bar": 46,
+     "pitch": 56,
+     "line": "B 11",
+     "harmMs": 107.9,
+     "loudMs": 79.3,
+     "inWhence": false
+    },
+    {
+     "bar": 46,
+     "pitch": 58,
+     "line": "B 11",
+     "harmMs": 93.0,
+     "loudMs": 52.6,
+     "inWhence": true
+    },
+    {
+     "bar": 46,
+     "pitch": 56,
+     "line": "B 11",
+     "harmMs": -565.6,
+     "loudMs": 90.8,
+     "inWhence": false
+    },
+    {
+     "bar": 47,
+     "pitch": 60,
+     "line": "B 11",
+     "harmMs": 197.7,
+     "loudMs": 94.1,
+     "inWhence": true
+    },
+    {
+     "bar": 48,
+     "pitch": 66,
+     "line": "B 11",
+     "harmMs": 167.8,
+     "loudMs": 102.3,
+     "inWhence": true
+    },
+    {
+     "bar": 50,
+     "pitch": 72,
+     "line": "B 11",
+     "harmMs": 212.7,
+     "loudMs": 50.6,
+     "inWhence": false
+    },
+    {
+     "bar": 51,
+     "pitch": 78,
+     "line": "B 11",
+     "harmMs": 68.0,
+     "loudMs": 53.7,
+     "inWhence": false
+    },
+    {
+     "bar": 51,
+     "pitch": 80,
+     "line": "B 11",
+     "harmMs": 78.0,
+     "loudMs": 57.0,
+     "inWhence": false
+    },
+    {
+     "bar": 52,
+     "pitch": 82,
+     "line": "B 11",
+     "harmMs": 127.9,
+     "loudMs": 100.2,
+     "inWhence": false
+    },
+    {
+     "bar": 52,
+     "pitch": 80,
+     "line": "B 11",
+     "harmMs": 88.0,
+     "loudMs": 63.6,
+     "inWhence": false
+    },
+    {
+     "bar": 52,
+     "pitch": 84,
+     "line": "B 11",
+     "harmMs": 137.8,
+     "loudMs": 71.9,
+     "inWhence": false
+    },
+    {
+     "bar": 53,
+     "pitch": 86,
+     "line": "B 11",
+     "harmMs": 142.8,
+     "loudMs": 75.2,
+     "inWhence": false
+    },
+    {
+     "bar": 53,
+     "pitch": 86,
+     "line": "B 11",
+     "harmMs": 112.9,
+     "loudMs": 76.8,
+     "inWhence": false
+    },
+    {
+     "bar": 54,
+     "pitch": 86,
+     "line": "B 11",
+     "harmMs": 107.9,
+     "loudMs": 76.6,
+     "inWhence": false
+    },
+    {
+     "bar": 69,
+     "pitch": 51,
+     "line": "C 3",
+     "harmMs": 217.7,
+     "loudMs": -73.0,
+     "inWhence": true
+    },
+    {
+     "bar": 72,
+     "pitch": 52,
+     "line": "C 4",
+     "harmMs": 202.7,
+     "loudMs": -63.3,
+     "inWhence": true
+    },
+    {
+     "bar": 84,
+     "pitch": 52,
+     "line": "D",
+     "harmMs": 162.8,
+     "loudMs": -54.7,
+     "inWhence": true
+    },
+    {
+     "bar": 89,
+     "pitch": 49,
+     "line": "E 2",
+     "harmMs": 132.9,
+     "loudMs": -73.5,
+     "inWhence": true
+    },
+    {
+     "bar": 93,
+     "pitch": 49,
+     "line": "E 8",
+     "harmMs": 132.9,
+     "loudMs": -70.6,
+     "inWhence": true
+    },
+    {
+     "bar": 97,
+     "pitch": 49,
+     "line": "E long end",
+     "harmMs": 132.9,
+     "loudMs": -72.7,
+     "inWhence": true
+    },
+    {
+     "bar": 101,
+     "pitch": 78,
+     "line": "E long end",
+     "harmMs": 184.4,
+     "loudMs": -53.2,
+     "inWhence": false
+    },
+    {
+     "bar": 109,
+     "pitch": 49,
+     "line": "F f",
+     "harmMs": 132.9,
+     "loudMs": -74.0,
+     "inWhence": true
+    }
+   ],
+   "pitchModelCV": {
+    "Harm": {
+     "before": {
+      "n": 391,
+      "median": 113.0,
+      "sd": 88.4,
+      "worst": -565.6,
+      "warn": 8,
+      "fail": 362
+     },
+     "after": {
+      "n": 391,
+      "median": -0.0,
+      "sd": 91.1,
+      "worst": -728.4,
+      "warn": 49,
+      "fail": 135
+     }
+    },
+    "Loud": {
+     "before": {
+      "n": 54,
+      "median": 0.5,
+      "sd": 48.3,
+      "worst": 102.3,
+      "warn": 23,
+      "fail": 17
+     },
+     "after": {
+      "n": 54,
+      "median": 14.4,
+      "sd": 42.7,
+      "worst": 106.9,
+      "warn": 11,
+      "fail": 13
+     }
+    }
+   },
+   "levelDb": {
+    "reference (noise)": {
+     "n": 21,
+     "median": -0.0,
+     "sd": 3.03,
+     "min": -5.67,
+     "max": 4.02
+    },
+    "swapped all": {
+     "n": 217,
+     "median": -2.61,
+     "sd": 3.64,
+     "min": -11.27,
+     "max": 8.31
+    },
+    "swapped mixed": {
+     "n": 98,
+     "median": -0.89,
+     "sd": 3.13,
+     "min": -6.93,
+     "max": 8.31
+    },
+    "dyn mf": {
+     "n": 184,
+     "median": -2.81,
+     "sd": 3.35,
+     "min": -11.27,
+     "max": 5.49
+    },
+    "violas 48-58 (quickLevel 0)": {
+     "n": 41,
+     "median": 0.26,
+     "sd": 2.59,
+     "min": -4.82,
+     "max": 5.49
+    },
+    "violas across 58/59": {
+     "n": 20,
+     "median": 0.09,
+     "sd": 2.14,
+     "min": -4.17,
+     "max": 4.46
+    },
+    "violas 59-90": {
+     "n": 156,
+     "median": -3.71,
+     "sd": 3.58,
+     "min": -11.27,
+     "max": 8.31
+    },
+    "swapped held out": {
+     "n": 108,
+     "median": -4.37,
+     "sd": 3.23,
+     "min": -11.27,
+     "max": 5.94
+    },
+    "length 1": {
+     "n": 8,
+     "median": 2.33,
+     "sd": 2.43,
+     "min": -2.64,
+     "max": 3.63
+    },
+    "length 2": {
+     "n": 8,
+     "median": -2.48,
+     "sd": 2.7,
+     "min": -6.74,
+     "max": 1.35
+    },
+    "length 4": {
+     "n": 8,
+     "median": -6.0,
+     "sd": 1.97,
+     "min": -8.76,
+     "max": -2.11
+    },
+    "length 8": {
+     "n": 8,
+     "median": -5.53,
+     "sd": 1.63,
+     "min": -6.49,
+     "max": -1.09
+    },
+    "length 11": {
+     "n": 8,
+     "median": -4.31,
+     "sd": 1.31,
+     "min": -5.53,
+     "max": -1.12
+    },
+    "slurred not swapped": {
+     "n": 8,
+     "median": -0.0,
+     "sd": 0.1,
+     "min": -0.07,
+     "max": 0.28
+    },
+    "swapped in Whence": {
+     "n": 11,
+     "median": -0.08,
+     "sd": 0.89,
+     "min": -1.46,
+     "max": 1.7
+    },
+    "dyn p": {
+     "n": 11,
+     "median": 3.62,
+     "sd": 3.28,
+     "min": -3.22,
+     "max": 8.31
+    },
+    "dyn f": {
+     "n": 11,
+     "median": -2.6,
+     "sd": 3.31,
+     "min": -8.45,
+     "max": 2.6
+    },
+    "dyn p cresc": {
+     "n": 11,
+     "median": -3.38,
+     "sd": 3.65,
+     "min": -7.56,
+     "max": 5.8
+    }
+   }
+  },
+  "Celli": {
+   "q2": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 202,
+      "median": 88.0,
+      "sd": 121.1,
+      "worst": -1047.8,
+      "warn": 27,
+      "fail": 139
+     },
+     "swapped held out": {
+      "n": 615,
+      "median": 68.0,
+      "sd": 93.4,
+      "worst": -1029.5,
+      "warn": 91,
+      "fail": 419
+     },
+     "slurred not swapped": {
+      "n": 38,
+      "median": 76.3,
+      "sd": 87.4,
+      "worst": 299.1,
+      "warn": 4,
+      "fail": 26
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 21,
+      "median": -14.4,
+      "sd": 46.2,
+      "worst": 120.2,
+      "warn": 4,
+      "fail": 6
+     },
+     "swapped held out": {
+      "n": 104,
+      "median": -10.7,
+      "sd": 45.7,
+      "worst": 150.3,
+      "warn": 20,
+      "fail": 23
+     },
+     "slurred not swapped": {
+      "n": 32,
+      "median": -14.1,
+      "sd": 40.3,
+      "worst": 75.2,
+      "warn": 7,
+      "fail": 9
+     },
+     "reference (unslurred)": {
+      "n": 22,
+      "median": -0.2,
+      "sd": 39.4,
+      "worst": 124.3,
+      "warn": 2,
+      "fail": 5
+     }
+    }
+   },
+   "q0": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 203,
+      "median": 53.1,
+      "sd": 64.7,
+      "worst": 332.4,
+      "warn": 52,
+      "fail": 111
+     },
+     "swapped held out": {
+      "n": 667,
+      "median": 48.1,
+      "sd": 54.2,
+      "worst": 299.2,
+      "warn": 183,
+      "fail": 339
+     },
+     "slurred not swapped": {
+      "n": 39,
+      "median": 78.0,
+      "sd": 79.9,
+      "worst": 299.1,
+      "warn": 6,
+      "fail": 26
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 18,
+      "median": -25.0,
+      "sd": 57.6,
+      "worst": 155.1,
+      "warn": 9,
+      "fail": 6
+     },
+     "swapped held out": {
+      "n": 108,
+      "median": -40.1,
+      "sd": 37.1,
+      "worst": -120.7,
+      "warn": 33,
+      "fail": 39
+     },
+     "slurred not swapped": {
+      "n": 32,
+      "median": -19.2,
+      "sd": 38.6,
+      "worst": 84.4,
+      "warn": 7,
+      "fail": 8
+     },
+     "reference (unslurred)": {
+      "n": 22,
+      "median": -41.3,
+      "sd": 35.7,
+      "worst": -70.8,
+      "warn": 2,
+      "fail": 11
+     }
+    }
+   },
+   "byPitch": {
+    "36": {
+     "Loud": {
+      "n": 20,
+      "median": 8.7
+     },
+     "inWhence": false
+    },
+    "37": {
+     "Harm": {
+      "n": 3,
+      "median": 197.8
+     },
+     "Loud": {
+      "n": 3,
+      "median": -1.1
+     },
+     "inWhence": false
+    },
+    "38": {
+     "Harm": {
+      "n": 18,
+      "median": 176.1
+     },
+     "Loud": {
+      "n": 7,
+      "median": 31.0
+     },
+     "inWhence": false
+    },
+    "39": {
+     "Harm": {
+      "n": 6,
+      "median": 127.9
+     },
+     "Loud": {
+      "n": 1,
+      "median": -19.3
+     },
+     "inWhence": false
+    },
+    "40": {
+     "Harm": {
+      "n": 19,
+      "median": 93.0
+     },
+     "Loud": {
+      "n": 3,
+      "median": -3.9
+     },
+     "inWhence": false
+    },
+    "41": {
+     "Harm": {
+      "n": 11,
+      "median": -126.5
+     },
+     "inWhence": false
+    },
+    "42": {
+     "Harm": {
+      "n": 17,
+      "median": 28.1
+     },
+     "Loud": {
+      "n": 4,
+      "median": -16.8
+     },
+     "inWhence": false
+    },
+    "43": {
+     "Harm": {
+      "n": 14,
+      "median": 80.5
+     },
+     "inWhence": false
+    },
+    "44": {
+     "Harm": {
+      "n": 19,
+      "median": 196.1
+     },
+     "Loud": {
+      "n": 6,
+      "median": -14.1
+     },
+     "inWhence": false
+    },
+    "45": {
+     "Harm": {
+      "n": 14,
+      "median": 127.0
+     },
+     "inWhence": false
+    },
+    "46": {
+     "Harm": {
+      "n": 21,
+      "median": 152.8
+     },
+     "Loud": {
+      "n": 3,
+      "median": 20.9
+     },
+     "inWhence": true
+    },
+    "47": {
+     "Harm": {
+      "n": 11,
+      "median": 227.7
+     },
+     "inWhence": false
+    },
+    "48": {
+     "Harm": {
+      "n": 23,
+      "median": 56.4
+     },
+     "Loud": {
+      "n": 4,
+      "median": -25.2
+     },
+     "inWhence": true
+    },
+    "49": {
+     "Harm": {
+      "n": 16,
+      "median": 23.2
+     },
+     "inWhence": true
+    },
+    "50": {
+     "Harm": {
+      "n": 22,
+      "median": 70.5
+     },
+     "Loud": {
+      "n": 6,
+      "median": -26.6
+     },
+     "inWhence": false
+    },
+    "51": {
+     "Harm": {
+      "n": 13,
+      "median": 103.0
+     },
+     "inWhence": true
+    },
+    "52": {
+     "Harm": {
+      "n": 23,
+      "median": 108.0
+     },
+     "Loud": {
+      "n": 3,
+      "median": -24.2
+     },
+     "inWhence": true
+    },
+    "53": {
+     "Harm": {
+      "n": 12,
+      "median": 157.8
+     },
+     "inWhence": false
+    },
+    "54": {
+     "Harm": {
+      "n": 26,
+      "median": 113.0
+     },
+     "Loud": {
+      "n": 4,
+      "median": -1.2
+     },
+     "inWhence": true
+    },
+    "55": {
+     "Harm": {
+      "n": 17,
+      "median": 127.9
+     },
+     "inWhence": true
+    },
+    "56": {
+     "Harm": {
+      "n": 24,
+      "median": 108.0
+     },
+     "Loud": {
+      "n": 6,
+      "median": 83.0
+     },
+     "inWhence": false
+    },
+    "57": {
+     "Harm": {
+      "n": 12,
+      "median": 63.0
+     },
+     "inWhence": false
+    },
+    "58": {
+     "Harm": {
+      "n": 21,
+      "median": 28.1
+     },
+     "Loud": {
+      "n": 3,
+      "median": -14.4
+     },
+     "inWhence": true
+    },
+    "59": {
+     "Harm": {
+      "n": 12,
+      "median": 202.7
+     },
+     "inWhence": false
+    },
+    "60": {
+     "Harm": {
+      "n": 28,
+      "median": 84.7
+     },
+     "Loud": {
+      "n": 4,
+      "median": -34.6
+     },
+     "inWhence": true
+    },
+    "61": {
+     "Harm": {
+      "n": 14,
+      "median": 43.1
+     },
+     "inWhence": true
+    },
+    "62": {
+     "Harm": {
+      "n": 25,
+      "median": 78.0
+     },
+     "Loud": {
+      "n": 6,
+      "median": -24.5
+     },
+     "inWhence": false
+    },
+    "63": {
+     "Harm": {
+      "n": 14,
+      "median": 53.1
+     },
+     "inWhence": false
+    },
+    "64": {
+     "Harm": {
+      "n": 21,
+      "median": 68.1
+     },
+     "Loud": {
+      "n": 3,
+      "median": 20.4
+     },
+     "inWhence": false
+    },
+    "65": {
+     "Harm": {
+      "n": 13,
+      "median": 98.0
+     },
+     "inWhence": false
+    },
+    "66": {
+     "Harm": {
+      "n": 28,
+      "median": 68.0
+     },
+     "Loud": {
+      "n": 4,
+      "median": -76.4
+     },
+     "inWhence": false
+    },
+    "67": {
+     "Harm": {
+      "n": 17,
+      "median": -46.7
+     },
+     "inWhence": false
+    },
+    "68": {
+     "Harm": {
+      "n": 24,
+      "median": 6.5
+     },
+     "Loud": {
+      "n": 6,
+      "median": -77.0
+     },
+     "inWhence": false
+    },
+    "69": {
+     "Harm": {
+      "n": 16,
+      "median": 33.1
+     },
+     "inWhence": false
+    },
+    "70": {
+     "Harm": {
+      "n": 22,
+      "median": 68.0
+     },
+     "Loud": {
+      "n": 3,
+      "median": 20.2
+     },
+     "inWhence": false
+    },
+    "71": {
+     "Harm": {
+      "n": 13,
+      "median": 78.0
+     },
+     "inWhence": false
+    },
+    "72": {
+     "Harm": {
+      "n": 26,
+      "median": 18.2
+     },
+     "Loud": {
+      "n": 4,
+      "median": -71.5
+     },
+     "inWhence": false
+    },
+    "73": {
+     "Harm": {
+      "n": 16,
+      "median": 139.6
+     },
+     "inWhence": false
+    },
+    "74": {
+     "Harm": {
+      "n": 24,
+      "median": 38.1
+     },
+     "Loud": {
+      "n": 6,
+      "median": -27.3
+     },
+     "inWhence": false
+    },
+    "75": {
+     "Harm": {
+      "n": 15,
+      "median": 176.1
+     },
+     "inWhence": false
+    },
+    "76": {
+     "Harm": {
+      "n": 22,
+      "median": 24.8
+     },
+     "Loud": {
+      "n": 3,
+      "median": -19.9
+     },
+     "inWhence": false
+    },
+    "77": {
+     "Harm": {
+      "n": 13,
+      "median": 23.2
+     },
+     "inWhence": false
+    },
+    "78": {
+     "Harm": {
+      "n": 26,
+      "median": 60.6
+     },
+     "Loud": {
+      "n": 4,
+      "median": -15.1
+     },
+     "inWhence": false
+    },
+    "79": {
+     "Harm": {
+      "n": 16,
+      "median": 48.1
+     },
+     "inWhence": false
+    },
+    "80": {
+     "Harm": {
+      "n": 22,
+      "median": 32.3
+     },
+     "Loud": {
+      "n": 6,
+      "median": -40.9
+     },
+     "inWhence": false
+    },
+    "81": {
+     "Harm": {
+      "n": 14,
+      "median": 15.7
+     },
+     "inWhence": false
+    },
+    "82": {
+     "Harm": {
+      "n": 14,
+      "median": 47.2
+     },
+     "Loud": {
+      "n": 3,
+      "median": -15.0
+     },
+     "inWhence": false
+    }
+   },
+   "byLine": {
+    "A 32nd": {
+     "Harm": {
+      "n": 61,
+      "median": 51.4,
+      "sd": 59.8,
+      "worst": 201.1,
+      "warn": 13,
+      "fail": 35
+     },
+     "Loud": {
+      "n": 1,
+      "median": -2.4,
+      "sd": 0.0,
+      "worst": -2.4,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "A 16th": {
+     "Harm": {
+      "n": 87,
+      "median": 68.1,
+      "sd": 67.9,
+      "worst": 252.6,
+      "warn": 10,
+      "fail": 62
+     },
+     "Loud": {
+      "n": 1,
+      "median": 10.5,
+      "sd": 0.0,
+      "worst": 10.5,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "A 8th": {
+     "Harm": {
+      "n": 90,
+      "median": 78.8,
+      "sd": 81.8,
+      "worst": -267.9,
+      "warn": 8,
+      "fail": 67
+     },
+     "Loud": {
+      "n": 2,
+      "median": 16.4,
+      "sd": 3.3,
+      "worst": 19.7,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "B 1": {
+     "Harm": {
+      "n": 16,
+      "median": 41.5,
+      "sd": 79.3,
+      "worst": 181.1,
+      "warn": 2,
+      "fail": 10
+     },
+     "Loud": {
+      "n": 1,
+      "median": -5.0,
+      "sd": 0.0,
+      "worst": -5.0,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "B 2": {
+     "Harm": {
+      "n": 21,
+      "median": 78.0,
+      "sd": 74.4,
+      "worst": 232.7,
+      "warn": 4,
+      "fail": 14
+     },
+     "Loud": {
+      "n": 1,
+      "median": 6.4,
+      "sd": 0.0,
+      "worst": 6.4,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "B 4": {
+     "Harm": {
+      "n": 30,
+      "median": 46.4,
+      "sd": 117.1,
+      "worst": -247.9,
+      "warn": 6,
+      "fail": 19
+     },
+     "Loud": {
+      "n": 2,
+      "median": 9.3,
+      "sd": 1.6,
+      "worst": 11.0,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "B 8": {
+     "Harm": {
+      "n": 31,
+      "median": 53.0,
+      "sd": 164.1,
+      "worst": -525.6,
+      "warn": 8,
+      "fail": 19
+     },
+     "Loud": {
+      "n": 32,
+      "median": -42.2,
+      "sd": 36.9,
+      "worst": -118.1,
+      "warn": 11,
+      "fail": 11
+     }
+    },
+    "B 12": {
+     "Harm": {
+      "n": 31,
+      "median": 84.6,
+      "sd": 85.9,
+      "worst": 269.2,
+      "warn": 3,
+      "fail": 22
+     },
+     "Loud": {
+      "n": 32,
+      "median": -14.2,
+      "sd": 36.9,
+      "worst": 85.4,
+      "warn": 5,
+      "fail": 6
+     }
+    },
+    "B 17": {
+     "Harm": {
+      "n": 31,
+      "median": 63.0,
+      "sd": 220.6,
+      "worst": -1029.5,
+      "warn": 8,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 32,
+      "median": -9.5,
+      "sd": 52.5,
+      "worst": 150.3,
+      "warn": 7,
+      "fail": 6
+     }
+    },
+    "C 3": {
+     "Harm": {
+      "n": 20,
+      "median": 80.5,
+      "sd": 85.1,
+      "worst": 217.7,
+      "warn": 1,
+      "fail": 17
+     },
+     "Loud": {
+      "n": 1,
+      "median": 7.3,
+      "sd": 0.0,
+      "worst": 7.3,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "C 4": {
+     "Harm": {
+      "n": 22,
+      "median": 113.0,
+      "sd": 75.3,
+      "worst": 252.6,
+      "warn": 1,
+      "fail": 17
+     },
+     "Loud": {
+      "n": 1,
+      "median": 7.0,
+      "sd": 0.0,
+      "worst": 7.0,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "C 5": {
+     "Harm": {
+      "n": 18,
+      "median": 55.6,
+      "sd": 84.9,
+      "worst": 212.7,
+      "warn": 5,
+      "fail": 11
+     },
+     "Loud": {
+      "n": 1,
+      "median": 1.7,
+      "sd": 0.0,
+      "worst": 1.7,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "C 7": {
+     "Harm": {
+      "n": 23,
+      "median": 93.0,
+      "sd": 80.3,
+      "worst": 237.7,
+      "warn": 2,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 1,
+      "median": 6.3,
+      "sd": 0.0,
+      "worst": 6.3,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "C 12": {
+     "Harm": {
+      "n": 14,
+      "median": -24.2,
+      "sd": 86.1,
+      "worst": 177.8,
+      "warn": 1,
+      "fail": 8
+     },
+     "Loud": {
+      "n": 1,
+      "median": 1.0,
+      "sd": 0.0,
+      "worst": 1.0,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "D": {
+     "Harm": {
+      "n": 45,
+      "median": 78.0,
+      "sd": 79.7,
+      "worst": 267.6,
+      "warn": 5,
+      "fail": 31
+     },
+     "Loud": {
+      "n": 1,
+      "median": -19.3,
+      "sd": 0.0,
+      "worst": -19.3,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "E 2": {
+     "Harm": {
+      "n": 42,
+      "median": 75.5,
+      "sd": 71.6,
+      "worst": 227.7,
+      "warn": 6,
+      "fail": 29
+     },
+     "Loud": {
+      "n": 1,
+      "median": 11.8,
+      "sd": 0.0,
+      "worst": 11.8,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "E 8": {
+     "Harm": {
+      "n": 43,
+      "median": 68.0,
+      "sd": 71.0,
+      "worst": 227.7,
+      "warn": 6,
+      "fail": 28
+     },
+     "Loud": {
+      "n": 1,
+      "median": 9.7,
+      "sd": 0.0,
+      "worst": 9.7,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "E long end": {
+     "Harm": {
+      "n": 60,
+      "median": 73.8,
+      "sd": 160.6,
+      "worst": -1047.8,
+      "warn": 10,
+      "fail": 43
+     },
+     "Loud": {
+      "n": 8,
+      "median": -73.3,
+      "sd": 37.8,
+      "worst": -117.9,
+      "warn": 1,
+      "fail": 6
+     }
+    },
+    "F p": {
+     "Harm": {
+      "n": 45,
+      "median": 68.1,
+      "sd": 76.3,
+      "worst": 232.7,
+      "warn": 7,
+      "fail": 30
+     },
+     "Loud": {
+      "n": 2,
+      "median": 4.0,
+      "sd": 5.9,
+      "worst": 9.8,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "F f": {
+     "Harm": {
+      "n": 43,
+      "median": 68.1,
+      "sd": 67.8,
+      "worst": 222.7,
+      "warn": 6,
+      "fail": 29
+     },
+     "Loud": {
+      "n": 1,
+      "median": 7.7,
+      "sd": 0.0,
+      "worst": 7.7,
+      "warn": 0,
+      "fail": 0
+     }
+    },
+    "F cresc": {
+     "Harm": {
+      "n": 44,
+      "median": 68.0,
+      "sd": 70.4,
+      "worst": 227.7,
+      "warn": 6,
+      "fail": 29
+     },
+     "Loud": {
+      "n": 2,
+      "median": 4.8,
+      "sd": 5.8,
+      "worst": 10.6,
+      "warn": 0,
+      "fail": 0
+     }
+    }
+   },
+   "failsBoth": [
+    {
+     "bar": 39,
+     "pitch": 52,
+     "line": "B 8",
+     "harmMs": 83.0,
+     "loudMs": -74.6,
+     "inWhence": true
+    },
+    {
+     "bar": 40,
+     "pitch": 60,
+     "line": "B 8",
+     "harmMs": 212.7,
+     "loudMs": -64.8,
+     "inWhence": true
+    },
+    {
+     "bar": 40,
+     "pitch": 62,
+     "line": "B 8",
+     "harmMs": 78.0,
+     "loudMs": -116.4,
+     "inWhence": false
+    },
+    {
+     "bar": 41,
+     "pitch": 62,
+     "line": "B 8",
+     "harmMs": 187.8,
+     "loudMs": -84.8,
+     "inWhence": false
+    },
+    {
+     "bar": 42,
+     "pitch": 70,
+     "line": "B 8",
+     "harmMs": 53.0,
+     "loudMs": -65.0,
+     "inWhence": false
+    },
+    {
+     "bar": 42,
+     "pitch": 72,
+     "line": "B 8",
+     "harmMs": 83.0,
+     "loudMs": -88.3,
+     "inWhence": false
+    },
+    {
+     "bar": 43,
+     "pitch": 76,
+     "line": "B 8",
+     "harmMs": 142.9,
+     "loudMs": -86.7,
+     "inWhence": false
+    },
+    {
+     "bar": 50,
+     "pitch": 56,
+     "line": "B 12",
+     "harmMs": 269.2,
+     "loudMs": 80.5,
+     "inWhence": false
+    },
+    {
+     "bar": 51,
+     "pitch": 56,
+     "line": "B 12",
+     "harmMs": 174.4,
+     "loudMs": 85.4,
+     "inWhence": false
+    },
+    {
+     "bar": 53,
+     "pitch": 66,
+     "line": "B 12",
+     "harmMs": 144.5,
+     "loudMs": -69.5,
+     "inWhence": false
+    },
+    {
+     "bar": 54,
+     "pitch": 72,
+     "line": "B 12",
+     "harmMs": 79.6,
+     "loudMs": -54.7,
+     "inWhence": false
+    },
+    {
+     "bar": 65,
+     "pitch": 56,
+     "line": "B 17",
+     "harmMs": 272.5,
+     "loudMs": 150.3,
+     "inWhence": false
+    },
+    {
+     "bar": 66,
+     "pitch": 56,
+     "line": "B 17",
+     "harmMs": -1029.5,
+     "loudMs": 146.9,
+     "inWhence": false
+    },
+    {
+     "bar": 67,
+     "pitch": 60,
+     "line": "B 17",
+     "harmMs": 342.4,
+     "loudMs": 120.2,
+     "inWhence": true
+    },
+    {
+     "bar": 70,
+     "pitch": 68,
+     "line": "B 17",
+     "harmMs": -56.7,
+     "loudMs": -71.4,
+     "inWhence": false
+    },
+    {
+     "bar": 124,
+     "pitch": 42,
+     "line": "E long end",
+     "harmMs": 84.6,
+     "loudMs": -50.8,
+     "inWhence": false
+    },
+    {
+     "bar": 126,
+     "pitch": 54,
+     "line": "E long end",
+     "harmMs": -1047.8,
+     "loudMs": -67.6,
+     "inWhence": true
+    },
+    {
+     "bar": 127,
+     "pitch": 60,
+     "line": "E long end",
+     "harmMs": 94.6,
+     "loudMs": -81.0,
+     "inWhence": true
+    },
+    {
+     "bar": 128,
+     "pitch": 66,
+     "line": "E long end",
+     "harmMs": 244.3,
+     "loudMs": -104.4,
+     "inWhence": false
+    },
+    {
+     "bar": 129,
+     "pitch": 72,
+     "line": "E long end",
+     "harmMs": 64.7,
+     "loudMs": -117.9,
+     "inWhence": false
+    }
+   ],
+   "pitchModelCV": {
+    "Harm": {
+     "before": {
+      "n": 417,
+      "median": 63.1,
+      "sd": 120.5,
+      "worst": -1047.8,
+      "warn": 64,
+      "fail": 275
+     },
+     "after": {
+      "n": 417,
+      "median": -1.7,
+      "sd": 119.6,
+      "worst": -1205.6,
+      "warn": 58,
+      "fail": 195
+     }
+    },
+    "Loud": {
+     "before": {
+      "n": 57,
+      "median": -14.4,
+      "sd": 52.1,
+      "worst": 150.3,
+      "warn": 12,
+      "fail": 18
+     },
+     "after": {
+      "n": 57,
+      "median": -14.4,
+      "sd": 51.9,
+      "worst": 150.3,
+      "warn": 12,
+      "fail": 18
+     }
+    }
+   },
+   "levelDb": {
+    "reference (noise)": {
+     "n": 22,
+     "median": -0.0,
+     "sd": 0.21,
+     "min": -0.98,
+     "max": 0.0
+    },
+    "swapped all": {
+     "n": 241,
+     "median": -1.73,
+     "sd": 1.55,
+     "min": -6.68,
+     "max": 2.38
+    },
+    "swapped held out": {
+     "n": 129,
+     "median": -2.26,
+     "sd": 1.65,
+     "min": -6.68,
+     "max": 2.38
+    },
+    "dyn mf": {
+     "n": 205,
+     "median": -1.75,
+     "sd": 1.52,
+     "min": -6.68,
+     "max": 2.38
+    },
+    "swapped mixed": {
+     "n": 104,
+     "median": -1.3,
+     "sd": 1.33,
+     "min": -5.18,
+     "max": 2.19
+    },
+    "length 1": {
+     "n": 8,
+     "median": -2.86,
+     "sd": 1.98,
+     "min": -6.68,
+     "max": -0.24
+    },
+    "length 2": {
+     "n": 8,
+     "median": -2.67,
+     "sd": 0.84,
+     "min": -3.28,
+     "max": -0.63
+    },
+    "length 4": {
+     "n": 8,
+     "median": -1.58,
+     "sd": 1.09,
+     "min": -3.29,
+     "max": 0.27
+    },
+    "length 8": {
+     "n": 8,
+     "median": -0.62,
+     "sd": 1.46,
+     "min": -2.83,
+     "max": 2.08
+    },
+    "length 12": {
+     "n": 8,
+     "median": 0.43,
+     "sd": 1.31,
+     "min": -1.98,
+     "max": 2.32
+    },
+    "length 17": {
+     "n": 8,
+     "median": 0.72,
+     "sd": 1.05,
+     "min": -0.65,
+     "max": 2.38
+    },
+    "slurred not swapped": {
+     "n": 8,
+     "median": -0.33,
+     "sd": 0.27,
+     "min": -0.68,
+     "max": 0.16
+    },
+    "swapped in Whence": {
+     "n": 8,
+     "median": -1.65,
+     "sd": 0.73,
+     "min": -2.71,
+     "max": -0.45
+    },
+    "dyn p": {
+     "n": 12,
+     "median": 0.34,
+     "sd": 1.34,
+     "min": -2.73,
+     "max": 1.61
+    },
+    "dyn f": {
+     "n": 12,
+     "median": -2.68,
+     "sd": 1.1,
+     "min": -3.51,
+     "max": -0.17
+    },
+    "dyn p cresc": {
+     "n": 12,
+     "median": -0.47,
+     "sd": 1.48,
+     "min": -4.55,
+     "max": 1.07
+    }
+   }
+  },
+  "Basses": {
+   "q0": {
+    "Harm": {
+     "swapped in Whence": {
+      "n": 0
+     },
+     "swapped held out": {
+      "n": 0
+     },
+     "slurred not swapped": {
+      "n": 439,
+      "median": 6.5,
+      "sd": 193.5,
+      "worst": -1422.0,
+      "warn": 73,
+      "fail": 278
+     },
+     "reference (unslurred)": {
+      "n": 0
+     }
+    },
+    "Loud": {
+     "swapped in Whence": {
+      "n": 0
+     },
+     "swapped held out": {
+      "n": 0
+     },
+     "slurred not swapped": {
+      "n": 119,
+      "median": 36.9,
+      "sd": 101.2,
+      "worst": 350.7,
+      "warn": 20,
+      "fail": 77
+     },
+     "reference (unslurred)": {
+      "n": 22,
+      "median": 23.6,
+      "sd": 24.0,
+      "worst": 32.1,
+      "warn": 9,
+      "fail": 0
+     }
+    }
+   },
+   "byPitch": {
+    "24": {
+     "Loud": {
+      "n": 21,
+      "median": -108.1
+     },
+     "inWhence": false
+    },
+    "25": {
+     "Harm": {
+      "n": 11,
+      "median": -1.8
+     },
+     "inWhence": false
+    },
+    "26": {
+     "Harm": {
+      "n": 22,
+      "median": -39.2
+     },
+     "Loud": {
+      "n": 6,
+      "median": 33.2
+     },
+     "inWhence": false
+    },
+    "27": {
+     "Harm": {
+      "n": 13,
+      "median": -46.7
+     },
+     "Loud": {
+      "n": 1,
+      "median": -90.4
+     },
+     "inWhence": false
+    },
+    "28": {
+     "Harm": {
+      "n": 19,
+      "median": 137.9
+     },
+     "Loud": {
+      "n": 4,
+      "median": 62.7
+     },
+     "inWhence": false
+    },
+    "29": {
+     "Harm": {
+      "n": 12,
+      "median": 207.7
+     },
+     "inWhence": false
+    },
+    "30": {
+     "Harm": {
+      "n": 11,
+      "median": -111.6
+     },
+     "Loud": {
+      "n": 5,
+      "median": 52.5
+     },
+     "inWhence": false
+    },
+    "31": {
+     "Harm": {
+      "n": 10,
+      "median": -44.2
+     },
+     "inWhence": false
+    },
+    "32": {
+     "Harm": {
+      "n": 17,
+      "median": 176.2
+     },
+     "Loud": {
+      "n": 7,
+      "median": -2.6
+     },
+     "inWhence": false
+    },
+    "33": {
+     "Harm": {
+      "n": 7,
+      "median": -28.4
+     },
+     "inWhence": false
+    },
+    "34": {
+     "Harm": {
+      "n": 8,
+      "median": 162.8
+     },
+     "Loud": {
+      "n": 4,
+      "median": 40.4
+     },
+     "inWhence": false
+    },
+    "35": {
+     "Harm": {
+      "n": 9,
+      "median": -81.6
+     },
+     "inWhence": false
+    },
+    "36": {
+     "Harm": {
+      "n": 23,
+      "median": 18.2
+     },
+     "Loud": {
+      "n": 5,
+      "median": 38.5
+     },
+     "inWhence": false
+    },
+    "37": {
+     "Harm": {
+      "n": 12,
+      "median": -1.8
+     },
+     "Loud": {
+      "n": 1,
+      "median": -198.5
+     },
+     "inWhence": false
+    },
+    "38": {
+     "Harm": {
+      "n": 19,
+      "median": 49.7
+     },
+     "Loud": {
+      "n": 8,
+      "median": 35.3
+     },
+     "inWhence": false
+    },
+    "39": {
+     "Harm": {
+      "n": 6,
+      "median": -55.0
+     },
+     "inWhence": false
+    },
+    "40": {
+     "Harm": {
+      "n": 16,
+      "median": -1.8
+     },
+     "Loud": {
+      "n": 3,
+      "median": 42.1
+     },
+     "inWhence": false
+    },
+    "41": {
+     "Harm": {
+      "n": 13,
+      "median": 28.1
+     },
+     "inWhence": false
+    },
+    "42": {
+     "Harm": {
+      "n": 19,
+      "median": 3.2
+     },
+     "Loud": {
+      "n": 5,
+      "median": 66.7
+     },
+     "inWhence": false
+    },
+    "43": {
+     "Harm": {
+      "n": 9,
+      "median": -46.7
+     },
+     "inWhence": false
+    },
+    "44": {
+     "Harm": {
+      "n": 22,
+      "median": 39.8
+     },
+     "Loud": {
+      "n": 8,
+      "median": 74.0
+     },
+     "inWhence": false
+    },
+    "45": {
+     "Harm": {
+      "n": 12,
+      "median": -54.2
+     },
+     "inWhence": false
+    },
+    "46": {
+     "Harm": {
+      "n": 19,
+      "median": 79.6
+     },
+     "Loud": {
+      "n": 4,
+      "median": 87.5
+     },
+     "inWhence": false
+    },
+    "47": {
+     "Harm": {
+      "n": 12,
+      "median": 129.6
+     },
+     "Loud": {
+      "n": 1,
+      "median": -200.0
+     },
+     "inWhence": false
+    },
+    "48": {
+     "Harm": {
+      "n": 21,
+      "median": 24.8
+     },
+     "Loud": {
+      "n": 5,
+      "median": 4.3
+     },
+     "inWhence": false
+    },
+    "49": {
+     "Harm": {
+      "n": 10,
+      "median": -22.6
+     },
+     "inWhence": false
+    },
+    "50": {
+     "Harm": {
+      "n": 27,
+      "median": 94.6
+     },
+     "Loud": {
+      "n": 13,
+      "median": 66.3
+     },
+     "inWhence": false
+    },
+    "51": {
+     "Harm": {
+      "n": 13,
+      "median": -21.7
+     },
+     "Loud": {
+      "n": 1,
+      "median": -146.7
+     },
+     "inWhence": false
+    },
+    "52": {
+     "Harm": {
+      "n": 28,
+      "median": 55.5
+     },
+     "Loud": {
+      "n": 12,
+      "median": 89.1
+     },
+     "inWhence": false
+    },
+    "53": {
+     "Harm": {
+      "n": 8,
+      "median": -24.2
+     },
+     "inWhence": false
+    },
+    "54": {
+     "Harm": {
+      "n": 11,
+      "median": -16.8
+     },
+     "Loud": {
+      "n": 5,
+      "median": 122.9
+     },
+     "inWhence": false
+    }
+   },
+   "byLine": {
+    "A 32nd": {
+     "Harm": {
+      "n": 24,
+      "median": 76.3,
+      "sd": 73.1,
+      "worst": 176.2,
+      "warn": 3,
+      "fail": 15
+     },
+     "Loud": {
+      "n": 1,
+      "median": -147.1,
+      "sd": 0.0,
+      "worst": -147.1,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "A 16th": {
+     "Harm": {
+      "n": 37,
+      "median": -26.7,
+      "sd": 107.0,
+      "worst": 262.6,
+      "warn": 7,
+      "fail": 21
+     },
+     "Loud": {
+      "n": 1,
+      "median": -107.5,
+      "sd": 0.0,
+      "worst": -107.5,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "A 8th": {
+     "Harm": {
+      "n": 57,
+      "median": -8.5,
+      "sd": 92.3,
+      "worst": 395.6,
+      "warn": 13,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 4,
+      "median": -172.6,
+      "sd": 56.3,
+      "worst": -200.0,
+      "warn": 0,
+      "fail": 4
+     }
+    },
+    "B 1": {
+     "Harm": {
+      "n": 10,
+      "median": 56.4,
+      "sd": 81.0,
+      "worst": 196.1,
+      "warn": 1,
+      "fail": 6
+     },
+     "Loud": {
+      "n": 1,
+      "median": -132.3,
+      "sd": 0.0,
+      "worst": -132.3,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "B 2": {
+     "Harm": {
+      "n": 10,
+      "median": 25.6,
+      "sd": 121.8,
+      "worst": 257.6,
+      "warn": 0,
+      "fail": 9
+     },
+     "Loud": {
+      "n": 1,
+      "median": -120.9,
+      "sd": 0.0,
+      "worst": -120.9,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "B 4": {
+     "Harm": {
+      "n": 19,
+      "median": 31.4,
+      "sd": 93.1,
+      "worst": 320.8,
+      "warn": 7,
+      "fail": 8
+     },
+     "Loud": {
+      "n": 2,
+      "median": -12.5,
+      "sd": 48.9,
+      "worst": -61.4,
+      "warn": 1,
+      "fail": 1
+     }
+    },
+    "B 8": {
+     "Harm": {
+      "n": 23,
+      "median": 78.0,
+      "sd": 168.2,
+      "worst": -545.6,
+      "warn": 2,
+      "fail": 17
+     },
+     "Loud": {
+      "n": 16,
+      "median": 6.7,
+      "sd": 35.6,
+      "worst": 82.2,
+      "warn": 5,
+      "fail": 4
+     }
+    },
+    "B 12": {
+     "Harm": {
+      "n": 23,
+      "median": 94.6,
+      "sd": 300.2,
+      "worst": -813.3,
+      "warn": 0,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 22,
+      "median": 38.5,
+      "sd": 70.3,
+      "worst": 257.9,
+      "warn": 5,
+      "fail": 9
+     }
+    },
+    "B 19": {
+     "Harm": {
+      "n": 23,
+      "median": 111.2,
+      "sd": 418.6,
+      "worst": -1290.6,
+      "warn": 3,
+      "fail": 18
+     },
+     "Loud": {
+      "n": 24,
+      "median": 66.5,
+      "sd": 51.1,
+      "worst": 224.3,
+      "warn": 5,
+      "fail": 18
+     }
+    },
+    "B 21": {
+     "Harm": {
+      "n": 23,
+      "median": 124.5,
+      "sd": 508.4,
+      "worst": -1422.0,
+      "warn": 2,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 24,
+      "median": 73.8,
+      "sd": 93.5,
+      "worst": 350.7,
+      "warn": 4,
+      "fail": 18
+     }
+    },
+    "C 3": {
+     "Harm": {
+      "n": 7,
+      "median": 202.7,
+      "sd": 152.0,
+      "worst": 262.6,
+      "warn": 0,
+      "fail": 7
+     },
+     "Loud": {
+      "n": 1,
+      "median": -117.2,
+      "sd": 0.0,
+      "worst": -117.2,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "C 4": {
+     "Harm": {
+      "n": 9,
+      "median": 38.1,
+      "sd": 103.2,
+      "worst": 182.8,
+      "warn": 2,
+      "fail": 6
+     },
+     "Loud": {
+      "n": 1,
+      "median": -107.5,
+      "sd": 0.0,
+      "worst": -107.5,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "C 5": {
+     "Harm": {
+      "n": 7,
+      "median": 28.1,
+      "sd": 132.0,
+      "worst": 267.6,
+      "warn": 0,
+      "fail": 6
+     },
+     "Loud": {
+      "n": 1,
+      "median": -117.9,
+      "sd": 0.0,
+      "worst": -117.9,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "C 7": {
+     "Harm": {
+      "n": 6,
+      "median": -4.3,
+      "sd": 103.3,
+      "worst": 222.7,
+      "warn": 3,
+      "fail": 3
+     },
+     "Loud": {
+      "n": 1,
+      "median": -108.2,
+      "sd": 0.0,
+      "worst": -108.2,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "C 12": {
+     "Harm": {
+      "n": 4,
+      "median": -79.1,
+      "sd": 7.4,
+      "worst": -86.6,
+      "warn": 0,
+      "fail": 4
+     },
+     "Loud": {
+      "n": 1,
+      "median": -116.7,
+      "sd": 0.0,
+      "worst": -116.7,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "D": {
+     "Harm": {
+      "n": 19,
+      "median": -16.8,
+      "sd": 88.9,
+      "worst": 192.8,
+      "warn": 5,
+      "fail": 12
+     },
+     "Loud": {
+      "n": 1,
+      "median": -90.4,
+      "sd": 0.0,
+      "worst": -90.4,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "E 2": {
+     "Harm": {
+      "n": 20,
+      "median": -6.8,
+      "sd": 110.9,
+      "worst": 262.6,
+      "warn": 4,
+      "fail": 13
+     },
+     "Loud": {
+      "n": 1,
+      "median": -107.4,
+      "sd": 0.0,
+      "worst": -107.4,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "E 8": {
+     "Harm": {
+      "n": 20,
+      "median": -24.2,
+      "sd": 109.0,
+      "worst": 222.7,
+      "warn": 5,
+      "fail": 11
+     },
+     "Loud": {
+      "n": 1,
+      "median": -117.7,
+      "sd": 0.0,
+      "worst": -117.7,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "E long end": {
+     "Harm": {
+      "n": 31,
+      "median": -36.7,
+      "sd": 104.6,
+      "worst": 257.6,
+      "warn": 5,
+      "fail": 20
+     },
+     "Loud": {
+      "n": 12,
+      "median": -47.0,
+      "sd": 82.6,
+      "worst": 160.6,
+      "warn": 0,
+      "fail": 8
+     }
+    },
+    "F p": {
+     "Harm": {
+      "n": 23,
+      "median": -46.7,
+      "sd": 102.1,
+      "worst": 247.6,
+      "warn": 3,
+      "fail": 16
+     },
+     "Loud": {
+      "n": 1,
+      "median": -122.3,
+      "sd": 0.0,
+      "worst": -122.3,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "F f": {
+     "Harm": {
+      "n": 21,
+      "median": -41.7,
+      "sd": 79.8,
+      "worst": 157.8,
+      "warn": 4,
+      "fail": 13
+     },
+     "Loud": {
+      "n": 1,
+      "median": -97.7,
+      "sd": 0.0,
+      "worst": -97.7,
+      "warn": 0,
+      "fail": 1
+     }
+    },
+    "F cresc": {
+     "Harm": {
+      "n": 23,
+      "median": -41.7,
+      "sd": 105.2,
+      "worst": 247.6,
+      "warn": 4,
+      "fail": 15
+     },
+     "Loud": {
+      "n": 1,
+      "median": -122.9,
+      "sd": 0.0,
+      "worst": -122.9,
+      "warn": 0,
+      "fail": 1
+     }
+    }
+   },
+   "failsBoth": [
+    {
+     "bar": 13,
+     "pitch": 51,
+     "line": "A 8th",
+     "harmMs": -58.3,
+     "loudMs": -146.7,
+     "inWhence": false
+    },
+    {
+     "bar": 29,
+     "pitch": 30,
+     "line": "B 8",
+     "harmMs": -266.2,
+     "loudMs": -50.3,
+     "inWhence": false
+    },
+    {
+     "bar": 32,
+     "pitch": 44,
+     "line": "B 8",
+     "harmMs": 63.0,
+     "loudMs": 55.8,
+     "inWhence": false
+    },
+    {
+     "bar": 33,
+     "pitch": 52,
+     "line": "B 8",
+     "harmMs": 68.0,
+     "loudMs": 55.7,
+     "inWhence": false
+    },
+    {
+     "bar": 34,
+     "pitch": 52,
+     "line": "B 8",
+     "harmMs": 117.9,
+     "loudMs": 82.2,
+     "inWhence": false
+    },
+    {
+     "bar": 37,
+     "pitch": 30,
+     "line": "B 12",
+     "harmMs": -548.9,
+     "loudMs": 53.7,
+     "inWhence": false
+    },
+    {
+     "bar": 38,
+     "pitch": 32,
+     "line": "B 12",
+     "harmMs": 199.4,
+     "loudMs": 68.5,
+     "inWhence": false
+    },
+    {
+     "bar": 40,
+     "pitch": 42,
+     "line": "B 12",
+     "harmMs": 139.5,
+     "loudMs": 257.9,
+     "inWhence": false
+    },
+    {
+     "bar": 41,
+     "pitch": 44,
+     "line": "B 12",
+     "harmMs": 74.7,
+     "loudMs": 103.1,
+     "inWhence": false
+    },
+    {
+     "bar": 42,
+     "pitch": 52,
+     "line": "B 12",
+     "harmMs": 84.6,
+     "loudMs": 63.1,
+     "inWhence": false
+    },
+    {
+     "bar": 42,
+     "pitch": 50,
+     "line": "B 12",
+     "harmMs": 124.6,
+     "loudMs": 93.0,
+     "inWhence": false
+    },
+    {
+     "bar": 43,
+     "pitch": 52,
+     "line": "B 12",
+     "harmMs": 69.7,
+     "loudMs": 57.9,
+     "inWhence": false
+    },
+    {
+     "bar": 44,
+     "pitch": 52,
+     "line": "B 12",
+     "harmMs": 144.5,
+     "loudMs": 132.7,
+     "inWhence": false
+    },
+    {
+     "bar": 46,
+     "pitch": 28,
+     "line": "B 19",
+     "harmMs": 235.9,
+     "loudMs": 129.1,
+     "inWhence": false
+    },
+    {
+     "bar": 47,
+     "pitch": 30,
+     "line": "B 19",
+     "harmMs": -1280.6,
+     "loudMs": 52.5,
+     "inWhence": false
+    },
+    {
+     "bar": 49,
+     "pitch": 34,
+     "line": "B 19",
+     "harmMs": 345.7,
+     "loudMs": 135.5,
+     "inWhence": false
+    },
+    {
+     "bar": 49,
+     "pitch": 32,
+     "line": "B 19",
+     "harmMs": 221.0,
+     "loudMs": 62.2,
+     "inWhence": false
+    },
+    {
+     "bar": 50,
+     "pitch": 36,
+     "line": "B 19",
+     "harmMs": 315.7,
+     "loudMs": 88.8,
+     "inWhence": false
+    },
+    {
+     "bar": 50,
+     "pitch": 38,
+     "line": "B 19",
+     "harmMs": 265.9,
+     "loudMs": 55.5,
+     "inWhence": false
+    },
+    {
+     "bar": 53,
+     "pitch": 44,
+     "line": "B 19",
+     "harmMs": 240.9,
+     "loudMs": 61.9,
+     "inWhence": false
+    },
+    {
+     "bar": 53,
+     "pitch": 46,
+     "line": "B 19",
+     "harmMs": 96.3,
+     "loudMs": 133.3,
+     "inWhence": false
+    },
+    {
+     "bar": 54,
+     "pitch": 44,
+     "line": "B 19",
+     "harmMs": 96.2,
+     "loudMs": 134.9,
+     "inWhence": false
+    },
+    {
+     "bar": 55,
+     "pitch": 48,
+     "line": "B 19",
+     "harmMs": 61.3,
+     "loudMs": 66.6,
+     "inWhence": false
+    },
+    {
+     "bar": 55,
+     "pitch": 50,
+     "line": "B 19",
+     "harmMs": 345.7,
+     "loudMs": 168.0,
+     "inWhence": false
+    },
+    {
+     "bar": 56,
+     "pitch": 52,
+     "line": "B 19",
+     "harmMs": 111.2,
+     "loudMs": 79.8,
+     "inWhence": false
+    },
+    {
+     "bar": 57,
+     "pitch": 52,
+     "line": "B 19",
+     "harmMs": 51.4,
+     "loudMs": 224.3,
+     "inWhence": false
+    },
+    {
+     "bar": 58,
+     "pitch": 50,
+     "line": "B 19",
+     "harmMs": 171.1,
+     "loudMs": 66.3,
+     "inWhence": false
+    },
+    {
+     "bar": 59,
+     "pitch": 52,
+     "line": "B 19",
+     "harmMs": 116.2,
+     "loudMs": 97.8,
+     "inWhence": false
+    },
+    {
+     "bar": 62,
+     "pitch": 28,
+     "line": "B 21",
+     "harmMs": -1372.1,
+     "loudMs": 87.4,
+     "inWhence": false
+    },
+    {
+     "bar": 64,
+     "pitch": 30,
+     "line": "B 21",
+     "harmMs": -1077.7,
+     "loudMs": 122.2,
+     "inWhence": false
+    },
+    {
+     "bar": 66,
+     "pitch": 32,
+     "line": "B 21",
+     "harmMs": 219.3,
+     "loudMs": 62.1,
+     "inWhence": false
+    },
+    {
+     "bar": 66,
+     "pitch": 36,
+     "line": "B 21",
+     "harmMs": 364.0,
+     "loudMs": 96.9,
+     "inWhence": false
+    },
+    {
+     "bar": 67,
+     "pitch": 38,
+     "line": "B 21",
+     "harmMs": 264.2,
+     "loudMs": 57.0,
+     "inWhence": false
+    },
+    {
+     "bar": 68,
+     "pitch": 40,
+     "line": "B 21",
+     "harmMs": 124.5,
+     "loudMs": 146.7,
+     "inWhence": false
+    },
+    {
+     "bar": 70,
+     "pitch": 44,
+     "line": "B 21",
+     "harmMs": 239.3,
+     "loudMs": 61.7,
+     "inWhence": false
+    },
+    {
+     "bar": 71,
+     "pitch": 44,
+     "line": "B 21",
+     "harmMs": 99.6,
+     "loudMs": 131.4,
+     "inWhence": false
+    },
+    {
+     "bar": 72,
+     "pitch": 48,
+     "line": "B 21",
+     "harmMs": 119.5,
+     "loudMs": 76.4,
+     "inWhence": false
+    },
+    {
+     "bar": 72,
+     "pitch": 50,
+     "line": "B 21",
+     "harmMs": 344.0,
+     "loudMs": 350.7,
+     "inWhence": false
+    },
+    {
+     "bar": 73,
+     "pitch": 52,
+     "line": "B 21",
+     "harmMs": 179.4,
+     "loudMs": 225.9,
+     "inWhence": false
+    },
+    {
+     "bar": 73,
+     "pitch": 50,
+     "line": "B 21",
+     "harmMs": 169.4,
+     "loudMs": 71.2,
+     "inWhence": false
+    },
+    {
+     "bar": 74,
+     "pitch": 54,
+     "line": "B 21",
+     "harmMs": 194.4,
+     "loudMs": 126.0,
+     "inWhence": false
+    },
+    {
+     "bar": 75,
+     "pitch": 52,
+     "line": "B 21",
+     "harmMs": 59.7,
+     "loudMs": 225.7,
+     "inWhence": false
+    },
+    {
+     "bar": 75,
+     "pitch": 50,
+     "line": "B 21",
+     "harmMs": 284.1,
+     "loudMs": 350.4,
+     "inWhence": false
+    },
+    {
+     "bar": 76,
+     "pitch": 52,
+     "line": "B 21",
+     "harmMs": 109.5,
+     "loudMs": 95.9,
+     "inWhence": false
+    },
+    {
+     "bar": 104,
+     "pitch": 44,
+     "line": "E long end",
+     "harmMs": -61.7,
+     "loudMs": 86.2,
+     "inWhence": false
+    },
+    {
+     "bar": 106,
+     "pitch": 48,
+     "line": "E long end",
+     "harmMs": 244.3,
+     "loudMs": -82.0,
+     "inWhence": false
+    },
+    {
+     "bar": 107,
+     "pitch": 46,
+     "line": "E long end",
+     "harmMs": -81.6,
+     "loudMs": 160.6,
+     "inWhence": false
+    }
+   ],
+   "pitchModelCV": {
+    "Harm": {
+     "before": {
+      "n": 227,
+      "median": 9.8,
+      "sd": 171.1,
+      "worst": -1280.6,
+      "warn": 39,
+      "fail": 144
+     },
+     "after": {
+      "n": 227,
+      "median": 10.0,
+      "sd": 180.6,
+      "worst": -1233.9,
+      "warn": 17,
+      "fail": 161
+     }
+    },
+    "Loud": {
+     "before": {
+      "n": 62,
+      "median": 50.0,
+      "sd": 104.2,
+      "worst": 350.4,
+      "warn": 6,
+      "fail": 46
+     },
+     "after": {
+      "n": 62,
+      "median": 40.4,
+      "sd": 103.5,
+      "worst": 351.4,
+      "warn": 6,
+      "fail": 34
+     }
+    }
+   }
+  }
+ },
+ "unsplitCheck": {
+  "groups": 246,
+  "medianDb": -2.1792523341446213e-09,
+  "p90AbsDb": 5.613462356279797e-06,
+  "maxAbsDb": 4.022014203625112
+ }
+}
