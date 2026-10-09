@@ -26,6 +26,7 @@
 #include <vector>
 #include <QString>
 #include <QStringList>
+#include "playabilitywindsdyn.h"
 
 namespace Ms {
 namespace Playability {
@@ -198,6 +199,10 @@ bool isLoud(double velocity);
 // S11 tiers, split halfway between MuseScore's default velocities; mp goes with p
 QString dynamicTier(double velocity);
 int tierOrder(const QString& tier);
+// W2/B1 levels (SPEC-w2b1): soft = the pp tier (pp or softer), p/mp = the p tier, fff = above 119,
+// halfway between MuseScore's ff 112 and fff 126 (split like dynamicTier's tiers, the halfway point
+// with the softer side)
+bool windLevelMatches(WindLevel level, double velocity);
 
 // S10 slurred staccato, SECTIONS only (Wagner p. 35: four to six notes soft, three at f-ff;
 // Forsyth p. 344, Sevsay p. 13); soloists: no count limit.

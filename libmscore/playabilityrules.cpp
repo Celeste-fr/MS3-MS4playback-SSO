@@ -769,6 +769,17 @@ QString dynamicTier(double v)
       return "ff";
       }
 
+bool windLevelMatches(WindLevel level, double v)
+      {
+      switch (level) {
+            case WindLevel::ANY:  return true;
+            case WindLevel::SOFT: return dynamicTier(v) == "pp";
+            case WindLevel::P_MP: return dynamicTier(v) == "p";
+            case WindLevel::FFF:  return v > (112 + 126) / 2.0;
+            }
+      return false;
+      }
+
 int tierOrder(const QString& tier)
       {
       static const QStringList ORDER = { "pp", "p", "mf", "f", "ff" };
