@@ -150,6 +150,23 @@ headless test scores and their checked results are the parity tests.
   1 skipped. Not covered: sackbuts, soprano trombone, cimbasso, Wagner tubas, mellophone, alto and
   Vienna horns, natural and baroque instruments, the subcontrabass tuba; the 5th valve's step is not
   in the sources (5th-valve fingerings are shown from the chart only).
+- W2/B1, woodwind and brass register x dynamic (the owner's spec SPEC-w2b1, 2026-10-09; done):
+  a note in a register band at a level the books call hard is dark yellow, impossible red, decided at
+  draw time (nothing saved). Marks: flute B6–D7 soft (W); oboe B♭3–D4 at p/mp (W) and soft (R), E♭4–F4
+  soft (W), F6–A6 at fff (R); bassoon B♭1–F2 soft (W); every saxophone written B♭3–F4 at p/mp (W) and soft
+  (R); horn D5–F5 sounding soft (W, any horn id, read as in F like the valve check); trumpets in C and
+  B♭ written B5–D6 soft (R) and F♯3–B3 soft (W); cornet and flugelhorn not covered. Panel notes (no
+  mark): low flute, low piccolo, low alto flute, soft clarinet written A6 and up (the books disagree),
+  top E♭ clarinet, high bassoon. Soft = the pp tier of `dynamicTier` (pp or softer), p/mp = its p tier,
+  fff = above 119 (halfway between MuseScore's ff 112 and fff 126, split like the tiers); the level is
+  `levelAt` at the note's chord (dynamics and hairpins); one set of numbers for section and soloist.
+  Bands include both ends; written = sounding − the wind data's transposition. Rules (with book and
+  page) in `tools/playability/w2b1_rules.py`; `gen_winds_dyn.py` writes `libmscore/playabilitywindsdyn.h`
+  and checks the spec's paired written/sounding bands. Rows of kind `dynamic`, one per moment and rule;
+  the panel lists every rule a selected note falls under (`ChordInfo::windNotes`). Tests `windDynRules`,
+  `windDynamics` (wind-dyn-tests.mscx from `tools/playability/gen_winddyn_tests.py`): 29 pass, 1 skipped.
+  Not built (spec): saxophone top, nonprofessional trumpet, registers named without pitches, English
+  horn, bass clarinet, trumpet low ff.
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1
