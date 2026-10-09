@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The shipped dynamics calibration of Spitfire Symphony Orchestra, from the repo's measurements.
 
-    calibration_from_sound_dynamics.py [-d sso_sound_dynamics.json] [-m "<map>.xml"] [-o "<map>.dynamics.json"]
+    calibration_from_sound_dynamics.py [-d sso_sound_dynamics.json] [-r sso_rachm_register_curves.json]
+                                       [-m "<map>.xml"] [-o "<map>.dynamics.json"]
 
 MuseScore's own file (<dataPath>/soundlibraries/<library>/dynamics.json, written by Check articulations >
 Dynamics) holds the same numbers per patch name and articulation value (SoundLib::DynamicsCalibration::read,
@@ -11,6 +12,8 @@ Articulation value and writes the file read() takes, next to the map, where Soun
 finds it when the user has none. Like the check, it keeps only what a notation plays (an Articulation with
 techniques=), never drum hits, and the held note's expression curve; fields the measurement doesn't have
 (expressionPerceived) are left out. Curves are rounded to 0.01 dB (the check writes 0.1).
+Techniques measured at several pitches (-r, sso_rachm_register_curves.json: Long (Rachm.)) also get "pitches":
+{"<pitch>": {"curve", "perceived"}}, each pitch's own curve (DynamicsCurve::atPitch); the one curve stays.
 Prints the measured sounds that match no patch/value of the map and the map's played articulations without data.
 """
 import argparse
@@ -23,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 MAP = os.path.join(ROOT, "share", "soundlibraries", "Spitfire Symphony Orchestra.xml")
 SOURCE = "sso_sound_dynamics.json"
+REGISTERS = "sso_rachm_register_curves.json"
 
 
 def r2(x):
@@ -43,7 +47,7 @@ def map_articulations(path):
     return out
 
 
-def convert(measured, arts):
+def convert(measured, arts, registers=None):
     """-> (document, unmapped [(patch, sound, value, why)], missing [(patch, value)])"""
     patches, unmapped = {}, []
     for patch, sounds in measured.items():
@@ -66,11 +70,16 @@ def convert(measured, arts):
                 for k in ("perceived", "attack", "expression"):
                     if e.get(k):
                         c[k] = points(e[k])
+                reg = (registers or {}).get("patches", {}).get(patch, {}).get(name)
+                if reg and reg.get("value") == value:
+                    c["pitches"] = {p: {k: points(v[k]) for k in ("curve", "perceived") if v.get(k)}
+                                    for p, v in sorted(reg["pitches"].items(), key=lambda i: int(i[0]))}
                 patches.setdefault(patch, {})[str(value)] = c
     missing = [(p, v) for p, vs in arts.items() for v, played in sorted(vs.items())
                if played and str(v) not in patches.get(p, {})]
-    doc = {"source": "generated from %s by tools/soundlibraries/calibration_from_sound_dynamics.py "
-                     "(the owner's dynamics checks; curves in dB along velocity = CC1 = x)" % SOURCE,
+    doc = {"source": "generated from %s%s by tools/soundlibraries/calibration_from_sound_dynamics.py "
+                     "(the owner's dynamics checks; curves in dB along velocity = CC1 = x)"
+                     % (SOURCE, " and " + REGISTERS if registers else ""),
            "patches": {p: patches[p] for p in sorted(patches)}}
     return doc, unmapped, missing
 
@@ -78,13 +87,19 @@ def convert(measured, arts):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-d", "--dynamics", default=os.path.join(HERE, SOURCE))
+    ap.add_argument("-r", "--registers", default=os.path.join(HERE, REGISTERS),
+                    help="per-pitch curves ('' for none)")
     ap.add_argument("-m", "--map", default=MAP)
     ap.add_argument("-o", "--out")
     a = ap.parse_args()
     out = a.out or os.path.splitext(a.map)[0] + ".dynamics.json"
     with open(a.dynamics) as f:
         measured = json.load(f)
-    doc, unmapped, missing = convert(measured, map_articulations(a.map))
+    registers = None
+    if a.registers:
+        with open(a.registers) as f:
+            registers = json.load(f)
+    doc, unmapped, missing = convert(measured, map_articulations(a.map), registers)
     with open(out, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
         f.write("\n")

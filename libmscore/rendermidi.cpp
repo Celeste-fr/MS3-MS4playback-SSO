@@ -1245,14 +1245,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const bool calibrated = cal && Playback::on("levels/calibrated", score);
                   const SoundLib::Choice libHeld = calibrated ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
                                                               : SoundLib::Choice();
-                  auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
+                  // (a technique measured at several pitches: the note's pitch's curve, DynamicsCurve::atPitch)
+                  auto libVelocity = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
                         if (!c || !lp->velocityDynamics.contains(c.base))
                               return -1;
                         const int level = Ms4::expressionLevel(dynLevel);
                         if (libHeld && level > 0) {
                               const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
                                                                          libPatches[libHeld.patch]->name, libHeld.articulation->value,
-                                                                         level, 40.0 * std::log10(r.share));
+                                                                         level, 40.0 * std::log10(r.share), note->ppitch());
                               if (v > 0)
                                     return qBound(1, v, 127);
                               }
@@ -1278,7 +1279,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const double db = levelOf(note) + quickDb(note, c);
                         if (db == 0.0 || !c)
                               return;
-                        const SoundLib::DynamicsCurve* own = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
+                        const SoundLib::DynamicsCurve* ownCurve = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
+                        const SoundLib::DynamicsCurve ownAt = ownCurve ? ownCurve->atPitch(note->ppitch()) : SoundLib::DynamicsCurve();
+                        const SoundLib::DynamicsCurve* own = ownCurve ? &ownAt : nullptr;     // (at the note's pitch where measured)
                         if (velocity > 0) {
                               if (own && (own->drivenBy == "velocity" || own->drivenBy == "both") && own->points.size() >= 2) {
                                     const int v = own->louder(velocity, db);
@@ -1308,7 +1311,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         l.map = [curve, db](int x) {
                               if (x <= 0)
                                     return x;
-                              int y = curve.points.size() >= 2 ? curve.inverse(curve.at(x) + db) : MarcatoLevel::velocity(x, db);
+                              // louder: the lowest CC at or over x that reaches the level (DynamicsCurve::raise: past a dip)
+                              int y = curve.points.size() < 2 ? MarcatoLevel::velocity(x, db)
+                                      : db > 0 ? curve.raise(x, db) : curve.inverse(curve.at(x) + db);
                               return qBound(1, db < 0 ? qMin(y, x) : qMax(y, x), 127);
                               };
                         libLevels[note] = l;
@@ -1549,7 +1554,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!li->kit && !note->tieBack()) {
                                     const Chord* ch = note->chord();
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
-                                    libNote.velocity = libVelocity(libChoice, r, level);
+                                    libNote.velocity = libVelocity(note, libChoice, r, level);
                                     marcatoLevel(note, libChoice, libNote.velocity, level);
                                     trackLevel(note, libChoice);
                                     }
@@ -1676,7 +1681,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               noteChannel = libChannel;
                               if (!li->kit) {
                                     libChoice = librarySwitch(note, noteArts, start, length);
-                                    libNote.velocity = libVelocity(libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     trackLevel(note, libChoice);
                                     }

@@ -1,0 +1,38 @@
+{
+ "about": "The CC1 at which Long (Rachm.) (the note [slurs] quick swaps in) is as loud as plain Long in the passage, per register: the standard test score's own line, rendered on the Windows test VM (real SSO in Kontakt 8, All techniques patches at library defaults, offline through kthost), plain Long (quick 0) against quick 2 with every swapped note's CC1 fixed at a series of values; perceived loudness power-averaged over each slurred group (split at bar lines), each render played twice; per group the CC1 where the fixed-CC1 level crosses Long's (linear between the renders), per register (groups by the median pitch of their swapped notes) the median, rounded. The passage plays CC1 fromCC1. Read by rachm_quick_levels.py.",
+ "fromCC1": 64,
+ "sections": {
+  "Violins 1": {
+   "source": "commit cc803150fb (2026-10-08): fixed CC1 76 / 88 / 100 / 112 / 127, 8 groups; registers by measured pitches 72-75 / 76-78 / 84, edges at the midpoints",
+   "registers": [
+    {"pitches": [55, 75], "matchCC1": 75},
+    {"pitches": [76, 81], "matchCC1": 82},
+    {"pitches": [82, 94], "matchCC1": 69}
+   ]
+  },
+  "Violins 2": {
+   "source": "commit cc803150fb (2026-10-08): a copy of the score with Violins 1's music on staff 2; registers as Violins 1",
+   "registers": [
+    {"pitches": [55, 75], "matchCC1": 76},
+    {"pitches": [76, 81], "matchCC1": 67},
+    {"pitches": [82, 94], "matchCC1": 64}
+   ]
+  },
+  "Violas": {
+   "source": "2026-10-09 (branch rachm-register-curves): fixed CC1 64, 72 .. 120 step 8, 127; 30 groups; pass 1 vs 2 of R0 - L median 0.03 dB, max 1.17",
+   "registers": [
+    {"pitches": [48, 58], "matchCC1": 72, "groups": 20, "perGroup": [66, 77]},
+    {"pitches": [59, 90], "matchCC1": 89, "groups": 10, "perGroup": [75, 105]}
+   ]
+  },
+  "Celli": {
+   "source": "2026-10-09 (branch rachm-register-curves): as Violas; 30 groups; pass 1 vs 2 median 0.05 dB, max 0.18",
+   "registers": [
+    {"pitches": [36, 49], "matchCC1": 91, "groups": 12, "perGroup": [88, 92]},
+    {"pitches": [50, 52], "matchCC1": 105, "groups": 12, "perGroup": [104, 106]},
+    {"pitches": [53, 56], "matchCC1": 98, "groups": 4, "perGroup": [98, 118]},
+    {"pitches": [57, 82], "matchCC1": 92, "groups": 2, "perGroup": [92, 93]}
+   ]
+  }
+ }
+}

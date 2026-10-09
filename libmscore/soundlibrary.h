@@ -324,7 +324,16 @@ int routesGeneration();
 //    Inspector level (articulation.h MarcatoLevel), both by ear (perceived) where both curves have it, else
 //    by the 50 ms level. Without the user's own file: the library's shipped one
 //    (share/soundlibraries/<library>.dynamics.json, from the measured tools/soundlibraries/sso_sound_dynamics.json)
+//    A technique may also carry curves measured at several pitches ("pitches": {"<pitch>": {"curve", "perceived"}},
+//    tools/soundlibraries/sso_rachm_register_curves.json): a note's level then follows its own pitch's curve
+//    (DynamicsCurve::atPitch: in dB, linear in pitch between the two nearest measured pitches at each x, the
+//    nearest one beyond them); without them the one curve serves every pitch, as before
 //---------------------------------------------------------
+
+struct PitchCurve {
+      std::vector<std::pair<int, double>> points;       // x, dB (as DynamicsCurve's)
+      std::vector<std::pair<int, double>> perceived;    // may be empty
+      };
 
 struct DynamicsCurve {
       QString drivenBy;
@@ -336,13 +345,19 @@ struct DynamicsCurve {
       // dynamics CC at 80, in dB and by ear (127: the level playback leaves it at); may be empty
       std::vector<std::pair<int, double>> expression;
       std::vector<std::pair<int, double>> expressionPerceived;
-      double at(int x) const;                           // interpolated; clamped at the ends
+      std::map<int, PitchCurve> pitches;                // pitch -> its own measured curve; may be empty
+      DynamicsCurve atPitch(int pitch) const;           // the curve at a pitch (itself without pitches or pitch < 0)
+      double at(int x) const;                          // interpolated; clamped at the ends
       double perceivedAt(int x) const;                  // (-200 without perceived)
       double attackAt(int x) const;                     // (-200 without attack)
       int inverse(double db) const;                     // the x that plays db (1 … 127)
       bool byEar() const { return perceived.size() >= 2; }
       int perceivedInverse(double db) const;            // the x that sounds db (1 … 127; -1 without perceived)
       int louder(int x, double db) const;               // the x that sounds db louder than x (by ear where measured)
+      // db > 0 on the dynamics CC: the lowest y >= x whose 50 ms level reaches at(x) + db (inverse's first
+      // crossing where that is >= x; where the curve dips and it lies under x, the first CC over x that reaches
+      // it: Violas Long (Rachm.)); never reached: 127
+      int raise(int x, double db) const;
       };
 
 class DynamicsCalibration {
@@ -367,8 +382,9 @@ int calibratedController(const DynamicsCalibration& cal, const QString& patch, i
                          const QString& refPatch, int refValue, int cc);
 // a technique on velocity ([levels] calibrated): the velocity at which it is db louder than the held note
 // (refPatch, refValue) at the dynamics CC value cc; -1: a curve missing or the technique not on velocity
+// (pitch: the note's, for a technique measured at several pitches; -1: its one curve)
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
-                       const QString& refPatch, int refValue, int cc, double db);
+                       const QString& refPatch, int refValue, int cc, double db, int pitch = -1);
 
 //---------------------------------------------------------
 //   Route

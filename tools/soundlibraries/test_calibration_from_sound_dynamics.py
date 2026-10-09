@@ -61,6 +61,24 @@ class Convert(unittest.TestCase):
                          [("Other patch", 1, "no such patch"), ("Violas", 77, "no such value")])
         self.assertEqual(missing, [("Violas - Performance", 20)])
         self.assertIn("source", doc)
+        self.assertNotIn("pitches", long_)
+
+    def test_registers(self):
+        """per-pitch curves join the entry of the same patch, sound and value"""
+        reg = {"patches": {"Violas": {"Long": {"value": 1, "pitches": {
+            "69": {"curve": [[16, -31.111], [127, -26.6]], "perceived": [[16, 40], [127, 50]]},
+            "55": {"curve": [[16, -33.4], [127, -25.3]]}}}, "Spiccato": {"value": 7, "pitches": {"60": {"curve": []}}}}}}
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.xml")
+            with open(p, "w") as f:
+                f.write(MAP)
+            doc, _, _ = C.convert(MEASURED, C.map_articulations(p), reg)
+        long_ = doc["patches"]["Violas"]["1"]
+        self.assertEqual(list(long_["pitches"]), ["55", "69"])
+        self.assertEqual(long_["pitches"]["69"]["curve"], [[16, -31.11], [127, -26.6]])
+        self.assertEqual(long_["pitches"]["55"], {"curve": [[16, -33.4], [127, -25.3]]})
+        self.assertEqual(long_["curve"], [[32, -47.51], [127, -35.8]])      # (the one curve stays)
+        self.assertNotIn("pitches", doc["patches"]["Violas"]["42"])        # (another value)
 
 
 class Shipped(unittest.TestCase):
@@ -70,8 +88,14 @@ class Shipped(unittest.TestCase):
             doc = json.load(f)
         with open(os.path.join(C.HERE, C.SOURCE)) as f:
             measured = json.load(f)
-        again, _, missing = C.convert(measured, C.map_articulations(C.MAP))
+        with open(os.path.join(C.HERE, C.REGISTERS)) as f:
+            registers = json.load(f)
+        again, _, missing = C.convert(measured, C.map_articulations(C.MAP), registers)
         self.assertEqual(doc, again, "stale: run calibration_from_sound_dynamics.py")
+        # per-pitch curves: Long (Rachm.) (16) of the four upper string sections, nothing else
+        with_pitches = sorted((p, v) for p, arts in doc["patches"].items() for v, c in arts.items() if "pitches" in c)
+        self.assertEqual(with_pitches, [("Celli", "16"), ("Violas", "16"), ("Violins 1", "16"), ("Violins 2", "16")])
+        self.assertEqual(sorted(map(int, doc["patches"]["Violas"]["16"]["pitches"])), [48, 50, 53, 55, 69, 74, 79, 90])
         self.assertEqual(missing, [])
         # known values: Violas' held Long at pp, as measured
         e = measured["Violas"]["Long"]
