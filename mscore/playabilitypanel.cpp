@@ -243,6 +243,14 @@ PlayabilityPanel::PlayabilityPanel(QWidget* parent)
       _selected->setFont(sf);
       vl->addWidget(_selected);
 
+      // woodwind and brass register x dynamic notes (W2/B1): shown under every page
+      _windNotes = new QLabel;
+      _windNotes->setWordWrap(true);
+      _windNotes->setTextInteractionFlags(Qt::TextSelectableByMouse);
+      _windNotes->setFont(sf);
+      _windNotes->setVisible(false);
+      vl->addWidget(_windNotes);
+
       QHBoxLayout* buttons = new QHBoxLayout;
       _toggle = new QPushButton;
       connect(_toggle, &QPushButton::clicked, this, &PlayabilityPanel::toggleList);
@@ -507,6 +515,8 @@ void PlayabilityPanel::updateSelectedLine()
       if (!_info.tuning.isEmpty())
             text += "\n" + tr("Tuning: %1").arg(_info.tuning);        // a scordatura in force
       _selected->setText(text);
+      _windNotes->setVisible(!_info.windNotes.isEmpty());
+      _windNotes->setText(_info.windNotes.join("\n"));
       }
 
 void PlayabilityPanel::toggleList()

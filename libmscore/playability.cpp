@@ -11,6 +11,8 @@
 #include "playability.h"
 #include "playabilityrules.h"
 #include "playabilitybrass.h"
+#include "playabilitydiagram.h"
+#include "playabilitywinds.h"
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -143,6 +145,7 @@ class Pass {
       std::vector<std::pair<int, double>> _tempo;   // tick, quarter notes per second
       std::map<int, std::vector<std::pair<int, int>>> _slurs;     // track -> [from, to]
       std::map<int, std::vector<HairpinSpan>> _hairpins;          // staff -> hairpins
+      bool _spanners { false };                                   // collected
 
       int barOf(const Fraction& tick) const;
       int barOf(int tick) const { return barOf(Fraction::fromTicks(tick)); }
@@ -182,6 +185,10 @@ class Pass {
       void checkBrass(Part* part, const QString& staffName);
       ChordInfo inspectBrass(Chord* chord);
       ChordInfo inspectFamily(Chord* chord, Family f);
+      ChordInfo inspectBody(Chord* chord);
+      // woodwinds and brass: register x dynamic (SPEC-w2b1)
+      double windLevel(const Note* n, int tick);
+      void checkWindDynamics(Part* part, const QString& staffName);
 
    public:
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
@@ -304,6 +311,9 @@ StaffTexts Pass::staffTexts(int staffIdx) const
 // Slurs per track and hairpins per staff, from the score's spanners.
 void Pass::collectSpanners()
       {
+      if (_spanners)
+            return;
+      _spanners = true;
       for (const auto& sp : _score->spanner()) {
             Spanner* s = sp.second;
             if (s->isSlur())
@@ -416,6 +426,17 @@ static double levelAt(const StateList& dyn, const std::vector<HairpinSpan>& hair
             return v0 + (v1 - v0) * (t - hp.from) / (hp.to - hp.from);
             }
       return base;
+      }
+
+// a wind rule's instrument, band (both ends) and level
+static bool windRuleHits(const WindDynRule& r, const QString& id, int tr, int ppitch, double level)
+      {
+      bool inst = false;
+      for (const char* i : r.instruments)
+            if (id == QLatin1String(i))
+                  inst = true;
+      int p = r.written ? ppitch - tr : ppitch;
+      return inst && p >= r.lo && p <= r.hi && windLevelMatches(r.level, level);
       }
 
 BowUse Pass::bowUse(const StringInstrument& in, const StateList& dyn, const std::vector<HairpinSpan>& allHairpins,
@@ -922,6 +943,55 @@ void Pass::momentRow(const PartMoment& m, const std::vector<const PartNote*>& on
       addRow(m.tick, m.tick, on.front()->chord->track(), staff, kind, red ? "impossible" : "risky", reason, names.join(" + "));
       _res.rows.back().grace = on.front()->grace;
       (red ? _res.impossible : _res.outOfReach)++;
+      }
+
+//---------------------------------------------------------
+//   checkWindDynamics
+//    W2 (woodwinds) / B1 (brass), the owner's spec SPEC-w2b1: a note in a register band at a
+//    level the books call hard (dark yellow) or impossible (red), or a note for the panel only
+//    (playabilitywindsdyn.h, generated from tools/playability/w2b1_rules.py). The level is the
+//    dynamics and hairpins' at the note's chord (levelAt); bands are sounding pitches, or
+//    written (sounding - the instrument's transposition). Tied continuations are not checked
+//    again. One row per moment and rule.
+//---------------------------------------------------------
+
+double Pass::windLevel(const Note* n, int tick)
+      {
+      int st = n->staffIdx();
+      return levelAt(staffTexts(st).dyn, _hairpins[st], tick);
+      }
+
+void Pass::checkWindDynamics(Part* part, const QString& staffName)
+      {
+      bool any = false;
+      for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i)
+            if (!windAt(part, i->first).isEmpty())
+                  any = true;
+      if (!any)
+            return;
+      std::map<int, StaffTexts> texts;
+      for (const PartMoment& m : partMoments(part)) {
+            QString id = windAt(part, m.tick);
+            auto wd = windData().find(id);
+            if (wd == windData().end())
+                  continue;
+            std::vector<double> levels;
+            for (const PartNote& n : m.notes) {
+                  int st = n.note->staffIdx();
+                  if (!texts.count(st))
+                        texts[st] = staffTexts(st);
+                  levels.push_back(levelAt(texts[st].dyn, _hairpins[st], m.tick));
+                  }
+            for (const WindDynRule& r : windDynRules()) {
+                  if (r.kind == WindDynKind::NOTE)
+                        continue;
+                  std::vector<const PartNote*> on;
+                  for (size_t k = 0; k < m.notes.size(); ++k)
+                        if (m.notes[k].attack && windRuleHits(r, id, wd->second.tr, m.notes[k].note->ppitch(), levels[k]))
+                              on.push_back(&m.notes[k]);
+                  momentRow(m, on, staffName, "dynamic", r.kind == WindDynKind::RED, QString(r.text) + " (" + r.source + ")");
+                  }
+            }
       }
 
 // does an arpeggio sign reach the hand's staff at this moment?
@@ -1689,6 +1759,12 @@ void Pass::run()
             else
                   checkKeyboard(part, staffName);
             }
+      for (Part* part : _score->parts()) {
+            QString staffName = part->longName();
+            if (staffName.isEmpty())
+                  staffName = part->partName();
+            checkWindDynamics(part, staffName);
+            }
       for (PlayabilityRow& r : _res.rows)
             r.staffShort = shortStaffName(_score->staff(r.track / VOICES)->part(), r.staff, r.tick);
       }
@@ -1700,6 +1776,29 @@ void Pass::run()
 //---------------------------------------------------------
 
 ChordInfo Pass::inspect(Chord* chord)
+      {
+      ChordInfo info = inspectBody(chord);
+      if (!chord || chord->notes().empty())
+            return info;
+      Chord* main = chord->isGrace() ? toChord(chord->parent()) : chord;
+      int tick = main->tick().ticks();
+      QString id = windAt(chord->part(), tick);
+      auto wd = windData().find(id);
+      if (wd == windData().end())
+            return info;
+      collectSpanners();
+      std::vector<Note*> notes(chord->notes().begin(), chord->notes().end());
+      std::stable_sort(notes.begin(), notes.end(), [](const Note* a, const Note* b) { return a->ppitch() < b->ppitch(); });
+      for (const Note* n : notes) {
+            double level = windLevel(n, tick);
+            for (const WindDynRule& r : windDynRules())
+                  if (windRuleHits(r, id, wd->second.tr, n->ppitch(), level))
+                        info.windNotes << tpcName(n->tpc1(), n->ppitch()) + ": " + r.text + " (" + r.source + ")";
+            }
+      return info;
+      }
+
+ChordInfo Pass::inspectBody(Chord* chord)
       {
       ChordInfo info;
       if (!chord || chord->notes().empty())

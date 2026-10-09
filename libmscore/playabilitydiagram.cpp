@@ -651,7 +651,7 @@ static void instrumentAt(const Part* part, const Fraction& tick, QString* id, QS
             }
       }
 
-static QString windAt(const Part* part, int tick)
+QString windAt(const Part* part, int tick)
       {
       QString id, name;
       instrumentAt(part, Fraction::fromTicks(tick), &id, &name);

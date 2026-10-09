@@ -94,6 +94,7 @@ class PlayabilityPanel : public QDockWidget {
       QLabel* _count;
       DisplayListView* _graph;
       QLabel* _selected;
+      QLabel* _windNotes;
       QPushButton* _toggle;
 
       ChordInfo _info;

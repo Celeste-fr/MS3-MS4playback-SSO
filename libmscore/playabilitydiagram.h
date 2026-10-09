@@ -30,6 +30,7 @@
 namespace Ms {
 
 class Score;
+class Part;
 
 struct DrawItem {
       enum class Kind : char { LINE, RECT, CIRCLE, LABEL, META };
@@ -130,6 +131,8 @@ WindModel windModel(Score* score, bool museScoreRange = true);
 DisplayList layoutWindGraph(const WindModel& model, int graph, double w, double h);
 // the plugin's id for a MusicXML instrument id and the part's name ("Clarinet in A"), or empty
 QString windResolve(const QString& instrumentId, const QString& name);
+// the wind id of the instrument in force at a tick: its own id and long name, else the part's
+QString windAt(const Part* part, int tick);
 
 }     // namespace Playability
 }     // namespace Ms
