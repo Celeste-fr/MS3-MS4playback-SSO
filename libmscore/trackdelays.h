@@ -24,9 +24,14 @@
 //   Track levels (the owner, 2026-10-07, asked whether each technique's "volume offset" could be edited): a patch's
 //   and a technique's own level in dB, added up (the part's is the Mixer's volume). Played by CC11 per note
 //   (MidiRenderer::libraryNoteLevels, as a marcato's level: dB add up), so it is in Live's clips and the plain set's
-//   CC11 lane alike. Only softer: CC11 rests at the library's expression value (SSO: 127, its top), so a level is
-//   kept within MIN_DB .. 0, MIN_DB being CC11's least non-zero value (1 of 127: 20 log10(1/127) = -42.08 dB). A
-//   library whose dynamics are CC11 (no plain volume left) ignores levels.
+//   CC11 lane alike. A level is kept within MIN_DB .. MAX_DB: MIN_DB is CC11's least non-zero value (1 of 127:
+//   20 log10(1/127) = -42.08 dB); MAX_DB is the top of Live's track Volume (1.99526238, +6 dB: livesetxml.h), so the
+//   plain set plays what MuseScore does (the owner, 2026-10-08: Violins' Long "just has to be 8 dB louder", +6 dB
+//   chosen over a higher top Live couldn't follow). Louder (the owner, 2026-10-08): CC11 rests at the library's
+//   expression value (SSO: 127, its top), so a patch with a level above 0 dB has headroom (headroomDb): its loudest
+//   level, played by its volume (its Kontakt slot's in MuseScore, Vst3Synth::setMix; its Kontakt track's Volume in
+//   Live, with the Mixer's: within Live's +6 dB), and every note on it plays its level less that by CC11 (noteDb). A
+//   library whose dynamics are CC11 (no plain volume left) ignores levels (patchGain 1).
 //
 //   Kept in the score as the metaTag "trackDelays" (MuseScore 3.6 keeps metaTags through a round trip), left out
 //   when every value is 0; JSON:
@@ -49,6 +54,7 @@ namespace Ms {
 
 class MasterScore;
 class Part;
+namespace SoundLib { class Library; }
 
 namespace TrackDelays {
 
@@ -56,7 +62,7 @@ extern const char* const metaTag;
 constexpr double MIN_MS = -1000.0;
 constexpr double MAX_MS = 1000.0;
 constexpr double MIN_DB = -42.08;             // CC11 1 of 127 (header)
-constexpr double MAX_DB = 0.0;
+constexpr double MAX_DB = 6.0;              // Live's track Volume top, 1.99526238 (header)
 
 struct Delays {
       double ms { 0.0 };                      // the part's (its group track in Live)
@@ -89,6 +95,13 @@ double earliest(const Delays& d);
 double db(const Delays& d, const QString& patch, const QString& technique);
 // one track's own level (0: none)
 double ownDb(const Delays& d, const QString& key);
+// a patch's headroom (0 .. MAX_DB): the loudest level a note on it plays at, the patch's own or with a technique's (db(),
+// within MAX_DB)
+double headroomDb(const Delays& d, const QString& patch);
+// what CC11 plays for a note of the technique on the patch: db() within MIN_DB .. MAX_DB less the patch's headroom
+double noteDb(const Delays& d, const QString& patch, const QString& technique);
+// the patch's volume factor on top of the Mixer's: its headroom as a gain (1 for a library whose dynamics are CC11)
+double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch);
 
 }     // namespace TrackDelays
 }     // namespace Ms

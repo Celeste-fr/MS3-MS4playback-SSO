@@ -97,6 +97,7 @@ struct Kontakt {
       std::vector<Lane> lanes;            // by controller, the pitch bend last
       std::vector<ParamLane> params;
       int untuned { 0 };                  // notes of a varispeed copy, played at the key's pitch
+      double gain { 1.0 };                // its track-level headroom (TrackDelays::patchGain): on its track's Volume
       };
 
 struct PartTracks {
@@ -162,8 +163,11 @@ QStringList keyPath(const QString& annotation); // the path; empty: not a key
 // the set's tracks (LiveSetWriter::Spec::tracks): per section a group, in it a group per part, in that per patch its
 // Kontakt track (the part's Mixer; its lanes in a "Controllers" clip, its parameters as automation; the caller adds the
 // plug-in, as for the routes' tracks) and a track per technique (switchClips, MIDI To the Kontakt); each with its key
-// (trackKey) as its annotation
-std::vector<LiveSetWriter::Track> tracks(const Layout& layout);
+// (trackKey) as its annotation. link: a MuseScore Link copy (Track::link; the device itself: Spec::link) on each technique
+// track, its only device, so its MIDI passes through it before it goes To the Kontakt ("Edit in MuseScore" and a clip tab
+// playing through Live on any track; tools/live/MuseScoreLink.js passes the notes and controllers on as they are, except
+// notes on its carrier keys 114-127, which become controllers: LIVE.md › The plain set). Off: the plain set as before.
+std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link = false);
 
 }     // namespace PlainLiveSet
 }     // namespace Ms

@@ -12,6 +12,8 @@
 #include "partplayback.h"
 #include "part.h"
 #include "score.h"
+#include "soundlibrary.h"
+#include "audio/midi/event.h"
 
 #include <algorithm>
 #include <cmath>
@@ -173,6 +175,29 @@ double ownDb(const Delays& d, const QString& key)
 double db(const Delays& d, const QString& patch, const QString& technique)
       {
       return ownDb(d, trackKey(patch)) + ownDb(d, trackKey(patch, technique));
+      }
+
+double headroomDb(const Delays& d, const QString& patch)
+      {
+      const double own = ownDb(d, trackKey(patch));
+      const QString techniques = trackKey(patch, "-").chopped(1);         // "<patch> / "
+      double top = own;                                                   // (a technique with no level of its own)
+      for (const auto& l : d.levels)
+            if (l.first.startsWith(techniques))
+                  top = std::max(top, own + l.second);
+      return std::max(0.0, std::min(MAX_DB, top));
+      }
+
+double noteDb(const Delays& d, const QString& patch, const QString& technique)
+      {
+      return std::max(MIN_DB, std::min(MAX_DB, db(d, patch, technique))) - headroomDb(d, patch);
+      }
+
+double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
+      {
+      if (library.dynamicsCC == CTRL_EXPRESSION)
+            return 1.0;
+      return std::pow(10.0, headroomDb(d, patch) / 20.0);
       }
 
 }     // namespace TrackDelays

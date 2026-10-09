@@ -16,14 +16,14 @@
 //   fully configurable … and editable in an ini file"). docs/PLAYBACK_SETTINGS.md lists every adjustment.
 //
 //   Three layers, each over the one before:
-//     1. built-in defaults (definitions(); for a few, the sound library map's value: <Legato early>,
+//     1. built-in defaults (definitions(); for a few, the sound library map's value:
 //        <Onset early>, <Tuning tolerance tail maxLanes>)
 //     2. the global ini file, playback.ini in MuseScore's data folder (Windows:
 //        %LOCALAPPDATA%\MuseScore\MuseScore3Evo\playback.ini), written with every key, its default and a
 //        comment when missing; never overwritten. Read at start and by reload() (Edit › Reload Playback
 //        Settings, Mixer › Advanced Options…): a reload renders again
-//     3. the score: metaTag "playbackSettings" ("legato/overlapTicks=40;pedal/upAfterMs=60"), and the three
-//        older per-score metaTags (soundLibraryLegatoEarly, soundLibraryOnsetEarly, soundLibraryLanes),
+//     3. the score: metaTag "playbackSettings" ("legato/keepMs=60;shorts/staccato=40"), and the two
+//        older per-score metaTags (soundLibraryOnsetEarly, soundLibraryLanes; soundLibraryLegatoEarly ignored since 2026-10-07),
 //        which stay where they were. A score without overrides has no such metaTag (unchanged files)
 //   Per-patch tables (map data: legato delays, onsets, shorts' from=) can be overridden in the ini only,
 //   by patch name: [legato.delay], [heldNotes.onset], [shorts.from] (see the generated file).
@@ -32,6 +32,7 @@
 #include <QString>
 #include <QStringList>
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace Ms {
@@ -72,6 +73,23 @@ QStringList warnings();                         // unknown keys, bad values (als
 QString iniTemplate();                          // the file as written when missing
 bool iniHas(const char* id);
 double iniValue(const char* id);
+
+// presets: a few settings set together in playback.ini (the owner, 2026-10-07: "library default, and recommended")
+struct Preset {
+      const char* id;                                   // "recommended", "library"
+      const char* name;                                 // for menus
+      std::vector<std::pair<const char*, double>> values;   // setting id -> value; the others are left as they are
+      };
+const std::vector<Preset>& presets();
+// the preset's keys written into the ini file's text (comments and other lines kept; a missing key or section is added)
+QString applyPresetToText(const QString& text, const Preset& preset);
+// the file edited (written from iniTemplate() first when missing); false when it can't be written. Does not reload.
+bool applyPreset(const QString& id, const QString& path = QString());
+// the preset the ini's values match ("" : custom); a key not in the ini counts as the map's (Recommended: SSO's 100)
+QString detectPreset(const std::map<QString, double>& iniValues);
+QString currentPreset();                                // for the ini now read
+// the preset's keys the score overrides (own value or the older metaTag)
+QStringList presetKeysOverriddenBy(const Score* score);
 
 // per-patch tables (ini only): text by patch ("Violins 2 - Performance") or "patch|articulation"; an
 // offset ("+25", "-30": ms added) or a whole table ("-12:240 -7:280 …" / one number)

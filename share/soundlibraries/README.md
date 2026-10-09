@@ -157,9 +157,10 @@ switch value of each articulation. For example:
   audio comparison can't judge but the pictures confirm). The check then counts it as passed,
   and a last check that found exactly these is shown as passed without checking again.
 - `modifiers` are variants: `muted harmonics sulpont sultasto flautando cuivre sulg sulc bellsup
-  pdlt multitongue`. When no variant matches, the plain articulation plays. Staff text sets them:
+  pdlt multitongue performance`. When no variant matches, the plain articulation plays. Staff text sets them:
   "sul pont.", "sul tasto", "flautando", "cuivré", "sul G", "sul C", "bells up" ("campana in
-  aria", "pavillons en l'air"), "près de la table" ("pdlt"), "double tongue" / "triple tongue";
+  aria", "pavillons en l'air"), "près de la table" ("pdlt"), "double tongue" / "triple tongue",
+  "performance" (a library's own legato patch: SSO's Performance patches; "non performance" ends it);
   "ord." ends them all.
 - `partName` on an `Instrument` is a regular expression. That instrument is preferred for parts
   whose name matches it.
@@ -174,8 +175,8 @@ switch value of each articulation. For example:
   the next note a little, as legato patches need. An articulation whose first technique is `legato`
   is a legato patch's own: slurred notes on it join by legato transitions (`legatoDelay`, below). One
   that plays slurs but lists another technique first (`techniques="long legato"`) attacks each
-  slurred note anew (SSO's All techniques longs; the SSO map has no Performance patches since
-  2026-10-06, the owner's choice).
+  slurred note anew (SSO's All techniques longs, which slurs play since 2026-10-06, the owner's
+  choice; SSO's Performance patches play only under staff text "performance", since 2026-10-07).
 
   ```xml
   <Instrument name="Strings - Violins 1 - Legato" with="Violins 1">
@@ -185,6 +186,10 @@ switch value of each articulation. For example:
 - **Measured timing.** Optional attributes come from measuring the library (SSO's come from
   the owner's background timing run and plug-in extract, `tools/soundlibraries/sso_articulation_timing.json`
   and `sso_patch_measurements.json`, written by `gen_spitfire_sso.py`):
+  - `legatoVelocity` on an `Articulation` (1-127): a legato transition's velocity, whatever the note's
+    (Spitfire's Performance legato picks the transition by velocity: fast 85-127 "with accent", slow 85-127
+    bowed). SSO: Violas - Performance 100, the other Performance patches none (measured per family, `gen_spitfire_sso.py` LEGATO_VELOCITY; on Violas - Performance, 2026-10-07: a run of slurred
+    sixteenths arrives with an SD of 41 ms against the written times at 100, 49 ms at 64).
   - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long
     after its note-on (SSO's Performance patches: 60–690 ms, median 190). Either one number for
     every interval or the delay by interval, `interval:ms` pairs in semitones (the new note minus the
@@ -193,17 +198,13 @@ switch value of each articulation. For example:
     nearest note on the same patch). SSO's come from the legato grid (`sso_legato_grid.json`: 14
     intervals from -12 to +12, velocity changes nothing), for the string Performance patches from
     5 starting pitches (`sso_legato_grid_pitches.json`; +12 takes -12's). A slurred note that is a
-    transition (its note before, on the same patch, is slurred into it) starts early by this times
-    `<Legato early>` percent, so the new pitch lands near the beat. The note before loses at most
-    a share of its length: none up to 125 ms, rising linearly to half at 250 ms and longer (fast
-    runs, where SSO's transitions are faster, stay even); it is also capped at the chunk's or the
-    repeat's start; its note-off, the
-    controllers and the switches stay where they were. The first note of a slur, the note after
-    it and a repeated key are not moved.
-  - `<Legato early="100"/>` (top level): that percent (SSO: 100, measured: the new pitch then fully arrives a
-    median 40 ms after the beat). A score can set its own in
-    *Mixer › Advanced Options…* ("Legato transitions early by", metaTag `soundLibraryLegatoEarly`);
-    0 plays transitions on the beat.
+    transition (its note before, on the same patch, is slurred into it) plays on its beat; the delay
+    times only the glide of a transition bent to another tuning (`[tuning] bendAtArrival`, below). (The
+    early start by this delay, `<Legato early>` and metaTag `soundLibraryLegatoEarly`, was removed
+    2026-10-07; an older map's or score's is ignored.)
+  - `peak` on an `Articulation` (ms): when a held note is loudest after its note-on (SSO: the median over the
+    measured semitones of the onset check's mf perceived peak). With `[slurs] quick` a slurred note shorter than
+    it plays the patch's tenuto short (1) or espressivo long (2) instead.
   - `onset` on an `Articulation` (ms): a sustained note is heard this long after its note-on (its
     level 15 dB under the note's peak), one number or `pitch:ms` pairs by played MIDI pitch
     (`onset="55:65 68:55 78:65 89:40 97:80"`, linear between, the nearest end's beyond). A note that is
@@ -217,19 +218,11 @@ switch value of each articulation. For example:
     legato patch an overlap would play a transition instead of the note's attack), and the note's
     switch and the controllers sent at its tick move with it. SSO: 10-60 ms for most longs, 175-440 ms
     for sul tasto, flautando and harmonics (from the rest check's per-semitone full-level times by
-    family; `gen_spitfire_sso.py`); not on tremolos, trills, shorts, harp, keyboards or percussion.
-  - `legatoLevel` / `legatoLevelLong` on a legato `Articulation` (dB): how much louder (+) or softer (-) each
-    transition arrives than the other transitions into the same pitch, heard in a run of sixteenths / settled half a
-    second in; per interval from its first start pitch up, one value per start pitch, empty unmeasured
-    (`legatoLevel="+1:49:-1.2,0.4,,2 -1:50:…"`). Played only with `[legato] levelBalance` (off): CC11 evens them
-    from the transition's arrival. SSO: the legato level scan (`tools/soundlibraries/legato_level_scan.py`,
-    `legato_levels_from_scan.py`, `sso_legato_levels.json`; `gen_spitfire_sso.py`).
-  - `legatoLevel` / `legatoLevelLong` on a legato `Articulation` (dB): how much louder (+) or softer (-) each
-    transition arrives than the other transitions into the same pitch, heard in a run of sixteenths / settled half a
-    second in; per interval from its first start pitch up, one value per start pitch, empty unmeasured
-    (`legatoLevel="+1:49:-1.2,0.4,,2 -1:50:…"`). Played only with `[legato] levelBalance` (off): CC11 evens them
-    from the transition's arrival. SSO: the legato level scan (`tools/soundlibraries/legato_level_scan.py`,
-    `legato_levels_from_scan.py`, `sso_legato_levels.json`; `gen_spitfire_sso.py`).
+    family; `gen_spitfire_sso.py`); since 2026-10-08 also every other technique the onset check measured (shorts,
+    marcato, tremolos, trills, falls: measured pitches only, no family fit), not rips, effects, harp, keyboards or
+    percussion.
+  - (`legatoLevel` / `legatoLevelLong`, the level each transition arrived at, played by `[legato] levelBalance`: removed
+    2026-10-07, ignored in an older map; the measurement stays in `sso_legato_levels.json`.)
   - `<Onset early="100"/>` (top level): that percent (SSO: 100). A score can set its own in *Mixer ›
     Advanced Options…* ("Held notes early by", metaTag `soundLibraryOnsetEarly`); 0 plays them on the beat.
   - `length` on an `Articulation` (seconds): how long its sample is (SSO's Short 0.5 / Short 1.0), for
@@ -249,7 +242,6 @@ switch value of each articulation. For example:
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
 
   ```xml
-  <Legato early="100"/>
   <Onset early="100"/>
   <Instrument name="Violins 1 - Performance" with="Violins 1" bend="99.1">
     <Articulation name="Legato" value="20" techniques="legato long" release="885"

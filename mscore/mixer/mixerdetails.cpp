@@ -632,8 +632,9 @@ void MixerDetails::editTrackDelays()
       QLabel* intro = new QLabel(tr("Delay: added to the part's %1 ms, as Live adds a Kontakt track's and a technique "
                                     "track's delays to their group's (-1000 to 1000 ms). Level: a patch's and a "
                                     "technique's, added up, played by CC11 (expression) on the technique's notes, in "
-                                    "Live's clips too; softer only (CC11 rests at its top), down to %2 dB.")
-                                 .arg(d.ms).arg(TrackDelays::MIN_DB), &dialog);
+                                    "Live's clips too; %2 to +%3 dB. Above 0 dB the patch's volume (its Kontakt track's "
+                                    "in Live) plays louder by its loudest level and CC11 the rest.")
+                                 .arg(d.ms).arg(TrackDelays::MIN_DB).arg(TrackDelays::MAX_DB), &dialog);
       intro->setWordWrap(true);
       top->addWidget(intro);
       QScrollArea* scroll = new QScrollArea(&dialog);

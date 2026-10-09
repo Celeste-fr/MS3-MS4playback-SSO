@@ -111,6 +111,46 @@ here). What was learned there about checking playback:
 - Kontakt's state can be diffed before and after a change made in its window (`Save Kontakt's state for
   diagnosis`, or a test host's getState): that is how Max voices was found.
 
+## Playback audit (agents, Linux; before any build goes to the owner)
+
+A whole-score check of the sound library events as playback renders them (10-measure chunks, as Seq; no plug-in,
+no audio), for the faults the owner should never have to point out (2026-10-09). Code: `libmscore/playbackaudit.*`
+(its header lists each check and its source), test `tst_playbackaudit` (fixtures for every check, and an env-driven
+run on any score). It checks the renderer against the map's own onsets and the shipped calibration, not the real
+sound: whether the onsets are right is the Windows VM's job (above). Checks:
+
+- **OVERLAP** (fail): on one route, a note still sounding more than `[legato] keepMs` into the next note of its line,
+  or a key struck while it still sounds there.
+- **UNMEASURED** (report, per instrument): swapped (`[slurs] quick`) or early notes whose onset (and swapped level) is
+  not from an in-context fit, and notes whose technique has no onset in the map at all (arrival unknown). The map doesn't record where an onset comes from, so the fit files' instrument lists
+  say it (`sso_long_onset_fit.json`, `sso_rachm_onset_fit.json`, `sso_rachm_levels.json`, as `gen_spitfire_sso.py`
+  reads them).
+- **CAPPED** (report, the cut in ms): a note started less early than its onset says (x `<Onset early>` %): cut where
+  the note before on its patch keeps `[legato] keepMs` (that note started earlier than its own length), at the start
+  of the pass, or else (chunk start, grace notes, arpeggio, legato transition). It arrives late by the cut. A cut
+  within one tick is the renderer's rounding to ticks and not reported.
+- **ARRIVAL**: predicted arrival = sent time + the onset the map gives the note (as the renderer takes it: by pitch for a
+  swap or `[heldNotes] byPitch`, else the median; playback.ini's `[heldNotes.onset]` applied) - written time; a chord's
+  earliest against the note before in its line (joined without a rest): more than 50 ms fails, 30-50 ms warns (Rasch
+  1979's ensemble asynchrony, applied within a line). With the full early start it is ~0 by construction; what shows
+  is CAPPED notes and `<Onset early>` below 100.
+- **LEVEL STEP** (values): under one slur at an unchanged written dynamic, the change of level between neighbouring
+  notes in dB (the shipped dynamics calibration). Proposed threshold, not enforced, owner to approve: the intensity
+  difference limen of Jesteadt, Wier & Green 1977 (JASA 61, 169-177; dI/I = 0.463 (I/I0)^-0.072 as Praat's manual
+  quotes it), 0.69 dB at 60 dB sensation level (0.93 at 40, 0.50 at 80); steps above it are marked "> DL".
+
+Run it on the standard score (Recommended), through the worktree's wrappers:
+
+```sh
+./run-<name>.sh 'cd mtest/libmscore/playbackaudit && MS_AUDIT_SCORE="$HOME/MuseScore/ms3fork/test-scores/Whence 12-TET.mscz" \
+  MS_AUDIT_OUT=/tmp/audit-whence.txt QT_QPA_PLATFORM=offscreen ./tst_playbackaudit auditScore'
+```
+
+`MS_AUDIT_SETTINGS`: a preset id (`recommended`, the default; `library`) or a `playbackSettings` metaTag
+(`heldNotes/early=0;slurs/quick=0`). `MS_AUDIT_MAP`: another map (default the shipped SSO map and its
+`.dynamics.json`). The test fails on any OVERLAP; read the report's ARRIVAL fails and CAPPED notes before handing a
+build over, and say in the hand-over which remain and why. Keep reports out of the repository (the owner's score).
+
 ## Testing here (Linux, no Kontakt)
 
 - `tools/playbackverify/try_with_testsynth.sh <build dir> <install dir> [work dir]`: the whole

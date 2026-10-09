@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!-- slurred sixteenths at 110 bpm (136 ms) swapped to a quicker technique ([slurs] quick 2) whose onset is longer
+     than the note, then a half note on the held one under the same slur, as the violas' Whence bars 9-12
+     (tst_playbackaudit::swapFindings) -->
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1">
+      <part-name>Violas</part-name>
+      <score-instrument id="P1-I1"><instrument-name>Viola</instrument-name><instrument-sound>strings.viola</instrument-sound></score-instrument>
+      <midi-instrument id="P1-I1"><midi-channel>1</midi-channel><midi-program>42</midi-program></midi-instrument>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>2</beats><beat-type>4</beat-type></time><clef><sign>C</sign><line>3</line></clef></attributes>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>110</per-minute></metronome></direction-type><sound tempo="110"/></direction>
+      <direction placement="below"><direction-type><dynamics><mf/></dynamics></direction-type><sound dynamics="88.89"/></direction>
+      <note><rest/><duration>4</duration><type>quarter</type></note>
+      <note><pitch><step>A</step><octave>3</octave></pitch><duration>1</duration><type>16th</type><notations><slur type="start" number="1"/></notations></note>
+      <note><pitch><step>B</step><octave>3</octave></pitch><duration>1</duration><type>16th</type></note>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>16th</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>16th</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><type>half</type><notations><slur type="stop" number="1"/></notations></note>
+    </measure>
+  </part>
+</score-partwise>

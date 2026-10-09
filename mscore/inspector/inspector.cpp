@@ -768,16 +768,16 @@ InspectorArticulation::InspectorArticulation(QWidget* parent)
             { Pid::ORNAMENT_STYLE,      0, ar.ornamentStyle,    ar.resetOrnamentStyle    },
             { Pid::PLAY,                0, ar.playArticulation, ar.resetPlayArticulation }
             };
-      // marcatos only (every selected one): their level, 0 the library's (libmscore/articulation.h MarcatoLevel)
-      bool marcatos = true;
+      // every articulation sign (all selected ones): its level, 0 the library's (libmscore/articulation.h MarcatoLevel)
+      bool articulations = true;
       for (const auto& ee : *inspector->el())
-            marcatos = marcatos && ee->isArticulation() && toArticulation(ee)->isMarcato();
-      if (marcatos)
+            articulations = articulations && ee->isArticulation();
+      if (articulations)
             iiList.push_back({ Pid::MARCATO_LEVEL, 0, ar.marcatoLevel, ar.resetMarcatoLevel });
-      ar.marcatoLevelLabel->setVisible(marcatos);
-      ar.marcatoLevel->setVisible(marcatos);
-      ar.marcatoLevel->setRange(MarcatoLevel::MIN_DB, MarcatoLevel::MAX_DB);   // (articulation.h: what SSO's marcatos span)
-      ar.resetMarcatoLevel->setVisible(marcatos);
+      ar.marcatoLevelLabel->setVisible(articulations);
+      ar.marcatoLevel->setVisible(articulations);
+      ar.marcatoLevel->setRange(MarcatoLevel::MIN_DB, MarcatoLevel::MAX_DB);   // (articulation.h: what SSO's techniques span)
+      ar.resetMarcatoLevel->setVisible(articulations);
       const std::vector<InspectorPanel> ppList = { { ar.title, ar.panel } };
       mapSignals(iiList, ppList);
       connect(ar.properties, SIGNAL(clicked()), SLOT(propertiesClicked()));
@@ -1340,10 +1340,21 @@ InspectorStaffText::InspectorStaffText(QWidget* parent)
       if (sameTypes)
             s.title->setText(el->userName());
 
-      const std::vector<InspectorItem> il = {
+      std::vector<InspectorItem> il = {
             { Pid::SUB_STYLE,  0, s.style,     s.resetStyle     },
             { Pid::PLACEMENT,  0, s.placement, s.resetPlacement }
             };
+      // a staff text (all selected ones; not a system text): the level of the technique it sets, 0 the library's
+      // (libmscore/articulation.h MarcatoLevel)
+      bool staffTexts = true;
+      for (const auto& ee : *inspector->el())
+            staffTexts = staffTexts && ee->isStaffText();
+      if (staffTexts)
+            il.push_back({ Pid::MARCATO_LEVEL, 0, s.level, s.resetLevel });
+      s.levelLabel->setVisible(staffTexts);
+      s.level->setVisible(staffTexts);
+      s.level->setRange(MarcatoLevel::MIN_DB, MarcatoLevel::MAX_DB);
+      s.resetLevel->setVisible(staffTexts);
       const std::vector<InspectorPanel> ppList = {
             { s.title, s.panel }
             };

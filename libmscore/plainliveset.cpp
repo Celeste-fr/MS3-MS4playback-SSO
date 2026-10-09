@@ -149,6 +149,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             Kontakt k;
             k.instrument = r.instrument;
             k.patch = r.instrument ? r.instrument->name : QString();
+            k.gain = TrackDelays::patchGain(library, p->delays, k.patch);
             k.port = r.port;
             k.channel = r.channel;
             k.patchIndex = r.patch;
@@ -180,26 +181,60 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             Kontakt& k = *b.kontakt;
             const SoundLib::LibInstrument* li = k.instrument;
             const bool copy = copyRoute[r.first];
+            // a switch sets the switch in force (true); anything else doesn't
+            auto setsSwitch = [li](const NPlayEvent& e, int& value) {
+                  if (e.librarySwitch()) {
+                        if (e.type() == ME_NOTEON && e.velo() > 0 && li && li->switchType == SoundLib::SwitchType::KEYSWITCH)
+                              value = e.pitch();
+                        else if (e.type() == ME_CONTROLLER)
+                              value = e.value();
+                        return true;
+                        }
+                  if (e.type() == ME_CONTROLLER && li
+                      && ((li->switchType == SoundLib::SwitchType::CC && e.controller() == li->switchNumber)
+                          || (li->switchType == SoundLib::SwitchType::PROGRAM && e.controller() == CTRL_PROGRAM))) {
+                        value = e.value();
+                        return true;
+                        }
+                  return false;
+                  };
+            // a controller or bend right before a note-on at its tick (its track level's CC11, a dynamic, a lane's
+            // bend) is that note's: its lane point moves by the note's technique's own delay, which the technique's
+            // MIDI track plays (the Kontakt track has the patch's, the part group the part's), as the renderer moves
+            // it (MidiRenderer::libraryTrackDelays)
+            std::vector<std::pair<int, const NPlayEvent*>> items = r.second;
+            auto pd = delays.find(to->second.first);
+            if (pd != delays.end() && !pd->second.tracks.empty()) {
+                  int sw = -1;
+                  for (size_t i = 0; i < items.size(); ++i) {
+                        const NPlayEvent& e = *items[i].second;
+                        if (setsSwitch(e, sw) || (e.type() != ME_CONTROLLER && e.type() != ME_PITCHBEND))
+                              continue;
+                        int nsw = sw;
+                        for (size_t j = i + 1; j < items.size() && items[j].first == items[i].first; ++j) {
+                              const NPlayEvent& n = *items[j].second;
+                              if (setsSwitch(n, nsw) || n.type() != ME_NOTEON || n.velo() == 0)
+                                    continue;
+                              const double ms = TrackDelays::own(pd->second, TrackDelays::trackKey(k.patch, techniqueName(li, nsw)));
+                              if (ms != 0.0)
+                                    items[i].first = std::max(0, score->utime2utick(score->utick2utime(items[i].first) + ms / 1000.0));
+                              break;
+                              }
+                        }
+                  std::stable_sort(items.begin(), items.end(), [](const std::pair<int, const NPlayEvent*>& a,
+                                                                  const std::pair<int, const NPlayEvent*>& b) { return a.first < b.first; });
+                  }
             int value = -1;                               // the switch in force
             std::map<int, std::deque<std::pair<size_t, LiveClips::Note>>> open;   // pitch -> (technique, note)
-            for (const auto& item : r.second) {
+            for (const auto& item : items) {
                   const NPlayEvent& e = *item.second;
                   const int at = tl.units(item.first);
                   const bool on = e.type() == ME_NOTEON && e.velo() > 0;
                   const bool off = e.type() == ME_NOTEOFF || (e.type() == ME_NOTEON && e.velo() == 0);
-                  if (e.librarySwitch()) {
-                        if (on && li && li->switchType == SoundLib::SwitchType::KEYSWITCH)
-                              value = e.pitch();
-                        else if (e.type() == ME_CONTROLLER)
-                              value = e.value();
+                  if (setsSwitch(e, value))
                         continue;
-                        }
                   if (e.type() == ME_CONTROLLER) {
-                        if (li && li->switchType == SoundLib::SwitchType::CC && e.controller() == li->switchNumber)
-                              value = e.value();
-                        else if (li && li->switchType == SoundLib::SwitchType::PROGRAM && e.controller() == CTRL_PROGRAM)
-                              value = e.value();
-                        else if (laneController(e.controller(), li) && !copy)
+                        if (laneController(e.controller(), li) && !copy)
                               putPoint(b.lanes[e.controller()], at, e.value());
                         }
                   else if (e.type() == ME_PITCHBEND) {
@@ -437,7 +472,7 @@ QStringList keyPath(const QString& annotation)
       return annotation.mid(int(strlen(KEY_PREFIX))).split(" / ");
       }
 
-std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
+std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
       {
       std::vector<LiveSetWriter::Track> out;
       int partNumber = 0;
@@ -480,7 +515,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                         kt.routeKey = QString("%1:%2").arg(k.port).arg(kt.channel);
                         kt.routePatch = k.patchIndex;
                         kt.annotation = trackKey({ s.name, p.name, kt.name });
-                        kt.volume = LiveSetWriter::mixGain(mix.volume);
+                        kt.volume = LiveSetWriter::kontaktVolume(mix.volume, k.gain);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
                         kt.active = !mix.muted;
                         kt.delayKey = TrackDelays::trackKey(k.patch);
@@ -513,7 +548,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout)
                         for (size_t i = 0; i < k.techniques.size(); ++i) {
                               LiveSetWriter::Track tt;
                               tt.name = QString("%1 – %2").arg(out[size_t(kontaktIndex)].name, k.techniques[i].name);
-                              tt.link = false;
+                              tt.link = link;
                               tt.color = color;
                               tt.groupIndex = partIndex;
                               tt.midiTo = kontaktIndex;

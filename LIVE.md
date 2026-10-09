@@ -167,7 +167,10 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   when it changes (2026-09-30). The Live Object Model can write a clip's notes but not
   its MIDI controller envelopes, so the controllers travel as notes, and the **MuseScore Link**
   device, placed before Kontakt on the track, turns each carrier into its controller or the pitch bend
-  (and drops its note-off). Keys 114-127 are never played as notes. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
+  (and drops its note-off). Keys 114-127 are never played as notes. The device does so only on a track holding a
+  clip named "MuseScore: …" (protocol 8, 2026-10-07; `MuseScoreLink.js` › Carriers: a `[gate 2 2]` before the carrier
+  keys' `[route]`, set by the copy from its own track's arrangement and session clips once a second and at once
+  when the hub makes or deletes one); on any other track every note passes unchanged, keys 114-127 too. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
   also in an export or a freeze, and chased when playback starts in the middle (Live's *Chase MIDI
   Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
   placed just before it (0.26 ms at 120 bpm apart): switches first, then the controllers, the pitch bend
@@ -241,8 +244,8 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
 Tested here: the clips' contents (`tst_liveintegration` clipsTimeline, clipsControllers, clipsScore,
 clipsChanges, clipsOsc, clipsImport); the device's script against a stand-in for Live
 (`tools/live/test/test_device.js`: hub, tracks by port / name, clips replaced, the owner's clips left,
-locators, tempo, transport, Monitor) and its patcher and `.amxd` (`test_patch.js`: carrier notes to
-controllers); and the whole chain with a real MuseScore build (GUI under Xvfb) talking to the stand-in
+locators, tempo, transport, Monitor, the carriers' gate) and its patcher and `.amxd` (`test_patch.js`: carrier notes to
+controllers, every note through on other tracks); and the whole chain with a real MuseScore build (GUI under Xvfb) talking to the stand-in
 over UDP (`tools/live/test/fake_live_server.js`): a two-part score with a repeat and a tempo change
 gave four clips on four tracks found by name, locators at the right beats (60 then 120 bpm at bar 3),
 and a note moved up in MuseScore reached its clip about a second later, only that clip sent again;
@@ -297,6 +300,20 @@ in a section collapsible at the same time".
   pitch), pitch bends (not written yet).
 - **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
   the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.
+- **With MuseScore Link on each technique track** (`LiveSetKind::PLAIN_LINKED`, `PlainLiveSet::tracks(layout, true)`;
+  Create Live Set and `--create-live-set` write it since 2026-10-07, the owner: "make it default"): the same set with a MuseScore Link copy as each technique track's only device,
+  so "Edit in MuseScore" and clip tabs playing through Live work on any track. Off, the set is byte for byte the plain
+  set (`tst_liveequivalence` `plainSetLinked`). The device passes notes, controllers, program changes and pitch bend on
+  unchanged, keys 114-127 too: it converts carriers only on a track holding a "MuseScore: …" clip (protocol 8, above
+  › What a clip holds), and the plain set's clips are named after their techniques. (Before protocol 8 it turned
+  every note on 114-127 into a controller.) Checked on the VM (Live 12.4.6, 2026-10-07, recorder tracks taking each
+  technique track's output): a "Long" clip with keys 60 and 112-127 at velocities 1, 65 and 127 came out identical (51
+  notes: keys, velocities, lengths, times within 0.04 millibeats); a "MuseScore: …" clip's carriers on another copy came
+  out as CC1, CC11, CC64 and the pitch bend with the expected values, no key 114-127 left (CC32 can't be checked
+  this way: Live doesn't record it into a clip). Measured on the VM (Live
+  12.4.6, Kontakt 8 + SSO, Whence: 10 technique tracks, 2026-10-07; numbers in the commit message): what reaches the
+  Kontakt tracks has the same notes, keys and velocities, each note-on and note-off up to one sample (44.1 kHz) later;
+  load, save, memory and CPU within the runs' spread (about +100 MB private memory).
 - **Checked in Live 12.4.6** (the VM's trial, Drift standing in for Kontakt, 2026-10-06): the set opens without a
   dialog, both group levels fold (outer group TrackGroupId -1, inner the outer's Id, AudioOut/GroupTrack). MIDI To is
   `MidiOut/Track.<id>/TrackIn` (Upper the track's name, Lower "Track In"); the receiving track plays it only with
@@ -323,18 +340,26 @@ in a section collapsible at the same time".
   each technique's own, added to the part's). Written as the tracks' **TrackDelay** (`Value` ms, `IsValueSampleBased`
   false): the part's on its part group, a patch's on its Kontakt track, a technique's on its MIDI track; the section
   group and the clips get none. MuseScore plays the same sums: a note and its switch the part's + the patch's + the
-  technique's, the Kontakt's controllers (the Controllers clip, parameter automation) the part's + the patch's. Range
+  technique's, the Kontakt's controllers (the Controllers clip, parameter automation) the part's + the patch's, except
+  a controller or bend right before a note-on at its tick (its track level's CC11, a dynamic): the note's sum, so the
+  plain set puts that lane point the technique's own delay later than written (the owner, 2026-10-08: Long +6 dB with
+  the Long delayed, its CC11 came on time and raised the spiccato's ring, heard as the Long not moving). Range
   -1000 .. 1000 ms: Live 12's manual (18.7 Track Delays) gives none; a tutorial gives 1000 ms either way
   (musicgurus.com, "Ableton Live delay - Track Delay time"). **Untried in Live**: that a group's delay delays the
   tracks in it, and a MIDI track's its MIDI To output (the manual: "every track"); what Live does when an early
   technique's switch overtakes another technique's note (MuseScore plays it as the sums say: the same clash).
-  Test: `tst_soundlibrary` `trackDelays`, `tst_liveequivalence` `plainSetTrackDelays`.
+  Test: `tst_soundlibrary` `trackDelays`, `tst_liveequivalence` `plainSetTrackDelays`, `delayedTrackLevel`.
 - **Track levels** (the same metaTag's `levels`, the same *Tracks…* dialog's Level column; the owner, 2026-10-07,
   asked for each technique's "volume offset"): a patch's and a technique's own dB, added up, played by CC11 on the
   technique's notes (`libraryNoteLevels`, as a marcato's level). Live gets it in the notes' data, not as a track
   setting: the plain set's Kontakt track's CC11 lane (and the clips) carry the changes, so a technique track has no
-  volume of its own in Live (a MIDI track has no fader). Softer only (CC11 rests at 127): -42.08 dB (CC11 1) .. 0.
-  Test: `tst_soundlibrary` `trackLevels`, `tst_liveequivalence` `plainSetTrackDelays`.
+  volume of its own in Live (a MIDI track has no fader). -42.08 dB (CC11 1) .. +6 dB (the owner, 2026-10-08: Live's
+  track Volume top, so the set plays what MuseScore does). Louder than 0 dB: CC11 rests at 127, so a patch's loudest
+  level is its headroom (`TrackDelays::headroomDb`), played by the Kontakt track's Volume (MuseScore: the slot's,
+  `Vst3Synth::setMix`; route set and plain set: `LiveSetWriter::kontaktVolume`, the Mixer's gain times it), and every
+  note on the patch plays its level less the headroom by CC11 (`noteDb`). Read back: the Kontakt track's Volume less
+  the headroom is the Mixer's. Above the Mixer's default (100) the two add past Live's +6 dB: Live is kept at +6 (What
+  still differs). Test: `tst_soundlibrary` `trackLevels`, `tst_liveequivalence` `plainSetTrackDelays`.
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
@@ -735,8 +760,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What matches (2026-09-30)
 
-- Everything in the rendering reaches the clips, as the same events: notes and velocities (early legato transitions,
-  phrase marks, slur ends: tst_liveequivalence liveClipsLegatoEarly), the switches and every controller on a carrier
+- Everything in the rendering reaches the clips, as the same events: notes and velocities (legato transitions,
+  phrase marks, slur ends: tst_liveequivalence liveClipsLegato), the switches and every controller on a carrier
   key (UACC, CC1 dynamics, CC11, pedal, the map's CC controllers; 127 exact since 2026-09-30: before, CC11 127 played
   as 126 on every Live note, 0.07-0.08 dB under MuseScore on the VM), the **pitch bend** (keys 115 / 114, 14 bit:
   the microtones of patches with `bend=`, glides included; liveClipsBend).
@@ -775,6 +800,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   sounds is up to a few tenths of a millisecond off MuseScore's. On the test synth this is the whole remaining
   difference (residual -32 dB; none without such changes: -327 dB); on SSO's Performance legato, the quarter-tone
   glide notes of the VM score were within 0.36 dB.
+- **A raised track level with a loud Mixer** (trackdelays.h, 2026-10-08): a patch's headroom (up to +6 dB) and the
+  Mixer's volume above 100 (up to +4.15 dB) multiply on the Kontakt track's Volume, which stops at +6 dB in Live
+  (`LiveSetWriter::MAX_VOLUME`); MuseScore's slot has no such top. At the Mixer's default 100 they match.
 - **A carrier value of 1 plays as 0** (the UACC switch: 127 can't be carried, and it is no articulation): 128
   controller values in a note's 127 velocities.
 - **MuseScore's automation lanes of plug-in parameters** play in Live through the device (since 2026-09-30), from a
@@ -821,8 +849,8 @@ before anything sets it.
 Tests (`tst_liveequivalence`, the test synth): liveEquivalence (quarter tones by bend with glides, a plug-in and a CC
 Controller, volume 80 / pan 32): correlation 0.99970, residual -32.2 dB, every note within 0.02 dB and 0 ms; each
 old way fails it (`MS_LIVE_EQUIVALENCE_FAULT`: no bend: correlation 0.50; no mixer: notes 4.6 dB off; the setup
-without the Controllers: 8.8 dB off). liveEquivalenceLegato (early legato transitions on an extra patch, two tempi):
-bit-identical after the start (residual -327 dB). liveSetControllersAndMix, liveClipsBend, liveClipsLegatoEarly.
+without the Controllers: 8.8 dB off). liveEquivalenceLegato (legato transitions on an extra patch, two tempi; early until 2026-10-07):
+bit-identical after the start (residual -327 dB). liveSetControllersAndMix, liveClipsBend, liveClipsLegato.
 
 ### Measured with SSO (the Windows VM, 2026-09-30)
 
@@ -1442,7 +1470,7 @@ do.
 (Moved from CLAUDE.md on 2026-10-04, to keep that file short: agents read it whole.)
 
 `libmscore/midisync.h`, `liveset.*` (automation from a set), `liveclips.*` + `mscore/liveclips.*`
-(Live plays the score; carrier notes 114-127), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
+(Live plays the score; carrier notes 114-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
 tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
 (`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
 `libmscore/plainliveset.*` (the plain set), `libmscore/livetracks.*` (the plain set read back: track keys in the

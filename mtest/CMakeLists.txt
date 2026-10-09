@@ -179,6 +179,7 @@ subdirs (
         libmscore/soundlibrary
         libmscore/liveintegration
         libmscore/liveequivalence
+        libmscore/playbackaudit
         libmscore/tuning
         libmscore/playability
         libmscore/tempochange

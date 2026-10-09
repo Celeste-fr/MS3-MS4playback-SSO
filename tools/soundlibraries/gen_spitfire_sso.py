@@ -132,16 +132,11 @@ I=[
  (None,'Tubular Bells','tubular-bells',None),
  (None,'Desk Bells','hand-bells',None),
 ]
-# Legato transitions start early (libmscore/rendermidi.cpp: libLegatoEarly): by this share of the
-# patch's measured delay (legatoDelay=). Measured with SSO on the test VM (2026-09-30, Solo Violin, Violins 1,
-# Flute Solo Performance, slurred steps and leaps at 60 and 120 bpm, 42 transitions; the new pitch within
-# 35 cents, YIN every 5 ms): after the beat by a median of 230 ms before, 128 at 50 %, 80 at 75 %, 40 at 100 %
-# (20 of 42 within 40 ms, one 59 ms early); leaps of a fourth or fifth stay 100-280 ms late. 100 %: the
-# full arrival lands a little late, where the ear already hears the new note (docs/HISTORY.md, Legato transitions start early).
-# 0 since 2026-10-06 (the owner: no automatic adjustments, timing is adjusted in Live): notes start as written;
-# 100 turns the measured early starts back on (Playback adjustments, or this)
-LEGATO_EARLY = 0
-ONSET_EARLY = 0
+# Held notes start early by their measured onset (libmscore/rendermidi.cpp: libOnsetEarly), by this percent. Since
+# 2026-10-07 again (the owner: plain Long for everything, lined up within Rasch's 30-50 ms between players; [heldNotes]
+# early 0 plays them as written). (<Legato early>, the legato transitions' early start, 0 since 2026-10-06, went
+# 2026-10-07 with the settings not in use; so did legatoLevel= / legatoLevelLong=, the legato level balance's)
+ONSET_EARLY = 100
 out=['<?xml version="1.0" encoding="UTF-8"?>',
 '<!--',
 '  Spitfire Symphony Orchestra (Kontakt), articulations switched by UACC (CC32).',
@@ -179,10 +174,6 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '       retuned once its notes\' release has rung out to 60 dB under (twice release= on the Articulation, measured',
 '       to 30 dB under). Tolerance, tail and the copies\' maximum are left to MuseScore, which computes them -->',
 '  <Tuning method="varispeed"/>',
-'  <!-- a slurred note on a legato articulation (legatoDelay=, a legato transition; none in this map: the owner',
-'       plays no Performance patch) reaches its pitch legatoDelay ms after its note-on: it starts early by that',
-'       times early percent (0: notes start as written, the owner 2026-10-06; 100: as measured) -->',
-f'  <Legato early="{LEGATO_EARLY}"/>',
 '  <!-- a held note that is no legato transition (slurred or not) is heard onset ms after its note-on',
 '       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent (0: as written) -->',
 f'  <Onset early="{ONSET_EARLY}"/>',
@@ -285,11 +276,51 @@ SPITFIRE_ADD['Timpani'] = [('Timpani', 0, ALL, ''), ('Muted', 1, ALL, 'muted'), 
 # Extra patches (soundlibrary.h): other patches a part plays alongside its main one, each loaded
 # only when the part's notation asks for one of its articulations (and, hosted, once it is set
 # up). Named as the owner's .nki files. (main patch, extra patch, articulations)
-# - No Performance patches (the owner, 2026-10-06: "NO using performance patches"; the All techniques
-#   patches have Release, Tightness and the Options page): slurred notes play the All techniques
-#   patch's own longs. Until then a slur picked the Performance legato (Spitfire's legato
-#   transitions, measured in sso_legato_*.json, which the map no longer uses; earlier commits have it).
-EXTRAS = [
+# - No Performance patches by default (the owner, 2026-10-06: "NO using performance patches"; the All
+#   techniques patches have Release, Tightness and the Options page): slurred notes play the All techniques
+#   patch's own longs. Staff text "performance" (modifier performance, until "ord." or "non performance"; the
+#   owner, 2026-10-07: "let's use the performance patch, but tune the note spread so that they are within the
+#   established range for professional players") plays slurred and held notes on the part's Performance patch
+#   (Spitfire's legato transitions, measured in sso_legato_*.json), its transitions at LEGATO_VELOCITY where measured.
+#   Its UACC value is not known (20 = the standard's legato); a single-articulation patch ignores it.
+LEGATO = [('Legato', 20, 'legato long', 'performance', 'long')]
+PERFORMANCE = {
+    'Violins 1': 'Violins 1 - Performance', 'Violins 2': 'Violins 2 - Performance',
+    'Violas': 'Violas - Performance', 'Celli': 'Celli - Performance', 'Basses': 'Basses - Performance',
+    'Solo Violin 1': 'Solo Violin - Performance', 'Solo Violin 2': 'Solo Violin 2 - Performance',
+    'Solo Viola': 'Solo Viola - Performance', 'Solo Cello': 'Solo Cello - Performance',
+    'Piccolo': 'Piccolo Flute - Performance', 'Flute Solo': 'Flute Solo - Total Performance',
+    'Flutes a2': 'Flutes a2 - Performance', 'Alto Flute': 'Alto Flute - Performance',
+    'Bass Flute': 'Bass Flute - Performance', 'Oboe Solo': 'Oboe Solo - Performance',
+    'Oboes a2': 'Oboes a2 - Performance', 'Cor Anglais': 'Cor Anglais - Performance',
+    'Clarinet Solo': 'Clarinet Solo - Performance', 'Clarinets a2': 'Clarinets a2 - Performance',
+    'Bass Clarinet': 'Bass Clarinet - Performance', 'Contrabass Clarinet': 'ContraBass Clarinet - Performance',
+    'Bassoon Solo': 'Bassoon Solo - Performance', 'Bassoons a2': 'Bassoons a2 - Performance',
+    'Contrabassoon': 'ContraBassoon - Performance',
+    'Horn Solo': 'Horn Solo - Performance', 'Horns a2': 'Horns a2 - Performance', 'Horns a6': 'Horns a6 - Performance',
+    'Trumpet Solo': 'Trumpet Solo - Total Performance', 'Trumpets a2': 'Trumpets a2 - Performance',
+    'Trumpets a6': 'Trumpets a6 - Performance', 'Tenor Trombone Solo': 'Tenor Trombone Solo - Total Performance',
+    'Tenor Trombones a2': 'Tenor Trombones a2 - Performance', 'Trombones a6': 'Trombones a6 - Performance',
+    'Bass Trombones a2': 'Bass Trombones a2 - Performance', 'Tuba Solo': 'Tuba Solo - Performance',
+    'Motif Horns a4': 'Horns a4 - Performance', 'Motif Trumpets a3': 'Trumpets a3 - Performance',
+    'Motif Trombones a5': 'Trombones a5 - Performance',
+}
+# the velocity of a Performance patch's legato transitions (legatoVelocity=), only where a measurement showed it
+# tightens the run; elsewhere the transition keeps the note's own. Spitfire's Performance Legato picks the transition
+# by velocity (support.spitfireaudio.com/en/articles/11815986: slow 1-19 portamento, 20-84 slurred, 85-127 bowed; fast
+# 1-84 fast slurred, 85-127 fast slurred with accent). Measured 2026-10-07 (kthost on the test VM; Whence's violas,
+# bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, moved by octaves into each patch's range; branch
+# legato-pair-delays), SD of arrival - written, transitions at 64 / at 100: Violas 54 / 39, Violins 1 53 / 65, Celli
+# 53 / 70, Basses 39 / 65, Flute Solo 35 / 65, Trumpet Solo 26 / 35; Oboe, Clarinet, Bassoon, Horn, Tenor Trombone and
+# Tuba Solo render the same at both (29, 31, 98, 29, 31, 55). Rasch 1979: 30-50 ms between players is typical
+LEGATO_VELOCITY = {'Violas - Performance': 100}
+EXTRAS = [(m, e, LEGATO) for m, e in PERFORMANCE.items()]
+EXTRAS += [
+    # on one string, "performance": legato ("sul G" / "sul C")
+    ('Violins 1', 'Violins 1 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg performance')]),
+    ('Violins 2', 'Violins 2 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg performance')]),
+    ('Violas', 'Violas - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc performance')]),
+    ('Celli', 'Celli - Sul C - Performance', [('Legato Sul C', 20, 'legato', 'sulc performance')]),
     # on one string: long ("sul G" / "sul C"); the All techniques patches' own Long
     # Sul G (Violins) and Long Sul C (Celli) play nothing (Kontakt's Voices stays 0)
     ('Violins 1', 'Strings - Violins 1 - Long Sul G', [('Long Sul G', 1, 'long legato', 'sulg')]),
@@ -834,7 +865,7 @@ for nki in NKI_FILES:
     assert name.lower() not in names, name
     v = setupValues(nki)
     arts = FILE_ARTICULATIONS[nki]
-    # (a Performance patch is not scanned: the owner plays none, 2026-10-06)
+    # (a Performance patch is not scanned: one articulation, played only under "performance")
     scan = '' if len(arts) < 2 or 'Performance' in name else ' scan="keys"' if '/Symphonic Percussion/' in '/' + nki \
         else ' scan="values"'
     pitch = f' pitch="{FILE_KEYS[nki][2]}"' if nki in FILE_KEYS else ''
@@ -1086,22 +1117,6 @@ def octaveDelays(patch):
         return ' '.join(f'{k}:{int(round(v + corr))}' for k, v in sorted(by.items())) or None
     return text('12'), text('-12')
 octaveCount = 0
-# The level each legato transition arrives at (legatoLevel= heard in a run of sixteenths, legatoLevelLong= settled):
-# sso_legato_levels.json (legato_levels_from_scan.py: the legato level scan, kthost renders of every start pitch x
-# interval +-1 2 3 5 7 12 per Performance patch at mf, 2026-10-02, branch legato-level-balance), dB against the
-# median of the transitions into the same pitch; the renderer's [legato] levelBalance plays each at that median
-LEGATO_LEVELS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_levels.json')
-LEGATO_LEVELS = json.load(open(LEGATO_LEVELS_PATH, encoding='utf-8')) if os.path.exists(LEGATO_LEVELS_PATH) else {}
-def legatoLevels(patch, which):
-    """the legatoLevel= / legatoLevelLong= text of a patch (None: not measured)"""
-    t = LEGATO_LEVELS.get(patch, {}).get(which)
-    if not t:
-        return None
-    def v(x):
-        return '' if x is None else f'{x:g}'
-    return ' '.join(f'{int(i):+d}:{first}:' + ','.join(v(x) for x in vals)
-                    for i, (first, vals) in sorted(t.items(), key=lambda kv: int(kv[0]))) or None
-legatoLevelCount = 0
 def legatoDelay(patch, sound, t):
     """the legatoDelay= text of a patch's legato sound (None: not measured)"""
     fromPitches = legatoDelayFromPitches(patch, sound)
@@ -1149,10 +1164,10 @@ def bendRange(name):
 #   brass 0.11 full + 21 ms (rms 12), strings 0.15 full + 22 (19), woodwinds 0.28 full + 8 (27), sul tasto /
 #   flautando / harmonics 0.58 full - 118 (48; not under the strings'); 10-60 ms for most longs, 175-440 for the slow
 #   techniques. Per semitone, smoothed (a running median of 7), as few pitch:ms pairs as stay within 10 ms or 10 %
-#   of the median (Douglas-Peucker; the fits' own error is 12-48 ms); one number where all are. Only longs and legato
-#   (what was measured): not tremolos, trills, long marcato, nor harp, keyboards and percussion.
+#   of the median (Douglas-Peucker; the fits' own error is 12-48 ms); one number where all are. Longs and legato, and
+#   since 2026-10-08 every other technique the onset check measured (shorts, marcato, tremolos, trills: measured only,
+#   no fit; not rips and effects), not harp, keyboards and percussion.
 RANGE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_sound_range.json'), encoding='utf-8'))
-ONSET_EARLY = 100
 def onsetFamily(patch, sound):
     if re.search(r'Sul Tasto|Flautando|Harmonics', sound):
         return 'slow'
@@ -1217,6 +1232,15 @@ def onsetMs(r, sound):
     # after the -15 dB time, varying note to note, and the sweep of e6f44e6 heard such notes up to 399 ms early; the
     # -15 dB time leaves some of them late, 123-223 ms in the sweep of 3f0cda5, which sounds less wrong)
     return max(0, t - ONSET_LATENCY)
+# - peak= (ms): when a held articulation is loudest, the median over the measured semitones of the onset check's mf
+#   perceived peak (sso_sound_onset.json, the same lone 1.5 s notes); a slurred note shorter than it never gets past
+#   its swell, so [slurs] quick may play it on a quicker technique (SoundLib::choose)
+def swellPeak(patch, sound):
+    rows = MEASURED_ONSET.get(patch, {}).get(sound)
+    if not isinstance(rows, list):
+        return None
+    peaks = [r[7][1] for r in rows if len(r) > 7 and r[7] and r[7][1] is not None and r[7][1] > 0]
+    return round(statistics.median(peaks)) if peaks else None
 def measuredOnsets(patch, sound):
     rows = MEASURED_ONSET.get(patch, {}).get(sound)
     if not isinstance(rows, list):
@@ -1235,7 +1259,7 @@ def _ratios():
                     out.setdefault((onsetFamily(patch, sound) == 'brass', articulationKind(sound)), []).append(ms / rng[pitch])
     return {k: statistics.median(v) for k, v in out.items() if len(v) >= 20}
 ONSET_RATIO = _ratios()
-def onset(patch, sound):
+def _onset(patch, sound):
     """the onset= text of a sustained sound (None: not measured or no family)"""
     family = onsetFamily(patch, sound)
     measured = MEASURED_ONSET.get(patch, {}).get(sound)
@@ -1272,6 +1296,27 @@ def onset(patch, sound):
     if all(abs(m - mid) <= tolerance for m in smooth):
         return str(int(5 * round(mid / 5)))
     return ' '.join(f'{p}:{int(5 * round(m / 5))}' for p, m in simplify(points, tolerance))
+# The All techniques patches' Long fitted so that the sections' slurred notes arrive together (the owner, 2026-10-07:
+# plain Long for everything, within Rasch's 30-50 ms between players; sso_long_onset_fit.json, onset_fit_from_split.py
+# has the measurement): "onsets", every semitone's own (kept within 5 ms: the pitch-to-pitch steps are what lines the
+# notes up), or "shift", the measured table moved by that many ms
+# Long (Rachm.), what [slurs] quick plays short slurred violin notes on, fitted the same way per pitch
+# (sso_rachm_onset_fit.json, Violins 1 and 2, 2026-10-08): on Whence's violin passage its own per-pitch onsets arrive
+# steadier (SD 10.8 / 11.4 ms) than its fit's median (22.0 / 22.6) or Long's median (21.6 / 26.5, Violins 2 97 ms early)
+def loadFit(name):
+    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+    return json.load(open(f, encoding='utf-8')) if os.path.exists(f) else {}
+ONSET_FITS = {'Long': loadFit('sso_long_onset_fit.json'), 'Long (Rachm.)': loadFit('sso_rachm_onset_fit.json')}
+def onset(patch, sound):
+    fit = ONSET_FITS.get(sound, {}).get(patch)
+    if fit and 'onsets' in fit:
+        points = sorted((int(p), ms) for p, ms in fit['onsets'].items())
+        return ' '.join(f'{p}:{int(ms)}' for p, ms in simplify(points, 5))
+    text = _onset(patch, sound)
+    if fit and text:
+        move = lambda ms: str(max(0, int(ms) + fit['shift']))
+        return ' '.join(f'{p}:{move(ms)}' for p, ms in (x.split(':') for x in text.split())) if ':' in text else move(text)
+    return text
 # - release= (ms), by register: the rest check measured each semitone's release at mf (sso_sound_range.json, to 30 dB
 #   under its level before the note-off). It differs by pitch far more than by articulation: pairs of neighbouring
 #   semitones ring twice as long as the rest (Violins 1 - Performance Legato 855 at the test pitch, 2180 / 2055 at
@@ -1341,8 +1386,21 @@ def shortFrom(patch, sound):
             break
         w = round(w - 0.01, 2)
     return last
+# - quickLevel= ("pitch/heldMs:dB ..."): on Long (Rachm.), the dB that plays it as loud as the patch's Long when [slurs]
+#   quick swaps a short slurred note to it ([slurs] quickLevel): Long minus Rachm. (sso_rachm_levels.json, the Windows
+#   VM 2026-10-08: each semitone held 100 / 136 / 250 / 273 ms at mf, the perceived peak in the first second; Violins 1
+#   about 6 dB at 100-136 ms, Violins 2 about 3; the owner, 2026-10-08: Rachm. "sounds quieter than plain long")
+RACHM_LEVELS = loadFit('sso_rachm_levels.json')
+def quickLevel(patch, sound):
+    by = RACHM_LEVELS.get(patch) if sound == 'Long (Rachm.)' else None
+    if not by:
+        return None
+    return ' '.join(f'{p}/{ms}:{-db:g}' for p, per in sorted(by.items(), key=lambda x: int(x[0]))
+                    for ms, db in sorted(per.items(), key=lambda x: int(x[0])) if db is not None) or None
 shortFromCount = 0
 onsetCount = 0
+peakCount = 0
+quickLevelCount = 0
 current = None
 legatoGridUsed = set()
 timedValues = set()
@@ -1373,6 +1431,8 @@ for i, line in enumerate(out):
     delay = legatoDelay(current, sound, t) if t.get('legato') else None
     if delay:
         extra += f' legatoDelay="{delay}"'
+        if current in LEGATO_VELOCITY:
+            extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
         legatoGridUsed.add(current)
         up, down = octaveDelays(current)
         if up:
@@ -1381,22 +1441,26 @@ for i, line in enumerate(out):
             extra += f' octaveDown="{down}"'
         if up or down:
             octaveCount += 1
-        run, settled = legatoLevels(current, 'run'), legatoLevels(current, 'settled')
-        if run:
-            extra += f' legatoLevel="{run}"'
-        if settled:
-            extra += f' legatoLevelLong="{settled}"'
-        if run or settled:
-            legatoLevelCount += 1
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
     f = shortFrom(current, sound)
     if f:
         extra += f' from="{f:g}"'
         shortFromCount += 1
-    o = onset(current, sound) if t.get('sustains') and ('long' in techniques or 'legato' in techniques) else None
+    # (every technique with measured onsets too since 2026-10-08, the owner: every sound arrives on the beat, shorts
+    # included; not rips and effects, whose -15 dB time is the gesture's, not an attack's)
+    held = t.get('sustains') and ('long' in techniques or 'legato' in techniques)
+    o = onset(current, sound) if held or (measuredOnsets(current, sound) and not re.search(r'Rip|Fx', sound)) else None
     if o:
         extra += f' onset="{o}"'
         onsetCount += 1
+    p = swellPeak(current, sound) if held else None
+    if p:
+        extra += f' peak="{p}"'
+        peakCount += 1
+        q = quickLevel(current, sound)
+        if q:
+            extra += f' quickLevel="{q}"'
+            quickLevelCount += 1
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'

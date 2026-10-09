@@ -313,7 +313,7 @@
          <item row="2" column="1">
           <widget class="QLabel" name="marcatoLevelLabel">
            <property name="text">
-            <string>Marcato level:</string>
+            <string>Level:</string>
            </property>
            <property name="alignment">
             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
@@ -332,19 +332,19 @@
             </sizepolicy>
            </property>
            <property name="toolTip">
-            <string>How much louder or softer this marcato plays than the sound library's marcato (sound library parts; the built-in synthesizer by its velocity). Library default: no change</string>
+            <string>How much louder or softer the notes with this articulation play (sound library parts: than the technique it chooses; the built-in synthesizer by its velocity). The levels of a chord's articulations add up. Library default: no change</string>
            </property>
            <property name="accessibleName">
-            <string>Marcato level</string>
+            <string>Level</string>
            </property>
            <property name="decimals">
             <number>1</number>
            </property>
            <property name="minimum">
-            <double>-18.500000000000000</double>
+            <double>-35.500000000000000</double>
            </property>
            <property name="maximum">
-            <double>12.500000000000000</double>
+            <double>35.500000000000000</double>
            </property>
            <property name="singleStep">
             <double>0.500000000000000</double>
@@ -360,7 +360,7 @@
             </sizepolicy>
            </property>
            <property name="accessibleName">
-            <string>Reset 'Marcato level' value</string>
+            <string>Reset 'Level' value</string>
            </property>
           </widget>
          </item>

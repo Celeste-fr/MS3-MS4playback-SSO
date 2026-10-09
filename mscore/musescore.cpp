@@ -5230,7 +5230,7 @@ static bool liveSetInBackground(const QStringList& argv)
 #endif
       if (!liveSetOut.isEmpty()) {
             LiveIntegration::LiveSetPlan plan;
-            if (!LiveIntegration::planLiveSet(score.get(), *library, LiveIntegration::LiveSetKind::PLAIN, &plan, &error)
+            if (!LiveIntegration::planLiveSet(score.get(), *library, LiveIntegration::LiveSetKind::PLAIN_LINKED, &plan, &error)
                 || !LiveSetWriter::write(liveSetOut, plan.spec, &error)) {
                   log(error);
                   ok = false;
@@ -7506,6 +7506,18 @@ void MuseScore::reloadPlaybackSettings()
       const QStringList warn = Playback::warnings();
       showMessage(warn.isEmpty() ? tr("Playback settings read from %1").arg(Playback::iniPath())
                                  : tr("Playback settings read, %1 warning(s): %2").arg(warn.size()).arg(warn.join("; ")), 8000);
+      }
+
+//---------------------------------------------------------
+//   applyPlaybackPreset
+//    a preset (libmscore/playbacksettings.h) written into playback.ini, then read as Reload Playback Settings does
+//---------------------------------------------------------
+
+void MuseScore::applyPlaybackPreset(const QString& id)
+      {
+      if (!Playback::applyPreset(id))
+            showMessage(tr("Could not write %1").arg(Playback::iniPath()), 8000);
+      reloadPlaybackSettings();
       }
 
 //---------------------------------------------------------

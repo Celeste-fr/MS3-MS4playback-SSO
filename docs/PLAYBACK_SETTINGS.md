@@ -8,13 +8,28 @@ configurable … and editable in an ini file".
 export everything in the correct techniques and configured so that it's easiest for me to adjust in ableton"): every
 early start (legato transitions, held notes' onsets, fast-run firsts), the phrase gap, pedal timing and the calibrated
 short velocities. Notes play as written; the technique is still chosen from the notation (shorts by their meant
-length) and quarter tones still bend. Each one's measured value is in its row below: set it in playback.ini or the
-score to turn it back on.
+length) and quarter tones still bend. Held notes' onsets came back on 2026-10-07 (`<Onset early>` 100).
+
+**Removed 2026-10-07** (the owner: "remove all settings not currently being used"): the settings that were off or at
+a value that changed nothing, with the code they switched: `[legato] overlapTicks`, `slurEndOverlap`, `phraseGapMs`,
+`early` (map `<Legato early>`), `velocity` (the map's `legatoVelocity` stays, applied as it is), `fastTechnique`,
+`fastFirsts`, `fastBelowShare`, `levelBalance`, `levelMaxDb`, `levelHeadroomDb` (map `legatoLevel` /
+`legatoLevelLong`); `[shorts] calibratedVelocity` (and the short notes' balance: Advanced Options' balance rows,
+metaTag `soundLibraryShortBalance`, Recommended); `[pedal] upAfterMs`, `downAfterMs`, `upMaxShare`, `downMaxShare` (a
+pedal change goes up one tick after its chord, down the tick after); `[dynamics] evenSteps` (metaTag
+`soundLibraryEvenSteps`, `MS_EVEN_DYNAMIC_STEPS`); `[tuning] oneInstance`; `[tracks] mapDelays` (map
+`<Instrument trackDelay>`). Default playback is unchanged (the renderer's events for Whence, before and after,
+identical). An older playback.ini or score with these keys (or the metaTags `soundLibraryLegatoEarly`,
+`soundLibraryShortBalance`, `soundLibraryEvenSteps`) opens as before: the keys are ignored without a warning; an older
+map's `<Legato early>` and `legatoLevel` / `legatoLevelLong` are ignored too. Legato transitions play on their beat;
+their measured delays (`legatoDelay`, octaves, `[legato.delay]`, `fastShare` / `fastFullMs`) now time only a bent
+transition's glide (`[tuning] bendAtArrival`). The measurements stay in the repository (`sso_legato_levels.json`,
+the sweeps below, HANDOFF.md).
 
 ## Configuration: three layers
 
 1. **Built-in defaults** (`libmscore/playbacksettings.cpp`, `DEFINITIONS`). A few take the sound library map's
-   value as their default (`<Legato early>`, `<Onset early>`, `<Tuning tolerance tail maxLanes>`).
+   value as their default (`<Onset early>`, `<Tuning tolerance tail maxLanes>`).
 2. **playback.ini**, one file for every score, in MuseScore's data folder:
    - Windows: `%LOCALAPPDATA%\MuseScore\MuseScore3Evo\playback.ini`
    - Linux: `~/.local/share/MuseScore/MuseScore3Evo/playback.ini`
@@ -25,9 +40,9 @@ score to turn it back on.
    that aren't numbers and values out of range are logged (`playback.ini: …`) and shown under the settings table;
    out-of-range values are clamped. **Edit › Reload Playback Settings** (or *Reload playback.ini* in the dialog)
    reads it again and renders every score again; no restart.
-3. **The score** (saved in it, undoable): metaTag `playbackSettings` (`legato/overlapTicks=40;pedal/upAfterMs=60`),
-   plus the three older per-score metaTags that stay where they were: `soundLibraryLegatoEarly` (legato/early),
-   `soundLibraryOnsetEarly` (heldNotes/early), `soundLibraryLanes` (tuning tolerance / tail / maxLanes). A score
+3. **The score** (saved in it, undoable): metaTag `playbackSettings` (`legato/keepMs=60;shorts/staccato=40`),
+   plus the two older per-score metaTags that stay where they were: `soundLibraryOnsetEarly` (heldNotes/early),
+   `soundLibraryLanes` (tuning tolerance / tail / maxLanes). A score
    without overrides has none of them, so its file is unchanged; MuseScore 3.6 keeps metaTags (round trip).
 
 **UI**: *Mixer › Advanced Options… › Playback adjustments*: every setting, grouped as in the ini, with its
@@ -49,6 +64,68 @@ same `MidiRenderer`). `hosting/maxVoices` reaches the Live Set (its Kontakt stat
 `hosting/settleSeconds` and varispeed's glide (varispeed can't reach Live; pitch-bend
 glides, one cent a tick, are rendered and do).
 
+## Presets
+
+Two presets switch `playback.ini` (the owner, 2026-10-07: "library default, and recommended"; then, of Library
+default: "very late, but at least it sounds consistent": an Even early preset; 2026-10-08: "make even early the new
+recommended", so Recommended is it and the per-pitch shift is `byPitch=1` only). The Preset box in Mixer > Advanced Options... >
+Playback adjustments writes the preset's keys into the file as a text edit (comments and the other values stay; a
+missing key goes under its section's header, a missing section at the end; a missing file starts from the template)
+and then reads it as Reload Playback Settings does, playback going on. The box says "this score overrides: ..." when
+the open score has its own value of a preset key (not cleared). "(Custom)" shows when the ini matches none (not
+selectable).
+
+| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel |
+|---|---|---|---|---|
+| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms) | 1: techniques on velocity as loud as the held note, plus MS4's offset (below, Calibrated levels; 2026-10-08) | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") |
+| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) |
+
+`byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
+run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
+
+Only those keys differ. The others are left as they are because: `legato/keepMs` acts only with early starts; the shorts'
+lengths are MuseScore 4's note model; tuning and hosting are mechanics. A key missing from the ini counts as its
+default; for `heldNotes/early` that is the map's value, taken as Recommended's 100 (SSO's).
+Advanced Options shows each of these once, in Playback adjustments (its older rows "Held notes early by" and "Copies
+for other tunings" were the same metaTags and went 2026-10-08). The table is
+`Playback::presets()` (`libmscore/playbacksettings.cpp`).
+
+## Calibrated levels
+
+The owner, 2026-10-08, on staccatos sounding too quiet: "bring back the calibrated short velocity and include it in the
+recommended preset. adjust all techniques according to the measured value, taking into account that some techniques
+are meant to be louder", then "use MuseScore 4.7.5's articulation profiles for everything incl. marcato, with the
+requirement that whatever notation that caused the technique can change the dynamics in the inspector".
+
+`[levels] calibrated` (1 by default and in Recommended, 0 in Library default; per score through `playbackSettings`):
+a library note whose technique is on velocity (the map's `<Dynamics velocity>`: SSO's shorts, staccatissimo,
+spiccato, marcato, tenuto, pizzicato, Bartók, col legno) plays at the velocity at which its measured curve is as loud
+as the part's plain held note ("long": SSO's Long) at the same dynamic's CC1 (`SoundLib::calibratedVelocity`), plus
+MuseScore 4.7.5's offset for its articulations: 40 log10(MS4's velocity / a plain note's at that dynamic) dB
+(SoundFont 2's velocity law; MS4's articulation profiles: a marcato at mf plays at 103 against a plain note's 80: +4.4 dB),
+then the Inspector's levels (below). "As loud" is by ear: both curves' perceived loudness
+(`ArticulationCheck::perceivedLoudnessDb`: ERB-band specific loudness, short-term loudness with 22 / 50 ms attack / release,
+its peak; since 2026-10-08, after the first measurements on the VM showed the loudest 50 ms RMS misjudging a slow swell
+against a short: Flute Marcato on +4.2 dB by RMS, +8.6 by ear at mf), the loudest 50 ms RMS where either curve has no
+perceived points; the Inspector's dB on velocity are by ear too (`DynamicsCurve::louder`). Where either curve is missing, or with 0: as before (the dynamic's level on CC1's
+scale, an accent's share included; a marcato at the plain level). Techniques on the dynamics CC (legato, tremolo,
+trills, swells, marcato attack ...) keep the library's balance: they follow CC1 as the held note does, and their
+measured differences from it are the library's design (louder tremolo, softer flautando), not a calibration error.
+
+The measurements: the user's `dynamics.json` (Check articulations › Dynamics) when there is one, else the shipped
+`share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json` (`SoundLibraryHost::loadCalibration`), made from the
+owner's checks in `tools/soundlibraries/sso_sound_dynamics.json` by
+`tools/soundlibraries/calibration_from_sound_dynamics.py` (105 patches, 492 curves; only what the map plays).
+
+**Levels in the Inspector** (articulation.h MarcatoLevel): every articulation sign (Inspector › Articulation ›
+*Level*) and every staff text that changes the technique (Inspector › Staff text › *Level*: pizz., col legno, sul
+tasto ..., from the text to the next one that changes the technique) has a level in dB; a chord's articulations' and
+its text's add up. −35.5 … +35.5 dB, 0.5 steps: what SSO's played techniques differ from their plain held note at
+the same dynamic, −35.1 (Violas Col Legno at 32) … +25.1 dB (Horns a2 Rip at 32), 1308 pairs, median −2.6
+(`tools/soundlibraries/derived_numbers.py levels`), widened to the larger side both ways and rounded outward to 0.5:
+a level can bring any technique to the held note's loudness. Kept in the metaTag `marcatoLevels` (its name from when
+only marcatos had one; a text's entry `{"tick","track","text","db"}`).
+
 ## Inventory
 
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by
@@ -56,51 +133,46 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 
 | Adjustment | Default | Where it acts | Configure |
 |---|---|---|---|
-| Legato overlap: a slurred note lasts into the next. Measured (below, Measured by sweeps): SSO joins two notes into a transition whenever the first ends at most 20 ms before the next note-on, so no overlap is needed | 0 ticks (measured) | `rendermidi.cpp` `libOverlap` | `[legato] overlapTicks` |
-| A slur's last note doesn't overlap the next note | on (MS4 overlaps) | `libOverlap`, `slurGoesOn` | `[legato] slurEndOverlap` (1: MS4's) |
-| Phrase gap: a note on a legato patch that is no legato transition (after a slur's end, a phrase mark, a detached note, a held note started early) starts at least this long after the note before on its route (channel, patch, tuning copy) ends; that note keeps at least `keepMs` as played. Measured (the overlap sweep, below): SSO joins two notes into a transition up to a 20 ms gap, 80 of 336 at 40 ms, none from 60 ms; 60 is the smallest gap with a fresh attack every time. The owner, 2026-10-04. Not with `slurEndOverlap` 1; built-in sounds unchanged (MS4's lengths) | 0: off (since 2026-10-06; measured: 60 ms) | `finishLibraryEvents` (`libFreshAttacks`) | `[legato] phraseGapMs` (0: off) |
 | Phrase marks: a slur that plays no legato | per slur | `slur.h` Phrase marks, metaTag `phraseMarks` | per slur (Alt+S, Inspector) |
-| Marcato level: a marcato (also marcato-staccato / -tenuto) louder or softer than the library's marcato. A note on velocity (SSO's Marcato on winds / brass): the velocity at which its measured curve (dynamics.json) is that many dB away, else SoundFont 2's law 40 log10(v/127); a note on the dynamics CC (SSO's strings' Marcato Attack): softer by CC11 (the held note's expression curve, else the law), louder by CC1 (its own curve, else the law; up to 127), on its route from right before its note-on to right before the route's next note-on; built-in synthesizer: the velocity by the law. A library marcato gets no MS4 accent velocity boost (since 2026-10-02: its velocity is the dynamic's level on CC1's scale, as a plain note's; accents > keep theirs; built-in synthesizer unchanged) | "Library default" (0 dB: no change) | `articulation.h` MarcatoLevel, `rendermidi.cpp` (`marcatoLevel`, `libraryNoteLevels`, `playNote`), metaTag `marcatoLevels` | per sign: Inspector › Articulation › *Marcato level* (−18.5 … +12.5 dB, 0.5 steps; several selected: all). The range: what SSO's marcatos span against the same instrument's plain held note at the same dynamic, −18.5 (Bassoon Solo at pp) … +12.4 dB (Trumpet Solo muted at 127), 212 pairs in `sso_sound_dynamics.json`, rounded outward to 0.5 (`tools/soundlibraries/derived_numbers.py marcato`; the owner's choice of rule, 2026-10-03) |
-| Track delay: a library part (and each of its patches and techniques, added to the part's) plays this many ms later, negative earlier, as Live's Track Delay; every library event of the track moved in time, the tempo followed; with a negative delay everything else (other parts, the metronome) plays later by the earliest one (`libraryDelayLead`), so the track is early from its first note (2026-10-07; before: clamped at the start); a note and its switch by the technique's sum, controllers by the patch's | 0 ms (none) | `trackdelays.h`, `rendermidi.cpp` `libraryTrackDelays`, metaTag `trackDelays` | per part: Mixer › *Track delay*, *Tracks…* (−1000 … 1000 ms: a tutorial's figure for Live, its manual gives none); the plain Live set writes it as TrackDelay and reads it back |
-| Track level: a library part's patch and technique each play this many dB softer (added up), by CC11 (expression) from right before each of the technique's notes, the value in force again before the next note without one; adds to a marcato's level (2026-10-07) | 0 dB (none) | `trackdelays.h`, `rendermidi.cpp` `trackLevel` / `libraryNoteLevels`, metaTag `trackDelays` (`levels`) | per part: Mixer › *Tracks…* › Level (−42.08 … 0 dB: CC11 rests at 127, its top, and 1 of 127 is −42.08 dB); in Live's clips and the plain set's CC11 lane alike |
-| Legato transitions start early by the patch's measured delay | 0 % (map `<Legato early>`; 100 until 2026-10-06) | `collect` / `legatoTransition` | `[legato] early`; score: old metaTag |
-| Legato delay per patch and interval | map `legatoDelay` (5-pitch grid; octaves by template fit) | `Articulation::legatoDelayAt` | `[legato.delay]` table |
+| Level (marcato only until 2026-10-08): an articulation sign, or a staff text that changes the technique, louder or softer than the technique plays (above, Calibrated levels). A note on velocity: the velocity at which its measured curve (dynamics.json) is that many dB away, else SoundFont 2's law 40 log10(v/127); a note on the dynamics CC (SSO's strings' Marcato Attack): softer by CC11 (the held note's expression curve, else the law), louder by CC1 (its own curve, else the law; up to 127), on its route from right before its note-on to right before the route's next note-on; built-in synthesizer (MS3 and MS4 modes): the velocity by the law | "Library default" (0 dB: no change) | `articulation.h` MarcatoLevel, `rendermidi.cpp` (`levelOf`, `marcatoLevel`, `libraryNoteLevels`, `playNote`), `SoundLib::TextState::db`, metaTag `marcatoLevels` | per sign: Inspector › Articulation › *Level*; per text: Inspector › Staff text › *Level* (−35.5 … +35.5 dB, 0.5 steps; several selected: all; the range: above). Until 2026-10-08 −18.5 … +12.5, what SSO's marcatos span (`derived_numbers.py marcato`) |
+| Calibrated levels: a technique on velocity as loud as the part's held note at the same dynamic, plus MuseScore 4's offset for its articulations (marcato's too) | on (Recommended; Library default: off) | `rendermidi.cpp` `libVelocity`, `SoundLib::calibratedVelocity`; data: dynamics.json, else the shipped `Spitfire Symphony Orchestra.dynamics.json` | `[levels] calibrated`; score: `playbackSettings` |
+| Track delay: a library part (and each of its patches and techniques, added to the part's) plays this many ms later, negative earlier, as Live's Track Delay; every library event of the track moved in time, the tempo followed; with a negative delay everything else (other parts, the metronome) plays later by the earliest one (`libraryDelayLead`), so the track is early from its first note (2026-10-07; before: clamped at the start); a note and its switch by the technique's sum, and so do the controllers and bends right before it at its tick (its track level's CC11, a dynamic; 2026-10-08), other controllers by the patch's | 0 ms (none) | `trackdelays.h`, `rendermidi.cpp` `libraryTrackDelays`, metaTag `trackDelays` | per part: Mixer › *Track delay*, *Tracks…* (−1000 … 1000 ms: a tutorial's figure for Live, its manual gives none); the plain Live set writes it as TrackDelay and reads it back |
+| Track level: a library part's patch and technique each play this many dB softer or louder (added up), by CC11 (expression) from right before each of the technique's notes, the value in force again before the next note without one; adds to a marcato's level (2026-10-07). Louder (2026-10-08): the patch's loudest level is its headroom, played by its volume (hosted: the slot's; Live: the Kontakt track's Volume), its notes' CC11 that much lower | 0 dB (none) | `trackdelays.h` (`headroomDb`, `noteDb`, `patchGain`), `rendermidi.cpp` `trackLevel` / `libraryNoteLevels`, `soundlibraryhost.cpp` `applyMixer`, `LiveSetWriter::kontaktVolume`, metaTag `trackDelays` (`levels`) | per part: Mixer › *Tracks…* › Level (−42.08 … +6 dB: 1 of 127 is −42.08 dB; +6 dB is Live's track Volume top, the owner's choice 2026-10-08); in Live's clips and the plain set's CC11 lane alike |
+| Legato transition velocity: a legato transition plays at the map's velocity, whatever the note's (Spitfire's Performance legato picks the transition by velocity: fast 85-127 "with accent", slow 85-127 bowed; Spitfire support article 11815986). Measured 2026-10-07 (Violas - Performance, Whence's violas bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, kthost on the test VM): arrival - written SD 49 ms at velocity 64, 41 ms at 100 (37-38 against 45-46 on the notes heard in every render); 159 of 180 transitions detected against 133; median arrival 68 ms against 88; median note peak 1.5 dB lower. Per-note shifts made it no tighter (HANDOFF.md). Same passage on every family (moved by octaves near each patch's test note), SD at 64 / at 100 (ms): Violas 54 / 39, Violins 1 53 / 65, Celli 53 / 70, Basses 39 / 65, Flute 35 / 65, Trumpet 26 / 35; Oboe 29, Clarinet 31, Bassoon 98, Horn 29, Tenor Trombone 31, Tuba 55 render the same at both. So only Violas - Performance gets 100; the others keep the note's own (Violins 1 at 30 / 50 / 84: 53 / 50 / 53). Only under staff text "performance" (SSO) | map `legatoVelocity` (SSO: Violas - Performance 100; other maps: the note's own) | `collect` (`libTransitionFrom`) | map only (`[legato] velocity` removed 2026-10-07) |
+| Legato delay per patch and interval (times a bent transition's glide: `[tuning] bendAtArrival`) | map `legatoDelay` (5-pitch grid; octaves by template fit) | `Articulation::legatoDelayAt` | `[legato.delay]` table |
 | Octave slurs (±12) by start pitch (16 patches, measured at ~16-30 starts each; 2026-10-02, option C) | map `octaveUp` / `octaveDown` (start MIDI pitch:ms; failed fits left out); unmeasured start: the nearest measured one, a tie (one-semitone gap) to the side whose run of like values (±50 ms, adjacent) is shorter, else the lower; unknown start: the table's median; patches without them: `legatoDelay`'s ±12 | `SoundLib::octaveDelayAt` via `legatoDelayAt(interval, fromPitch)` | `[legato.delay]` offset (adds) or table (its ±12 replaces) |
 | Oboe Solo +60 (not its +12 per-start octave values), Violins 2 +25 ms legato corrections; Violins 2 octave slurs −30 / −30 more (+12 / −12; the octave sweep of 5698181 heard both 30 ms early) | map (generator `SWEEP_LEGATO_CORRECTION`, `OCTAVE_NO_SWEEP_CORRECTION`, `OCTAVE_SWEEP_CORRECTION`) | map data | `[legato.delay]` offset |
-| An early start leaves the note before at least this much of its length as played (it may have started early itself) | 40 ms (chosen by a sweep: below) | `legatoTransition`, `onsetEarliest` (`libPlayedOn`) | `[legato] keepMs` |
-| A transition after a short note starts early by a share of the measured delay: 50 % after a very short note, rising linearly to all of it after a 380 ms note (fitted: below) | 50 %, 380 ms | `libFastDelay` | `[legato] fastShare`, `fastFullMs` (0: always all) |
-| A slur's first note right after a note too short for the transition (same patch, no rest) starts as early as that transition | off (on until 2026-10-06) | `collect` (held-note branch) | `[legato] fastFirsts` |
-| Fast technique: a slurred note after a note shorter than its transition plays its own attack on the same patch (the note before ends there) instead of a legato transition | off (measured about as on time as the default with its notes as early; the owner decides by ear) | `collect` (`libRetrigger`) | `[legato] fastTechnique`; "too short": `fastBelowShare` (100 % of the transition's delay; also used by fastFirsts) |
-| A transition's note before ends `overlapTicks` after the transition's start as played (not the written one): one note overlaps the next | always | `finishLibraryEvents` (`libLegatoOffs`) | fixed (the overlap itself: `overlapTicks`) |
+| A held note started early by its onset leaves the note before on its patch at least this much of its length as played (it may have started early itself) | 40 ms (chosen by a sweep: below) | `onsetEarliest` (`libPlayedOn`) | `[legato] keepMs` |
+| A transition after a short note arrives sooner, by a share of the measured delay: 50 % after a very short note, rising linearly to all of it after a 380 ms note (fitted: below); times the bent transition's glide | 50 %, 380 ms | `libFastDelay` (`libGlideDelayMs`) | `[legato] fastShare`, `fastFullMs` (0: always all) |
 | Legato glide of a tuning copy. Pitch bend: one cent a tick, the bend value nearest each step (a glide of d cents: ceil(d) ticks; a quarter tone ~52 ms at 120 bpm): the owner's criterion (2026-10-03) "as short as possible without audible steps: each step at most one cent" on the renderer's tick grid; no setting. Varispeed: the same criterion per output frame (it changes its speed every frame): a glide of d cents takes ceil(d × the larger ratio / the smaller) frames, each within a cent (a quarter tone 51 frames, ~1.2 ms at 44.1 kHz; `Vst3Plugin::GLIDE_CENT_STEP`); `[legato] glideMs` (30 ms, no source) retired 2026-10-03 | computed | `libraryPitchBends`, `Vst3Plugin::setPitch` | — |
-| Legato level balance: a transition plays at the level of the other transitions into its pitch (map `legatoLevel`, heard in a run of sixteenths, up to 0.15 s; `legatoLevelLong`, settled, from 0.5 s; mixed between), by CC11 on its route from its arrival (note-on + the full measured delay) to the route's next note-on, added in dB to a marcato's level and to the CC11 in force; down by at most `levelMaxDb`, up by at most `levelHeadroomDb` (the part's CC11 resting that much down: the whole part softer). Off: measured alone, SSO's transitions differ by 2-6 dB per start and interval (repeatably, at p / mf / f alike), but in a run the notes around them move them as much, and on it didn't even renderer runs or Whence (HANDOFF › Legato level balance) | off; 9.4 dB (the largest measured: Cor Anglais +3 settled from G4, of 30288 transitions, `derived_numbers.py levelmax`); 0 dB | `collect` (legato transition: `libLevels` volumeDb, atMs), `libraryNoteLevels`, `renderMs4Dynamics` (headroom) | `[legato] levelBalance`, `levelMaxDb`, `levelHeadroomDb` |
-| Held notes start early by their measured onset | 0 % (map `<Onset early>`; 100 until 2026-10-06) | `collect` / `onsetEarliest`, `finishLibraryEvents` | `[heldNotes] early`; score: old metaTag |
+| Held notes, and since 2026-10-08 every technique with measured onsets (shorts, marcato, tremolos, trills, falls; not rips, effects, harp, keyboards, percussion; the owner: "is there a reason not to make this the recommended?" after slurred shorts stayed on the beat while Longs moved), start early by their measured onset. Medians across patches (latency removed): pizzicato / Bartók / col legno 3, staccato / spiccato 8, Short CS 26, Marcato / Tenuto 33, Short 0.5 61, Short 1.0 113, Long 86 ms | 100 % (map `<Onset early>`; 0 from 2026-10-06 to 2026-10-07; the owner: plain Long for every slurred note, lined up between sections; 0 plays them as written, to compare) | `collect` / `onsetEarliest`, `finishLibraryEvents` | `[heldNotes] early`; score: old metaTag |
 | Onset per patch and pitch (-15 dB perceived; swells per semitone) | map `onset` | `Articulation::onsetAt` | `[heldNotes.onset]` table; definition: generator |
+| Notes early by their articulation's median onset, or each by its pitch's onset (2026-10-07: even runs; the default since 2026-10-08) | 0 (median) | `collect` (`libOnsetByPitch`), `Articulation::onsetMedian` | `[heldNotes] byPitch`; score: `playbackSettings` |
 | Shorts chosen by meant sounding length | on | `SoundLib::want`, `choose` | `[shorts] byMeantLength` |
 | Meant length factors | staccato 50, staccatissimo 25, tenuto 99, portato 74.5 % (MS4's) | `want` (`Want::soundSeconds`) | `[shorts] staccato` … `portato` |
 | Measured short thresholds | map `from` | `choose` | `[shorts.from]` table |
-| Short notes' velocity balance per family, calibration, Recommended (off: a short plays at the dynamic's velocity) | off (since 2026-10-06; on: dynamics.json) | `calibratedVelocity` | `[shorts] calibratedVelocity`; Advanced Options (balance rows), dynamics.json; metaTag `soundLibraryShortBalance` |
-| Even dynamic steps | off | `evenStepsEnabled` | `[dynamics] evenSteps` (or `MS_EVEN_DYNAMIC_STEPS`); mode: metaTag `soundLibraryEvenSteps` |
-| Pedal changes after their chord (legato pedalling) | one tick after (since 2026-10-06; a pianist's: up 40 ms, down 90 ms after); at most 25 % of the next pedal / 50 % of its own | `renderSpanners` (pedal) | `[pedal] upAfterMs`, `downAfterMs`, `upMaxShare`, `downMaxShare` |
+| Slurred notes shorter than their held technique's measured peak (map `peak`, the median over its semitones of the onset check's mf perceived peak: SSO violins' Long ~1.06 s, violas' 0.77 s) play a quicker technique of the same patch with the note's modifiers: 1 the tenuto short (Short 1.0, its `from` not applied: the slur's note-off ends it), 2 the espressivo long (Long (Rachm.)); none fits: the held one; early by the swapped technique's own onset at each pitch whatever `[heldNotes] byPitch` says (`Choice::swapped`; Long (Rachm.)'s per-pitch fit, `sso_rachm_onset_fit.json`, Windows VM 2026-10-08: on Whence's violin passage arrivals SD 10.8 / 11.4 ms for Violins 1 / 2 against 22.0 / 22.6 on its median and 21.6 / 26.5 on Long's; the owner, 2026-10-08: "the timing is still not as good as plain long"). The owner, 2026-10-08: slurred violins had no attack (Whence's slurred notes 136-273 ms); 2026-10-08, after comparing by ear: "let's make slurs quick = 2 the recommended preset" | 2 (Recommended; Library default 0) | `SoundLib::choose` (`chooseSlurred`), `want` (`Want::slurQuick`) | `[slurs] quick`; score: `playbackSettings` |
+| A note `[slurs] quick` swaps plays as loud as its held technique would: Long less Long (Rachm.) at the note's pitch and written length (map `quickLevel` on the swapped articulation: `sso_rachm_levels.json`, re-measured on the Windows VM 2026-10-08 in the passage itself, standard test score's slurred groups, perceived loudness per group against plain Long: the dB that, through the shipped dynamics curve, gives the CC1 at which Rachm. matches Long, per register (Violins 1: 1.3 to pitch 75, 2.1 to 81, 0.6 above; Violins 2: 0.9, 0.2, 0), the same at every length, register edges at the midpoints between measured pitches 72-85; log-linear in length, linear in pitch, the nearest end's beyond; 0 where not measured: only Violins 1 and 2), added to the note's level (CC11 down along the held expression curve, CC1 up along the articulation's dynamics curve, as the Inspector's levels: so in Live's clips and the plain set too). The owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured, Violins 1 about 6 dB under Long at 100-136 ms, Violins 2 about 3; at 1 the owner, 2026-10-08: "not the correct volume. violin 1 in bar 5 now sounds really loud relative to the viola and cello" ; that file held isolated notes' differences (5-11 dB), which the shallow dynamics curve turned into CC1 105-127, about 5 dB over Long in the passage (VM). Values replaced by the in-context ones; the owner, 2026-10-09, on build 37882502550: "1 is the right balance, make it the recommended preset" | 1 (on; Recommended 1) | `rendermidi.cpp` (`quickDb`, `marcatoLevel`), `Articulation::quickLevelAt` | `[slurs] quickLevel`; score: `playbackSettings` |
+| Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |
 | A key struck again ends its sounding note just before | on | `finishLibraryEvents` | `[notes] sameKeyEndsFirst` |
 | Tuning copies: tolerance, tail, max copies. Computed when the map leaves them out (SSO's does since 2026-10-03). Tolerance: half the smallest gap between two distinct accidental values (`ScoreTuning::smallestAccidentalGap`: 16.5, MuseScore 3.6's 23-limit comma, against 16.667, a twelfth of a tone: 0.167, so 0.083 cents). Tail: each note's ring to 60 dB under (ISO 3382-1's reverberation time), twice its measured release to 30 dB under (`<Articulation release>`; T30 extrapolated as ISO 3382-1 does); unmeasured: its patch's longest, else the part's (`SoundLib::laneRing`). Max copies: 1 + the free memory (read once a run: Windows available physical memory, Linux MemAvailable) / (245 MB a copy, the owner's 1031 → 1276 MB × the parts that need copies: whose notes play at more than one tuning, `SoundLib::partsNeedingCopies`; the owner, 2026-10-04: an even share between those parts only) (`SoundLib::memoryMaxLanes`) | 0.083 cents; 2 × release; by memory | `SoundLib::lanes`, `libraryLaneSettings` | `[tuning] tolerance`, `tail`, `maxLanes`; score: `soundLibraryLanes` |
 | A copy waits for its notes' measured release | on (map `release`) | `SoundLib::lanes` | `[tuning] waitForRelease` |
 | Pitch bend instead of varispeed where the patch bends | on (map `bend`) | `updateState` (`libBend`) | `[tuning] pitchBend` |
 | A legato transition's pitch bend glides when the transition arrives (note-on + the full measured legato delay for the interval / start pitch), one cent a tick from there, at the latest by the lane's next note-on; fresh attacks and slur starts bend at the note-on. The bend is the channel's: at the note-on it retuned the note before while it still sounded (SSO, Whence on 49b00a0, 2026-10-02: violas 65-83 % retuned 10-30 ms after the note-on, the new note heard ~90-130 ms after it) | on | `libraryPitchBends` (`libGlideDelayMs`) | `[tuning] bendAtArrival` (0: at the note-on) |
-| One instance for a line's tunings on a patch tuned by pitch bend (the owner, 2026-10-02: fewer Kontakt instances, less memory; to be judged by ear): a copy may be retuned by the bend once its notes' measured release (`<Articulation release>`: to 30 dB under the level, the longest over the range; else the tail) has rung out (1, safe) or once they have ended (2, aggressive: a detached note's ringing tail is bent to the next note's tuning). Notes sounding together at different tunings, notes beyond the bend range and patches that don't bend (SSO's All techniques: every detached note) keep the copies' rule. Whence (counted on Linux, `oneInstanceCounts`): 19 instances off, 19 safe (its lines' gaps are shorter than the releases, 0.8-1.3 s), 15 aggressive (the four strings' Performance copies; the All techniques copies and the celli's double stops stay) | off (0) | `SoundLib::lanes` (also `routes`: hosted instances, MIDI-out routes, Create Live Set tracks, Live clips) | `[tuning] oneInstance` (0 off, 1 safe, 2 aggressive); score: `playbackSettings` |
 | Automation ramps: a value at each tick where the ramp reaches another step: a MIDI controller's 1/127 (every CC value it passes, at its tick), a plug-in parameter's 1e-4 (the lane's own precision: its points are kept to 1e-4); the owner's criterion, 2026-10-03. Live: the lanes Create Live Set / the device store are packed (`packLane`) to within one MIDI step (1/127) and one tick of MuseScore's staircase; Live's clip envelopes and a set's curves as straight pieces within one MIDI step of the curve (`Automation::flattenCurve`) | computed (no setting; `[automation] stepTicks` retired) | `Automation::Lane::events`, `renderMs4Dynamics` (lanes), `envelopeEvents`, `LiveSet::curve` | — |
 | Live clips: controller carrier spacing (measured in Live 12.4.6: below) | 1 unit (EPSILON) | `LiveClips::clipNotes` | `[live] carrierEpsilon` |
 | Kontakt voices per patch | 512 | `SoundLibraryHost::kontaktMaxVoices` (also the Live Set) | `[hosting] maxVoices` (`MS_KONTAKT_MAX_VOICES` wins) |
 | Settle after setState before controllers (measured: below) | 0.047 s | `Vst3Plugin::settle` | `[hosting] settleSeconds` |
 | Mixer volume, pan and mute on library slots apply from the next audio block, no glide (the owner, 2026-10-03: no mixer smoothing; the 5 ms glide had no source, `[hosting] mixSmoothingMs` is retired) | at once | `Vst3Synth::process` | — |
 | MS3 hairpin with its own velocity change plays as in 3.6 | on | `ms3HairpinVelocity()` | Preferences (Advanced) `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT` |
-| Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
+| Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale (calibrated levels off, or not measured) | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
 | Live controls (Controllers window live, LiveOverrides) | always | `PartControllers::liveChanges` | not a number: no setting |
 | Chunks don't end before a slurred or library note (live playback) | always | `libSlurAcross`, `libNoteAfter` | fixed (correctness: an early start can't cross a chunk) |
 | Background loading pauses | 0 ms | `SoundLibraryHost` `INPUT_PAUSE_MS`, `PRELOAD_GAP_MS` | fixed (the owner chose 0) |
 
-**Fast slurs (2026-10-02, the owner: "I want fast slurs to not sound late"; replaces the fast-note ramp of
-2026-09-30, whose keys `rampFromMs`, `rampToMs`, `rampMaxShare` are now reported as no longer used):** SSO's
+**Fast slurs (2026-10-02; history: legato transitions play on their beat since 2026-10-06, the early start removed
+2026-10-07, the owner: "I want fast slurs to not sound late"; replaces the fast-note ramp of
+2026-09-30, whose keys `rampFromMs`, `rampToMs`, `rampMaxShare` are now ignored):** SSO's
 Performance patches sound a slurred sixteenth's pitch 100-170 ms after its note-on (strings; woodwinds and brass
 60-130) at 100-200 bpm, longer than the note itself; the ramp left them 90-125 ms late (median). Now every note of a
 fast slurred run starts early by about that much (the cascade: each note before keeps its played length, only a run's
@@ -116,7 +188,7 @@ The owner's rule (2026-10-03): no number without a source; a sweep with a rule s
 value. Windows VM: Kontakt 8 + SSO through kthost (an offline VST 3 host: each patch's MuseScore setup, the rest
 check's), MuseScore 2bc46bc's `--verify-playback`, Live 12.4.6 (trial). Tools in the repository unless said.
 
-- **`[legato] overlapTicks` 30 → 0.** Rule: the smallest overlap with a legato transition in every tested case.
+- **`[legato] overlapTicks` 30 → 0** (removed 2026-10-07 at 0). Rule: the smallest overlap with a legato transition in every tested case.
   Slurred pairs on all 43 Performance patches, intervals ±1 ±2 ±5 ±12 from the middle of the legato range, the note
   before held 0.8 s or a sixteenth at 110 (136 ms), the note before ending −300 (a gap) … +250 ms after the next
   note-on; transition or fresh attack told by the new note's own harmonics over its first 400 ms against the same
@@ -173,7 +245,7 @@ check's), MuseScore 2bc46bc's `--verify-playback`, Live 12.4.6 (trial). Tools in
   `releases_from_long_tail.py` → `sso_sound_range.json` (277 values) → the generator: Timpani Swell mf 6070 → 7575,
   Swell f 5730 → 7550, Roll 4720 → 4715, Roll Muted 1835 → 1975; Glockenspiel Roll 5325 → 12875; Tubular Bells 6110 →
   9845 ms.
-- **`[pedal]` 40 / 90 ms, 25 / 50 %: kept, open.** Rule: the smallest times with no chord losing a note. The VM can't
+- **`[pedal]` 40 / 90 ms, 25 / 50 %: off from 2026-10-06, removed 2026-10-07.** Rule: the smallest times with no chord losing a note. The VM can't
   make SSO's Grand Piano drop a chord at any timing: kthost, 60 four-note chord changes each, up −1 / down 0 ms (MS4's,
   the owner's failing case) … up 60 / down 160 ms, offline and realtime: 0 notes more than 6 dB under the reference;
   MuseScore's export of `Piano pedal chords` (102 strikes) with up 0 … 60 ms: 0 missing attacks. With nothing failing,
@@ -198,4 +270,4 @@ the map is generated; change them in `gen_spitfire_sso.py` (its comments hold th
 per patch in playback.ini.
 
 Tests: `tst_soundlibrary::playbackSettingsIni` (generation, parsing, unknown keys, clamping, reload) and
-`playbackSettingsLayers` (default / ini / score for rendered effects); `tst_liveequivalence::playbackSettingsWidget` (the table, per-score edits). Octaves by start pitch: `tst_soundlibrary::legatoOctaveByStartPitch`, `tst_liveequivalence::liveClipsLegatoOctave` / `liveEquivalenceOctave` (Live identical). Bend at arrival: `tst_soundlibrary::tuningBendAtArrival` (transition, fresh attack, clamp, layers), `tst_liveequivalence::liveClipsBend` (row "at arrival": Live identical). Legato level balance: `tst_soundlibrary::legatoLevelBalance` (tables, arrival, max, headroom, off, layers), `tst_liveequivalence::liveEquivalenceLegatoLevel` (CC11 in Live's clips as rendered, audio identical). Marcato level: `tst_marcatolevel` (metaTag, undo, copy / paste, parts, the law, velocity and controller paths, default = main's events), `tst_liveequivalence::liveMarcatoLevel` (clips and audio identical). One instance: `tst_soundlibrary::tuningOneInstance` (line, release overlap, chord, no bend, layers, bends per note), `oneInstanceCounts` (a score's instances per mode: `MS_ROUTES_SCORE`), `tst_liveequivalence::liveClipsBend` (row "one instance").
+`playbackSettingsLayers` (default / ini / score for rendered effects; removed keys ignored); `tst_liveequivalence::playbackSettingsWidget` (the table, per-score edits). Octaves by start pitch: `tst_soundlibrary::legatoOctaveByStartPitch`, `tst_liveequivalence::liveClipsLegatoOctave` / `liveEquivalenceOctave` (Live identical). Bend at arrival: `tst_soundlibrary::tuningBendAtArrival` (transition, fresh attack, clamp, layers), `tst_liveequivalence::liveClipsBend` (row "at arrival": Live identical). Marcato level: `tst_marcatolevel` (metaTag, undo, copy / paste, parts, the law, velocity and controller paths, default = main's events), `tst_liveequivalence::liveMarcatoLevel` (clips and audio identical).

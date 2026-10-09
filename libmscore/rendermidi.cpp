@@ -101,9 +101,7 @@ struct SndConfig {
       int ms4SwingGate = 100;     // swing: the chord's length, percent
       bool ms4Once = false;       // the note once, as written, whatever MuseScore 3's play events are
       int libPatch = 0;           // a sound library part: the patch that plays the note
-      int libOverlap = 0;         // ticks the note lasts into the next (a library's legato)
-      double libEarly = 0;        // seconds a legato transition (a library's legato delay) or a held note (its
-                                  // onset) starts early
+      double libEarly = 0;        // seconds a held note starts early (its onset)
       int libEarliest = 0;        // … but not before this utick
       int* libOn = nullptr;       // where the note starts, as written and as played (libEarly)
       int* libWrittenOn = nullptr;
@@ -111,6 +109,7 @@ struct SndConfig {
       int libKey = -1;            // a library kit: the patch's key that plays the drum sound
                                   // (a sound library plays the trill / tremolo: SoundLib)
       const Automation::Lane* velocityLane = nullptr;    // the part's Velocity lane (MidiRenderer::velocityLanes)
+      double textLevel = 0.0;     // MuseScore 3's playback: the technique text's level, dB (MidiRenderer::levelOf)
 
       SndConfig() {}
       SndConfig(bool use, int c, DynamicsRenderMethod me) : useSND(use), controller(c), method(me) {}
@@ -387,15 +386,15 @@ static int ms3PitchBend(int p)
 
 static void playNote(EventMap* events, const Note* note, int channel, int pitch,
    int velo, int onTime, int offTime, int staffIdx, int layer = -1, int libPatch = 0,
-   const Automation::Lane* velocityLane = nullptr)
+   const Automation::Lane* velocityLane = nullptr, double textLevel = 0.0)
       {
       if (!note->play())
             return;
       // a note's own velocity (Inspector: user value / offset); MS4 mode (layer >= 0) plays none,
-      // as MuseScore 4 ignores MuseScore 3's note velocities when it reads a score; a marcato's level
-      // (articulation.h MarcatoLevel; MS4 mode: collectMeasureEventsMs4)
+      // as MuseScore 4 ignores MuseScore 3's note velocities when it reads a score; the articulations' and the
+      // technique text's level (articulation.h MarcatoLevel, MidiRenderer::levelOf; MS4 mode: collectMeasureEventsMs4)
       if (layer < 0)
-            velo = MarcatoLevel::velocity(note->customizeVelocity(velo), MarcatoLevel::of(note->chord()));
+            velo = MarcatoLevel::velocity(note->customizeVelocity(velo), MarcatoLevel::of(note->chord()) + textLevel);
       // a clip tab's Velocity lane (automation.h): the curve's value at the note's start (its chord's tick: score time, as
       // the lane's points), as Live plays the clip with it
       if (layer < 0 && velocityLane)
@@ -541,12 +540,10 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   if (n1 > n0 && qAbs(span - slope * (n1 - n0)) > 1e-6)
                         off = sc->utime2utick(sc->utick2utime(on) + span * config.ms4Dur / Ms4::HUNDRED);
             }
-            off += config.libOverlap;
             if (config.libWrittenOn)
                   *config.libWrittenOn = on;
             if (config.libEarly > 0) {
-                  // a legato transition or a held note: early by the patch's delay or onset in time, at the tempo
-                  // there (the note-off stays)
+                  // a held note: early by its onset in time, at the tempo there (the note-off stays)
                   Score* sc = note->score();
                   const int early = sc->utime2utick(sc->utick2utime(on) - config.libEarly);
                   on = qMin(on, qMax(config.libEarliest, early));
@@ -601,7 +598,7 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   }
 
             velo *= velocityMultiplier;
-            playNote(events, note, channel, p, qBound(1, velo, 127), on, off, staffIdx, -1, 0, config.velocityLane);
+            playNote(events, note, channel, p, qBound(1, velo, 127), on, off, staffIdx, -1, 0, config.velocityLane, config.textLevel);
             }
 
       // Single-note dynamics
@@ -955,6 +952,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         }
 
                   SndConfig config;       // dummy
+                  config.textLevel = textLevel(chord);
 
                   if (!graceNotesMerged(chord))
                         for (Chord*& c : chord->graceNotesBefore())
@@ -1051,6 +1049,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                   SndConfig config = SndConfig(useSND, controller, sctx.method);
                   auto vl = velocityLanes.find(st1->part());
                   config.velocityLane = vl != velocityLanes.end() ? &vl->second : nullptr;
+                  config.textLevel = textLevel(chord);
 
                   //
                   // Add normal note events
@@ -1237,50 +1236,52 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         events->registerChannel(libChannel);
                   const std::vector<const SoundLib::LibInstrument*> libPatches = li ? lp->patchesFor(li)
                                                                                      : std::vector<const SoundLib::LibInstrument*>();
-                  // a short (Spitfire: velocity, not CC1, sets its dynamics): with [shorts] calibratedVelocity (off by
-                  // default since 2026-10-06), measured (Check articulations › Dynamics), the velocity at which it is as loud as the part's held note at this dynamic;
-                  // else, listed in <Dynamics velocity>, its level on the CC's scale. An accent's share
-                  // (levelVelocity over the plain level) on top. -1: MS4's velocity
+                  // a technique on velocity (Spitfire's shorts, pizzicato ...: velocity, not CC1, sets its dynamics),
+                  // listed in <Dynamics velocity>. With [levels] calibrated and both measured (dynamics.json): the
+                  // velocity at which it is as loud as the part's held note at this dynamic, plus MS4's offset for its
+                  // articulations (marcato's too: SoundFont 2's law, 40 log10 of MS4's velocity over a plain note's).
+                  // Else its level on the CC's scale, an accent's share included (levelVelocity). -1: MS4's velocity
                   const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::dynamicsCalibration() : nullptr;
-                  const bool calibrated = cal && Playback::on("shorts/calibratedVelocity", score);
+                  const bool calibrated = cal && Playback::on("levels/calibrated", score);
+                  const SoundLib::Choice libHeld = calibrated ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
+                                                              : SoundLib::Choice();
                   auto libVelocity = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
-                        if (!c)
+                        if (!c || !lp->velocityDynamics.contains(c.base))
                               return -1;
                         const int level = Ms4::expressionLevel(dynLevel);
+                        if (libHeld && level > 0) {
+                              const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
+                                                                         libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                         level, 40.0 * std::log10(r.share));
+                              if (v > 0)
+                                    return qBound(1, v, 127);
+                              }
                         // a marcato (also with staccato / tenuto) gets no accent share: it plays as a plain note
                         // of the dynamic (MS4's accent boost is MS4's; the library's marcato level is the
                         // library's own, plus the Marcato level offset, marcatoLevel)
                         const bool marcato = std::find(r.arts.begin(), r.arts.end(), Ms4::Art::Marcato) != r.arts.end();
-                        const double accent = level > 0 && !marcato ? double(r.levelVelocity) / level : 1.0;
-                        if (calibrated) {
-                              const SoundLib::Choice held = SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} });
-                              if (held) {
-                                    // as loud as the held note plays: at the dynamics CC even steps send
-                                    // (their volume turns both down alike)
-                                    const int cc = SoundLib::evenStep(SoundLib::heldCurve(*cal, libPatches), SoundLib::evenSteps(score),
-                                                                      level).dynamics;
-                                    const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
-                                                                               libPatches[held.patch]->name, held.articulation->value, cc,
-                                                                               SoundLib::family(*libPatches.front()), score);
-                                    if (v > 0)
-                                          return qBound(1, int(std::lround(v * accent)), 127);
-                                    }
-                              }
-                        return lp->velocityDynamics.contains(c.base) ? (marcato ? level : r.levelVelocity) : -1;
+                        return marcato ? level : r.levelVelocity;
                         };
-                  // a marcato's level (articulation.h MarcatoLevel; 0: nothing changes). A note on velocity (velocity:
+                  // the chord's articulations' and its technique text's level (articulation.h MarcatoLevel, levelOf; 0: nothing changes). A note on velocity (velocity:
                   // libVelocity's): the velocity at which its articulation's measured curve is db louder or softer
                   // (SoundFont 2's law without one); else a level of its own on its route (libraryNoteLevels): softer
                   // by the expression CC along the held note's measured expression curve, louder by the dynamics CC
                   // along the articulation's own curve (the law without them)
+                  // a note [slurs] quick swapped: as loud as the held technique at its pitch and written length
+                  // ([slurs] quickLevel; the map's quickLevel, 0 where not measured)
+                  const bool quickLevel = Playback::on("slurs/quickLevel", score);
+                  auto quickDb = [&](const Note* note, const SoundLib::Choice& c) {
+                        return quickLevel && c && c.swapped
+                               ? c.articulation->quickLevelAt(note->ppitch(), SoundLib::noteSeconds(note) * 1000) : 0.0;
+                        };
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
-                        const double db = MarcatoLevel::of(note->chord());
+                        const double db = levelOf(note) + quickDb(note, c);
                         if (db == 0.0 || !c)
                               return;
                         const SoundLib::DynamicsCurve* own = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
                         if (velocity > 0) {
                               if (own && (own->drivenBy == "velocity" || own->drivenBy == "both") && own->points.size() >= 2) {
-                                    const int v = own->inverse(own->at(velocity) + db);
+                                    const int v = own->louder(velocity, db);
                                     velocity = db < 0 ? qMin(v, velocity) : qMax(v, velocity);
                                     }
                               else
@@ -1312,13 +1313,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               };
                         libLevels[note] = l;
                         };
-                  // the track levels of the note's patch and technique (trackdelays.h; after marcatoLevel: they add up)
+                  // the track levels of the note's patch and technique (trackdelays.h; after marcatoLevel: they add up),
+                  // less the patch's headroom (its volume plays that: TrackDelays::patchGain)
                   auto trackLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         auto d = c ? libTrackDelays.find(st1->part()) : libTrackDelays.end();
                         if (d == libTrackDelays.end() || d->second.levels.empty())
                               return;
                         const SoundLib::LibInstrument* patch = libPatches[c.patch];
-                        const double db = TrackDelays::db(d->second, patch->name,
+                        const double db = TrackDelays::noteDb(d->second, patch->name,
                                                           PlainLiveSet::techniqueName(patch, c.articulation->value));
                         if (db != 0.0)
                               libLevels[note].volumeDb += db;
@@ -1327,6 +1329,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
                         if (c)
                               putLibrarySwitch(events, *libPatches[c.patch], libChannel, c, start + tickOffset, st1->idx());
+                        if (c && libTrace)
+                              libTrace->push_back({ note, start + tickOffset, c, libPatches[c.patch] });
                         return c;
                         };
                   // a kit: the drum sound's patch and key (rolled: its roll key, else its hit); none: the
@@ -1349,13 +1353,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         return n;
                         };
-                  // a legato articulation needs the next note to start before this one ends
-                  // a legato articulation needs the next note to start before this one ends: only
-                  // within a slur. MS4 counts a slur's last chord as legato too (its sound and length
-                  // stay so), but held into the next note it would make that note, unslurred, a legato
-                  // transition on the same Performance patch instead of a new attack (the owner,
-                  // 2026-09-30). So a note (the end of its tie chain) overlaps only when a slur, not a
-                  // phrase mark, goes on past it on its staff.
+                  // whether a slur, not a phrase mark, goes on past a note (the end of its tie chain) on its staff:
+                  // only then is the next note a legato transition. MS4 counts a slur's last chord as legato too
+                  // (its sound and length stay so), but the note after it, unslurred, is a new attack (the owner,
+                  // 2026-09-30)
                   auto slurGoesOn = [&](const Note* note) {
                         const Note* last = note;
                         for (int guard = 0; last->tieFor() && last->tieFor()->endNote() && guard < 1000; ++guard) {
@@ -1375,10 +1376,6 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         return false;
                         };
-                  auto libOverlap = [&](const SoundLib::Choice& c, const Note* note) {
-                        // (playback settings [legato] overlapTicks, slurEndOverlap)
-                        return c && c.base == "legato" && (libSlurEndOverlap || slurGoesOn(note)) ? libOverlapTicks : 0;
-                        };
                   // where a note before (the first of its tie chain) starts as played: early or not (libPlayedOn),
                   // else as written
                   auto playedOn = [&](const Note* first) {
@@ -1389,11 +1386,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
                   // patch, an articulation that plays transitions: playsTransitions()). Returns that note (nullptr:
                   // not a transition: a slur's first note, the note after its end, the same key struck again, a
-                  // slur on an articulation that attacks each note anew), the earliest utick the note may start: the note before keeps
-                  // keepMs of its length as played (below), not before the chunk or the pass, the interval from it
-                  // (semitones; of a chord before, its nearest note that goes on legato) and its written length
-                  // (seconds)
-                  auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* earliest, int* interval,
+                  // slur on an articulation that attacks each note anew), the interval from it (semitones; of a chord
+                  // before, its nearest note that goes on legato) and its written length (seconds)
+                  auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* interval,
                                               double* lenBefore) -> const Note* {
                         if (!c || c.base != "legato" || !c.articulation->playsTransitions())
                               return nullptr;
@@ -1425,15 +1420,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.base != "legato" || pc.patch != c.patch || !pc.articulation->playsTransitions())
                                     continue;
-                              // the note before keeps keepMs of its length as played (it may itself have started
-                              // early: in a fast slurred run every note starts early by about the same, so each
-                              // keeps its length). Measured with SSO (2026-10-02, branch fast-slurs-on-time): SSO's
-                              // strings reach a slurred sixteenth's pitch 120-160 ms after its note-on at 100-200
-                              // bpm, more than the note itself is long; the ramp before (none up to 125 ms, half
-                              // from 250) left them 100-150 ms late
                               const int start = fc->tick().ticks() + tickOffset;
-                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep);
-                              *earliest = std::max({ cap, libChunkStart, (*rs)->utick });
                               *interval = note->ppitch() - pn->ppitch();
                               *lenBefore = score->utick2utime(utick) - score->utick2utime(start);
                               return first;
@@ -1442,11 +1429,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         };
 
                   // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
-                  // articulation with a measured onset: how early it may start (utick). As for a transition, the note
-                  // just before on its track, when it plays on the same patch, keeps keepMs of its length as played
-                  // (that note and its written length in before / lenBefore); not before the chunk or the pass; -1: not
-                  // at all (grace notes or an arpeggio before it)
-                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, const Note** before, double* lenBefore) -> int {
+                  // articulation with a measured onset: how early it may start (utick). The note just before on its
+                  // track, when it plays on the same patch, keeps keepMs of its length as played; not before the
+                  // chunk or the pass; -1: not at all (grace notes or an arpeggio before it)
+                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c) -> int {
                         Chord* ch = note->chord();
                         if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
                               return -1;
@@ -1470,8 +1456,6 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!pc || pc.patch != c.patch)
                                     continue;
                               const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep);
-                              *before = pn;
-                              *lenBefore = score->utick2utime(utick) - score->utick2utime(fc->tick().ticks() + tickOffset);
                               return std::max(earliest, cap);
                               }
                         return earliest;
@@ -1579,8 +1563,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         SndConfig config;
                         config.ms4 = true;
                         config.method = DynamicsRenderMethod::MS4;
-                        // (the built-in synthesizer: a marcato's level by SoundFont 2's law, MarcatoLevel::velocity)
-                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, MarcatoLevel::of(note->chord()));
+                        // (the built-in synthesizer: the level by SoundFont 2's law, MarcatoLevel::velocity)
+                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note));
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
                         config.ms4Offset = offset;
@@ -1589,100 +1573,55 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4TiedTicks = tiedTicks;
                         config.ms4Once = once;
                         config.libPatch = libChoice.patch;
-                        config.libOverlap = libOverlap(libChoice, note);
-                        const Note* libTransitionFrom = nullptr;      // a legato transition started early: from this note
-                        const Note* libRetrigger = nullptr;           // the fast technique: its own attack after this note
                         if (li && !libNote.builtIn && !li->kit) {
                               // a legato transition (SSO's Performance patches reach the new pitch 60-690 ms after the
-                              // note-on, median 190, by patch and interval: the legato grid) starts early by the patch's
-                              // delay for the interval, times the score's percent; its tuning lane glides from the note
-                              // before (pitch bend)
-                              int earliest = 0;
+                              // note-on, median 190, by patch and interval: the legato grid): its tuning lane glides
+                              // from the note before (pitch bend) when it arrives
                               int interval = 0;
                               double lenBefore = 0;
-                              const Note* from = legatoTransition(note, libChoice, &earliest, &interval, &lenBefore);
-                              double delayMs = 0;
-                              if (from) {
-                                    // (an octave by the pitch it starts from, where measured: octaveUp / octaveDown;
-                                    // playback.ini [legato.delay] by patch: an offset or its own table); after a short
-                                    // note SSO's transition is quicker ([legato] fastShare, fastFullMs)
-                                    delayMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
-                                                                            libChoice.articulation->name, interval,
-                                                                            libChoice.articulation->legatoDelayAt(interval, from->ppitch())),
-                                                           lenBefore);
-                                    // the fast technique ([legato] fastTechnique, fastBelowShare): after a note shorter than
-                                    // the transition, the slurred note plays its own attack on the same patch (early by its
-                                    // onset; the note before ends there, no overlap) instead of a transition that would be
-                                    // heard after the beat (SSO: strings 100-170 ms, a sixteenth at 110 is 136)
-                                    if (offset == 0 && libFastTechnique && lenBefore * 1000.0 < delayMs * libFastBelow) {
-                                          libRetrigger = from;
-                                          from = nullptr;
-                                          }
-                                    }
+                              const Note* from = legatoTransition(note, libChoice, &interval, &lenBefore);
                               if (!from) {
-                                    // (no transition, e.g. the fast technique's own attack: its bend is set at its
-                                    // note-on, no glide; an earlier render's entries go)
+                                    // (no transition: its bend is set at its note-on, no glide; an earlier render's
+                                    // entries go)
                                     libGlideFrom.erase(note);
                                     libGlideDelayMs.erase(note);
                                     }
                               if (from) {
                                     libGlideFrom[note] = from;
-                                    libTransitionFrom = from;
-                                    if (offset == 0 && libLegatoEarly > 0 && delayMs > 0) {
-                                          config.libEarly = delayMs * libLegatoEarly / 100.0 / 1000.0;
-                                          config.libEarliest = earliest;
-                                          }
-                                    libGlideDelayMs[note] = delayMs;   // (its bend glides when the transition arrives)
-                                    // the legato level balance ([legato] levelBalance): SSO's transitions arrive 2-6 dB louder or
-                                    // softer than the pitch's other transitions (each is its own recording: by start and
-                                    // interval, measured 2026-10-02); CC11 sets the note's level from its arrival (the full
-                                    // delay after the note-on, as the bend), up by at most the part's headroom, down by at
-                                    // most levelMaxDb; with a marcato's level on the note they add up. Off by default: in a
-                                    // run the notes around a transition move its level as much (HANDOFF.md)
-                                    if (libLevelBalance) {
-                                          const int t0 = note->chord()->tick().ticks() + tickOffset;
-                                          const int len = note->chord()->actualTicks().ticks() + std::max(0, tiedTicks);
-                                          const double seconds = score->utick2utime(t0 + len) - score->utick2utime(t0);
-                                          const SoundLib::Articulation& la = *libChoice.articulation;
-                                          if (!la.legatoLevels.empty() || !la.legatoLevelsLong.empty()) {
-                                                // (unmeasured: 0 dB, still from the arrival: the note before keeps its own until then)
-                                                const double dev = la.legatoLevelAt(interval, from->ppitch(), seconds);
-                                                LibLevel& l = libLevels[note];
-                                                if (!std::isnan(dev))
-                                                      l.volumeDb += qBound(-libLevelMax, -dev, libLevelHeadroom);
-                                                l.atMs = delayMs;
-                                                }
-                                          }
+                                    // its velocity (the map's legatoVelocity, else the note's own): Spitfire's Performance
+                                    // legato picks the transition by velocity
+                                    const int legatoVelocity = libChoice.articulation->legatoVelocity;
+                                    if (legatoVelocity > 0)
+                                          libNote.velocity = qBound(1, legatoVelocity, 127);
+                                    // its bend glides when the transition arrives: the patch's delay for the interval (an
+                                    // octave by the pitch it starts from, where measured: octaveUp / octaveDown;
+                                    // playback.ini [legato.delay] by patch: an offset or its own table); after a short
+                                    // note SSO's transition is quicker ([legato] fastShare, fastFullMs)
+                                    libGlideDelayMs[note] = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
+                                                                                          libChoice.articulation->name, interval,
+                                                                                          libChoice.articulation->legatoDelayAt(interval, from->ppitch())),
+                                                                         lenBefore);
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
                                        && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
-                                    // a held note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
-                                    // the note-on, sul tasto / flautando / harmonics 175-440 ms): early by its onset, the
-                                    // chord's latest so that its notes start together
+                                    // a note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
+                                    // the note-on, sul tasto / flautando / harmonics 175-440 ms; since 2026-10-08 every
+                                    // measured technique, shorts too: pizzicato 3, staccato 8, marcato 33, Short 1.0 113 ms
+                                    // median): early by its onset, the
+                                    // chord's latest so that its notes start together; [heldNotes] byPitch 0: the patch's
+                                    // median onset for every pitch (one shift, a run's spacing as written); a [slurs]
+                                    // quick swap always by pitch (Choice::swapped)
+                                    const SoundLib::Articulation* oa = libChoice.articulation;
+                                    const bool byPitch = libOnsetByPitch || libChoice.swapped;
                                     double onsetMs = 0;
                                     for (const Note* n : note->chord()->notes())
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
-                                                                   libPatches[libChoice.patch]->name, libChoice.articulation->name,
-                                                                   n->ppitch(), libChoice.articulation->onsetAt(n->ppitch())));
-                                    const Note* before = nullptr;
-                                    double lenB = 0;
-                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice, &before, &lenB) : -1;
-                                    double earlyMs = onsetMs * libOnsetEarly / 100.0;
-                                    // in a fast run (the note just before on the same patch shorter than the transition
-                                    // into this note would take): as early as that transition ([legato] fastFirsts).
-                                    // Measured (2026-10-02): SSO's Performance strings sound a slur's first note after a
-                                    // sixteenth 140-200 ms after its note-on, like a transition, not 45-75 ms (the onset
-                                    // from silence)
-                                    if (before && libFastFirsts && libLegatoEarly > 0) {
-                                          const int iv = note->ppitch() - before->ppitch();
-                                          const double d = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
-                                                                                         libChoice.articulation->name, iv,
-                                                                                         libChoice.articulation->legatoDelayAt(iv, before->ppitch())),
-                                                                        lenB);
-                                          if (lenB * 1000.0 < d * libFastBelow)
-                                                earlyMs = std::max(earlyMs, d * libLegatoEarly / 100.0);
-                                          }
+                                                                   libPatches[libChoice.patch]->name, oa->name,
+                                                                   n->ppitch(), byPitch ? oa->onsetAt(n->ppitch())
+                                                                                                : oa->onsetMedian()));
+                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
+                                    const double earlyMs = onsetMs * libOnsetEarly / 100.0;
                                     if (earliest >= 0 && earlyMs > 0) {
                                           config.libEarly = earlyMs / 1000.0;
                                           config.libEarliest = earliest;
@@ -1700,20 +1639,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (li && !libNote.builtIn && offset == 0 && !note->tieBack())
                               config.libPlayed = &played;
                         collectNote(events, noteChannel, note, 1.0, tickOffset, st1, config);
-                        if (played >= 0) {
+                        if (played >= 0)
                               libPlayedOn[{ note, tickOffset }] = played;
-                              if (libTransitionFrom && played < note->chord()->tick().ticks() + tickOffset)
-                                    libLegatoOffs.push_back({ libTransitionFrom, noteChannel, played, false });
-                              else if (libRetrigger)
-                                    libLegatoOffs.push_back({ libRetrigger, noteChannel, played, true });
-                              // a fresh attack on a legato patch ([legato] phraseGapMs; not the fast technique's own
-                              // attacks, which keep their cut at the note-on): an articulation that plays legato
-                              // transitions (playsTransitions()), whatever this note asked for (a held note may play it:
-                              // prefer="long")
-                              if (!libTransitionFrom && !libRetrigger && libChoice && !li->kit
-                                  && libChoice.articulation->playsTransitions())
-                                    libFreshAttacks.push_back({ note, noteChannel, libChoice.patch, played });
-                              }
                         if (config.libOn && libShiftOn >= 0 && libShiftOn < libShiftWritten)
                               libShifts.push_back({ noteChannel, libChoice.patch, libShiftOn, libShiftWritten,
                                                     note->chord()->tick().ticks() + tickOffset });
@@ -1760,7 +1687,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         events->registerChannel(noteChannel);
                         const int on = start + tickOffset + (length * r.ts) / Ms4::HUNDRED;
-                        const int off = on + (length * r.dur) / Ms4::HUNDRED + (length > 0 ? libOverlap(libChoice, note) : 0);
+                        const int off = on + (length * r.dur) / Ms4::HUNDRED;
                         if (length <= 0) {
                               // no length (an ornament's body squeezed out by its prefix and suffix): MS4
                               // sends no note-on but still the note-off, at its start plus the (negative)
@@ -1775,7 +1702,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         playNote(events, note, noteChannel, libNote.key >= 0 ? libNote.key : qBound(0, note->ppitch() + pitchOffset, 127),
                                  qBound(1, libNote.velocity > 0 ? libNote.velocity
-                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, MarcatoLevel::of(note->chord())), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
+                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note)), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
                         };
 
                   renderAtFn = [&](const Note* n, const std::vector<Ms4::ArtRef>& a, int st, int len, int po, int) { renderAt(n, a, st, len, po); };
@@ -2097,27 +2024,7 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
             int controller = CTRL_EXPRESSION;
             std::vector<int> channels;
-            // a library part's: per channel, its held note's curve for even steps (SoundLib::evenStep), and
-            // whether they turn the expression CC (not when an automation lane has it)
-            std::map<int, const SoundLib::DynamicsCurve*> heldCurves;
-            const SoundLib::EvenSteps evenSteps = lp ? SoundLib::evenSteps(score) : SoundLib::EvenSteps::OFF;
-            bool evenVolume = evenSteps == SoundLib::EvenSteps::VOLUME_HEARING || evenSteps == SoundLib::EvenSteps::VOLUME_ENERGY;
-            if (lp)
-                  for (const LibPart::Auto& a : lp->automation)
-                        if (a.cc == CTRL_EXPRESSION)
-                              evenVolume = false;
             std::vector<int> builtInChannels;     // a kit's drum sounds the built-in synthesizer plays
-            // the legato level balance's headroom ([legato] levelHeadroomDb): a part with a patch that has measured
-            // transition levels rests that much down on CC11 (its own values, even steps', a CC11 lane's), so that
-            // transitions arriving softer can be raised (libraryNoteLevels)
-            double rest = 1.0;
-            if (lp && libLevelBalance && libLevelHeadroom > 0 && library->dynamicsCC != CTRL_EXPRESSION) {
-                  for (const SoundLib::LibInstrument* li : lp->patches)
-                        for (const SoundLib::Articulation& a : li->articulations)
-                              if (!a.legatoLevels.empty() || !a.legatoLevelsLong.empty())
-                                    rest = std::pow(10.0, -libLevelHeadroom / 20.0);
-                  }
-            auto resting = [rest](int v) { return rest == 1.0 || v <= 0 ? v : qBound(1, int(std::lround(v * rest)), 127); };
             if (lp) {
                   if (ctx.snd)
                         for (const auto& ip : *part->instruments())
@@ -2157,8 +2064,7 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                                     NPlayEvent ev = a.live >= 0 ? NPlayEvent(ME_PARAMETER, ip.second->channel(0)->channel(),
                                                                              LiveClips::LIVE_PARAM, a.live)
                                                   : param ? NPlayEvent(ME_PARAMETER, ip.second->channel(0)->channel(), a.param, 0)
-                                                          : NPlayEvent(ME_CONTROLLER, ip.second->channel(0)->channel(), a.cc,
-                                                                       a.cc == CTRL_EXPRESSION ? resting(value) : value);
+                                                          : NPlayEvent(ME_CONTROLLER, ip.second->channel(0)->channel(), a.cc, value);
                                     if (param)
                                           ev.setTuning(float(tv.second));
                                     ev.setOriginatingStaff(part->staff(0)->idx());
@@ -2169,20 +2075,13 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                   if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
                         continue;
                   controller = library->dynamicsCC;
-                  if (controller == CTRL_EXPRESSION)
-                        evenVolume = false;
-                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
                   for (const auto& ip : *part->instruments()) {
                         if (!libraryPlays(ip.second))
                               continue;
                         const int ch = ip.second->channel(0)->channel();
                         channels.push_back(ch);
-                        auto li = lp->instruments.find(ip.second);
-                        if (cal && evenSteps != SoundLib::EvenSteps::OFF && li != lp->instruments.end() && li->second)
-                              heldCurves[ch] = SoundLib::heldCurve(*cal, lp->patchesFor(li->second));
-                        // (even steps' volume: put() sends it with each level)
-                        if (controller != CTRL_EXPRESSION && !(evenVolume && heldCurves[ch] && heldCurves[ch]->expression.size() >= 2)) {
-                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, resting(qBound(0, library->expressionValue, 127)));
+                        if (controller != CTRL_EXPRESSION) {
+                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, library->expressionValue, 127));
                               ev.setOriginatingStaff(part->staff(0)->idx());
                               events->insert(std::make_pair(tick1 + tickOffset, ev));
                               }
@@ -2198,16 +2097,9 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
             auto put = [&](int tick, int level) {
                   const int value = Ms4::expressionLevel(level);
                   for (int ch : channels) {
-                        auto hc = heldCurves.find(ch);
-                        const SoundLib::Step step = SoundLib::evenStep(hc == heldCurves.end() ? nullptr : hc->second, evenSteps, value);
-                        if (evenVolume && step.expression >= 0) {
-                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, resting(step.expression));
-                              ev.setOriginatingStaff(part->staff(0)->idx());
-                              events->insert(events->lower_bound(tick + tickOffset), std::make_pair(tick + tickOffset, ev));
-                              }
                         if (lp && tick >= lp->dynamicsLaneFrom)
                               continue;               // (a dynamics lane plays it from there)
-                        NPlayEvent ev(ME_CONTROLLER, ch, controller, step.dynamics);
+                        NPlayEvent ev(ME_CONTROLLER, ch, controller, value);
                         ev.setOriginatingStaff(part->staff(0)->idx());
                         // a library's dynamics CC ahead of the notes at its tick (a long starting on a
                         // new dynamic would start at the old one); MS4's CC11 after them, as MS4 sends it
@@ -2329,12 +2221,18 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             return;
       const int utick2 = chunk.utick2();
 
-      // held notes started early by their onset (SSO: 10-60 ms for most longs, up to 440 for flautando or harmonics):
+      // notes started early by their onset (SSO: 10-60 ms for most longs, up to 440 for flautando or harmonics; shorts
+      // 3-113 ms):
       // a note on the same patch that ends between the new start and the written one ends at the new start (it
       // would end there anyway; on a Performance patch the overlap would play a legato transition instead of the
       // note's own attack), unless it started after the new start; the note's switch, sent at the written start,
       // and the controllers sent at the chord's tick (the dynamic it starts on) go with it, the controllers only
-      // when no other note of the channel starts in between
+      // when no other note of the channel starts in between.
+      // "It started after the new start" asks about the note off's own note (the note on carrying the same Note),
+      // not any note on of its key: an onset longer than the note before (SSO Violas Long (Rachm.) 105-185 ms
+      // against a 16th at 110 bpm, 136 ms) puts the next note of that key's early start inside this window, and
+      // taking that for the off's note kept the note sounding through the next one (the owner, 2026-10-09:
+      // Whence bar 7, violas 57 58 57 55, each 57 overlapping the 58 / 55 after it)
       for (const LibShift& s : libShifts) {
             std::vector<NPlayEvent> moved;
             for (auto i = events->upper_bound(s.on); i != events->end() && i->first <= std::max(s.written, s.chordTick);) {
@@ -2345,11 +2243,12 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                               move = ev.libraryPatch() == s.patch && i->first <= s.written;
                         else if (ev.type() == ME_NOTEON && ev.velo() == 0 && ev.libraryPatch() == s.patch && i->first <= s.written) {
                               move = true;
-                              for (auto j = events->lower_bound(s.on); j != i; ++j) {
+                              for (auto j = events->upper_bound(s.on); j != i; ++j) {
                                     const NPlayEvent& o = j->second;
                                     if (o.type() == ME_NOTEON && o.velo() > 0 && !o.librarySwitch() && o.channel() == ev.channel()
-                                        && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch() && j->first > s.on)
-                                          move = false;       // (a note that started after the new start)
+                                        && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch()
+                                        && (!ev.note() || o.note() == ev.note()))
+                                          move = false;       // (its note started after the new start)
                                     }
                               }
                         else if (ev.type() == ME_CONTROLLER && i->first == s.chordTick) {
@@ -2371,72 +2270,6 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             const auto at = events->lower_bound(s.on);
             for (const NPlayEvent& ev : moved)
                   events->insert(at, std::make_pair(s.on, ev));
-            }
-
-      // a legato transition started early: the note before (still sounding: its note-off is where it was written,
-      // overlapTicks after the written start) ends overlapTicks after the new start as played. In a fast run whose
-      // notes start early by more than a note's length, it would else still sound when the next one or two start
-      // (SSO's legato is monophonic: the key let go then)
-      // A slurred note played by the fast technique (its own attack): the note before ends where it starts, before it
-      for (const LibLegatoOff& l : libLegatoOffs) {
-            const int at = l.cut ? l.on : l.on + libOverlapTicks;
-            for (auto i = events->upper_bound(at); i != events->end(); ++i) {
-                  const NPlayEvent& ev = i->second;
-                  if (ev.type() == ME_NOTEON && ev.velo() == 0 && ev.note() == l.from && ev.channel() == l.channel
-                      && !ev.librarySwitch()) {
-                        NPlayEvent off(ev);
-                        events->erase(i);
-                        events->insert(events->lower_bound(at), std::make_pair(at, off));
-                        break;
-                        }
-                  }
-            }
-
-      // a phrase's new note on a legato patch ([legato] phraseGapMs): SSO plays a legato transition into a note whose
-      // note before on the patch ends less than ~40 ms before it (numbers-measured 2026-10-03: up to 20 ms always, 40 ms
-      // 80 of 336, from 60 ms never), so after a slur's end, a phrase mark or a detached note the new note would be
-      // slurred into. What sounds on its route (channel and patch) and started at least phraseGapMs before it ends
-      // phraseGapMs before it; the note before keeps at least [legato] keepMs as played. Not with slurEndOverlap (the
-      // owner asked for MS4's overlap there)
-      if (libPhraseGap > 0 && !libSlurEndOverlap) {
-            auto laneOf = [&](const Note* n) { auto l = libLanes.find(n); return l != libLanes.end() ? l->second : 0; };
-            for (const LibFreshAttack& a : libFreshAttacks) {
-                  const int at = score->utime2utick(score->utick2utime(a.on) - libPhraseGap);
-                  if (at >= a.on)
-                        continue;
-                  std::vector<std::pair<int, NPlayEvent>> moved;
-                  for (auto i = events->upper_bound(at); i != events->end() && i->first <= a.on + libOverlapTicks + 1;) {
-                        const NPlayEvent& ev = i->second;
-                        // (the same route: channel, patch and copy for other tunings; another copy is another instance)
-                        if (ev.type() != ME_NOTEON || ev.velo() != 0 || ev.librarySwitch() || ev.channel() != a.channel
-                            || ev.libraryPatch() != a.patch || laneOf(ev.note()) != laneOf(a.note)) {
-                              ++i;
-                              continue;
-                              }
-                        // its note-on: the latest one of that key on the route before the note-off
-                        int noteOn = -1;
-                        for (auto j = events->lower_bound(std::max(0, at - 64 * DIVISION)); j != i; ++j) {
-                              const NPlayEvent& o = j->second;
-                              if (o.type() == ME_NOTEON && o.velo() > 0 && !o.librarySwitch() && o.channel() == ev.channel()
-                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch())
-                                    noteOn = j->first;
-                              }
-                        if (noteOn < 0 || noteOn >= at) {         // (a note of the new chord, or one that started after)
-                              ++i;
-                              continue;
-                              }
-                        const int keep = score->utime2utick(score->utick2utime(noteOn) + libKeep);
-                        const int to = std::max(at, std::min(keep, i->first));
-                        if (to >= i->first) {
-                              ++i;
-                              continue;
-                              }
-                        moved.push_back({ to, ev });
-                        i = events->erase(i);
-                        }
-                  for (const auto& m : moved)
-                        events->insert(events->lower_bound(m.first), m);
-                  }
             }
 
       // a key struck again on the same patch while its last note still sounds (a legato overlap, a note
@@ -2570,8 +2403,11 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
 //---------------------------------------------------------
 //   libraryTrackDelays
 //    each library event of the chunk moved by its track's delay (trackdelays.h), in time: a note, its note-off and
-//    its switch by its technique's (the switch in force on the route when it starts), what else goes to the route
-//    (controllers, pitch bends, parameters) by its patch's; plus libDelayLead (libraryDelayLead), so nothing goes
+//    its switch by its technique's (the switch in force on the route when it starts), and so do the controllers and
+//    bends right before it at its tick (its track level's CC11, a dynamic: the owner, 2026-10-08, Long +6 dB / Spiccato
+//    -2 dB with the Long 300 ms late: the Long's CC11 came on time and raised the spiccato's ring by 8 dB where the Long
+//    was written, heard as the Long not moving); what else goes to the route (controllers, pitch bends, parameters) by
+//    its patch's; plus libDelayLead (libraryDelayLead), so nothing goes
 //    before the start. As the plain Live set
 //    plays it (a technique's MIDI track, the Kontakt track, the part's group, each delayed): an earlier technique's
 //    note can come before a controller sent for it, as in Live. Not for Live's clips (the set has it as the tracks'
@@ -2617,6 +2453,27 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
                   auto v = value.find(route);
                   return PlainLiveSet::techniqueName(li, v == value.end() ? -1 : v->second);
                   };
+            // a controller or bend right before a note-on at its tick (a track level's CC11, a dynamic, a lane's
+            // bend: libraryNoteLevels, libraryPitchBends) is that note's: the note's technique (else none)
+            auto noteTechnique = [&]() {
+                  auto v = value.find(route);
+                  int sw = v == value.end() ? -1 : v->second;
+                  for (auto j = std::next(i); j != events->end() && j->first == i->first; ++j) {
+                        const NPlayEvent& e = j->second;
+                        if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != route || e.libraryDelayed())
+                              continue;
+                        const bool eOn = e.type() == ME_NOTEON && e.velo() > 0;
+                        if (e.librarySwitch()) {
+                              if (keyswitch && eOn)
+                                    sw = e.pitch();
+                              else if (e.type() == ME_CONTROLLER)
+                                    sw = e.value();
+                              }
+                        else if (eOn)
+                              return PlainLiveSet::techniqueName(li, sw);
+                        }
+                  return QString();
+                  };
             double ms = 0.0;
             if (ev.librarySwitch() || on) {
                   ms = TrackDelays::ms(d->second, patch, technique());
@@ -2632,6 +2489,8 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
                   else
                         ms = TrackDelays::ms(d->second, patch, technique());
                   }
+            else if (ev.type() == ME_CONTROLLER || ev.type() == ME_PITCHBEND)
+                  ms = TrackDelays::ms(d->second, patch, noteTechnique());
             else
                   ms = TrackDelays::ms(d->second, patch);
             ms += libDelayLead;
@@ -2679,15 +2538,13 @@ void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
 
 //---------------------------------------------------------
 //   libraryNoteLevels
-//    a note's own level by a controller (libLevels: a marcato's level on a patch whose level is the dynamics
-//    controller, articulation.h MarcatoLevel; the legato level balance, libraryLegatoLevels). The controller is
+//    a note's own level by a controller (libLevels: a marcato's level, articulation.h MarcatoLevel; a track
+//    level, trackdelays.h). The controller is
 //    the route's (channel-wide), so the note's value goes right before its note-on, every value the route gets
 //    until right before its next note-on at a later tick is mapped too, and there (else at the chunk's end) the
 //    value in force goes again: the notes before and after keep theirs; what still rings of the note before at
 //    the note-on (its release) takes the note's level, and the note's own release the next note's. A chord's
-//    notes at one tick on one route: the first one's level. A level with atMs (a legato transition: from its
-//    arrival) starts that long after the note-on instead (no later than the route's next note-on): until then
-//    the note before keeps its own, as it still sounds. volumeDb is CC11 on top of what CC11 has (the value in
+//    notes at one tick on one route: the first one's level. volumeDb is CC11 on top of what CC11 has (the value in
 //    force, or the note's CC11 map): one CC11 schedule per route whatever sets it. The one place that schedules
 //    such per-note controller values (a merge point for other per-note levels)
 //---------------------------------------------------------
@@ -2747,8 +2604,6 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             };
       struct Active { const LibLevel* level; int tick; NPlayEvent like; };
       std::map<int, Active> active;                         // route -> the note level in force
-      struct Pending { int at; int route; const LibLevel* level; int tick; NPlayEvent like; };
-      std::vector<Pending> pending;                         // levels from a legato transition's arrival
       // at it (tick t, inserted before it): the level in force on the route goes (the values in force again), the
       // note's comes (nullptr: none)
       auto switchTo = [&](EventMap::iterator it, int t, int route, const LibLevel* level, int tick, const NPlayEvent& like) {
@@ -2766,20 +2621,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   }
             active[route] = { level, tick, like };
             };
-      auto flush = [&](EventMap::iterator it, int upTo, int route) {     // pending switches due by upTo (route -1: all)
-            for (auto p = pending.begin(); p != pending.end();) {
-                  if (p->at <= upTo && (route < 0 || p->route == route)) {
-                        const Pending q = *p;
-                        p = pending.erase(p);
-                        switchTo(it, std::min(q.at, upTo), q.route, q.level, q.tick, q.like);
-                        }
-                  else
-                        ++p;
-                  }
-            };
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
-            if (!pending.empty())
-                  flush(i, i->first, -1);
             NPlayEvent& ev = i->second;
             if (!ev.isExternal() || ev.librarySwitch())
                   continue;
@@ -2799,31 +2641,14 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             auto a = active.find(route);
             if (a != active.end() && i->first == a->second.tick)
                   continue;                               // (a chord's note: the first one's level)
-            bool chordNote = false;
-            for (const Pending& p : pending)
-                  chordNote |= p.route == route && p.tick == i->first;
-            if (chordNote)
-                  continue;
-            flush(i, i->first, route);                    // (the note before's arrival not reached: its level now)
             auto l = ev.note() ? libLevels.find(ev.note()) : libLevels.end();
             if (l == libLevels.end()) {
                   if (active.count(route))
                         switchTo(i, i->first, route, nullptr, i->first, ev);
                   continue;
                   }
-            const LibLevel& level = l->second;
-            if (level.atMs > 0) {
-                  const int at = score->utime2utick(score->utick2utime(i->first) + level.atMs / 1000.0);
-                  if (at > i->first) {
-                        pending.push_back({ at, route, &level, i->first, ev });
-                        continue;
-                        }
-                  }
-            switchTo(i, i->first, route, &level, i->first, ev);
+            switchTo(i, i->first, route, &l->second, i->first, ev);
             }
-      for (const Pending& p : pending)
-            if (p.at < utick2)
-                  switchTo(events->lower_bound(p.at), p.at, p.route, p.level, p.tick, p.like);
       for (const auto& a : active) {
             for (int controller : controllersOf(*a.second.level))
                   events->insert(events->lower_bound(utick2),
@@ -3211,9 +3036,9 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                   const int to = pc->second.dynamics.spannerStop(s);
                   if (to <= from)
                         continue;
-                  // a sound library part: a pedal change after the chord it comes with ([pedal] upAfterMs /
-                  // downAfterMs: one tick by default since 2026-10-06; a pianist's legato pedalling: up 40 ms
-                  // after the chord, down again at 90 ms). The owner, 2026-09-28: SSO's Grand Piano dropped
+                  // a sound library part: a pedal change after the chord it comes with: up one tick after it,
+                  // down the tick after (since 2026-10-06; the settings that delayed them by milliseconds went
+                  // 2026-10-07, unused). The owner, 2026-09-28: SSO's Grand Piano dropped
                   // about 1 chord in 8 at a pedal change (28 of 220, 1 of 2442 elsewhere, in a piano piece's
                   // export), the pedal lifted a tick before the chord and put down with it
                   int down = from;
@@ -3222,10 +3047,6 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                         auto isPedal = [&](const Spanner* o) {
                               return o != s && o->part() == s->part() && (o->isPedal() || o->isLetRing())
                                      && (!o->staff() || o->staff()->primaryStaff());
-                              };
-                        auto after = [&](int tick, double ms) {
-                              const double beatsPerSecond = score->tempomap()->tempo(tick);
-                              return std::max(1, int(std::lround(ms / 1000.0 * beatsPerSecond * DIVISION)));
                               };
                         const Spanner* prev = nullptr;
                         const Spanner* next = nullptr;
@@ -3239,12 +3060,9 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               if (oFrom > from && (oFrom == to + 1 || oFrom == to))
                                     next = o.second;
                               }
-                        // (down at least a tick after the previous pedal's up, which comes upAfterMs after this chord: both
-                        // 0 ms, up one tick after the chord, down the tick after)
+                        // (down the tick after the previous pedal's up, which comes a tick after this chord)
                         if (prev)
-                              down = from + std::max(std::min(after(from, Playback::value("pedal/downAfterMs", score)),
-                                                              std::max(1, int((to - from) * Playback::value("pedal/downMaxShare", score) / 100.0))),
-                                                     after(from, Playback::value("pedal/upAfterMs", score)) + 1);
+                              down = from + 2;
                         // the chord it goes up with: the next pedal's, else one of the part's starting where
                         // this one ends (up to 5 ticks on; the owner, 2026-09-28: a chord where a pedal ended,
                         // not a change, was missing too, the pedal up at its tick)
@@ -3261,8 +3079,8 @@ void MidiRenderer::renderSpanners(const Chunk& chunk, EventMap* events)
                               }
                         if (chordTick >= 0) {
                               const int nextLength = next ? pc->second.dynamics.spannerStop(next) - chordTick : 1 << 30;
-                              up = chordTick + std::min(after(chordTick, Playback::value("pedal/upAfterMs", score)),
-                                                        std::max(0, int(nextLength * Playback::value("pedal/upMaxShare", score) / 100.0)));
+                              // (a tick after it; with the chord, a next pedal shorter than 4 ticks)
+                              up = chordTick + std::min(1, std::max(0, nextLength / 4));
                               }
                         }
                   auto put = [&](int tick, int value) {
@@ -4629,24 +4447,13 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   ms4Active.insert(part);
 
       libChunkStart = chunk.utick1();
-      libLegatoEarly = library ? SoundLib::legatoEarly(score, *library) : 0;
       libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
-      libOverlapTicks = int(Playback::value("legato/overlapTicks", score));
-      libSlurEndOverlap = Playback::on("legato/slurEndOverlap", score);
-      libPhraseGap = Playback::value("legato/phraseGapMs", score) / 1000.0;
+      libOnsetByPitch = Playback::on("heldNotes/byPitch", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
-      libFastTechnique = Playback::on("legato/fastTechnique", score);
-      libFastFirsts = Playback::on("legato/fastFirsts", score);
-      libFastBelow = Playback::value("legato/fastBelowShare", score) / 100.0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
-      libLevelBalance = Playback::on("legato/levelBalance", score);
-      libLevelMax = Playback::value("legato/levelMaxDb", score);
-      libLevelHeadroom = std::min(libLevelMax, Playback::value("legato/levelHeadroomDb", score));
       libShifts.clear();
       libPlayedOn.clear();
-      libLegatoOffs.clear();
-      libFreshAttacks.clear();
       libLevels.clear();
 
       // create note & other events
@@ -4706,6 +4513,17 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 //   MidiRenderer::updateState
 //---------------------------------------------------------
 
+double MidiRenderer::textLevel(const Chord* chord) const
+      {
+      auto t = partTexts.find(chord->part());
+      return t == partTexts.end() ? 0.0 : t->second.at(chord->tick().ticks()).db;
+      }
+
+double MidiRenderer::levelOf(const Note* note) const
+      {
+      return MarcatoLevel::of(note->chord()) + textLevel(note->chord());
+      }
+
 void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
@@ -4737,6 +4555,9 @@ void MidiRenderer::updateState()
                         if (l.target == Automation::VELOCITY_TARGET && !l.points.empty())
                               velocityLanes[pl.first] = l;
             libParts.clear();
+            partTexts.clear();
+            for (Part* part : score->parts())
+                  partTexts[part].build(score, part);
             libRoutes.clear();
             libTrackDelays.clear();
             libTrackRoutes.clear();

@@ -1,7 +1,7 @@
 // The MuseScore Link patcher's MIDI path (MuseScoreLink.maxpat, made by make_device.py), run on a small
 // model of the Max objects it uses, as Cycling '74's reference describes them (midiparse, route, sel,
 // -, prepend, iter, midiformat, midiout). It checks the wiring: a carrier note becomes its controller,
-// its note-off is dropped, every other message passes unchanged. It can't show that Max behaves as
+// its note-off is dropped, every other message passes unchanged; on a track without a MuseScore clip (the carriers' gate) every note passes. It can't show that Max behaves as
 // modelled (LIVE.md › What to check). Also: the .amxd container's layout.
 // Run: node tools/live/test/test_patch.js
 
@@ -107,11 +107,13 @@ function receive(id, inlet, v) {
                   for (let k = Math.min(list.length, args.length) - 1; k >= 0; --k)
                         emit(id, k, list[k]);
                   return;
-            case "gate":
+            case "gate":                        // (gate n [initial]: inlet 0 picks the outlet, 1 … n; 0 closed)
+                  if (s.open === undefined)
+                        s.open = args.length > 1 ? args[1] : 0;
                   if (inlet === 0)
                         s.open = list[0];
                   else if (s.open)
-                        emit(id, 0, v);
+                        emit(id, s.open - 1, v);
                   return;
             case "loadmess":
                   emit(id, 0, args.length === 1 ? args[0] : args);
@@ -211,6 +213,11 @@ function play(bytes) {
       return midiOut.slice();
       }
 
+// the carriers' gate (MuseScoreLink.js › Carriers): the script's outlet 9 "gate 1" (a MuseScore clip on the track) or 2
+const v8box = patcher.boxes.find((b) => b.box.text === "v8").box.id;
+const carrierGate = patcher.boxes.find((b) => b.box.text === "gate 2 2").box.id;
+function carriers(on) { emit(v8box, 9, ["gate", on ? 1 : 2]); }
+
 let failures = 0;
 function test(name, fn) {
       try {
@@ -222,6 +229,29 @@ function test(name, fn) {
             console.log("FAIL " + name + "\n  " + (e.stack || e));
             }
       }
+
+test("on a track without a MuseScore clip (the gate as loaded, \"gate 2 2\", or the script's \"gate 2\") every note passes, keys 114-127 too", () => {
+      assert.ok((wires[carrierGate + ":0"] || []).some(([d]) => /^route 127 /.test(boxes[d].text)));
+      const pass = () => {
+            for (let key = 114; key <= 127; ++key) {
+                  assert.deepStrictEqual(play([0x90, key, 65]), [0x90, key, 65]);
+                  assert.deepStrictEqual(play([0x90, key, 1]), [0x90, key, 1]);
+                  assert.deepStrictEqual(play([0x90, key, 127]), [0x90, key, 127]);
+                  assert.deepStrictEqual(play([0x80, key, 64]), [0x90, key, 0]);       // (its note-off kept, as note-on 0)
+                  assert.deepStrictEqual(play([0x93, key, 90]), [0x93, key, 90]);     // (on its channel)
+                  }
+            assert.deepStrictEqual(play([0x90, 60, 90]), [0x90, 60, 90]);
+            assert.deepStrictEqual(play([0xb0, 7, 100]), [0xb0, 7, 100]);
+            assert.deepStrictEqual(play([0xe0, 0, 80]), [0xe0, 0, 80]);
+            };
+      pass();                                    // (as loaded: the model's gate takes its initial outlet from "gate 2 2")
+      carriers(true);                            // a MuseScore clip on the track: converted
+      assert.deepStrictEqual(play([0x90, 126, 65]), [0xb0, 1, 65]);
+      assert.deepStrictEqual(play([0x80, 126, 0]), []);
+      carriers(false);                           // gone: through again
+      pass();
+      carriers(true);                            // (the tests below: a track with MuseScore's clips)
+      });
 
 test("notes pass unchanged", () => {
       assert.deepStrictEqual(play([0x90, 60, 90]), [0x90, 60, 90]);

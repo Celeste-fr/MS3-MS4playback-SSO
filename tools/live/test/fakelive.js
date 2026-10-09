@@ -336,7 +336,7 @@ function loadDevice(live, shared, deviceId) {
             messnamed(name) {
                   const args = Array.prototype.slice.call(arguments, 1);
                   live.messages = (live.messages || []).concat([[name].concat(args)]);
-                  if (name === "msl_params" || name === "msl_keep" || name === "msl_vel")
+                  if (name === "msl_params" || name === "msl_keep" || name === "msl_vel" || name === "msl_carriers")
                         for (const d of live.loaded)
                               d.message(name, args);
                   },

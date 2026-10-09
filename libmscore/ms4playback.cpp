@@ -540,8 +540,10 @@ NoteResult note(Family fam, const std::vector<ArtRef>& arts, int D, bool snd)
       if (snd) {
             const bool plain = arts.size() == 1 && arts[0].art == Art::Standard;
             const int base = plain ? r.velocity : note(fam, { ArtRef { Art::Standard, false } }, D, true).velocity;
-            if (base > 0)
-                  r.levelVelocity = qBound(1, int(std::lround(r.levelVelocity * double(r.velocity) / base)), 127);
+            if (base > 0) {
+                  r.share = double(r.velocity) / base;
+                  r.levelVelocity = qBound(1, int(std::lround(r.levelVelocity * r.share)), 127);
+                  }
             }
       for (const P& q : pats)
             r.arts.push_back(q.art);

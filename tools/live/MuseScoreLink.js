@@ -4,7 +4,9 @@
 // One copy goes on each MIDI track that plays a library part, BEFORE the instrument (Kontakt). In
 // every copy the patcher (not this script) turns the carrier notes of MuseScore's clips (keys 114-127: controllers, pitch bend)
 // into their MIDI controllers, in Max's scheduler, sample-timed with the notes; this script is not in
-// that path. One copy (the first loaded; another takes over when it goes) is the hub:
+// that path. It does so only on a track holding a MuseScore clip (protocol 8; below, "Carriers"): elsewhere (the plain
+// set's technique tracks, any other track) every note, keys 114-127 too, passes unchanged.
+// One copy (the first loaded; another takes over when it goes) is the hub:
 //   - it listens to MuseScore (OSC over UDP on localhost, port 9001 by default; answers on port + 1);
 //   - it writes each part's clip on its track: found by MIDI From = the part's MuseScore port and
 //     channel, else (a part's main patch) by track name = part name; one arrangement clip from beat
@@ -86,6 +88,17 @@
 //     id, type and info); /ms/probecall id:i path:s fn:s args… -> /live/probe id text (call, or "get" /
 //     "set" a property).
 //
+// Carriers (protocol 8): the patcher's [gate 2 2] in front of the carrier keys' [route]: outlet 1 the carriers' route,
+//   outlet 2 (the patcher's initial state) every note straight on to the velocity shaper, unchanged. The copy sets it
+//   (outlet 9 "gate 1" / "gate 2") from its own track: a clip named "MuseScore: …" (liveclips.cpp clipName: only
+//   MuseScore's clips carry carriers; the plain set's clips are named after their technique) in the arrangement or in a
+//   session slot -> 1, else 2. Checked when the copy loads, once a second (the clips' ids each time, their names when
+//   the ids change and every CARRIER_NAMES_EVERY seconds: a rename), and at once when the hub makes or deletes a clip on
+//   the track (messnamed("msl_carriers", track) -> every copy's [receive msl_carriers] -> deferlow). The whole track
+//   counts: another clip on a track with a MuseScore clip has its keys 114-127 converted too (the hub makes no clip
+//   over a track's other clips). A note on 114-127 sounding while the gate goes to 1 (a MuseScore clip made on its
+//   track just then) loses its note-off, as the carriers' are dropped.
+//
 // Plain ECMAScript 5 so it runs in [js] and [v8] alike, and in the Node tests (tools/live/test).
 
 autowatch = 0;
@@ -95,12 +108,15 @@ outlets = 10;     // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2:
                   // 6: the lanes to keep in the Live Set ([pattr Lanes]),
                   // 7: "set msl_m<track id>" to the [receive] that plays MuseScore's notes for a clip tab,
                   // 8: OSC to the MuseScore Envelopes script ([udpsend 127.0.0.1 9005]: what is kept in the set),
-                  // 9: the velocity shaper ("bias <ticks>", "log 0/1")
+                  // 9: the velocity shaper ("bias <ticks>", "log 0/1") and the carriers' gate ("gate 1/2": Carriers)
 
-var PROTOCOL = 7;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+var PROTOCOL = 8;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
                                         // 5: the tracks' parameters and the clips' places (automation lanes of any track);
                                         // 6: an arrangement clip's place in the song, Live's tempo reported as it changes;
-                                        // 7: velocity curves of clip tabs, kept through the MuseScore Envelopes script
+                                        // 7: velocity curves of clip tabs, kept through the MuseScore Envelopes script;
+                                        // 8: carriers converted only on a track holding a MuseScore clip (Carriers)
+var CLIP_PREFIX = "MuseScore: ";        // liveclips.cpp clipName
+var CARRIER_NAMES_EVERY = 5;            // s: the clips' names read again (a rename) without a change of their ids
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
 var BATCH = 500;                        // notes per add_new_notes call
 // (measured, numbers-measured 2026-10-03, Live 12.4.6: while Live froze or duplicated Kontakt + SSO tracks the hub's 1 s
@@ -262,6 +278,7 @@ function bang() {
       velTask = new Task(velFill, this);
       velObserve();
       velChanged();
+      carriersCheck(true);
       }
 
 function beat() {
@@ -284,6 +301,7 @@ function beat() {
             elect();
       paramsCheck();
       velFill();
+      carriersCheck(false);
       }
 
 function elect() {
@@ -403,6 +421,11 @@ function anything() {
       if (messagename === "msl_vel") {                        // (a velocity curve on a track changed)
             if (num(a[0]) === me.track && me.track)
                   velChanged();
+            return;
+            }
+      if (messagename === "msl_carriers") {                   // (the hub made or deleted a clip on a track)
+            if (num(a[0]) === me.track && me.track)
+                  carriersCheck(true);
             return;
             }
       if (messagename === "vlog")                             // (the shaper's note-ons, while the "vlog" probe asks)
@@ -823,6 +846,7 @@ function writeClip(t) {
                   }
             ours = { id: id, api: new LiveAPI("id " + id) };
             ours.api.set("name", t.clip);
+            carriersChanged(num(tr.id));
             }
       var c = ours.api;
       c.set("muted", 0);
@@ -846,6 +870,7 @@ function clearClip(w) {
             if (clips[i].name === w.clip)
                   found.api.call("delete_clip", "id", clips[i].id);
       delete placed[w.key];
+      carriersChanged(num(found.api.id));
       }
 
 function applyMode() {
@@ -2745,6 +2770,63 @@ function probeCall(id, path, fn, args) {
             }
       }
 
+//---------------------------------------------------------
+//   Carriers: converted only on a track holding a MuseScore clip
+//---------------------------------------------------------
+
+var carrierGate = 0;          // what the gate was last set to (0: not yet)
+var carrierSig = "";          // the track's clips' ids at the last reading of their names
+var carrierNamed = 0;         // when their names were read
+var carrierOurs = false;
+
+// the hub made or deleted a clip on the track: its copies look again at once
+function carriersChanged(track) {
+      if (typeof messnamed === "function")
+            messnamed("msl_carriers", track);
+      }
+
+// the clips on this copy's track: arrangement and session, by id
+function carrierClipIds(tr) {
+      var l = ids(tr.get("arrangement_clips"));
+      var slots = ids(tr.get("clip_slots"));
+      for (var i = 0; i < slots.length; ++i) {
+            var c = ids(new LiveAPI("id " + slots[i]).get("clip"));
+            if (c.length)
+                  l.push(c[0]);
+            }
+      return l;
+      }
+
+function carriersCheck(force) {
+      if (typeof LiveAPI === "undefined" || !me.track)
+            return;
+      var ours = carrierOurs;
+      try {
+            var tr = new LiveAPI("id " + me.track);
+            if (!(num(tr.id) > 0))
+                  return;
+            var l = carrierClipIds(tr);
+            var sig = l.join(",");
+            if (force || sig !== carrierSig || now() - carrierNamed >= CARRIER_NAMES_EVERY * 1000) {
+                  ours = false;
+                  for (var i = 0; i < l.length && !ours; ++i)
+                        if (str(new LiveAPI("id " + l[i]).get("name")).indexOf(CLIP_PREFIX) === 0)
+                              ours = true;
+                  carrierSig = sig;
+                  carrierNamed = now();
+                  }
+            }
+      catch (e) {
+            return;
+            }
+      carrierOurs = ours;
+      var gate = ours ? 1 : 2;
+      if (gate !== carrierGate || force) {
+            carrierGate = gate;
+            outlet(9, "gate", gate);
+            }
+      }
+
 // (Node tests)
 if (typeof module !== "undefined")
       module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,
@@ -2756,10 +2838,12 @@ if (typeof module !== "undefined")
                          velShape: velShape, velCode: velCode, velValueAt: velValueAt, velClip: velClip,
                          velClipAtoms: velClipAtoms, velTrack: velTrack, velTrackAtoms: velTrackAtoms, velFill: velFill,
                          velClipTime: velClipTime, velGrid: velGrid, chunkAtoms: chunkAtoms, beat: beat,
+                         carriersCheck: carriersCheck,
                          VEL_RING: VEL_RING, KEEP_PACKET: KEEP_PACKET,
                          decodeSaved: decodeSaved, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
                                         edits: edits, slots: slots, bases: bases, waiting: waiting, prefix: prefix,
                                         pendingParams: pendingParams, saved: saved, keptByScript: keptByScript,
-                                        velRec: velRec, velReady: velReady, velAsks: velAsks };
+                                        velRec: velRec, velReady: velReady, velAsks: velAsks,
+                                        carrierGate: carrierGate };
                                } };

@@ -88,6 +88,7 @@ class SoundLibraryHost : public QObject {
       // the last sync: the Mixer's values go to the slots (applyMixer). Only compared with the score's
       // parts before use (a part deleted since isn't read)
       std::array<const Part*, 64> _slotParts {};
+      std::array<QString, 64> _slotPatches;         // (and its patch: a track level's headroom, TrackDelays::patchGain)
       const MasterScore* _slotScore { nullptr };
       // instances set aside by syncSome: a patch the score being loaded doesn't play in their slot
 #ifdef USE_VST3
@@ -283,7 +284,7 @@ class SoundLibraryDialog : public QDialog {
 //---------------------------------------------------------
 //   SoundLibraryOptions
 //    Mixer › Advanced Options…: the score's sound library settings (the copies for other tunings,
-//    the short notes' balance per family) and the library's own (its folder, the background
+//    held notes early by their onset) and the library's own (its folder, the background
 //    measurements); the owner, 2026-09-28: "put the useful configs in there … make all these
 //    configs per score"
 //---------------------------------------------------------
@@ -293,13 +294,6 @@ class SoundLibraryOptions : public QDialog {
 
       std::shared_ptr<const SoundLib::Library> _library;
       QPointer<MasterScore> _score;
-      QDoubleSpinBox* _tolerance { nullptr };
-      QDoubleSpinBox* _tail { nullptr };
-      QSpinBox* _maxLanes { nullptr };
-      QSpinBox* _legatoEarly { nullptr };
-      QSpinBox* _onsetEarly { nullptr };
-      std::map<QString, QDoubleSpinBox*> _balance;
-      QComboBox* _evenSteps { nullptr };
       QLabel* _folder { nullptr };
       QLabel* _liveSet { nullptr };
       QCheckBox* _liveAuto { nullptr };
@@ -308,13 +302,7 @@ class SoundLibraryOptions : public QDialog {
       QLabel* _liveClipsStatus { nullptr };
 
       void load();
-      void setLaneSettings(bool libraryDefaults);
-      void setBalance(bool libraryDefaults);
-      // the owner's ear: family's short notes setting db sounds right (dynamics.json heardBalanceDb); forget: drop it
-      void setHeard(const QString& family, double db, bool forget);
-      void exportEvenSteps();
       void setMetaTag(const char* tag, const QString& value);
-      void startBackground(const QStringList& args, const QString& what);
 
    public:
       SoundLibraryOptions(MasterScore* score, QWidget* parent = nullptr);

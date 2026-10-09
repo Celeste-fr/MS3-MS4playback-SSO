@@ -33,6 +33,7 @@
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/synthesizerstate.h"
+#include "libmscore/trackdelays.h"
 #include "liveintegration.h"
 #include "livesetexport.h"
 #include "soundlibraryhost.h"
@@ -270,9 +271,11 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                   }
             for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
                   vst->setExportMix(k, 100, 64, false);
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
             for (const SoundLib::Route& rt : routes) {
                   const SoundLib::PartMix m = SoundLib::partMix(rt.part, false);
-                  vst->setExportMix(rt.port * 16 + rt.channel, m.volume, m.pan, m.muted);
+                  const double gain = TrackDelays::patchGain(library, TrackDelays::of(rt.part, delays), rt.instrument->name);
+                  vst->setExportMix(rt.port * 16 + rt.channel, m.volume, m.pan, m.muted, float(gain));
                   }
             const qint64 last = qint64((score->utick2utime(events.rbegin()->first)) * rate);
             total = last + 3 * rate;

@@ -16,7 +16,10 @@ then a directory "dlst" > "dire" of big-endian tag-length-value entries (type "J
 sz32 <JSON size + 2>, of32 16, vers 0, flag 0x11, mdat 0), each length counting its own 8-byte header.
 
 The MIDI path is plain Max objects in the scheduler thread (the script is never in it):
-  midiin -> midiparse; notes -> route 127 … 116 (the carrier keys, liveclips.h's table):
+  midiin -> midiparse; notes -> gate 2 2 (the carriers' gate, MuseScoreLink.js › Carriers: the script's outlet 9
+    "gate 1" on a track holding a MuseScore clip, "gate 2", the initial state, elsewhere): outlet 2 every note on
+    unchanged (through the velocity shaper, below), keys 114-127 too; outlet 1 -> route 127 … 116 (the carrier keys,
+    liveclips.h's table):
     a carrier's note-on (velocity v > 0) -> sel 0 -> the value -> prepend 176 <cc> -> iter -> midiout
     (a control change on channel 1), its note-off dropped. The value (liveclips.h carrierValue): UACC (key 127)
     "- 1" (v - 1); the others "expr $i1*($i1>1)" (v, and 1 as 0: 127 exact);
@@ -25,7 +28,7 @@ The MIDI path is plain Max objects in the scheduler thread (the script is never 
     inlet 1: lower), then a bang to its left inlet:
     the whole bend (status 224 = pitch bend on channel 1, lower, upper) -> iter -> midiout. Either half sends it
     with the other's last value, so a pair chased in any order ends right; note-offs dropped;
-    any other note -> midiformat (with the rest of midiparse's messages and its channel) -> midiout.
+    any other note -> the velocity shaper -> midiformat (with the rest of midiparse's messages and its channel) -> midiout.
   A clip tab playing through its track: the hub's udpreceive -> route /ms/midi (msl_in) -> forward to
     "msl_m<track id>" -> each copy's receive (named by the script) -> iter -> midiout; the rest -> deferlow -> the script.
 
@@ -106,7 +109,8 @@ class Patch:
             "boxanimatetime": 200, "enablehscroll": 1, "enablevscroll": 1,
             "devicewidth": DEVICE_WIDTH,
             "description": "MuseScore Link: the score's parts as clips, kept up to date by MuseScore; "
-                           "turns their controller notes into MIDI controllers. Put it before the instrument.",
+                           "turns their controller notes into MIDI controllers (only on a track holding a MuseScore "
+                           "clip). Put it before the instrument.",
             "digest": "", "tags": "", "style": "", "subpatcher_template": "",
             "boxes": self.boxes, "lines": self.lines,
             "dependency_cache": [], "autosave": 0,
@@ -121,6 +125,8 @@ def build(script):
     keys = " ".join(str(127 - i) for i in range(len(CARRIER_CCS))) + f" {BEND_MSB} {BEND_LSB}"
     n = len(CARRIER_CCS)
     route = p.obj(f"route {keys}", 1, n + 3, 30, 110, w=400)
+    # the carriers' gate (MuseScoreLink.js › Carriers): outlet 1 the route above, outlet 2 (initially open) past it
+    cgate = p.obj("gate 2 2", 2, 2, 30, 90, outlettype=["", ""])
     fmt = p.obj("midiformat", 7, 2, 30, 330, outlettype=["int", ""])
     it = p.obj("iter", 1, 1, 420, 330, outlettype=[""])
     midiout = p.obj("midiout", 1, 0, 30, 370)
@@ -128,7 +134,8 @@ def build(script):
     def value(x):                          # a continuous controller's or a bend half's value: v, 1 as 0
         return p.obj("expr $i1*($i1>1)", 1, 1, x, 200, w=110, outlettype=[""])
     p.connect(midiin, 0, parse, 0)
-    p.connect(parse, 0, route, 0)
+    p.connect(parse, 0, cgate, 1)
+    p.connect(cgate, 0, route, 0)
     for i, cc in enumerate(CARRIER_CCS):
         x = 30 + i * 60
         sel = p.obj("sel 0", 2, 2, x, 160, outlettype=["bang", ""])
@@ -236,6 +243,7 @@ def build(script):
     vunp = p.obj("unpack 0 0", 1, 2, 30, 270, outlettype=["int", "int"])
     vpack = p.obj("pack 0 0", 2, 1, 30, 300, outlettype=[""])
     p.connect(route, n + 2, shp, 0)
+    p.connect(cgate, 1, shp, 0)
     p.connect(shp, 2, vexpr, 1)
     p.connect(phasor, 0, vsnap, 0)
     p.connect(shp, 1, vsnap, 0)
@@ -260,9 +268,10 @@ def build(script):
         pre_d = p.obj(f"prepend {word}", 1, 1, 820 + (k - 1) * 90, 90)
         p.connect(dsp, k, pre_d, 0)
         p.connect(pre_d, 0, js, 0)
-    vroute = p.obj("route bias log", 1, 3, 820, 120, outlettype=["", "", ""])
+    vroute = p.obj("route bias log gate", 1, 4, 820, 120, outlettype=["", "", "", ""])
     p.connect(js, 9, vroute, 0)
     p.connect(vroute, 0, vidx, 1)
+    p.connect(vroute, 2, cgate, 0)          # ("gate 1" / "gate 2": the carriers' gate)
     vlog = p.obj("pack 0 0. 0 0", 4, 1, 30, 330, outlettype=[""])
     p.connect(vunp, 0, vlog, 0)
     p.connect(vsnap, 0, vlog, 1)
@@ -279,10 +288,11 @@ def build(script):
     # outlet 8: what is kept in the set, to the MuseScore Envelopes script; its word that a track's values came, and a
     # velocity curve changed (the hub's messnamed), through deferlow
     p.connect(js, 8, p.obj("udpsend 127.0.0.1 9005", 1, 0, 650, 560), 0)
-    for name in ("msl_keep", "msl_vel"):
-        r = p.obj(f"receive {name}", 0, 1, 650, 590 if name == "msl_keep" else 650, outlettype=[""])
-        d = p.obj("deferlow", 1, 1, 650, 615 if name == "msl_keep" else 675)
-        pr = p.obj(f"prepend {name}", 1, 1, 750, 615 if name == "msl_keep" else 675)
+    # (and msl_carriers: the hub made or deleted a clip on a track, MuseScoreLink.js › Carriers)
+    for k, name in enumerate(("msl_keep", "msl_vel", "msl_carriers")):
+        r = p.obj(f"receive {name}", 0, 1, 650, 590 + 60 * k, outlettype=[""])
+        d = p.obj("deferlow", 1, 1, 650, 615 + 60 * k)
+        pr = p.obj(f"prepend {name}", 1, 1, 750, 615 + 60 * k)
         p.connect(r, 0, d, 0)
         p.connect(d, 0, pr, 0)
         p.connect(pr, 0, js, 0)

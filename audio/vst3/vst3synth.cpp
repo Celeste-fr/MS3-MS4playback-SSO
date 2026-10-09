@@ -340,34 +340,34 @@ void Vst3Synth::panGains(int pan, float* left, float* right)
             *left = 0.f;
       }
 
-static void mixTargets(int volume, int pan, bool muted, float* left, float* right)
+static void mixTargets(int volume, int pan, bool muted, float gain, float* left, float* right)
       {
       if (muted) {
             *left = *right = 0.f;
             return;
             }
-      const float g = Vst3Synth::volumeGain(volume);
+      const float g = Vst3Synth::volumeGain(volume) * gain;
       Vst3Synth::panGains(pan, left, right);
       *left *= g;
       *right *= g;
       }
 
-void Vst3Synth::setMix(int slot, int volume, int pan, bool muted)
+void Vst3Synth::setMix(int slot, int volume, int pan, bool muted, float gain)
       {
       if (slot < 0 || slot >= MAX_SLOTS)
             return;
       float l, r;
-      mixTargets(volume, pan, muted, &l, &r);
+      mixTargets(volume, pan, muted, gain, &l, &r);
       _mix[size_t(slot)].left = l;
       _mix[size_t(slot)].right = r;
       }
 
-void Vst3Synth::setExportMix(int slot, int volume, int pan, bool muted)
+void Vst3Synth::setExportMix(int slot, int volume, int pan, bool muted, float gain)
       {
       if (slot < 0 || slot >= MAX_SLOTS)
             return;
       float l, r;
-      mixTargets(volume, pan, muted, &l, &r);
+      mixTargets(volume, pan, muted, gain, &l, &r);
       _exportMix[size_t(slot)].left = l;
       _exportMix[size_t(slot)].right = r;
       }

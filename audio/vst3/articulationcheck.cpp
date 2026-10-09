@@ -802,8 +802,8 @@ std::vector<ArticulationCheck::DynamicsResult> ArticulationCheck::dynamics(Vst3P
                         r.attack.push_back({ x, ak.salienceDb });
                         r.riseMs.push_back({ x, ak.riseMs });
                         }
-                  // the held note on the controller: the expression CC's volume (even dynamic steps,
-                  // SoundLib::evenStep), at mf; 127 is the curve's 80
+                  // the held note on the controller: the expression CC's volume (SoundLib::heldCurve,
+                  // the marcato level), at mf; 127 is the curve's 80
                   if (full[size_t(i)] && by != "velocity" && settings.expressionCC >= 0) {
                         for (int x : EXPRESSION_POINTS) {
                               double db;

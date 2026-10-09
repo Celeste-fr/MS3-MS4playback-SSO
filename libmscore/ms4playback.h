@@ -67,6 +67,8 @@ struct NoteResult {
       int velocity { 64 };                // 7-bit note-on velocity, as FluidSequencer sends it
       int levelVelocity { 64 };           // the note's dynamic level as a velocity on the dynamics CC's scale
                                           // (expressionLevel), its articulations' share as in velocity
+      double share { 1.0 };               // velocity over a plain (Standard) note's at the same level (snd; else 1):
+                                          // the articulations' MS4 offset, 40 log10(share) dB by SoundFont 2's law
       std::vector<Art> arts;              // the resolved types, MS4 enum order
       bool bend { false };                // FluidSequencer plays a pitch curve (BEND_SUPPORTED_TYPES)
       int pitchCurve[11] = {};            // at 0, 10 … 100 % of the note; 50 = one semitone

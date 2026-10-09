@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fits [legato] fastShare / fastFullMs (MidiRenderer::libFastDelay: after a note L long a legato transition's delay is
 the map's legatoDelay times min(1, share + (1 - share) * L / full)) to renders of make_fastrun_scores.py's scores with
-legato early at 0 (metaTag soundLibraryLegatoEarly 0: every note-on at its written time, so a transition's heard
+legato transitions on time (every note-on at its written time, so a transition's heard
 arrival after its written time is SSO's own delay). Written for numbers-measured (2026-10-03); the fit behind the
 earlier 65 % / 800 ms (2026-10-02) left no script or data, so these replace them.
 

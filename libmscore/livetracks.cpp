@@ -20,6 +20,7 @@
 #include "plainliveset.h"
 #include "score.h"
 #include "soundlibrary.h"
+#include "trackdelays.h"
 #include "undo.h"
 
 namespace Ms {
@@ -363,6 +364,8 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
       std::map<size_t, LiveSet::Bound> bound;
       QStringList notImported;
       const QList<Part*> scoreParts = score ? score->parts() : QList<Part*>();
+      const std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      const std::map<const Part*, TrackDelays::Delays> delays = score ? TrackDelays::read(score) : std::map<const Part*, TrackDelays::Delays>();
       // the parts with one Kontakt track: its mixer is the part's Mixer
       std::map<int, int> kontakts;
       for (const auto& w : data.written)
@@ -384,11 +387,13 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
             State s;
             // the static mixer: what MuseScore writes (a Kontakt: the part's Mixer; others Live's defaults)
             if (t.hasMixer) {
-                  double volume = 1, pan = 0;
+                  double volume = 1, pan = 0, gain = 1;
                   bool active = true;
                   if (kontakt && part) {
                         const SoundLib::PartMix pm = SoundLib::partMix(part, false);
-                        volume = LiveSetWriter::mixGain(pm.volume);
+                        // (its Volume carries the patch's track-level headroom too: not the Mixer's)
+                        gain = library ? TrackDelays::patchGain(*library, TrackDelays::of(part, delays), w.delayKey) : 1.0;
+                        volume = LiveSetWriter::kontaktVolume(pm.volume, gain);
                         pan = LiveSetWriter::mixPan(pm.pan);
                         active = !pm.muted;
                         }
@@ -398,7 +403,7 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   if (mainKontakt && part && kontakts[w.part] == 1) {
                         Mix m;
                         if (volumeChanged)
-                              m.volume = LiveSetWriter::mixVolume(t.volume);
+                              m.volume = LiveSetWriter::mixVolume(t.volume / gain);
                         if (panChanged)
                               m.pan = LiveSetWriter::mixPanValue(t.pan);
                         if (activeChanged)

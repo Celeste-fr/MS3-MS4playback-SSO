@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "livesetwriter.h"
+#include "trackdelays.h"
 
 #include <algorithm>
 #include <initializer_list>
@@ -987,6 +988,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
       if (!score)
             return out;
       std::map<const Part*, int> colorOf;
+      const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
       for (const SoundLib::Route& r : SoundLib::routes(score, library)) {
             Track t;
             t.part = r.part ? r.part->partName() : QString();
@@ -1006,7 +1008,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             t.lane = r.lane;
             // the Mixer as MuseScore's host plays the part (mute, not solo: as MuseScore's export)
             const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
-            t.volume = mixGain(m.volume);
+            t.volume = kontaktVolume(m.volume, TrackDelays::patchGain(library, TrackDelays::of(r.part, delays), t.patch));
             t.pan = mixPan(m.pan);
             t.active = !m.muted;
             out.push_back(t);
@@ -1041,6 +1043,11 @@ double mixGain(int volume)
       {
       const double v = std::max(0, std::min(127, volume)) / 100.0;
       return std::max(v * v, 0.0003162277571);
+      }
+
+double kontaktVolume(int volume, double patchGain)
+      {
+      return std::min(MAX_VOLUME, mixGain(volume) * patchGain);
       }
 
 double mixPan(int pan)

@@ -30,59 +30,32 @@ namespace Playback {
 static const double MAP = std::numeric_limits<double>::quiet_NaN();
 
 // every adjustment this fork makes beyond MuseScore 4's playback that is a number (docs/PLAYBACK_SETTINGS.md
-// has where each one acts and how it was measured). The automatic timing and level adjustments (early starts,
-// phrase gaps, pedal timing, calibrated short velocities) are off by default since 2026-10-06 (the owner: notes
-// play as written, timing and levels are adjusted in Live); their measured values stay one setting away
+// has where each one acts and how it was measured). The automatic timing and level adjustments are off since
+// 2026-10-06 (the owner: notes play as written, timing and levels are adjusted in Live); the settings no longer in
+// use went on 2026-10-07 (the owner: remove settings not in use; their keys are ignored: REMOVED below)
 static const std::vector<Definition> DEFINITIONS = {
       // [legato]
-      // (measured, numbers-measured 2026-10-03: SSO's 43 Performance patches play a legato transition whenever the note
-      // before ends at most 20 ms before the next note-on, never at 40 ms or more, whatever the overlap; 0 is the smallest
-      // value with every transition: docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
-      { "legato/overlapTicks", 0, 0, 480, "ticks (480 a quarter)",
-        "a slurred note lasts this long into the next one (SSO joins notes up to 20 ms apart: 0 is enough for it)", true },
-      { "legato/slurEndOverlap", 0, 0, 1, "on/off",
-        "1: a slur's last note overlaps the note after it too (MuseScore 4); 0: it ends on time, so the next note gets its own attack", true },
-      // (measured, numbers-measured 2026-10-03, the same sweep as overlapTicks: SSO joins two notes into a legato transition
-      // up to a 20 ms gap, does so for 80 of 336 at 40 ms and for none from 60 ms; 60 is the smallest gap with no
-      // transition. The owner, 2026-10-04: phrases separate. Only where SSO would join: a note on a legato patch that is
-      // no transition, after a note on the same route)
-      { "legato/phraseGapMs", 0, 0, 500, "ms",
-        "a note on a legato patch that is no legato transition (a slur's end, a phrase mark, a detached note) starts at least this long after the note before on its patch ends, so it gets its own attack (0: off; measured: 60)", true },
-      { "legato/early", MAP, 0, 200, "%",
-        "a legato transition starts this share of its patch's measured legato delay early (default: the map's <Legato early>, SSO 100)", true },
       // (keepMs chosen by a sweep, numbers-measured 2026-10-03: 0 / 20 / 40 / 60 / 80 / 120 ms on make_fastrun_scores.py's
       // scores, MuseScore 2bc46bc on the Windows VM, 3072 transitions each: median |arrival| 31 / 31 / 31 / 34 / 45 / 94
       // ms, 40 the fewest without an arrival (410 against 424-432); tools/playbackverify/choose_keep_ms.py)
       { "legato/keepMs", 40, 0, 1000, "ms",
-        "a note before a transition (or before a held note started early) on the same patch keeps at least this much of its length as played", true },
+        "a note before a held note started early on the same patch keeps at least this much of its length as played", true },
       // (fastShare / fastFullMs fitted, numbers-measured 2026-10-03: tools/playbackverify/fit_fast_share.py on 2580
       // transitions of 12 Performance patches in fast runs at 100-200 bpm, least squares over part x tempo medians;
       // docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
       { "legato/fastShare", 50, 0, 100, "%",
-        "after a very short note a transition starts early by this share of its measured delay (SSO is quicker in fast passages) ...", true },
+        "after a very short note a transition arrives after this share of its measured delay (SSO is quicker in fast passages; "
+        "times a bent transition's glide, tuning/bendAtArrival) ...", true },
       { "legato/fastFullMs", 380, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
-      { "legato/fastTechnique", 0, 0, 1, "on/off",
-        "1: a slurred note after a note too short for the transition into it plays its own attack (early as the transition would be) instead of a legato transition", true },
-      { "legato/fastFirsts", 0, 0, 1, "on/off",
-        "1: a slur's first note right after a note too short for a transition (same patch, no rest) starts as early as that transition would", true },
-      { "legato/fastBelowShare", 100, 0, 400, "%",
-        "too short: shorter than this share of the transition's delay (the patch's measured delay, after fastShare / fastFullMs)", true },
-      // (varispeed only; 30 has no source: needs a sweep on the VM. A pitch-bend glide takes one cent a tick: libraryPitchBends)
-      { "legato/levelBalance", 0, 0, 1, "on/off",
-        "1: a legato transition plays at its pitch's level (the map's measured legatoLevel: SSO's transitions alone arrive 2-6 dB louder or softer), by CC11 from its arrival; off: in runs the notes around a transition move its level as much (measured), so it didn't even them", true },
-      // (the largest measured correction: Cor Anglais - Performance, +3 settled from G4, 9.4 dB loud, of 30288 measured
-      // transitions; sso_legato_levels.json, tools/soundlibraries/derived_numbers.py levelmax)
-      { "legato/levelMaxDb", 9.4, 0, 12, "dB",
-        "the level balance turns a transition down by at most this much (and up by at most levelHeadroomDb)", true },
-      { "legato/levelHeadroomDb", 0, 0, 12, "dB",
-        "a part with measured transition levels rests this much down on CC11, so that transitions arriving softer can be raised by up to it (the whole part is that much softer)", true },
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
-        "a held note that is no legato transition starts this share of its measured onset early (default: the map's <Onset early>, SSO 100)", true },
+        "a note that is no legato transition starts this share of its articulation's measured onset early (held notes and, since "
+        "2026-10-08, every measured technique; default: the map's <Onset early>, SSO 100)", true },
+      // (the owner, 2026-10-08: "make even early the new recommended")
+      { "heldNotes/byPitch", 0, 0, 1, "on/off",
+        "0: every note of an articulation by the median of its measured onsets (one shift: a run keeps its written "
+        "spacing); 1: each by its pitch's measured onset (attacks on the beat, a run's spacing uneven)", true },
       // [shorts]
-      { "shorts/calibratedVelocity", 0, 0, 1, "on/off",
-        "1: a short plays at the velocity at which it is as loud as the part's held note (Check articulations › Dynamics, "
-        "dynamics.json, with the Advanced Options' balance); 0: at the dynamic's velocity (the map's <Dynamics velocity>)", true },
       { "shorts/byMeantLength", 1, 0, 1, "on/off",
         "1: a short with a measured from= is chosen by how long the note is meant to sound (written length times the factors below); 0: by its written length", true },
       { "shorts/staccato", 50, 1, 100, "%",
@@ -90,13 +63,28 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/staccatissimo", 25, 1, 100, "%", "the same for staccatissimo", true },
       { "shorts/tenuto", 99, 1, 100, "%", "the same for tenuto", true },
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
-      // [pedal]
-      { "pedal/upAfterMs", 0, 0, 1000, "ms",
-        "a sound library part's sustain pedal goes up this long after the chord it changes with (0: one tick after, so the "
-        "chord still sounds; a pianist's: 40)", true },
-      { "pedal/downAfterMs", 0, 0, 1000, "ms", "and down again this long after it (0: one tick; a pianist's: 90)", true },
-      { "pedal/upMaxShare", 25, 0, 100, "%", "the pedal goes up at most this share of the next pedal's length after its chord", true },
-      { "pedal/downMaxShare", 50, 0, 100, "%", "it goes down at most this share of its own length after its start", true },
+      // [slurs]
+      // (the owner, 2026-10-08: slurred violins have no attack; SSO's violin Long peaks after ~1.06 s, Whence's slurred
+      // notes last 136-273 ms; 2026-10-08, after comparing by ear: "let's make slurs quick = 2 the recommended preset")
+      { "slurs/quick", 2, 0, 2, "",
+        "a slurred note shorter than its held technique's measured peak (<Articulation peak>) plays: 0 the held technique; "
+        "1 the patch's tenuto short (SSO: Short 1.0); 2 its espressivo long (SSO: Long (Rachm.))", true },
+      // (the owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured on the Windows VM, perceived peaks at
+      // mf held 100-273 ms: Violins 1 about 6 dB under Long, Violins 2 about 3; by pitch and length, not one number;
+      // then, at 1: "not the correct volume. violin 1 in bar 5 now sounds really loud relative to the viola and cello":
+      // re-measured in the passage (in-context levels, 0.6-2.1 dB); 2026-10-09, on build 37882502550: "1 is the right
+      // balance, make it the recommended preset")
+      { "slurs/quickLevel", 1, 0, 1, "on/off",
+        "1: a note [slurs] quick swaps plays as loud as its held technique would at its pitch and written length (map "
+        "quickLevel: the boost that matches Long in the passage, per register); 0: at the swapped technique's own level", true },
+      // [levels]
+      // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
+      // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
+      // balance: measured sensible, docs/PLAYBACK_SETTINGS.md › Calibrated levels)
+      { "levels/calibrated", 1, 0, 1, "on/off",
+        "1: a technique on velocity (the map's <Dynamics velocity>: shorts, pizzicato ...), where measured, plays as loud as the "
+        "part's held note at the same dynamic, plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a "
+        "plain note's); 0: at the dynamic's level, MuseScore 4's accent share on top (the library's own balance)", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
@@ -114,13 +102,6 @@ static const std::vector<Definition> DEFINITIONS = {
       { "tuning/bendAtArrival", 1, 0, 1, "on/off",
         "1: a legato transition's pitch bend glides when the transition arrives (note-on plus the measured legato delay), "
         "so the note before keeps its tuning while it sounds; 0: at the note-on", true },
-      { "tuning/oneInstance", 0, 0, 2, "mode",
-        "on a patch tuned by pitch bend, fewer copies (less memory): the bend may retune a copy once its notes' measured release "
-        "has rung out (1: safe) or once they have ended (2: aggressive, a detached note's tail is bent to the next note's tuning), "
-        "so a line plays its tunings on one instance; notes sounding together at different tunings still use copies; 0: off", true },
-      // [dynamics]
-      { "dynamics/evenSteps", 0, 0, 1, "on/off",
-        "1: the Advanced Options' even dynamic steps act (off since 2026-09-28; MS_EVEN_DYNAMIC_STEPS turns it on too)", true },
       // [live]
       // (measured in Live 12.4.6: 1 and 0 units keep every carrier before its note; 1 is the smallest the range allows:
       // LiveClips::EPSILON, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
@@ -204,6 +185,28 @@ static bool isTable(const QString& group)
       return false;
       }
 
+// settings no longer in use: an older playback.ini or score that has them opens as before, the key ignored without a
+// warning (the owner, 2026-10-07: no wall of text). 2026-10-02: the fast-note ramp (legato/ramp*); 2026-10-03: varispeed's
+// glide (a step within a cent), the nominal short (measured from=), the Mixer's glide, a fixed automation step (one MIDI
+// step at its tick); 2026-10-07 (the owner: remove settings not in use; each was off or at a value that changed nothing):
+// the rest
+static const char* const REMOVED[] = {
+      "legato/rampFromMs", "legato/rampToMs", "legato/rampMaxShare", "legato/glideMs", "shorts/nominalShare",
+      "hosting/mixSmoothingMs", "automation/stepTicks",
+      "legato/overlapTicks", "legato/slurEndOverlap", "legato/phraseGapMs", "legato/early", "legato/velocity",
+      "legato/fastTechnique", "legato/fastFirsts", "legato/fastBelowShare", "legato/levelBalance", "legato/levelMaxDb",
+      "legato/levelHeadroomDb", "shorts/calibratedVelocity", "pedal/upAfterMs", "pedal/downAfterMs", "pedal/upMaxShare",
+      "pedal/downMaxShare", "dynamics/evenSteps", "tuning/oneInstance", "tracks/mapDelays",
+      };
+
+static bool removed(const QString& id)
+      {
+      for (const char* r : REMOVED)
+            if (id == r)
+                  return true;
+      return false;
+      }
+
 // one key's text into the snapshot (warns of unknown keys and bad values)
 static void take(Ini& i, const QString& group, const QString& key, const QString& text)
       {
@@ -214,28 +217,9 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
       const QString id = group + "/" + key;
       const Definition* d = definition(id);
       if (!d) {
-            // (the fast-note ramp, replaced on 2026-10-02 by keepMs, fastShare / fastFullMs and fastTechnique: fast slurs on time)
-            if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs, fastTechnique; delete the line)").arg(id);
-            // (the nominal short rule, 90 % of length=, had no source; every SSO short with a length= has a measured
-            // from=: removed 2026-10-03, numbers-measured)
-            // (varispeed's glide time: now as short as each frame's step stays within a cent, Vst3Plugin::GLIDE_CENT_STEP)
-            else if (id == "legato/glideMs")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: a varispeed glide is as short as each step stays "
-                                        "within a cent; delete the line)").arg(id);
-            else if (id == "shorts/nominalShare")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: every short with a length= has a measured from=; delete the line)").arg(id);
-            // (a fixed ramp step, replaced on 2026-10-03: a ramp sends a value at each tick where it moves by one step of its
-            // controller's resolution, Automation::Lane::events)
-            // (the Mixer's gain glide on library slots, 5 ms: no source; removed 2026-10-03, the owner: no mixer smoothing)
-            else if (id == "hosting/mixSmoothingMs")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: the Mixer's volume, pan and mute apply at once; "
-                                        "delete the line)").arg(id);
-            else if (id == "automation/stepTicks")
-                  i.warnings << QString("%1 is no longer used (since 2026-10-03: a ramp sends each change of one MIDI step, or of a "
-                                        "parameter's resolution, at the tick it happens; delete the line)").arg(id);
-            else
-                  i.warnings << QString("unknown key %1 (ignored)").arg(id);
+            if (removed(id))
+                  return;     // (no longer in use: ignored silently)
+            i.warnings << QString("unknown key %1 (ignored)").arg(id);
             return;
             }
       const QString t = text.trimmed();
@@ -274,6 +258,7 @@ QString iniTemplate()
            "; A key left empty (key=) uses the default; a score can override any of these in\n"
            "; Mixer > Advanced Options... > Playback adjustments. Edit > Reload Playback Settings (or the button there)\n"
            "; reads this file again, no restart. MuseScore writes this file only when it is missing.\n"
+           "; Presets (Recommended, Library default): the Preset box there; they set only the keys listed in docs/PLAYBACK_SETTINGS.md > Presets.\n"
            "; Lines starting with ';' are comments. On/off settings: 1 or 0.\n";
       QString section;
       for (const Definition& d : DEFINITIONS) {
@@ -295,16 +280,145 @@ QString iniTemplate()
            "; \"patch|articulation\". A value is an offset in ms (+25, -30) added to the map's, or a whole\n"
            "; table that replaces it: legato delays by interval (-12:240 -7:280 +2:220 ... +12:440), onsets\n"
            "; by MIDI pitch (55:60 72:40 ...), or one number for all.\n"
-           "\n; a legato transition's delay (ms; the renderer starts it that much early, times legato/early)\n"
+           "\n; a legato transition's delay (ms; a bent transition's glide starts when it arrives: tuning/bendAtArrival)\n"
            "[legato.delay]\n"
            "; Violins 2 - Performance=+25\n"
-           "\n; a held note's onset (ms; it starts that much early, times heldNotes/early)\n"
+           "\n; a note's onset (ms; it starts that much early, times heldNotes/early)\n"
            "[heldNotes.onset]\n"
            "; Violins 1|Long Flautando=-50\n"
            "\n; a short's from= (s: the meant sounding length from which it is chosen; an offset in s, or a number)\n"
            "[shorts.from]\n"
            "; Violas|Short 0.5=0.55\n";
       return out;
+      }
+
+//---------------------------------------------------------
+//   presets
+//    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated) and
+//    the slurred notes' quicker technique (slurs/quick, slurs/quickLevel) differ between them. The other settings are not in the table because: legato/keepMs acts
+//    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
+//    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
+//    choice of sound.
+//---------------------------------------------------------
+
+const std::vector<Preset>& presets()
+      {
+      static const std::vector<Preset> P = {
+            // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent"; 2026-10-08: "make
+            // even early the new recommended": early, each patch by its median onset)
+            // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
+            // "1 is the right balance, make it the recommended preset")
+            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 } } },
+            { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 } } },
+            };
+      return P;
+      }
+
+QString applyPresetToText(const QString& text, const Preset& preset)
+      {
+      const QString eol = text.contains("\r\n") ? "\r\n" : "\n";
+      QStringList lines = text.split('\n');
+      for (QString& l : lines)
+            if (l.endsWith('\r'))
+                  l.chop(1);
+      if (!lines.isEmpty() && lines.last().isEmpty())
+            lines.removeLast();
+      for (const auto& kv : preset.values) {
+            const QString id = kv.first;
+            const QString group = id.section('/', 0, 0);
+            const QString key = id.section('/', 1);
+            const QString line = key + "=" + number(kv.second);
+            int sectionLine = -1;
+            int keyLine = -1;
+            QString cur;
+            for (int i = 0; i < lines.size(); ++i) {
+                  const QString t = lines[i].trimmed();
+                  if (t.startsWith(';') || t.startsWith('#') || t.isEmpty())
+                        continue;
+                  if (t.startsWith('[') && t.endsWith(']')) {
+                        cur = t.mid(1, t.size() - 2).trimmed();
+                        if (cur == group && sectionLine < 0)
+                              sectionLine = i;
+                        continue;
+                        }
+                  if (cur == group && t.section('=', 0, 0).trimmed() == key) {
+                        keyLine = i;
+                        break;
+                        }
+                  }
+            if (keyLine >= 0)
+                  lines[keyLine] = line;
+            else if (sectionLine >= 0)
+                  lines.insert(sectionLine + 1, line);
+            else {
+                  if (!lines.isEmpty() && !lines.last().trimmed().isEmpty())
+                        lines << QString();
+                  lines << "[" + group + "]" << line;
+                  }
+            }
+      return lines.join(eol) + eol;
+      }
+
+bool applyPreset(const QString& id, const QString& pathArg)
+      {
+      const Preset* preset = nullptr;
+      for (const Preset& p : presets())
+            if (id == p.id)
+                  preset = &p;
+      const QString path = pathArg.isEmpty() ? iniPath() : pathArg;
+      if (!preset || path.isEmpty())
+            return false;
+      QString text;
+      if (QFileInfo::exists(path)) {
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+                  return false;
+            text = QString::fromUtf8(f.readAll());
+            }
+      else {
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            text = iniTemplate();
+            }
+      QFile f(path);
+      if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+      f.write(applyPresetToText(text, *preset).toUtf8());
+      return f.error() == QFile::NoError;
+      }
+
+static double presetValue(const char* presetId, const char* id)
+      {
+      for (const Preset& p : presets())
+            if (QString(p.id) == presetId)
+                  for (const auto& kv : p.values)
+                        if (QString(kv.first) == id)
+                              return kv.second;
+      return NAN;
+      }
+
+QString detectPreset(const std::map<QString, double>& iniValues)
+      {
+      for (const Preset& p : presets()) {
+            bool all = true;
+            for (const auto& kv : p.values) {
+                  const auto it = iniValues.find(kv.first);
+                  // (a key left out is its default; the map's value is the Recommended preset's)
+                  const Definition* d = definition(kv.first);
+                  const double left = d && d->mapDefault() ? presetValue("recommended", kv.first) : d ? d->value : NAN;
+                  const double v = it != iniValues.end() ? it->second : left;
+                  const bool match = std::fabs(v - kv.second) < 1e-6;
+                  all = all && match;
+                  }
+            if (all)
+                  return p.id;
+            }
+      return QString();
+      }
+
+QString currentPreset()
+      {
+      return detectPreset(ini()->values);
       }
 
 static std::shared_ptr<Ini> read(const QString& path)
@@ -424,8 +538,8 @@ QString writeScoreValues(const std::map<QString, double>& values)
 bool hasOwnMetaTag(const char* id)
       {
       const QString s = id;
-      return s == "legato/early" || s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
-             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival" && s != "tuning/oneInstance";
+      return s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
+             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival";
       }
 
 static bool ownMetaTagValue(const char* id, const Score* score, double* v)
@@ -435,8 +549,8 @@ static bool ownMetaTagValue(const char* id, const Score* score, double* v)
       const MasterScore* ms = score->masterScore();
       const QString s = id;
       bool ok = false;
-      if (s == "legato/early" || s == "heldNotes/early") {
-            const QString tag = ms->metaTag(s == "legato/early" ? "soundLibraryLegatoEarly" : "soundLibraryOnsetEarly");
+      if (s == "heldNotes/early") {
+            const QString tag = ms->metaTag("soundLibraryOnsetEarly");     // (soundLibraryLegatoEarly: ignored since 2026-10-07)
             const int x = tag.trimmed().toInt(&ok);
             if (ok && x >= 0) {
                   *v = std::min(x, 200);
@@ -559,6 +673,22 @@ double adjust(const char* table, const QString& patch, const QString& articulati
             return b.first == a.first ? b.second : a.second + (b.second - a.second) * (key - a.first) / double(b.first - a.first);
             }
       return pts.back().second;
+      }
+
+QStringList presetKeysOverriddenBy(const Score* score)
+      {
+      QStringList out;
+      if (!score)
+            return out;
+      const std::map<QString, double> own = scoreValues(score);
+      for (const Preset& p : presets())
+            for (const auto& kv : p.values) {
+                  const QString id = kv.first;
+                  double v = 0;
+                  if ((own.count(id) || ownMetaTagValue(kv.first, score, &v)) && !out.contains(id))
+                        out << id;
+                  }
+      return out;
       }
 
 } // namespace Playback

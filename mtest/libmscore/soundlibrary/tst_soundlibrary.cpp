@@ -70,13 +70,12 @@ class TestSoundLibrary : public QObject, public MTest
       std::shared_ptr<SoundLib::Library> loadMap(const QString& xml);
 
    private slots:
-      void initTestCase() { qputenv("MS_EVEN_DYNAMIC_STEPS", "1"); initMTest(); }     // (even dynamic steps: off for the owner)
+      void initTestCase() { initMTest(); }
       void cleanup() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); SoundLib::setAvailable(nullptr); }
       void textTechniques();
       void choose();
       void spitfireMap();
       void routesTiming();
-      void oneInstanceCounts();
       void automation();
       void automationCurves();
       void automationEditing();
@@ -86,30 +85,27 @@ class TestSoundLibrary : public QObject, public MTest
       void attackSalience();
       void noteSecondsWritten();
       void dynamicsCalibration();
-      void salienceFit();
       void heldOnPerformance();
       void dynamicsCheck();
       void timingCheck();
       void restCheck();
       void shortsFollowDynamics();
-      void evenDynamicSteps();
       void pedalChangeAfterChord();
       void sameKeyStruckAgain();
       void checkedAsExpected();
       void render();
       void renderPatches();
       void renderPhraseMark();
-      void legatoEarly();
-      void phraseGap();
+      void legatoVelocity();
       void trackDelays();
       void trackLevels();
-      void legatoEarlyFastRun();
-      void legatoEarlyByInterval();
+      void legatoDelayByInterval();
       void legatoOctaveByStartPitch();
-      void legatoLevelBalance();
       void onsetEarly();
+      void onsetLongerThanNote();
       void playbackSettingsIni();
       void playbackSettingsLayers();
+      void playbackPresets();
       void renderKit();
       void renderKitRoll();
       void controllers();
@@ -143,7 +139,6 @@ class TestSoundLibrary : public QObject, public MTest
       void computedLaneSettings();
       void tuningBend();
       void tuningBendAtArrival();
-      void tuningOneInstance();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -207,6 +202,14 @@ void TestSoundLibrary::textTechniques()
       SoundLib::TextTechniques::apply("molto vib.", s);
       SoundLib::TextTechniques::apply("ord.", s);
       QVERIFY(!s.modifiers.contains("espressivo"));
+      // Spitfire's Performance legato, only where the score asks for it
+      SoundLib::TextTechniques::apply("performance", s);
+      QVERIFY(s.modifiers.contains("performance"));
+      SoundLib::TextTechniques::apply("non performance", s);
+      QVERIFY(!s.modifiers.contains("performance"));
+      SoundLib::TextTechniques::apply("Performance legato", s);
+      SoundLib::TextTechniques::apply("ord.", s);
+      QVERIFY(!s.modifiers.contains("performance"));
       SoundLib::TextTechniques::apply("sul G", s);
       QVERIFY(s.modifiers.contains("sulg"));
       SoundLib::TextTechniques::apply("sul C", s);
@@ -311,57 +314,6 @@ void TestSoundLibrary::routesTiming()
       delete score;
       }
 
-//---------------------------------------------------------
-//   oneInstanceCounts
-//    a measurement, not a check (MS_ROUTES_SCORE, skipped when unset): the instances (routes) each part
-//    of a score needs with SSO's map, every extra available, for [tuning] oneInstance off / safe /
-//    aggressive, per patch; and, for comparison only, as if every patch bent (SSO's All techniques
-//    patches don't: they keep their copies)
-//---------------------------------------------------------
-
-void TestSoundLibrary::oneInstanceCounts()
-      {
-      const QString file = qEnvironmentVariable("MS_ROUTES_SCORE");
-      if (file.isEmpty())
-            QSKIP("MS_ROUTES_SCORE not set");
-      QString error;
-      auto lib = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
-      QVERIFY2(lib, qPrintable(error));
-      auto allBend = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
-      QVERIFY2(allBend, qPrintable(error));
-      for (SoundLib::LibInstrument& i : allBend->instruments)
-            if (!i.kit && i.bendCents <= 0)
-                  i.bendCents = 100;
-      MasterScore* score = readCreatedScore(file);
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      // part -> patch -> instances, by column: off, safe, aggressive, all bending (aggressive)
-      std::map<QString, std::map<QString, std::array<int, 4>>> table;
-      std::array<int, 4> total { { 0, 0, 0, 0 } };
-      for (int column = 0; column < 4; ++column) {
-            SoundLib::setCurrent(column == 3 ? std::shared_ptr<const SoundLib::Library>(allBend) : std::shared_ptr<const SoundLib::Library>(lib));
-            Playback::setIniValuesForTest({ { "tuning/oneInstance", QString::number(column == 3 ? 2 : column) } });
-            for (const SoundLib::Route& r : SoundLib::routes(score, column == 3 ? *allBend : *lib)) {
-                  ++table[r.part->partName()][r.instrument->name][size_t(column)];
-                  ++total[size_t(column)];
-                  }
-            }
-      Playback::setIniValuesForTest({});
-      for (const auto& part : table) {
-            std::array<int, 4> sum { { 0, 0, 0, 0 } };
-            for (const auto& patch : part.second) {
-                  qDebug("ONEINSTANCE patch\t%s\t%s\t%d\t%d\t%d\t%d", qPrintable(part.first), qPrintable(patch.first),
-                         patch.second[0], patch.second[1], patch.second[2], patch.second[3]);
-                  for (size_t c = 0; c < 4; ++c)
-                        sum[c] += patch.second[c];
-                  }
-            qDebug("ONEINSTANCE part\t%s\t%d\t%d\t%d\t%d", qPrintable(part.first), sum[0], sum[1], sum[2], sum[3]);
-            }
-      qDebug("ONEINSTANCE total\t%d\t%d\t%d\t%d", total[0], total[1], total[2], total[3]);
-      SoundLib::setCurrent(nullptr);
-      delete score;
-      }
-
 void TestSoundLibrary::spitfireMap()
       {
       QString error;
@@ -375,7 +327,7 @@ void TestSoundLibrary::spitfireMap()
             values += p.scan == "values";
             keys += p.scan == "keys" && p.keyScan;
             }
-      QCOMPARE(int(lib->otherPatches.size()), 541 + 9 + 43);    // (+ 4 kits and 5 ensembles with every technique on, + the 43 Performance patches)
+      QCOMPARE(int(lib->otherPatches.size()), 541 + 9 + 1);     // (+ 4 kits and 5 ensembles with every technique on, + Oboe Principal - Total Performance: the other 42 Performance patches play under "performance")
       QCOMPARE(values, 0);                                  // (every values patch's values are known)
       QCOMPARE(keys, 7);
       int scanned = 0;
@@ -605,19 +557,6 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(patchFor("Violins 1", { { "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
       QCOMPARE(patchFor("Violins 1", { { "legato", "long" }, { "espressivo" } }), QString("Violins 1: Long (Rachm.)"));
       QCOMPARE(patchFor("Violins 1", { { "short" }, { "espressivo" } }), QString("Violins 1: Short 0.5"));
-      // the balance families, from the patches' folders (an extra patch: its main patch's)
-      auto familyOf = [&](const QString& name) {
-            for (const SoundLib::LibInstrument& li : lib->instruments)
-                  if (li.name == name)
-                        return SoundLib::family(li);
-            return QString("?");
-            };
-      QCOMPARE(familyOf("Violins 1"), QString("strings"));
-      QCOMPARE(familyOf("Solo Viola"), QString("solo strings"));
-      QCOMPARE(familyOf("Oboe Solo"), QString("woodwinds"));
-      QCOMPARE(familyOf("Horns a6"), QString("brass"));
-      QCOMPARE(familyOf("Motif Horns a4"), QString("brass"));
-      QCOMPARE(familyOf("Harp"), QString("other"));
       // shorts by the note's length (2026-09-28, "Whence" bar 8). Since 2026-10-01 a measured short (map from=) is chosen
       // where its sounding length is the closest to how long the note is meant to sound: the written length times MS4's
       // duration factor (staccato 50 %, staccatissimo 25 %, tenuto 99 %, portato 74.5 %): Violins 2 Short 0'5 from
@@ -647,6 +586,55 @@ void TestSoundLibrary::spitfireMap()
       QCOMPARE(byLength({ A::Staccatissimo }, 1.0), QString("Violins 2: Spiccato"));
       QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.1), QString("Violas: Spiccato"));   // 0.55 s meant; Short 0'5 rings 0.84 s
       QCOMPARE(byLengthOf("Violas", { A::Staccato }, 1.3), QString("Violas: Short 0.5"));
+      // [slurs] quick (2026-10-08): a slurred note shorter than its Long's measured peak (Violins 1 1063 ms, Violas
+      // 773) on Short 1.0 (its from= not applied) or Long (Rachm.); longer, muted (no muted Short 1.0) or off: Long
+      auto slurred = [&](const QString& patch, double seconds, int quick, QStringList mods = {}) {
+            SoundLib::Want w { { "legato", "long" }, mods };
+            w.seconds = seconds;
+            w.slurQuick = quick;
+            return patchFor(patch, w);
+            };
+      QCOMPARE(slurred("Violins 1", 0.136, 0), QString("Violins 1: Long"));
+      QCOMPARE(slurred("Violins 1", 0.136, 1), QString("Violins 1: Short 1.0"));
+      QCOMPARE(slurred("Violins 1", 0.136, 2), QString("Violins 1: Long (Rachm.)"));
+      QCOMPARE(slurred("Violins 1", 1.1, 1), QString("Violins 1: Long"));
+      QCOMPARE(slurred("Violas", 0.8, 1), QString("Violas: Long"));
+      QCOMPARE(slurred("Violas", 0.7, 1), QString("Violas: Short 1.0"));
+      QCOMPARE(slurred("Violins 1", 0.136, 1, { "muted" }), QString("Violins 1: Long CS"));
+      // the swap is marked (Choice::swapped): early by Rachm.'s own onset at each pitch (its fit, sso_rachm_onset_fit.json)
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.name == "Violins 1") {
+                  SoundLib::Want w { { "legato", "long" }, {} };
+                  w.seconds = 0.136;
+                  w.slurQuick = 2;
+                  const SoundLib::Choice c = SoundLib::choose(li.patches(), w);
+                  QVERIFY(c && c.swapped);
+                  QCOMPARE(c.articulation->name, QString("Long (Rachm.)"));
+                  QVERIFY(!c.articulation->onsets.empty());
+                  // [slurs] quickLevel: the boost that matches Long in the passage (map quickLevel, re-measured
+                  // 2026-10-08 in context, per register, the same at every length); the nearest end's beyond the measured
+                  const SoundLib::Articulation* rachm = c.articulation;
+                  QCOMPARE(rachm->quickLevelAt(55, 100), 1.3);
+                  QCOMPARE(rachm->quickLevelAt(75, 273), 1.3);
+                  QCOMPARE(rachm->quickLevelAt(76, 136), 2.1);
+                  QCOMPARE(rachm->quickLevelAt(82, 250), 0.6);
+                  QVERIFY(qAbs(rachm->quickLevelAt(78, std::sqrt(100.0 * 136.0)) - 2.1) < 1e-9);
+                  QCOMPARE(rachm->quickLevelAt(40, 20), 1.3);
+                  QCOMPARE(rachm->quickLevelAt(100, 5000), 0.6);
+                  QCOMPARE(SoundLib::Articulation().quickLevelAt(64, 50), 0.0);
+                  w.slurQuick = 0;
+                  QVERIFY(!SoundLib::choose(li.patches(), w).swapped);
+                  }
+      {
+            std::vector<Ms4::ArtRef> slur { { A::Legato, false } };
+            Playback::setIniValuesForTest({ { "slurs/quick", "1" } });
+            QCOMPARE(SoundLib::want(slur, SoundLib::TextState(), 0.136, 0).slurQuick, 1);
+            QCOMPARE(SoundLib::want({}, SoundLib::TextState(), 0.136, 0).slurQuick, 0);
+            Playback::setIniValuesForTest({ { "slurs/quick", "0" } });
+            QCOMPARE(SoundLib::want(slur, SoundLib::TextState(), 0.136, 0).slurQuick, 0);
+            Playback::setIniValuesForTest({});            // (the default: Recommended's 2)
+            QCOMPARE(SoundLib::want(slur, SoundLib::TextState(), 0.136, 0).slurQuick, 2);
+      }
       // (a length unknown: as before)
       QCOMPARE(patchFor("Violins 2", { { "short" }, {} }), QString("Violins 2: Short 0.5"));
       QCOMPARE(patchFor("Horn Solo", { { "staccatissimo", "spiccato", "short" }, {} }),
@@ -778,13 +766,10 @@ void TestSoundLibrary::render()
       delete score;
       }
 
-// The legato timing the render tests below were computed with: the overlap and the fast-note share before
-// numbers-measured (2026-10-03: overlapTicks 0, fastShare 50 %, fastFullMs 380 ms measured). They test the
-// mechanism, so they keep their numbers; playbackSettingsIni / Layers check the defaults. fastFirsts: on as before
-// 2026-10-06 (off by default since: no automatic adjustments).
-static const std::map<QString, QString> OLD_TIMING = { { "legato/overlapTicks", "30" }, { "legato/fastShare", "65" },
-                                                       { "legato/fastFullMs", "800" }, { "legato/phraseGapMs", "0" },
-                                                       { "legato/fastFirsts", "1" } };
+// The fast-note share the render tests below were computed with, before numbers-measured (2026-10-03: fastShare
+// 50 %, fastFullMs 380 ms measured; they time a bent transition's glide). They test the mechanism, so they keep
+// their numbers; playbackSettingsIni / Layers check the defaults.
+static const std::map<QString, QString> OLD_TIMING = { { "legato/fastShare", "65" }, { "legato/fastFullMs", "800" } };
 static std::map<QString, QString> withOld(std::map<QString, QString> m)
       {
       for (const auto& v : OLD_TIMING)
@@ -886,9 +871,9 @@ void TestSoundLibrary::renderPatches()
       QCOMPARE(notes[4].sw, 40);
       QCOMPARE(notes[6].sw, 1);
       QCOMPARE(notes[7].sw, 1);
-      // legato: each slurred note lasts into the next
+      // legato: each slurred note plays as written, up to the next (the overlap, [legato] overlapTicks, went 2026-10-07)
       for (int i = 0; i < 3; ++i)
-            QVERIFY2(notes[i].off > notes[i + 1].on, qPrintable(QString("note %1 ends at %2, the next starts at %3")
+            QVERIFY2(notes[i].off <= notes[i + 1].on && notes[i].off > notes[i].on, qPrintable(QString("note %1 ends at %2, the next starts at %3")
                      .arg(i).arg(notes[i].off).arg(notes[i + 1].on)));
 
       // an extra patch that can't play (hosted without a setup): not routed, its notes on the
@@ -971,11 +956,11 @@ void TestSoundLibrary::renderPhraseMark()
       QCOMPARE(outer->ticks().ticks(), 7 * DIVISION);
 
       // as a slur: legato until the inner slur starts (MS4 cuts the outer one off there), the inner
-      // one's notes legato, each overlapping into the next but the slur's last (G5): the unslurred
-      // F5 after it starts with an attack of its own, not as a legato transition
+      // one's notes legato; the unslurred F5 after the slur's last (G5) is on the main patch. No note
+      // overlaps the next (the overlap, [legato] overlapTicks, went 2026-10-07)
       std::vector<N> notes = render();
       QCOMPARE(int(notes.size()), 8);
-      QCOMPARE(describe(notes), QString("L>L>L>L>L - - - "));
+      QCOMPARE(describe(notes), QString("L L L L L - - - "));
 
       // as a phrase mark: only the inner slur
       score->startCmd();
@@ -983,201 +968,9 @@ void TestSoundLibrary::renderPhraseMark()
       score->endCmd();
       notes = render();
       QCOMPARE(int(notes.size()), 8);
-      QCOMPARE(describe(notes), QString("- - L>L>L - - - "));
+      QCOMPARE(describe(notes), QString("- - L L L - - - "));
       for (const N& n : notes)
             QVERIFY(n.off > n.on);
-      delete score;
-      Playback::setIniValuesForTest({});
-      }
-
-//---------------------------------------------------------
-//   legatoEarly
-//    a legato transition (a slurred note after a slurred note on the legato patch) starts early by
-//    its articulation's legatoDelay times <Legato early> percent, at the tempo there, not before half
-//    way into the note before; a slur's first note, the note after a slur and a key struck again stay
-//    on the beat; the note-offs stay; the score's own percent (metaTag soundLibraryLegatoEarly)
-//    (legato-early.musicxml: C5 D5 E5 F5 slurred at 60 | G5, A4 A4 B4 slurred | 120 bpm: C5 E5 G5 C6
-//    slurred | eight slurred sixteenths C5 … C6)
-//---------------------------------------------------------
-
-void TestSoundLibrary::legatoEarly()
-      {
-      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
-      auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='75'/>"
-         "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long'/>"
-         "</Instrument>"
-         "<Instrument name='Violin Legato' with='Violin'>"
-         "<Switch type='none'/>"
-         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' release='900'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib);
-      QCOMPARE(lib->legatoEarly, 75);
-      QCOMPARE(lib->instruments[1].articulations[0].legatoDelayMs, 200.0);
-      QCOMPARE(lib->instruments[1].articulations[0].releaseMs, 900.0);
-      SoundLib::setCurrent(lib);
-      MasterScore* score = readScore(DIR + "legato-early.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      QCOMPARE(SoundLib::legatoEarly(score, *lib), 75);
-
-      struct N { int on; int off; int pitch; int channel; };
-      auto render = [score]() {
-            EventMap events;
-            SynthesizerState ss;
-            score->renderMidi(&events, false, true, ss);
-            std::vector<N> notes;
-            for (const auto& te : events) {
-                  const NPlayEvent& ev = te.second;
-                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
-                        continue;
-                  if (ev.velo() > 0)
-                        notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel() });
-                  else {
-                        for (N& n : notes)
-                              if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
-                                    n.off = te.first;
-                        }
-                  }
-            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
-            return notes;
-            };
-      const int Q = DIVISION, S = DIVISION / 4;
-      // the written starts, and how early each plays at 75 % of 200 ms: 150 ms is 72 ticks at 60 bpm; after a quarter
-      // at 120 (500 ms) the delay is 65 % + 35 % * 500 / 800 of it (fastShare, fastFullMs): 173.75 ms, 75 % of it
-      // 125 ticks at 120. The sixteenths at 120 (125 ms): 200 * 0.70 = 141 ms, 75 % of it 101 ticks; the run's second
-      // note 40 ms (38 ticks) after its first (keepMs)
-      const std::vector<std::pair<int, int>> written = {
-            { 0, 0 }, { Q, 72 }, { 2 * Q, 72 }, { 3 * Q, 72 },                       // m1: the slur's first on the beat
-            { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 72 },                 // m2: after the slur, its first, A4 again, B4
-            { 8 * Q, 0 }, { 9 * Q, 125 }, { 10 * Q, 125 }, { 11 * Q, 125 },          // m3 at 120
-            };
-      std::vector<N> notes = render();
-      QCOMPARE(int(notes.size()), 12 + 8);
-      for (size_t i = 0; i < written.size(); ++i)
-            QVERIFY2(qAbs(notes[i].on - (written[i].first - written[i].second)) <= 1,
-                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(notes[i].pitch)
-                                .arg(notes[i].on).arg(written[i].first - written[i].second)));
-      QCOMPARE(notes[12].on, 12 * Q);                           // the run: its first on the beat
-      QVERIFY(qAbs(notes[13].on - (12 * Q + 38)) <= 1);
-      for (int i = 2; i < 8; ++i)
-            QVERIFY2(qAbs(notes[size_t(12 + i)].on - (12 * Q + i * S - 101)) <= 1, qPrintable(QString::number(notes[size_t(12 + i)].on)));
-      // the legato patch plays the slurred notes; each (but a slur's last) overlaps the next: 30 ticks after the
-      // next one's start as played
-      QCOMPARE(notes[1].channel, 1);
-      QVERIFY(notes[1].off > notes[2].on);
-      QVERIFY(notes[0].off > notes[1].on);
-      QCOMPARE(notes[4].channel, 0);                            // (G5: unslurred, the main patch)
-      const std::set<size_t> beforeTransition = { 0, 1, 2, 6, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18 };
-      std::vector<N> onBeat;
-      {
-            score->setMetaTag(SoundLib::legatoEarlyMetaTag, "0");
-            QCOMPARE(SoundLib::legatoEarly(score, *lib), 0);
-            onBeat = render();
-            QCOMPARE(int(onBeat.size()), 20);
-            for (size_t i = 0; i < written.size(); ++i)
-                  QCOMPARE(onBeat[i].on, written[i].first);
-            for (size_t i = 0; i < notes.size(); ++i) {
-                  if (beforeTransition.count(i))
-                        QCOMPARE(notes[i].off, notes[i + 1].on + 30);
-                  else
-                        QCOMPARE(notes[i].off, onBeat[i].off);
-                  }
-      }
-      // the score's own percent: 50 % of 200 ms at 60 bpm is 48 ticks, of 173.75 at 120 83
-      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "50");
-      notes = render();
-      QCOMPARE(notes[1].on, Q - 48);
-      QCOMPARE(notes[7].on, 7 * Q - 48);
-      QVERIFY(qAbs(notes[9].on - (9 * Q - 83)) <= 1);
-      QCOMPARE(notes[0].on, 0);
-      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
-      QCOMPARE(SoundLib::legatoEarly(score, *lib), 75);
-      delete score;
-      Playback::setIniValuesForTest({});
-      }
-
-//---------------------------------------------------------
-//   phraseGap
-//    [legato] phraseGapMs (the owner, 2026-10-04; measured: SSO joins notes into a legato transition up to a 40 ms gap,
-//    never from 60): a note on the legato patch that is no transition (here G5, held, after the slur C5 D5 E5 F5: held
-//    notes play the legato patch, prefer='long', as SSO's Performance legato does) starts 60 ms after the note before on
-//    its route ends; transitions keep their overlap; 0 turns it off; the note before keeps at least keepMs as played
-//    (legato-early.musicxml at 60 bpm: 60 ms is 29 ticks, the quarter F5 ends at 4 Q - 29)
-//---------------------------------------------------------
-
-void TestSoundLibrary::phraseGap()
-      {
-      auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='0'/>"
-         "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long'/>"
-         "</Instrument>"
-         "<Instrument name='Violin Legato' with='Violin'>"
-         "<Switch type='none'/>"
-         "<Articulation name='Legato' value='20' techniques='legato long' prefer='long' legatoDelay='200' release='900'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib);
-      SoundLib::setCurrent(lib);
-      MasterScore* score = readScore(DIR + "legato-early.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      struct N { int on; int off; int pitch; int channel; };
-      auto render = [score]() {
-            EventMap events;
-            SynthesizerState ss;
-            score->renderMidi(&events, false, true, ss);
-            std::vector<N> notes;
-            for (const auto& te : events) {
-                  const NPlayEvent& ev = te.second;
-                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
-                        continue;
-                  if (ev.velo() > 0)
-                        notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel() });
-                  else {
-                        for (N& n : notes)
-                              if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
-                                    n.off = te.first;
-                        }
-                  }
-            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
-            return notes;
-            };
-      const int Q = DIVISION;
-      // without the gap (0): F5, the slur's last, ends where MS4 ends it, right before G5
-      Playback::setIniValuesForTest({ { "legato/phraseGapMs", "0" } });
-      std::vector<N> off = render();
-      QVERIFY(off.size() >= 5);
-      QCOMPARE(off[3].pitch, 77);                               // F5
-      QCOMPARE(off[4].pitch, 79);                               // G5
-      QCOMPARE(off[4].on, 4 * Q);
-      QCOMPARE(off[3].channel, off[4].channel);                 // (both on the legato patch's route)
-      QVERIFY2(off[3].off > 4 * Q - 29, qPrintable(QString::number(off[3].off)));
-      // the default since 2026-10-06 is off (notes as written)
-      Playback::setIniValuesForTest({});
-      std::vector<N> byDefault = render();
-      QCOMPARE(int(byDefault.size()), int(off.size()));
-      for (size_t i = 0; i < off.size(); ++i)
-            QCOMPARE(byDefault[i].off, off[i].off);
-      // the measured value, 60 ms: F5 ends 29 ticks before G5; the slurred notes before keep MS4's end (overlapTicks 0:
-      // 5 ticks, ~10 ms, before the next: SSO joins them), not cut back by the gap
-      Playback::setIniValuesForTest({ { "legato/phraseGapMs", "60" } });
-      std::vector<N> gap = render();
-      QCOMPARE(int(gap.size()), int(off.size()));
-      QCOMPARE(gap[4].on, 4 * Q);
-      QVERIFY2(qAbs(gap[3].off - (4 * Q - 29)) <= 1, qPrintable(QString::number(gap[3].off)));
-      for (int i = 0; i < 3; ++i)
-            QVERIFY2(gap[size_t(i)].off == off[size_t(i)].off && gap[size_t(i)].off > gap[size_t(i + 1)].on - 29, qPrintable(QString("note %1 ends %2, next starts %3")
-                                                                           .arg(i).arg(gap[size_t(i)].off).arg(gap[size_t(i + 1)].on)));
-      // the note before keeps at least keepMs as played: a 500 ms gap with keepMs 800 leaves F5 800 ms (384 ticks)
-      Playback::setIniValuesForTest({ { "legato/phraseGapMs", "500" }, { "legato/keepMs", "800" } });
-      std::vector<N> big = render();
-      QVERIFY2(qAbs(big[3].off - (big[3].on + 384)) <= 1, qPrintable(QString("%1 %2").arg(big[3].on).arg(big[3].off)));
-      // MS4's overlap at slur ends (slurEndOverlap 1): no gap, F5 ends as without it
-      Playback::setIniValuesForTest({ { "legato/slurEndOverlap", "1" } });
-      std::vector<N> ms4 = render();
-      QCOMPARE(ms4[3].off, off[3].off);
       delete score;
       Playback::setIniValuesForTest({});
       }
@@ -1204,7 +997,7 @@ void TestSoundLibrary::trackDelays()
       QVERIFY(score);
       score->rebuildMidiMapping();
       typedef std::tuple<int, int, int, int, int, bool> E;     // tick, type, a, b, channel, a switch
-      auto render = [score](const QString& tag) {
+      auto render = [score](const QString& tag, bool sorted = true) {
             score->setMetaTag(TrackDelays::metaTag, tag);
             EventMap events;
             SynthesizerState ss;
@@ -1215,23 +1008,36 @@ void TestSoundLibrary::trackDelays()
                   if (ev.isExternal())
                         out.emplace_back(te.first, ev.type(), ev.dataA(), ev.dataB(), ev.extChannel(), ev.librarySwitch());
                   }
-            std::sort(out.begin(), out.end());
+            if (sorted)
+                  std::sort(out.begin(), out.end());
             return out;
             };
       auto at = [score](int tick, double ms) {
             return std::max(0, score->utime2utick(std::max(0.0, score->utick2utime(tick) + ms / 1000.0)));
             };
-      // what the delays make of the events without them: notes (and their switch) by noteMs, the rest by otherMs
+      // what the delays make of the events without them (in the renderer's order): notes (and their switch, and the
+      // controllers right before a note-on at its tick: its dynamic, its level) by noteMs, the rest by otherMs
       auto expected = [&](const std::vector<E>& base, double noteMs, double otherMs) {
             std::vector<E> out;
-            for (E e : base) {
-                  const bool note = std::get<1>(e) == ME_NOTEON || std::get<1>(e) == ME_NOTEOFF || std::get<5>(e);
+            for (size_t i = 0; i < base.size(); ++i) {
+                  E e = base[i];
+                  bool note = std::get<1>(e) == ME_NOTEON || std::get<1>(e) == ME_NOTEOFF || std::get<5>(e);
+                  if (std::get<1>(e) == ME_CONTROLLER || std::get<1>(e) == ME_PITCHBEND)
+                        for (size_t j = i + 1; j < base.size() && std::get<0>(base[j]) == std::get<0>(e); ++j) {
+                              const E& n = base[j];
+                              if (std::get<4>(n) == std::get<4>(e) && !std::get<5>(n) && std::get<1>(n) == ME_NOTEON
+                                  && std::get<3>(n) > 0) {
+                                    note = true;
+                                    break;
+                                    }
+                              }
                   std::get<0>(e) = at(std::get<0>(e), note ? noteMs : otherMs);
                   out.push_back(e);
                   }
             std::sort(out.begin(), out.end());
             return out;
             };
+      const std::vector<E> baseOrder = render(QString(), false);      // (the renderer's order: what is before a note)
       const std::vector<E> base = render(QString());
       int notes = 0;
       for (const E& e : base)
@@ -1243,18 +1049,18 @@ void TestSoundLibrary::trackDelays()
       // +100 ms: everything later; at 60 a quarter is a second, 100 ms 48 ticks
       const std::vector<E> later = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":100}]");
       QCOMPARE(later.size(), base.size());
-      QVERIFY(later == expected(base, 100, 100));
+      QVERIFY(later == expected(baseOrder, 100, 100));
       QCOMPARE(std::get<0>(later.front()), DIVISION / 10);
       // (and after the change to 120, 100 ms is 96 ticks: the last event)
       QCOMPARE(std::get<0>(later.back()), at(std::get<0>(base.back()), 100));
 
       // -100 ms: everything else 100 ms later (the lead), nothing clamped at the start; the only part, so as written
       QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"ms\":-100}]") == base);
-      // the technique's own -100 ms: its notes as written, the patch's controllers 100 ms later, from the first note
-      // on (the owner, 2026-10-07: at -40 ms the first note wasn't early)
+      // the technique's own -100 ms: its notes (and the dynamics at their ticks) as written, the patch's other
+      // controllers 100 ms later, from the first note on (the owner, 2026-10-07: at -40 ms the first note wasn't early)
       const std::vector<E> earlier = render("[{\"part\":0,\"name\":\"Violin\",\"tracks\":{\"Violin / Long\":-100}}]");
       QCOMPARE(earlier.size(), base.size());
-      QVERIFY(earlier == expected(base, 0, 100));
+      QVERIFY(earlier == expected(baseOrder, 0, 100));
       int firstOn = -1;
       int firstController = -1;
       for (const E& e : earlier) {
@@ -1264,16 +1070,16 @@ void TestSoundLibrary::trackDelays()
                   firstController = std::get<0>(e);
             }
       QCOMPARE(firstOn, 0);
-      QCOMPARE(firstController, DIVISION / 10);
+      QCOMPARE(firstController, 0);                                   // (its dynamic with it)
       QCOMPARE(TrackDelays::earliest(TrackDelays::of(score->parts()[0], TrackDelays::read(score))), -100.0);
 
       // the technique's own 50 ms on top: notes 150 ms later, controllers 100
       const std::vector<E> technique = render(
          "[{\"part\":0,\"name\":\"Violin\",\"ms\":100,\"tracks\":{\"Violin / Long\":50}}]");
-      QVERIFY(technique == expected(base, 150, 100));
+      QVERIFY(technique == expected(baseOrder, 150, 100));
       // the patch's own -30 ms: everything on the patch 70 ms later
       const std::vector<E> patch = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":100,\"tracks\":{\"Violin\":-30}}]");
-      QVERIFY(patch == expected(base, 70, 70));
+      QVERIFY(patch == expected(baseOrder, 70, 70));
       // another technique's own delay: no note of this score plays it
       QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"tracks\":{\"Violin / Short\":200}}]") == base);
 
@@ -1296,7 +1102,8 @@ void TestSoundLibrary::trackDelays()
 //    a technique's and a patch's own level (trackdelays.h, track levels): CC11 by the dB added up right before each of
 //    the technique's notes (127 at -6 dB: 127 x 10^(-6/20) = 63.6, 64), the value in force (127) again before the next
 //    note without one; nothing else changes. A technique no note plays changes nothing; the metaTag keeps levels
-//    within MIN_DB .. 0
+//    within MIN_DB .. MAX_DB. Louder (+6 dB on Long): the patch's headroom (6 dB, its volume: patchGain 10^(6/20)),
+//    so Long's notes play CC11 127 and the patch's other notes 6 dB less (64)
 //---------------------------------------------------------
 
 void TestSoundLibrary::trackLevels()
@@ -1370,129 +1177,67 @@ void TestSoundLibrary::trackLevels()
       if (!shortNotes)
             QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin / Short\":-6}}]") == base);
 
-      // the metaTag: levels within MIN_DB .. 0, a louder one dropped (0), kept with no delay at all
+      // louder: Long +6 dB, the patch's headroom; Long's notes CC11 127, the patch's others 64 (-6 dB)
+      const std::vector<E> up = render("[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin / Long\":6}}]");
+      switchValue = -1;
+      cc11 = 127;
+      int upNotes = 0;
+      for (const E& e : up) {
+            if (std::get<5>(e) && std::get<1>(e) == ME_CONTROLLER)
+                  switchValue = std::get<3>(e);
+            else if (isCC11(e))
+                  cc11 = std::get<3>(e);
+            else if (std::get<1>(e) == ME_NOTEON && std::get<3>(e) > 0) {
+                  QCOMPARE(cc11, switchValue == 1 ? 127 : 64);
+                  ++upNotes;
+                  }
+            }
+      QVERIFY(upNotes > 0);
+
+      // the metaTag: levels within MIN_DB .. MAX_DB, kept with no delay at all
       std::map<const Part*, TrackDelays::Delays> delays;
       delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin", "Long")] = -60;
-      delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin")] = 5;
+      delays[score->parts()[0]].levels[TrackDelays::trackKey("Violin")] = 9;
       QVERIFY(!delays[score->parts()[0]].empty());
       score->setMetaTag(TrackDelays::metaTag, TrackDelays::write(score, delays));
       const TrackDelays::Delays d = TrackDelays::of(score->parts()[0], TrackDelays::read(score));
-      QCOMPARE(d.levels.size(), size_t(1));
-      QCOMPARE(TrackDelays::db(d, "Violin", "Long"), TrackDelays::MIN_DB);
+      QCOMPARE(d.levels.size(), size_t(2));
+      QCOMPARE(TrackDelays::ownDb(d, TrackDelays::trackKey("Violin")), TrackDelays::MAX_DB);
+      QCOMPARE(TrackDelays::db(d, "Violin", "Long"), TrackDelays::MIN_DB + TrackDelays::MAX_DB);
       QCOMPARE(TrackDelays::ms(d, "Violin", "Long"), 0.0);
+      // the headroom: the patch's +6 (Short has no level of its own); Long's CC11 6 dB less, Short's 0
+      QCOMPARE(TrackDelays::headroomDb(d, "Violin"), 6.0);
+      QCOMPARE(TrackDelays::noteDb(d, "Violin", "Long"), TrackDelays::MIN_DB + TrackDelays::MAX_DB - 6.0);
+      QCOMPARE(TrackDelays::noteDb(d, "Violin", "Short"), 0.0);
+      QVERIFY(std::fabs(TrackDelays::patchGain(*lib, d, "Violin") - LiveSetWriter::MAX_VOLUME) < 1e-6);
+      QCOMPARE(TrackDelays::patchGain(*lib, d, "Viola"), 1.0);
+      // softer only: no headroom
+      TrackDelays::Delays soft;
+      soft.levels[TrackDelays::trackKey("Violin", "Long")] = -6;
+      QCOMPARE(TrackDelays::headroomDb(soft, "Violin"), 0.0);
+      QCOMPARE(TrackDelays::noteDb(soft, "Violin", "Long"), -6.0);
+      // Live's Kontakt track: the Mixer's gain times the headroom, within Live's +6 dB
+      QVERIFY(std::fabs(LiveSetWriter::kontaktVolume(100, LiveSetWriter::MAX_VOLUME) - LiveSetWriter::MAX_VOLUME) < 1e-9);
+      QVERIFY(std::fabs(LiveSetWriter::kontaktVolume(127, LiveSetWriter::MAX_VOLUME) - LiveSetWriter::MAX_VOLUME) < 1e-9);
+      QVERIFY(std::fabs(LiveSetWriter::kontaktVolume(50, 2.0) - 0.5) < 1e-9);
       delete score;
       }
 
 //---------------------------------------------------------
-//   legatoEarlyFastRun
-//    a fast run under short slurs (the owner's cellos in "Whence": sixteenths at 110, 136 ms, in 4-note slurs; the owner,
-//    2026-10-02: "I want fast slurs to not sound late"). legato-fast.musicxml: sixteen sixteenths at 110 in four 4-note
-//    slurs, then a whole note. A transition after a short note starts early by fastShare (65 %) rising to all of its
-//    delay after a note fastFullMs (800 ms) long; the note before keeps keepMs (40 ms) as played; a slurred note after a
-//    note shorter than its transition plays its own attack (fastTechnique)
-//---------------------------------------------------------
-
-void TestSoundLibrary::legatoEarlyFastRun()
-      {
-      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
-      struct N { int on; int off; };
-      auto render = [this](int delayMs) {
-            auto lib = loadMap(QString(
-               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
-               "<Instrument name='Violin' ids='violin'>"
-               "<Articulation name='Long' value='1' techniques='long'/>"
-               "</Instrument>"
-               "<Instrument name='Violin Legato' with='Violin'>"
-               "<Switch type='none'/>"
-               "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='%1' release='900'/>"
-               "</Instrument></SoundLibrary>").arg(delayMs));
-            SoundLib::setCurrent(lib);
-            MasterScore* score = readScore(DIR + "legato-fast.musicxml");
-            score->rebuildMidiMapping();
-            EventMap events;
-            SynthesizerState ss;
-            score->renderMidi(&events, false, true, ss);
-            std::vector<N> notes;
-            for (const auto& te : events) {
-                  const NPlayEvent& ev = te.second;
-                  if (!ev.isExternal() || ev.type() != ME_NOTEON)
-                        continue;
-                  if (ev.velo() > 0)
-                        notes.push_back({ te.first, -1 });
-                  else {
-                        // (each note's own off: the earliest of its pitch still open; here the pitches of
-                        // neighbours differ)
-                        for (N& n : notes)
-                              if (n.off < 0 && n.on <= te.first) {
-                                    n.off = te.first;
-                                    break;
-                                    }
-                        }
-                  }
-            std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
-            delete score;
-            return notes;
-            };
-      const int S = DIVISION / 4;                     // (136 ms at 110: 0.88 ticks a ms)
-      // 160 ms: after a sixteenth 160 * (0.65 + 0.35 * 136 / 800) = 113.5 ms, 100 ticks; shorter than the sixteenth:
-      // legato transitions. A slur's first on the beat (this map has no onset), its second 40 ms (35 ticks) after it
-      // (the first keeps keepMs), the others 100 ticks early: every note of the slur after the second keeps its length
-      std::vector<N> n = render(160);
-      QCOMPARE(int(n.size()), 17);
-      for (int i = 0; i < 16; ++i) {
-            const int b = (i / 4) * 4 * S;
-            const int expected = i % 4 == 0 ? b : i % 4 == 1 ? b + 35 : b + (i % 4) * S - 100;
-            QVERIFY2(qAbs(n[size_t(i)].on - expected) <= 1,
-                     qPrintable(QString("note %1 starts at %2, expected %3").arg(i).arg(n[size_t(i)].on).arg(expected)));
-            }
-      for (int i = 0; i < 16; ++i) {
-            // a transition's note before ends 30 ticks after its start as played (one note overlaps the next); a slur's
-            // last ends on time, the next slur's first on the beat
-            if (i % 4 != 3)
-                  QVERIFY2(qAbs(n[size_t(i)].off - (n[size_t(i + 1)].on + 30)) <= 1,
-                           qPrintable(QString("note %1 ends at %2, the next starts at %3").arg(i).arg(n[size_t(i)].off).arg(n[size_t(i + 1)].on)));
-            else
-                  QVERIFY(qAbs(n[size_t(i)].off - (i + 1) * S) <= 3);         // (MS4's 99 %)
-            }
-      // 200 ms: after a sixteenth 141.9 ms, longer than it; with the fast technique ([legato] fastTechnique=1) every note
-      // its own attack, on the beat here (no onset in this map), the note before ending there
-      Playback::setIniValuesForTest(withOld({ { "legato/fastTechnique", "1" } }));
-      n = render(200);
-      Playback::setIniValuesForTest(withOld({}));
-      QCOMPARE(int(n.size()), 17);
-      for (int i = 0; i < 16; ++i) {
-            QCOMPARE(n[size_t(i)].on, i * S);
-            if (i % 4 != 3)
-                  QCOMPARE(n[size_t(i)].off, n[size_t(i + 1)].on);
-            else
-                  QVERIFY(qAbs(n[size_t(i)].off - n[size_t(i + 1)].on) <= 3);     // (a slur's last: MS4's 99 %)
-            }
-      // without it (the default): transitions 125 ticks early, the second of a slur 35 ticks after its first
-      n = render(200);
-      for (int i = 0; i < 16; ++i) {
-            const int b = (i / 4) * 4 * S;
-            const int expected = i % 4 == 0 ? b : i % 4 == 1 ? b + 35 : b + (i % 4) * S - 125;
-            QVERIFY2(qAbs(n[size_t(i)].on - expected) <= 1,
-                     qPrintable(QString("note %1 starts at %2, expected %3").arg(i).arg(n[size_t(i)].on).arg(expected)));
-            }
-      Playback::setIniValuesForTest({});
-      }
-
-//---------------------------------------------------------
-//   legatoEarlyByInterval
+//   legatoDelayByInterval
 //    legatoDelay by interval ("interval:ms" pairs, SSO's legato grid: a patch's transitions take 60-690 ms
 //    by interval): read, interpolated between intervals, the widest's beyond; each transition of
-//    legato-early.musicxml starts early by its own interval's delay (+1, +2, +3, +4 between +3 and +5, +5)
+//    legato-early.musicxml plays on the beat (the delays time a bent transition's glide only)
 //---------------------------------------------------------
 
-void TestSoundLibrary::legatoEarlyByInterval()
+void TestSoundLibrary::legatoDelayByInterval()
       {
       Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
                        "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='+2:abc'/>"
                        "</Instrument></SoundLibrary>"));
       auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long'/>"
          "</Instrument>"
@@ -1529,21 +1274,11 @@ void TestSoundLibrary::legatoEarlyByInterval()
             }
       std::stable_sort(ons.begin(), ons.end());
       QCOMPARE(int(ons.size()), 20);
-      const int Q = DIVISION;
-      // early by: at 60 bpm 0.48 ticks a ms, at 120 0.96; after a quarter at 120 (500 ms) 65 % + 35 % * 500 / 800 of
-      // the delay (fastShare, fastFullMs)
-      const double f = 0.65 + 0.35 * 500 / 800.0;
-      const std::vector<std::pair<int, double>> written = {
-            { 0, 0 }, { Q, 200 * 0.48 }, { 2 * Q, 200 * 0.48 }, { 3 * Q, 100 * 0.48 },     // C D E F: +2 +2 +1
-            { 4 * Q, 0 }, { 5 * Q, 0 }, { 6 * Q, 0 }, { 7 * Q, 200 * 0.48 },             // G, A A (struck again) B: +2
-            { 8 * Q, 0 }, { 9 * Q, 190 * f * 0.96 }, { 10 * Q, 150 * f * 0.96 }, { 11 * Q, 230 * f * 0.96 },   // C E G C: +4 +3 +5
-            };
-      for (size_t i = 0; i < written.size(); ++i) {
-            const double expected = written[i].first - written[i].second;
-            QVERIFY2(qAbs(ons[i].first - expected) <= 1.0,
-                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(ons[i].second)
-                                .arg(ons[i].first).arg(expected)));
-            }
+      // every transition on the beat: the delays time a bent transition's glide only (tuningBendAtArrival; the early
+      // start of transitions, <Legato early>, went 2026-10-07)
+      for (size_t i = 0; i < 12; ++i)
+            QVERIFY2(ons[i].first == int(i) * DIVISION, qPrintable(QString("note %1 (pitch %2) starts at %3").arg(i)
+                     .arg(ons[i].second).arg(ons[i].first)));
       delete score;
       Playback::setIniValuesForTest({});
       }
@@ -1578,7 +1313,7 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
                        "<Articulation name='Legato' value='20' techniques='legato' octaveUp='60:x'/>"
                        "</Instrument></SoundLibrary>"));
       auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long'/>"
          "</Instrument>"
@@ -1604,24 +1339,36 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
       QCOMPARE(plain.legatoDelayAt(12, 72), 800.0);
       QCOMPARE(plain.legatoDelayAt(-12, 84), 400.0);
 
-      // the shipped map plays no legato transitions: no Performance patches (the owner, 2026-10-06), slurs play the All
-      // techniques longs ("long legato": each note its own attack)
+      // the shipped map plays legato transitions only under staff text "performance": slurs play the All techniques
+      // longs ("long legato": each note its own attack; the owner, 2026-10-06), the Performance patches' Legato needs the
+      // modifier performance (2026-10-07); its transitions keep the note's velocity except where measured tighter
+      // (gen_spitfire_sso.py LEGATO_VELOCITY: Violas - Performance 100)
       {
       QString err;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
       QVERIFY2(sso, qPrintable(err));
       int slurred = 0;
+      int performance = 0;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
-            QVERIFY2(!li.name.contains("Performance"), qPrintable(li.name));
             for (const SoundLib::Articulation& oa : li.articulations) {
-                  QVERIFY2(!oa.playsTransitions() && oa.legatoDelays.empty(), qPrintable(li.name + ": " + oa.name));
-                  if (oa.techniques.contains("legato"))
-                        ++slurred;
+                  if (oa.playsTransitions()) {
+                        QVERIFY2(li.name.contains("Performance") && !li.with.isEmpty() && oa.modifiers.contains("performance")
+                                 && oa.legatoVelocity == (li.name == "Violas - Performance" ? 100 : -1),
+                                 qPrintable(li.name + ": " + oa.name));
+                        ++performance;
+                        }
+                  else {
+                        QVERIFY2(!li.name.contains("Performance") && oa.legatoDelays.empty() && oa.legatoVelocity < 0,
+                                 qPrintable(li.name + ": " + oa.name));
+                        if (oa.techniques.contains("legato"))
+                              ++slurred;
+                        }
                   }
             }
       QVERIFY(slurred > 0);
+      QCOMPARE(performance, 42);
       }
-      // the renderer passes the start pitch
+      // rendered: the notes on the beat
       SoundLib::setCurrent(lib);
       MasterScore* score = readScore(DIR + "legato-octave.musicxml");
       QVERIFY(score);
@@ -1637,128 +1384,10 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
             }
       std::stable_sort(ons.begin(), ons.end());
       QCOMPARE(int(ons.size()), 8);
-      const int Q = DIVISION;
-      // early by (60 bpm: 0.48 ticks a ms): C5 C6 C5 D5: +12 from 72 300, -12 from 84 150, +2 200;
-      // D5 D6 D5 E5: +12 from 74 (73 and 75 equally near: the lower) 500, -12 from 86 (nearest: 84) 150, +2 200
-      const std::vector<std::pair<int, double>> written = {
-            { 0, 0 }, { Q, 300 * 0.48 }, { 2 * Q, 150 * 0.48 }, { 3 * Q, 200 * 0.48 },
-            { 4 * Q, 0 }, { 5 * Q, 500 * 0.48 }, { 6 * Q, 150 * 0.48 }, { 7 * Q, 200 * 0.48 },
-            };
-      for (size_t i = 0; i < written.size(); ++i) {
-            const double expected = written[i].first - written[i].second;
-            QVERIFY2(qAbs(ons[i].first - expected) <= 1.0,
-                     qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(ons[i].second)
-                                .arg(ons[i].first).arg(expected)));
-            }
+      // on the beat: the delays time a bent transition's glide only (the early start of transitions went 2026-10-07)
+      for (size_t i = 0; i < ons.size(); ++i)
+            QCOMPARE(ons[i].first, int(i) * DIVISION);
       delete score;
-      }
-
-//---------------------------------------------------------
-//   legatoLevelBalance
-//    [legato] levelBalance: a legato transition's measured level (<Articulation legatoLevel legatoLevelLong>, dB
-//    against the pitch's other transitions, by interval and start pitch) is evened out by CC11 on the note's route
-//    from its arrival (the note-on plus the full measured delay) until the route's next note-on; a run's table up
-//    to 0.15 s, the settled one from 0.5 s; up by at most levelHeadroomDb (the part's CC11 resting that much down),
-//    down by at most levelMaxDb; off (the default): CC11 untouched. legato-octave.musicxml (60 bpm quarters: C5 C6 C5 D5, D5 D6
-//    D5 E5, each four slurred)
-//---------------------------------------------------------
-
-void TestSoundLibrary::legatoLevelBalance()
-      {
-      auto mapWith = [&](const QString& levels) {
-            return loadMap(
-               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
-               "<Instrument name='Violin' ids='violin'>"
-               "<Articulation name='Long' value='1' techniques='long'/>"
-               "</Instrument>"
-               "<Instrument name='Violin Legato' with='Violin'>"
-               "<Switch type='none'/>"
-               "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' " + levels + "/>"
-               "</Instrument></SoundLibrary>");
-            };
-      // the tables
-      {
-      auto lib = mapWith("legatoLevel='+2:72:3,,-2 -1:60:1' legatoLevelLong='+2:72:1'");
-      QVERIFY(lib);
-      const SoundLib::Articulation& a = lib->instruments[1].articulations[0];
-      QCOMPARE(a.legatoLevelAt(2, 72, 0.1), 3.0);                     // a run's
-      QCOMPARE(a.legatoLevelAt(2, 72, 1.0), 1.0);                     // settled
-      QVERIFY(qAbs(a.legatoLevelAt(2, 72, 0.325) - 2.0) < 1e-9);      // half way
-      QVERIFY(std::isnan(a.legatoLevelAt(2, 73, 0.1)));               // unmeasured
-      QCOMPARE(a.legatoLevelAt(2, 74, 1.0), -2.0);                    // (no settled one: the run's)
-      QVERIFY(std::isnan(a.legatoLevelAt(5, 72, 0.1)));
-      QVERIFY(std::isnan(a.legatoLevelAt(-1, 59, 0.1)));
-      QVERIFY(!mapWith("legatoLevel='+2:72'"));
-      QVERIFY(!mapWith("legatoLevel='+2:72:1,x'"));
-      }
-      const int Q = DIVISION;
-      // the CC11 values on the legato patch's route (tick, value)
-      auto render = [&](const QString& levels, const QString& settings) {
-            std::vector<std::pair<int, int>> cc11;
-            auto lib = mapWith(levels);
-            if (!lib)
-                  return cc11;
-            SoundLib::setCurrent(lib);
-            MasterScore* score = readScore(DIR + "legato-octave.musicxml");
-            if (!score)
-                  return cc11;
-            score->setMetaTag(Playback::metaTag, settings);
-            score->rebuildMidiMapping();
-            EventMap events;
-            SynthesizerState ss;
-            score->renderMidi(&events, false, true, ss);
-            for (const auto& te : events) {
-                  const NPlayEvent& ev = te.second;
-                  if (ev.isExternal() && ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION && ev.libraryPatch() == 1)
-                        cc11.push_back({ te.first, ev.value() });
-                  }
-            delete score;
-            return cc11;
-            };
-      auto valueAt = [](const std::vector<std::pair<int, int>>& cc, int tick) {
-            int v = -1;
-            for (const auto& c : cc)
-                  if (c.first <= tick)
-                        v = c.second;
-            return v;
-            };
-      // C5 -> D5 (+2 from 72, a second each: settled, 1 dB loud) down 1 dB from its arrival, the written time (started
-      // 200 ms early, arriving 200 ms after its note-on); back at the next slur's first note (its note-on, 4Q)
-      {
-      const auto cc = render("legatoLevelLong='+2:72:1'", "legato/levelBalance=1");
-      QCOMPARE(valueAt(cc, 3 * Q - 1), 127);
-      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(127 * std::pow(10.0, -1 / 20.0))));
-      QCOMPARE(valueAt(cc, 4 * Q - 1), int(std::lround(127 * std::pow(10.0, -1 / 20.0))));
-      QCOMPARE(valueAt(cc, 4 * Q), 127);
-      QCOMPARE(valueAt(cc, 8 * Q), 127);                              // (D5 -> E5: +2 from 74, unmeasured)
-      }
-      // 2 dB soft: no headroom (the default), so nothing to raise; 6 dB headroom: the part rests 6 dB down, the
-      // note 4 dB down
-      {
-      const auto none = render("legatoLevelLong='+2:72:-2'", "legato/levelBalance=1");
-      QCOMPARE(valueAt(none, 3 * Q), 127);
-      const auto cc = render("legatoLevelLong='+2:72:-2'", "legato/levelBalance=1;legato/levelHeadroomDb=6");
-      const int rest = int(std::lround(127 * std::pow(10.0, -6 / 20.0)));
-      QCOMPARE(valueAt(cc, 0), rest);
-      QCOMPARE(valueAt(cc, 3 * Q - 1), rest);
-      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(rest * std::pow(10.0, 2 / 20.0))));
-      QCOMPARE(valueAt(cc, 4 * Q), rest);
-      }
-      // 11 dB loud: down by levelMaxDb (9.4, the loudest measured: sso_legato_levels.json); off (the default): untouched
-      {
-      QCOMPARE(Playback::definition("legato/levelMaxDb")->value, 9.4);
-      const auto cc = render("legatoLevelLong='+2:72:11'", "legato/levelBalance=1");
-      QCOMPARE(valueAt(cc, 3 * Q), int(std::lround(127 * std::pow(10.0, -9.4 / 20.0))));
-      const auto off = render("legatoLevelLong='+2:72:11'", "");
-      for (const auto& c : off)
-            QCOMPARE(c.second, 127);
-      }
-      // the layers: playback.ini on, the score's off over it
-      Playback::setIniValuesForTest({ { "legato/levelBalance", "1" } });
-      QCOMPARE(valueAt(render("legatoLevelLong='+2:72:1'", ""), 3 * Q), int(std::lround(127 * std::pow(10.0, -1 / 20.0))));
-      for (const auto& c : render("legatoLevelLong='+2:72:1'", "legato/levelBalance=0"))
-            QCOMPARE(c.second, 127);
-      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
@@ -1767,14 +1396,14 @@ void TestSoundLibrary::legatoLevelBalance()
 //    articulation's onset (<Articulation onset>, by pitch; <Onset early> percent; SSO's longs are heard 10-60
 //    ms after the note-on, sul tasto / flautando / harmonics up to 440): capped by the note before on the
 //    same patch as transitions are, not before the score's start; what ends on its patch in between ends at
-//    the new start, its switch moves with it. legato-early.musicxml (see legatoEarly)
+//    the new start, its switch moves with it. legato-early.musicxml; transitions play on the beat
 //---------------------------------------------------------
 
 void TestSoundLibrary::onsetEarly()
       {
-      Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
+      Playback::setIniValuesForTest(withOld({ { "heldNotes/byPitch", "1" } }));      // (the timing these expectations were computed with: by pitch)
       auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/><Onset early='100'/>"
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50'/>"
          "</Instrument>"
@@ -1788,6 +1417,8 @@ void TestSoundLibrary::onsetEarly()
       QCOMPARE(longArt.onsetAt(60), 50.0);
       QCOMPARE(longArt.onsetAt(78), 100.0);
       QCOMPARE(lib->instruments[1].articulations[0].onsetAt(40), 100.0);
+      QCOMPARE(longArt.onsetMedian(), 100.0);                                 // (150 + 50) / 2
+      QCOMPARE(lib->instruments[1].articulations[0].onsetMedian(), 100.0);    // (one number)
       QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
                        "<Articulation name='Long' value='1' techniques='long' onset='60:x'/>"
                        "</Instrument></SoundLibrary>"));
@@ -1826,13 +1457,13 @@ void TestSoundLibrary::onsetEarly()
             };
       const int Q = DIVISION, S = DIVISION / 4;
       // at 60 bpm 0.48 ticks a ms, at 120 0.96. G5 (79) on the main patch: 50 + 100 * 7 / 12 ms; the legato
-      // patch's fresh notes 100 ms; transitions 200 ms, after a quarter at 120 (500 ms) 173.75 (fastShare, fastFullMs)
+      // patch's fresh notes 100 ms; transitions on the beat
       const double g5 = (50 + 100 * 7 / 12.0) * 0.48;
       const std::vector<std::pair<int, double>> written = {
-            { 0, 0 }, { Q, 96 }, { 2 * Q, 96 }, { 3 * Q, 96 },         // the slur's first at the score's start: not earlier
-            { 4 * Q, g5 }, { 5 * Q, 48 }, { 6 * Q, 48 }, { 7 * Q, 96 },  // G5 unslurred, A4 a slur's first, A4 again, B4
+            { 0, 0 }, { Q, 0 }, { 2 * Q, 0 }, { 3 * Q, 0 },             // the slur's first at the score's start: not earlier
+            { 4 * Q, g5 }, { 5 * Q, 48 }, { 6 * Q, 48 }, { 7 * Q, 0 },   // G5 unslurred, A4 a slur's first, A4 again, B4
             { 8 * Q, 48 },                                              // C5 at 120, a slur's first: its 100 ms are at 60 bpm
-            { 9 * Q, 167 }, { 10 * Q, 167 }, { 11 * Q, 167 },
+            { 9 * Q, 0 }, { 10 * Q, 0 }, { 11 * Q, 0 },                 // transitions
             { 12 * Q, 96 },                                             // the run's first: a slur's first
             };
       std::vector<N> notes = render();
@@ -1843,21 +1474,9 @@ void TestSoundLibrary::onsetEarly()
                      qPrintable(QString("note %1 (pitch %2) starts at %3, expected %4").arg(i).arg(notes[i].pitch)
                                 .arg(notes[i].on).arg(expected)));
             }
-      // the run's sixteenths (125 ms): transitions after a short note, 200 * 0.70 = 141 ms early (135 ticks), each note
-      // before overlapping 30 ticks into the next as played; with the fast technique ([legato] fastTechnique) each its own
-      // attack as early (fastFirsts: more than its onset, 100 ms), the note before ending there
-      for (int i = 1; i < 8; ++i) {
-            QVERIFY(qAbs(notes[size_t(12 + i)].on - (12 * Q + i * S - 135)) <= 1);
-            QCOMPARE(notes[size_t(12 + i - 1)].off, notes[size_t(12 + i)].on + 30);
-            }
-      Playback::setIniValuesForTest(withOld({ { "legato/fastTechnique", "1" } }));
-      notes = render();
-      Playback::setIniValuesForTest(withOld({}));
-      for (int i = 1; i < 8; ++i) {
-            QVERIFY(qAbs(notes[size_t(12 + i)].on - (12 * Q + i * S - 135)) <= 1);
-            QCOMPARE(notes[size_t(12 + i - 1)].off, notes[size_t(12 + i)].on);
-            }
-      notes = render();
+      // the run's sixteenths (125 ms): transitions, on the beat
+      for (int i = 1; i < 8; ++i)
+            QCOMPARE(notes[size_t(12 + i)].on, 12 * Q + i * S);
       // G5's switch to Long goes with it, before it; the B4 before C5 (same patch, no overlap: the slur ended)
       // ends where C5 now starts; F5 before G5 (another patch) keeps its end
       QVERIFY(std::find(switches.begin(), switches.end(), notes[4].on) != switches.end());
@@ -1865,16 +1484,73 @@ void TestSoundLibrary::onsetEarly()
       QCOMPARE(notes[7].off, notes[8].on);
       const int f5off = notes[3].off;
       QVERIFY(f5off > notes[4].on);
-      // the score's own percent: 0 plays held notes as written, transitions still early
+      // the score's own percent: 0 plays held notes as written, transitions on the beat
       score->setMetaTag(SoundLib::onsetEarlyMetaTag, "0");
       notes = render();
       QCOMPARE(notes[3].off, f5off);
       QCOMPARE(notes[4].on, 4 * Q);
       QCOMPARE(notes[5].on, 5 * Q);
       QCOMPARE(notes[8].on, 8 * Q);
-      QCOMPARE(notes[1].on, Q - 96);
+      QCOMPARE(notes[1].on, Q);
       QVERIFY(notes[7].off > 8 * Q - 48);                       // (B4 keeps its end)
       score->setMetaTag(SoundLib::onsetEarlyMetaTag, "");
+      delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   onsetLongerThanNote
+//    an onset longer than the note before (200 ms against sixteenths of 136 ms at 110 bpm, as SSO's Long
+//    (Rachm.) on the violas' Whence bar 7): each note starts early, capped by the one before (legato/keepMs),
+//    and still ends where the next note on its patch starts, also when the key after next is its own (A B-flat
+//    A G: the second A's early start falls inside B-flat's window; before 2026-10-09 that kept the first A's
+//    note off, and each A sounded through the next note). onset-longer.musicxml
+//---------------------------------------------------------
+
+void TestSoundLibrary::onsetLongerThanNote()
+      {
+      Playback::setIniValuesForTest(withOld({ { "heldNotes/byPitch", "1" } }));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='200'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "onset-longer.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      struct N { int on; int off; int pitch; };
+      std::vector<N> notes;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal() || ev.type() != ME_NOTEON)
+                  continue;
+            if (ev.velo() > 0)
+                  notes.push_back({ te.first, -1, ev.pitch() });
+            else {
+                  for (N& n : notes)                  // (the key's earliest note still on)
+                        if (n.pitch == ev.pitch() && n.off < 0) {
+                              n.off = te.first;
+                              break;
+                              }
+                  }
+            }
+      QCOMPARE(int(notes.size()), 8);
+      const std::vector<int> pitches = { 69, 70, 69, 67, 69, 70, 69, 67 };
+      const int S = DIVISION / 4;
+      for (size_t i = 0; i < notes.size(); ++i) {
+            QCOMPARE(notes[i].pitch, pitches[i]);
+            QVERIFY2(notes[i].on < DIVISION + int(i) * S && notes[i].off > notes[i].on,
+                     qPrintable(QString("note %1 at %2-%3").arg(i).arg(notes[i].on).arg(notes[i].off)));
+            if (i + 1 < notes.size())
+                  QVERIFY2(notes[i].off <= notes[i + 1].on,
+                           qPrintable(QString("note %1 (pitch %2) ends at %3, the next starts at %4")
+                                      .arg(i).arg(notes[i].pitch).arg(notes[i].off).arg(notes[i + 1].on)));
+            }
       delete score;
       Playback::setIniValuesForTest({});
       }
@@ -1905,51 +1581,216 @@ void TestSoundLibrary::playbackSettingsIni()
             QVERIFY(Playback::source(d.id) == Playback::Source::DEFAULT);   // (written as the defaults: the defaults)
             }
       QVERIFY(text.contains("[legato]") && text.contains("[hosting]") && text.contains("[legato.delay]"));
-      QCOMPARE(Playback::value("legato/overlapTicks"), 0.0);
-      QCOMPARE(Playback::source("legato/overlapTicks"), Playback::Source::DEFAULT);
-      // edited by hand: an override, a bad value, an unknown key, one out of range, a table
+      QCOMPARE(Playback::value("legato/fastShare"), 50.0);
+      QCOMPARE(Playback::source("legato/fastShare"), Playback::Source::DEFAULT);
+      // edited by hand: an override, a bad value, an unknown key, one out of range, a table; settings no longer
+      // in use (rampToMs since 2026-10-02, overlapTicks and the pedal timing since 2026-10-07) are ignored silently
       QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
-      f.write("; edited\n[legato]\noverlapTicks=60\nkeepMs=abc\nrampToMs=250\nbogus=1\n[pedal]\nupAfterMs=5000\n"
+      f.write("; edited\n[legato]\nfastShare=60\nkeepMs=abc\nrampToMs=250\nbogus=1\noverlapTicks=60\nvelocity=90\n"
+              "[pedal]\nupAfterMs=5000\n[shorts]\ncalibratedVelocity=1\nstaccato=500\n"
               "[legato.delay]\nViolins 2 - Performance=+25\nCelli - Performance|Legato=-12:300 +12:500\n");
       f.close();
       const int g1 = Playback::generation();
       Playback::reload();
       QVERIFY(Playback::generation() != g1);
-      QCOMPARE(Playback::value("legato/overlapTicks"), 60.0);
-      QCOMPARE(Playback::source("legato/overlapTicks"), Playback::Source::INI);
+      QCOMPARE(Playback::value("legato/fastShare"), 60.0);
+      QCOMPARE(Playback::source("legato/fastShare"), Playback::Source::INI);
       QCOMPARE(Playback::value("legato/keepMs"), 40.0);       // (not a number: the default)
-      QCOMPARE(Playback::value("pedal/upAfterMs"), 1000.0);   // (clamped)
-      QCOMPARE(Playback::warnings().size(), 4);
+      QCOMPARE(Playback::value("shorts/staccato"), 100.0);    // (clamped)
+      QCOMPARE(Playback::warnings().size(), 3);
       QVERIFY(Playback::warnings().join(" ").contains("legato/bogus"));
-      // (the fast-note ramp's keys, gone since 2026-10-02: said so)
-      QVERIFY(Playback::warnings().join(" ").contains("legato/rampToMs is no longer used"));
+      QVERIFY(!Playback::warnings().join(" ").contains("overlapTicks"));
+      QVERIFY(!Playback::warnings().join(" ").contains("upAfterMs"));
+      QVERIFY(!Playback::warnings().join(" ").contains("rampToMs"));
       QCOMPARE(Playback::adjust("legato.delay", "Violins 2 - Performance", "Legato", 2, 200), 225.0);
       QCOMPARE(Playback::adjust("legato.delay", "Celli - Performance", "Legato", 0, 200), 400.0);   // (its own table)
       QCOMPARE(Playback::adjust("legato.delay", "Violas - Performance", "Legato", 2, 200), 200.0);
       // a start never overwrites the user's file
       Playback::setIniPath(path);
-      QCOMPARE(Playback::value("legato/overlapTicks"), 60.0);
+      QCOMPARE(Playback::value("legato/fastShare"), 60.0);
       Playback::setIniValuesForTest({});
-      QCOMPARE(Playback::value("legato/overlapTicks"), 0.0);
+      QCOMPARE(Playback::value("legato/fastShare"), 50.0);
       // the score layer's text: only what is set, in the definitions' order; read back clamped
       QCOMPARE(Playback::writeScoreValues({}), QString());
-      QCOMPARE(Playback::writeScoreValues({ { "pedal/upAfterMs", 60 }, { "legato/overlapTicks", 40 } }),
-               QString("legato/overlapTicks=40;pedal/upAfterMs=60"));
+      QCOMPARE(Playback::writeScoreValues({ { "shorts/staccato", 60 }, { "legato/keepMs", 40 }, { "legato/overlapTicks", 30 } }),
+               QString("legato/keepMs=40;shorts/staccato=60"));     // (a removed setting: not written)
+      }
+
+//---------------------------------------------------------
+//   legatoVelocity
+//    a legato transition plays at its articulation's legatoVelocity (Spitfire's Performance legato picks the
+//    transition by velocity: SSO's map 100), whatever the note's; a slur's first note and unslurred notes keep their
+//    own (legato-early.musicxml)
+//---------------------------------------------------------
+
+void TestSoundLibrary::legatoVelocity()
+      {
+      Playback::setIniValuesForTest({});
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' legatoVelocity='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(lib->instruments[1].articulations[0].legatoVelocity, 100);
+      QCOMPARE(lib->instruments[0].articulations[0].legatoVelocity, -1);
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='L' value='20' techniques='legato' legatoVelocity='128'/></Instrument></SoundLibrary>"));
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto velocities = [score]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::pair<int, int>> v;       // (on, velocity)
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0)
+                        v.push_back({ te.first, ev.velo() });
+                  }
+            std::stable_sort(v.begin(), v.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  return a.first < b.first;
+                  });
+            return v;
+            };
+      // the transitions: m1 D5 E5 F5, m2 B4, m3 E5 G5 C6, the run's second to eighth; the notes' own velocities from
+      // the same map without legatoVelocity
+      const std::set<size_t> transitions = { 1, 2, 3, 7, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19 };
+      auto plain = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(plain);
+      SoundLib::setCurrent(plain);
+      const std::vector<std::pair<int, int>> own = velocities();
+      QCOMPARE(int(own.size()), 20);
+      for (size_t i : transitions)
+            QVERIFY(own[i].second != 100);
+      SoundLib::setCurrent(lib);
+      std::vector<std::pair<int, int>> v = velocities();
+      QCOMPARE(int(v.size()), 20);
+      for (size_t i = 0; i < v.size(); ++i) {
+            QCOMPARE(v[i].first, own[i].first);                 // (the timing stays)
+            QCOMPARE(v[i].second, transitions.count(i) ? 100 : own[i].second);
+            }
+      delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   playbackPresets
+//    a preset edits playback.ini as text (comments and the other edited keys stay; a missing key or section is
+//    added; a missing file starts from the template) and the effective values are recognised as a preset or custom
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackPresets()
+      {
+      const Playback::Preset* rec = nullptr;
+      const Playback::Preset* lib = nullptr;
+      for (const Playback::Preset& p : Playback::presets()) {
+            if (QString(p.id) == "recommended")
+                  rec = &p;
+            if (QString(p.id) == "library")
+                  lib = &p;
+            }
+      QVERIFY(rec && lib && Playback::presets().size() == 2);
+      // a file with comments, a user's edits and the key set
+      const QString text =
+         "; my comment\n[legato]\n; keepMs note\nkeepMs=77\n\n[heldNotes]\n; early note\nearly=30\n\n[shorts]\nstaccato=44\n";
+      QString out = Playback::applyPresetToText(text, *rec);
+      // (byPitch, missing: added under the section's header)
+      // (and [levels] calibrated, missing: the section added at the end)
+      const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
+                                + "\n[levels]\ncalibrated=%3\n\n[slurs]\nquickLevel=1\nquick=%4\n";
+      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2));
+      // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0));
+      // a missing key: added under its section; the rest unchanged
+      const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
+      QCOMPARE(Playback::applyPresetToText(noKey, *lib),
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ncalibrated=0\n\n[slurs]\nquick=0\n"));
+      // a missing section: added at the end
+      const QString noSection = "[shorts]\nstaccato=44";
+      QCOMPARE(Playback::applyPresetToText(noSection, *rec),
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nquickLevel=1\nquick=2\n"));
+      // another section's key of the same name is not touched
+      const QString other = "[x]\nearly=5\n";
+      QCOMPARE(Playback::applyPresetToText(other, *rec),
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nquickLevel=1\nquick=2\n"));
+      // the file: missing starts from the template, then only the key differs
+      QTemporaryDir dir;
+      QVERIFY(dir.isValid());
+      const QString path = dir.filePath("playback.ini");
+      QVERIFY(Playback::applyPreset("library", path));
+      QFile f(path);
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      const QString written = QString::fromUtf8(f.readAll());
+      f.close();
+      QCOMPARE(written, Playback::applyPresetToText(Playback::iniTemplate(), *lib));
+      QVERIFY(written.contains("early=0\n"));
+      QVERIFY(written.contains("calibrated=0\n"));
+      QVERIFY(written.contains("; Presets"));
+      QVERIFY(!Playback::applyPreset("nonsense", path));
+      // an existing file keeps the other edits
+      QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+      f.write(text.toUtf8());
+      f.close();
+      QVERIFY(Playback::applyPreset("recommended", path));
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1).arg(2));
+      f.close();
+      // detection, from the file read and from values
+      Playback::setIniPath(path);
+      QCOMPARE(Playback::currentPreset(), QString("recommended"));
+      QVERIFY(Playback::applyPreset("library", path));
+      Playback::reload();
+      QCOMPARE(Playback::currentPreset(), QString("library"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "legato/keepMs", 10 } }),
+               QString("library"));
+      // quick left out: its default 2, Recommended's; Library default needs 0
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "slurs/quick", 0 } }), QString());
+      // calibrated left out: its default 1, Recommended's; Library default needs 0
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "levels/calibrated", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 55 } }), QString());
+      // byPitch left out: its default 0, Recommended's; 1 (by pitch): custom (Library default whatever it is)
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 } }),
+               QString("library"));
+      QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
+      Playback::setIniPath(QString());
+      Playback::setIniValuesForTest({});
       }
 
 //---------------------------------------------------------
 //   playbackSettingsLayers
 //    a setting's effect at each layer (built-in default, playback.ini, the score's metaTag), rendered:
-//    the legato overlap, a legato delay table, a pedal-free piece's same notes; and the shorts' meant
+//    held notes early by their patch's median onset (and the older own metaTag; byPitch 1: by pitch), removed settings ignored; and the shorts' meant
 //    length; a score without overrides gets no metaTag
 //---------------------------------------------------------
 
 void TestSoundLibrary::playbackSettingsLayers()
       {
       auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='0'/>"
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Articulation name='Long' value='1' techniques='long' onset='60:20 79:100 90:140 100:200'/>"
          "</Instrument>"
          "<Instrument name='Violin Legato' with='Violin'>"
          "<Switch type='none'/>"
@@ -1983,45 +1824,42 @@ void TestSoundLibrary::playbackSettingsLayers()
             return notes;
             };
       const int Q = DIVISION;
-      // C5 (slurred into D5) lasts overlapTicks past its end into D5: default 0, ini 60, the score's 90
-      // (C5's own end is MS4's 99 % of it, 5 ticks before D5)
+      // G5 (unslurred, on the main patch) starts early by the patch's median onset (120 ms, 57.6 ticks at 60 bpm): the
+      // map's 0 %, the ini's 100 %, the score's 50 % (its own metaTag); the transitions play on the beat
       std::vector<N> n = render();
-      const int base = n[0].off - n[1].on;
-      QCOMPARE(base, -5);
-      Playback::setIniValuesForTest({ { "legato/overlapTicks", "60" } });
+      QCOMPARE(n.size() > 4, true);
+      QCOMPARE(n[4].on, 4 * Q);
+      QCOMPARE(n[1].on, Q);
+      QCOMPARE(Playback::source("heldNotes/early", score, lib->onsetEarly), Playback::Source::MAP);
+      Playback::setIniValuesForTest({ { "heldNotes/early", "100" } });
       n = render();
-      QCOMPARE(n[0].off - n[1].on, base + 60);
-      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "legato/overlapTicks", 90 } }));
-      QCOMPARE(Playback::source("legato/overlapTicks", score), Playback::Source::SCORE);
+      QVERIFY2(qAbs(n[4].on - (4 * Q - 58)) <= 1, qPrintable(QString::number(n[4].on)));
+      QCOMPARE(n[1].on, Q);
+      score->setMetaTag(SoundLib::onsetEarlyMetaTag, "50");
+      QCOMPARE(Playback::source("heldNotes/early", score, lib->onsetEarly), Playback::Source::SCORE);
       n = render();
-      QCOMPARE(n[0].off - n[1].on, base + 90);
+      QVERIFY2(qAbs(n[4].on - (4 * Q - 29)) <= 1, qPrintable(QString::number(n[4].on)));
+      score->setMetaTag(SoundLib::onsetEarlyMetaTag, "");
+      // byPitch 1 (the score's): G5's own onset, 100 ms (48 ticks), not the patch's median 120
+      score->setMetaTag(Playback::metaTag, "heldNotes/byPitch=1");
+      n = render();
+      QVERIFY2(qAbs(n[4].on - (4 * Q - 48)) <= 1, qPrintable(QString::number(n[4].on)));
+      QCOMPARE(n[1].on, Q);
       score->setMetaTag(Playback::metaTag, "");
-      // legato early: the map's 0 %, the ini's 100 % with a table for the patch (+2: 300 ms, 144 ticks at 60 bpm),
-      // the score's 50 % (the older metaTag)
-      QCOMPARE(n.size() > 3, true);
-      Playback::setIniValuesForTest({ { "legato/early", "100" }, { "legato.delay/Violin Legato", "+2:300 +1:100" } });
-      QCOMPARE(SoundLib::legatoEarly(score, *lib), 100);
+      // settings removed 2026-10-07, in the score (the older soundLibraryLegatoEarly too) or the ini: ignored
+      const std::vector<N> plain = render();
+      Playback::setIniValuesForTest({ { "heldNotes/early", "100" }, { "legato/overlapTicks", "60" }, { "legato/early", "100" },
+                                      { "legato/fastTechnique", "1" }, { "legato/velocity", "90" } });
+      score->setMetaTag(Playback::metaTag, "legato/overlapTicks=90;legato/phraseGapMs=80;pedal/upAfterMs=40");
+      score->setMetaTag("soundLibraryLegatoEarly", "50");
       n = render();
-      QVERIFY2(qAbs(n[1].on - (Q - 144)) <= 1, qPrintable(QString::number(n[1].on)));
-      QVERIFY2(qAbs(n[3].on - (3 * Q - 48)) <= 1, qPrintable(QString::number(n[3].on)));     // (+1: 100 ms)
-      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "50");
-      QCOMPARE(Playback::source("legato/early", score, lib->legatoEarly), Playback::Source::SCORE);
-      n = render();
-      QVERIFY2(qAbs(n[1].on - (Q - 72)) <= 1, qPrintable(QString::number(n[1].on)));
-      score->setMetaTag(SoundLib::legatoEarlyMetaTag, "");
-      // the run's sixteenths at 120 (125 ms) are legato transitions, early; with the fast technique (ini or score) each
-      // plays its own attack, on the beat here (this map has no onset)
-      Playback::setIniValuesForTest({ { "legato/early", "100" } });
-      n = render();
-      QVERIFY(n[13].on < 12 * Q + DIVISION / 4);
-      Playback::setIniValuesForTest({ { "legato/early", "100" }, { "legato/fastTechnique", "1" } });
-      n = render();
-      QCOMPARE(n[13].on, 12 * Q + DIVISION / 4);
-      Playback::setIniValuesForTest({ { "legato/early", "100" } });
-      score->setMetaTag(Playback::metaTag, "legato/fastTechnique=1");
-      n = render();
-      QCOMPARE(n[13].on, 12 * Q + DIVISION / 4);
+      QCOMPARE(n.size(), plain.size());
+      for (size_t i = 0; i < n.size(); ++i) {
+            QCOMPARE(n[i].on, plain[i].on);
+            QCOMPARE(n[i].off, plain[i].off);
+            }
       score->setMetaTag(Playback::metaTag, "");
+      score->setMetaTag("soundLibraryLegatoEarly", "");
       // shorts: a staccato's meant length by layer
       std::vector<Ms4::ArtRef> stacc { { Ms4::Art::Staccato, false } };
       Playback::setIniValuesForTest({});
@@ -3573,12 +3411,11 @@ void TestSoundLibrary::vst3Settle()
 //---------------------------------------------------------
 //   tuningBendAtArrival
 //    a legato transition's bend glides when the transition arrives ([tuning] bendAtArrival, on): the note-on
-//    plus the transition's delay (here 200 ms, after a quarter at 120 173.75: fastShare / fastFullMs; the early
-//    start took as much, so the glide starts on the written beat), not at the note-on, where the channel's bend would retune the note before
-//    while it still sounds; fresh attacks bend at their note-on; a delay beyond the next note-on: the glide
-//    ends just before it (600 ms, 521 after the quarter: C5 keeps keepMs, 40 ms, D5+ starts there and E5 521 ms
-//    early); off (ini or score):
-//    at the note-on. quartertones.musicxml at 120: m7's slurred C5, D5+ (12000), E5 (12480)
+//    plus the transition's delay (here 200 ms, after a quarter at 120 173.75: fastShare / fastFullMs; the note
+//    plays on its beat), not at the note-on, where the channel's bend would retune the note before while it
+//    still sounds; fresh attacks bend at their note-on; a delay beyond the next note-on: the glide ends just
+//    before it (600 ms, 521 after the quarter: D5+'s arrival after E5's note-on); off (ini or score): at the
+//    note-on. quartertones.musicxml at 120: m7's slurred C5, D5+ (12000), E5 (12480)
 //---------------------------------------------------------
 
 void TestSoundLibrary::tuningBendAtArrival()
@@ -3586,7 +3423,7 @@ void TestSoundLibrary::tuningBendAtArrival()
       Playback::setIniValuesForTest(withOld({}));      // (the timing these expectations were computed with)
       auto mapWith = [&](const QString& delay) {
             return loadMap(
-               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Legato early='100'/>"
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
                "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
                "<Instrument name='Violin' ids='violin' bend='200'>"
                "<Articulation name='Long' value='1' techniques='legato long' legatoDelay='" + delay + "'/>"
@@ -3634,20 +3471,21 @@ void TestSoundLibrary::tuningBendAtArrival()
             return out;
             };
       auto ticksOf = [](double msec) { return int(std::lround(msec * 0.96)); };
-      // on: D5+ starts 173.75 ms (167 ticks) early, its bend holds C5's 8192 until 12000 (the transition's arrival),
-      // then glides to 10240 (+50 cents of ±200) one cent a tick: 50 steps on the next 50 ticks; E5 the same from 10240 to 8192
+      // on: D5+ starts on its beat, its bend holds C5's 8192 until 173.75 ms (167 ticks) later (the transition's
+      // arrival), then glides to 10240 (+50 cents of ±200) one cent a tick: 50 steps on the next 50 ticks; E5 the same from 10240 to 8192
       render();
       QCOMPARE(ons[6].pitch, 74);
       QCOMPARE(ons[7].pitch, 76);
       for (size_t g : { size_t(6), size_t(7) }) {
             const int written = g == 6 ? 12000 : 12480;
-            QVERIFY2(std::abs(ons[g].tick - (written - ticksOf(173.75))) <= 1, qPrintable(QString::number(ons[g].tick)));
+            QCOMPARE(ons[g].tick, written);
             const std::vector<Bend> b = between(g);
             QVERIFY(b.size() >= 9);
             QCOMPARE(b.front().tick, ons[g].tick);
             QCOMPARE(b.front().value, g == 6 ? 8192 : 10240);         // (the note before's)
-            QVERIFY2(b[1].tick >= written && b[1].tick <= written + ticksOf(4),
-                     qPrintable(QString("glide %1 starts at %2, arrival %3").arg(g).arg(b[1].tick).arg(written)));
+            const int arrival = written + ticksOf(173.75);
+            QVERIFY2(b[1].tick >= arrival - 1 && b[1].tick <= arrival + ticksOf(4),
+                     qPrintable(QString("glide %1 starts at %2, arrival %3").arg(g).arg(b[1].tick).arg(arrival)));
             QCOMPARE(b.back().value, g == 6 ? 10240 : 8192);
             QCOMPARE(int(b.size()), 1 + 50);
             for (size_t k = 2; k < b.size(); ++k) {
@@ -3661,13 +3499,13 @@ void TestSoundLibrary::tuningBendAtArrival()
             QCOMPARE(int(b.size()), 1);
             QCOMPARE(b.front().tick, ons[i].tick);
             }
-      // the clamp: 600 ms, 521 after a quarter; D5+ starts 40 ms after C5 (keepMs), its transition would arrive
-      // 521 ms later, after E5's note-on (12480 - 521 ms): the glide ends just before E5's note-on, the value reached
+      // the clamp: 600 ms, 521 after a quarter; D5+'s transition would arrive 521 ms after its note-on, after E5's
+      // note-on (12480): the glide ends just before E5's note-on, the value reached
       SoundLib::setCurrent(mapWith("600"));
       render();
       {
             const std::vector<Bend> b = between(6);
-            QVERIFY2(std::abs(ons[7].tick - (12480 - ticksOf(521.25))) <= 1, qPrintable(QString::number(ons[7].tick)));
+            QCOMPARE(ons[7].tick, 12480);
             QCOMPARE(b.back().value, 10240);
             QVERIFY(b.back().tick < ons[7].tick && b.back().tick >= ons[7].tick - ticksOf(5));
             QCOMPARE(b[1].tick, ons[7].tick - 50);          // (50 steps, the last a tick before E5)
@@ -3687,122 +3525,6 @@ void TestSoundLibrary::tuningBendAtArrival()
       score->setMetaTag(Playback::metaTag, "");
       delete score;
       Playback::setIniValuesForTest({});
-      }
-
-//---------------------------------------------------------
-//   tuningOneInstance
-//    [tuning] oneInstance on a patch that bends (SoundLib::lanes): a line plays its tunings on one instance,
-//    the bend retuning it; safe (1) only once the note before's measured release (here 300 ms) has rung out,
-//    aggressive (2) once it has ended; a chord with two tunings still takes a copy. quartertones-line.musicxml
-//    at 120: C5 (0-0.5 s), C5+ (1.0), E5- (2.0), D5+ (3.0) and F5 (3.5) right after it, C5 + E5- together (4.0).
-//    Off: the copies as before (tail 1.5 s). The setting by layer, pitchBend off or a patch that doesn't bend:
-//    as off; rendered: each note on its lane's channel, the bend in force at its note-on its own tuning's
-//---------------------------------------------------------
-
-void TestSoundLibrary::tuningOneInstance()
-      {
-      auto mapWith = [&](const QString& bend) {
-            return loadMap(
-               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
-               "<Tuning method='varispeed' tolerance='0.5' tail='1.5'/>"
-               "<Instrument name='Violin' ids='violin'" + bend + ">"
-               "<Articulation name='Long' value='1' techniques='long legato' release='300'/>"
-               "</Instrument></SoundLibrary>");
-            };
-      auto lib = mapWith(" bend='200'");
-      QVERIFY(lib);
-      SoundLib::setCurrent(lib);
-      SoundLib::setOutput(SoundLib::Output::PLUGIN);
-      Playback::setIniValuesForTest({});
-      MasterScore* score = readScore(DIR + "quartertones-line.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      std::vector<const Note*> notes;               // in order, a chord's bottom up
-      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
-            if (s->element(0) && s->element(0)->isChord())
-                  for (const Note* n : toChord(s->element(0))->notes())
-                        notes.push_back(n);
-      QCOMPARE(int(notes.size()), 7);
-      const std::vector<double> cents = { 0, 50, -50, 50, 0, 0, -50 };
-      auto lanesOf = [&](const SoundLib::LibInstrument* patch, SoundLib::OneInstance mode) {
-            const SoundLib::Lanes l = SoundLib::lanes(score, score->parts()[0], { patch }, 0.5, 1.5, 4, mode);
-            std::vector<int> got;
-            for (const Note* n : notes) {
-                  got.push_back(l.lane.at(n));
-                  if (std::fabs(l.cents.at(n) - cents[got.size() - 1]) > 0.01)
-                        got.back() = -1;
-                  }
-            got.push_back(l.count[0]);                // (the count last)
-            return got;
-            };
-      auto text = [](const std::vector<int>& v) {
-            QStringList s;
-            for (int x : v)
-                  s << QString::number(x);
-            return s.join(' ');
-            };
-      const std::vector<int> off = { 0, 1, 0, 1, 2, 2, 0, 3 };
-      const std::vector<int> safe = { 0, 0, 0, 0, 1, 1, 0, 2 };         // (F5 right after D5+: within its release)
-      const std::vector<int> aggressive = { 0, 0, 0, 0, 0, 0, 1, 2 };   // (the chord's E5-: a copy)
-      const SoundLib::LibInstrument* violin = &lib->instruments[0];
-      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::OFF) == off, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::OFF))));
-      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SAFE) == safe, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SAFE))));
-      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE) == aggressive, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE))));
-      // safe: the gaps of 0.5 s after the detached notes are more than the release; a release over them (600 ms)
-      // keeps a copy for C5+, D5+ joins it, F5 retunes lane 0 (E5-'s release over), the chord's E5- a third
-      {
-            auto longer = loadMap(
-               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
-               "<Tuning method='varispeed' tolerance='0.5' tail='1.5'/>"
-               "<Instrument name='Violin' ids='violin' bend='200'>"
-               "<Articulation name='Long' value='1' techniques='long legato' release='600'/>"
-               "</Instrument></SoundLibrary>");
-            QVERIFY2(lanesOf(&longer->instruments[0], SoundLib::OneInstance::SAFE) == (std::vector<int> { 0, 1, 0, 1, 0, 0, 2, 3 }), qPrintable(text(lanesOf(&longer->instruments[0], SoundLib::OneInstance::SAFE))));
-            QVERIFY2(lanesOf(&longer->instruments[0], SoundLib::OneInstance::AGGRESSIVE) == aggressive, qPrintable(text(lanesOf(&longer->instruments[0], SoundLib::OneInstance::AGGRESSIVE))));
-      }
-      // a patch that doesn't bend, or the bend off: the copies as before
-      auto plain = mapWith("");
-      QVERIFY2(lanesOf(&plain->instruments[0], SoundLib::OneInstance::AGGRESSIVE) == off, qPrintable(text(lanesOf(&plain->instruments[0], SoundLib::OneInstance::AGGRESSIVE))));
-      Playback::setIniValuesForTest({ { "tuning/pitchBend", "0" } });
-      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE) == off, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::AGGRESSIVE))));
-      // by layer: default off, the ini's, the score's
-      Playback::setIniValuesForTest({});
-      QCOMPARE(SoundLib::oneInstance(score), SoundLib::OneInstance::OFF);
-      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SETTING) == off, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SETTING))));
-      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 3);
-      Playback::setIniValuesForTest({ { "tuning/oneInstance", "2" } });
-      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SETTING) == aggressive, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SETTING))));
-      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
-      score->setMetaTag(Playback::metaTag, "tuning/oneInstance=1");
-      QCOMPARE(Playback::source("tuning/oneInstance", score), Playback::Source::SCORE);
-      QVERIFY2(lanesOf(violin, SoundLib::OneInstance::SETTING) == safe, qPrintable(text(lanesOf(violin, SoundLib::OneInstance::SETTING))));
-      QVERIFY(!Playback::hasOwnMetaTag("tuning/oneInstance"));
-
-      // rendered (safe, the score's): each note on its lane's channel, untuned, its own bend in force at its note-on
-      score->setPlaylistDirty();
-      EventMap events;
-      SynthesizerState ss;
-      score->renderMidi(&events, false, true, ss);
-      int found = 0;
-      for (auto i = events.begin(); i != events.end(); ++i) {
-            const NPlayEvent& ev = i->second;
-            if (!ev.isExternal() || ev.type() != ME_NOTEON || ev.velo() == 0 || ev.librarySwitch() || !ev.note())
-                  continue;
-            const size_t k = size_t(std::find(notes.begin(), notes.end(), ev.note()) - notes.begin());
-            QVERIFY(k < notes.size());
-            QCOMPARE(ev.extChannel(), safe[k]);
-            QVERIFY(ev.tuning() == 0);
-            int last = -1;                    // (the bend in force: the last on its channel before it, in event order)
-            for (auto j = events.begin(); j != i; ++j)
-                  if (j->second.isExternal() && j->second.extChannel() == ev.extChannel() && j->second.type() == ME_PITCHBEND)
-                        last = j->second.dataA() | (j->second.dataB() << 7);
-            QVERIFY2(last == SoundLib::bendValue(cents[k], 200), qPrintable(QString("note %1: bend %2").arg(k).arg(last)));
-            ++found;
-            }
-      QCOMPARE(found, 7);
-      score->setMetaTag(Playback::metaTag, "");
-      Playback::setIniValuesForTest({});
-      delete score;
       }
 
 //---------------------------------------------------------
@@ -4707,192 +4429,6 @@ void TestSoundLibrary::shortsFollowDynamics()
       }
 
 //---------------------------------------------------------
-//   evenDynamicSteps
-//    SoundLib::evenStep (the owner, 2026-09-28: SSO's held notes climb far more from pp to mf than
-//    from mf to ff): ppp … fff split evenly over the held note's own range, by volume (CC11 down) or
-//    by recording (another CC1), judged by energy or by ear; and what playback sends
-//---------------------------------------------------------
-
-void TestSoundLibrary::evenDynamicSteps()
-      {
-      // (disabled for the owner, on with MS_EVEN_DYNAMIC_STEPS: set in initTestCase)
-      // a held note like SSO's Violas Long: steep to mf, then flat, with a dip at ff
-      SoundLib::DynamicsCurve held;
-      held.drivenBy = "controller";
-      held.points = { { 16, -60 }, { 32, -50 }, { 48, -44 }, { 64, -41 }, { 80, -39.5 }, { 96, -39.2 }, { 112, -39.6 }, { 127, -39 } };
-      for (const auto& p : held.points)                     // by ear: a brighter top sounds louder
-            held.perceived.push_back({ p.first, p.second + 50 + 0.05 * (p.first - 16) });
-      held.expression = { { 16, -90 }, { 32, -75 }, { 48, -62 }, { 64, -53 }, { 80, -47 }, { 96, -43 }, { 112, -41 }, { 127, -39.5 } };
-      for (const auto& p : held.expression)
-            held.expressionPerceived.push_back({ p.first, p.second + 50 });
-      auto f = [](const std::vector<std::pair<int, double>>& pts, int x) {
-            SoundLib::DynamicsCurve c;
-            c.points = pts;
-            return c.at(x);
-            };
-      const int MARKS[8] = { 16, 32, 48, 64, 80, 96, 112, 127 };
-
-      // off, or no curve: as before
-      QCOMPARE(SoundLib::evenStep(&held, SoundLib::EvenSteps::OFF, 80).dynamics, 80);
-      QCOMPARE(SoundLib::evenStep(&held, SoundLib::EvenSteps::OFF, 80).expression, -1);
-      QCOMPARE(SoundLib::evenStep(nullptr, SoundLib::EvenSteps::VOLUME_ENERGY, 80).dynamics, 80);
-
-      for (bool hearing : { false, true }) {
-            const auto& curve = hearing ? held.perceived : held.points;
-            const double lo = f(curve, 16), hi = f(curve, 127);
-            // by recording: the loudness at the CC sent climbs by the same step at every marking
-            const SoundLib::EvenSteps rec = hearing ? SoundLib::EvenSteps::RECORDING_HEARING : SoundLib::EvenSteps::RECORDING_ENERGY;
-            int last = 0;
-            for (int x : MARKS) {
-                  const SoundLib::Step st = SoundLib::evenStep(&held, rec, x);
-                  QCOMPARE(st.expression, -1);
-                  QVERIFY(st.dynamics >= last);
-                  last = st.dynamics;
-                  const double want = lo + (hi - lo) * (x - 16) / 111.0;
-                  QVERIFY2(std::fabs(f(curve, st.dynamics) - want) < 0.4,
-                           qPrintable(QString("%1 %2: %3 at %4, want %5").arg(hearing).arg(x).arg(f(curve, st.dynamics)).arg(st.dynamics).arg(want)));
-                  }
-            QCOMPARE(SoundLib::evenStep(&held, rec, 16).dynamics, 16);
-            QVERIFY(SoundLib::evenStep(&held, rec, 80).dynamics < 80);        // mf: nearer pp's recording
-            // by volume: the same CC1, the volume down to the step
-            const SoundLib::EvenSteps vol = hearing ? SoundLib::EvenSteps::VOLUME_HEARING : SoundLib::EvenSteps::VOLUME_ENERGY;
-            const auto& volume = hearing ? held.expressionPerceived : held.expression;
-            for (int x : MARKS) {
-                  const SoundLib::Step st = SoundLib::evenStep(&held, vol, x);
-                  QCOMPARE(st.dynamics, x);
-                  QVERIFY(st.expression >= 1 && st.expression <= 127);
-                  const double sounds = f(curve, x) + f(volume, st.expression) - f(volume, 127);
-                  const double want = lo + (hi - lo) * (x - 16) / 111.0;
-                  QVERIFY2(std::fabs(sounds - want) < 0.4,
-                           qPrintable(QString("%1 %2: %3 (CC11 %4), want %5").arg(hearing).arg(x).arg(sounds).arg(st.expression).arg(want)));
-                  }
-            QCOMPARE(SoundLib::evenStep(&held, vol, 16).expression, 127);
-            QCOMPARE(SoundLib::evenStep(&held, vol, 127).expression, 127);
-            QVERIFY(SoundLib::evenStep(&held, vol, 80).expression < 127);
-            // a MuseScore 3 fade under ppp: ppp's volume, the CC fading
-            QCOMPARE(SoundLib::evenStep(&held, vol, 8).dynamics, 8);
-            QCOMPARE(SoundLib::evenStep(&held, vol, 8).expression, 127);
-            }
-      // by ear and by energy differ
-      QVERIFY(SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_HEARING, 80).dynamics
-              != SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_ENERGY, 80).dynamics);
-      // a dip from round robins (mf louder than f) is not followed: the markings still climb
-      {
-            SoundLib::DynamicsCurve dip = held;
-            dip.points = { { 16, -60 }, { 32, -54 }, { 48, -49 }, { 64, -45 }, { 80, -40 }, { 96, -44 }, { 112, -38 }, { 127, -36 } };
-            int last = 0;
-            for (int x : MARKS) {
-                  const int v = SoundLib::evenStep(&dip, SoundLib::EvenSteps::RECORDING_ENERGY, x).dynamics;
-                  QVERIFY2(v >= last, qPrintable(QString("%1 -> %2 after %3").arg(x).arg(v).arg(last)));
-                  last = v;
-                  }
-            // volume: the step never above the pooled curve, so never a cut from the dip at 96 alone
-            QVERIFY(SoundLib::evenStep(&dip, SoundLib::EvenSteps::VOLUME_ENERGY, 96).expression > 1);
-      }
-      // flat from 48 up (SSO's Clarinets a2 - Performance): fff stays at 127, not the flat stretch's start
-      {
-            SoundLib::DynamicsCurve flat = held;
-            flat.points = { { 16, -60 }, { 32, -52 }, { 48, -46 }, { 64, -46 }, { 80, -46 }, { 96, -46 }, { 112, -46 }, { 127, -46 } };
-            QCOMPARE(SoundLib::evenStep(&flat, SoundLib::EvenSteps::RECORDING_ENERGY, 127).dynamics, 127);
-            const int ff = SoundLib::evenStep(&flat, SoundLib::EvenSteps::RECORDING_ENERGY, 112).dynamics;  // -47.9 dB: under the flat
-            QVERIFY2(ff > 32 && ff < 48, qPrintable(QString::number(ff)));
-      }
-      // a patch that barely follows the expression CC (SSO's Tuba Solo - Performance): as before
-      {
-            SoundLib::DynamicsCurve deaf = held;
-            deaf.expression = { { 16, -40.6 }, { 64, -40.4 }, { 127, -40 } };
-            QCOMPARE(SoundLib::evenStep(&deaf, SoundLib::EvenSteps::VOLUME_ENERGY, 80).expression, -1);
-            QCOMPARE(SoundLib::evenStep(&deaf, SoundLib::EvenSteps::VOLUME_ENERGY, 80).dynamics, 80);
-      }
-      // volume without the volume measured: as before
-      {
-            SoundLib::DynamicsCurve old = held;
-            old.expression.clear();
-            QCOMPARE(SoundLib::evenStep(&old, SoundLib::EvenSteps::VOLUME_ENERGY, 80).expression, -1);
-            QCOMPARE(SoundLib::evenStep(&old, SoundLib::EvenSteps::VOLUME_ENERGY, 80).dynamics, 80);
-      }
-
-      // the volume curves written and read back
-      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
-      cal->setCurve("Violin", 1, held);
-      SoundLib::DynamicsCurve staccato;
-      staccato.drivenBy = "velocity";
-      for (int x : MARKS)
-            staccato.points.push_back({ x, -70 + 0.4 * x });
-      cal->setCurve("Violin", 40, staccato);
-      QTemporaryDir dir;
-      QVERIFY(cal->write(dir.path() + "/dynamics.json"));
-      auto back = std::make_shared<SoundLib::DynamicsCalibration>();
-      QVERIFY(back->read(dir.path() + "/dynamics.json"));
-      QCOMPARE(int(back->curve("Violin", 1)->expression.size()), 8);
-      QCOMPARE(back->curve("Violin", 1)->expressionPerceived.back().second, 10.5);
-      QVERIFY(back->curve("Violin", 40)->expression.empty());
-
-      // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
-      auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' expression='127' velocity='short'/>"
-         "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
-         "<Articulation name='Staccato' value='40' techniques='short'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib);
-      SoundLib::setCurrent(lib);
-      SoundLib::setDynamicsCalibration(back);
-      Playback::setIniValuesForTest({ { "shorts/calibratedVelocity", "1" } });     // (off by default since 2026-10-06)
-      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      QCOMPARE(SoundLib::evenSteps(score), SoundLib::EvenSteps::OFF);
-      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
-      struct Played { int cc1, cc11, velo; };
-      auto play = [&](const QString& mode) {
-            score->setMetaTag(SoundLib::evenStepsMetaTag, mode);
-            EventMap events;
-            SynthesizerState ss;
-            score->renderMidi(&events, false, true, ss);
-            std::vector<Played> out;
-            int cc1 = -1, cc11 = -1;
-            for (const auto& te : events) {
-                  const NPlayEvent& ev = te.second;
-                  if (ev.channel() != ch)
-                        continue;
-                  if (ev.type() == ME_CONTROLLER && ev.dataA() == 1)
-                        cc1 = ev.dataB();
-                  else if (ev.type() == ME_CONTROLLER && ev.dataA() == 11)
-                        cc11 = ev.dataB();
-                  else if (ev.type() == ME_NOTEON && ev.velo() > 0)
-                        out.push_back({ cc1, cc11, ev.velo() });
-                  }
-            return out;
-            };
-      const std::vector<Played> off = play("");
-      QCOMPARE(int(off.size()), 9);
-      QCOMPARE(off[0].cc1, 32);
-      QCOMPARE(off[3].cc1, 80);
-      QCOMPARE(off[3].cc11, 127);
-      const std::vector<Played> vol = play("volume-energy");
-      QCOMPARE(SoundLib::evenSteps(score), SoundLib::EvenSteps::VOLUME_ENERGY);
-      QCOMPARE(int(vol.size()), 9);
-      QCOMPARE(vol[0].cc1, 32);
-      QCOMPARE(vol[3].cc1, 80);
-      QCOMPARE(vol[0].cc11, SoundLib::evenStep(&held, SoundLib::EvenSteps::VOLUME_ENERGY, 32).expression);
-      QCOMPARE(vol[3].cc11, SoundLib::evenStep(&held, SoundLib::EvenSteps::VOLUME_ENERGY, 80).expression);
-      QVERIFY(vol[3].cc11 < 127);
-      QCOMPARE(vol[0].velo, off[0].velo);                   // the shorts: turned down with the held note
-      QCOMPARE(vol[3].velo, off[3].velo);
-      const std::vector<Played> rec = play("recording-energy");
-      QCOMPARE(int(rec.size()), 9);
-      QCOMPARE(rec[3].cc1, SoundLib::evenStep(&held, SoundLib::EvenSteps::RECORDING_ENERGY, 80).dynamics);
-      QCOMPARE(rec[3].cc11, 127);
-      // the shorts as loud as the held note at the CC1 sent
-      QCOMPARE(rec[3].velo, SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, rec[3].cc1));
-      QVERIFY(rec[3].velo < off[3].velo);
-      SoundLib::setDynamicsCalibration(nullptr);
-      Playback::setIniValuesForTest({});
-      delete score;
-      }
-
-//---------------------------------------------------------
 //   pedalChangeAfterChord
 //    a pedal change on a sound library part comes after the chord it goes with (legato pedalling):
 //    the owner, 2026-09-28, SSO's Grand Piano dropped about 1 chord in 8 at a pedal change when the
@@ -4910,10 +4446,7 @@ void TestSoundLibrary::pedalChangeAfterChord()
                "</Instrument></SoundLibrary>");
             QVERIFY(lib);
             SoundLib::setCurrent(withLibrary ? lib : nullptr);
-            for (bool pianist : { true, false }) {
-                  // a pianist's legato pedalling (the default until 2026-10-06), else the default: one tick after the chord
-                  Playback::setIniValuesForTest(pianist ? std::map<QString, QString> { { "pedal/upAfterMs", "40" }, { "pedal/downAfterMs", "90" } }
-                                                        : std::map<QString, QString>());
+            {     // (one tick after the chord)
                   MasterScore* score = readScore(DIR + "pedal-change.musicxml");
                   QVERIFY(score);
                   score->rebuildMidiMapping();
@@ -4935,12 +4468,7 @@ void TestSoundLibrary::pedalChangeAfterChord()
                   QCOMPARE(chord2, 1920);
                   QCOMPARE(int(pedal.size()), 4);                   // down, the change (up, down), up
                   QCOMPARE(pedal[0], std::make_pair(0, 127));
-                  if (withLibrary && pianist) {
-                        // 40 ms and 90 ms after the chord at 60 bpm: 19 and 43 ticks
-                        QCOMPARE(pedal[1], std::make_pair(1920 + 19, 0));
-                        QCOMPARE(pedal[2], std::make_pair(1920 + 43, 127));
-                        }
-                  else if (withLibrary) {
+                  if (withLibrary) {
                         QCOMPARE(pedal[1], std::make_pair(1920 + 1, 0));
                         QCOMPARE(pedal[2], std::make_pair(1920 + 2, 127));
                         }
@@ -4956,8 +4484,7 @@ void TestSoundLibrary::pedalChangeAfterChord()
             }
       Playback::setIniValuesForTest({});
       // a pedal that ends where a chord starts, with no pedal after it (the owner's piece at 8:37):
-      // up 40 ms after that chord with the library (a pianist's pedalling; by default one tick), at its tick without
-      Playback::setIniValuesForTest({ { "pedal/upAfterMs", "40" } });
+      // up one tick after that chord with the library, at its tick without
       for (bool withLibrary : { true, false }) {
             auto lib = loadMap(
                "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
@@ -4978,7 +4505,7 @@ void TestSoundLibrary::pedalChangeAfterChord()
                         pedal.push_back({ te.first, te.second.dataB() });
             QCOMPARE(int(pedal.size()), 2);
             QCOMPARE(pedal[1].second, 0);
-            QVERIFY2(withLibrary ? pedal[1].first == 1920 + 19 : pedal[1].first <= 1920, qPrintable(QString::number(pedal[1].first)));
+            QVERIFY2(withLibrary ? pedal[1].first == 1920 + 1 : pedal[1].first <= 1920, qPrintable(QString::number(pedal[1].first)));
             delete score;
             }
       Playback::setIniValuesForTest({});
@@ -5365,9 +4892,8 @@ void TestSoundLibrary::heldOnPerformance()
 
 //---------------------------------------------------------
 //   dynamicsCalibration
-//    measured curves (Check articulations › Dynamics): a short plays the velocity at which it is as
-//    loud as the part's held note at the note's dynamic (plus the balance setting); an accent keeps
-//    its share; without a curve for the held note, the <Dynamics velocity> rule
+//    measured curves (Check articulations › Dynamics, dynamics.json; the marcato level reads them): a curve's
+//    inverse, written and read back; calibratedController
 //---------------------------------------------------------
 
 void TestSoundLibrary::dynamicsCalibration()
@@ -5387,288 +4913,20 @@ void TestSoundLibrary::dynamicsCalibration()
       QCOMPARE(cal->curve("Violin", 40)->inverse(-100), 1);           // under the curve: its slope goes on, to 1
       QCOMPARE(cal->curve("Violin", 40)->inverse(-67.6), 6);          // (-70 + 0.4 x: 6)
       QCOMPARE(cal->curve("Violin", 40)->inverse(0), 127);
-      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 1, "Violin", 1, 80), -1);    // on the controller
-      // pp (CC 32): -36.8 dB -> the staccato's velocity 83; mf (80): -32 -> 95
-      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 40, "Violin", 1, 32), 83);
-      QCOMPARE(SoundLib::calibratedVelocity(*cal, "Violin", 40, "Violin", 1, 80), 95);
       // written and read back
       QTemporaryDir dir;
-      cal->balanceDb = -2;
       QVERIFY(cal->write(dir.path() + "/dynamics.json"));
       auto back = std::make_shared<SoundLib::DynamicsCalibration>();
       QVERIFY(back->read(dir.path() + "/dynamics.json"));
-      QCOMPARE(back->balanceDb, -2.0);
       QCOMPARE(back->curve("Violin", 40)->drivenBy, QString("velocity"));
       QCOMPARE(int(back->curve("Violin", 40)->points.size()), 8);
-      // -2 dB: pp -38.8 -> 78
-      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32), 78);
-      // per family: its own, else balanceDb; written and read back
-      back->familyBalanceDb["strings"] = -4;
-      QCOMPARE(back->balanceFor("strings"), -4.0);
-      QCOMPARE(back->balanceFor("brass"), -2.0);
-      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32, "strings"), 73);   // -40.8 dB
-      QCOMPARE(SoundLib::calibratedVelocity(*back, "Violin", 40, "Violin", 1, 32, "brass"), 78);
-      QVERIFY(back->write(dir.path() + "/dynamics.json"));
-      SoundLib::DynamicsCalibration again;
-      QVERIFY(again.read(dir.path() + "/dynamics.json"));
-      QCOMPARE(again.balanceFor("strings"), -4.0);
-      QCOMPARE(again.balanceFor("woodwinds"), -2.0);
-      // the score's own (Mixer › Advanced Options…): only what differs from the library's is written
-      {
-            MasterScore* sc = readScore(DIR + "shorts-dynamics.musicxml");
-            QVERIFY(sc);
-            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "strings"), -4.0);
-            const QString tag = SoundLib::writeShortBalance({ { "strings", -4.0 }, { "solo strings", -6.0 }, { "brass", 1.5 } }, again);
-            QCOMPARE(tag, QString("brass=1.5 solo_strings=-6"));
-            sc->setMetaTag(SoundLib::shortBalanceMetaTag, tag);
-            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "solo strings"), -6.0);
-            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "brass"), 1.5);
-            QCOMPARE(SoundLib::shortNotesBalance(sc, again, "strings"), -4.0);
-            QCOMPARE(SoundLib::calibratedVelocity(again, "Violin", 40, "Violin", 1, 32, "solo strings", sc), 68);   // -42.8 dB
-            delete sc;
-      }
-      // the recommended setting: shorts matched in energy that sound 3 dB louder -> -3
-      {
-            auto rlib = loadMap(
-               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
-               "<Instrument name='Violin' ids='violin' nki='Instruments/Symphonic Strings/Violin.nki'>"
-               "<Articulation name='Long' value='1' techniques='long legato'/>"
-               "<Articulation name='Staccato' value='40' techniques='short'/>"
-               "</Instrument></SoundLibrary>");
-            QVERIFY(rlib);
-            SoundLib::DynamicsCalibration rc;
-            SoundLib::DynamicsCurve held = line("controller", -40, 0.1);
-            SoundLib::DynamicsCurve shortc = line("velocity", -70, 0.4);
-            double dummy;
-            QVERIFY(!SoundLib::recommendedBalance(*rlib, rc, "strings", &dummy));       // nothing measured
-            for (const auto& p : held.points)
-                  held.perceived.push_back({ p.first, p.second + 50 });
-            for (const auto& p : shortc.points)
-                  shortc.perceived.push_back({ p.first, p.second + 53 });                // 3 dB louder by ear
-            rc.setCurve("Violin", 1, held);
-            rc.setCurve("Violin", 40, shortc);
-            double rec = 0;
-            QVERIFY(SoundLib::recommendedBalance(*rlib, rc, "strings", &rec));
-            QCOMPARE(rec, -3.0);
-            QVERIFY(!SoundLib::recommendedBalance(*rlib, rc, "brass", &dummy));
-      }
-
-      // in playback: shorts-dynamics.musicxml (bar 1 pp A B stacc. C held, bar 2 mf, bar 3 pp accented A)
-      back->balanceDb = 0;
-      auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
-         "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
-         "<Articulation name='Staccato' value='40' techniques='short'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib);
-      SoundLib::setCurrent(lib);
-      SoundLib::setDynamicsCalibration(back);
-      Playback::setIniValuesForTest({ { "shorts/calibratedVelocity", "1" } });     // (off by default since 2026-10-06)
-      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
-      EventMap events;
-      SynthesizerState ss;
-      score->renderMidi(&events, false, true, ss);
-      std::vector<int> velo;
-      for (const auto& te : events)
-            if (te.second.channel() == ch && te.second.type() == ME_NOTEON && te.second.velo() > 0)
-                  velo.push_back(te.second.velo());
-      // off (the default): the first short plays at its dynamic's velocity, not the calibrated one
-      Playback::setIniValuesForTest({});
-      EventMap plainEvents;
-      score->renderMidi(&plainEvents, false, true, ss);
-      for (const auto& te : plainEvents) {
-            if (te.second.channel() == ch && te.second.type() == ME_NOTEON && te.second.velo() > 0) {
-                  QVERIFY2(te.second.velo() != 83, "calibrated velocity while calibratedVelocity is off");
-                  break;
-                  }
-            }
-      SoundLib::setDynamicsCalibration(nullptr);
-      QCOMPARE(int(velo.size()), 9);
-      QCOMPARE(velo[0], 83);
-      QCOMPARE(velo[1], 83);
-      QCOMPARE(velo[3], 95);
-      QVERIFY2(velo[6] > 83 && velo[6] <= 127, qPrintable(QString::number(velo[6])));       // accented pp
-      delete score;
-
       // calibratedController: the CC at which a patch's own long matches the held note (Violin -
       // Performance's Legato, -40 + 0.1 x; the main patch's Long -45 + 0.2 x: at 32, 41)
-      auto lib2 = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
-         "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
-         "<Articulation name='Staccato' value='40' techniques='short'/>"
-         "</Instrument>"
-         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
-         "<Articulation name='Legato' value='20' techniques='legato long' prefer='long'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib2);
       auto cal2 = std::make_shared<SoundLib::DynamicsCalibration>();
       cal2->setCurve("Violin - Performance", 20, line("controller", -40, 0.1));
       cal2->setCurve("Violin", 1, line("controller", -45, 0.2));
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 32), 41);
       QCOMPARE(SoundLib::calibratedController(*cal2, "Violin", 1, "Violin - Performance", 20, 80), 65);
-      }
-
-//---------------------------------------------------------
-//   salienceFit
-//    the recommended short notes' balance with attack salience (SoundLib::recommendation, fitSalience):
-//    a dynamics.json from before it (no attack curves, no heardBalanceDb) reads and recommends as
-//    before; with attack curves, the weight fitted to the owner's ear (the map's <Dynamics heard>,
-//    dynamics.json's heardBalanceDb) reproduces one reference exactly, several by least squares
-//---------------------------------------------------------
-
-void TestSoundLibrary::salienceFit()
-      {
-      auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short' heard='strings=-4 solo_strings=-2'/>"
-         "<Instrument name='Violin' ids='violin' nki='Instruments/Symphonic Strings/Violin.nki'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
-         "<Articulation name='Staccato' value='40' techniques='short'/>"
-         "</Instrument>"
-         "<Instrument name='Trumpet' ids='trumpet' nki='Instruments/Symphonic Brass/Trumpet.nki'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
-         "<Articulation name='Staccato' value='40' techniques='short'/>"
-         "</Instrument>"
-         "<Instrument name='Flute' ids='flute' nki='Instruments/Symphonic Woodwinds/Flute.nki'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
-         "<Articulation name='Staccato' value='40' techniques='short'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib);
-      QCOMPARE(int(lib->heardBalance.size()), 2);
-      QCOMPARE(lib->heardBalance.at("strings"), -4.0);
-      QCOMPARE(lib->heardBalance.at("solo strings"), -2.0);
-      // a file from before attack salience: the held note -40 + 0.1 x dB (perceived +50), the staccato
-      // -70 + 0.4 x (perceived +49: matched in energy it sounds 1 dB softer, the loudness model's
-      // strings +1 dB); brass's staccato sounds 1.5 dB louder (-1.5 dB)
-      QTemporaryDir dir;
-      const QString file = dir.path() + "/dynamics.json";
-      {
-            auto pts = [](double a, double b, double off) {
-                  QJsonArray arr;
-                  for (int x : { 16, 32, 48, 64, 80, 96, 112, 127 })
-                        arr.append(QJsonArray({ x, a + b * x + off }));
-                  return arr;
-                  };
-            auto art = [&](const char* by, double a, double b, double per) {
-                  return QJsonObject({ { "drivenBy", by }, { "curve", pts(a, b, 0) }, { "perceived", pts(a, b, per) } });
-                  };
-            QJsonObject patches;
-            patches["Violin"] = QJsonObject({ { "1", art("controller", -40, 0.1, 50) }, { "40", art("velocity", -70, 0.4, 49) } });
-            patches["Trumpet"] = QJsonObject({ { "1", art("controller", -40, 0.1, 50) }, { "40", art("velocity", -70, 0.4, 51.5) } });
-            QJsonObject o({ { "balanceDb", 0 }, { "patches", patches } });
-            QFile f(file);
-            QVERIFY(f.open(QIODevice::WriteOnly));
-            f.write(QJsonDocument(o).toJson());
-      }
-      SoundLib::DynamicsCalibration old;
-      QVERIFY(old.read(file));
-      QVERIFY(old.heardBalanceDb.empty());
-      QVERIFY(old.curve("Violin", 40)->attack.empty());
-      QCOMPARE(old.curve("Violin", 40)->attackAt(80), -200.0);
-      double db = 0;
-      QVERIFY(SoundLib::recommendedBalance(*lib, old, "strings", &db));
-      QCOMPARE(db, 1.0);                                          // loudness only, as before
-      QVERIFY(SoundLib::recommendedBalance(*lib, old, "brass", &db));
-      QCOMPARE(db, -1.5);
-      QVERIFY(!SoundLib::recommendedBalance(*lib, old, "woodwinds", &db));
-      QVERIFY(!SoundLib::fitSalience(*lib, old).ok);
-      {
-            const SoundLib::Recommendation r = SoundLib::recommendation(*lib, old, "strings", SoundLib::fitSalience(*lib, old));
-            QVERIFY(r.loudness && !r.salience);
-            QCOMPARE(r.notes, 3);                                 // pp, mf, ff
-            QCOMPARE(r.attackNotes, 0);
-      }
-      {
-            const QString report = SoundLib::recommendationReport(*lib, old);
-            QVERIFY2(report.contains("Recommended short notes settings: strings +1 dB, woodwinds") == false
-                     && report.contains("Recommended short notes settings: strings +1 dB, brass -1.5 dB"), qPrintable(report));
-            QVERIFY2(report.contains("strings: loudness only +1 dB (3 notes; no attack measured"), qPrintable(report));
-            QVERIFY2(report.contains("heard right: -4 dB"), qPrintable(report));
-            QVERIFY2(report.contains("solo strings: nothing measured; heard right: -2 dB"), qPrintable(report));
-            QVERIFY2(report.contains("attack salience not used: no attack measured"), qPrintable(report));
-      }
-      QVERIFY(old.write(file));                                   // written back: still no attack, no heard
-      {
-            QFile f(file);
-            QVERIFY(f.open(QIODevice::ReadOnly));
-            const QByteArray json = f.readAll();
-            QVERIFY(!json.contains("\"attack\""));
-            QVERIFY(!json.contains("heardBalanceDb"));
-      }
-
-      // measured with attack salience: strings' shorts' attacks 2.5 dB beyond their loudness (S), brass's 1
-      SoundLib::DynamicsCalibration cal = old;
-      auto withAttack = [&](const QString& patch, int value, double beyond) {
-            SoundLib::DynamicsCurve c = *cal.curve(patch, value);
-            for (const auto& p : c.perceived)
-                  c.attack.push_back({ p.first, p.second + beyond });
-            cal.setCurve(patch, value, c);
-            };
-      withAttack("Violin", 1, 0);
-      withAttack("Violin", 40, 2.5);
-      withAttack("Trumpet", 1, 0);
-      withAttack("Trumpet", 40, 1.0);
-      // one reference, strings -4 (solo strings' has nothing measured): w = (1 + 4) / 2.5 = 2, exactly -4
-      SoundLib::SalienceFit fit = SoundLib::fitSalience(*lib, cal);
-      QVERIFY(fit.ok);
-      QCOMPARE(fit.used, QStringList({ "strings" }));
-      QVERIFY2(std::fabs(fit.weight - 2.0) < 1e-9, qPrintable(QString::number(fit.weight)));
-      SoundLib::Recommendation rs = SoundLib::recommendation(*lib, cal, "strings", fit);
-      QVERIFY(rs.salience);
-      QVERIFY2(std::fabs(rs.salienceDb - -4.0) < 1e-9, qPrintable(QString::number(rs.salienceDb)));
-      QVERIFY2(std::fabs(rs.loudnessDb - 1.0) < 1e-9, qPrintable(QString::number(rs.loudnessDb)));
-      QVERIFY(SoundLib::recommendedBalance(*lib, cal, "strings", &db));
-      QCOMPARE(db, -4.0);
-      // brass by the same weight: -(1.5 + 2 * 1) = -3.5
-      QVERIFY(SoundLib::recommendedBalance(*lib, cal, "brass", &db));
-      QCOMPARE(db, -3.5);
-      {
-            const QString report = SoundLib::recommendationReport(*lib, cal);
-            QVERIFY2(report.contains("Recommended short notes settings: strings -4 dB, brass -3.5 dB"), qPrintable(report));
-            QVERIFY2(report.contains("strings: loudness only +1 dB, with attack salience -4 dB (matched shorts sound -1 dB "
-                                     "against the held note, their attacks 2.5 dB beyond that; 3 notes); heard right: -4 dB"), qPrintable(report));
-            QVERIFY2(report.contains("brass: loudness only -1.5 dB, with attack salience -3.5 dB"), qPrintable(report));
-            QVERIFY2(report.contains("attack salience weight 2.00, fitted to what was heard right (strings)"), qPrintable(report));
-      }
-      // a family measured without attack curves stays on loudness only
-      {
-            SoundLib::DynamicsCalibration mixed = cal;
-            mixed.setCurve("Trumpet", 40, *old.curve("Trumpet", 40));
-            QVERIFY(SoundLib::recommendedBalance(*lib, mixed, "brass", &db));
-            QCOMPARE(db, -1.5);
-            QVERIFY(SoundLib::recommendedBalance(*lib, mixed, "strings", &db));
-            QCOMPARE(db, -4.0);
-      }
-      // the owner's ear in dynamics.json: another strings reference replaces the map's (-3: w = 4 / 2.5)
-      cal.heardBalanceDb["strings"] = -3;
-      fit = SoundLib::fitSalience(*lib, cal);
-      QVERIFY2(std::fabs(fit.weight - 1.6) < 1e-9, qPrintable(QString::number(fit.weight)));
-      QVERIFY2(std::fabs(SoundLib::recommendation(*lib, cal, "strings", fit).salienceDb - -3.0) < 1e-9, "");
-      // two references, strings -4 and brass -3: least squares, w = (2.5 * 5 + 1 * 1.5) / (2.5^2 + 1^2)
-      cal.heardBalanceDb["strings"] = -4;
-      cal.heardBalanceDb["brass"] = -3;
-      fit = SoundLib::fitSalience(*lib, cal);
-      QCOMPARE(fit.used, QStringList({ "brass", "strings" }));
-      QVERIFY2(std::fabs(fit.weight - 14.0 / 7.25) < 1e-9, qPrintable(QString::number(fit.weight)));
-      // written and read back
-      QVERIFY(cal.write(file));
-      SoundLib::DynamicsCalibration back;
-      QVERIFY(back.read(file));
-      QCOMPARE(back.heardBalanceDb.at("brass"), -3.0);
-      QCOMPARE(int(back.curve("Violin", 40)->attack.size()), 8);
-      QVERIFY(std::fabs(SoundLib::fitSalience(*lib, back).weight - 14.0 / 7.25) < 1e-9);
-      // an ear that wants the shorts louder than loudness says: no negative weight (loudness only)
-      SoundLib::DynamicsCalibration louder = cal;
-      louder.heardBalanceDb = { { "strings", 3 } };
-      fit = SoundLib::fitSalience(*lib, louder);
-      QVERIFY(fit.ok);
-      QCOMPARE(fit.weight, 0.0);
-      QVERIFY(SoundLib::recommendedBalance(*lib, louder, "strings", &db));
-      QCOMPARE(db, 1.0);
       }
 
 //---------------------------------------------------------

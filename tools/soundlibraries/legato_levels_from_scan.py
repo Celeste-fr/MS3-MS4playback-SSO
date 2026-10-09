@@ -13,8 +13,8 @@ transitions this one arrives: SSO records each start x interval on its own, and 
 patch's attacks minus the reference, median dB}} and prints a summary.
 
 Measured 2026-10-02 (43 patches): per patch a median 0.1-1.8 dB off, 0-31 % over 3 dB; the same at p and f. In a
-run, though, the notes around a transition move its level by as much (1.4-4.9 dB, Violas), so the renderer's [legato]
-levelBalance, which plays these, stays off (HANDOFF.md › Legato level balance)."""
+run, though, the notes around a transition move its level by as much (1.4-4.9 dB, Violas), so the legato level
+balance that played these stayed off and went 2026-10-07 (the measurement is kept: HANDOFF.md › Legato level balance)."""
 import argparse
 import glob
 import json

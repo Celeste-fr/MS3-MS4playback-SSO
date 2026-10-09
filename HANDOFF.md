@@ -5,6 +5,14 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Before a build goes to the owner (2026-10-09)
+
+Run the playback audit on *Whence 12-TET* with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
+with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every ARRIVAL fail and CAPPED note left must be
+named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
+LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
+Green 1977) the owner hasn't approved yet.
+
 ## No Performance patches (2026-10-06)
 
 The owner: "NO using performance patches. with all technique patches we have control of release, tightness, CC
@@ -15,6 +23,31 @@ tempo* stay at the library's defaults (the owner, 2026-10-06): adjusted in Live 
 by MuseScore. Unmeasured: how the All techniques longs sound slurred at speed. A slurred
 "espr." note now plays Long (Rachm.) as a held one does (`long legato`, as Long CS plays muted slurs; it played the
 Performance legato): offer to the owner, revert in the generator's table if they prefer plain Long.
+
+**Plain Long for every section, lined up (the owner, 2026-10-07: "just using plain long for everything"; goal: pairs of sections within Rasch 1979's 30-50 ms)**, branch `legato-pair-delays`. Every slurred note plays the All techniques Long, early by its onset (`<Onset early="100"/>`). Measured on the Windows VM (real SSO, kthost offline, *Whence* violas bars 3-7 moved into each of 12 patches' range, odd and even notes on two instances so no attack is masked): with the map's old onsets the slow run (durations x4) had 40 of 66 section pairs within 50 ms (loudness detector; 58 by the new pitch's harmonics), the fast run 14 of 15. The residual followed pitch (Oboe r 0.94, Tuba 0.90), so `sso_long_onset_fit.json` (`onset_fit_from_split.py`) gives Violins 1, Violas, Flute, Oboe, Clarinet and Tuba a per-semitone Long onset (isolated notes, each the median of those within a semitone, + the section's offset) and moves Basses' (-84) and Tenor Trombone's (-36); `gen_spitfire_sso.py` reads it. Rendered again (batch 7): slow 56 of 66 pairs within 50 ms (loudness, median SD 29 ms), 62 of 66 (harmonics, 28), fast 16 of 16 (34; the fast loudness detector reads too few notes). The replay predicted each to within one pair. Left over 50 ms, not fixable by a per-pitch early start: Basses on loudness (round-robin variants; the detector misses one below pitch 38, and pitch 40 alternates 150 / 320 ms; harmonics puts their pairs at 25-42) and Oboe on harmonics (pitch 76 has two attacks ~60 ms apart, at 79 the detectors differ by ~105 ms). Next only by ear: the owner listens, against `[heldNotes] early 0`. `[heldNotes] early 0` plays notes as written, to compare.
+
+**Performance with every note shifted to a consistent arrival (the owner's "B", 2026-10-07): not reachable by shifting**
+(branch `legato-pair-delays`; Windows VM, real SSO, kthost offline, Violas - Performance at mf, *Whence* 12-TET violas
+bars 3-7 three times). Heard arrival after note-on in the run, unshifted: median 93 ms, 10-90 % 58..183 (the same note
+in the three passes within 10 ms: SSO is repeatable). (1) The pair scan (`legato_pair_scan.py`, every start x interval
+±1..12 in three contexts, `sso_legato_pairs.json`) doesn't predict the run: shifting each note by its pair's value
+leaves the 10-90 % width at 115-130 ms (was 125). (2) Closed loop on the passage itself (shift by each note's own heard
+lateness, render, measure again) diverges: width 125 → 165 → 328 ms; even notes whose predecessor kept ≥ 60 ms got no
+tighter (130 → 144). Moving a note-on changes SSO's transition about as much as the shift. Left: a uniform shift (the
+old `legatoDelay` by interval, `Legato early`), which centres the run but keeps its spread.
+
+**Performance as an opt-in, its spread in the players' range (the owner, 2026-10-07: "let's use the performance patch,
+but tune the note spread so that they are within the established range for professional players")**, branch
+`legato-pair-delays`, waiting for the owner (changes the 2026-10-06 decision where a score asks for it). Staff text
+"performance" (until "ord." / "non performance") plays slurred and held notes on the part's Performance patch (modifier
+`performance`, 42 Legato articulations); Violas - Performance plays its transitions at velocity 100, the others at the note's own (map `legatoVelocity`; the playback.ini
+override `[legato] velocity` was removed 2026-10-07: to hear the note's own, a map without it). Target: Rasch 1979, between-player asynchrony SD 30-50 ms typical (string
+quartets 24-28 ms at fast tempi). Measured (same passage and VM): arrival - written SD 49 ms at velocity 64, **41 ms at
+100** (on the notes heard in every render 45-46 → 37-38); 159 of 180 transitions detected against 133; median arrival
+68 ms against 88; median note peak 1.5 dB lower. Per-note nudges toward the run's median (gain 0.5, ±60 ms) made it no
+tighter (49 → 46 at 64; 41 → 51 at 100). Inside 30-50, not down to 24-28. To hear: velocity 100 is Spitfire's "fast
+slurred with accent" (slow transitions 85-127: bowed), so offer both by ear (a map without `legatoVelocity` vs the default). Same passage on every family (moved by octaves near each patch's test note), SD at 64 / at 100 (ms): Violas 54 / 39, Violins 1 53 / 65, Celli 53 / 70, Basses 39 / 65, Flute 35 / 65, Trumpet 26 / 35; Oboe 29, Clarinet 31, Bassoon 98, Horn 29, Tenor Trombone 31, Tuba 55 render the same at both. So only Violas - Performance gets 100; the others keep the note's own. A sweep at 30 / 50 / 84 / 120 (Violins 1 53 / 50 / 53 / 58, Celli 44 / 35 / 47 / 64) looked like 50 for both, but rendering again gave Celli 49 at 50 and 42 at 64, Violins 1 55 / 53: renders differ by about ±10 ms of SD, so 50 was taken back. Bassoon (98) and Tuba (55) don't react to velocity; a per-note nudge helps Bassoon (98 → 62) and hurts Tuba (55 → 87). Lateness grows in slower music (every duration x4: Violas median 98 → 189, Horn 98 → 249 ms), so one early start per patch fits one tempo (map `trackDelay` was tried and reverted 2026-10-07: commit "Map track delays", c82c63d5c3, has every family's numbers, and the All techniques Long patches'). Transitions play on their beat (`Legato early` removed 2026-10-07; notes as written: the run's median arrives 68 ms late; an early start at
+velocity 100 is unmeasured, and any start shift changes SSO's transition, above).
 
 ## Where things are (2026-10-02)
 
@@ -66,7 +99,9 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   sweep correction no longer applies to its +12 octave values (owner 2026-10-02; −12 keeps it; re-sweep to confirm). Violins 2 ±12 were −30 (both directions): `OCTAVE_SWEEP_CORRECTION` −30 / −30 (branch legato-level-balance; re-sweep to confirm).
   Violins 1 flautando low register still +256 ms.
 - **Fast slurs on time (the owner, 2026-10-02: "I want fast slurs to not sound late"; replaces the earlier acceptance of
-  slurred sixteenths arriving late, and the fast-note ramp; branch `fast-slurs-on-time`).** SSO's Performance patches
+  slurred sixteenths arriving late, and the fast-note ramp; branch `fast-slurs-on-time`). History: the early
+  transitions, `fastFirsts`, `overlapTicks` and `fastTechnique` below were removed 2026-10-07 (the owner: "remove all
+  settings not currently being used"); `fastShare` / `fastFullMs` now time only a bent transition's glide.** SSO's Performance patches
   sound a slurred sixteenth's pitch 100-170 ms after its note-on (strings; woodwinds / brass 60-130) at 100-200 bpm,
   whatever the note's own length; the ramp gave a 136 ms note 6 ms, so they were heard 90-125 ms late (median), and a
   slur's first note inside a run (its own attack right after the note before) 100-160 ms late. Now: the note before
@@ -90,7 +125,8 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
   windows): bars 4 / 6 within 0.8 / 1.3 dB; bars 3 / 5 still 3.9 / 4.4 dB (the third note, Eb3 reached again from D3,
   is 3-4 dB down in every variant, own attacks too: SSO's sample, not the timing). Open: the legato level balance
   below didn't fix it.
-- **Legato level balance (branch `legato-level-balance`, 2026-10-02; `[legato] levelBalance`, off).** Measured on the
+- **Legato level balance (branch `legato-level-balance`, 2026-10-02; `[legato] levelBalance`, off; removed 2026-10-07
+  with map `legatoLevel` / `legatoLevelLong`, the measurement kept in `sso_legato_levels.json`).** Measured on the
   Windows VM with kthost (offline Kontakt 8 + SSO, the Performance patches' own setups): CC11 is a plain volume on every
   Performance patch, 20 log10(v/127) (101 / 80 / 64: -2.0 / -4.0 / -6.0 dB, spectrum unchanged within 0.1 dB; Tuba
   Solo - Performance ignores it), heard 10-240 ms after a step (the hall). Every start x interval +-1 2 3 5 7 12 of the 43
@@ -111,9 +147,8 @@ https://claude.ai/artifact/XYLfhVe44uPJemn4uexhAM).
 
 ## The owner's decisions of 2026-10-04 (from the pause list of numbers-measured)
 
-1. Phrase gap: done, `[legato] phraseGapMs` 60 (c4c8860).
-2. Pedal 40 / 90 ms: kept until the owner's PC measures them: an export of `Piano pedal chords` with `[pedal] upAfterMs`
-   0 … 60 ms (docs/PLAYBACK_SETTINGS.md › Measured by sweeps); not urgent.
+1. Phrase gap: done, `[legato] phraseGapMs` 60 (c4c8860); off 2026-10-06, removed 2026-10-07.
+2. Pedal 40 / 90 ms: off 2026-10-06, `[pedal]` removed 2026-10-07 (a change one tick after its chord).
 3. Thresholds: 10 dB short length and 50 % legato arrival approved as the owner's rules (ISO 3382-1's early decay time
    as an analogy for the first); T30 for the tuning tail approved (docs/PLAYBACK_SETTINGS.md › 3C). The standard's text is not
    needed (the owner, 2026-10-04): both are the owner's rules, the standard only an analogy.
@@ -141,17 +176,38 @@ Each has its background in docs/HISTORY.md Part 2 under the same name.
 - Clip-tab automation lanes as the clip's envelopes (branch `clip-envelopes`): the owner installs the Control
   Surface script `tools/live/MuseScoreEnvelopes` once (LIVE.md › Automation lanes in a clip tab) and tries a Windows
   build (the new device, protocol 5, from that build's `tools/live`); arrangement clips get no lanes (open question).
-- Marcato level (Inspector › Articulation › *Marcato level*, per sign, metaTag `marcatoLevels`; default "Library
-  default" = the library's plain marcato): the owner tries it on SSO (velocity-driven Marcato on winds / brass;
-  Marcato Attack on strings by CC11 down / CC1 up). MS4's accent velocity boost no longer reaches library marcatos
-  (owner, 2026-10-02): a plain note's velocity at the dynamic (mf 80), the level on top.
+- Calibrated levels (branch `calibrated-levels`, from `legato-pair-delays`, 2026-10-08; the owner: shorts too
+  quiet, "use MuseScore 4.7.5's articulation profiles for everything incl. marcato"): `[levels] calibrated` (on,
+  Recommended) plays SSO's velocity techniques as loud as the part's Long at the same dynamic, plus MS4's
+  articulation offset, plus the Inspector's *Level* (every articulation sign and technique staff text, ±35.5 dB;
+  metaTag `marcatoLevels`); calibration shipped as `share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json`.
+  The owner listens: Recommended against Library default (shorts, marcatos, pizzicato against Long), and decides
+  whether it merges (with `legato-pair-delays` under it). docs/PLAYBACK_SETTINGS.md › Calibrated levels.
+  Measured 2026-10-08 (Windows VM, kthost offline, real SSO, All techniques Violins 1 / Flute Solo / Horn Solo, events
+  from 1bceb0b4da; each note's loudest 50 ms RMS, median of 4, minus Long at the same dynamic, p / mf / f):
+  Violins Short 0.5 off -3.6 / +1.6 / -5.2, on -4.1 / +2.5 / -1.2; Pizzicato off -13.2 / -4.2 / -5.5, on +1.4 / +2.4 /
+  -1.2; Flute staccato off -13.8 / -8.1 / -0.8, on -5.1 / -2.1 / -1.6; Flute Marcato off -15.4 / -6.6 / +0.4, on -0.6 /
+  +4.2 / +3.8 (target about +4.5); Horn staccato off -2.0 / -3.2 / -4.6, on -1.3 / -3.6 / +0.6; Horn Marcato off +4.1 /
+  +3.6 / -2.7, on +4.7 / +2.1 / +1.5. Open: at p the shipped curves are bumpy (Flute's 48 quieter than its 32), so
+  straight-line reading misses by up to 5 dB; Horn at mf picks a lower velocity than off (staccato alternates samples,
+  5 dB note to note). On a K-weighted peak, Flute Marcato on reads +4 .. +8.6 dB (may sound louder than the RMS says).
+  Since then (d8e7aa2001, 29aca978b8): calibration by ear (perceived curves), every held Long measured at 8 CC1 points.
+  Measured again 2026-10-08 (same VM and patches, kthost, 3 pitches each: Violins A3 / E5 / D6, Flute E4 / F5 / E6,
+  Horn F3 / B♭3 / F4 sounding; perceived peak, technique minus Long, 54 rows): off 6 .. 35 dB away (low pizz -34.7),
+  on median |2.95| dB, 41 of 54 within 5 dB. The rest is pitch: one velocity per part and dynamic for every pitch, the
+  curves measured at one test pitch. Worst on: Horn F4 staccato mf -10.4, Flute E4 staccato -9.9 / -9.5 / -7.9,
+  Horn F4 Marcato p +8.2, Violins D6 pizz +6.9 / +6.0, Violins A3 pizz f -7.4. A fix needs per-pitch level curves
+  (a new measurement: the check at several pitches); offered to the owner, not started.
+  Also on this branch (12b6b30593, 2026-10-08): every measured technique starts early by its median onset, shorts
+  and marcato too (map onset= on 343 more articulations); untried by ear with SSO. Most shorts move 3-8 ms, marcato /
+  tenuto ~33, Short 0.5 61, Short 1.0 113 ms (docs/PLAYBACK_SETTINGS.md). Listen: slurred shorts against Longs.
 - Tuning: the playback regression (`ab/trace/regress.sh`, not in the repository) not run since edb5eec;
   *Tools › Tuning…* left untested by the owner's choice.
 
-No longer waiting (moot since "no automatic adjustments", 2026-10-06; the mechanisms stay, off): even dynamic steps
-and attack salience (only with calibrated short velocities), `[tuning] oneInstance` (Performance patches only), the
-timing A/B renders, the Track Delay value, per-patch octave corrections, pedal 40 / 90 ms, audit #4 (event timing
-within a block).
+No longer waiting (moot since "no automatic adjustments", 2026-10-06; the settings and their code removed
+2026-10-07, docs/PLAYBACK_SETTINGS.md lists them): even dynamic steps and attack salience (calibrated short
+velocities), `[tuning] oneInstance`, the timing A/B renders, the Track Delay value, per-patch octave corrections,
+pedal 40 / 90 ms, audit #4 (event timing within a block).
 
 ## When a check zip arrives (*Check articulations* hand-back)
 
