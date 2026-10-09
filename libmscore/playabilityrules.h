@@ -393,9 +393,13 @@ constexpr int ATTACH_F = 1;
 constexpr int ATTACH_E = 2;
 // a text naming the valves ("4 valves", "five-valve"): their count, else 0
 int brassValveText(const QString& text);
-// the valves assumed without a text: trumpet group 3 (Adler p. 335), euphonium 4 (Adler p. 354),
-// baritone and tubas 3 (the chart's row for all brasses, Blatter p. 463), horn 3 and the thumb
+// the valves assumed without a text: trumpet group 3 (Adler p. 335; Sevsay p. 93), euphonium 4
+// (Adler p. 354; Sevsay p. 109), baritone 3 (Sevsay p. 109), tubas 4 (Sevsay p. 109; Kennan &
+// Grantham, tuba section), horn 3 and the thumb
 int brassValves(Brass b);
+// whether partials 9-16 are labelled "specialists": not on horn and tubas, whose players reach the
+// 16th partial (Blatter p. 458, BR4); unnamed there (trombones, euphonium, baritone): the usual 1-8
+bool brassSpecialists(Brass b);
 
 struct BrassEntry {
       // a slide position

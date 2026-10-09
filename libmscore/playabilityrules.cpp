@@ -1272,7 +1272,32 @@ int brassValveText(const QString& text)
 
 int brassValves(Brass b)
       {
-      return b == Brass::EUPHONIUM ? 4 : isTrombone(b) || b == Brass::NONE ? 0 : 3;
+      switch (b) {
+            case Brass::EUPHONIUM:
+            case Brass::F_TUBA:
+            case Brass::EB_TUBA:
+            case Brass::CC_TUBA:
+            case Brass::BBB_TUBA:
+                  return 4;
+            case Brass::NONE:
+                  return 0;
+            default:
+                  return isTrombone(b) ? 0 : 3;
+            }
+      }
+
+bool brassSpecialists(Brass b)
+      {
+      switch (b) {
+            case Brass::HORN:
+            case Brass::F_TUBA:
+            case Brass::EB_TUBA:
+            case Brass::CC_TUBA:
+            case Brass::BBB_TUBA:
+                  return false;
+            default:
+                  return b != Brass::NONE;
+            }
       }
 
 int brassChartPitch(Brass b, int sounding, int transposeChromatic)
@@ -1330,7 +1355,7 @@ double BrassEntry::slot() const
       return raised ? x - 0.4 : x;           // drawn a little toward I (cosmetic)
       }
 
-static void labelEntry(BrassEntry& e, int valves)
+static void labelEntry(BrassEntry& e, int valves, bool specialists)
       {
       if (e.partial > 0)
             e.labels << QString("partial %1").arg(e.partial);
@@ -1338,7 +1363,7 @@ static void labelEntry(BrassEntry& e, int valves)
             e.labels << "pedal, difficult";
       if (outOfTunePartial(e.partial) && !e.raised)
             e.labels << "out of tune";
-      if (e.partial >= BRASS_SPECIALIST)
+      if (specialists && e.partial >= BRASS_SPECIALIST)
             e.labels << "specialists";
       if ((e.mask & 8) && popcount(e.mask & 7) >= 2)
             e.labels << "may be sharp";                   // Blatter p. 459 (BR7)
@@ -1429,7 +1454,7 @@ std::vector<BrassEntry> slideEntries(Brass b, int attachments, int pitch)
             for (BrassEntry& e : plain) {
                   e.extra = extra[s];
                   e.name = slidePositionName(s, e.position, e.raised);
-                  labelEntry(e, 0);
+                  labelEntry(e, 0, true);
                   out.push_back(e);
                   }
             }
@@ -1496,7 +1521,7 @@ std::vector<BrassEntry> valveEntries(Brass b, int valves, int pitch)
                         hi = v + 1;
             e.playable = hi <= valves;
             e.name = fingeringName(e.mask);
-            labelEntry(e, valves);
+            labelEntry(e, valves, brassSpecialists(b));
             out.push_back(e);
             };
       if (b == Brass::HORN) {

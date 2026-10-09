@@ -1022,6 +1022,11 @@ void TestPlayability::brassRules()
       QCOMPARE(brassValveText("Euphonium (5 valves)"), 5);
       QCOMPARE(brassValveText("four-valve tuba"), 4);
       QCOMPARE(brassValveText("Tuba"), 0);
+      QCOMPARE(brassValves(Brass::BBB_TUBA), 4);
+      QCOMPARE(brassValves(Brass::BARITONE), 3);
+      QCOMPARE(brassValves(Brass::TRUMPET), 3);
+      QVERIFY(!brassSpecialists(Brass::HORN) && !brassSpecialists(Brass::F_TUBA));
+      QVERIFY(brassSpecialists(Brass::TRUMPET) && brassSpecialists(Brass::EUPHONIUM));
       // partials (equal temperament within a quarter tone) and raised positions
       QCOMPARE(partialOf(19), 3);
       QCOMPARE(partialOf(34), 7);
@@ -1075,7 +1080,7 @@ void TestPlayability::brassRules()
       e = valveEntries(Brass::EUPHONIUM, 0, 35);             // B1: 1+2+3+4
       QCOMPARE(e[0].mask, 0x0f);
       QVERIFY(e[0].playable && e[0].labels.contains("may be sharp") && e[0].partial == 2);
-      e = valveEntries(Brass::BBB_TUBA, 0, 23);              // B0 on a 3-valve tuba
+      e = valveEntries(Brass::BBB_TUBA, 3, 23);              // B0 on a 3-valve tuba
       QVERIFY(!e[0].playable && e[0].labels.contains("needs 4th valve"));
       QVERIFY(e.back().labels.contains("needs 5th valve"));
       // derived above the treble chart (written G4): the octave below's pattern, 0 then 1+3 (G4)
@@ -1095,6 +1100,8 @@ void TestPlayability::brassRules()
       for (const BrassEntry& x : e)
             (x.mask & HORN_THUMB ? bb : f) = true;
       QVERIFY(f && bb);
+      for (const BrassEntry& x : valveEntries(Brass::HORN, 0, 86))  // written D6: partial 9+, no label
+            QVERIFY(!x.labels.contains("specialists"));
       QCOMPARE(brassChartPitch(Brass::HORN, 65, -9), 72);    // any horn read as in F
       QCOMPARE(brassChartPitch(Brass::TRUMPET, 70, -2), 72);
       // B5
@@ -1124,7 +1131,7 @@ void TestPlayability::brass()
             QString::fromUtf8("7 | Tenor Trombone | risky | a slide glissando on the pedal partial (Bb1–E1) | Bb1") };
       compare(got, want);
       // the clean bars (Tenor 1, 4, 8; Bass 1; Trombone with F 1; Alto 2; Trumpet 1, 3; Horn; Tuba 1;
-      // Euphonium) carry no mark
+      // Euphonium; Tuba in F 1, 4th valve by default) carry no mark
       QStringList m = markList(r);
       QCOMPARE(m.size(), 10);
       for (const QString& x : m)

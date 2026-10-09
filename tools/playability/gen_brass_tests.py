@@ -28,11 +28,13 @@ Trumpet in Bb (brass.trumpet.bflat), written
   4  D7 [C7]                beyond partial 16: red
 Horn in F (brass.french-horn), written
   1  C5 [F4]                clean; both sides shown
-Tuba (brass.tuba): BBb, 3 valves
+Tuba (brass.tuba): BBb, staff text "3 valves"
   1  Bb1                    clean (open, partial 2)
   2  B0                     only a 4th-valve fingering: red
 Euphonium (brass.euphonium): 4 valves
   1  B1                     1+2+3+4 (may be sharp): clean
+Tuba in F (brass.tuba): 4 valves by default
+  1  G1                     only 4th-valve fingerings: clean
 Run: python3 tools/playability/gen_brass_tests.py
 """
 import os
@@ -123,8 +125,9 @@ BB = dict(tpc_shift=2, semis=2)                     # written a major 2nd above 
 add('Trumpet in Bb', 'brass.trumpet.bflat', 'G', 56,
     [whole('C5', **BB), whole('C#3', **BB), whole('D6', **BB), whole('D7', **BB)], diatonic=-1, chromatic=-2)
 add('Horn in F', 'brass.french-horn', 'G', 60, [whole('C5', tpc_shift=1, semis=7)], diatonic=-4, chromatic=-7)
-add('Tuba', 'brass.tuba', 'F', 58, [whole('Bb1'), whole('B0')])
+add('Tuba', 'brass.tuba', 'F', 58, [whole('Bb1'), whole('B0')], text='3 valves')
 add('Euphonium', 'brass.euphonium', 'F', 58, [whole('B1')])
+add('Tuba in F', 'brass.tuba', 'F', 58, [whole('G1')])
 
 body = ''.join('<Staff id="%d">%s</Staff>\n' % (i + 1, ''.join('<Measure><voice>%s</voice></Measure>' % b for b in bars))
                for i, bars in enumerate(staves))
