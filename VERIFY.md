@@ -111,6 +111,39 @@ here). What was learned there about checking playback:
 - Kontakt's state can be diffed before and after a change made in its window (`Save Kontakt's state for
   diagnosis`, or a test host's getState): that is how Max voices was found.
 
+## Playback audit (agents, Linux; before any build goes to the owner)
+
+A whole-score check of the sound library events as playback renders them (10-measure chunks, as Seq; no plug-in,
+no audio), for the faults the owner should never have to point out (2026-10-09). Code: `libmscore/playbackaudit.*`
+(its header lists each check and its source), test `tst_playbackaudit` (fixtures for every check, and an env-driven
+run on any score). Checks:
+
+- **OVERLAP** (fail): on one route, a note still sounding more than `[legato] keepMs` into the next note of its line,
+  or a key struck while it still sounds there.
+- **UNMEASURED** (report, per instrument): swapped (`[slurs] quick`) or early notes whose onset (and swapped level) is
+  not from an in-context fit. The map doesn't record where an onset comes from, so the fit files' instrument lists
+  say it (`sso_long_onset_fit.json`, `sso_rachm_onset_fit.json`, `sso_rachm_levels.json`, as `gen_spitfire_sso.py`
+  reads them).
+- **EARLY > NOTE** (warning): a note started earlier than its own written length.
+- **TIMING**: a chord's start offset against the note before it in its line (joined without a rest): a step of
+  more than 50 ms fails, 30-50 ms warns (Rasch 1979's ensemble asynchrony, applied within a line). The offsets are
+  note-ons, early by design by each technique's onset: a step shows where the note's arrival rests on the onsets being
+  right, so each finding says whether both onsets are fitted in context.
+- **LEVEL STEP** (values only): under one slur at an unchanged written dynamic, the change of level between
+  neighbouring notes in dB (the shipped dynamics calibration). No threshold until the owner sets one.
+
+Run it on the standard score (Recommended), through the worktree's wrappers:
+
+```sh
+./run-<name>.sh 'cd mtest/libmscore/playbackaudit && MS_AUDIT_SCORE="$HOME/MuseScore/ms3fork/test-scores/Whence 12-TET.mscz" \
+  MS_AUDIT_OUT=/tmp/audit-whence.txt QT_QPA_PLATFORM=offscreen ./tst_playbackaudit auditScore'
+```
+
+`MS_AUDIT_SETTINGS`: a preset id (`recommended`, the default; `library`) or a `playbackSettings` metaTag
+(`heldNotes/early=0;slurs/quick=0`). `MS_AUDIT_MAP`: another map (default the shipped SSO map and its
+`.dynamics.json`). The test fails on any OVERLAP; read the report's TIMING fails and EARLY > NOTE before handing a
+build over, and say in the hand-over which remain and why. Keep reports out of the repository (the owner's score).
+
 ## Testing here (Linux, no Kontakt)
 
 - `tools/playbackverify/try_with_testsynth.sh <build dir> <install dir> [work dir]`: the whole

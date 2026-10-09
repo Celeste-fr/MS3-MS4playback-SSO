@@ -5,6 +5,13 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Before a build goes to the owner (2026-10-09)
+
+Run the playback audit on *Whence 12-TET* with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
+with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every TIMING fail and EARLY > NOTE left must be
+named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
+LEVEL STEP has no threshold yet: the owner decides one from the values.
+
 ## No Performance patches (2026-10-06)
 
 The owner: "NO using performance patches. with all technique patches we have control of release, tightness, CC

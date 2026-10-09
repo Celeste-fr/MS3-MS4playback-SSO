@@ -169,6 +169,18 @@ class MidiRenderer {
       int minChunkSize = 0;
 
    public:
+      // a library note's choice as rendered (each switch put): the whole-score audit reads it (playbackaudit.h);
+      // playback sets none
+      struct LibTrace {
+            const Note* note;
+            int utick;                                // its written start (as rendered: an ornament's sub-note's)
+            SoundLib::Choice choice;
+            const SoundLib::LibInstrument* patch;     // the chosen patch
+            };
+   private:
+      std::vector<LibTrace>* libTrace { nullptr };
+
+   public:
       class Chunk {
             int _tickOffset;
             Measure const * first;
@@ -248,6 +260,7 @@ class MidiRenderer {
       // output (the MuseScore Link device sets them in Live), lanes Live plays itself (Lane::playedByLive) left out
       void setForLiveClips(bool v) { forLiveClips = v; needUpdate = true; }
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
+      void setLibraryTrace(std::vector<LibTrace>* trace) { libTrace = trace; }
 
       Chunk getChunkAt(int utick);
 

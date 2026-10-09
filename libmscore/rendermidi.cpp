@@ -1329,6 +1329,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
                         if (c)
                               putLibrarySwitch(events, *libPatches[c.patch], libChannel, c, start + tickOffset, st1->idx());
+                        if (c && libTrace)
+                              libTrace->push_back({ note, start + tickOffset, c, libPatches[c.patch] });
                         return c;
                         };
                   // a kit: the drum sound's patch and key (rolled: its roll key, else its hit); none: the
