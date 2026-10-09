@@ -610,15 +610,16 @@ void TestSoundLibrary::spitfireMap()
                   QVERIFY(c && c.swapped);
                   QCOMPARE(c.articulation->name, QString("Long (Rachm.)"));
                   QVERIFY(!c.articulation->onsets.empty());
-                  // [slurs] quickLevel: Long less Rachm. (map quickLevel, perceived peaks at mf) at the note's pitch and
-                  // length; a measured point as measured, log-linear in length, linear in pitch, the nearest end's beyond
+                  // [slurs] quickLevel: the boost that matches Long in the passage (map quickLevel, re-measured
+                  // 2026-10-08 in context, per register, the same at every length); the nearest end's beyond the measured
                   const SoundLib::Articulation* rachm = c.articulation;
-                  QCOMPARE(rachm->quickLevelAt(55, 100), 8.4);
-                  QCOMPARE(rachm->quickLevelAt(64, 136), 5.9);
-                  QVERIFY(qAbs(rachm->quickLevelAt(64, std::sqrt(100.0 * 136.0)) - 5.8) < 1e-9);
-                  QVERIFY(qAbs((rachm->quickLevelAt(64, 100) + rachm->quickLevelAt(65, 100)) / 2 - 5.85) < 1e-9);
-                  QCOMPARE(rachm->quickLevelAt(40, 20), 8.4);
-                  QCOMPARE(rachm->quickLevelAt(100, 5000), 1.1);
+                  QCOMPARE(rachm->quickLevelAt(55, 100), 1.3);
+                  QCOMPARE(rachm->quickLevelAt(75, 273), 1.3);
+                  QCOMPARE(rachm->quickLevelAt(76, 136), 2.1);
+                  QCOMPARE(rachm->quickLevelAt(82, 250), 0.6);
+                  QVERIFY(qAbs(rachm->quickLevelAt(78, std::sqrt(100.0 * 136.0)) - 2.1) < 1e-9);
+                  QCOMPARE(rachm->quickLevelAt(40, 20), 1.3);
+                  QCOMPARE(rachm->quickLevelAt(100, 5000), 0.6);
                   QCOMPARE(SoundLib::Articulation().quickLevelAt(64, 50), 0.0);
                   w.slurQuick = 0;
                   QVERIFY(!SoundLib::choose(li.patches(), w).swapped);
