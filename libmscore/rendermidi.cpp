@@ -2385,8 +2385,11 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
 //---------------------------------------------------------
 //   libraryTrackDelays
 //    each library event of the chunk moved by its track's delay (trackdelays.h), in time: a note, its note-off and
-//    its switch by its technique's (the switch in force on the route when it starts), what else goes to the route
-//    (controllers, pitch bends, parameters) by its patch's; plus libDelayLead (libraryDelayLead), so nothing goes
+//    its switch by its technique's (the switch in force on the route when it starts), and so do the controllers and
+//    bends right before it at its tick (its track level's CC11, a dynamic: the owner, 2026-10-08, Long +6 dB / Spiccato
+//    -2 dB with the Long 300 ms late: the Long's CC11 came on time and raised the spiccato's ring by 8 dB where the Long
+//    was written, heard as the Long not moving); what else goes to the route (controllers, pitch bends, parameters) by
+//    its patch's; plus libDelayLead (libraryDelayLead), so nothing goes
 //    before the start. As the plain Live set
 //    plays it (a technique's MIDI track, the Kontakt track, the part's group, each delayed): an earlier technique's
 //    note can come before a controller sent for it, as in Live. Not for Live's clips (the set has it as the tracks'
@@ -2432,6 +2435,27 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
                   auto v = value.find(route);
                   return PlainLiveSet::techniqueName(li, v == value.end() ? -1 : v->second);
                   };
+            // a controller or bend right before a note-on at its tick (a track level's CC11, a dynamic, a lane's
+            // bend: libraryNoteLevels, libraryPitchBends) is that note's: the note's technique (else none)
+            auto noteTechnique = [&]() {
+                  auto v = value.find(route);
+                  int sw = v == value.end() ? -1 : v->second;
+                  for (auto j = std::next(i); j != events->end() && j->first == i->first; ++j) {
+                        const NPlayEvent& e = j->second;
+                        if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != route || e.libraryDelayed())
+                              continue;
+                        const bool eOn = e.type() == ME_NOTEON && e.velo() > 0;
+                        if (e.librarySwitch()) {
+                              if (keyswitch && eOn)
+                                    sw = e.pitch();
+                              else if (e.type() == ME_CONTROLLER)
+                                    sw = e.value();
+                              }
+                        else if (eOn)
+                              return PlainLiveSet::techniqueName(li, sw);
+                        }
+                  return QString();
+                  };
             double ms = 0.0;
             if (ev.librarySwitch() || on) {
                   ms = TrackDelays::ms(d->second, patch, technique());
@@ -2447,6 +2471,8 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
                   else
                         ms = TrackDelays::ms(d->second, patch, technique());
                   }
+            else if (ev.type() == ME_CONTROLLER || ev.type() == ME_PITCHBEND)
+                  ms = TrackDelays::ms(d->second, patch, noteTechnique());
             else
                   ms = TrackDelays::ms(d->second, patch);
             ms += libDelayLead;

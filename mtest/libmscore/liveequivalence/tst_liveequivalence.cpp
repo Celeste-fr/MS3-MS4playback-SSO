@@ -97,6 +97,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetLinked();
       void plainSetReadBack();
       void plainSetTrackDelays();
+      void delayedTrackLevel();
       void liveTracksJson();
       void dumpEvents();
       void playbackSettingsWidget();
@@ -1777,6 +1778,93 @@ void TestLiveEquivalence::plainSetTrackDelays()
       score->setMetaTag(TrackDelays::metaTag, LiveTracks::delaysTag(score, im));
       QCOMPARE(TrackDelays::ownDb(TrackDelays::of(part, TrackDelays::read(score)), "Violin / Staccato"), -6.0);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   delayedTrackLevel
+//    a technique's track level (its notes' CC11) moves with the technique's track delay: played, each CC11 at its
+//    delayed note-on; in the plain set, the CC11 lane's point (the Kontakt track, not delayed by the technique) that
+//    much later than the note's written start (the owner, 2026-10-08: Long +6 dB, Long delayed, heard as not moved)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::delayedTrackLevel()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"" + part->partName() + "\","
+                        "\"levels\":{\"Violin / Staccato\":-6},\"tracks\":{\"Violin / Staccato\":100}}]");
+      auto isLevel = [](const NPlayEvent& e) {
+            return e.isExternal() && e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION && e.value() == 64;
+            };
+
+      // played: each CC11 64 with a note-on of its route at its tick
+      EventMap played;
+      score->renderMidi(&played, false, true, SynthesizerState());
+      int levels = 0;
+      for (const auto& te : played) {
+            if (!isLevel(te.second))
+                  continue;
+            ++levels;
+            bool note = false;
+            const int route = te.second.extPort() * 16 + te.second.extChannel();
+            for (auto r = played.equal_range(te.first); r.first != r.second; ++r.first) {
+                  const NPlayEvent& e = r.first->second;
+                  note |= e.isExternal() && e.extPort() * 16 + e.extChannel() == route && e.type() == ME_NOTEON
+                          && e.velo() > 0 && !e.librarySwitch();
+                  }
+            QVERIFY2(note, qPrintable(QString("CC11 at %1 without its note").arg(te.first)));
+            }
+      QVERIFY(levels > 0);
+
+      // the plain set: the first staccato's CC11 point 100 ms after its written start
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      EventMap events;
+      for (int utick = 0;;) {
+            const MidiRenderer::Chunk c = r.getChunkAt(utick);
+            if (!c)
+                  break;
+            r.renderChunk(c, &events, ctx);
+            utick = c.utick2();
+            }
+      int written = -1;
+      for (const auto& te : events)
+            if (isLevel(te.second)) {
+                  written = te.first;
+                  break;
+                  }
+      QVERIFY(written >= 0);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const int at = tl.units(score->utime2utick(score->utick2utime(written) + 0.1));
+      QVERIFY(at > tl.units(written));
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, tl);
+      int first = -1;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                        for (const PlainLiveSet::Lane& lane : k.lanes)
+                              if (lane.cc == CTRL_EXPRESSION)
+                                    for (const auto& pt : lane.points)
+                                          if (pt.second == 64 && first < 0)
+                                                first = pt.first;
+      QCOMPARE(first, at);
+      delete score;
+      SoundLib::setCurrent(nullptr);
       }
 
 //---------------------------------------------------------

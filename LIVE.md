@@ -340,12 +340,15 @@ in a section collapsible at the same time".
   each technique's own, added to the part's). Written as the tracks' **TrackDelay** (`Value` ms, `IsValueSampleBased`
   false): the part's on its part group, a patch's on its Kontakt track, a technique's on its MIDI track; the section
   group and the clips get none. MuseScore plays the same sums: a note and its switch the part's + the patch's + the
-  technique's, the Kontakt's controllers (the Controllers clip, parameter automation) the part's + the patch's. Range
+  technique's, the Kontakt's controllers (the Controllers clip, parameter automation) the part's + the patch's, except
+  a controller or bend right before a note-on at its tick (its track level's CC11, a dynamic): the note's sum, so the
+  plain set puts that lane point the technique's own delay later than written (the owner, 2026-10-08: Long +6 dB with
+  the Long delayed, its CC11 came on time and raised the spiccato's ring, heard as the Long not moving). Range
   -1000 .. 1000 ms: Live 12's manual (18.7 Track Delays) gives none; a tutorial gives 1000 ms either way
   (musicgurus.com, "Ableton Live delay - Track Delay time"). **Untried in Live**: that a group's delay delays the
   tracks in it, and a MIDI track's its MIDI To output (the manual: "every track"); what Live does when an early
   technique's switch overtakes another technique's note (MuseScore plays it as the sums say: the same clash).
-  Test: `tst_soundlibrary` `trackDelays`, `tst_liveequivalence` `plainSetTrackDelays`.
+  Test: `tst_soundlibrary` `trackDelays`, `tst_liveequivalence` `plainSetTrackDelays`, `delayedTrackLevel`.
 - **Track levels** (the same metaTag's `levels`, the same *Tracks…* dialog's Level column; the owner, 2026-10-07,
   asked for each technique's "volume offset"): a patch's and a technique's own dB, added up, played by CC11 on the
   technique's notes (`libraryNoteLevels`, as a marcato's level). Live gets it in the notes' data, not as a track

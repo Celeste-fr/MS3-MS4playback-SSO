@@ -168,7 +168,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   playback, lanes options, playback mode, Reload Playback Settings) stop and start again where they were (`GoOnPlaying`).
 - Track delays (`libmscore/trackdelays.*`, metaTag `trackDelays`; Mixer › Track delay / Tracks…): ms per part plus
   per patch / technique (added up, as Live adds a group's and its tracks'); `MidiRenderer::libraryTrackDelays` moves
-  the library events (not for Live's clips); with a negative delay everything else plays later by the earliest one
+  the library events (not for Live's clips; a note's CC11 / dynamic at its tick with the note, in the plain set's lanes too); with a negative delay everything else plays later by the earliest one
   (`libraryDelayLead`), so nothing is clamped at the start; the plain set writes them as TrackDelay, `livetracks.*` reads them back.
   Track levels (same metaTag, `levels`; same dialog): dB per patch / technique, added up, by CC11 per note
   (`libLevels`, `libraryNoteLevels`), so in Live's clips and the plain set's CC11 lane too; -42.08 .. +6 dB (Live's
@@ -265,7 +265,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_soundlibrary`: 68 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 20 passed (2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 21 passed (2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks). `tst_liveintegration` 60 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,

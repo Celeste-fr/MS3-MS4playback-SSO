@@ -970,7 +970,7 @@ void TestSoundLibrary::trackDelays()
       QVERIFY(score);
       score->rebuildMidiMapping();
       typedef std::tuple<int, int, int, int, int, bool> E;     // tick, type, a, b, channel, a switch
-      auto render = [score](const QString& tag) {
+      auto render = [score](const QString& tag, bool sorted = true) {
             score->setMetaTag(TrackDelays::metaTag, tag);
             EventMap events;
             SynthesizerState ss;
@@ -981,23 +981,36 @@ void TestSoundLibrary::trackDelays()
                   if (ev.isExternal())
                         out.emplace_back(te.first, ev.type(), ev.dataA(), ev.dataB(), ev.extChannel(), ev.librarySwitch());
                   }
-            std::sort(out.begin(), out.end());
+            if (sorted)
+                  std::sort(out.begin(), out.end());
             return out;
             };
       auto at = [score](int tick, double ms) {
             return std::max(0, score->utime2utick(std::max(0.0, score->utick2utime(tick) + ms / 1000.0)));
             };
-      // what the delays make of the events without them: notes (and their switch) by noteMs, the rest by otherMs
+      // what the delays make of the events without them (in the renderer's order): notes (and their switch, and the
+      // controllers right before a note-on at its tick: its dynamic, its level) by noteMs, the rest by otherMs
       auto expected = [&](const std::vector<E>& base, double noteMs, double otherMs) {
             std::vector<E> out;
-            for (E e : base) {
-                  const bool note = std::get<1>(e) == ME_NOTEON || std::get<1>(e) == ME_NOTEOFF || std::get<5>(e);
+            for (size_t i = 0; i < base.size(); ++i) {
+                  E e = base[i];
+                  bool note = std::get<1>(e) == ME_NOTEON || std::get<1>(e) == ME_NOTEOFF || std::get<5>(e);
+                  if (std::get<1>(e) == ME_CONTROLLER || std::get<1>(e) == ME_PITCHBEND)
+                        for (size_t j = i + 1; j < base.size() && std::get<0>(base[j]) == std::get<0>(e); ++j) {
+                              const E& n = base[j];
+                              if (std::get<4>(n) == std::get<4>(e) && !std::get<5>(n) && std::get<1>(n) == ME_NOTEON
+                                  && std::get<3>(n) > 0) {
+                                    note = true;
+                                    break;
+                                    }
+                              }
                   std::get<0>(e) = at(std::get<0>(e), note ? noteMs : otherMs);
                   out.push_back(e);
                   }
             std::sort(out.begin(), out.end());
             return out;
             };
+      const std::vector<E> baseOrder = render(QString(), false);      // (the renderer's order: what is before a note)
       const std::vector<E> base = render(QString());
       int notes = 0;
       for (const E& e : base)
@@ -1009,18 +1022,18 @@ void TestSoundLibrary::trackDelays()
       // +100 ms: everything later; at 60 a quarter is a second, 100 ms 48 ticks
       const std::vector<E> later = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":100}]");
       QCOMPARE(later.size(), base.size());
-      QVERIFY(later == expected(base, 100, 100));
+      QVERIFY(later == expected(baseOrder, 100, 100));
       QCOMPARE(std::get<0>(later.front()), DIVISION / 10);
       // (and after the change to 120, 100 ms is 96 ticks: the last event)
       QCOMPARE(std::get<0>(later.back()), at(std::get<0>(base.back()), 100));
 
       // -100 ms: everything else 100 ms later (the lead), nothing clamped at the start; the only part, so as written
       QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"ms\":-100}]") == base);
-      // the technique's own -100 ms: its notes as written, the patch's controllers 100 ms later, from the first note
-      // on (the owner, 2026-10-07: at -40 ms the first note wasn't early)
+      // the technique's own -100 ms: its notes (and the dynamics at their ticks) as written, the patch's other
+      // controllers 100 ms later, from the first note on (the owner, 2026-10-07: at -40 ms the first note wasn't early)
       const std::vector<E> earlier = render("[{\"part\":0,\"name\":\"Violin\",\"tracks\":{\"Violin / Long\":-100}}]");
       QCOMPARE(earlier.size(), base.size());
-      QVERIFY(earlier == expected(base, 0, 100));
+      QVERIFY(earlier == expected(baseOrder, 0, 100));
       int firstOn = -1;
       int firstController = -1;
       for (const E& e : earlier) {
@@ -1030,16 +1043,16 @@ void TestSoundLibrary::trackDelays()
                   firstController = std::get<0>(e);
             }
       QCOMPARE(firstOn, 0);
-      QCOMPARE(firstController, DIVISION / 10);
+      QCOMPARE(firstController, 0);                                   // (its dynamic with it)
       QCOMPARE(TrackDelays::earliest(TrackDelays::of(score->parts()[0], TrackDelays::read(score))), -100.0);
 
       // the technique's own 50 ms on top: notes 150 ms later, controllers 100
       const std::vector<E> technique = render(
          "[{\"part\":0,\"name\":\"Violin\",\"ms\":100,\"tracks\":{\"Violin / Long\":50}}]");
-      QVERIFY(technique == expected(base, 150, 100));
+      QVERIFY(technique == expected(baseOrder, 150, 100));
       // the patch's own -30 ms: everything on the patch 70 ms later
       const std::vector<E> patch = render("[{\"part\":0,\"name\":\"Violin\",\"ms\":100,\"tracks\":{\"Violin\":-30}}]");
-      QVERIFY(patch == expected(base, 70, 70));
+      QVERIFY(patch == expected(baseOrder, 70, 70));
       // another technique's own delay: no note of this score plays it
       QVERIFY(render("[{\"part\":0,\"name\":\"Violin\",\"tracks\":{\"Violin / Short\":200}}]") == base);
 
