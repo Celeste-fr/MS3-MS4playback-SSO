@@ -25,7 +25,7 @@ CLARINETS_BB_A = ['clarinet', 'bb-clarinet', 'a-clarinet']
 RULES = [
     # marks
     dict(id='W2-FL-HIGH', instruments=['flute'], pitch='sounding', lo='B6', hi='D7', level='soft', kind='warning',
-         text='flute B6-D7 is hard to play pp or softer', source='Sevsay p. 75; Kennan & Grantham p. 76'),
+         text='flute B6-D7 is hard to play pp or softer', source='Sevsay p. 75; Kennan & Grantham p. 77'),
     dict(id='W2-OB-LOW-A', instruments=['oboe'], pitch='sounding', lo='Bb3', hi='D4', level='p/mp', kind='warning',
          text='oboe Bb3-D4 is hard to play p or mp', source='Blatter p. 100'),
     dict(id='W2-OB-LOW-B', instruments=['oboe'], pitch='sounding', lo='Bb3', hi='D4', level='soft', kind='red',
@@ -42,7 +42,7 @@ RULES = [
          text='saxophone written Bb3-F4 cannot be played pp or softer', source='Blatter p. 127; Adler p. 218'),
     dict(id='B1-HN-HIGH', instruments=['horn'], pitch='sounding', lo='D5', hi='F5', check=('written', 'A5', 'C6'),
          level='soft', kind='warning',
-         text='horn D5-F5 (written A5-C6) is hard to play pp or softer', source='Sevsay p. 97; Kennan & Grantham p. 128'),
+         text='horn D5-F5 (written A5-C6) is hard to play pp or softer', source='Sevsay p. 97; Kennan & Grantham p. 129'),
     dict(id='B1-TPT-HIGH', instruments=TRUMPETS, pitch='written', lo='B5', hi='D6', level='soft', kind='red',
          text='trumpet written B5-D6 cannot be played pp or softer', source='band Adler p. 332; Sevsay p. 120'),
     dict(id='B1-TPT-LOW', instruments=TRUMPETS, pitch='written', lo='F#3', hi='B3', level='soft', kind='warning',
@@ -52,7 +52,7 @@ RULES = [
          text='low flute: weak and easily covered; ff hardly possible', source='Blatter p. 91; Sevsay p. 120'),
     dict(id='W2-PIC-LOW', instruments=['piccolo'], pitch='sounding', lo='D5', hi='E6', check=('written', 'D4', 'E5'),
          level='any', kind='note',
-         text='low piccolo: too weak to be heard in a tutti or heavy scoring', source='Kennan & Grantham p. 79'),
+         text='low piccolo: too weak to be heard in a tutti or heavy scoring', source='Kennan & Grantham p. 80'),
     dict(id='W2-AFL-LOW', instruments=['alto-flute'], pitch='sounding', lo='G3', hi='F4', check=('written below', 'B4'),
          level='any', kind='note', text='low alto flute: accompany it lightly', source='Blatter p. 92'),
     dict(id='W2-CL-HIGH', instruments=CLARINETS_BB_A, pitch='written', lo='A6', hi=None, level='soft', kind='note',
