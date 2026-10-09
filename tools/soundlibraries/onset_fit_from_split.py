@@ -45,6 +45,21 @@ instances; arrival SD of the readable slurred notes, loudness / harmonics): earl
 15 ms (loudness) to 30 ms (harmonics) before the reference on Violins 1, level with it on Violins 2.
 sso_rachm_levels.json: Rachm. minus Long, perceived-loudness peak in the first second, by pitch and held length
 (ms), mean of two repeats, same VM renders.
+
+--sound "Long (Rachm.)" --context (2026-10-09): Violas and Celli (vla, vc; the other entries of the file are kept:
+a patch not in --isolated isn't refitted). Same VM, real SSO, kthost. Isolated every semitone 48-90 / 36-82 as above
+(repeat SD median 2 / 3 ms), less the readings whose start the note before still masked (its tail within 15 dB of
+this note's peak, 3 / 8 of 172 / 188; Celli 44 has no reading). The slow split run (violas passage x4, early by Long's
+map median 59 / 117.5) didn't carry over to the score's tempo: its true onsets (violas 35-189 ms by pitch) were 2-3x
+what the same pitches showed at tempo, and per pitch against the fit's median it was better under one detector and
+worse under the other (violas 43.5 vs 52.2 loudness, 57.9 vs 49.9 harmonics). So --context: --split holds the
+patch's own line of the standard test score at its tempo (the dumped route as MuseScore plays it with [slurs] quick
+2, odd / even notes on two instances, the swapped notes only, three renders with different early starts: the per
+note spread of the readings median 13 / 5 ms), each pitch the median of its readings within a semitone under both
+detectors, a reading before the note starts dropped (the overlap in bar 7); pitches the line doesn't reach: isolated
++ the offset (median of at tempo - isolated). Violas 33-129 ms (median 66), Celli 7-161 (median 107). Rendered again
+with them (the same line): the violas' Rachm. notes arrive -5 ms (loudness, SD 10; harmonics +3, SD 56), were -78
+(SD 19) and -60 (SD 50); the other notes -10. Celli: loudness reads 2 of 120, harmonics +11 (SD 32), was -11 (SD 30).
 """
 import argparse
 import json
@@ -58,7 +73,7 @@ FIT = ['vln1', 'vla', 'fl', 'ob', 'cl', 'tba']
 SHIFT = ['tbn', 'cb']
 # --sound: the articulation fitted, its patches (fitted per pitch / shifted) and its file
 SOUNDS = {'Long': (FIT, SHIFT, 'sso_long_onset_fit.json'),
-          'Long (Rachm.)': (['vln1', 'vln2'], [], 'sso_rachm_onset_fit.json')}
+          'Long (Rachm.)': (['vln1', 'vln2', 'vla', 'vc'], [], 'sso_rachm_onset_fit.json')}
 
 
 def main():
@@ -68,12 +83,19 @@ def main():
     ap.add_argument('--smooth', type=int, default=1, help='median of the isolated medians within this many semitones')
     ap.add_argument('--sound', default='Long', choices=sorted(SOUNDS), help='the articulation fitted')
     ap.add_argument('--out', help='default: the sound\'s file next to this script')
+    ap.add_argument('--context', action='store_true',
+                    help='--split is a run at the score\'s own tempo: each pitch takes the median true onset of the '
+                         'run\'s notes within --smooth semitones (late_S and, when there, hlate_S: both detectors; a '
+                         'reading before the note starts is dropped); pitches without: isolated + offset')
     a = ap.parse_args()
     fit, shift, name = SOUNDS[a.sound]
     out_path = a.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
     iso = json.load(open(a.isolated))
-    out = {}
+    # a patch not in --isolated keeps its entry in the output file (measured in an earlier run)
+    out = json.load(open(out_path)) if os.path.exists(out_path) else {}
     for code in fit + shift:
+        if code not in iso:
+            continue
         table = {int(p): v['median'] for p, v in iso[code].items()}
         table = {p: statistics.median(table[q] for q in table if abs(q - p) <= a.smooth) for p in table}
         meta = {str(x['i']): x for x in json.load(open(os.path.join(a.split, f'meta_Q_{code}.json')))}
@@ -82,6 +104,17 @@ def main():
             out[PATCH[code]] = {'shift': round(statistics.median(late.values()))}
             continue
         nearest = lambda p: table[min(table, key=lambda k: abs(k - p))]
+        if a.context:
+            hpath = os.path.join(a.split, f'hlate_S_{code}.json')
+            reads = [(meta[i]['pitch'], (meta[i]['written'] - meta[i]['on']) * 1000 + ms)
+                     for d in (late, json.load(open(hpath)) if os.path.exists(hpath) else {}) for i, ms in d.items()]
+            reads = [(p, t) for p, t in reads if t >= 0]
+            off = statistics.median(t - nearest(p) for p, t in reads)
+            own = {p: statistics.median(t for q, t in reads if abs(q - p) <= a.smooth) for p in table
+                   if any(abs(q - p) <= a.smooth for q, _ in reads)}
+            out[PATCH[code]] = {'onsets': {str(p): max(0, round(own[p] if p in own else table[p] + off))
+                                           for p in sorted(table)}}
+            continue
         off = statistics.median((meta[i]['written'] - meta[i]['on']) * 1000 + ms - nearest(meta[i]['pitch'])
                                 for i, ms in late.items())
         out[PATCH[code]] = {'onsets': {str(p): max(0, round(table[p] + off)) for p in sorted(table)}}
