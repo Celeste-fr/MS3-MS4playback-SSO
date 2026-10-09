@@ -445,6 +445,15 @@ void Seq::start()
       libraryMixerChanged();
 
       allowBackgroundRendering = true;
+      // (a change made outside a command marks the playlist dirty after its endCmd, which sends no playlistChanged:
+      // the Mixer's track delays and levels, a part's playback mode, Reload Playback Settings; while stopped, Play
+      // played what was rendered before it. The owner, 2026-10-08: a Long track delay changed nothing heard), sent
+      // here as endCmd sends it
+      if (cs->playlistDirty()) {
+            for (Score* s : cs->scoreList())
+                  emit s->playlistChanged();
+            cs->masterScore()->setPlaylistClean();
+            }
       collectEvents(getPlayStartUtick());
       if (cs->playMode() == PlayMode::AUDIO) {
             if (!oggInit) {

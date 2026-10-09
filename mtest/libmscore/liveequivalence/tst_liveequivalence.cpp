@@ -1853,7 +1853,20 @@ void TestLiveEquivalence::dumpEvents()
       if (qEnvironmentVariableIsSet("MS_DUMP_SETTINGS"))         // (the score's playback settings, e.g. heldNotes/byPitch=0)
             score->setMetaTag(Playback::metaTag, qEnvironmentVariable("MS_DUMP_SETTINGS"));
       EventMap events;
-      score->renderMidi(&events, false, true, SynthesizerState());
+      if (qEnvironmentVariableIsSet("MS_DUMP_CHUNKED")) {         // (as Seq plays it: 10-measure chunks, each in its own map)
+            score->masterScore()->setExpandRepeats(true);
+            MidiRenderer midi(score);
+            midi.setMinChunkSize(10);
+            MidiRenderer::Context ctx { SynthesizerState() };
+            ctx.renderHarmony = true;
+            for (MidiRenderer::Chunk chunk = midi.getChunkAt(0); chunk; chunk = midi.getChunkAt(chunk.utick2())) {
+                  EventMap part;
+                  midi.renderChunk(chunk, &part, ctx);
+                  events.insert(part.begin(), part.end());
+                  }
+            }
+      else
+            score->renderMidi(&events, false, true, SynthesizerState());
       const QString out = qEnvironmentVariable("MS_DUMP_OUT");
       QDir().mkpath(out);
       std::map<QString, QStringList> ms;
