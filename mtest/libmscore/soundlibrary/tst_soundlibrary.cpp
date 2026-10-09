@@ -612,6 +612,17 @@ void TestSoundLibrary::spitfireMap()
                   QCOMPARE(c.articulation->name, QString("Long (Rachm.)"));
                   QCOMPARE(c.onsetArticulation()->name, QString("Long"));
                   QVERIFY(c.onsetArticulation()->onsetMedian() != c.articulation->onsetMedian());
+                  // [slurs] quickLevel: the measured levels (lengthLevels, mf) at the swapped note's pitch and length;
+                  // a measured point as measured, log-linear in length, linear in pitch, the nearest end's beyond
+                  const SoundLib::Articulation* longA = c.timing;
+                  const SoundLib::Articulation* rachm = c.articulation;
+                  QCOMPARE(longA->levelAt(64, 50), -33.0);
+                  QCOMPARE(rachm->levelAt(64, 50), -36.9);
+                  QVERIFY(qAbs(longA->levelAt(64, std::sqrt(50.0 * 100.0)) - (-33.1)) < 1e-9);
+                  QVERIFY(qAbs(rachm->levelAt(70, 50) - (-36.9 + (-42.8 + 36.9) / 2)) < 1e-9);
+                  QCOMPARE(rachm->levelAt(40, 20), -36.9);
+                  QCOMPARE(rachm->levelAt(100, 5000), -32.5);
+                  QVERIFY(std::isnan(SoundLib::Articulation().levelAt(64, 50)));
                   w.slurQuick = 0;
                   QVERIFY(!SoundLib::choose(li.patches(), w).timing);
                   }

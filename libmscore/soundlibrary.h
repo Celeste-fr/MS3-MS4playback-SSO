@@ -119,6 +119,11 @@ struct Articulation {
       // a held note is loudest this long after its note-on (<Articulation peak>, ms, the median of the measured
       // semitones); a slurred note shorter than it is all swell ([slurs] quick: choose); -1: unknown
       double peakMs { -1 };
+      // how loud it is at mf held that long (<Articulation lengthLevels="pitch/heldMs:dB …">: the loudest 50 ms, measured
+      // at three pitches): [slurs] quickLevel plays a swapped slurred note at its held articulation's level
+      struct LengthLevel { int pitch; double ms; double db; };
+      std::vector<LengthLevel> lengthLevels;      // sorted by pitch, then ms
+      double levelAt(int pitch, double ms) const; // log-linear in ms, linear in pitch, the nearest end's beyond; NaN: none
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;

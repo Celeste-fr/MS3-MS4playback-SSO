@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <mutex>
 #include <set>
 
@@ -199,6 +200,42 @@ double Articulation::onsetMedian() const
       return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
       }
 
+double Articulation::levelAt(int pitch, double ms) const
+      {
+      // each measured pitch's level at ms, then between the two pitches around the note
+      std::vector<std::pair<int, double>> byPitch;
+      const double x = std::log(qMax(ms, 1.0));
+      for (size_t i = 0; i < lengthLevels.size(); ) {
+            size_t j = i;
+            while (j < lengthLevels.size() && lengthLevels[j].pitch == lengthLevels[i].pitch)
+                  ++j;
+            double db = lengthLevels[i].db;
+            for (size_t k = i; k < j; ++k) {
+                  if (x <= std::log(lengthLevels[k].ms) || k + 1 == j) {
+                        db = lengthLevels[k].db;
+                        if (k > i && x < std::log(lengthLevels[k].ms)) {
+                              const double x0 = std::log(lengthLevels[k - 1].ms), x1 = std::log(lengthLevels[k].ms);
+                              db = lengthLevels[k - 1].db + (lengthLevels[k].db - lengthLevels[k - 1].db) * (x - x0) / (x1 - x0);
+                              }
+                        break;
+                        }
+                  }
+            byPitch.push_back({ lengthLevels[i].pitch, db });
+            i = j;
+            }
+      if (byPitch.empty())
+            return std::numeric_limits<double>::quiet_NaN();
+      if (pitch <= byPitch.front().first)
+            return byPitch.front().second;
+      for (size_t i = 1; i < byPitch.size(); ++i)
+            if (pitch <= byPitch[i].first) {
+                  const auto& a = byPitch[i - 1];
+                  const auto& b = byPitch[i];
+                  return a.second + (b.second - a.second) * (pitch - a.first) / double(b.first - a.first);
+                  }
+      return byPitch.back().second;
+      }
+
 // <Drum pitch="38" key="62" name="Snare hit" [velocity="127"] [ids="snare-drum"] [technique="roll"]
 // [default="off"]/>; without pitch: a key no MuseScore sound plays (listed for reference and checked, never chosen);
 // without key (default="off", no pitch): a technique the patch has, off at its defaults, with no key (reference)
@@ -237,6 +274,18 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.fromSeconds = a.hasAttribute("from") ? a.value("from").toDouble() : -1;
       art.releaseMs = a.hasAttribute("release") ? a.value("release").toDouble() : -1;
       art.peakMs = a.hasAttribute("peak") ? a.value("peak").toDouble() : -1;
+      for (const QString& t : a.value("lengthLevels").toString().split(' ', QString::SkipEmptyParts)) {
+            const int slash = t.indexOf('/'), colon = t.indexOf(':');
+            bool ok1 = false, ok2 = false, ok3 = false;
+            const Articulation::LengthLevel l { t.left(slash).toInt(&ok1), t.mid(slash + 1, colon - slash - 1).toDouble(&ok2),
+                                                t.mid(colon + 1).toDouble(&ok3) };
+            if (slash < 0 || colon < slash || !ok1 || !ok2 || !ok3 || l.ms <= 0)
+                  return false;
+            art.lengthLevels.push_back(l);
+            }
+      std::sort(art.lengthLevels.begin(), art.lengthLevels.end(), [](const Articulation::LengthLevel& x, const Articulation::LengthLevel& y) {
+            return x.pitch != y.pitch ? x.pitch < y.pitch : x.ms < y.ms;
+            });
       art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
       if (a.hasAttribute("legatoVelocity") && (art.legatoVelocity < 1 || art.legatoVelocity > 127))
             return false;

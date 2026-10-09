@@ -1267,8 +1267,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // (SoundFont 2's law without one); else a level of its own on its route (libraryNoteLevels): softer
                   // by the expression CC along the held note's measured expression curve, louder by the dynamics CC
                   // along the articulation's own curve (the law without them)
+                  // a note [slurs] quick swapped (Choice::timing): the held technique's measured level at its pitch and
+                  // written length less the swapped one's ([slurs] quickLevel; 0 without both measured)
+                  const bool quickLevel = Playback::on("slurs/quickLevel", score);
+                  auto quickDb = [&](const Note* note, const SoundLib::Choice& c) {
+                        if (!quickLevel || !c || !c.timing)
+                              return 0.0;
+                        const double ms = SoundLib::noteSeconds(note) * 1000;
+                        const double db = c.timing->levelAt(note->ppitch(), ms) - c.articulation->levelAt(note->ppitch(), ms);
+                        return std::isnan(db) ? 0.0 : db;
+                        };
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
-                        const double db = levelOf(note);
+                        const double db = levelOf(note) + quickDb(note, c);
                         if (db == 0.0 || !c)
                               return;
                         const SoundLib::DynamicsCurve* own = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;

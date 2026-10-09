@@ -1381,9 +1381,21 @@ def shortFrom(patch, sound):
             break
         w = round(w - 0.01, 2)
     return last
+# - lengthLevels= ("pitch/heldMs:dB ..."): how loud the articulation is at mf when held that long (sso_short_lengths.json:
+#   the loudest 50 ms in dB, held 50 / 100 / 250 / 500 / 1000 / 2000 ms at the test pitch and an octave either side), on
+#   held articulations with a peak=: [slurs] quickLevel plays a swapped slurred note (Long (Rachm.) for Long) by the held
+#   one's level at its pitch and length (the owner, 2026-10-08: Rachm. "sounds quieter than plain long"; Violins 1 at
+#   50-100 ms: 4-6 dB under Long, from 500 ms up 1-3 dB over)
+def lengthLevels(patch, sound):
+    rows = SHORT_LENGTHS.get(patch, {}).get(sound)
+    if not isinstance(rows, list):
+        return None
+    pts = sorted((r[0], r[1], r[5]) for r in rows if len(r) > 5 and r[5] is not None)
+    return ' '.join(f'{p}/{ms:g}:{db:g}' for p, ms, db in pts) or None
 shortFromCount = 0
 onsetCount = 0
 peakCount = 0
+lengthLevelCount = 0
 current = None
 legatoGridUsed = set()
 timedValues = set()
@@ -1440,6 +1452,10 @@ for i, line in enumerate(out):
     if p:
         extra += f' peak="{p}"'
         peakCount += 1
+        ll = lengthLevels(current, sound)
+        if ll:
+            extra += f' lengthLevels="{ll}"'
+            lengthLevelCount += 1
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'
