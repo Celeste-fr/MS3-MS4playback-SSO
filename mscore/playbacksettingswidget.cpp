@@ -23,7 +23,10 @@
 #include <QLabel>
 #include <QStandardItemModel>
 #include <QPushButton>
+#include <QScrollBar>
+#include <QTimer>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -58,7 +61,10 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       open->setToolTip(Playback::iniPath());
       QPushButton* reload = new QPushButton(tr("Reload playback.ini"), this);
       reload->setToolTip(tr("Reads playback.ini again and renders the scores again (Edit › Reload Playback Settings)"));
+      QPushButton* clear = new QPushButton(tr("Clear this score's values"), this);
+      clear->setToolTip(tr("Takes all of this score's own values away: playback.ini (the preset) or the defaults apply"));
       h->addWidget(reset);
+      h->addWidget(clear);
       h->addStretch();
       h->addWidget(open);
       h->addWidget(reload);
@@ -90,6 +96,14 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
                         if (!id.isEmpty())
                               setScoreValue(id.constData(), 0, true);
                         }
+                  }
+            refresh();
+            emit changed();
+            });
+      connect(clear, &QPushButton::clicked, this, [this]() {
+            for (const Playback::Definition& d : Playback::definitions()) {
+                  if (d.perScore && Playback::source(d.id, _score.data(), mapValue(d.id)) == Playback::Source::SCORE)
+                        setScoreValue(d.id, 0, true);
                   }
             refresh();
             emit changed();
@@ -180,6 +194,14 @@ void PlaybackSettingsWidget::refresh()
       QString selected;
       if (!_tree->selectedItems().isEmpty())
             selected = _tree->selectedItems().front()->data(0, Qt::UserRole).toString();
+      // the tree is filled again: keep where it was scrolled to and which value had the focus
+      const int scrolled = _tree->verticalScrollBar()->value();
+      QString focused;
+      for (QTreeWidgetItemIterator i(_tree); *i; ++i)
+            if (QWidget* w = _tree->itemWidget(*i, 1))
+                  if (w->hasFocus())
+                        focused = (*i)->data(0, Qt::UserRole).toString();
+      QWidget* focusBox = nullptr;
       _tree->clear();
       std::map<QString, QTreeWidgetItem*> groups;
       for (const Playback::Definition& d : Playback::definitions()) {
@@ -226,11 +248,20 @@ void PlaybackSettingsWidget::refresh()
                   if (_filling)
                         return;
                   setScoreValue(key.constData(), x, false);
-                  refresh();
-                  emit changed();
+                  // (after the box's signal: refresh deletes the box)
+                  QTimer::singleShot(0, this, [this]() {
+                        refresh();
+                        emit changed();
+                        });
                   });
             _tree->setItemWidget(it, 1, box);
+            if (id == focused)
+                  focusBox = box;
             }
+      _tree->doItemsLayout();
+      _tree->verticalScrollBar()->setValue(scrolled);
+      if (focusBox)
+            focusBox->setFocus();
       QStringList warn = Playback::warnings();
       // (one line: the details on hover)
       _info->setText(warn.isEmpty() ? QString() : tr("playback.ini: %n line(s) ignored or corrected (hover for details)", "", warn.size()));
