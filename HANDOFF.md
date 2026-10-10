@@ -69,12 +69,27 @@ sections' Performance patches not measured.
   v100 (bowed) ≥ 260 ms slow form (arrival 160-185 ms), 145-230 a second form (early burst at 50-110 ms, a dip; 145-200
   differ pass to pass), ≤ 130 an early form (40-55 ms). v64 (fingered): arrival shortens smoothly 700 → 130 ms
   (130 → 60 ms arrival), ≤ 108 a later form (125-200). History doesn't matter: four notes at 70 or 500 ms before the
-  same last transition give the same arrival. Untested: whether the limits follow the host tempo.
+  same last transition give the same arrival. **The limits are fixed in ms**: host tempo 60 / 120 / 180 (kthost
+  `--tempo`, `ProcessContext::tempo`; no song position sent) differ no more than passes at one tempo (≤ 3.7 dB against
+  ≤ 4.2). Transitions at 30 / 50 / 64 / 84 play the same fingered sample; arrival shortens smoothly 130 ms (IOI 700) →
+  75-80 (300-200), one consistent 10-15 ms step earlier between IOI 200 and 180 (same curve shifted, not a new form);
+  the only distinct fast form is the later one at ≤ 108.
 - CC21 = vibrato: Non-vib 0-41, Vibrato 42-84, Molto-vib 85-127 (window zones; the level follows continuously).
+- CC16 = Mute (an on/off switch: window MUTE OFF at 0-64, ON at 72-127, edge 65-71 not measured): a filter on the same
+  sample, 1 kHz -2, 2 kHz -6, 4 kHz -4 dB, level -1 to -3 dB (higher notes more); transition timing unchanged.
+- CC20 changes nothing measurable on a freshly loaded patch (held notes, first notes, pairs at 500 / 150 ms; the window
+  labels it "UACC CC#20").
 - **CC32 (UACC) switches the patch to "None / NO ACTIVE TECHNIQUE"**: silent until reloaded. Never send CC32 to a
   Performance patch.
 - The owner's own set (2026-10-10, recorded on the Launchkey): first notes at 63-99 (spiccato), transitions 85-100
-  (bowed), a lower neighbour at 60-75 (fingered), 2-5 ms gaps (still legato), a 54 ms gap (re-attack).
+  (bowed), a lower neighbour at 60-75 (fingered), 2-5 ms gaps (still legato), a 54 ms gap (re-attack). Its clips play
+  Whence's own figures. Rendered from it (*Whence* 12-TET bars 1-4, Violas / Celli - Performance, kthost offline, real
+  SSO): velocities per figure and place from clip "Kontakt 8" (neighbour below 94 / 69 / 93 / 94, above 97 / 102 / 92 /
+  88; first 112), overlap 24 ms (its median). **O** all legato; **R** as the owner's other clips, each slur re-attacked
+  (the note before ends 54 ms early, velocity 106: medians of the set's 9 re-attacks), so the window lights the spiccato
+  attack per slur and the transition on notes 2-4. Note-to-note level SD: Violas C 1.6, O 1.2, R 1.2 dB; Celli C 0.7,
+  O 1.9, R 1.5 dB; no place in the group over 1 dB (P: 2.5). As rendered quieter than C (O 4.9 / 10.9, R 4.0 / 8.7 dB);
+  listening page (level-matched): https://claude.ai/artifact/HiaXmvp2m4v5GJSCLhhus8, waiting for the owner's ear.
 
 **Plain Long for every section, lined up (the owner, 2026-10-07: "just using plain long for everything"; goal: pairs of sections within Rasch 1979's 30-50 ms)**, branch `legato-pair-delays`. Every slurred note plays the All techniques Long, early by its onset (`<Onset early="100"/>`). Measured on the Windows VM (real SSO, kthost offline, *Whence* violas bars 3-7 moved into each of 12 patches' range, odd and even notes on two instances so no attack is masked): with the map's old onsets the slow run (durations x4) had 40 of 66 section pairs within 50 ms (loudness detector; 58 by the new pitch's harmonics), the fast run 14 of 15. The residual followed pitch (Oboe r 0.94, Tuba 0.90), so `sso_long_onset_fit.json` (`onset_fit_from_split.py`) gives Violins 1, Violas, Flute, Oboe, Clarinet and Tuba a per-semitone Long onset (isolated notes, each the median of those within a semitone, + the section's offset) and moves Basses' (-84) and Tenor Trombone's (-36); `gen_spitfire_sso.py` reads it. Rendered again (batch 7): slow 56 of 66 pairs within 50 ms (loudness, median SD 29 ms), 62 of 66 (harmonics, 28), fast 16 of 16 (34; the fast loudness detector reads too few notes). The replay predicted each to within one pair. Left over 50 ms, not fixable by a per-pitch early start: Basses on loudness (round-robin variants; the detector misses one below pitch 38, and pitch 40 alternates 150 / 320 ms; harmonics puts their pairs at 25-42) and Oboe on harmonics (pitch 76 has two attacks ~60 ms apart, at 79 the detectors differ by ~105 ms). Next only by ear: the owner listens, against `[heldNotes] early 0`. `[heldNotes] early 0` plays notes as written, to compare.
 
