@@ -38,7 +38,11 @@ overlapped the next) didn't pulse. A measured CC11 dip on each slur's first note
 lowered by how much louder they measured than the transitions against C (Celli 2.7 dB = CC11 93, Violas 0.9 dB = 115, the
 fork's CC11 law, confirmed in the render), from the written time (from the early send it lowers the note before by ~2 dB).
 Celli four-note bump 2.9 → ~2.0 dB, but the note-to-note spread stays 2.5 dB (C 0.7): most of it isn't the group pattern.
-The owner: "still terrible". Performance stays dropped. Velocity picks the transition (no other control on these patches: `sso_patch_controls.json`), but it
+The owner: "still terrible". Then every note evened by a CC11 value per note, fitted by rendering (each note against
+C's, two rounds): per-16th spread Celli 2.6 → 0.8 dB, Violas 2.0 → ~1.7, but CC11 steps of up to ~14 dB between
+sixteenths, landing on transitions that still carry the note before: the owner, "sounds horrible, the volume seems to jump
+all over the place" (a per-16th RMS spread doesn't see jumps inside a note). Performance stays dropped: the transitions'
+own 2-6 dB differences can't be evened by level without audible steps. Velocity picks the transition (no other control on these patches: `sso_patch_controls.json`), but it
 barely matters. The restored kthost (MD5 ea7e692e…, after C:\claude was lost 2026-10-10) renders the Long patches
 bit-identically to the old one (050b4970…, -137 dB null); Performance renders differ take to take.
 
