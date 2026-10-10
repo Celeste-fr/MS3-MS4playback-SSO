@@ -42,7 +42,14 @@ The owner: "still terrible". Then every note evened by a CC11 value per note, fi
 C's, two rounds): per-16th spread Celli 2.6 → 0.8 dB, Violas 2.0 → ~1.7, but CC11 steps of up to ~14 dB between
 sixteenths, landing on transitions that still carry the note before: the owner, "sounds horrible, the volume seems to jump
 all over the place" (a per-16th RMS spread doesn't see jumps inside a note). Performance stays dropped: the transitions'
-own 2-6 dB differences can't be evened by level without audible steps. Velocity picks the transition (no other control on these patches: `sso_patch_controls.json`), but it
+own 2-6 dB differences can't be evened by level without audible steps. **How the Performance patches pick samples** (Spitfire Symphonic Strings
+manual p. 10, the same recordings as SSO's strings; the SSO manual has no such section): a phrase's first note, velocity
+1-9 smooth attack, 10-127 spiccato/staccato attack (3-4 layers, 6 round robins); transitions need overlap; slow playing
+1-19 portamento, 20-84 fingered, 85-127 bowed; faster and "runs" (very fast) sets chosen by playing speed (how measured: not
+stated), each 1-84 / 85-127. Measured 2026-10-10 (Windows VM): single notes, only velocity 7 of 7..127 has a slow attack;
+transitions change type between 79 and 87. So P's slur starts at 64 were spiccato attacks: the pulse. Slur starts at
+velocity 7 (smooth): Celli spread 2.6 → 1.5 dB, no four-note pattern; Violas 2.0 → 2.35 (first note low: the smooth
+attack is slower, still sent early by the spiccato onset). Waiting for the owner's ear (listening page, version S). Velocity picks the transition (no other control on these patches: `sso_patch_controls.json`), but it
 barely matters. The restored kthost (MD5 ea7e692e…, after C:\claude was lost 2026-10-10) renders the Long patches
 bit-identically to the old one (050b4970…, -137 dB null); Performance renders differ take to take.
 
