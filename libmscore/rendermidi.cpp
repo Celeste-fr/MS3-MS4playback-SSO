@@ -67,6 +67,9 @@
 
 namespace Ms {
 
+const int MidiRenderer::DYNAMIC_LEVELS[8] = { 3250, 3750, 4250, 4750, 5250, 5750, 6250, 6750 };
+const char* const MidiRenderer::DYNAMIC_NAMES[8] = { "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff" };
+
     //int printNoteEventLists(NoteEventList el, int prefix, int j){
     //    int k=0;
     //    for (NoteEvent event : el) {
@@ -1442,7 +1445,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // choice (the Inspector) first: a transition where a note of the patch comes just before, else
                   // an attack; Auto: a slurred note goes on by transition (after a glissando line portamento,
                   // else bowed: the map's legatoVelocity where measured), else an attack: accented under an accent
-                  // or marcato, a re-attack right after a note of its patch, spiccato after silence
+                  // or marcato, a re-attack right after a note of its patch, spiccato after silence. A note's own join
+                  // (the Join lane, Note::libraryJoin) right after a note of its patch: a transition up to legatoGap ms
+                  // apart (none listed: overlapping or touching), else a re-attack; the note before ends that far from
+                  // it. Its own velocity (Note::libraryVelocity) replaces the technique's
                   struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0; };
                   auto performanceNote = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r) {
@@ -1458,26 +1464,41 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const SoundLib::Articulation::Technique* t = nullptr;
                         const PerformanceTechnique::Transition tr = note->performanceTransition();
                         const PerformanceTechnique::Attack at = note->performanceAttack();
-                        bool transition = false;
-                        if (tr != PerformanceTechnique::Transition::AUTO && joinable
-                            && (t = a->transition(PerformanceTechnique::transitionName(tr))))
-                              transition = true;
-                        else if (at == PerformanceTechnique::Attack::AUTO && slurred) {
+                        const int join = joinable ? note->libraryJoin() : PerformanceTechnique::JOIN_AUTO;
+                        const bool ownJoin = join != PerformanceTechnique::JOIN_AUTO;
+                        auto autoTransition = [&]() {
                               bool glissando = false;
                               for (const Spanner* sp : note->spannerBack())
                                     glissando |= sp->isGlissando();
-                              t = a->transition(glissando ? "portamento" : "bowed");
+                              return a->transition(glissando ? "portamento" : "bowed");
+                              };
+                        bool transition = false;
+                        if (ownJoin) {
+                              if (join >= -std::max(0.0, a->legatoGapMs)) {
+                                    if (tr != PerformanceTechnique::Transition::AUTO)
+                                          t = a->transition(PerformanceTechnique::transitionName(tr));
+                                    if (!t)
+                                          t = autoTransition();
+                                    transition = t;
+                                    }
+                              }
+                        else if (tr != PerformanceTechnique::Transition::AUTO && joinable
+                            && (t = a->transition(PerformanceTechnique::transitionName(tr))))
+                              transition = true;
+                        else if (at == PerformanceTechnique::Attack::AUTO && slurred) {
+                              t = autoTransition();
                               transition = t;
                               }
+                        const int own = note->libraryVelocity();
                         if (transition) {
                               if (!slurred) {
                                     p.interval = interval;
                                     p.lenBefore = lenBefore;
                                     }
                               p.from = joinable;
-                              p.velocity = (t->name == "bowed" && a->legatoVelocity > 0) ? a->legatoVelocity : t->velocity;
+                              p.velocity = own > 0 ? own : (t->name == "bowed" && a->legatoVelocity > 0) ? a->legatoVelocity : t->velocity;
                               p.before = joinable;
-                              p.endMs = a->overlapMs > 0 ? a->overlapMs : 0;
+                              p.endMs = ownJoin ? join : a->overlapMs > 0 ? a->overlapMs : 0;
                               return p;
                               }
                         if (at != PerformanceTechnique::Attack::AUTO)
@@ -1490,9 +1511,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         if (t)
                               p.velocity = (t->name == "spiccato" && joinable && a->reattackVelocity > 0) ? a->reattackVelocity : t->velocity;
-                        if (joinable && a->reattackGapMs > 0) {
+                        if (own > 0)
+                              p.velocity = own;
+                        if (ownJoin || (joinable && a->reattackGapMs > 0)) {
                               p.before = joinable;
-                              p.endMs = -a->reattackGapMs;
+                              p.endMs = ownJoin ? join : -a->reattackGapMs;
                               }
                         return p;
                         };
@@ -1621,6 +1644,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libNote.velocity = libVelocity(note, libChoice, r, level);
                                     marcatoLevel(note, libChoice, libNote.velocity, level);
                                     trackLevel(note, libChoice);
+                                    if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
+                                          libNote.velocity = note->libraryVelocity();
+                                    if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
+                                          LibTrace& t = libTrace->back();
+                                          t.velocity = libNote.velocity;
+                                          if (libVelocity(note, libChoice, r, level) > 0)
+                                                for (int l : DYNAMIC_LEVELS)
+                                                      t.dynamicVelocities.push_back(libVelocity(note, libChoice,
+                                                                  Ms4::note(ctx.family, noteArts, l, ctx.snd), l));
+                                          }
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {
@@ -1658,6 +1691,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (perf.before)
                                           libJoins.push_back({ noteChannel, libChoice.patch, perf.before->ppitch(), note,
                                                                note->chord()->tick().ticks() + tickOffset, perf.endMs });
+                                    if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
+                                          LibTrace& t = libTrace->back();
+                                          t.velocity = libNote.velocity;
+                                          t.performance = perf.from ? LibPerformance::TRANSITION : LibPerformance::ATTACK;
+                                          t.joinMs = perf.before ? int(std::lround(perf.endMs)) : PerformanceTechnique::JOIN_AUTO;
+                                          }
                                     }
                               if (!from) {
                                     // (no transition: its bend is set at its note-on, no glide; an earlier render's
@@ -1759,6 +1798,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     trackLevel(note, libChoice);
+                                    if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
+                                          libNote.velocity = note->libraryVelocity();
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {

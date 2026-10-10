@@ -328,6 +328,7 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             return false;
       art.reattackGapMs = a.hasAttribute("reattackGap") ? a.value("reattackGap").toDouble() : -1;
       art.overlapMs = a.hasAttribute("overlap") ? a.value("overlap").toDouble() : -1;
+      art.legatoGapMs = a.hasAttribute("legatoGap") ? a.value("legatoGap").toDouble() : -1;
       if (a.hasAttribute("legatoDelay") && !readKeyedMs(a.value("legatoDelay").toString(), art.legatoDelayMs, art.legatoDelays))
             return false;
       if (a.hasAttribute("onset") && !readKeyedMs(a.value("onset").toString(), art.onsetMs, art.onsets))

@@ -73,8 +73,10 @@ void read(Score* score)
             const int pitch = o.value("pitch").toInt(-1);
             const Attack attack = attackFromName(o.value("attack").toString());
             const Transition transition = transitionFromName(o.value("transition").toString());
+            const int velocity = qBound(0, o.value("velocity").toInt(0), 127);
+            const int join = o.contains("join") ? qBound(-JOIN_MAX, o.value("join").toInt(), JOIN_MAX) : JOIN_AUTO;
             if (tick < 0 || track < 0 || track >= score->ntracks() || pitch < 0
-                || (attack == Attack::AUTO && transition == Transition::AUTO))
+                || (attack == Attack::AUTO && transition == Transition::AUTO && velocity == 0 && join == JOIN_AUTO))
                   continue;
             Segment* seg = score->tick2segment(Fraction::fromTicks(tick), true, SegmentType::ChordRest);
             Element* e = seg ? seg->element(track) : nullptr;
@@ -93,6 +95,8 @@ void read(Score* score)
                               continue;
                         toNote(l)->setPerformanceAttack(attack);
                         toNote(l)->setPerformanceTransition(transition);
+                        toNote(l)->setLibraryVelocity(velocity);
+                        toNote(l)->setLibraryJoin(join);
                         }
                   }
             }
@@ -112,7 +116,8 @@ QString write(const Score* score)
                         continue;
                   auto add = [&](const Chord* c, int grace) {
                         for (const Note* n : c->notes()) {
-                              if (n->performanceAttack() == Attack::AUTO && n->performanceTransition() == Transition::AUTO)
+                              if (n->performanceAttack() == Attack::AUTO && n->performanceTransition() == Transition::AUTO
+                                  && n->libraryVelocity() == 0 && n->libraryJoin() == JOIN_AUTO)
                                     continue;
                               QJsonObject o;
                               o["tick"] = s->tick().ticks();
@@ -124,6 +129,10 @@ QString write(const Score* score)
                                     o["attack"] = attackName(n->performanceAttack());
                               if (n->performanceTransition() != Transition::AUTO)
                                     o["transition"] = transitionName(n->performanceTransition());
+                              if (n->libraryVelocity() > 0)
+                                    o["velocity"] = n->libraryVelocity();
+                              if (n->libraryJoin() != JOIN_AUTO)
+                                    o["join"] = n->libraryJoin();
                               list.append(o);
                               }
                         };

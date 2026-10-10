@@ -364,6 +364,8 @@ static constexpr PropertyMetaData propertyList[] = {
 
       { Pid::PERFORMANCE_ATTACK,        P_TYPE::INT,            true,  "performanceAttack",      DUMMY_QT_TRANSLATE_NOOP("propertyName", "performance attack")                            },
       { Pid::PERFORMANCE_TRANSITION,    P_TYPE::INT,            true,  "performanceTransition",  DUMMY_QT_TRANSLATE_NOOP("propertyName", "performance transition")                        },
+      { Pid::LIBRARY_VELOCITY,          P_TYPE::INT,            true,  "libraryVelocity",        DUMMY_QT_TRANSLATE_NOOP("propertyName", "library velocity")                              },
+      { Pid::LIBRARY_JOIN,              P_TYPE::INT,            true,  "libraryJoin",            DUMMY_QT_TRANSLATE_NOOP("propertyName", "library join")                                  },
 
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };

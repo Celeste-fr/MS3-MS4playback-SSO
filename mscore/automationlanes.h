@@ -67,6 +67,7 @@
 //   Values are shown 0-127 (the map's controller scale; SSO's controls are 0-127); a clip tab's Velocity lane
 //   (liveclipmodel.h, offered first, always) in % (scale) or 1-127 (absolute), its right-click menu also choosing scale /
 //   absolute and "shape while playing" / "write into the notes" (asks first).
+//   Under a library part's header row, first: the Velocity and Join lanes, a stem per note (notelanes.h).
 //   A lane Live's set has as it is (Automation::Lane::playedByLive) is marked "Live"; editing it here makes
 //   MuseScore's the newer one (automation.h).
 //---------------------------------------------------------
@@ -89,6 +90,7 @@ class QPainter;
 namespace Ms {
 
 class Measure;
+class NoteLanes;
 class Part;
 class Score;
 class ScoreView;
@@ -147,9 +149,11 @@ class AutomationLanes : public QObject {
       void setDrawMode(bool on) { _drawMode = on; }
 
    private:
+      friend class NoteLanes;       // (the Velocity and Join lanes: notelanes.h)
       enum class Drag : signed char { NONE, PENDING, MOVE, CURVE, RUBBER, DRAW, FREE, SEGMENT };
 
       ScoreView* _view;
+      NoteLanes* _notes;
       std::set<const Part*> _unfolded;                         // view parts
       std::set<const Part*> _folded;                           // view parts: the header row only ("▸")
       const Part* _lastSelected { nullptr };
@@ -230,6 +234,7 @@ class AutomationLanes : public QObject {
       int segmentAt(const Automation::Lane& l, int tick) const;
       bool headerClick(const QPoint& pixel);
       void paintLane(QPainter& p, const Row& r, const QRectF& visible) const;
+      void paintGrid(QPainter& p, const Row& r, const QRectF& visible) const;   // bars, beats, the grid's steps
       void paintHeader(QPainter& p, const Row& r) const;
       QRectF headerRect(const Row& r) const;                                 // viewport
       QColor rowColor(const Row& r) const;                                   // a row's band

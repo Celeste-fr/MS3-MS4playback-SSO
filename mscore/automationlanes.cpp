@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "automationlanes.h"
+#include "notelanes.h"
 #include "liveclipedit.h"
 #include "liveclips.h"
 #include "scoreview.h"
@@ -58,6 +59,7 @@ using namespace Automation;
 AutomationLanes::AutomationLanes(ScoreView* view)
    : QObject(view), _view(view)
       {
+      _notes = new NoteLanes(this, view);
       }
 
 bool AutomationLanes::enabled()
@@ -88,6 +90,7 @@ void AutomationLanes::scoreChanged()
       _working = false;
       _work.clear();
       _drag = Drag::NONE;
+      _notes->scoreChanged();
       // (the selection's indices may point elsewhere now)
       Score* s = score();
       if (_selPart && s) {
@@ -114,6 +117,7 @@ void AutomationLanes::layoutChanged()
       _anchorsValid = false;
       _rowsValid = false;
       _targets.clear();
+      _notes->changed();
       }
 
 void AutomationLanes::unfold(const Part* part, bool on)
@@ -156,6 +160,8 @@ void AutomationLanes::selectionChanged()
       if (!part || part == _lastSelected)
             return;
       _lastSelected = part;
+      if (_notes->fresh())                // (the notes' lanes as the score is now)
+            _targets.clear();
       if (targets(part).empty())
             return;                 // (not a part the library plays)
       _unfolded.clear();
@@ -194,7 +200,10 @@ std::vector<AutomationLanes::Target> AutomationLanes::computeTargets(const Part*
                         out.push_back({ LiveClipEdit::liveTarget(p.d, p.p), p.name, false, true });
             return out;
             }
-      out = libraryTargets(part);
+      // the notes' Velocity and Join lanes first, then the library's controls
+      out = _notes->targets(PartPlaybackModes::masterPart(part));
+      for (const Target& t : libraryTargets(part))
+            out.push_back(t);
       // a part Live plays (Live plays the score): its Live track's parameters too
       const QString key = LiveIntegration::LiveClipsLink::instance()->routeKey(part);
       if (!key.isEmpty())
@@ -359,7 +368,7 @@ std::vector<QString> AutomationLanes::shownTargets(const Part* master, const std
       for (const Target& t : all) {
             const bool hidden = hiddenIt != _hidden.end() && hiddenIt->second.count(t.id);
             const bool added = addedIt != _added.end() && addedIt->second.count(t.id);
-            if (every || (!hidden && (has(t.id) || added)))
+            if (every || (!hidden && (has(t.id) || added || NoteLane::isTarget(t.id))))
                   out.push_back(t.id);
             }
       // lanes of controllers this part's patches don't list (a Live import's raw CC …)
@@ -765,6 +774,8 @@ QColor AutomationLanes::rowColor(const Row& r) const
       {
       if (r.target.isEmpty())
             return QColor(222, 219, 214);
+      if (NoteLane::isTarget(r.target))
+            return QColor(246, 246, 246);
       const Lane l = lane(r.master, r.target);
       const bool live = !l.points.empty() && l.playedByLive();
       return live ? QColor(246, 241, 250) : (r.param ? QColor(251, 245, 239) : QColor(242, 246, 251));
@@ -780,35 +791,17 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
             p.drawRect(r.rect);
             return;
             }
+      if (NoteLane::isTarget(r.target)) {
+            _notes->paintLane(p, r, visible);
+            return;
+            }
       const Lane l = lane(r.master, r.target);
       const bool live = !l.points.empty() && l.playedByLive();
       const QColor ink = live ? QColor(118, 72, 160) : (r.param ? QColor(200, 100, 30) : QColor(47, 109, 181));
       p.setPen(Qt::NoPen);
       p.setBrush(rowColor(r));
       p.drawRect(r.rect);
-      // the grid: bars, beats and the snap grid's steps between them (those only while 3 px apart or more on screen,
-      // so a fine grid zoomed out doesn't fill the lane)
-      const double xa = std::max(r.rect.left(), visible.left());
-      const double xb = std::min(r.rect.right(), visible.right());
-      Score* s = score();
-      const int ta = xToTick(xa);
-      const int tb = xToTick(xb);
-      for (Measure* m = s->tick2measureMM(Fraction::fromTicks(ta)); m && m->tick().ticks() <= tb; m = m->nextMeasureMM()) {
-            const int t0 = m->tick().ticks();
-            const int beat = 1920 / std::max(1, m->timesig().denominator());
-            int step = std::min(beat, gridTicks(t0));
-            if ((tickToX(t0 + step) - tickToX(t0)) / px < 3)
-                  step = beat;
-            for (int t = t0; t < m->endTick().ticks(); t += step) {
-                  // (a bar: where the staff's bar line is; the beats and steps where their notes are)
-                  const bool bar = t == t0;
-                  const Measure* prev = bar ? m->prevMeasureMM() : nullptr;
-                  const double x = prev && prev->system() == m->system() ? Automation::barLineX(prev) : tickToX(t);
-                  const QColor c = bar ? QColor(170, 170, 170) : (t - t0) % beat == 0 ? QColor(220, 220, 220) : QColor(232, 232, 232);
-                  p.setPen(QPen(c, px));
-                  p.drawLine(QPointF(x, r.rect.top()), QPointF(x, r.rect.bottom()));
-                  }
-            }
+      paintGrid(p, r, visible);
       p.setPen(QPen(QColor(200, 200, 200), px));
       p.setBrush(Qt::NoBrush);
       p.drawRect(r.rect);
@@ -868,6 +861,34 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
             }
       }
 
+void AutomationLanes::paintGrid(QPainter& p, const Row& r, const QRectF& visible) const
+      {
+      const double px = pixel();
+      // the grid: bars, beats and the snap grid's steps between them (those only while 3 px apart or more on screen,
+      // so a fine grid zoomed out doesn't fill the lane)
+      const double xa = std::max(r.rect.left(), visible.left());
+      const double xb = std::min(r.rect.right(), visible.right());
+      Score* s = score();
+      const int ta = xToTick(xa);
+      const int tb = xToTick(xb);
+      for (Measure* m = s->tick2measureMM(Fraction::fromTicks(ta)); m && m->tick().ticks() <= tb; m = m->nextMeasureMM()) {
+            const int t0 = m->tick().ticks();
+            const int beat = 1920 / std::max(1, m->timesig().denominator());
+            int step = std::min(beat, gridTicks(t0));
+            if ((tickToX(t0 + step) - tickToX(t0)) / px < 3)
+                  step = beat;
+            for (int t = t0; t < m->endTick().ticks(); t += step) {
+                  // (a bar: where the staff's bar line is; the beats and steps where their notes are)
+                  const bool bar = t == t0;
+                  const Measure* prev = bar ? m->prevMeasureMM() : nullptr;
+                  const double x = prev && prev->system() == m->system() ? Automation::barLineX(prev) : tickToX(t);
+                  const QColor c = bar ? QColor(170, 170, 170) : (t - t0) % beat == 0 ? QColor(220, 220, 220) : QColor(232, 232, 232);
+                  p.setPen(QPen(c, px));
+                  p.drawLine(QPointF(x, r.rect.top()), QPointF(x, r.rect.bottom()));
+                  }
+            }
+      }
+
 void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       {
       const QRectF h = headerRect(r);
@@ -912,6 +933,10 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       if (live)
             line2 += "  " + tr("Live");
       QString title = r.name;
+      if (NoteLane::isTarget(r.target)) {
+            title = _notes->title(r);
+            line2 = _notes->valueText(r, at);
+            }
       if (r.target == LiveClipEdit::VELOCITY_TARGET)        // its unit, and how Live gets it
             title = (LiveClipEdit::velMode(l) == LiveClipEdit::VelMode::SET ? tr("Velocity (1-127)") : tr("Velocity (%)"))
                     + QString::fromUtf8(" · ")
@@ -949,6 +974,7 @@ void AutomationLanes::dropFocus()
             return;
       _focus = false;
       _sel.clear();
+      _notes->clearSelection();
       _view->update();
       }
 
@@ -1060,6 +1086,14 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
             return true;                  // (the header band)
       if (score() && !score()->selection().isNone() && !_view->noteEntryMode())
             _view->deselectAll();         // (in note input the selection is the input position: kept)
+      if (NoteLane::isTarget(r.target)) {
+            _focus = true;
+            _selPart = r.master;
+            _selTarget = r.target;
+            _sel.clear();
+            _drag = Drag::NONE;
+            return _notes->press(r, p, ev->modifiers(), _drawMode);
+            }
       _dragRow = r;
       _pressPos = p;
       _pressPixel = ev->pos();
@@ -1123,6 +1157,10 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
 
 bool AutomationLanes::mouseMove(QMouseEvent* ev)
       {
+      if (_notes->dragging()) {
+            _notes->move(_view->toLogical(ev->pos()), ev->modifiers());
+            return true;
+            }
       if (_drag == Drag::NONE) {
             hover(ev->pos());
             return false;
@@ -1271,6 +1309,10 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
 
 bool AutomationLanes::mouseRelease(QMouseEvent* ev)
       {
+      if (_notes->dragging()) {
+            _notes->release();
+            return true;
+            }
       if (_drag == Drag::NONE)
             return false;
       const Drag d = _drag;
@@ -1323,6 +1365,10 @@ bool AutomationLanes::mouseDoubleClick(QMouseEvent* ev)
       if (!rp || rp->target.isEmpty())
             return rp != nullptr;
       const Row r = *rp;
+      if (NoteLane::isTarget(r.target)) {
+            _notes->doubleClick(r, p);
+            return true;
+            }
       Lane l = lane(r.master, r.target);
       const int tick = xToTick(p.x());
       if (ev->modifiers() & Qt::AltModifier) {
@@ -1362,10 +1408,14 @@ void AutomationLanes::hover(const QPoint& pos)
       _hoverText.clear();
       if (r && !r->target.isEmpty() && !headerRect(*r).contains(pos)) {
             _hover = p;
-            const Lane l = lane(r->master, r->target);
-            const int pt = pointAt(*r, l, p);
-            if (pt >= 0)
-                  _hoverText = valueText(r->target, l.points[size_t(pt)].value);
+            if (NoteLane::isTarget(r->target))
+                  _hoverText = _notes->hoverText(*r, p);
+            else {
+                  const Lane l = lane(r->master, r->target);
+                  const int pt = pointAt(*r, l, p);
+                  if (pt >= 0)
+                        _hoverText = valueText(r->target, l.points[size_t(pt)].value);
+                  }
             }
       if (old != _hover || oldText != _hoverText)
             _view->update();
@@ -1380,6 +1430,10 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
       const Row r = *rp;
       if (r.target.isEmpty()) {
             addLaneMenu(r, globalPos);
+            return true;
+            }
+      if (NoteLane::isTarget(r.target)) {
+            _notes->contextMenu(r, p, globalPos);
             return true;
             }
       Lane l = lane(r.master, r.target);
@@ -1558,10 +1612,11 @@ bool AutomationLanes::wantsKey(const QKeyEvent* ev) const
             case Qt::Key_Backspace:
             case Qt::Key_Escape:
                   return m == 0;
-            case Qt::Key_C:
+            case Qt::Key_C:             // (not in the notes' lanes)
             case Qt::Key_X:
             case Qt::Key_V:
             case Qt::Key_D:
+                  return m == Qt::ControlModifier && !NoteLane::isTarget(_selTarget);
             case Qt::Key_1:             // the grid: narrower, wider, snap on / off (Live's keys)
             case Qt::Key_2:
             case Qt::Key_4:
@@ -1575,6 +1630,10 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
       {
       if (!wantsKey(ev))
             return false;
+      if (NoteLane::isTarget(_selTarget) && (ev->key() == Qt::Key_Delete || ev->key() == Qt::Key_Backspace)) {
+            _notes->resetSelected();      // (back to Auto)
+            return true;
+            }
       Lane l = lane(_selPart, _selTarget);
       Row r;
       for (const Row& x : rows())

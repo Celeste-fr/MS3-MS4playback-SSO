@@ -11,6 +11,7 @@
 #include <QtTest/QtTest>
 #include "audio/midi/event.h"
 #include "mtest/testutils.h"
+#include "libmscore/articulation.h"
 #include "libmscore/chord.h"
 #include "libmscore/excerpt.h"
 #include "libmscore/glissando.h"
@@ -18,7 +19,9 @@
 #include "libmscore/instrument.h"
 #include "libmscore/measure.h"
 #include "libmscore/note.h"
+#include "libmscore/notelane.h"
 #include "libmscore/part.h"
+#include "libmscore/playbackaudit.h"
 #include "libmscore/performancetechnique.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/score.h"
@@ -145,6 +148,11 @@ class TestPerformanceTechnique : public QObject, public MTest
       void undoRedo();
       void copyPaste();
       void parts();
+      void ownValues();
+      void ownVelocityElsewhere();
+      void ownSaved();
+      void trace();
+      void lanes();
       };
 
 //---------------------------------------------------------
@@ -212,6 +220,169 @@ void TestPerformanceTechnique::autoTechniques()
       QVERIFY2(within(ms(k[81].on - k[79].off), 54), qPrintable(QString::number(ms(k[81].on - k[79].off))));
       QVERIFY2(within(ms(k[81].off - k[83].on), 24), qPrintable(QString::number(ms(k[81].off - k[83].on))));
       delete s;
+      }
+
+//---------------------------------------------------------
+//   ownValues
+//    the Velocity and Join lanes' values: D5 joined -20 ms (a gap up to legatoGap 39: a transition, bowed 93, C5
+//    ending 20 ms before it); E5 joined -60 ms (longer: a re-attack 106, D5 ending 60 ms before it); F5 at velocity 50,
+//    joined +40 (E5 ending 40 ms after it); C5's join unused (no note before: its attack, spiccato 112)
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::ownValues()
+      {
+      auto lib = sso();
+      MasterScore* s = score();
+      QVERIFY(lib && s);
+      std::vector<Note*> n = notes(s);
+      QCOMPARE(n[0]->propertyDefault(Pid::LIBRARY_JOIN).toInt(), PerformanceTechnique::JOIN_AUTO);
+      set({ n[0] }, Pid::LIBRARY_JOIN, 30);
+      set({ n[1] }, Pid::LIBRARY_JOIN, -20);
+      set({ n[2] }, Pid::LIBRARY_JOIN, -60);
+      set({ n[3] }, Pid::LIBRARY_JOIN, 40);
+      set({ n[3] }, Pid::LIBRARY_VELOCITY, 50);
+      std::map<int, Key> k = render(s, lib);
+      QCOMPARE(k[72].velocity, 112);
+      QCOMPARE(k[74].velocity, 93);
+      QCOMPARE(k[76].velocity, 106);
+      QCOMPARE(k[77].velocity, 50);
+      auto within = [](double a, double b) { return std::abs(a - b) < 2.5; };
+      QVERIFY2(within(ms(k[74].on - k[72].off), 20), qPrintable(QString::number(ms(k[74].on - k[72].off))));
+      QVERIFY2(within(ms(k[76].on - k[74].off), 60), qPrintable(QString::number(ms(k[76].on - k[74].off))));
+      QVERIFY2(within(ms(k[76].off - k[77].on), 40), qPrintable(QString::number(ms(k[76].off - k[77].on))));
+      // the edge: -39 still a transition, -40 a re-attack
+      set({ n[1] }, Pid::LIBRARY_JOIN, -39);
+      QCOMPARE(render(s, lib)[74].velocity, 93);
+      set({ n[1] }, Pid::LIBRARY_JOIN, -40);
+      QCOMPARE(render(s, lib)[74].velocity, 106);
+      // its own velocity after a technique: the velocity wins; a technique chosen after it: back to Auto (smooth: 5),
+      // undone together
+      set({ n[4] }, Pid::PERFORMANCE_ATTACK, int(Attack::SMOOTH));
+      set({ n[4] }, Pid::LIBRARY_VELOCITY, 30);
+      QCOMPARE(render(s, lib)[79].velocity, 30);
+      set({ n[4] }, Pid::PERFORMANCE_ATTACK, int(Attack::ACCENTED));
+      set({ n[4] }, Pid::PERFORMANCE_ATTACK, int(Attack::SMOOTH));
+      QCOMPARE(n[4]->libraryVelocity(), 0);
+      QCOMPARE(render(s, lib)[79].velocity, 5);
+      set({ n[1] }, Pid::LIBRARY_JOIN, -20);
+      set({ n[1] }, Pid::PERFORMANCE_TRANSITION, int(Transition::FINGERED));
+      QCOMPARE(n[1]->libraryJoin(), PerformanceTechnique::JOIN_AUTO);
+      s->undoRedo(true, 0);
+      QCOMPARE(n[1]->libraryJoin(), -20);
+      QCOMPARE(n[1]->performanceTransition(), Transition::AUTO);
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   ownVelocityElsewhere
+//    without "performance" (the All techniques patch) a note's own velocity is sent too; its join changes nothing
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::ownVelocityElsewhere()
+      {
+      auto lib = sso();
+      MasterScore* s = score(false);
+      QVERIFY(lib && s);
+      std::vector<Note*> n = notes(s);
+      std::map<int, Key> before = render(s, lib);
+      set({ n[0] }, Pid::LIBRARY_VELOCITY, 77);
+      set({ n[1], n[2] }, Pid::LIBRARY_JOIN, -100);
+      std::map<int, Key> after = render(s, lib);
+      QCOMPARE(after[72].velocity, 77);
+      for (int p : { 74, 76, 77 }) {
+            QCOMPARE(after[p].velocity, before[p].velocity);
+            QCOMPARE(after[p].on, before[p].on);
+            QCOMPARE(after[p].off, before[p].off);
+            }
+      QCOMPARE(after[72].on, before[72].on);
+      QCOMPARE(after[72].off, before[72].off);
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   ownSaved
+//    velocity and join in the metaTag, read back; a note with only them is written
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::ownSaved()
+      {
+      MasterScore* s = score();
+      QVERIFY(s);
+      std::vector<Note*> n = notes(s);
+      set({ n[1] }, Pid::LIBRARY_VELOCITY, 88);
+      set({ n[2] }, Pid::LIBRARY_JOIN, -45);
+      QVERIFY(saveScore(s, "performancetechnique-own.mscx"));
+      const QString text = fileText("performancetechnique-own.mscx");
+      QVERIFY2(text.contains("&quot;velocity&quot;:88") && text.contains("&quot;join&quot;:-45"),
+               qPrintable(text.section("<metaTag name=\"performanceTechniques\">", 1).left(300)));
+      QVERIFY(!text.contains("libraryVelocity") && !text.contains("libraryJoin"));
+      MasterScore* again = readCreatedScore("performancetechnique-own.mscx");
+      QVERIFY(again);
+      std::vector<Note*> m = notes(again);
+      QCOMPARE(m[1]->libraryVelocity(), 88);
+      QCOMPARE(m[1]->libraryJoin(), PerformanceTechnique::JOIN_AUTO);
+      QCOMPARE(m[2]->libraryJoin(), -45);
+      QCOMPARE(m[2]->libraryVelocity(), 0);
+      QCOMPARE(m[0]->libraryJoin(), PerformanceTechnique::JOIN_AUTO);
+      delete again;
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   trace
+//    what the lanes read (MidiRenderer::LibTrace): each note's velocity as sent, attack or transition, its join; a
+//    technique on velocity (the All techniques patch's Spiccato, staccato notes) its velocity at ppp … fff, rising
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::trace()
+      {
+      auto lib = sso();
+      MasterScore* s = score();
+      QVERIFY(lib && s);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> t;
+      PlaybackAudit::render(s, &events, &t);
+      std::map<int, MidiRenderer::LibTrace> byPitch;
+      for (const MidiRenderer::LibTrace& e : t)
+            byPitch.emplace(e.note->pitch(), e);
+      QCOMPARE(byPitch[72].velocity, 112);
+      QCOMPARE(byPitch[72].performance, MidiRenderer::LibPerformance::ATTACK);
+      QCOMPARE(byPitch[72].joinMs, PerformanceTechnique::JOIN_AUTO);
+      QCOMPARE(byPitch[74].performance, MidiRenderer::LibPerformance::ATTACK);
+      QCOMPARE(byPitch[74].joinMs, -54);
+      QCOMPARE(byPitch[76].velocity, 93);
+      QCOMPARE(byPitch[76].performance, MidiRenderer::LibPerformance::TRANSITION);
+      QCOMPARE(byPitch[76].joinMs, 24);
+      QVERIFY(byPitch[76].dynamicVelocities.empty());           // (dynamics on the controller)
+      delete s;
+
+      // without "performance", staccato: the Spiccato (on velocity)
+      MasterScore* st = score(false);
+      QVERIFY(st);
+      for (Note* n : notes(st)) {
+            Articulation* a = new Articulation(st);
+            a->setSymId(SymId::articStaccatoAbove);
+            a->setTrack(n->track());
+            a->setParent(n->chord());
+            st->startCmd();
+            st->undoAddElement(a);
+            st->endCmd();
+            }
+      t.clear();
+      events.clear();
+      PlaybackAudit::render(st, &events, &t);
+      SoundLib::setCurrent(nullptr);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      QVERIFY(!t.empty());
+      const MidiRenderer::LibTrace& e = t.front();
+      QCOMPARE(e.performance, MidiRenderer::LibPerformance::NONE);
+      QVERIFY2(e.dynamicVelocities.size() == 8, qPrintable(QString("%1 %2").arg(e.patch->name).arg(e.dynamicVelocities.size())));
+      for (size_t i = 1; i < 8; ++i)
+            QVERIFY(e.dynamicVelocities[i] >= e.dynamicVelocities[i - 1]);
+      QVERIFY(e.dynamicVelocities.front() < e.dynamicVelocities.back());
+      delete st;
       }
 
 //---------------------------------------------------------
@@ -403,6 +574,89 @@ void TestPerformanceTechnique::parts()
       QCOMPARE(notes(part)[3]->performanceAttack(), Attack::AUTO);
       delete again;
       delete s;
+      }
+
+//---------------------------------------------------------
+//   lanes
+//    what the Velocity and Join lanes show (NoteLane): the notes by tick; a Performance note's bands, the attacks' or,
+//    joined by transition, the transitions'; a join down to -39 ms (legatoGap) still a transition; an own join
+//    rendered; the Spiccato's dynamics bands, ppp … fff, contiguous over 1-127
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::lanes()
+      {
+      auto lib = sso();
+      MasterScore* s = score();
+      QVERIFY(lib && s);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      auto names = [](const std::vector<NoteLane::Band>& bands) {
+            QStringList l;
+            for (const NoteLane::Band& b : bands)
+                  l << QString("%1:%2-%3").arg(b.name).arg(b.low).arg(b.high);
+            return l.join(" ");
+            };
+      auto marks = NoteLane::marks(s);
+      QCOMPARE(int(marks.size()), 1);
+      std::vector<NoteLane::Mark> m = marks.begin()->second;
+      QCOMPARE(int(m.size()), 7);
+      for (size_t i = 1; i < m.size(); ++i)
+            QVERIFY(m[i].tick > m[i - 1].tick);
+      // C5: an attack, nothing before it
+      QCOMPARE(m[0].note->pitch(), 72);
+      QVERIFY(!m[0].joinable());
+      QCOMPARE(names(NoteLane::velocityBands(m[0], m[0].joinMs)), QString("smooth:1-9 spiccato:10-116 accented:117-127"));
+      QCOMPARE(NoteLane::bandAt(NoteLane::velocityBands(m[0], m[0].joinMs), m[0].velocity)->name, QString("spiccato"));
+      // D5: re-attacked 54 ms after C5 ends; joined at -39 ms, a transition, at -40 not
+      QCOMPARE(m[1].joinMs, -54);
+      QCOMPARE(NoteLane::legatoGap(m[1]), 39);
+      QCOMPARE(NoteLane::performanceAt(m[1], -54), MidiRenderer::LibPerformance::ATTACK);
+      QCOMPARE(NoteLane::performanceAt(m[1], -39), MidiRenderer::LibPerformance::TRANSITION);
+      QCOMPARE(NoteLane::performanceAt(m[1], -40), MidiRenderer::LibPerformance::ATTACK);
+      QCOMPARE(names(NoteLane::velocityBands(m[1], -39)), QString("portamento:1-19 fingered:20-84 bowed:85-127"));
+      // E5: a transition, F5's 24 ms overlap
+      QCOMPARE(m[2].performance, MidiRenderer::LibPerformance::TRANSITION);
+      QCOMPARE(m[2].joinMs, 24);
+      QCOMPARE(NoteLane::performanceAt(m[2], -60), MidiRenderer::LibPerformance::ATTACK);
+      // D5's own join: rendered as a transition, marked own
+      std::vector<Note*> n = notes(s);
+      set({ n[1] }, Pid::LIBRARY_JOIN, -20);
+      m = NoteLane::marks(s).begin()->second;
+      QVERIFY(m[1].ownJoin);
+      QCOMPARE(m[1].joinMs, -20);
+      QCOMPARE(m[1].performance, MidiRenderer::LibPerformance::TRANSITION);
+      QVERIFY(!m[2].ownJoin);
+      delete s;
+
+      // without "performance", staccato: the Spiccato on velocity, the dynamics' bands
+      MasterScore* st = score(false);
+      QVERIFY(st);
+      for (Note* x : notes(st)) {
+            Articulation* a = new Articulation(st);
+            a->setSymId(SymId::articStaccatoAbove);
+            a->setTrack(x->track());
+            a->setParent(x->chord());
+            st->startCmd();
+            st->undoAddElement(a);
+            st->endCmd();
+            }
+      m = NoteLane::marks(st).begin()->second;
+      SoundLib::setCurrent(nullptr);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      QVERIFY(!m.empty());
+      QVERIFY(!m[1].joinable());
+      const std::vector<NoteLane::Band> bands = NoteLane::velocityBands(m[0], m[0].joinMs);
+      QVERIFY2(bands.size() >= 2, qPrintable(names(bands)));
+      QCOMPARE(bands.front().low, 1);
+      QCOMPARE(bands.back().high, 127);
+      QCOMPARE(bands.back().name, QString("fff"));
+      for (size_t i = 1; i < bands.size(); ++i)
+            QCOMPARE(bands[i].low, bands[i - 1].high + 1);
+      const std::vector<int>& d = m[0].dynamicVelocities;
+      if (d[2] < d[3])
+            QCOMPARE(NoteLane::bandAt(bands, d[2])->name, QString::fromUtf8("p–mp"));
+      QCOMPARE(NoteLane::bandAt(bands, m[0].velocity) != nullptr, true);
+      delete st;
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

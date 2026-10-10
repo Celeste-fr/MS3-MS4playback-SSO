@@ -29,6 +29,7 @@
 #include "soundlibrary.h"
 #include "automation.h"
 #include "trackdelays.h"
+#include "performancetechnique.h"
 #include <functional>
 #include <limits>
 
@@ -173,14 +174,24 @@ class MidiRenderer {
       int minChunkSize = 0;
 
    public:
-      // a library note's choice as rendered (each switch put): the whole-score audit reads it (playbackaudit.h);
-      // playback sets none
+      // a library note's choice as rendered (each switch put): the whole-score audit reads it (playbackaudit.h),
+      // the Velocity and Join lanes too (mscore/notelanes.h); playback sets none
+      enum class LibPerformance : char { NONE, ATTACK, TRANSITION };      // on a Performance patch (performanceNote)
       struct LibTrace {
             const Note* note;
             int utick;                                // its written start (as rendered: an ornament's sub-note's)
             SoundLib::Choice choice;
             const SoundLib::LibInstrument* patch;     // the chosen patch
+            int velocity { -1 };                      // as sent (its own, Note::libraryVelocity, included)
+            LibPerformance performance { LibPerformance::NONE };
+            int joinMs { PerformanceTechnique::JOIN_AUTO };   // the note before ends this long after its note-on
+                                                              // (< 0: before it); JOIN_AUTO: not joined
+            // a technique on velocity: the velocity a plain note of it plays at each MS4 dynamic (DYNAMIC_LEVELS, ppp
+            // … fff: libVelocity; without the articulations' Inspector levels); empty: its velocity is no dynamic
+            std::vector<int> dynamicVelocities;
             };
+      static const int DYNAMIC_LEVELS[8];         // MS4's levels of ppp … fff (ms4playback.cpp's dynamic table)
+      static const char* const DYNAMIC_NAMES[8];
    private:
       std::vector<LibTrace>* libTrace { nullptr };
 

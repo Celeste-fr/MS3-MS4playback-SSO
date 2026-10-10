@@ -286,6 +286,9 @@ class Note final : public Element {
       // on a Performance patch (performancetechnique.h); Auto: as the notation says
       PerformanceTechnique::Attack _performanceAttack { PerformanceTechnique::Attack::AUTO };
       PerformanceTechnique::Transition _performanceTransition { PerformanceTechnique::Transition::AUTO };
+      // its own velocity and join (the Velocity and Join lanes; performancetechnique.h); 0 / JOIN_AUTO: as rendered
+      int _libraryVelocity { 0 };
+      int _libraryJoin { PerformanceTechnique::JOIN_AUTO };
 
       char _offTimeType    { 0 };    // compatibility only 1 - user(absolute), 2 - offset (%)
       char _onTimeType     { 0 };    // compatibility only 1 - user, 2 - offset
@@ -498,6 +501,10 @@ class Note final : public Element {
       void setPerformanceAttack(PerformanceTechnique::Attack v)           { _performanceAttack = v;        }
       PerformanceTechnique::Transition performanceTransition() const      { return _performanceTransition; }
       void setPerformanceTransition(PerformanceTechnique::Transition v)   { _performanceTransition = v;    }
+      int libraryVelocity() const                                         { return _libraryVelocity;       }
+      void setLibraryVelocity(int v)                                      { _libraryVelocity = v;          }
+      int libraryJoin() const                                             { return _libraryJoin;           }
+      void setLibraryJoin(int ms)                                         { _libraryJoin = ms;             }
 
       void setOnTimeOffset(int v);
       void setOffTimeOffset(int v);
@@ -529,6 +536,9 @@ class Note final : public Element {
       void localSpatiumChanged(qreal oldValue, qreal newValue) override;
       QVariant getProperty(Pid propertyId) const override;
       bool setProperty(Pid propertyId, const QVariant&) override;
+      // (a technique chosen, in the Inspector or anywhere: the note's own velocity and join go back to Auto, the same step)
+      void undoChangeProperty(Pid id, const QVariant&, PropertyFlags ps) override;
+      using Element::undoChangeProperty;
       void undoChangeDotsVisible(bool v);
       QVariant propertyDefault(Pid) const override;
       QString propertyUserValue(Pid) const override;

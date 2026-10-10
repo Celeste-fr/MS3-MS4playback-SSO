@@ -24,11 +24,17 @@
 //    Note::performanceAttack / performanceTransition (Pid::PERFORMANCE_ATTACK / _TRANSITION, the Inspector's
 //    Note › Performance attack / transition, every selected note at once); a tie chain plays its first note's.
 //    The score's metaTag "performanceTechniques" (kept by MuseScore 3.6 through a round trip) holds JSON
-//    [{"tick", "track", "grace", "pitch", "attack", "transition"}] ("grace": the grace chord's index, left
-//    out for the chord itself; "attack" / "transition" left out when Auto), written on save from the notes
+//    [{"tick", "track", "grace", "pitch", "attack", "transition", "velocity", "join"}] ("grace": the grace chord's
+//    index, left out for the chord itself; the others left out when Auto), written on save from the notes
 //    (each score of the file its own: the master score and each part), left out when every note is Auto;
 //    read after loading and applied to the notes found (and their linked copies). Copy / paste keeps them
 //    (written in the clipboard's XML only).
+//
+//    A note's own velocity and join (Note::libraryVelocity / libraryJoin, Pid::LIBRARY_VELOCITY / _JOIN; the
+//    Velocity and Join lanes, mscore/notelanes.h) replace what the renderer would play: the velocity on any
+//    library patch, the join on a Performance patch, where it also decides attack or transition: the note before
+//    overlapping it, or a gap up to the map's legatoGap ms (SSO: 39, measured), goes on by transition, a longer gap
+//    re-attacks (HANDOFF.md › How the Performance patches work). An Inspector technique sets them back to Auto.
 //---------------------------------------------------------
 
 #include <QString>
@@ -44,6 +50,9 @@ enum class Attack : char { AUTO, SMOOTH, SPICCATO, ACCENTED };
 enum class Transition : char { AUTO, PORTAMENTO, FINGERED, BOWED };
 
 extern const char* const metaTag;
+
+constexpr int JOIN_AUTO = -100000;    // a note's join as rendered
+constexpr int JOIN_MAX = 2000;        // ms either way (the lane shows less)
 
 const char* attackName(Attack a);               // "smooth", "spiccato", "accented" ("": Auto)
 const char* transitionName(Transition t);       // "portamento", "fingered", "bowed" ("": Auto)

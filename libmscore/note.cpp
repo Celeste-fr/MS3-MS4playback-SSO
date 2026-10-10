@@ -728,6 +728,8 @@ Note::Note(const Note& n, bool link)
       _veloOffset        = n._veloOffset;
       _performanceAttack = n._performanceAttack;
       _performanceTransition = n._performanceTransition;
+      _libraryVelocity = n._libraryVelocity;
+      _libraryJoin = n._libraryJoin;
       _headScheme        = n._headScheme;
       _headGroup         = n._headGroup;
       _headType          = n._headType;
@@ -1459,6 +1461,10 @@ void Note::write(XmlWriter& xml) const
                   xml.tag("performanceAttack", PerformanceTechnique::attackName(_performanceAttack));
             if (_performanceTransition != PerformanceTechnique::Transition::AUTO)
                   xml.tag("performanceTransition", PerformanceTechnique::transitionName(_performanceTransition));
+            if (_libraryVelocity > 0)
+                  xml.tag("libraryVelocity", _libraryVelocity);
+            if (_libraryJoin != PerformanceTechnique::JOIN_AUTO)
+                  xml.tag("libraryJoin", _libraryJoin);
             }
 
       for (Spanner* e : _spannerFor)
@@ -1595,6 +1601,10 @@ bool Note::readProperties(XmlReader& e)
             _performanceAttack = PerformanceTechnique::attackFromName(e.readElementText());
       else if (tag == "performanceTransition")
             _performanceTransition = PerformanceTechnique::transitionFromName(e.readElementText());
+      else if (tag == "libraryVelocity")
+            setProperty(Pid::LIBRARY_VELOCITY, e.readInt());
+      else if (tag == "libraryJoin")
+            setProperty(Pid::LIBRARY_JOIN, e.readInt());
       else if (tag == "play")
             setPlay(e.readInt());
       else if (tag == "tuning")
@@ -3102,6 +3112,10 @@ QVariant Note::getProperty(Pid propertyId) const
                   return int(_performanceAttack);
             case Pid::PERFORMANCE_TRANSITION:
                   return int(_performanceTransition);
+            case Pid::LIBRARY_VELOCITY:
+                  return _libraryVelocity;
+            case Pid::LIBRARY_JOIN:
+                  return _libraryJoin;
             case Pid::PLAY:
                   return play();
             case Pid::LINE:
@@ -3116,6 +3130,23 @@ QVariant Note::getProperty(Pid propertyId) const
                   break;
             }
       return Element::getProperty(propertyId);
+      }
+
+//---------------------------------------------------------
+//   undoChangeProperty
+//    an attack or transition chosen is a preset: the Velocity and Join lanes' values of the note go back to Auto
+//    (performancetechnique.h)
+//---------------------------------------------------------
+
+void Note::undoChangeProperty(Pid id, const QVariant& v, PropertyFlags ps)
+      {
+      if ((id == Pid::PERFORMANCE_ATTACK || id == Pid::PERFORMANCE_TRANSITION) && v != getProperty(id)) {
+            if (_libraryVelocity != 0)
+                  Element::undoChangeProperty(Pid::LIBRARY_VELOCITY, 0, PropertyFlags::NOSTYLE);
+            if (_libraryJoin != PerformanceTechnique::JOIN_AUTO)
+                  Element::undoChangeProperty(Pid::LIBRARY_JOIN, PerformanceTechnique::JOIN_AUTO, PropertyFlags::NOSTYLE);
+            }
+      Element::undoChangeProperty(id, v, ps);
       }
 
 //---------------------------------------------------------
@@ -3185,6 +3216,15 @@ bool Note::setProperty(Pid propertyId, const QVariant& v)
                   return true;
             case Pid::PERFORMANCE_TRANSITION:
                   _performanceTransition = PerformanceTechnique::Transition(qBound(0, v.toInt(), 3));
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::LIBRARY_VELOCITY:
+                  _libraryVelocity = qBound(0, v.toInt(), 127);
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::LIBRARY_JOIN:
+                  _libraryJoin = v.toInt() == PerformanceTechnique::JOIN_AUTO ? v.toInt()
+                                 : qBound(-PerformanceTechnique::JOIN_MAX, v.toInt(), PerformanceTechnique::JOIN_MAX);
                   score()->setPlaylistDirty();
                   return true;
             case Pid::VISIBLE: {
@@ -3260,6 +3300,10 @@ QVariant Note::propertyDefault(Pid propertyId) const
             case Pid::PERFORMANCE_ATTACK:
             case Pid::PERFORMANCE_TRANSITION:
                   return 0;         // Auto
+            case Pid::LIBRARY_VELOCITY:
+                  return 0;         // as rendered
+            case Pid::LIBRARY_JOIN:
+                  return PerformanceTechnique::JOIN_AUTO;
             case Pid::PLAY:
                   return true;
             case Pid::FIXED:

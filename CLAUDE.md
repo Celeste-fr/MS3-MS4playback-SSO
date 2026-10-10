@@ -131,7 +131,12 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   velocity 100, map `legatoVelocity`: HANDOFF.md; `sso_legato_*.json` kept). There the five string sections' Performance
   Legato play each note's **Performance technique** (`libmscore/performancetechnique.h`: attack smooth / spiccato /
   accented, transition portamento / fingered / bowed, Auto from the notation; Inspector › Note, every selected note at
-  once; metaTag `performanceTechniques`; map `attacks` `transitions` `reattack` `reattackGap` `overlap`): its velocity,
+  once, a choice resets the note's own values (`Note::undoChangeProperty`); each note's own velocity and join
+  (`Pid::LIBRARY_VELOCITY` / `LIBRARY_JOIN`, in the same metaTag; a join down to the map's `legatoGap` still a transition),
+  edited in the **Velocity and Join lanes** (`libmscore/notelane.h` the model, `mscore/notelanes.h` the lanes: a stem
+  per note under the part's automation header, coloured by technique band or, on velocity techniques, by dynamic
+  band ppp … fff); metaTag `performanceTechniques`; map `attacks` `transitions` `reattack` `reattackGap` `overlap`
+  `legatoGap`): its velocity,
   and the note before ending `overlap` ms after it or `reattackGap` ms before it (`performanceNote`, `libJoins` in
   `finishLibraryEvents`; not across 10-measure chunks or tuning lanes). **Held notes start early** by their
   measured onset (`<Articulation onset>` by pitch; metaTag `soundLibraryOnsetEarly`); the note before on its patch keeps
@@ -291,8 +296,8 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
-  allArticulations, textLevel, calibrated), `tst_performancetechnique` 10 (2026-10-10: Auto techniques, overrides, joins on
-  rendered events, file round trip, undo), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
+  allArticulations, textLevel, calibrated), `tst_performancetechnique` 15 (2026-10-10: Auto techniques, overrides, joins on
+  rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.
 - `tst_midi`: 97 passed (2026-10-04). Its 3.x tests render with MuseScore 3.6's method (`ms3State`: the MS3 mode)

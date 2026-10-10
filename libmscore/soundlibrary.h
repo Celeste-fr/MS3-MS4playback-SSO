@@ -97,15 +97,17 @@ struct Articulation {
                                           // Performance legato picks the transition by velocity, 85-127 "with accent");
                                           // -1: the note's own
       // a Performance legato patch's techniques by velocity (<Articulation attacks="smooth:1-9:7 spiccato:10-116:112 …"
-      // transitions="portamento:1-19:10 …" reattack="106" reattackGap="54" overlap="24">: name:band:velocity it plays
-      // with, the velocity of an attack right after a note of its patch, ms the note before ends before it / lasts into
-      // it; performancetechnique.h, the renderer's performanceNote). Empty: the notes play as before
+      // transitions="portamento:1-19:10 …" reattack="106" reattackGap="54" overlap="24" legatoGap="39">: name:band:velocity
+      // it plays with, the velocity of an attack right after a note of its patch, ms the note before ends before it /
+      // lasts into it, the longest gap the patch still joins by transition (a note's own join: Note::libraryJoin);
+      // performancetechnique.h, the renderer's performanceNote). Empty: the notes play as before
       struct Technique { QString name; int low; int high; int velocity; };
       std::vector<Technique> attacks;
       std::vector<Technique> transitions;
       int reattackVelocity { -1 };
       double reattackGapMs { -1 };
       double overlapMs { -1 };
+      double legatoGapMs { -1 };          // (-1: none listed: any gap re-attacks)
       const Technique* attack(const QString& name) const;         // nullptr: none of that name
       const Technique* transition(const QString& name) const;
       std::vector<std::pair<int, double>> legatoDelays;   // interval (semitones, the new note minus the one before)
