@@ -190,6 +190,19 @@ switch value of each articulation. For example:
     (Spitfire's Performance legato picks the transition by velocity: fast 85-127 "with accent", slow 85-127
     bowed). SSO: Violas - Performance 100, the other Performance patches none (measured per family, `gen_spitfire_sso.py` LEGATO_VELOCITY; on Violas - Performance, 2026-10-07: a run of slurred
     sixteenths arrives with an SD of 41 ms against the written times at 100, 49 ms at 64).
+  - `attacks`, `transitions`, `reattack`, `reattackGap`, `overlap` on an `Articulation` of a legato patch that picks
+    its sound by velocity and timing (`libmscore/performancetechnique.h`): `attacks="name:low-high:velocity …"`
+    lists the attacks (a note after silence or a re-attack) by their velocity band and the velocity played,
+    `transitions` the same for a note joined to the one before; `reattack` the velocity of a re-attack (Auto,
+    right after a note of the patch), `reattackGap` (ms) how long before it the note before ends, `overlap` (ms)
+    how long after a transition's note-on the note before ends. Names MuseScore knows: attacks `smooth`,
+    `spiccato`, `accented`; transitions `portamento`, `fingered`, `bowed` (Note › Performance attack / transition
+    in the Inspector; Auto: a slur's notes bowed, after a glissando portamento, an accent or marcato accented,
+    else spiccato). SSO (`gen_spitfire_sso.py` PERFORMANCE_TECHNIQUES, the five string sections' Performance
+    Legato): `attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122" transitions="portamento:1-19:10
+    fingered:20-84:69 bowed:85-127:93" reattack="106" reattackGap="54" overlap="24"` (bands: Spitfire's article and
+    measured on Violins 1 - Performance; velocities and times: the owner's own set, HANDOFF.md). A bowed transition
+    plays at `legatoVelocity` where the map has one.
   - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long
     after its note-on (SSO's Performance patches: 60–690 ms, median 190). Either one number for
     every interval or the delay by interval, `interval:ms` pairs in semitones (the new note minus the

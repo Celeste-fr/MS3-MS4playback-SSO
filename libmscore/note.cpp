@@ -726,6 +726,8 @@ Note::Note(const Note& n, bool link)
       _tuning            = n._tuning;
       _veloType          = n._veloType;
       _veloOffset        = n._veloOffset;
+      _performanceAttack = n._performanceAttack;
+      _performanceTransition = n._performanceTransition;
       _headScheme        = n._headScheme;
       _headGroup         = n._headGroup;
       _headType          = n._headType;
@@ -1451,6 +1453,13 @@ void Note::write(XmlWriter& xml) const
             }) {
             writeProperty(xml, id);
             }
+      // the Performance technique: in the clipboard only; a file keeps it in the metaTag (performancetechnique.h)
+      if (xml.clipboardmode()) {
+            if (_performanceAttack != PerformanceTechnique::Attack::AUTO)
+                  xml.tag("performanceAttack", PerformanceTechnique::attackName(_performanceAttack));
+            if (_performanceTransition != PerformanceTechnique::Transition::AUTO)
+                  xml.tag("performanceTransition", PerformanceTechnique::transitionName(_performanceTransition));
+            }
 
       for (Spanner* e : _spannerFor)
             e->writeSpannerStart(xml, this, track());
@@ -1582,6 +1591,10 @@ bool Note::readProperties(XmlReader& e)
             readProperty(e, Pid::HEAD_GROUP);
       else if (tag == "velocity")
             setVeloOffset(e.readInt());
+      else if (tag == "performanceAttack")            // (the clipboard's only: a file keeps it in the metaTag)
+            _performanceAttack = PerformanceTechnique::attackFromName(e.readElementText());
+      else if (tag == "performanceTransition")
+            _performanceTransition = PerformanceTechnique::transitionFromName(e.readElementText());
       else if (tag == "play")
             setPlay(e.readInt());
       else if (tag == "tuning")
@@ -3085,6 +3098,10 @@ QVariant Note::getProperty(Pid propertyId) const
                   return int(headType());
             case Pid::VELO_TYPE:
                   return int(veloType());
+            case Pid::PERFORMANCE_ATTACK:
+                  return int(_performanceAttack);
+            case Pid::PERFORMANCE_TRANSITION:
+                  return int(_performanceTransition);
             case Pid::PLAY:
                   return play();
             case Pid::LINE:
@@ -3162,6 +3179,14 @@ bool Note::setProperty(Pid propertyId, const QVariant& v)
                   setVeloType(ValueType(v.toInt()));
                   score()->setPlaylistDirty();
                   break;
+            case Pid::PERFORMANCE_ATTACK:             // (playback only: no relayout)
+                  _performanceAttack = PerformanceTechnique::Attack(qBound(0, v.toInt(), 3));
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::PERFORMANCE_TRANSITION:
+                  _performanceTransition = PerformanceTechnique::Transition(qBound(0, v.toInt(), 3));
+                  score()->setPlaylistDirty();
+                  return true;
             case Pid::VISIBLE: {
                   setVisible(v.toBool());
                   if (m)
@@ -3232,6 +3257,9 @@ QVariant Note::propertyDefault(Pid propertyId) const
                   return int(NoteHead::Type::HEAD_AUTO);
             case Pid::VELO_TYPE:
                   return int (ValueType::OFFSET_VAL);
+            case Pid::PERFORMANCE_ATTACK:
+            case Pid::PERFORMANCE_TRANSITION:
+                  return 0;         // Auto
             case Pid::PLAY:
                   return true;
             case Pid::FIXED:

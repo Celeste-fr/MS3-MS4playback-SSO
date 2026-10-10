@@ -84,7 +84,8 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
-//               [legatoVelocity="100"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]/>;
+//               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
+//               reattackGap="54" overlap="24"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -199,6 +200,22 @@ double Articulation::onsetMedian() const
       return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
       }
 
+const Articulation::Technique* Articulation::attack(const QString& name) const
+      {
+      for (const Technique& t : attacks)
+            if (t.name == name)
+                  return &t;
+      return nullptr;
+      }
+
+const Articulation::Technique* Articulation::transition(const QString& name) const
+      {
+      for (const Technique& t : transitions)
+            if (t.name == name)
+                  return &t;
+      return nullptr;
+      }
+
 double Articulation::quickLevelAt(int pitch, double ms) const
       {
       // each measured pitch's level at ms, then between the two pitches around the note
@@ -288,6 +305,29 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
       if (a.hasAttribute("legatoVelocity") && (art.legatoVelocity < 1 || art.legatoVelocity > 127))
             return false;
+      // name:low-high:velocity …, the bands inside 1-127 and the velocity inside its band
+      auto readTechniques = [&](const char* attr, std::vector<Articulation::Technique>& list) {
+            if (!a.hasAttribute(attr))
+                  return true;
+            for (const QString& t : a.value(attr).toString().split(' ', QString::SkipEmptyParts)) {
+                  const QStringList f = t.split(':');
+                  const QStringList band = f.value(1).split('-');
+                  bool ok1 = false, ok2 = false, ok3 = false;
+                  Articulation::Technique tq { f.value(0), band.value(0).toInt(&ok1), band.value(1).toInt(&ok2), f.value(2).toInt(&ok3) };
+                  if (f.size() != 3 || band.size() != 2 || !ok1 || !ok2 || !ok3 || tq.name.isEmpty() || tq.low < 1 || tq.high > 127
+                      || tq.low > tq.high || tq.velocity < tq.low || tq.velocity > tq.high)
+                        return false;
+                  list.push_back(tq);
+                  }
+            return true;
+            };
+      if (!readTechniques("attacks", art.attacks) || !readTechniques("transitions", art.transitions))
+            return false;
+      art.reattackVelocity = a.hasAttribute("reattack") ? a.value("reattack").toInt() : -1;
+      if (a.hasAttribute("reattack") && (art.reattackVelocity < 1 || art.reattackVelocity > 127))
+            return false;
+      art.reattackGapMs = a.hasAttribute("reattackGap") ? a.value("reattackGap").toDouble() : -1;
+      art.overlapMs = a.hasAttribute("overlap") ? a.value("overlap").toDouble() : -1;
       if (a.hasAttribute("legatoDelay") && !readKeyedMs(a.value("legatoDelay").toString(), art.legatoDelayMs, art.legatoDelays))
             return false;
       if (a.hasAttribute("onset") && !readKeyedMs(a.value("onset").toString(), art.onsetMs, art.onsets))

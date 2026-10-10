@@ -91,6 +91,20 @@ sections' Performance patches not measured.
   O 1.9, R 1.5 dB; no place in the group over 1 dB (P: 2.5). As rendered quieter than C (O 4.9 / 10.9, R 4.0 / 8.7 dB);
   listening page (level-matched): https://claude.ai/artifact/HiaXmvp2m4v5GJSCLhhus8, waiting for the owner's ear.
 
+**Performance technique per note (2026-10-10, branch `performance-techniques`)**: under staff text "performance" the
+five string sections' Performance patch plays each note by technique (`libmscore/performancetechnique.h`, the map's
+`attacks` / `transitions` / `reattack` / `reattackGap` / `overlap` from the owner's set above). Auto plays the
+notation: a note after silence spiccato 112, a slur's first note right after another a re-attack (106, the note before
+ending 54 ms earlier), notes under a slur bowed 93 (Violas 100, `legatoVelocity`) overlapping by 24 ms, an accent
+accented 122 (the sections' Performance Legato also lists `longmarcato` so an accented held note stays on it; short
+accented notes keep the All techniques Marcato), a portamento glissando into a note portamento 10. The Inspector
+(Note › Performance attack / transition) overrides it for every selected note at once; metaTag `performanceTechniques`.
+`tst_performancetechnique` (rendered events only, Violins section from the template; not heard with SSO yet). Not
+covered: a chromatic / diatonic glissando's steps and ornament sub-notes (`renderAt`) keep their plain velocity; joins
+across 10-measure chunks and tuning lanes. Next (agreed with the owner): two per-note lanes in Continuous View,
+Velocity (stems over the technique bands) and Join (ms: + overlap, − gap; −40 the re-attack line), the Inspector's
+combos becoming presets for both; same metaTag.
+
 **Plain Long for every section, lined up (the owner, 2026-10-07: "just using plain long for everything"; goal: pairs of sections within Rasch 1979's 30-50 ms)**, branch `legato-pair-delays`. Every slurred note plays the All techniques Long, early by its onset (`<Onset early="100"/>`). Measured on the Windows VM (real SSO, kthost offline, *Whence* violas bars 3-7 moved into each of 12 patches' range, odd and even notes on two instances so no attack is masked): with the map's old onsets the slow run (durations x4) had 40 of 66 section pairs within 50 ms (loudness detector; 58 by the new pitch's harmonics), the fast run 14 of 15. The residual followed pitch (Oboe r 0.94, Tuba 0.90), so `sso_long_onset_fit.json` (`onset_fit_from_split.py`) gives Violins 1, Violas, Flute, Oboe, Clarinet and Tuba a per-semitone Long onset (isolated notes, each the median of those within a semitone, + the section's offset) and moves Basses' (-84) and Tenor Trombone's (-36); `gen_spitfire_sso.py` reads it. Rendered again (batch 7): slow 56 of 66 pairs within 50 ms (loudness, median SD 29 ms), 62 of 66 (harmonics, 28), fast 16 of 16 (34; the fast loudness detector reads too few notes). The replay predicted each to within one pair. Left over 50 ms, not fixable by a per-pitch early start: Basses on loudness (round-robin variants; the detector misses one below pitch 38, and pitch 40 alternates 150 / 320 ms; harmonics puts their pairs at 25-42) and Oboe on harmonics (pitch 76 has two attacks ~60 ms apart, at 79 the detectors differ by ~105 ms). Next only by ear: the owner listens, against `[heldNotes] early 0`. `[heldNotes] early 0` plays notes as written, to compare.
 
 **Performance with every note shifted to a consistent arrival (the owner's "B", 2026-10-07): not reachable by shifting**

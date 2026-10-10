@@ -185,6 +185,7 @@ subdirs (
         libmscore/tempochange
         libmscore/phrasemark
         libmscore/marcatolevel
+        libmscore/performancetechnique
         libmscore/selectionfilter
         libmscore/selectionrangedelete
         libmscore/unrollrepeats

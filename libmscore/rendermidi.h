@@ -151,6 +151,10 @@ class MidiRenderer {
       // their written start ends at the new one, and their switch and controllers move with them (finishLibraryEvents)
       struct LibShift { int channel; int patch; int on; int written; int chordTick; };
       std::vector<LibShift> libShifts;
+      // a Performance note's join (rendermidi.cpp performanceNote; finishLibraryEvents): the note before on its patch
+      // (key) ends ms after (overlap) or before (re-attack gap) the note's note-on as played
+      struct LibJoin { int channel; int patch; int key; const Note* note; int written; double ms; };
+      std::vector<LibJoin> libJoins;
       // a note's own level on its route by a controller (this chunk; libraryNoteLevels): a marcato's level
       // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller, and its track level
       // (trackdelays.h: volumeDb). Several sources on one note add up in dB on CC11 (volumeDb on top of a CC11 map)

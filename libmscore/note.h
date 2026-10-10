@@ -21,6 +21,7 @@
 #include "element.h"
 #include "key.h"
 #include "noteevent.h"
+#include "performancetechnique.h"
 #include "pitchspelling.h"
 #include "shape.h"
 #include "symbol.h"
@@ -282,6 +283,9 @@ class Note final : public Element {
       NoteHead::Type  _headType  { NoteHead::Type::HEAD_AUTO    };
 
       ValueType _veloType { ValueType::OFFSET_VAL };
+      // on a Performance patch (performancetechnique.h); Auto: as the notation says
+      PerformanceTechnique::Attack _performanceAttack { PerformanceTechnique::Attack::AUTO };
+      PerformanceTechnique::Transition _performanceTransition { PerformanceTechnique::Transition::AUTO };
 
       char _offTimeType    { 0 };    // compatibility only 1 - user(absolute), 2 - offset (%)
       char _onTimeType     { 0 };    // compatibility only 1 - user, 2 - offset
@@ -490,6 +494,10 @@ class Note final : public Element {
       void setVeloType(ValueType v)         { _veloType = v;             }
       int veloOffset() const                { return _veloOffset;        }
       void setVeloOffset(int v)             { _veloOffset = v;           }
+      PerformanceTechnique::Attack performanceAttack() const              { return _performanceAttack;     }
+      void setPerformanceAttack(PerformanceTechnique::Attack v)           { _performanceAttack = v;        }
+      PerformanceTechnique::Transition performanceTransition() const      { return _performanceTransition; }
+      void setPerformanceTransition(PerformanceTechnique::Transition v)   { _performanceTransition = v;    }
 
       void setOnTimeOffset(int v);
       void setOffTimeOffset(int v);

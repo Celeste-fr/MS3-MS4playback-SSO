@@ -362,6 +362,9 @@ static constexpr PropertyMetaData propertyList[] = {
 
       { Pid::MARCATO_LEVEL,             P_TYPE::REAL,           true,  "marcatoLevel",           DUMMY_QT_TRANSLATE_NOOP("propertyName", "level")                                 },
 
+      { Pid::PERFORMANCE_ATTACK,        P_TYPE::INT,            true,  "performanceAttack",      DUMMY_QT_TRANSLATE_NOOP("propertyName", "performance attack")                            },
+      { Pid::PERFORMANCE_TRANSITION,    P_TYPE::INT,            true,  "performanceTransition",  DUMMY_QT_TRANSLATE_NOOP("propertyName", "performance transition")                        },
+
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };
 

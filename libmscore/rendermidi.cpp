@@ -1392,10 +1392,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // patch, an articulation that plays transitions: playsTransitions()). Returns that note (nullptr:
                   // not a transition: a slur's first note, the note after its end, the same key struck again, a
                   // slur on an articulation that attacks each note anew), the interval from it (semitones; of a chord
-                  // before, its nearest note that goes on legato) and its written length (seconds)
+                  // before, its nearest note that goes on legato) and its written length (seconds). joinable: any
+                  // note just before on the same patch (no slur needed: a Performance technique's re-attack or a
+                  // transition chosen in the Inspector, performanceNote)
                   auto legatoTransition = [&](const Note* note, const SoundLib::Choice& c, int* interval,
-                                              double* lenBefore) -> const Note* {
-                        if (!c || c.base != "legato" || !c.articulation->playsTransitions())
+                                              double* lenBefore, bool joinable = false) -> const Note* {
+                        if (!c || (c.base != "legato" && !joinable) || !c.articulation->playsTransitions())
                               return nullptr;
                         Chord* ch = note->chord();
                         if (note->tieBack() || ch->isGrace() || !ch->graceNotesBefore().empty())
@@ -1417,13 +1419,13 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               return std::abs(a->ppitch() - note->ppitch()) < std::abs(b->ppitch() - note->ppitch());
                               });
                         for (const Note* pn : before) {
-                              if (!pn->play() || !slurGoesOn(pn))
+                              if (!pn->play() || (!joinable && !slurGoesOn(pn)))
                                     continue;
                               const Note* first = pn->firstTiedNote();
                               const Chord* fc = first->chord();
                               const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
-                              if (!pc || pc.base != "legato" || pc.patch != c.patch || !pc.articulation->playsTransitions())
+                              if (!pc || (pc.base != "legato" && !joinable) || pc.patch != c.patch || !pc.articulation->playsTransitions())
                                     continue;
                               const int start = fc->tick().ticks() + tickOffset;
                               *interval = note->ppitch() - pn->ppitch();
@@ -1431,6 +1433,68 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               return first;
                               }
                         return nullptr;
+                        };
+
+                  // a note on a Performance legato patch whose map lists its techniques (<Articulation attacks
+                  // transitions>; performancetechnique.h): the velocity that picks its attack or transition, and how
+                  // the note just before on its patch ends (a re-attack: reattackGap ms before this note's note-on,
+                  // 40 ms or more being a new attack on SSO; a transition: overlap ms after it). The note's own
+                  // choice (the Inspector) first: a transition where a note of the patch comes just before, else
+                  // an attack; Auto: a slurred note goes on by transition (after a glissando line portamento,
+                  // else bowed: the map's legatoVelocity where measured), else an attack: accented under an accent
+                  // or marcato, a re-attack right after a note of its patch, spiccato after silence
+                  struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
+                                           int velocity = -1; const Note* before = nullptr; double endMs = 0; };
+                  auto performanceNote = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r) {
+                        PerformanceNote p;
+                        const SoundLib::Articulation* a = c ? c.articulation : nullptr;
+                        if (!a || a->attacks.empty() || note->tieBack())
+                              return p;
+                        p.on = true;
+                        int interval = 0;
+                        double lenBefore = 0;
+                        const Note* slurred = legatoTransition(note, c, &p.interval, &p.lenBefore);
+                        const Note* joinable = slurred ? slurred : legatoTransition(note, c, &interval, &lenBefore, true);
+                        const SoundLib::Articulation::Technique* t = nullptr;
+                        const PerformanceTechnique::Transition tr = note->performanceTransition();
+                        const PerformanceTechnique::Attack at = note->performanceAttack();
+                        bool transition = false;
+                        if (tr != PerformanceTechnique::Transition::AUTO && joinable
+                            && (t = a->transition(PerformanceTechnique::transitionName(tr))))
+                              transition = true;
+                        else if (at == PerformanceTechnique::Attack::AUTO && slurred) {
+                              bool glissando = false;
+                              for (const Spanner* sp : note->spannerBack())
+                                    glissando |= sp->isGlissando();
+                              t = a->transition(glissando ? "portamento" : "bowed");
+                              transition = t;
+                              }
+                        if (transition) {
+                              if (!slurred) {
+                                    p.interval = interval;
+                                    p.lenBefore = lenBefore;
+                                    }
+                              p.from = joinable;
+                              p.velocity = (t->name == "bowed" && a->legatoVelocity > 0) ? a->legatoVelocity : t->velocity;
+                              p.before = joinable;
+                              p.endMs = a->overlapMs > 0 ? a->overlapMs : 0;
+                              return p;
+                              }
+                        if (at != PerformanceTechnique::Attack::AUTO)
+                              t = a->attack(PerformanceTechnique::attackName(at));
+                        else {
+                              bool accent = false;
+                              for (Ms4::Art art : r.arts)
+                                    accent |= art == Ms4::Art::Accent || art == Ms4::Art::Marcato;
+                              t = a->attack(accent ? "accented" : "spiccato");
+                              }
+                        if (t)
+                              p.velocity = (t->name == "spiccato" && joinable && a->reattackVelocity > 0) ? a->reattackVelocity : t->velocity;
+                        if (joinable && a->reattackGapMs > 0) {
+                              p.before = joinable;
+                              p.endMs = -a->reattackGapMs;
+                              }
+                        return p;
                         };
 
                   // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
@@ -1584,7 +1648,17 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               // from the note before (pitch bend) when it arrives
                               int interval = 0;
                               double lenBefore = 0;
-                              const Note* from = legatoTransition(note, libChoice, &interval, &lenBefore);
+                              const PerformanceNote perf = offset == 0 ? performanceNote(note, libChoice, r) : PerformanceNote();
+                              const Note* from = perf.on ? perf.from : legatoTransition(note, libChoice, &interval, &lenBefore);
+                              if (perf.on) {
+                                    interval = perf.interval;
+                                    lenBefore = perf.lenBefore;
+                                    if (perf.velocity > 0)
+                                          libNote.velocity = perf.velocity;
+                                    if (perf.before)
+                                          libJoins.push_back({ noteChannel, libChoice.patch, perf.before->ppitch(), note,
+                                                               note->chord()->tick().ticks() + tickOffset, perf.endMs });
+                                    }
                               if (!from) {
                                     // (no transition: its bend is set at its note-on, no glide; an earlier render's
                                     // entries go)
@@ -1596,7 +1670,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // its velocity (the map's legatoVelocity, else the note's own): Spitfire's Performance
                                     // legato picks the transition by velocity
                                     const int legatoVelocity = libChoice.articulation->legatoVelocity;
-                                    if (legatoVelocity > 0)
+                                    if (legatoVelocity > 0 && !perf.on)
                                           libNote.velocity = qBound(1, legatoVelocity, 127);
                                     // its bend glides when the transition arrives: the patch's delay for the interval (an
                                     // octave by the pitch it starts from, where measured: octaveUp / octaveDown;
@@ -2276,6 +2350,44 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             const auto at = events->lower_bound(s.on);
             for (const NPlayEvent& ev : moved)
                   events->insert(at, std::make_pair(s.on, ev));
+            }
+
+      // a Performance note's join (performanceNote): the note before on its patch ends overlap ms after the
+      // note's note-on as played (a transition) or reattackGap ms before it (a re-attack), not before its own
+      // note-on. Not found (the note before in another chunk, on another tuning lane): unchanged
+      for (const LibJoin& j : libJoins) {
+            int on = -1;
+            for (auto i = events->lower_bound(j.written - 4 * DIVISION); i != events->end() && i->first <= j.written + DIVISION; ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch() && ev.channel() == j.channel && ev.note() == j.note) {
+                        on = i->first;
+                        break;
+                        }
+                  }
+            if (on < 0)
+                  continue;
+            auto off = events->end();
+            int lastOn = -1;
+            for (auto i = events->lower_bound(std::max(0, on - 8 * DIVISION)); i != events->end() && i->first <= on + 2 * DIVISION; ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (ev.type() != ME_NOTEON || ev.librarySwitch() || ev.channel() != j.channel || ev.libraryPatch() != j.patch
+                      || ev.pitch() != j.key)
+                        continue;
+                  if (ev.velo() > 0) {
+                        if (i->first < on)
+                              lastOn = i->first;
+                        }
+                  else if (lastOn >= 0 && (off == events->end() || std::abs(i->first - on) < std::abs(off->first - on)))
+                        off = i;
+                  }
+            if (off == events->end())
+                  continue;
+            const int to = std::max(lastOn + 1, score->utime2utick(score->utick2utime(on) + j.ms / 1000.0));
+            if (to == off->first)
+                  continue;
+            const NPlayEvent ev = off->second;
+            events->erase(off);
+            events->insert(std::make_pair(to, ev));
             }
 
       // a key struck again on the same patch while its last note still sounds (a legato overlap, a note
@@ -4459,6 +4571,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();
+      libJoins.clear();
       libPlayedOn.clear();
       libLevels.clear();
 

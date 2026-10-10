@@ -314,7 +314,23 @@ PERFORMANCE = {
 # 53 / 70, Basses 39 / 65, Flute Solo 35 / 65, Trumpet Solo 26 / 35; Oboe, Clarinet, Bassoon, Horn, Tenor Trombone and
 # Tuba Solo render the same at both (29, 31, 98, 29, 31, 55). Rasch 1979: 30-50 ms between players is typical
 LEGATO_VELOCITY = {'Violas - Performance': 100}
-EXTRAS = [(m, e, LEGATO) for m, e in PERFORMANCE.items()]
+# a Performance legato patch's techniques by velocity (attacks= / transitions=, name:band:velocity; reattack=,
+# reattackGap=, overlap=; libmscore/performancetechnique.h): the bands from Spitfire's article above (slow transitions)
+# and measured on Violins 1 - Performance (2026-10-10, HANDOFF.md › How the Performance patches work: first notes 1-9
+# smooth, 10-116 spiccato, 117-127 accented; a gap of 40 ms or more re-attacks). The velocities each technique plays
+# with: smooth 5 (the velocity measured slow), portamento 10 and accented 122 (the middles of their bands), spiccato
+# 112, fingered 69, bowed 93, a re-attack 106 after a 54 ms gap, transitions overlapping by 24 ms (the owner's own set,
+# 2026-10-10: its first note, lower neighbour, median transition, medians of its 9 re-attacks and of its overlaps).
+# The string sections only (the other Performance patches not measured: none, their notes play as before)
+PERFORMANCE_TECHNIQUES = (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
+                          ' transitions="portamento:1-19:10 fingered:20-84:69 bowed:85-127:93"'
+                          ' reattack="106" reattackGap="54" overlap="24"')
+PERFORMANCE_TECHNIQUE_PATCHES = {'Violins 1 - Performance', 'Violins 2 - Performance', 'Violas - Performance',
+                                 'Celli - Performance', 'Basses - Performance'}
+# with the techniques, an accented held note stays on the patch (its accented attack, not the All techniques
+# patch's Marcato Attack)
+LEGATO_TECHNIQUES = [('Legato', 20, 'legato long longmarcato', 'performance', 'long')]
+EXTRAS = [(m, e, LEGATO_TECHNIQUES if e in PERFORMANCE_TECHNIQUE_PATCHES else LEGATO) for m, e in PERFORMANCE.items()]
 EXTRAS += [
     # on one string, "performance": legato ("sul G" / "sul C")
     ('Violins 1', 'Violins 1 - Sul G - Performance', [('Legato Sul G', 20, 'legato', 'sulg performance')]),
@@ -1438,6 +1454,8 @@ for i, line in enumerate(out):
         extra += f' legatoDelay="{delay}"'
         if current in LEGATO_VELOCITY:
             extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
+        if current in PERFORMANCE_TECHNIQUE_PATCHES:
+            extra += PERFORMANCE_TECHNIQUES
         legatoGridUsed.add(current)
         up, down = octaveDelays(current)
         if up:

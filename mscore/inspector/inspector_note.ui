@@ -674,6 +674,142 @@
            </property>
           </widget>
          </item>
+         <item row="7" column="0">
+          <widget class="QLabel" name="label_performanceAttack">
+           <property name="text">
+            <string>Performance attack:</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+           </property>
+           <property name="buddy">
+            <cstring>performanceAttack</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="7" column="1">
+          <widget class="QComboBox" name="performanceAttack">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>On a Performance legato patch: how the note starts after silence or when it is played anew. Auto: from the notation</string>
+           </property>
+           <property name="accessibleName">
+            <string>Performance attack</string>
+           </property>
+           <item>
+            <property name="text">
+             <string>Auto</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Smooth</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Spiccato</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Accented</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="7" column="2">
+          <widget class="Ms::ResetButton" name="resetPerformanceAttack" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>10</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="accessibleName">
+            <string>Reset 'Performance attack' value</string>
+           </property>
+          </widget>
+         </item>
+         <item row="8" column="0">
+          <widget class="QLabel" name="label_performanceTransition">
+           <property name="text">
+            <string>Performance transition:</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+           </property>
+           <property name="buddy">
+            <cstring>performanceTransition</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="8" column="1">
+          <widget class="QComboBox" name="performanceTransition">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="toolTip">
+            <string>On a Performance legato patch: how the note joins the note before. Auto: from the notation (slurred notes bowed, after a glissando portamento)</string>
+           </property>
+           <property name="accessibleName">
+            <string>Performance transition</string>
+           </property>
+           <item>
+            <property name="text">
+             <string>Auto</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Portamento</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Fingered</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Bowed</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item row="8" column="2">
+          <widget class="Ms::ResetButton" name="resetPerformanceTransition" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>10</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="accessibleName">
+            <string>Reset 'Performance transition' value</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>
@@ -771,6 +907,8 @@
   <tabstop>tuning</tabstop>
   <tabstop>velocityType</tabstop>
   <tabstop>velocity</tabstop>
+  <tabstop>performanceAttack</tabstop>
+  <tabstop>performanceTransition</tabstop>
   <tabstop>dot1</tabstop>
   <tabstop>dot2</tabstop>
   <tabstop>dot3</tabstop>

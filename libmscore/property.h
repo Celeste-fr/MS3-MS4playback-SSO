@@ -370,6 +370,9 @@ enum class Pid : short {
 
       MARCATO_LEVEL,          // an articulation's level offset in dB, 0: the library's (articulation.h MarcatoLevel); not written in the element
 
+      PERFORMANCE_ATTACK,     // a note's attack on a Performance patch (performancetechnique.h); not written in the element
+      PERFORMANCE_TRANSITION, // a note's transition from the note before, likewise
+
       END
       };
 
