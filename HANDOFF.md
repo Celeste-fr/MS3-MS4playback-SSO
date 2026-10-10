@@ -62,7 +62,16 @@ sections' Performance patches not measured.
 - Slow transition (IOI 700): 1-19 portamento, 20-84 fingered (new pitch at ~234-266 ms), 85-127 bowed (~185 ms up,
   ~136 down). The window shows a third interval icon from 118; 85-127 sound the same.
 - Legato = the next note-on before the note-off, **or a gap up to 39 ms**; 40 ms or more re-attacks (both passes).
-  CC64 changes nothing. The same pitch again (20 ms gap) re-attacks.
+  CC64 changes nothing. The same pitch again (20 ms gap) re-attacks. Violas - Performance (2026-10-10, E4 → E♭4, two
+  passes): 39 ms still legato, 39.98 ms re-attacks, so the owner's 39.98 ms clip gaps re-attack. Same pitch (C4 112 → C4
+  106, gaps 30-60 ms): the spiccato attack icon lights, but the old note still rings within 6 dB of the new one's peak, so
+  the attack barely shows (level step +0.9..+1.9 dB).
+- **A staccato before a slur stays off the Performance patch** (the owner, 2026-10-10, *Whence* bars 9-12 Violas, each
+  slur after a staccato eighth on its pitch): moving the eighth onto Violas - Performance (velocity 112) so the slur
+  start re-attacks as bars 1-8's do was rendered (real SSO) with the eighth ending 39.98 ms before (T), shortened to the
+  figure notes' 96.38 ms (V), and 4.1 dB quieter by CC1 48 (W). V's attack measured clearest (2-8 kHz step +6.4 dB against
+  T's +0.5), but the owner: "all of these are worse than not doing anything". The eighth stays on the All techniques
+  patch and the slur starts from silence.
 - Intervals ±1..±12 transition; over an octave (±13..±24) no transition: the new note plays its own attack by its
   velocity (v5 slow, v127 fast) and the old one releases.
 - Speed (pair 69 v5 → 71, three passes per IOI; passes at slow IOIs agree within 0.1-1 dB, so round robins don't blur):
