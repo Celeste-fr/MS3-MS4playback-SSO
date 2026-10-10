@@ -24,6 +24,20 @@ by MuseScore. Unmeasured: how the All techniques longs sound slurred at speed. A
 "espr." note now plays Long (Rachm.) as a held one does (`long legato`, as Long CS plays muted slurs; it played the
 Performance legato): offer to the owner, revert in the generator's table if they prefer plain Long.
 
+**Performance legato tried again, 2026-10-10: not worth it** (the owner: "if we can't get the 4 separate slurs to work on
+performance patch, then it's maybe just not worth it"). *Whence* 12-TET bars 1-4, Violas / Celli on Violas / Celli -
+Performance (Windows VM, real SSO, kthost offline; hand-made events: each four-sixteenth slur's first note early by the
+map's Legato onset, the others transitions on their beat, velocity 64, CC1 64, CC11 127). The owner heard the line pulse
+on every beat: each slur's first note is a new bow stroke, louder than the transitions after it. Per-16th level SD
+(RMS, 60 ms after the written time): Celli 2.6-2.9 dB (three takes) against plain Long's 0.7, first note +1.8..+2.1 dB;
+Violas 1.7-2.3 against 1.6. The group-start velocity is no lever (30 / 45 / 64 / 90 / 120: Celli first note +1.0..+2.1,
+Violas worse at 90-120; takes alone differ by about ±0.5 dB of SD). One slur per bar measured flat (Celli 1.9, Violas 1.1:
+the per-beat pattern gone), which is why the first Performance try (until df273c3250, 2026-09-30, a slur's last note
+overlapped the next) didn't pulse. Left: a CC11 dip on slur starts, an automatic level adjustment (ruled out
+2026-10-06). Velocity picks the transition (no other control on these patches: `sso_patch_controls.json`), but it
+barely matters. The restored kthost (MD5 ea7e692e…, after C:\claude was lost 2026-10-10) renders the Long patches
+bit-identically to the old one (050b4970…, -137 dB null); Performance renders differ take to take.
+
 **Plain Long for every section, lined up (the owner, 2026-10-07: "just using plain long for everything"; goal: pairs of sections within Rasch 1979's 30-50 ms)**, branch `legato-pair-delays`. Every slurred note plays the All techniques Long, early by its onset (`<Onset early="100"/>`). Measured on the Windows VM (real SSO, kthost offline, *Whence* violas bars 3-7 moved into each of 12 patches' range, odd and even notes on two instances so no attack is masked): with the map's old onsets the slow run (durations x4) had 40 of 66 section pairs within 50 ms (loudness detector; 58 by the new pitch's harmonics), the fast run 14 of 15. The residual followed pitch (Oboe r 0.94, Tuba 0.90), so `sso_long_onset_fit.json` (`onset_fit_from_split.py`) gives Violins 1, Violas, Flute, Oboe, Clarinet and Tuba a per-semitone Long onset (isolated notes, each the median of those within a semitone, + the section's offset) and moves Basses' (-84) and Tenor Trombone's (-36); `gen_spitfire_sso.py` reads it. Rendered again (batch 7): slow 56 of 66 pairs within 50 ms (loudness, median SD 29 ms), 62 of 66 (harmonics, 28), fast 16 of 16 (34; the fast loudness detector reads too few notes). The replay predicted each to within one pair. Left over 50 ms, not fixable by a per-pitch early start: Basses on loudness (round-robin variants; the detector misses one below pitch 38, and pitch 40 alternates 150 / 320 ms; harmonics puts their pairs at 25-42) and Oboe on harmonics (pitch 76 has two attacks ~60 ms apart, at 79 the detectors differ by ~105 ms). Next only by ear: the owner listens, against `[heldNotes] early 0`. `[heldNotes] early 0` plays notes as written, to compare.
 
 **Performance with every note shifted to a consistent arrival (the owner's "B", 2026-10-07): not reachable by shifting**
