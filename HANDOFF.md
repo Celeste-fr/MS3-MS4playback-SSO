@@ -33,8 +33,9 @@ on every beat: each slur's first note is a new bow stroke, louder than the trans
 Violas 1.7-2.3 against 1.6. The group-start velocity is no lever (30 / 45 / 64 / 90 / 120: Celli first note +1.0..+2.1,
 Violas worse at 90-120; takes alone differ by about ±0.5 dB of SD). One slur per bar measured flat (Celli 1.9, Violas 1.1:
 the per-beat pattern gone), which is why the first Performance try (until df273c3250, 2026-09-30, a slur's last note
-overlapped the next) didn't pulse. Left: a CC11 dip on slur starts, an automatic level adjustment (ruled out
-2026-10-06). Velocity picks the transition (no other control on these patches: `sso_patch_controls.json`), but it
+overlapped the next) didn't pulse. Left, untried: a measured CC11 dip on each slur's first note, matching it to the
+transitions (the same kind of measured level matching as calibrated levels and `[slurs] quickLevel`, which the owner
+approved after 2026-10-06's "no automatic adjustments"; not ruled out). Velocity picks the transition (no other control on these patches: `sso_patch_controls.json`), but it
 barely matters. The restored kthost (MD5 ea7e692e…, after C:\claude was lost 2026-10-10) renders the Long patches
 bit-identically to the old one (050b4970…, -137 dB null); Performance renders differ take to take.
 
