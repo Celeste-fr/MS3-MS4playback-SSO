@@ -775,7 +775,7 @@ bool windLevelMatches(WindLevel level, double v)
             case WindLevel::ANY:  return true;
             case WindLevel::SOFT: return dynamicTier(v) == "pp";
             case WindLevel::P_MP: return dynamicTier(v) == "p";
-            case WindLevel::FFF:  return v > (112 + 126) / 2.0;
+            case WindLevel::FFF:  return v >= 126;                         // MuseScore's fff velocity
             }
       return false;
       }

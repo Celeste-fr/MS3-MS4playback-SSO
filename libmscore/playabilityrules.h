@@ -199,9 +199,8 @@ bool isLoud(double velocity);
 // S11 tiers, split halfway between MuseScore's default velocities; mp goes with p
 QString dynamicTier(double velocity);
 int tierOrder(const QString& tier);
-// W2/B1 levels (SPEC-w2b1): soft = the pp tier (pp or softer), p/mp = the p tier, fff = above 119,
-// halfway between MuseScore's ff 112 and fff 126 (split like dynamicTier's tiers, the halfway point
-// with the softer side)
+// W2/B1 levels (SPEC-w2b1): soft = the pp tier (pp or softer), p/mp = the p tier, fff = velocity 126
+// or more, MuseScore's own fff velocity (owner 2026-10-10)
 bool windLevelMatches(WindLevel level, double velocity);
 
 // S10 slurred staccato, SECTIONS only (Wagner p. 35: four to six notes soft, three at f-ff;

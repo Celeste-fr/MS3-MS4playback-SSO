@@ -1237,8 +1237,8 @@ void TestPlayability::windDynRules()
             QVERIFY(!windLevelMatches(WindLevel::SOFT, v) && windLevelMatches(WindLevel::P_MP, v));
       for (int v : { 73, 80, 96 })
             QVERIFY(!windLevelMatches(WindLevel::SOFT, v) && !windLevelMatches(WindLevel::P_MP, v) && !windLevelMatches(WindLevel::FFF, v));
-      QVERIFY(!windLevelMatches(WindLevel::FFF, 112) && !windLevelMatches(WindLevel::FFF, 119));
-      QVERIFY(windLevelMatches(WindLevel::FFF, 120) && windLevelMatches(WindLevel::FFF, 126) && windLevelMatches(WindLevel::FFF, 127));
+      QVERIFY(!windLevelMatches(WindLevel::FFF, 112) && !windLevelMatches(WindLevel::FFF, 125));
+      QVERIFY( windLevelMatches(WindLevel::FFF, 126) && windLevelMatches(WindLevel::FFF, 127));
       QVERIFY(windLevelMatches(WindLevel::ANY, 1) && windLevelMatches(WindLevel::ANY, 127));
       }
 
