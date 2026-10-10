@@ -53,6 +53,29 @@ attack is slower, still sent early by the spiccato onset). Waiting for the owner
 barely matters. The restored kthost (MD5 ea7e692e…, after C:\claude was lost 2026-10-10) renders the Long patches
 bit-identically to the old one (050b4970…, -137 dB null); Performance renders differ take to take.
 
+**How the Performance patches work (measured 2026-10-10)**: Violins 1 - Performance on the Windows VM (real Kontakt 8 +
+SSO, kthost2 in real time with the editor open, the window's Attack & Interval / Vibrato icons read from screen shots;
+A4 area, CC1 64, CC11 127; review page with the crops: https://claude.ai/artifact/NNRZK4h1VPsTBGM54mqvUw). Other
+sections' Performance patches not measured.
+- First note of a phrase: velocity 1-9 smooth (no bite, -6 dB at ~165 ms), 10-116 spiccato (bite at 50-80 ms, then a
+  swell, -6 dB at ~260 ms), 117-127 an accented attack (-20 dB at 30-40 ms; icon and sound change at 117).
+- Slow transition (IOI 700): 1-19 portamento, 20-84 fingered (new pitch at ~234-266 ms), 85-127 bowed (~185 ms up,
+  ~136 down). The window shows a third interval icon from 118; 85-127 sound the same.
+- Legato = the next note-on before the note-off, **or a gap up to 39 ms**; 40 ms or more re-attacks (both passes).
+  CC64 changes nothing. The same pitch again (20 ms gap) re-attacks.
+- Intervals ±1..±12 transition; over an octave (±13..±24) no transition: the new note plays its own attack by its
+  velocity (v5 slow, v127 fast) and the old one releases.
+- Speed (pair 69 v5 → 71, three passes per IOI; passes at slow IOIs agree within 0.1-1 dB, so round robins don't blur):
+  v100 (bowed) ≥ 260 ms slow form (arrival 160-185 ms), 145-230 a second form (early burst at 50-110 ms, a dip; 145-200
+  differ pass to pass), ≤ 130 an early form (40-55 ms). v64 (fingered): arrival shortens smoothly 700 → 130 ms
+  (130 → 60 ms arrival), ≤ 108 a later form (125-200). History doesn't matter: four notes at 70 or 500 ms before the
+  same last transition give the same arrival. Untested: whether the limits follow the host tempo.
+- CC21 = vibrato: Non-vib 0-41, Vibrato 42-84, Molto-vib 85-127 (window zones; the level follows continuously).
+- **CC32 (UACC) switches the patch to "None / NO ACTIVE TECHNIQUE"**: silent until reloaded. Never send CC32 to a
+  Performance patch.
+- The owner's own set (2026-10-10, recorded on the Launchkey): first notes at 63-99 (spiccato), transitions 85-100
+  (bowed), a lower neighbour at 60-75 (fingered), 2-5 ms gaps (still legato), a 54 ms gap (re-attack).
+
 **Plain Long for every section, lined up (the owner, 2026-10-07: "just using plain long for everything"; goal: pairs of sections within Rasch 1979's 30-50 ms)**, branch `legato-pair-delays`. Every slurred note plays the All techniques Long, early by its onset (`<Onset early="100"/>`). Measured on the Windows VM (real SSO, kthost offline, *Whence* violas bars 3-7 moved into each of 12 patches' range, odd and even notes on two instances so no attack is masked): with the map's old onsets the slow run (durations x4) had 40 of 66 section pairs within 50 ms (loudness detector; 58 by the new pitch's harmonics), the fast run 14 of 15. The residual followed pitch (Oboe r 0.94, Tuba 0.90), so `sso_long_onset_fit.json` (`onset_fit_from_split.py`) gives Violins 1, Violas, Flute, Oboe, Clarinet and Tuba a per-semitone Long onset (isolated notes, each the median of those within a semitone, + the section's offset) and moves Basses' (-84) and Tenor Trombone's (-36); `gen_spitfire_sso.py` reads it. Rendered again (batch 7): slow 56 of 66 pairs within 50 ms (loudness, median SD 29 ms), 62 of 66 (harmonics, 28), fast 16 of 16 (34; the fast loudness detector reads too few notes). The replay predicted each to within one pair. Left over 50 ms, not fixable by a per-pitch early start: Basses on loudness (round-robin variants; the detector misses one below pitch 38, and pitch 40 alternates 150 / 320 ms; harmonics puts their pairs at 25-42) and Oboe on harmonics (pitch 76 has two attacks ~60 ms apart, at 79 the detectors differ by ~105 ms). Next only by ear: the owner listens, against `[heldNotes] early 0`. `[heldNotes] early 0` plays notes as written, to compare.
 
 **Performance with every note shifted to a consistent arrival (the owner's "B", 2026-10-07): not reachable by shifting**
