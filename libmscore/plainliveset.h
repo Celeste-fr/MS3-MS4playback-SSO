@@ -31,8 +31,14 @@
 //
 //   The input is MuseScore's own render (MidiRenderer, as "Live plays the score" renders: setForLiveClips), so the
 //   techniques are the ones MuseScore plays; the timing and level adjustments are whatever the playback settings say
-//   (off by default since 2026-10-06: docs/PLAYBACK_SETTINGS.md). Copies of a patch for another tuning (varispeed
-//   lanes) can't be had in Live: their notes join the patch's own techniques, counted in Kontakt::untuned.
+//   (off by default since 2026-10-06: docs/PLAYBACK_SETTINGS.md). Microtones (the owner, 2026-10-10: "I will not accept
+//   losing microtones"): Live has no varispeed, so Live's routes (SoundLib::routes forLive) give a patch that doesn't
+//   bend a copy per tuning, each fixed: its own Kontakt track (Kontakt::cents, named "Violins 1 (−50 cents)"), whose
+//   state the export tunes by Kontakt's own Tune (KontaktSetup::withTune; measured with SSO 2026-10-10: ±50 cents
+//   within 2 cents, levels within 0.34 dB; in Live 12.4.6 -51.3 / -49.8 cents), its techniques' tracks under it. A
+//   bending patch (Performance) keeps MuseScore's lanes, slurred notes on one lane gliding by the bend: a Kontakt per
+//   lane too ("Violins 1 - Performance (copy 2)", cents NaN), its bends on its Controllers clip's bend envelope
+//   (Live's -8192 .. 8191: MIDI's bend less 8192, measured 2026-10-10). Every tuning's Kontakt has its patch's volume.
 //   The Mixer's mute and solo are not in the notes (the owner, 2026-10-06: a part soloed when the set was made left the
 //   others' clips silent): a note is muted only where its voice doesn't play (Staff::playbackVoice); a muted part's
 //   Kontakt track is written deactivated, a solo is left out (adjusted in Live).
@@ -90,13 +96,15 @@ struct ParamLane {
 struct Kontakt {
       const SoundLib::LibInstrument* instrument { nullptr };     // the patch
       QString patch;                      // its name
-      int port { 0 };                     // the route MuseScore plays it on (SoundLib::Route; its tuning lane 0)
+      int port { 0 };                     // the route MuseScore plays it on (SoundLib::Route, Live's)
       int channel { 0 };                  // 0-15
       int patchIndex { 0 };               // 0: the part's main patch, else its extras' index + 1
       std::vector<Technique> techniques;  // in the order of their first note
       std::vector<Lane> lanes;            // by controller, the pitch bend last
       std::vector<ParamLane> params;
-      int untuned { 0 };                  // notes of a varispeed copy, played at the key's pitch
+      int lane { 0 };                     // the route's tuning lane (SoundLib::Route::lane, Live's: one per tuning)
+      double cents { 0 };                 // its tuning: the Kontakt's Tune (KontaktSetup::withTune, by the export);
+                                          // NaN: a bending patch's lane, tuned by its bends
       double gain { 1.0 };                // its track-level headroom (TrackDelays::patchGain): on its track's Volume
       };
 
@@ -132,6 +140,9 @@ bool laneController(int cc, const SoundLib::LibInstrument* instrument);
 
 // a technique's name: the articulation's of the switch value on the patch; the patch's when it doesn't switch
 QString techniqueName(const SoundLib::LibInstrument* li, int value);
+
+// a tuned Kontakt's name suffix: " (−50 cents)"; a bending patch's copy " (copy 2)"; none on lane 0 at 0 cents or bending
+QString tuningName(const Kontakt& k);
 
 // the section of an instrument id (instruments.xml's group, a few merged: the percussion groups are "Percussion")
 QString sectionName(const QString& instrumentId);

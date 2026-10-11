@@ -11,6 +11,7 @@
 #include "plainliveset.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <deque>
 #include <set>
@@ -84,6 +85,7 @@ namespace {
 
 struct Builder {
       Kontakt* kontakt { nullptr };
+      const Part* partRef { nullptr };
       QString part;
       std::map<int, size_t> techniqueOf;            // switch value -> its index in techniques
       std::map<int, std::set<int>> startsAt;        // units -> the switch values of the notes starting there
@@ -116,20 +118,11 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
       const int endUnits = tl.units(LiveClips::playedTicks(score));
       out.length = std::max(1, endUnits);
 
-      // the tracks: section, part, patch (a tuning lane's route joins its patch's)
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library);
+      // the tracks: section, part, patch and tuning (Live's routes, a Kontakt for each: a patch that doesn't bend has a
+      // copy per tuning, tuned by its Tune; a bending patch's copies are tuned by their bends)
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library, true);
       const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
-      std::vector<std::pair<const Part*, std::pair<int, int>>> order;     // (part, (patch, route index)) of lane 0
-      std::map<int, std::pair<const Part*, int>> routeTo;                   // route -> (part, patch)
-      std::map<int, bool> copyRoute;                                        // route -> a tuning lane's copy
       for (const SoundLib::Route& r : routes) {
-            const int key = r.port * 16 + r.channel;
-            routeTo[key] = { r.part, r.patch };
-            copyRoute[key] = r.lane > 0;
-            }
-      for (const SoundLib::Route& r : routes) {
-            if (r.lane > 0)
-                  continue;
             const QString id = r.part && r.part->instrument() ? r.part->instrument()->getId() : QString();
             const QString sname = sectionName(id);
             auto s = std::find_if(out.sections.begin(), out.sections.end(), [&](const Section& x) { return x.name == sname; });
@@ -153,15 +146,18 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             k.port = r.port;
             k.channel = r.channel;
             k.patchIndex = r.patch;
+            k.lane = r.lane;
+            k.cents = r.cents;
             p->kontakts.push_back(k);
             }
       // (pointers once every vector has its size)
-      std::map<std::pair<const Part*, int>, Builder> builders;
+      std::map<int, Builder> builders;                                      // by its route
       for (Section& s : out.sections)
             for (PartTracks& p : s.parts)
                   for (Kontakt& k : p.kontakts) {
-                        Builder& b = builders[{ p.part, k.patchIndex }];
+                        Builder& b = builders[k.port * 16 + k.channel];
                         b.kontakt = &k;
+                        b.partRef = p.part;
                         b.part = p.name;
                         }
 
@@ -171,16 +167,12 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             if (te.second.isExternal())
                   byRoute[te.second.extPort() * 16 + te.second.extChannel()].push_back({ te.first, &te.second });
       for (const auto& r : byRoute) {
-            auto to = routeTo.find(r.first);
-            if (to == routeTo.end())
-                  continue;
-            auto bi = builders.find(to->second);
+            auto bi = builders.find(r.first);
             if (bi == builders.end())
                   continue;
             Builder& b = bi->second;
             Kontakt& k = *b.kontakt;
             const SoundLib::LibInstrument* li = k.instrument;
-            const bool copy = copyRoute[r.first];
             // a switch sets the switch in force (true); anything else doesn't
             auto setsSwitch = [li](const NPlayEvent& e, int& value) {
                   if (e.librarySwitch()) {
@@ -203,7 +195,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             // MIDI track plays (the Kontakt track has the patch's, the part group the part's), as the renderer moves
             // it (MidiRenderer::libraryTrackDelays)
             std::vector<std::pair<int, const NPlayEvent*>> items = r.second;
-            auto pd = delays.find(to->second.first);
+            auto pd = delays.find(b.partRef);
             if (pd != delays.end() && !pd->second.tracks.empty()) {
                   int sw = -1;
                   for (size_t i = 0; i < items.size(); ++i) {
@@ -234,18 +226,14 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   if (setsSwitch(e, value))
                         continue;
                   if (e.type() == ME_CONTROLLER) {
-                        if (laneController(e.controller(), li) && !copy)
+                        if (laneController(e.controller(), li))
                               putPoint(b.lanes[e.controller()], at, e.value());
                         }
-                  else if (e.type() == ME_PITCHBEND) {
-                        if (!copy)
-                              putPoint(b.lanes[PITCH_BEND], at, (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f));
-                        }
+                  else if (e.type() == ME_PITCHBEND)
+                        putPoint(b.lanes[PITCH_BEND], at, (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f));
                   else if (e.type() == ME_PARAMETER) {
-                        if (!copy) {
-                              const int pk = e.dataA() == LiveClips::LIVE_PARAM ? LiveClips::LIVE_PARAM_KEY + e.dataB() : e.dataA();
-                              putPoint(b.params[pk], at, e.tuning());
-                              }
+                        const int pk = e.dataA() == LiveClips::LIVE_PARAM ? LiveClips::LIVE_PARAM_KEY + e.dataB() : e.dataA();
+                        putPoint(b.params[pk], at, e.tuning());
                         }
                   else if (on) {
                         auto t = b.techniqueOf.find(value);
@@ -263,8 +251,6 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         n.muted = voiceOff(e);
                         open[n.pitch].push_back({ t->second, n });
                         b.startsAt[at].insert(value);
-                        if (copy)
-                              ++k.untuned;
                         }
                   else if (off) {
                         auto o = open.find(e.pitch());
@@ -300,10 +286,10 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             const SoundLib::LibInstrument* main = nullptr;
             QStringList live;
             for (const SoundLib::Route& r : routes)
-                  if (r.part == bi.first.first && r.patch == 0 && r.lane == 0)
+                  if (r.part == b.partRef && r.patch == 0 && r.lane == 0)
                         main = r.instrument;
-            if (bi.first.first)
-                  live = LiveClips::liveLanes(Automation::lanes(bi.first.first, Automation::read(score->masterScore())));
+            if (b.partRef)
+                  live = LiveClips::liveLanes(Automation::lanes(b.partRef, Automation::read(score->masterScore())));
             for (const auto& pe : b.params) {
                   QString title;
                   if (pe.first >= LiveClips::LIVE_PARAM_KEY) {
@@ -472,6 +458,17 @@ QStringList keyPath(const QString& annotation)
       return annotation.mid(int(strlen(KEY_PREFIX))).split(" / ");
       }
 
+QString tuningName(const Kontakt& k)
+      {
+      if (std::isnan(k.cents))
+            return k.lane == 0 ? QString() : QString(" (%1 %2)").arg(QObject::tr("copy")).arg(k.lane + 1);
+      if (k.lane == 0 && std::fabs(k.cents) < 0.005)
+            return QString();
+      const double c = std::round(k.cents * 100.0) / 100.0;
+      QString n = QString::number(std::fabs(c), 'f', std::fabs(c - std::round(c)) < 0.005 ? 0 : 2);
+      return QString(" (%1%2 cents)").arg(c < 0 ? QString(QChar(0x2212)) : QString("+"), n);
+      }
+
 std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
       {
       std::vector<LiveSetWriter::Track> out;
@@ -501,7 +498,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                   const SoundLib::PartMix mix = SoundLib::partMix(p.part, false);
                   for (const Kontakt& k : p.kontakts) {
                         LiveSetWriter::Track kt;
-                        kt.name = LiveSetWriter::trackName(p.name, k.patch, k.patchIndex == 0, 0);
+                        kt.name = LiveSetWriter::trackName(p.name, k.patch, k.patchIndex == 0, 0) + tuningName(k);
                         kt.link = false;
                         kt.color = color;
                         kt.groupIndex = partIndex;
@@ -514,6 +511,8 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         kt.channel = k.channel + 1;
                         kt.routeKey = QString("%1:%2").arg(k.port).arg(kt.channel);
                         kt.routePatch = k.patchIndex;
+                        kt.lane = k.lane;
+                        kt.cents = k.cents;
                         kt.annotation = trackKey({ s.name, p.name, kt.name });
                         kt.volume = LiveSetWriter::kontaktVolume(mix.volume, k.gain);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
@@ -525,12 +524,14 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                               c.name = QObject::tr("Controllers");
                               c.end = beats(layout.length);
                               for (const Lane& l : k.lanes) {
-                                    if (l.cc == PITCH_BEND)             // the scale of Live's clip bend envelope isn't measured: reported
-                                          continue;
+                                    // Live's clip bend envelope: -8192 .. 8191, MIDI's bend less 8192 (measured: Live 12.4.6
+                                    // with SSO's Violins 1 - Performance, bend= 99.1 cents, 2026-10-10: 4096, -4096 and 8191
+                                    // bent it +55, -50 and +103 cents, within the section's ±10-20 cents of spread)
+                                    const bool bend = l.cc == PITCH_BEND;
                                     LiveSetWriter::Clip::Envelope e;
-                                    e.controller = l.cc;
+                                    e.controller = bend ? LiveSetWriter::PITCH_BEND_ENVELOPE : l.cc;
                                     for (const auto& pt : l.points)
-                                          e.points.push_back({ beats(pt.first), double(pt.second) });
+                                          e.points.push_back({ beats(pt.first), double(bend ? pt.second - 8192 : pt.second) });
                                     c.envelopes.push_back(e);
                                     }
                               if (!c.envelopes.empty())

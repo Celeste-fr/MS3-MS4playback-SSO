@@ -989,7 +989,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             return out;
       std::map<const Part*, int> colorOf;
       const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
-      for (const SoundLib::Route& r : SoundLib::routes(score, library)) {
+      for (const SoundLib::Route& r : SoundLib::routes(score, library, true)) {
             Track t;
             t.part = r.part ? r.part->partName() : QString();
             t.instrument = r.instrument;
@@ -1006,6 +1006,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             t.port = r.port;
             t.routePatch = r.patch;
             t.lane = r.lane;
+            t.cents = r.cents;
             // the Mixer as MuseScore's host plays the part (mute, not solo: as MuseScore's export)
             const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
             t.volume = kontaktVolume(m.volume, TrackDelays::patchGain(library, TrackDelays::of(r.part, delays), t.patch));

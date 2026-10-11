@@ -104,7 +104,7 @@ struct Clip {
       // a MIDI controller's envelope in the clip: (beats from the clip's start, value), by time; the first point's value
       // is the value before it too; two points at one time are a step
       struct Envelope {
-            int controller { 0 };         // the CC; PITCH_BEND_ENVELOPE: the bend (0-16383)
+            int controller { 0 };         // the CC; PITCH_BEND_ENVELOPE: the bend (Live's -8192 .. 8191: MIDI's less 8192)
             std::vector<std::pair<double, double>> points;
             };
       std::vector<Envelope> envelopes;
@@ -182,6 +182,8 @@ struct Track {
       int port { 0 };
       int routePatch { 0 };
       int lane { 0 };
+      double cents { 0 };                 // the tuning its Kontakt plays at, by its Tune (SoundLib::Route::cents: a copy's
+                                          // fixed tuning, KontaktSetup::withTune by the export); NaN: it varies
       };
 
 struct Spec {

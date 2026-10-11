@@ -2571,7 +2571,7 @@ std::vector<std::pair<int, int>> Seq::libraryOuts(const Part* part)
             }
       if (_libOutsStale || _libOutsScore != cs || _libOutsGeneration != SoundLib::routesGeneration()) {
             _libOuts.clear();
-            for (const SoundLib::Route& r : SoundLib::routes(cs, *library))
+            for (const SoundLib::Route& r : SoundLib::routes(cs, *library, true))     // (MIDI out: no varispeed)
                   _libOuts.push_back({ r.part, { r.port, r.channel } });
             _libOutsScore = cs;
             _libOutsGeneration = SoundLib::routesGeneration();
@@ -2650,7 +2650,7 @@ void Seq::libraryControllersChanged(MasterScore* score, const Part* part, const 
       if (channel < 0 || channel >= int(cs->midiMapping().size()))
             return;
       const int tick = state == Transport::PLAY ? cs->repeatList().utick2tick(getCurTick()) : cs->playPos().ticks();
-      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(cs, SoundLib::routes(cs, *library), master,
+      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(cs, SoundLib::routes(cs, *library, !hosted), master,
                                                                           before, after, tick)) {
             NPlayEvent ev(ME_CONTROLLER, channel, c.cc, c.to < 0 ? 0 : c.to);
             ev.setExternal(c.port, c.channel);

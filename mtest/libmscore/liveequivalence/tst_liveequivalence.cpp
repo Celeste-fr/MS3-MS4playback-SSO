@@ -96,6 +96,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveMarcatoLevel_data();
       void liveMarcatoLevel();
       void plainLayout();
+      void plainTuned();
       void plainSet();
       void plainSetLinked();
       void plainSetReadBack();
@@ -341,7 +342,14 @@ void TestLiveEquivalence::liveSetControllersAndMix()
       // every route of the part, from the start
       {
             EventMap events;
-            score->renderMidi(&events, false, true, SynthesizerState());
+            {
+                  MidiRenderer r(score);
+                  r.setForLiveClips(true);          // (as the export renders: Live's routes, a fixed copy per tuning)
+                  SynthesizerState ss;
+                  MidiRenderer::Context ctx(ss);
+                  ctx.metronome = false;
+                  r.renderScore(&events, ctx);
+            }
             const LiveClips::Timeline tl = LiveClips::timeline(score);
             const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *host.lib, events, { "MuseScore A" }, tl);
             QCOMPARE(clips.size(), plan.spec.tracks.size());
@@ -394,7 +402,7 @@ void TestLiveEquivalence::liveSetControllersAndMix()
                   QCOMPARE(pt.plugin.parameters[0].value, 26 / 127.0);
                   }
             }
-      QCOMPARE(withPlugin, 1);
+      QCOMPARE(withPlugin, 3);                // (a Kontakt per tuning: the score's quarter tones, each copy by its Tune)
       QVERIFY(p3.left.isEmpty());
       QVERIFY(LiveIntegration::reportText(p3, "x.als", false).contains("MIDI To"));
       QCOMPARE(validate(LiveSetWriter::xml(p3.spec)), QString());
@@ -1142,6 +1150,138 @@ void TestLiveEquivalence::plainLayout()
       QCOMPARE(int(k2.techniques.size()), 2);
       QCOMPARE(k2.techniques[1].notes[0].pitch, 76);
       QCOMPARE(k2.techniques[1].notes[0].length, tl.units(480));
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   plainTuned
+//    microtones in Live (the owner, 2026-10-10: "I will not accept losing microtones"): the plain set gives each
+//    tuning of a patch that doesn't bend its own Kontakt (Kontakt::cents, which the export sets as Kontakt's Tune),
+//    its techniques' tracks under it, the part's dynamics on each; no note left at the key's pitch. The route set's
+//    copies carry their tuning too (quartertones.musicxml: 0, +50, -50)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainTuned()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      {
+            MidiRenderer r(score);
+            r.setForLiveClips(true);                // (as the export renders: LiveClipsLink::renderEvents)
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+      }
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, tl);
+      QCOMPARE(int(l.sections.size()), 1);
+      const PlainLiveSet::PartTracks& p = l.sections[0].parts[0];
+      QCOMPARE(int(p.kontakts.size()), 3);
+      const std::vector<double> cents = { 0, -50, 50 };
+      const std::vector<std::vector<int>> pitches = { { 72, 72, 72, 76 }, { 76 }, { 72, 74, 74 } };
+      for (size_t i = 0; i < 3; ++i) {
+            const PlainLiveSet::Kontakt& k = p.kontakts[i];
+            QCOMPARE(k.patch, QString("Violin"));
+            QCOMPARE(k.cents, cents[i]);
+            QCOMPARE(k.lane, int(i));
+            QCOMPARE(int(k.techniques.size()), 1);
+            std::vector<int> got;
+            for (const LiveClips::Note& n : k.techniques[0].notes)
+                  got.push_back(n.pitch);
+            QCOMPARE(got, pitches[i]);
+            bool dynamics = false;
+            for (const PlainLiveSet::Lane& lane : k.lanes)
+                  dynamics = dynamics || (lane.cc == 1 && !lane.points.empty());
+            QVERIFY(dynamics);
+            }
+      // the tracks: each Kontakt named by its tuning, its technique routed to it
+      const std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(l);
+      QStringList kontakts;
+      for (size_t i = 0; i < tracks.size(); ++i) {
+            const LiveSetWriter::Track& t = tracks[i];
+            if (t.group || t.midiTo >= 0)
+                  continue;
+            kontakts << t.name;
+            QCOMPARE(t.cents, cents[size_t(kontakts.size() - 1)]);
+            QVERIFY(i + 1 < tracks.size() && tracks[i + 1].midiTo == int(i));
+            QCOMPARE(t.volume, tracks[2].volume);       // (every tuning's Kontakt at the patch's level)
+            }
+      QCOMPARE(kontakts, QStringList({ "Violin", QString("Violin (%1 cents)").arg(QString(QChar(0x2212)) + "50"),
+                                       "Violin (+50 cents)" }));
+      // the route set: its copies at their tuning
+      const std::vector<LiveSetWriter::Track> routeTracks = LiveSetWriter::tracks(score, *lib, { "MuseScore A" });
+      QCOMPARE(int(routeTracks.size()), 3);
+      for (size_t i = 0; i < 3; ++i)
+            QCOMPARE(routeTracks[i].cents, cents[i]);
+      delete score;
+      SoundLib::setCurrent(nullptr);
+
+      // a patch that bends (Performance): MuseScore's lanes, a Kontakt each (cents NaN, the copy named), every note on
+      // one, each tuning by the bend on its Controllers clip, in Live's scale (MIDI's bend less 8192: -50 cents of a
+      // 200-cent bend -2048)
+      auto bent = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin' bend='200'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(bent);
+      SoundLib::setCurrent(bent);
+      score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap bentEvents;
+      {
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&bentEvents, ctx);
+      }
+      const PlainLiveSet::Layout bl = PlainLiveSet::layout(score, *bent, bentEvents, LiveClips::timeline(score));
+      const PlainLiveSet::PartTracks& bp = bl.sections[0].parts[0];
+      QVERIFY(bp.kontakts.size() >= 2);
+      int notes = 0;
+      for (size_t i = 0; i < bp.kontakts.size(); ++i) {
+            const PlainLiveSet::Kontakt& k = bp.kontakts[i];
+            QVERIFY(std::isnan(k.cents));
+            QCOMPARE(k.lane, int(i));
+            for (const PlainLiveSet::Technique& t : k.techniques)
+                  notes += int(t.notes.size());
+            }
+      QCOMPARE(notes, 8);
+      std::set<int> envelopeValues;
+      QStringList bentNames;
+      for (const LiveSetWriter::Track& t : PlainLiveSet::tracks(bl)) {
+            if (t.group || t.midiTo >= 0)
+                  continue;
+            bentNames << t.name;
+            for (const LiveSetWriter::Clip& c : t.clips)
+                  for (const LiveSetWriter::Clip::Envelope& e : c.envelopes)
+                        if (e.controller == LiveSetWriter::PITCH_BEND_ENVELOPE)
+                              for (const auto& pt : e.points)
+                                    envelopeValues.insert(int(pt.second));
+            }
+      QCOMPARE(bentNames.first(), QString("Violin"));
+      QCOMPARE(bentNames.value(1), QString("Violin (copy 2)"));
+      QVERIFY(envelopeValues.count(-2048));
+      QVERIFY(envelopeValues.count(2048));
+      for (int v : envelopeValues)
+            QVERIFY(v >= -8192 && v <= 8191);
       delete score;
       SoundLib::setCurrent(nullptr);
       }
@@ -1926,7 +2066,8 @@ void TestLiveEquivalence::liveTracksJson()
 //    settings, "id=value;..."; MS_DUMP_CALIBRATION: a dynamics.json to load): per route, MuseScore's events
 //    (<route> museScore.txt) and the MIDI the device makes of the clip (<route> live.txt) as lines "seconds type a b"
 //    (on, off, cc <n> <value>, pb <14-bit> 0), for replaying both through one plug-in instance elsewhere (the kthost
-//    on the Windows VM: LIVE.md › Measured with SSO)
+//    on the Windows VM: LIVE.md › Measured with SSO). MS_DUMP_LIVE: rendered as Live's clips and sets are (Live's
+//    routes: a copy per tuning), with kontakts.txt (the plain set's Kontakts) and routes.txt (the hosted routes)
 //---------------------------------------------------------
 
 void TestLiveEquivalence::dumpEvents()
@@ -1964,10 +2105,45 @@ void TestLiveEquivalence::dumpEvents()
                   events.insert(part.begin(), part.end());
                   }
             }
+      else if (qEnvironmentVariableIsSet("MS_DUMP_LIVE")) {       // (as Live's clips and sets render: Live's routes)
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            }
       else
             score->renderMidi(&events, false, true, SynthesizerState());
       const QString out = qEnvironmentVariable("MS_DUMP_OUT");
       QDir().mkpath(out);
+      // MS_DUMP_LIVE: the plain set's Kontakts (kontakts.txt: "part|patch|lane|cents|notes|techniques"; cents nan: a
+      // bending patch's lane, tuned by its bends) and the hosted routes (routes.txt: "part|patch|lane"), to count them
+      if (qEnvironmentVariableIsSet("MS_DUMP_LIVE")) {
+            QStringList ks, rs;
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, LiveClips::timeline(score));
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                              int n = 0;
+                              QStringList ts;
+                              for (const PlainLiveSet::Technique& t : k.techniques) {
+                                    n += int(t.notes.size());
+                                    ts << QString("%1 %2").arg(t.name).arg(t.notes.size());
+                                    }
+                              ks << QString("%1|%2|%3|%4|%5|%6").arg(p.name, k.patch).arg(k.lane).arg(k.cents, 0, 'f', 2).arg(n)
+                                    .arg(ts.join(", "));
+                              }
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib, false))
+                  rs << QString("%1|%2|%3").arg(r.part ? r.part->partName() : QString(),
+                                                r.instrument ? r.instrument->name : QString()).arg(r.lane);
+            QFile kf(out + "/kontakts.txt");
+            QVERIFY(kf.open(QIODevice::WriteOnly | QIODevice::Text));
+            kf.write((ks.join("\n") + "\n").toUtf8());
+            QFile rf(out + "/routes.txt");
+            QVERIFY(rf.open(QIODevice::WriteOnly | QIODevice::Text));
+            rf.write((rs.join("\n") + "\n").toUtf8());
+            }
       std::map<QString, QStringList> ms;
       for (const auto& te : events) {
             const NPlayEvent& e = te.second;

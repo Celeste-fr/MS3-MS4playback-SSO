@@ -92,6 +92,14 @@ QByteArray withScriptValues(const QByteArray& component, const std::map<QString,
 QByteArray withMaxVoices(const QByteArray& component, int maxVoices, QString* error, int* before = nullptr);
 int maxVoices(const QByteArray& program);       // a program's (slotProgram, nkiProgram); -1: not found
 
+// the instrument's Tune (Kontakt's instrument header › Tune, kept as a frequency ratio): a state with its
+// first slot's program tuned by cents, everything else kept (the very bytes when it already is); *before: what
+// it was in cents (NaN, and *error, when the program has none where Kontakt keeps it: the state comes back
+// unchanged). Empty with *error when the state has no program in its first slot. For a tuning lane's copy in
+// Live (Kontakt ignores VST 3 note tuning; All techniques patches don't bend)
+QByteArray withTune(const QByteArray& component, double cents, QString* error, double* before = nullptr);
+double tune(const QByteArray& program);         // a program's Tune in cents; NaN: not found
+
 } // namespace KontaktSetup
 } // namespace Ms
 #endif

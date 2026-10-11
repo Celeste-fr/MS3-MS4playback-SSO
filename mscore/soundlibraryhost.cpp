@@ -2326,7 +2326,7 @@ void SoundLibraryDialog::rebuild()
             return;
             }
       score = score->masterScore();
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *_library);
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *_library, _output != SoundLib::Output::PLUGIN);   // (MIDI out: no varispeed)
       const bool plugin = _output == SoundLib::Output::PLUGIN;
       SoundLibraryHost* host = SoundLibraryHost::instance();
       enum { PART, PATCH, CONTROLLERS, STATUS, SHOW, MEMORY };

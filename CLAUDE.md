@@ -175,6 +175,12 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `soundLibraryLanes`) play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends
   cleanly (`<Instrument bend>`; varispeed can't reach Live). A legato transition's bend glides when the
   transition arrives (note-on + its measured delay, ending before the next note-on; `[tuning] bendAtArrival`).
+  **Live and MIDI out** (no varispeed; the owner, 2026-10-10: "I will not accept losing microtones"):
+  `SoundLib::routes(…, forLive)` / `lanes(…, fixedTuning)` give a patch without `bend=` a fixed copy per tuning
+  (`Lanes::fixed`, `Route::cents`; lane 0 nearest 0 cents; no max), which the export tunes by Kontakt's instrument
+  Tune (`KontaktSetup::withTune`, measured within 2 cents in kthost and Live 12.4.6); the plain set gives every route
+  its own Kontakt, a bending patch's copies their bends as the clip's pitch-bend envelope (−8192 … 8191, measured).
+  LIVE.md › The plain set › Microtones.
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
   Mixer and playback edits never leave playback stopped (the owner, 2026-10-07): track delays / levels render again
   while playing (`Seq::renderAgainPlaying`, swapped in by the realtime thread); changes that may load patches (part
@@ -282,7 +288,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 70 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 72 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-10: kontaktTune, tuningLanesLive; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
@@ -291,7 +297,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   info. The audit still reads Violas / Celli as "fitted in context" (it reads the fit files, not `RACHM_UNUSED`).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 21 passed (2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 22 passed (2026-10-10: plainTuned; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
