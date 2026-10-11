@@ -180,7 +180,8 @@ struct ChordInfo {
       std::vector<TimpaniDrumInfo> drums;           // TIMPANI
       KeyboardHandInfo hand;                        // KEYBOARD
       BrassInfo brass;                              // SLIDE, VALVES
-      QStringList windNotes;        // woodwinds / brass: "<note>: <W2/B1 rule text> (<source>)", every rule it falls under
+      QStringList windNotes;        // woodwinds / brass: "<note>: <W2/B1 rule text> (<source>)", every rule it falls under;
+                                    // then W5 "<main> tr <upper>" / "<a> ↔ <b>: <rule text> (<source>)"
       };
 
 namespace Playability {

@@ -167,6 +167,28 @@ headless test scores and their checked results are the parity tests.
   `windDynamics` (wind-dyn-tests.mscx from `tools/playability/gen_winddyn_tests.py`): 29 pass, 1 skipped.
   Not built (spec): saxophone top, nonprofessional trumpet, registers named without pitches, English
   horn, bass clarinet, trumpet low ff.
+- W5, woodwind trills and two-note tremolos (the owner's spec SPEC-w5, approved 2026-10-11; done):
+  a trill or tremolo the books call hard is dark yellow, impossible red. A trill is a Trill spanner of any
+  type over the chord (as playback's `findFirstTrill`, whatever its play setting) or an ornament playback
+  plays as main note and the note above (`isUpperNeighbourTrill` in rendermidi.cpp: every step of its
+  excursion 0 or +1: trill, short trill, tremblement, shakes …; not mordents or turns); main = the written
+  note (`ppitch`), upper = main + `articulationExcursion(n, n, 1)` exactly as playback (key signature,
+  accidentals earlier in the bar). A tremolo is a two-note tremolo between two single notes; its pairs match
+  in either order. Pitches compare by MIDI number (C♯4–D♯4 = D♭4–E♭4); bands include both ends. Flute,
+  oboe, bassoon sounding; English horn (the oboe's five rules) and saxophones written; piccolo, alto flute,
+  clarinets, contrabassoon none. Marks: flute C4–D♭4, C♯4–D♯4 trills and C4–E♭4 tremolo (R), B3–C4,
+  B3–C♯4 trills (R), trill on G6+ (W), tremolo with B3 (W), tremolo wider than a P5 from C4–B4 (W); oboe /
+  English horn B♭3–B3 trill or tremolo (R), C4–C♯4 trill (W), tremolo wider than a P4 (W), trill above D6
+  (W), C♯5–D♯5 trill (W); bassoon any trill or tremolo with a note in B♭1–G♭2 (R; first, and nothing else
+  marks what it marks; the C♯2–D♯2 pair adds the trill-key hint), trill on D♭/E♭/G♭ or A4 (R) and on C5+
+  (W) except C♯5–D5, D5–E♭5, D♯5–E5, A♭2–B♭2 trill (W), tremolo wider than a P4 (W); D♯5–E5 a panel note
+  (extra E key); saxophone trill above written A6 (W). Every mark says "solo and section". The trill marks
+  its main note, the tremolo both. Rules (book and page) in `tools/playability/w5_rules.py`;
+  `gen_windtrills.py` writes `libmscore/playabilitywindtrills.h`. `Pass::checkWindTrills` (next to
+  `checkWindDynamics`): rows of kind `trill` / `tremolo`, one per trill or tremolo and rule, tied
+  continuations not again; the panel lists every W5 rule of the selected chord's trills and tremolo after
+  its W2/B1 notes (`ChordInfo::windNotes`). Tests `windTrillRules`, `windTrills` (windtrill-tests.mscx from
+  `tools/playability/gen_windtrill_tests.py`): 31 pass, 1 skipped. W3 (clarinet break): no rules (the owner).
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1
