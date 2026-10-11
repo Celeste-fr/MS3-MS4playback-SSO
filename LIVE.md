@@ -304,7 +304,9 @@ in a section collapsible at the same time".
   Measured 2026-10-10 on the VM with SSO: in kthost ±50 cents within 2 cents, levels within 0.34 dB; in a set Live
   12.4.6 played, −50 cents gave −51.3 (Long) and −49.8 (staccatos), levels within 0.2 dB. A patch with `bend=`
   (Performance) keeps MuseScore's lanes (slurred notes on one lane, the glide by the bend), a Kontakt per lane
-  ("… (copy 2)"), its bends as the Controllers clip's pitch-bend envelope. Every tuning's Kontakt has its patch's
+  ("… (copy 2)"), its bends as the Controllers clip's pitch-bend envelope (since 2026-10-11 every step a hold pair, the value before
+  up to it, then the new one: Live ramps linearly between breakpoints; a glide's tick-apart steps as breakpoints, the
+  straight stretches' ends only; parameter automation as steps too). Every tuning's Kontakt has its patch's
   volume and gain. Tests: `tst_liveequivalence` `plainTuned`, `tst_soundlibrary` `tuningLanesLive`, `kontaktTune`.
 - **A patch's copies share one Kontakt** (since 2026-10-10, `PlainLiveSet::multis`): a Kontakt multi, the patch's
   slot once per copy, each slot its own Tune (bent copies as made), slot *i* on MIDI channel *i*

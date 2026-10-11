@@ -154,6 +154,7 @@ class TestSoundLibrary : public QObject, public MTest
       void computedLaneSettings();
       void tuningBend();
       void tuningBendAtArrival();
+      void bendGlideMeasured();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -4146,6 +4147,94 @@ void TestSoundLibrary::tuningBendAtArrival()
       QVERIFY(glideStart() <= ticksOf(4));
       score->setMetaTag(Playback::metaTag, "");
       delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   bendGlideMeasured
+//    a patch whose transition's own pitch movement is measured (<Articulation bendGlide>): a slurred quarter tone's
+//    bend holds the note before's tuning until the transition leaves it, glides in a straight line (a value a tick, each
+//    step under a cent) to the note's tuning by its arrival and holds it until the next note-on; a fresh attack's bend is
+//    a step at its note-on. quartertones.musicxml at 120: m7's slurred C5, D5+ (+50 cents, note-on 12000), E5 (12480)
+//    on lane 0, the note before 500 ms long (bendGlide "136:0:100 600:100:300": leave 78.4 ms, arrive 256.9)
+//---------------------------------------------------------
+
+void TestSoundLibrary::bendGlideMeasured()
+      {
+      Playback::setIniValuesForTest(withOld({}));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin' bend='200'>"
+         "<Articulation name='Long' value='1' techniques='legato long' legatoDelay='200' bendGlide='600:100:300 136:0:100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      double leave = 0, arrive = 0;
+      QVERIFY(lib->instruments[0].articulations[0].bendGlideAt(500, &leave, &arrive));
+      QVERIFY(std::fabs(leave - 364.0 / 464.0 * 100) < 1e-9 && std::fabs(arrive - (100 + 364.0 / 464.0 * 200)) < 1e-9);
+      QVERIFY(lib->instruments[0].articulations[0].bendGlideAt(50, &leave, &arrive) && leave == 0 && arrive == 100);
+      QVERIFY(lib->instruments[0].articulations[0].bendGlideAt(900, &leave, &arrive) && leave == 100 && arrive == 300);
+      // malformed: arrive before leave
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='L' value='1' techniques='legato' bendGlide='136:100:50'/></Instrument></SoundLibrary>"));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      struct On { int tick; int pitch; int channel; };
+      std::vector<On> ons;
+      std::map<int, std::vector<std::pair<int, int>>> sent;          // channel -> (tick, value)
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch())
+                  ons.push_back({ te.first, ev.pitch(), ev.extChannel() });
+            else if (ev.type() == ME_PITCHBEND)
+                  sent[ev.extChannel()].push_back({ te.first, ev.dataA() | (ev.dataB() << 7) });
+            }
+      QCOMPARE(int(ons.size()), 8);
+      QCOMPARE(ons[6].tick, 12000);
+      QCOMPARE(ons[7].tick, 12480);
+      QCOMPARE(ons[6].channel, ons[7].channel);
+      // the bend in force at each tick from m7's C5 to E5's arrival + 100 ms: the path to a bend unit
+      const double on6 = score->utick2utime(12000), on7 = score->utick2utime(12480);
+      const double lv = 364.0 / 464.0 * 0.100, ar = 0.100 + 364.0 / 464.0 * 0.200;
+      const std::vector<std::pair<int, int>>& s = sent[ons[6].channel];
+      int steps = 0;
+      for (int tick = 11600; tick < 12480 + 480; ++tick) {
+            int v = -1;
+            for (const auto& x : s)
+                  if (x.first <= tick)
+                        v = x.second;
+            QVERIFY(v >= 0);
+            const double t = score->utick2utime(tick);
+            auto path = [&](double on, double a, double b) {
+                  return t <= on + lv ? a : t >= on + ar ? b : a + (b - a) * (t - on - lv) / (ar - lv);
+                  };
+            const double want = t < on7 ? path(on6, 0, 50) : path(on7, 50, 0);
+            const double got = (v - 8192) * 200.0 / (v < 8192 ? 8192.0 : 8191.0);
+            QVERIFY2(std::fabs(got - want) <= 200.0 / 8191.0, qPrintable(QString("tick %1: %2 cents, the path %3").arg(tick).arg(got).arg(want)));
+            }
+      for (size_t k = 1; k < s.size(); ++k) {
+            if (s[k].first >= 12000 && s[k].first < 12480 + 480) {
+                  ++steps;
+                  QVERIFY(std::abs(s[k].second - s[k - 1].second) * 200.0 / 8192 <= 1.0);           // (under a cent a step)
+                  }
+            }
+      QVERIFY(steps > 300);                             // (two glides of ~178 ms, a value a tick)
+      // the attack (m5's E5-, -50, after +50 on its lane): a step at its note-on
+      QCOMPARE(ons[4].pitch, 76);
+      const std::vector<std::pair<int, int>>& s4 = sent[ons[4].channel];
+      auto at4 = std::find_if(s4.begin(), s4.end(), [&](const std::pair<int, int>& x) { return x.first >= ons[4].tick; });
+      QVERIFY(at4 != s4.end());
+      QCOMPARE(at4->first, ons[4].tick);
+      QCOMPARE(at4->second, 6144);
+      delete score;
+      SoundLib::setCurrent(nullptr);
       Playback::setIniValuesForTest({});
       }
 

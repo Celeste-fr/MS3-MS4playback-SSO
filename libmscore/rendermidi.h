@@ -134,7 +134,10 @@ class MidiRenderer {
       // channel -> per patch: its pitch bend range in cents (SoundLib::LibInstrument::bendCents; 0: none)
       std::map<int, std::vector<double>> libBend;
       std::map<const Note*, const Note*> libGlideFrom;            // a legato transition's note before (its lane glides)
-      std::map<const Note*, double> libGlideDelayMs;              // its measured legato delay, ms (the bend glides then)
+      // its bend's glide, ms after its note-on: from leave to arrive (the patch's own transition as measured:
+      // Articulation::bendGlideAt; else both at its legato delay)
+      struct LibGlide { double leaveMs; double arriveMs; };
+      std::map<const Note*, LibGlide> libGlide;
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
@@ -187,6 +190,8 @@ class MidiRenderer {
             LibPerformance performance { LibPerformance::NONE };
             int joinMs { PerformanceTechnique::JOIN_AUTO };   // the note before ends this long after its note-on
                                                               // (< 0: before it); JOIN_AUTO: not joined
+            double glideLeaveMs { -1 };                       // a bent transition's glide (libraryPitchBends), ms
+            double glideArriveMs { -1 };                      // after its note-on; -1: none
             // a technique on velocity: the velocity a plain note of it plays at each MS4 dynamic (DYNAMIC_LEVELS, ppp
             // … fff: libVelocity; without the articulations' Inspector levels); empty: its velocity is no dynamic
             std::vector<int> dynamicVelocities;

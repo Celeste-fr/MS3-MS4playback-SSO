@@ -86,7 +86,8 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
-//               reattackGap="54" overlap="24"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]/>;
+//               reattackGap="54" overlap="24"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
+//               [bendGlide="136:-8:100 300:70:230 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -182,6 +183,32 @@ double Articulation::legatoDelayAt(int interval, int fromPitch) const
       if (interval == -12 && !octaveDown.empty())
             return octaveDelayAt(octaveDown, octaveDownMs, fromPitch);
       return keyedMsAt(legatoDelays, legatoDelayMs, interval);
+      }
+
+bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const
+      {
+      if (bendGlides.empty())
+            return false;
+      const BendGlide* lo = &bendGlides.front();
+      const BendGlide* hi = &bendGlides.back();
+      for (size_t i = 0; i + 1 < bendGlides.size(); ++i)
+            if (bendGlides[i].lenBeforeMs <= lenBeforeMs && lenBeforeMs <= bendGlides[i + 1].lenBeforeMs) {
+                  lo = &bendGlides[i];
+                  hi = &bendGlides[i + 1];
+                  break;
+                  }
+      double f = 0;
+      if (lenBeforeMs >= hi->lenBeforeMs)
+            f = 1;
+      else if (lenBeforeMs > lo->lenBeforeMs && hi->lenBeforeMs > lo->lenBeforeMs)
+            f = (lenBeforeMs - lo->lenBeforeMs) / (hi->lenBeforeMs - lo->lenBeforeMs);
+      if (lenBeforeMs <= bendGlides.front().lenBeforeMs) {
+            lo = hi = &bendGlides.front();
+            f = 0;
+            }
+      *leaveMs = lo->leaveMs + (hi->leaveMs - lo->leaveMs) * f;
+      *arriveMs = lo->arriveMs + (hi->arriveMs - lo->arriveMs) * f;
+      return true;
       }
 
 double Articulation::onsetAt(int pitch) const
@@ -392,6 +419,18 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             return false;
       if (a.hasAttribute("octaveUp") && !readKeyedMs(a.value("octaveUp").toString(), art.octaveUpMs, art.octaveUp))
             return false;
+      // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way)
+      for (const QString& g : a.value("bendGlide").toString().split(' ', QString::SkipEmptyParts)) {
+            const QStringList f = g.split(':');
+            bool ok[3] = { false, false, false };
+            Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
+            if (f.size() != 3 || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
+                  return false;
+            art.bendGlides.push_back(bg);
+            }
+      std::sort(art.bendGlides.begin(), art.bendGlides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
+            return x.lenBeforeMs < y.lenBeforeMs;
+            });
       if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))
             return false;
       // (legatoLevel / legatoLevelLong: the legato level balance's, removed 2026-10-07; an older map's are ignored)

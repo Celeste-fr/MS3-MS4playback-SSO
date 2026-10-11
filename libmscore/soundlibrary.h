@@ -123,6 +123,16 @@ struct Articulation {
       double legatoDelayAt(int interval, int fromPitch = -1) const;   // the delay for that interval: interpolated
                                           // linearly between the measured ones, beyond the widest the widest's
                                           // (-1: unknown); an octave from fromPitch: octaveDelayAt()
+      // a legato transition's own pitch movement (<Articulation bendGlide="136:-8:100 300:70:230 600:117:262">: the
+      // note before's length (ms, its start to the transition's) : the time after the note-on its f0 leaves the
+      // note before (a tenth of the way) : the time it reaches the new note (nine tenths); pitch-tracked, Kontakt 8 +
+      // SSO, tools/soundlibraries/sso_legato_glide.json): a bent transition's glide runs then, so a microtone moves
+      // with the patch's own transition (the renderer, libraryPitchBends). Empty: at the legato delay
+      struct BendGlide { double lenBeforeMs; double leaveMs; double arriveMs; };
+      std::vector<BendGlide> bendGlides;  // sorted by lenBeforeMs
+      // the leave and arrival (ms after the note-on) after a note lenBeforeMs long: linear between the measured
+      // lengths, the nearest one's outside them; false: none measured
+      bool bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const;
       // a sustained note's attack: it is heard (its level 15 dB under its peak) this long after its note-on
       // (<Articulation onset>: one number or "pitch:ms" pairs by played pitch): a note that is not a legato
       // transition starts early by it (the renderer, onsetEarly()); -1: unknown / not shifted
@@ -203,7 +213,7 @@ struct LibInstrument {
       // microtones by the patch's own pitch bend (<Instrument bend>: cents at full deflection, either way, the
       // bend linear; measured): a lane's tuning within it is played by pitch bend, not varispeed. 0: it doesn't bend
       double bendCents { 0 };
-      QString scan;                       // a <Patch> with several articulations (read from its files): "values"
+      QString scan;                      // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;
       std::vector<Controller> controllers;          // its own (over the library's, by id)
