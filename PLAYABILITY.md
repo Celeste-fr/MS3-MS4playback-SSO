@@ -262,6 +262,49 @@ headless test scores and their checked results are the parity tests.
   test-strings.mscx double bass now has its instrument's F8vb clef (the plugin parity is unchanged); the
   W2 test's high flute, oboe and bass-clef bassoon notes and W5's bass-clef bassoon carry G7 marks.
   39 pass, 1 skipped.
+- Uncancelled techniques (N1, SPEC-n1n2t, owner-approved 2026-10-11): per staff, staff and system texts in score
+  order, whole words, any case, the word lists in `playabilityrules.h` (`N1_*`; only the spellings of the research
+  notes). A technique switched on again while still on (no cancel word in between) is "risky" on the second text
+  (its first chord at or after the text, as G8): senza / non vibrato / white tone on any pitched staff (con vibrato,
+  con vib., mit Vib., normal vibrato or the ord. family; Adler p. 171, K&G p. 66, Sevsay pp. 32, 122, Blatter p. 40);
+  strings con sordino (senza sordino …; K&G p. 64, Sevsay p. 47, Blatter p. 36); brass con sordino / mute (senza
+  sordino, open, offen …), on trumpets "gestopft" counts as the mute (Adler pp. 322, 333-334, K&G p. 133, Blatter
+  p. 143); pizz. (the strings pass's `pizzState`) -> arco; special pizzicati (snap, Bartók, nail, plectrum, pinch,
+  buzz, guitar pizz.; pizz. tremolo / gliss. / behind the bridge) -> arco or the ord. family (K&G p. 66); col legno,
+  sul ponticello, sul tasto (each its own) -> ord. family (Adler p. 33, Sevsay p. 41, Blatter pp. 37-38); horn
+  stopped / gestopft / chiuso / bouché -> open, offen, aperto (Adler p. 323). Not marked: a technique still on at
+  the end, a cancel with nothing to cancel, a second text saying the same at the very tick it was switched on (the
+  fast-tests.mscx basses carry a comment text "pizz. 40: …" beside their "pizz."). "(solo and section)". Kind
+  `technique`. Flutter-tongue (owner 2026-10-11, the tied case only, `Pass::checkFlutterTies`): on a woodwind or
+  brass staff, a note with single-note tremolo strokes under a flutter text (flz., flt., frull., Flatterzunge,
+  frullato, flutter-tongue; in force until ord. / nat. / norm. / ordinario / modo ordinario / normale / naturale)
+  tied into a note without strokes, with no such cancel text at the plain note's tick: the plain note is marked
+  (Gould, Behind Bars p. 247; cancel words p. 495); untied plain notes are not.
+- Shared-staff accidentals (N2): woodwind and brass staves (`windAt`, or a brass type). Two players: voices 1 and 2
+  (voice 3/4 in the bar: skipped), or one voice with two-note chords (upper 1st player, lower 2nd; a single note is
+  both, a2; 3+ notes skipped). Per bar and player, a note whose alteration differs from the key signature
+  (`AccidentalState` from the bar's key and clef, line = `absStep`), differs from that player's last alteration on
+  the same line in the bar, and has no visible accidental of its own: "risky" (Adler pp. 768-769, Sevsay p. 118).
+  Tied continuations skipped; grace notes not read. Kind `accidental`.
+- Stopped horn notes (T1): horns (`windAt` "horn" or the horn brass type), written pitch = sounding + 7 (as in F,
+  as B3). Stopped = the `brassMuteClosed` ("+") articulation or inside an N1 horn "stopped" passage; written below
+  G♭3 (`STOPPED_HORN_LOW` 54) "risky", a stopping mute is needed (K&G p. 134); none while "stopping mute" /
+  "Stopfdämpfer" is in force (until open, offen, aperto, senza sordino). Kind `stopped`.
+- Left-hand pizzicato (T2): the `pluckedLeftHandPizzicato` articulation on string notes. Sections (`section` flag):
+  a note that is not an open string of the tuning in force (`tunedAt`), "(section)" (K&G p. 9). Soloists: a run of
+  consecutive single-note left-hand pizz. chords in one voice (a chord without it, or a double stop, ends it)
+  spanning more than a perfect 4th (`LH_PIZZ_RUN_MAX` 5), every note marked, "(solo)" (Sevsay p. 42; Adler p. 35).
+  Kind `lhPizz`.
+- Timpani pedal glissando (T3): a glissando between two timpani notes whose ends no single drum of the P1 planner
+  (`timpaniDrums`, the fifth drum when the part names one: `Pass::timpaniFifth`) holds: both notes "risky"
+  (K&G p. 232; Sevsay p. 170). Kind `timpaniGliss`.
+- Flutter-tongue on double reeds (T4): a flutter text (`T4_FLUTTER_WORDS`: flz., Flatterzunge, flutter-tongue,
+  frullato, Fltg. …) on a staff of the wind passes' Oboes or Bassoons families (oboe, English horn, oboe d'amore,
+  heckelphone, bassoon, contrabassoon): "risky" on the first chord at the text (Adler p. 174; K&G p. 109; Sevsay
+  p. 121; Blatter p. 80). Kind `flutter`.
+  Tests `techniqueCancels`, `sharedAccidentals`, `stoppedHorn`, `leftHandPizz`, `timpaniGliss`, `doubleReedFlutter`
+  (n1n2t-tests.mscx from `tools/playability/gen_n1n2t_tests.py`, cases listed in its docstring) and
+  `n1n2tOnOldFixtures` (none of these kinds on the older fixtures). 46 pass, 1 skipped.
 - No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
   unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
   (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1

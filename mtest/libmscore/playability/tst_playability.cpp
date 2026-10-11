@@ -84,6 +84,13 @@ class TestPlayability : public QObject, public MTest
       void chimes();
       void ledgerLines();
       void windDivisi();
+      void techniqueCancels();
+      void sharedAccidentals();
+      void stoppedHorn();
+      void leftHandPizz();
+      void timpaniGliss();
+      void doubleReedFlutter();
+      void n1n2tOnOldFixtures();
       void noDynamic();
       };
 
@@ -1744,6 +1751,145 @@ void TestPlayability::windDivisi()
                            rowText(5, "Flute", "risky", why, "\"non div.\"") };   // not "Dividing", "individual", nor the violin's "div."
       want.sort();
       QCOMPARE(got, want);
+      }
+
+//---------------------------------------------------------
+//   N1, N2, T1-T4 (SPEC-n1n2t): n1n2t-tests.mscx from tools/playability/gen_n1n2t_tests.py
+//---------------------------------------------------------
+
+static const QString N1_TAIL = ": the player was never told to go back (solo and section) (";
+
+static QString n1(const QString& label, const QString& cancel, int since, const QString& sources)
+      {
+      return QString("\"%1\" again with no \"%2\" since bar %3").arg(label, cancel).arg(since) + N1_TAIL + sources + ")";
+      }
+
+void TestPlayability::techniqueCancels()
+      {
+      MasterScore* score = readScore(DIR + "n1n2t-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString vib = "Adler p. 171; Kennan & Grantham p. 66; Sevsay pp. 32, 122; Blatter p. 40";
+      const QString legno = "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38";
+      const QString brass = "Adler pp. 322, 333-334; Kennan & Grantham p. 133; Blatter p. 143";
+      QStringList got = htkRows(r, { "technique" });
+      QStringList want = {
+            rowText(2, "Violin II", "risky", n1("pizz.", "arco", 1, "Adler p. 34; Kennan & Grantham p. 8; Sevsay p. 41; Blatter p. 27; Jacob p. 16"), "\"pizz.\""),
+            rowText(7, "Violin II", "risky", n1("special pizzicato", "arco / ord.", 6, "Kennan & Grantham p. 66"), "\"snap pizz.\""),
+            rowText(3, "Viola", "risky", n1("con sordino", "senza sordino", 1, "Kennan & Grantham p. 64; Sevsay p. 47; Blatter p. 36"), "\"con sord.\""),
+            rowText(7, "Viola", "risky", n1("senza / non vibrato", "con vibrato / normale / ord.", 6, vib), "\"non vibrato\""),
+            rowText(5, "Cello", "risky", n1("sul tasto", "ord. / naturale / normale", 4, legno), "\"sul tasto\""),
+            rowText(8, "Trumpet", "risky", n1("con sordino / gestopft", "senza sordino / open / offen", 7, brass), "\"con sord.\""),
+            rowText(4, "Horn 1", "risky", n1("stopped", "open / offen / aperto", 3, "Adler p. 323"), "\"chiuso\""),
+            rowText(7, "Horn 1", "risky", n1("con sordino", "senza sordino / open", 6, brass), "\"con sord.\""),
+            rowText(4, "Flute", "risky", n1("senza / non vibrato", "con vibrato / normale / ord.", 3, vib), "\"non vibrato\""),
+            // flutter-tongue tied into a plain eighth with no "ord." (bar 1); with "ord." (bar 2), untied (bar 3): clean
+            rowText(1, "Flute 2", "risky", "flutter-tongue tied into a plain note with no \"ord.\": mark where the flutter ends "
+                    "(solo and section) (Gould, Behind Bars p. 247)", "C5") };
+      want.sort();
+      compare(got, want);
+      // the text's first chord is marked: Violin II bar 2 (C5), Horn 1 bar 4 (F4)
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Violin II | 1920 | 72 | outOfReach"));
+      QVERIFY(m.contains("Horn 1 | 5760 | 65 | outOfReach"));
+      QVERIFY(!m.contains("Violin I | 5760 | 72 | outOfReach"));      // ends in pizz.: clean
+      QVERIFY(m.contains("Flute 2 | 960 | 72 | outOfReach"));         // the plain eighth
+      for (const char* clean : { "Flute 2 | 0 | 72", "Flute 2 | 2880 | 72", "Flute 2 | 4800 | 76" })
+            QVERIFY2(!m.contains(QString(clean) + " | outOfReach"), clean);
+      }
+
+void TestPlayability::sharedAccidentals()
+      {
+      MasterScore* score = readScore(DIR + "n1n2t-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString src = " in the bar has no accidental of its own: its part would lack it (solo and section) (Adler pp. 768-769; Sevsay p. 118)";
+      QStringList got = htkRows(r, { "accidental" });
+      QStringList want = { rowText(1, "Oboes", "risky", "the 2nd player's first F#5" + src, "F#5"),     // voice 2, bar 1
+                           rowText(3, "Oboes", "risky", "the 1st player's first F#5" + src, "F#5") };   // upper note of the 2nd chord
+      want.sort();
+      compare(got, want);
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Oboes | 960 | 78 | outOfReach"));
+      QVERIFY(m.contains("Oboes | 4800 | 78 | outOfReach"));
+      for (const char* clean : { "Oboes | 2880 | 78", "Oboes | 6720 | 78", "Oboes | 9600 | 78" })   // own sharps; the tied F#5
+            QVERIFY2(!m.contains(QString(clean) + " | outOfReach"), clean);
+      }
+
+void TestPlayability::stoppedHorn()
+      {
+      MasterScore* score = readScore(DIR + "n1n2t-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString why = QString::fromUtf8("stopped below written G♭3: lower notes need a stopping mute (solo and section) (Kennan & Grantham p. 134)");
+      QStringList got = htkRows(r, { "stopped" });
+      QStringList want = { rowText(1, "Horn 2", "risky", why, "written F3"),     // + F3
+                           rowText(4, "Horn 2", "risky", why, "written F3"),     // "open" ended the stopping mute
+                           rowText(5, "Horn 2", "risky", why, "written F3") };   // inside a "stopped" passage
+      want.sort();
+      compare(got, want);       // clean: + Gb3 (bar 2), + F3 under "stopping mute" (3), after "open" (6, 7); Horn 1 (written C5)
+      }
+
+void TestPlayability::leftHandPizz()
+      {
+      MasterScore* score = readScore(DIR + "n1n2t-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "lhPizz" });
+      QStringList want = {
+            rowText(2, "Violins", "risky", "left-hand pizz. on a stopped note: a section uses it on open strings only (section) (Kennan & Grantham p. 9)", "B4"),
+            rowText(3, "Solo Violin", "risky", "left-hand pizz. run spans a perfect 5th, more than a perfect 4th (solo) (Sevsay p. 42; Adler p. 35)",
+                    QString("E5") + QChar(0x2013) + "B5") };
+      want.sort();
+      compare(got, want);       // clean: the section's open A4, the soloist's A5-E5 (a 4th)
+      QStringList m = marks(score, r);
+      for (const char* hit : { "Solo Violin | 3840 | 83", "Solo Violin | 5280 | 77", "Solo Violin | 5760 | 76" })
+            QVERIFY2(m.contains(QString(hit) + " | outOfReach"), hit);
+      QVERIFY(!m.contains("Solo Violin | 0 | 81 | outOfReach"));
+      }
+
+void TestPlayability::timpaniGliss()
+      {
+      MasterScore* score = readScore(DIR + "n1n2t-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "timpaniGliss" });
+      QStringList want = { rowText(2, "Timpani", "risky", "pedal glissando: no drum's range holds both ends (solo and section) "
+                                   "(Kennan & Grantham p. 232; Sevsay p. 170)", QString("D2") + QChar(0x2013) + "C3") };
+      compare(got, want);       // D2-A2 (the 32" drum) clean
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Timpani | 1920 | 38 | outOfReach"));
+      QVERIFY(m.contains("Timpani | 2880 | 48 | outOfReach"));
+      }
+
+void TestPlayability::doubleReedFlutter()
+      {
+      MasterScore* score = readScore(DIR + "n1n2t-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "flutter" });
+      QStringList want = { rowText(1, "Oboe", "risky", "flutter-tongue on a double reed: very hard, many players cannot (solo and section) "
+                                   "(Adler p. 174; Kennan & Grantham p. 109; Sevsay p. 121; Blatter p. 80)", "\"flz.\"") };
+      compare(got, want);       // the flute's "flz." clean
+      }
+
+// the new checks add nothing to the older fixtures
+void TestPlayability::n1n2tOnOldFixtures()
+      {
+      for (const char* f : { "test-strings.mscx", "harm-tests.mscx", "micro-tests.mscx", "bow-tests.mscx", "jete-tests.mscx",
+                             "fast-tests.mscx", "tremolo-tests.mscx", "harp-tests.mscx", "timp-tests.mscx", "keys-tests.mscx",
+                             "brass-tests.mscx", "wind-tests.mscx", "wind-dyn-tests.mscx", "windtrill-tests.mscx",
+                             "brassentry-tests.mscx", "brasstrill-tests.mscx", "chimes-tests.mscx", "entrance-tests.mscx",
+                             "scord-tests.mscx", "spell-tests.mscx", "ledger-divisi-tests.mscx" }) {
+            MasterScore* score = readScore(DIR + f);
+            QVERIFY2(score, f);
+            PlayabilityResult r = Playability::analyse(score);
+            QStringList got = htkRows(r, { "technique", "accidental", "stopped", "lhPizz", "timpaniGliss", "flutter" });
+            for (const QString& g : got)
+                  qWarning("%s: %s", f, qPrintable(g));
+            QVERIFY2(got.isEmpty(), f);
+            delete score;
+            }
       }
 
 void TestPlayability::brassTrills()

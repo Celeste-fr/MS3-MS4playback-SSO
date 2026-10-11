@@ -447,6 +447,63 @@ constexpr int LEDGER_OTTAVA_MAX = 4;                // every other pitched instr
 // G8: "div." / "div" / "divisi" as a whole word in a wind or brass staff's text (Adler p. 179)
 constexpr const char* WIND_DIVISI_WORDS = "\\b(div|divisi)\\b";
 
+//---------------------------------------------------------
+//   N1 uncancelled techniques, N2 shared-staff accidentals, T1-T4 (SPEC-n1n2t, owner-approved 2026-10-11).
+//   Word lists: case-insensitive regexes matched as whole words (the pass wraps each list in
+//   (?<!\w)(?:...)(?!\w)); only the spellings in research/n1n2-notes.md and t1-t4-notes.md.
+//---------------------------------------------------------
+
+// N1 "ord." family: cancels non vibrato, special pizzicati, col legno, sul ponticello, sul tasto
+// (Adler p. 33, p. 171; Kennan & Grantham p. 66; Sevsay p. 122; Blatter pp. 37-38)
+constexpr const char* N1_ORD_WORDS = "ord\\.?|ordinario|modo\\s+ordinario|normale|normal|naturale|natural|nat\\.|naturel|ordinaire|"
+                                     "natürlich|ordinary|gewöhnlich";
+// senza / non vibrato -> con vibrato, normale, ord. (Adler p. 171; Kennan & Grantham p. 66; Sevsay pp. 32, 122; Blatter p. 40)
+constexpr const char* N1_VIB_ON = "senza\\s+vibrato|non\\s+vibrato|white\\s+tone";
+constexpr const char* N1_VIB_OFF = "con\\s+vibrato|con\\s+vib\\.|mit\\s+vib\\.|normal\\s+vibrato";
+// strings con sordino -> senza sordino (Kennan & Grantham p. 64; Sevsay p. 47; Blatter p. 36)
+constexpr const char* N1_STR_MUTE_ON = "con\\s+(?:la\\s+)?sord(?:ino|ina|\\.)|with\\s+(?:a\\s+)?mutes?|mutes?\\s+on|muted|"
+                                       "mit\\s+dämpfer|avec\\s+sourdine|put\\s+on\\s+mutes";
+constexpr const char* N1_STR_MUTE_OFF = "senza\\s+sord(?:ino|ina|\\.)|without\\s+(?:a\\s+)?mutes?|mutes?\\s+off|ohne\\s+dämpfer|"
+                                        "sans\\s+sourdine|sin\\s+sordina|take\\s+off\\s+mutes";
+// brass con sordino / mute -> senza sordino, open; trumpets: "gestopft" = muted, "offen" = mute off
+// (Adler pp. 322, 333-334; Kennan & Grantham p. 133; Blatter p. 143)
+constexpr const char* N1_BRASS_MUTE_ON = "con\\s+sord(?:ino|ina|\\.)|with\\s+mute|muted|mit\\s+dämpfer|gedämpft|"
+                                         "avec\\s+sourdine|sourdine";
+constexpr const char* N1_TRUMPET_MUTE_ON = "gestopft";
+constexpr const char* N1_BRASS_MUTE_OFF = "senza\\s+sord(?:ino|ina|\\.)|open|offen|ouvert|without\\s+mute|remove\\s+mute|"
+                                          "enlever\\s+la\\s+sourdine|ôter\\s+la\\s+sourdine|dämpfer\\s+weg|dämpfer\\s+absetzen|"
+                                          "togliere\\s+la\\s+sordina|via\\s+sordina|quitar\\s+la\\s+sordina|sans\\s+sourdine|"
+                                          "keine\\s+dämpfer|ohne\\s+dämpfer|sin\\s+sordina";
+// pizz. -> arco: the strings pass's pizzState (Adler p. 34; Kennan & Grantham p. 8; Sevsay p. 41; Blatter p. 27; Jacob p. 16)
+// special pizzicati -> arco, ord. (Kennan & Grantham p. 66: snap, nail, plectrum, pinch, buzz, guitar pizz.,
+// pizz. tremolo / glissando / behind the bridge)
+constexpr const char* N1_SPECIAL_PIZZ_ON = "(?:snap|bart[oó]k|nail|plectrum|pinch|buzz|guitar)\\s+pizz(?:\\.|icato)?|"
+                                           "pizz(?:\\.|icato)?\\s+(?:trem(?:olo|\\.)|gliss(?:ando|\\.)|behind\\s+the\\s+bridge)";
+constexpr const char* N1_SPECIAL_PIZZ_OFF = "arco";
+// col legno, sul ponticello, sul tasto -> ord. (Adler p. 33; Sevsay p. 41; Blatter pp. 37-38)
+constexpr const char* N1_COL_LEGNO_ON = "col\\s+legno(?:\\s+(?:battuto|tratto))?";
+constexpr const char* N1_PONT_ON = "sul\\s+pont(?:icello|\\.)";
+constexpr const char* N1_TASTO_ON = "sul\\s+tasto";
+// horn stopped (the word) -> open (Adler p. 323; Kennan & Grantham p. 134 names bouché too)
+constexpr const char* N1_HORN_STOP_ON = "stopped|gestopft|chiuso|bouché";
+constexpr const char* N1_HORN_STOP_OFF = "open|offen|aperto";
+
+// flutter-tongue (owner 2026-10-11, the tied case only): a flutter-tongued note (single-note tremolo strokes
+// under a flutter text) tied into a note without strokes needs ord. / nat. / norm. at the plain note
+// (Gould, Behind Bars p. 247; cancel words p. 495)
+constexpr const char* N1_FLUTTER_ON = "flz\\.?|flt\\.|frull\\.|flatterzunge|frullato|flutter[-\\s]?tongu(?:e|ed|ing)";
+constexpr const char* N1_FLUTTER_OFF = "ord\\.|nat\\.|norm\\.|ordinario|modo\\s+ordinario|normale|naturale";
+
+// T1 horn stopped notes: written pitch (as in F) below G♭3 needs a stopping mute (Kennan & Grantham p. 134)
+constexpr int STOPPED_HORN_LOW = 54;                // written G♭3: lower is marked
+constexpr const char* T1_STOPPING_MUTE_ON = "stopping\\s+mute|stopfdämpfer";
+constexpr const char* T1_STOPPING_MUTE_OFF = "open|offen|aperto|senza\\s+sord(?:ino|ina|\\.)";
+// T2 left-hand pizzicato: sections on open strings only (Kennan & Grantham p. 9); a soloist's run of
+// left-hand pizz. notes spans at most a perfect 4th (Sevsay p. 42; Adler p. 35 Ex 2-56)
+constexpr int LH_PIZZ_RUN_MAX = 5;                  // semitones, a perfect 4th
+// T4 flutter-tongue on double reeds (Adler p. 174; Kennan & Grantham p. 109; Sevsay p. 121; Blatter p. 80)
+constexpr const char* T4_FLUTTER_WORDS = "flz\\.?|flatterzunge|flatterz\\.|flutter[-\\s]?tongu(?:e|ed|ing)|frullato|fltg\\.?";
+
 }     // namespace Playability
 }     // namespace Ms
 

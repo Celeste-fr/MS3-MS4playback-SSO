@@ -19,6 +19,9 @@
 #include <set>
 
 #include "arpeggio.h"
+#include "utils.h"
+#include "key.h"
+#include "accidental.h"
 #include "articulation.h"
 #include "chord.h"
 #include "fingering.h"
@@ -40,6 +43,7 @@
 #include "slur.h"
 #include "tempotext.h"
 #include "textbase.h"
+#include "tie.h"
 #include "tremolo.h"
 #include "trill.h"
 #include "tuning.h"
@@ -217,6 +221,19 @@ class Pass {
       // ledger lines (G7) and "divisi" in wind and brass parts (G8), SPEC-g7g8
       void checkLedgerLines(Part* part, const QString& staffName);
       void checkWindDivisi(Part* part, const QString& staffName);
+      // N1, N2, T1-T4 (SPEC-n1n2t)
+      struct TechText { int tick; Segment* seg; QString text; };
+      std::vector<TechText> techTexts(int st) const;
+      Chord* firstChordFrom(Segment* s, int st) const;
+      void textRow(const TechText& t, int st, const QString& staffName, const QString& kind, const QString& reason);
+      bool timpaniFifth(Part* part) const;
+      void checkTechniqueCancels(Part* part, const QString& staffName);
+      void checkFlutterTies(Part* part, const QString& staffName);
+      void checkSharedAccidentals(Part* part, const QString& staffName);
+      void checkStoppedHorn(Part* part, const QString& staffName);
+      void checkLeftHandPizz(Part* part, const QString& staffName);
+      void checkTimpaniGliss(Part* part, const QString& staffName);
+      void checkDoubleReedFlutter(Part* part, const QString& staffName);
       void brassTrillNotes(Chord* chord, ChordInfo& info);
 
    public:
@@ -1174,6 +1191,525 @@ void Pass::checkWindDivisi(Part* part, const QString& staffName)
       }
 
 //---------------------------------------------------------
+//   N1 uncancelled techniques, N2 shared-staff accidentals, T1 stopped horn, T2 left-hand pizz.,
+//   T3 timpani pedal glissando, T4 flutter-tongue on double reeds (SPEC-n1n2t, owner-approved
+//   2026-10-11). Word lists in playabilityrules.h; every row "risky" (dark yellow).
+//---------------------------------------------------------
+
+// a word list as whole words, any case
+static QRegularExpression wordList(const QString& alternatives)
+      {
+      return QRegularExpression("(?<!\\w)(?:" + alternatives + ")(?!\\w)",
+                                QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+      }
+
+// the instrument families of the wind passes (windAt): woodwinds and saxophones; every other id is brass
+static QString windFamily(const Part* part, int tick)
+      {
+      QString id = windAt(part, tick);
+      auto wd = windData().find(id);
+      return wd == windData().end() ? QString() : QString(wd->second.family);
+      }
+
+static bool isWoodwindFamily(const QString& f)
+      {
+      return f == "Flutes" || f == "Oboes" || f == "Clarinets" || f == "Bassoons" || f == "Saxophones";
+      }
+
+static bool isBrassAt(Part* part, int tick)
+      {
+      if (!windAt(part, tick).isEmpty())
+            return !isWoodwindFamily(windFamily(part, tick));
+      QString id, name;
+      partIdName(part, &id, &name);
+      return brassType(id, name) != Brass::NONE;
+      }
+
+static bool isHornAt(Part* part, int tick)
+      {
+      if (windAt(part, tick) == "horn")
+            return true;
+      QString id, name;
+      partIdName(part, &id, &name);
+      return windAt(part, tick).isEmpty() && brassType(id, name) == Brass::HORN;
+      }
+
+static bool hasArticulation(const Chord* c, SymId id)
+      {
+      for (const Articulation* a : c->articulations())
+            if (a->symId() == id)
+                  return true;
+      return false;
+      }
+
+// a staff's staff and system texts, in score order
+std::vector<Pass::TechText> Pass::techTexts(int st) const
+      {
+      std::vector<TechText> out;
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (Element* e : s->annotations()) {
+                  if (!(e->isStaffText() || e->isSystemText()) || e->staffIdx() != st)
+                        continue;
+                  QString text = plainText(toTextBase(e)->xmlText()).simplified();
+                  if (!text.isEmpty())
+                        out.push_back({ s->tick().ticks(), s, text });
+                  }
+      return out;
+      }
+
+// the first chord on the staff at (else after) the segment: where a text's mark goes (G8)
+Chord* Pass::firstChordFrom(Segment* s, int st) const
+      {
+      for (Segment* t = s; t; t = t->next1(SegmentType::ChordRest))
+            for (int v = 0; v < VOICES; ++v) {
+                  Element* c = t->element(st * VOICES + v);
+                  if (c && c->isChord() && !toChord(c)->notes().empty())
+                        return toChord(c);
+                  }
+      return nullptr;
+      }
+
+// a row for a text, its first chord marked
+void Pass::textRow(const TechText& t, int st, const QString& staffName, const QString& kind, const QString& reason)
+      {
+      Chord* chord = firstChordFrom(t.seg, st);
+      if (chord)
+            for (Note* n : chord->notes())
+                  markOver(n, PlayMark::OUT_OF_REACH);
+      addRow(t.tick, t.tick, chord ? chord->track() : st * VOICES, staffName, kind, "risky", reason, "\"" + t.text + "\"");
+      _res.outOfReach++;
+      }
+
+// a technique's text state: 1 on, 0 cancelled, -1 neither (cancel words first: "sans sourdine" is not "sourdine")
+static std::function<int(const QString&)> wordState(const QString& on, const QString& off)
+      {
+      const QRegularExpression ON = wordList(on), OFF = wordList(off);
+      return [ON, OFF](const QString& t) { return OFF.match(t).hasMatch() ? 0 : ON.match(t).hasMatch() ? 1 : -1; };
+      }
+
+static int hornStopState(const QString& t)
+      {
+      static const std::function<int(const QString&)> f = wordState(N1_HORN_STOP_ON, N1_HORN_STOP_OFF);
+      return f(t);
+      }
+
+//---------------------------------------------------------
+//   checkTechniqueCancels (N1)
+//    per staff, a technique switched on again by a text while it is still on (no cancel word in
+//    between): the player was never told to go back. The second "on" text is marked. A technique
+//    still on at the end, a cancel with nothing to cancel, and a second text saying the same at the
+//    very tick it was switched on, are not marked.
+//---------------------------------------------------------
+
+void Pass::checkTechniqueCancels(Part* part, const QString& staffName)
+      {
+      enum Scope { PITCHED, STRINGS, BRASS, TRUMPET_BRASS, HORN };
+      struct Technique {
+            Scope scope;
+            const char* label;
+            const char* cancel;
+            const char* sources;
+            std::function<int(const QString&)> state;
+            };
+      static const QString ord = N1_ORD_WORDS;
+      static const std::function<int(const QString&)> special = wordState(N1_SPECIAL_PIZZ_ON, QString(N1_SPECIAL_PIZZ_OFF) + "|" + ord);
+      static const std::vector<Technique> TECHNIQUES = {
+            { PITCHED, "senza / non vibrato", "con vibrato / normale / ord.",
+              "Adler p. 171; Kennan & Grantham p. 66; Sevsay pp. 32, 122; Blatter p. 40",
+              wordState(N1_VIB_ON, QString(N1_VIB_OFF) + "|" + ord) },
+            { STRINGS, "con sordino", "senza sordino", "Kennan & Grantham p. 64; Sevsay p. 47; Blatter p. 36",
+              wordState(N1_STR_MUTE_ON, N1_STR_MUTE_OFF) },
+            { BRASS, "con sordino", "senza sordino / open", "Adler pp. 322, 333-334; Kennan & Grantham p. 133; Blatter p. 143",
+              wordState(N1_BRASS_MUTE_ON, N1_BRASS_MUTE_OFF) },
+            { TRUMPET_BRASS, "con sordino / gestopft", "senza sordino / open / offen",
+              "Adler pp. 322, 333-334; Kennan & Grantham p. 133; Blatter p. 143",
+              wordState(QString(N1_BRASS_MUTE_ON) + "|" + N1_TRUMPET_MUTE_ON, N1_BRASS_MUTE_OFF) },
+            // plain pizz.: the strings pass's pizzState, a special pizzicato is its own technique
+            { STRINGS, "pizz.", "arco", "Adler p. 34; Kennan & Grantham p. 8; Sevsay p. 41; Blatter p. 27; Jacob p. 16",
+              [](const QString& t) { return special(t) == 1 ? -1 : pizzState(t); } },
+            { STRINGS, "special pizzicato", "arco / ord.", "Kennan & Grantham p. 66", special },
+            { STRINGS, "col legno", "ord. / naturale / normale", "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38",
+              wordState(N1_COL_LEGNO_ON, ord) },
+            { STRINGS, "sul ponticello", "ord. / naturale / normale", "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38",
+              wordState(N1_PONT_ON, ord) },
+            { STRINGS, "sul tasto", "ord. / naturale / normale", "Adler p. 33; Sevsay p. 41; Blatter pp. 37-38",
+              wordState(N1_TASTO_ON, ord) },
+            { HORN, "stopped", "open / offen / aperto", "Adler p. 323", hornStopState },
+            };
+      for (int si = 0; si < part->nstaves(); ++si) {
+            int st = part->staff(si)->idx();
+            Staff* staff = _score->staff(st);
+            std::vector<int> onBar(TECHNIQUES.size(), -1), onTick(TECHNIQUES.size(), -1);
+            for (const TechText& t : techTexts(st)) {
+                  const Fraction tick = Fraction::fromTicks(t.tick);
+                  const bool trumpet = windFamily(part, t.tick) == "Trumpets";
+                  const bool brass = isBrassAt(part, t.tick);
+                  for (size_t k = 0; k < TECHNIQUES.size(); ++k) {
+                        const Technique& tq = TECHNIQUES[k];
+                        bool applies = false;
+                        switch (tq.scope) {
+                              case PITCHED: applies = !staff->isDrumStaff(tick); break;
+                              case STRINGS: applies = instrumentAt(part, tick).valid(); break;
+                              case BRASS: applies = brass && !trumpet; break;
+                              case TRUMPET_BRASS: applies = brass && trumpet; break;
+                              case HORN: applies = isHornAt(part, t.tick); break;
+                              }
+                        if (!applies)
+                              continue;
+                        int v = tq.state(t.text);
+                        if (v == 0)
+                              onBar[k] = -1;
+                        else if (v == 1) {
+                              if (onBar[k] >= 0 && t.tick == onTick[k])
+                                    continue;           // two texts saying it at the same moment: one instruction
+                              if (onBar[k] >= 0)
+                                    textRow(t, st, staffName, "technique",
+                                            QString("\"%1\" again with no \"%2\" since bar %3: the player was never told to go back "
+                                                    "(solo and section) (%4)").arg(tq.label, tq.cancel).arg(onBar[k]).arg(tq.sources));
+                              else {
+                                    onBar[k] = barOf(tick);
+                                    onTick[k] = t.tick;
+                                    }
+                              }
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkFlutterTies (N1, flutter-tongue: owner 2026-10-11, the tied case only)
+//    woodwind and brass staves: a note with single-note tremolo strokes under a flutter text (in
+//    force since the last cancel word, or at the note) tied into a note without strokes, with no
+//    ord. / nat. / norm. text at the plain note's tick: the plain note is marked (Gould, Behind
+//    Bars p. 247; cancel words p. 495). Untied plain notes after flutter notes need no word.
+//---------------------------------------------------------
+
+void Pass::checkFlutterTies(Part* part, const QString& staffName)
+      {
+      static const QRegularExpression ON = wordList(N1_FLUTTER_ON), OFF = wordList(N1_FLUTTER_OFF);
+      for (int si = 0; si < part->nstaves(); ++si) {
+            int st = part->staff(si)->idx();
+            StateList flutter;
+            std::set<int> cancelTicks;
+            for (const TechText& t : techTexts(st)) {
+                  if (OFF.match(t.text).hasMatch()) {
+                        flutter.changes.push_back({ t.tick, 0 });
+                        cancelTicks.insert(t.tick);
+                        }
+                  else if (ON.match(t.text).hasMatch())
+                        flutter.changes.push_back({ t.tick, 1 });
+                  }
+            auto strokes = [](const Chord* c) { return c->tremolo() && !c->tremolo()->twoNotes(); };
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                  int tick = s->tick().ticks();
+                  if (windAt(part, tick).isEmpty() && !isBrassAt(part, tick))
+                        continue;
+                  for (int track = st * VOICES; track < st * VOICES + VOICES; ++track) {
+                        Element* e = s->element(track);
+                        if (!e || !e->isChord() || !strokes(toChord(e)) || !flutter.on(tick))
+                              continue;
+                        for (Note* n : toChord(e)->notes()) {
+                              Note* plain = n->tieFor() ? n->tieFor()->endNote() : nullptr;
+                              if (!plain || strokes(plain->chord()))
+                                    continue;
+                              int pt = plain->chord()->tick().ticks();
+                              if (cancelTicks.count(pt))
+                                    continue;
+                              markOver(plain, PlayMark::OUT_OF_REACH);
+                              addRow(pt, pt, plain->chord()->track(), staffName, "technique", "risky",
+                                     "flutter-tongue tied into a plain note with no \"ord.\": mark where the flutter ends "
+                                     "(solo and section) (Gould, Behind Bars p. 247)", tpcName(plain->tpc1(), plain->ppitch()));
+                              _res.outOfReach++;
+                              }
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkSharedAccidentals (N2)
+//    woodwind and brass staves with two players: two voices (voice 1 the 1st player, voice 2 the
+//    2nd), or one voice with two-note chords (upper note 1st, lower 2nd; a single note both, a2;
+//    3+ notes skipped). In each bar each player shows its own accidental the first time it plays
+//    an altered note (alteration differs from the key signature) on a staff line, even when the
+//    other player already showed it there (Adler pp. 768-769; Sevsay p. 118). Same line only;
+//    tied continuations skipped; grace notes not read.
+//---------------------------------------------------------
+
+void Pass::checkSharedAccidentals(Part* part, const QString& staffName)
+      {
+      for (int si = 0; si < part->nstaves(); ++si) {
+            int st = part->staff(si)->idx();
+            Staff* staff = _score->staff(st);
+            for (Measure* m = _score->firstMeasure(); m; m = m->nextMeasure()) {
+                  if (windAt(part, m->tick().ticks()).isEmpty() && !isBrassAt(part, m->tick().ticks()))
+                        continue;
+                  bool used[VOICES] = {};
+                  for (Segment* s = m->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest))
+                        for (int v = 0; v < VOICES; ++v) {
+                              Element* e = s->element(st * VOICES + v);
+                              if (e && e->isChord())
+                                    used[v] = true;
+                              }
+                  if (used[2] || used[3])
+                        continue;
+                  const bool twoVoices = used[0] && used[1];
+                  AccidentalState key;
+                  key.init(staff->keySigEvent(m->tick()), staff->clef(m->tick()));
+                  std::map<int, int> last[2];               // per player: line -> its last alteration there
+                  for (Segment* s = m->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest))
+                        for (int v = 0; v < 2; ++v) {
+                              Element* e = s->element(st * VOICES + v);
+                              if (!e || !e->isChord())
+                                    continue;
+                              Chord* c = toChord(e);
+                              std::vector<std::pair<Note*, std::vector<int>>> assigned;
+                              const std::vector<Note*>& ns = c->notes();
+                              if (twoVoices) {
+                                    if (ns.size() == 1)
+                                          assigned.push_back({ ns[0], { v } });
+                                    }
+                              else if (ns.size() == 1)
+                                    assigned.push_back({ ns[0], { 0, 1 } });
+                              else if (ns.size() == 2) {
+                                    bool firstHigher = ns[0]->ppitch() > ns[1]->ppitch();
+                                    assigned.push_back({ firstHigher ? ns[0] : ns[1], { 0 } });
+                                    assigned.push_back({ firstHigher ? ns[1] : ns[0], { 1 } });
+                                    }
+                              for (auto& a : assigned) {
+                                    Note* n = a.first;
+                                    if (n->tieBack())
+                                          continue;
+                                    const int line = absStep(n->tpc(), n->epitch());
+                                    const int alter = int(tpc2alter(n->tpc()));
+                                    const int keyAlter = int(key.accidentalVal(line));
+                                    const bool own = n->accidental() && n->accidental()->visible();
+                                    QStringList missing;
+                                    for (int p : a.second) {
+                                          auto i = last[p].find(line);
+                                          int prev = i == last[p].end() ? keyAlter : i->second;
+                                          if (alter != keyAlter && alter != prev && !own)
+                                                missing << (p == 0 ? "1st" : "2nd");
+                                          last[p][line] = alter;
+                                          }
+                                    if (missing.isEmpty())
+                                          continue;
+                                    markOver(n, PlayMark::OUT_OF_REACH);
+                                    int tick = s->tick().ticks();
+                                    addRow(tick, tick, c->track(), staffName, "accidental", "risky",
+                                           QString("the %1 player's first %2 in the bar has no accidental of its own: its part "
+                                                   "would lack it (solo and section) (Adler pp. 768-769; Sevsay p. 118)")
+                                           .arg(missing.join(" and ")).arg(tpcName(n->tpc1(), n->ppitch())),
+                                           tpcName(n->tpc1(), n->ppitch()));
+                                    _res.outOfReach++;
+                                    }
+                              }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkStoppedHorn (T1)
+//    horn notes played stopped (the "+" articulation, or inside a "stopped" / "gestopft" / "chiuso"
+//    / "bouché" text passage until open / offen / aperto) whose written pitch, as in F, is below
+//    G♭3: a stopping mute is needed (Kennan & Grantham p. 134). None while a "stopping mute" /
+//    "Stopfdämpfer" text is in force (until open, offen, aperto, senza sordino).
+//---------------------------------------------------------
+
+void Pass::checkStoppedHorn(Part* part, const QString& staffName)
+      {
+      static const std::function<int(const QString&)> muteState = wordState(T1_STOPPING_MUTE_ON, T1_STOPPING_MUTE_OFF);
+      const int tr = windData().at("horn").tr;
+      for (int si = 0; si < part->nstaves(); ++si) {
+            int st = part->staff(si)->idx();
+            StateList stopped, mute;
+            for (const TechText& t : techTexts(st)) {
+                  if (!isHornAt(part, t.tick))
+                        continue;
+                  int v;
+                  if ((v = hornStopState(t.text)) >= 0)
+                        stopped.changes.push_back({ t.tick, v });
+                  if ((v = muteState(t.text)) >= 0)
+                        mute.changes.push_back({ t.tick, v });
+                  }
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                  int tick = s->tick().ticks();
+                  if (!isHornAt(part, tick) || mute.on(tick))
+                        continue;
+                  for (int track = st * VOICES; track < st * VOICES + VOICES; ++track) {
+                        Element* el = s->element(track);
+                        if (!el || !el->isChord())
+                              continue;
+                        Chord* main = toChord(el);
+                        auto check = [&](Chord* c, int grace) {
+                              if (!hasArticulation(c, SymId::brassMuteClosed) && !stopped.on(tick))
+                                    return;
+                              QStringList names;
+                              for (Note* n : c->notes()) {
+                                    int written = n->ppitch() - tr;
+                                    if (n->tieBack() || written >= STOPPED_HORN_LOW)
+                                          continue;
+                                    markOver(n, PlayMark::OUT_OF_REACH);
+                                    names << "written " + tpcName(n->tpc1() + 1, written);
+                                    }
+                              if (names.isEmpty())
+                                    return;
+                              addRow(tick, tick, track, staffName, "stopped", "risky",
+                                     "stopped below written G♭3: lower notes need a stopping mute (solo and section) "
+                                     "(Kennan & Grantham p. 134)", names.join(" + "));
+                              _res.rows.back().grace = grace;
+                              _res.outOfReach++;
+                              };
+                        const QVector<Chord*>& graces = main->graceNotes();
+                        for (int g = 0; g < graces.size(); ++g)
+                              check(graces[g], g);
+                        check(main, -1);
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkLeftHandPizz (T2)
+//    string notes with the left-hand pizzicato "+" articulation. Sections: on an open string of the
+//    instrument (its tuning in force) only (Kennan & Grantham p. 9). Soloists: a run (consecutive
+//    single left-hand pizz. notes in one voice; a bowed note or a chord ends it) spans at most a
+//    perfect 4th (Sevsay p. 42; Adler p. 35 Ex 2-56).
+//---------------------------------------------------------
+
+void Pass::checkLeftHandPizz(Part* part, const QString& staffName)
+      {
+      for (int si = 0; si < part->nstaves(); ++si) {
+            int st = part->staff(si)->idx();
+            bool any = false;
+            for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i)
+                  any |= instrumentAt(part, Fraction::fromTicks(i->first)).valid();
+            if (!any)
+                  return;
+            StaffTexts tx = staffTexts(st);
+            for (int v = 0; v < VOICES; ++v) {
+                  const int track = st * VOICES + v;
+                  std::vector<Note*> run;
+                  auto flush = [&]() {
+                        if (run.size() >= 2) {
+                              auto lo = std::min_element(run.begin(), run.end(), [](Note* a, Note* b) { return a->ppitch() < b->ppitch(); });
+                              auto hi = std::max_element(run.begin(), run.end(), [](Note* a, Note* b) { return a->ppitch() < b->ppitch(); });
+                              int span = (*hi)->ppitch() - (*lo)->ppitch();
+                              if (span > LH_PIZZ_RUN_MAX) {
+                                    for (Note* n : run)
+                                          markOver(n, PlayMark::OUT_OF_REACH);
+                                    addRow(run.front()->chord()->tick().ticks(), run.back()->chord()->tick().ticks(), track, staffName,
+                                           "lhPizz", "risky",
+                                           QString("left-hand pizz. run spans a %1, more than a perfect 4th (solo) (Sevsay p. 42; Adler p. 35)")
+                                           .arg(intervalName(span)),
+                                           tpcName((*lo)->tpc1(), (*lo)->ppitch()) + QChar(0x2013) + tpcName((*hi)->tpc1(), (*hi)->ppitch()));
+                                    _res.outOfReach++;
+                                    }
+                              }
+                        run.clear();
+                        };
+                  for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                        Element* e = s->element(track);
+                        if (!e || !e->isChord())
+                              continue;
+                        Chord* c = toChord(e);
+                        const StringInstrument in = tunedAt(part, s->tick(), tx);
+                        if (!in.valid() || !hasArticulation(c, SymId::pluckedLeftHandPizzicato)) {
+                              flush();
+                              continue;
+                              }
+                        if (!in.section) {
+                              if (c->notes().size() == 1)
+                                    run.push_back(c->notes().front());
+                              else
+                                    flush();
+                              continue;
+                              }
+                        QStringList names;
+                        for (Note* n : c->notes()) {
+                              if (n->tieBack() || std::find(in.strings.begin(), in.strings.end(), n->ppitch()) != in.strings.end())
+                                    continue;
+                              markOver(n, PlayMark::OUT_OF_REACH);
+                              names << tpcName(n->tpc1(), n->ppitch());
+                              }
+                        if (names.isEmpty())
+                              continue;
+                        int tick = s->tick().ticks();
+                        addRow(tick, tick, track, staffName, "lhPizz", "risky",
+                               "left-hand pizz. on a stopped note: a section uses it on open strings only (section) "
+                               "(Kennan & Grantham p. 9)", names.join(" + "));
+                        _res.outOfReach++;
+                        }
+                  flush();
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkTimpaniGliss (T3)
+//    a glissando between two timpani notes: one drum must hold both ends, the P1 planner's drum
+//    ranges (timpaniDrums; Kennan & Grantham p. 232; Sevsay p. 170). Both notes marked.
+//---------------------------------------------------------
+
+void Pass::checkTimpaniGliss(Part* part, const QString& staffName)
+      {
+      if (familyOf(part) != Family::TIMPANI)
+            return;
+      const std::vector<TimpaniDrum> drums = timpaniDrums(timpaniFifth(part));
+      for (int si = 0; si < part->nstaves(); ++si) {
+            int st = part->staff(si)->idx();
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  for (int track = st * VOICES; track < st * VOICES + VOICES; ++track) {
+                        Element* e = s->element(track);
+                        if (!e || !e->isChord())
+                              continue;
+                        for (Note* n : toChord(e)->notes())
+                              for (Spanner* sp : n->spannerFor()) {
+                                    if (!sp->isGlissando() || !sp->endElement() || !sp->endElement()->isNote())
+                                          continue;
+                                    Note* to = toNote(sp->endElement());
+                                    int lo = std::min(n->ppitch(), to->ppitch()), hi = std::max(n->ppitch(), to->ppitch());
+                                    bool ok = false;
+                                    for (const TimpaniDrum& d : drums)
+                                          ok |= d.lo <= lo && hi <= d.hi;
+                                    if (ok)
+                                          continue;
+                                    markOver(n, PlayMark::OUT_OF_REACH);
+                                    markOver(to, PlayMark::OUT_OF_REACH);
+                                    int tick = s->tick().ticks();
+                                    addRow(tick, to->chord()->tick().ticks(), track, staffName, "timpaniGliss", "risky",
+                                           "pedal glissando: no drum's range holds both ends (solo and section) "
+                                           "(Kennan & Grantham p. 232; Sevsay p. 170)",
+                                           tpcName(n->tpc1(), n->ppitch()) + QChar(0x2013) + tpcName(to->tpc1(), to->ppitch()));
+                                    _res.outOfReach++;
+                                    }
+                        }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkDoubleReedFlutter (T4)
+//    a flutter-tongue text on an oboe, English horn, bassoon or contrabassoon staff (the Oboes and
+//    Bassoons families of the wind passes) (Adler p. 174; Kennan & Grantham p. 109; Sevsay p. 121;
+//    Blatter p. 80). The first chord at the text is marked.
+//---------------------------------------------------------
+
+void Pass::checkDoubleReedFlutter(Part* part, const QString& staffName)
+      {
+      static const QRegularExpression FLZ = wordList(T4_FLUTTER_WORDS);
+      for (int si = 0; si < part->nstaves(); ++si) {
+            int st = part->staff(si)->idx();
+            for (const TechText& t : techTexts(st)) {
+                  QString f = windFamily(part, t.tick);
+                  if ((f == "Oboes" || f == "Bassoons") && FLZ.match(t.text).hasMatch())
+                        textRow(t, st, staffName, "flutter",
+                                "flutter-tongue on a double reed: very hard, many players cannot (solo and section) "
+                                "(Adler p. 174; Kennan & Grantham p. 109; Sevsay p. 121; Blatter p. 80)");
+                  }
+            }
+      }
+
+//---------------------------------------------------------
 //   checkWindTrills
 //    W5, the owner's spec SPEC-w5: woodwind trills and two-note tremolos the books call hard (dark
 //    yellow) or impossible (red), or a note for the panel only (playabilitywindtrills.h, generated
@@ -1946,9 +2482,9 @@ std::vector<HarpPlan> Pass::checkHarp(Part* part, const QString& staffName)
 //    every moment's pitches planned onto the drums (planTimpani); seconds from the tempo marks
 //---------------------------------------------------------
 
-TimpaniPlan Pass::checkTimpani(Part* part, const QString& staffName, std::vector<PartMoment>* momentsOut, bool* fifthOut)
+// a fifth drum when the part names one: its names, or a text on its staves (P1)
+bool Pass::timpaniFifth(Part* part) const
       {
-      // a fifth drum when the part names one: its names, or a text on its staves
       bool fifth = timpaniFifthDrum(part->longName()) || timpaniFifthDrum(part->partName());
       for (const StaffName& sn : part->instrument()->longNames())
             fifth |= timpaniFifthDrum(sn.name());
@@ -1958,6 +2494,12 @@ TimpaniPlan Pass::checkTimpani(Part* part, const QString& staffName, std::vector
                   if (e->isTextBase() && e->staffIdx() >= st0 && e->staffIdx() < st0 + part->nstaves()
                      && timpaniFifthDrum(plainText(toTextBase(e)->xmlText())))
                         fifth = true;
+      return fifth;
+      }
+
+TimpaniPlan Pass::checkTimpani(Part* part, const QString& staffName, std::vector<PartMoment>* momentsOut, bool* fifthOut)
+      {
+      bool fifth = timpaniFifth(part);
 
       std::vector<PartMoment> all = partMoments(part), moments;
       std::vector<TimpaniMoment> tm;
@@ -2524,6 +3066,13 @@ void Pass::run()
             checkChimes(part, staffName);
             checkLedgerLines(part, staffName);
             checkWindDivisi(part, staffName);
+            checkTechniqueCancels(part, staffName);
+            checkFlutterTies(part, staffName);
+            checkSharedAccidentals(part, staffName);
+            checkStoppedHorn(part, staffName);
+            checkLeftHandPizz(part, staffName);
+            checkTimpaniGliss(part, staffName);
+            checkDoubleReedFlutter(part, staffName);
             }
       for (int st = 0; st < _score->nstaves(); ++st) {
             Part* part = _score->staff(st)->part();
