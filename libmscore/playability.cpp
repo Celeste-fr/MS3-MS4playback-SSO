@@ -197,6 +197,7 @@ class Pass {
       // woodwinds and brass: register x dynamic (SPEC-w2b1)
       double windLevel(const Note* n, int tick);
       void checkWindDynamics(Part* part, const QString& staffName);
+      void checkEntrance(int st, const QString& staffName);
       // woodwind trills and two-note tremolos (SPEC-w5)
       void checkWindTrills(Part* part, const QString& staffName);
 
@@ -423,13 +424,13 @@ static int strokeLastTick(const Chord* last)
 
 static double levelAt(const StateList& dyn, const std::vector<HairpinSpan>& hairpins, double t)
       {
-      double base = dyn.valueAt(t, DEFAULT_VELOCITY);
+      double base = dyn.valueAt(t, NO_DYNAMIC_VELOCITY);
       for (const HairpinSpan& hp : hairpins) {
             if (!(hp.from <= t && t < hp.to))
                   continue;
             if (dyn.index(t) > dyn.index(hp.from))
                   continue;                         // a dynamic inside the hairpin wins
-            double v0 = dyn.valueAt(hp.from, DEFAULT_VELOCITY), v1 = v0 + hp.change;
+            double v0 = dyn.valueAt(hp.from, NO_DYNAMIC_VELOCITY), v1 = v0 + hp.change;
             int e = dyn.index(hp.to - 1) + 1;      // the first dynamic at or after the end
             if (e < int(dyn.changes.size()) && (hp.cresc ? dyn.changes[e].second > v0 : dyn.changes[e].second < v0))
                   v1 = dyn.changes[e].second;
@@ -1968,8 +1969,55 @@ void Pass::run()
             checkWindDynamics(part, staffName);
             checkWindTrills(part, staffName);
             }
+      for (int st = 0; st < _score->nstaves(); ++st) {
+            Part* part = _score->staff(st)->part();
+            QString staffName = part->longName();
+            if (staffName.isEmpty())
+                  staffName = part->partName();
+            if (staffName.isEmpty())
+                  staffName = QString("staff %1").arg(st + 1);
+            checkEntrance(st, staffName);
+            }
       for (PlayabilityRow& r : _res.rows)
             r.staffShort = shortStaffName(_score->staff(r.track / VOICES)->part(), r.staff, r.tick);
+      }
+
+//---------------------------------------------------------
+//   checkEntrance
+//    the first sounding note of a staff with no dynamic in force there (a hairpin alone is none;
+//    the same dynamics as levelAt reads): Kennan & Grantham p. 31 (a dynamic must be marked below
+//    each staff), p. 369. One row per staff, risky; the note's chord, grace notes included.
+//---------------------------------------------------------
+
+void Pass::checkEntrance(int st, const QString& staffName)
+      {
+      Chord* first = nullptr;
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s && !first; s = s->next1(SegmentType::ChordRest))
+            for (int v = 0; v < VOICES && !first; ++v) {
+                  Element* e = s->element(st * VOICES + v);
+                  if (e && e->isChord() && !toChord(e)->notes().empty())
+                        first = toChord(e);
+                  }
+      if (!first)
+            return;
+      int tick = first->tick().ticks();
+      if (staffTexts(st).dyn.index(tick) >= 0)
+            return;
+      QStringList names;
+      auto take = [&](Chord* c) {
+            for (Note* n : c->notes()) {
+                  markOver(n, PlayMark::OUT_OF_REACH);
+                  QString nm = tpcName(n->tpc1(), n->ppitch());
+                  if (!names.contains(nm))
+                        names << nm;
+                  }
+            };
+      for (Chord* g : first->graceNotes())
+            take(g);
+      take(first);
+      addRow(tick, tick, first->track(), staffName, "entrance", "risky",
+             "no dynamic marked at the first entrance (solo and section) (Kennan & Grantham p. 31)", names.join(" + "));
+      _res.outOfReach++;
       }
 
 //---------------------------------------------------------

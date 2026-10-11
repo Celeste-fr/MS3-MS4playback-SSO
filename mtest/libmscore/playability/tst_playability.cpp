@@ -75,6 +75,7 @@ class TestPlayability : public QObject, public MTest
       void windDynamics();
       void windTrillRules();
       void windTrills();
+      void noDynamic();
       };
 
 static QString rowText(int bar, const QString& staff, const QString& verdict, const QString& reason, const QString& notes)
@@ -1520,6 +1521,36 @@ void TestPlayability::windTrills()
       QCOMPARE(notesAt(0, BAR + Q), QStringList());                                  // C#4-D4 in C major
       QCOMPARE(notesAt(1, 0), QStringList({ line("C#4 tr D#4", "W5-FL-LOW-A") }));  // the same note in E major
       QCOMPARE(notesAt(6, 0), QStringList());                                        // clarinet
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   noDynamic: no dynamic in force = MS4's natural level, counted as mp (owner 2026-10-11), and the
+//   first entrance of a staff without a dynamic is a warning (Kennan & Grantham p. 31)
+//---------------------------------------------------------
+
+void TestPlayability::noDynamic()
+      {
+      MasterScore* score = readScore(DIR + "entrance-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString entrance = "no dynamic marked at the first entrance (solo and section) (Kennan & Grantham p. 31)";
+      const WindDynRule* w = windRule("W2-OB-LOW-A");
+      QStringList want = {
+            // the oboe: entrance warning, and the unmarked Bb3 is judged at mp (W2-OB-LOW-A is the p/mp rule)
+            rowText(1, "Oboe", "risky", entrance, "Bb3"),
+            rowText(1, "Oboe", "risky", QString(w->text) + " (" + w->source + ")", "Bb3"),
+            // the violin: entrance warning; the 7 s slur is at the p tier (max 6 s; at mf it would be red)
+            rowText(1, "Violin", "risky", entrance, "A4"),
+            rowText(1, "Violin", "outOfReach", "slur 7 s at p (max 6 s)", "A4 … A4 (3 notes)"),
+            // the flute: its dynamic comes after the first note
+            rowText(1, "Flute", "risky", entrance, "C5") };
+      want.sort();
+      QStringList got = rows(r);
+      compare(got, want);
+      // Violin 2 starts with mf: clean
+      for (const QString& x : got)
+            QVERIFY(!x.contains("Violin 2"));
       delete score;
       }
 

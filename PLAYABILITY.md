@@ -189,6 +189,17 @@ headless test scores and their checked results are the parity tests.
   continuations not again; the panel lists every W5 rule of the selected chord's trills and tremolo after
   its W2/B1 notes (`ChordInfo::windNotes`). Tests `windTrillRules`, `windTrills` (windtrill-tests.mscx from
   `tools/playability/gen_windtrill_tests.py`): 31 pass, 1 skipped. W3 (clarinet break): no rules (the owner).
+- No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
+  unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
+  (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1
+  p/mp rules fire on unmarked notes in their bands. Test `noDynamic` (entrance-tests.mscx from
+  `tools/playability/gen_entrance_tests.py`): unmarked oboe Bb3 -> W2-OB-LOW-A, unmarked 7 s slur -> p tier.
+  The generated test scores now carry an explicit mf at each staff's start where they were about something else.
+- First entrance without a dynamic (Kennan & Grantham p. 31, p. 369; `Pass::checkEntrance`): for every
+  staff of every instrument, the first sounding note (rests skipped, grace notes with their chord) with no
+  Dynamic in force there (the same reading as `levelAt`; a hairpin alone is none) gets a "risky" row of kind
+  `entrance`, "no dynamic marked at the first entrance (solo and section)", and a dark yellow mark. One row
+  per staff; a dynamic that comes after the first note still warns on that note.
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1

@@ -180,14 +180,16 @@ QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNot
 // Askenfelt 1986 p. 1011, Flesch p. 64 ≈ 15 s), p 6 / 12 (Wagner p. 30), mf 3 / 6 (Russo), f 2.5 /
 // 4.5 (Forsyth p. 390, Schoonderwaldt 2009 p. 2715, Wagner p. 30), ff 1.5 / 3 (Sevsay, Russo).
 // Cello and bass × 0.6 derived from Forsyth p. 445 (bass bow changed every 3–4 s at p). Without any
-// dynamic a passage counts as mf (velocity 80).
+// dynamic a passage counts as mp (velocity 64): MS4's "natural" level, owner 2026-10-11.
 struct BowLimit {
       bool valid { false };
       double warn { 0 };
       double red { 0 };
       };
 BowLimit bowLimit(const StringInstrument& in, const QString& tier);
-constexpr int DEFAULT_VELOCITY = 80;
+// No dynamic in force = MS4's "natural" level (Ms4::NATURAL, 0.5 dB above mp), counted as mp:
+// MuseScore's mp velocity 64 (owner decision 2026-10-11). Every level lookup falls back to it.
+constexpr int NO_DYNAMIC_VELOCITY = 64;
 
 // Dynamics as MuseScore's velocities (verified on 3.6.2): pp 33, p 49, mf 80, f 96, ff 112 …; a
 // dynamic that changes after its attack settles at velocity + change (fp 49, sfp 65). Accents (sf,

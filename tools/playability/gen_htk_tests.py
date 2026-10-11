@@ -68,7 +68,8 @@ def head(clef, tempo=False):
     return ('<Clef><concertClefType>%s</concertClefType><transposingClefType>%s</transposingClefType></Clef>'
             '<KeySig><accidental>0</accidental></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>' % (clef, clef)
             + ('<Tempo><tempo>1</tempo><followText>1</followText><text><sym>metNoteQuarterUp</sym> = 60</text></Tempo>'
-               if tempo else ''))
+               if tempo else '')
+            + '<Dynamic><subtype>mf</subtype></Dynamic>')
 
 
 def part(name, iid, clefs, program):

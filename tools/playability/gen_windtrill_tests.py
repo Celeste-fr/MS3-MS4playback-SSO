@@ -137,7 +137,7 @@ def bar(items, tr):
 
 def head(clef, key):
     return ('<Clef><concertClefType>%s</concertClefType><transposingClefType>%s</transposingClefType></Clef>'
-            '<KeySig><accidental>%d</accidental></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>' % (clef, clef, key))
+            '<KeySig><accidental>%d</accidental></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>' % (clef, clef, key) + '<Dynamic><subtype>mf</subtype></Dynamic>')
 
 
 def part(name, iid, clef, program, diatonic=0, chromatic=0):

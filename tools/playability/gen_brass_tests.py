@@ -89,7 +89,8 @@ BARS = 8
 def head(clef, text=None):
     return ('<Clef><concertClefType>%s</concertClefType><transposingClefType>%s</transposingClefType></Clef>'
             '<KeySig><accidental>0</accidental></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>' % (clef, clef)
-            + ('<StaffText><text>%s</text></StaffText>' % text if text else ''))
+            + ('<StaffText><text>%s</text></StaffText>' % text if text else '')
+            + '<Dynamic><subtype>mf</subtype></Dynamic>')
 
 
 def part(name, iid, clef, program, diatonic=0, chromatic=0):
