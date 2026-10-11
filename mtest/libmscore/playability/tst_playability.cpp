@@ -91,6 +91,12 @@ class TestPlayability : public QObject, public MTest
       void timpaniGliss();
       void doubleReedFlutter();
       void n1n2tOnOldFixtures();
+      void malletChords();
+      void clarinetKey();
+      void stringGliss();
+      void vocalNotation();
+      void vocalTessitura();
+      void r1r4OnOldFixtures();
       void noDynamic();
       };
 
@@ -1885,6 +1891,134 @@ void TestPlayability::n1n2tOnOldFixtures()
             QVERIFY2(score, f);
             PlayabilityResult r = Playability::analyse(score);
             QStringList got = htkRows(r, { "technique", "accidental", "stopped", "lhPizz", "timpaniGliss", "flutter" });
+            for (const QString& g : got)
+                  qWarning("%s: %s", f, qPrintable(g));
+            QVERIFY2(got.isEmpty(), f);
+            delete score;
+            }
+      }
+
+//---------------------------------------------------------
+//   R1-R4 (SPEC-r1r4): r1r4-tests.mscx from tools/playability/gen_r1r4_tests.py
+//---------------------------------------------------------
+
+void TestPlayability::malletChords()
+      {
+      MasterScore* score = readScore(DIR + "r1r4-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString count = " notes struck at once: more than 4, two mallets in each hand (solo and section) "
+                            "(Adler pp. 437-441; Blatter pp. 200, 204; Kennan & Grantham pp. 235-241; Sevsay pp. 147-153)";
+      QStringList got = htkRows(r, { "malletChord" });
+      QStringList want = {
+            rowText(2, "Marimba", "risky", "5" + count, "C4 + E4 + G4 + C5 + E5"),
+            rowText(3, "Marimba", "risky", "however the hands share this chord, one hand spans more than an octave (at best 14 semitones) "
+                    "(solo and section) (Kennan & Grantham p. 238; Sevsay p. 147)", "C4 + D5 + E5 + F6"),
+            rowText(1, "Marimba 2", "risky", "5" + count, "C3 + G3 + E5 + G5 + C6") };     // both staves together
+      want.sort();
+      compare(got, want);       // clean: C4 E4 G5 B5, C4 C5, Marimba 2 bar 2 (4 notes), the piano's 5
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Marimba | 1920 | 60 | outOfReach"));
+      QVERIFY(m.contains("Marimba 2 | 0 | 48 | outOfReach"));
+      QVERIFY(!m.contains("Marimba | 0 | 60 | outOfReach"));
+      }
+
+void TestPlayability::clarinetKey()
+      {
+      MasterScore* score = readScore(DIR + "r1r4-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "clarinetKey" });
+      const QString toA = QString::fromUtf8(": the A clarinet is the better choice (solo and section) (Kennan & Grantham pp. 89-90, 117, 209)");
+      QStringList want = {
+            rowText(2, "Clarinet in Bb", "risky", QString::fromUtf8("B♭ clarinet written in B major (5 sharps)") + toA, "5 sharps"),
+            rowText(3, "Clarinet in Bb", "risky", QString::fromUtf8("written in C♯ major (7 sharps): write it as D♭ major (5 flats) "
+                    "(solo and section) (Gould p. 252; Kennan & Grantham pp. 90, 117)"), "7 sharps"),       // not also "A clarinet"
+            rowText(4, "Clarinet in Bb", "risky", QString::fromUtf8("B♭ clarinet written in G♭ major (6 flats)") + toA, "6 flats"),
+            rowText(2, "Clarinet in A", "risky", QString::fromUtf8("A clarinet written in F♯ major (6 sharps): the B♭ clarinet is the "
+                    "better choice (solo and section) (Kennan & Grantham pp. 90, 117, 209)"), "6 sharps"),
+            rowText(1, "Horn in F", "risky", QString::fromUtf8("instrument in F written in F♯ major (6 sharps): an instrument in a flat "
+                    "key reads G♭ major (6 flats) (solo and section) (Gould p. 252)"), "6 sharps") };
+      want.sort();
+      compare(got, want);       // clean: B♭ in 4 sharps, A in 5 sharps, the horn's 6 flats, the flute's 7 sharps
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Clarinet in Bb | 1920 | 72 | outOfReach"));
+      QVERIFY(!m.contains("Clarinet in Bb | 0 | 72 | outOfReach"));
+      }
+
+void TestPlayability::stringGliss()
+      {
+      MasterScore* score = readScore(DIR + "r1r4-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "stringGliss" });
+      const QChar d(0x2013);
+      const QString harm = "harmonic glissando with no string named (\"sul G\", I-IV): the harmonics depend on the string "
+                           "(solo and section) (Gould p. 423)";
+      QStringList want = {
+            rowText(1, "Viola", "risky", "\"sul E\": the viola has no E string (solo and section) (Gould p. 394; Adler p. 54)", "\"sul E\""),
+            rowText(1, "Violin 2", "risky", "double-stop glissandos in contrary motion: only cellos and double basses play them "
+                    "(solo and section) (Sevsay p. 39)", QString("A4") + d + "F4 + D5" + d + "F5"),
+            rowText(1, "Violin 3", "risky", harm, QString("D5") + d + "G5"),
+            rowText(3, "Violin 3", "risky", harm, QString("D5") + d + "G5"),        // "ord." ended "sul G"
+            rowText(2, "Violin 4", "risky", "artificial harmonic glissando with a line on only one note: draw it on both the stopped "
+                    "note and the diamond (solo and section) (Gould p. 424)", QString("C4") + d + "D4") };
+      want.sort();
+      compare(got, want);       // clean: the violin's "sul E", the cello's contrary glissandos, under "sul G", both lines
+      QStringList m = marks(score, r);
+      for (const char* hit : { "Viola | 0 | 60", "Violin 2 | 0 | 69", "Violin 2 | 0 | 74", "Violin 4 | 1920 | 60", "Violin 4 | 1920 | 65" })
+            QVERIFY2(m.contains(QString(hit) + " | outOfReach"), hit);
+      QVERIFY(!m.contains("Violin | 0 | 72 | outOfReach"));
+      }
+
+void TestPlayability::vocalNotation()
+      {
+      MasterScore* score = readScore(DIR + "r1r4-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "vocal" });
+      QStringList want = {
+            rowText(2, "Soprano", "risky", "melisma with no slur: slur the notes of one syllable (solo and section) (Gould p. 435)", "\"la\""),
+            rowText(4, "Soprano", "risky", "final syllable held over more than one note with no extender line (solo and section) (Gould p. 447)", "\"Ah\""),
+            rowText(6, "Soprano", "risky", "extender line after a syllable the word goes on from: use a hyphen (solo and section) (Gould p. 448)", "\"a\""),
+            rowText(1, "Tenor", "risky", "tenor in a plain treble clef: use treble 8vb (solo and section) (Gould p. 433)", "treble clef") };
+      want.sort();
+      compare(got, want);       // clean: the slurred melisma, a rest inside, the held syllable with an extender, Tenor 2 in G8vb
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Soprano | 1920 | 72 | outOfReach"));
+      QVERIFY(!m.contains("Soprano | 0 | 72 | outOfReach"));
+      }
+
+void TestPlayability::vocalTessitura()
+      {
+      MasterScore* score = readScore(DIR + "r1r4-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList got = htkRows(r, { "tessitura" });
+      const QString why = QString::fromUtf8("only 25 % of the sung time lies within a 5th of the soprano central pitch Bb4 (Eb4–F5); "
+                                            "most of it should (75-80 %), trained singers may go beyond it (solo and section) (Blatter p. 380)");
+      QStringList want = { rowText(1, "Soprano 3", "risky", why, "A5"), rowText(2, "Soprano 3", "risky", why, "A5"),
+                           rowText(3, "Soprano 3", "risky", why, "A5") };
+      want.sort();
+      compare(got, want);       // clean: Soprano 2 (94 %, its Eb4 and F5 inside), Tenor 3 (sounding C4), Soprano, Tenor, Tenor 2
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Soprano 3 | 0 | 81 | outOfReach"));
+      QVERIFY(!m.contains("Soprano 3 | 5760 | 72 | outOfReach"));
+      QVERIFY(!m.contains("Soprano 2 | 7680 | 81 | outOfReach"));
+      }
+
+// the new checks on the older fixtures
+void TestPlayability::r1r4OnOldFixtures()
+      {
+      for (const char* f : { "test-strings.mscx", "harm-tests.mscx", "micro-tests.mscx", "bow-tests.mscx", "jete-tests.mscx",
+                             "fast-tests.mscx", "tremolo-tests.mscx", "harp-tests.mscx", "timp-tests.mscx", "keys-tests.mscx",
+                             "brass-tests.mscx", "wind-tests.mscx", "wind-dyn-tests.mscx", "windtrill-tests.mscx",
+                             "brassentry-tests.mscx", "brasstrill-tests.mscx", "chimes-tests.mscx", "entrance-tests.mscx",
+                             "scord-tests.mscx", "spell-tests.mscx", "ledger-divisi-tests.mscx", "n1n2t-tests.mscx" }) {
+            MasterScore* score = readScore(DIR + f);
+            QVERIFY2(score, f);
+            PlayabilityResult r = Playability::analyse(score);
+            QStringList got = htkRows(r, { "malletChord", "clarinetKey", "stringGliss", "vocal", "tessitura" });
             for (const QString& g : got)
                   qWarning("%s: %s", f, qPrintable(g));
             QVERIFY2(got.isEmpty(), f);

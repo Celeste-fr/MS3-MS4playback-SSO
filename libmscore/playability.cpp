@@ -21,6 +21,9 @@
 #include "arpeggio.h"
 #include "utils.h"
 #include "key.h"
+#include "keysig.h"
+#include "lyrics.h"
+#include "clef.h"
 #include "accidental.h"
 #include "articulation.h"
 #include "chord.h"
@@ -234,6 +237,13 @@ class Pass {
       void checkLeftHandPizz(Part* part, const QString& staffName);
       void checkTimpaniGliss(Part* part, const QString& staffName);
       void checkDoubleReedFlutter(Part* part, const QString& staffName);
+      // R1-R4 (SPEC-r1r4)
+      void chordRow(Segment* s, int st, const QString& staffName, const QString& kind, const QString& reason, const QString& notes);
+      void checkMalletChords(Part* part, const QString& staffName);
+      void checkClarinetKey(Part* part, const QString& staffName);
+      void checkStringGliss(Part* part, const QString& staffName);
+      void checkVocalNotation(Part* part, const QString& staffName);
+      void checkVocalTessitura(Part* part, const QString& staffName);
       void brassTrillNotes(Chord* chord, ChordInfo& info);
 
    public:
@@ -1710,6 +1720,484 @@ void Pass::checkDoubleReedFlutter(Part* part, const QString& staffName)
       }
 
 //---------------------------------------------------------
+//   R1 mallet chords, R2 clarinet key choice, R3 string glissando, R4 vocal notation (SPEC-r1r4,
+//   owner-approved 2026-10-11). Limits and word lists in playabilityrules.h; every row "risky".
+//---------------------------------------------------------
+
+// a row at the first chord on the staff at (else after) a segment, its notes marked (as G8)
+void Pass::chordRow(Segment* s, int st, const QString& staffName, const QString& kind, const QString& reason, const QString& notes)
+      {
+      Chord* chord = firstChordFrom(s, st);
+      if (chord)
+            for (Note* n : chord->notes())
+                  markOver(n, PlayMark::OUT_OF_REACH);
+      int tick = chord ? chord->tick().ticks() : s->tick().ticks();
+      addRow(tick, tick, chord ? chord->track() : st * VOICES, staffName, kind, "risky", reason, notes);
+      _res.outOfReach++;
+      }
+
+// the instrument in force at a tick: its id and long name, else the part's
+static void idNameAt(Part* part, const Fraction& tick, QString* id, QString* name)
+      {
+      const Instrument* in = part->instrument(tick);
+      *id = in->instrumentId();
+      *name = in->longNames().isEmpty() ? QString() : plainText(in->longNames().front().name());
+      if (id->isEmpty() && name->isEmpty()) {
+            *id = part->instrumentId();
+            *name = plainText(part->longName());
+            if (name->isEmpty())
+                  *name = plainText(part->partName());
+            }
+      }
+
+//---------------------------------------------------------
+//   checkMalletChords (R1)
+//    marimba, vibraphone, xylophone, glockenspiel (R1_MALLET_IDS; the name when there is no id), one
+//    player, every staff and voice of the part together: the different pitches struck at one moment
+//    (partMoments; tied continuations are not struck). R1-COUNT: more than R1_MAX_NOTES. R1-SPAN, a
+//    chord of 2-4 not marked by R1-COUNT: the lower notes to the left hand, the upper to the right, at
+//    most R1_MAX_PER_HAND each; marked when every such split has a hand spanning more than
+//    R1_HAND_SPAN_MAX. Crossed hands are not tried: a crossed split always needs a wider hand.
+//---------------------------------------------------------
+
+void Pass::checkMalletChords(Part* part, const QString& staffName)
+      {
+      static const QRegularExpression ID(R1_MALLET_IDS);
+      static const QRegularExpression NAME(R1_MALLET_NAMES, QRegularExpression::CaseInsensitiveOption);
+      QString id, name;
+      partIdName(part, &id, &name);
+      if (!(id.isEmpty() ? NAME.match(name).hasMatch() : ID.match(id).hasMatch()))
+            return;
+      for (const PartMoment& m : partMoments(part)) {
+            std::vector<const PartNote*> on;
+            std::set<int> struck;
+            for (const PartNote& pn : m.notes)
+                  if (pn.attack) {
+                        on.push_back(&pn);
+                        struck.insert(pn.note->ppitch());
+                        }
+            const int n = int(struck.size());
+            if (n > R1_MAX_NOTES) {
+                  momentRow(m, on, staffName, "malletChord", false,
+                            QString("%1 notes struck at once: more than 4, two mallets in each hand (solo and section) "
+                                    "(Adler pp. 437-441; Blatter pp. 200, 204; Kennan & Grantham pp. 235-241; Sevsay pp. 147-153)").arg(n));
+                  continue;
+                  }
+            if (n < 2)
+                  continue;
+            const std::vector<int> p(struck.begin(), struck.end());
+            int best = -1;
+            for (int left = 0; left <= n; ++left) {
+                  const int right = n - left;
+                  if (left > R1_MAX_PER_HAND || right > R1_MAX_PER_HAND)
+                        continue;
+                  const int l = left >= 2 ? p[left - 1] - p[0] : 0;
+                  const int r = right >= 2 ? p[n - 1] - p[left] : 0;
+                  const int wider = std::max(l, r);
+                  if (best < 0 || wider < best)
+                        best = wider;
+                  }
+            if (best > R1_HAND_SPAN_MAX)
+                  momentRow(m, on, staffName, "malletChord", false,
+                            QString("however the hands share this chord, one hand spans more than an octave (at best %1) "
+                                    "(solo and section) (Kennan & Grantham p. 238; Sevsay p. 147)").arg(intervalName(best)));
+            }
+      }
+
+//---------------------------------------------------------
+//   checkClarinetKey (R2)
+//    each key signature on the staff (not the ones layout repeats), as the part shows it: written
+//    (with concert pitch on, the concert key transposed back as MuseScore does), on an instrument
+//    whose transposition changes the key. R2-RESPELL-7: 7 sharps or flats, the 5-accidental key
+//    (Gould p. 252; Kennan & Grantham pp. 90, 117). R2-BB-TO-A / R2-A-TO-BB (not on a key marked by
+//    R2-RESPELL-7): a B♭ clarinet (B♭ soprano clarinet ids, transposition a major 2nd down) with 5+
+//    sharps or 6+ flats, an A clarinet (minor 3rd down) with 6+ of either (Kennan & Grantham pp. 89-90,
+//    117, 209). R2-RESPELL-6: instruments in A, D, G with 6 flats, in B♭, F, E♭ with 6 sharps (Gould
+//    p. 252). Marked on the first chord after the key signature.
+//---------------------------------------------------------
+
+static QString keyName(int fifths)
+      {
+      static const char* const NAMES[] = { "C♭", "G♭", "D♭", "A♭", "E♭", "B♭", "F", "C", "G", "D", "A", "E", "B", "F♯", "C♯" };
+      return fifths < -7 || fifths > 7 ? QString() : QString::fromUtf8(NAMES[fifths + 7]) + " major";
+      }
+
+static QString accidentalCount(int fifths)
+      {
+      int n = std::abs(fifths);
+      return QString("%1 %2%3").arg(n).arg(fifths > 0 ? "sharp" : "flat").arg(n == 1 ? "" : "s");
+      }
+
+void Pass::checkClarinetKey(Part* part, const QString& staffName)
+      {
+      static const QRegularExpression CLARINET_NAME("clarinet", QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression OTHER_CLARINET("bass|alto|contra|basset|piccolo|sopranino", QRegularExpression::CaseInsensitiveOption);
+      for (int si = 0; si < part->nstaves(); ++si) {
+            const int st = part->staff(si)->idx();
+            for (Segment* s = _score->firstSegment(SegmentType::KeySig); s; s = s->next1(SegmentType::KeySig)) {
+                  Element* e = s->element(st * VOICES);
+                  if (!e || !e->isKeySig() || e->generated())
+                        continue;
+                  KeySig* ks = toKeySig(e);
+                  if (ks->isCustom() || ks->isAtonal())
+                        continue;
+                  const Instrument* in = part->instrument(s->tick());
+                  Interval iv = in->transpose();
+                  const int inKey = ((iv.chromatic % 12) + 12) % 12;
+                  if (inKey == 0)
+                        continue;                     // C, or octaves only: the key is the concert key
+                  Key k = ks->key();
+                  if (_score->styleB(Sid::concertPitch)) {
+                        iv.flip();
+                        k = transposeKey(k, iv, part->preferSharpFlat());
+                        }
+                  const int fifths = int(k);
+                  const QString written = keyName(fifths) + " (" + accidentalCount(fifths) + ")";
+                  QString id, name;
+                  idNameAt(part, s->tick(), &id, &name);
+                  const bool clarinet = id.isEmpty() ? (CLARINET_NAME.match(name).hasMatch() && !OTHER_CLARINET.match(name).hasMatch())
+                                                     : (id == "wind.reed.clarinet" || id == "wind.reed.clarinet.bflat" || id == "wind.reed.clarinet.a");
+                  const bool bb = clarinet && in->transpose().chromatic == -2;
+                  const bool a = clarinet && in->transpose().chromatic == -3;
+                  if (std::abs(fifths) >= R2_RESPELL_7) {
+                        const int other = fifths > 0 ? fifths - 12 : fifths + 12;
+                        chordRow(s, st, staffName, "clarinetKey",
+                                 QString("written in %1: write it as %2 (%3) (solo and section) (Gould p. 252; Kennan & Grantham pp. 90, 117)")
+                                 .arg(written, keyName(other), accidentalCount(other)), accidentalCount(fifths));
+                        }
+                  else {
+                        if (bb && (fifths >= R2_BB_TO_A_SHARPS || -fifths >= R2_BB_TO_A_FLATS))
+                              chordRow(s, st, staffName, "clarinetKey",
+                                       QString::fromUtf8("B♭ clarinet written in %1: the A clarinet is the better choice (solo and section) "
+                                                         "(Kennan & Grantham pp. 89-90, 117, 209)").arg(written), accidentalCount(fifths));
+                        if (a && std::abs(fifths) >= R2_A_TO_BB)
+                              chordRow(s, st, staffName, "clarinetKey",
+                                       QString::fromUtf8("A clarinet written in %1: the B♭ clarinet is the better choice (solo and section) "
+                                                         "(Kennan & Grantham pp. 90, 117, 209)").arg(written), accidentalCount(fifths));
+                        }
+                  // instruments in sharp keys (A 9, D 2, G 7) read sharps, in flat keys (B♭ 10, F 5, E♭ 3) flats
+                  const bool sharpKey = inKey == 9 || inKey == 2 || inKey == 7;
+                  const bool flatKey = inKey == 10 || inKey == 5 || inKey == 3;
+                  if ((sharpKey && fifths == -R2_RESPELL_6) || (flatKey && fifths == R2_RESPELL_6)) {
+                        static const char* const IN[] = { "", "", "D", "E♭", "", "F", "", "G", "", "A", "B♭", "" };
+                        chordRow(s, st, staffName, "clarinetKey",
+                                 QString::fromUtf8("instrument in %1 written in %2: an instrument in a %3 key reads %4 (%5) "
+                                                   "(solo and section) (Gould p. 252)")
+                                 .arg(QString::fromUtf8(IN[inKey]), written, sharpKey ? "sharp" : "flat", keyName(-fifths), accidentalCount(-fifths)),
+                                 accidentalCount(fifths));
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkStringGliss (R3)
+//    bowed strings (instrumentAt, the tuning in force: tunedAt). R3-STRING-NAME: a "sul X" text (X a
+//    note letter) naming no string of the instrument (Gould p. 394; Adler p. 54). R3-CONTRARY: a
+//    violin or viola chord whose notes' glissandos go up and down (Sevsay p. 39). R3-HARM-STRING: a
+//    glissando from or to a harmonic (diamond notehead, or the harmonic circle) with no string
+//    indication in force: "sul X" / "sul I-IV", a text led by a roman numeral I-IV, or a string number
+//    on the note; it lasts until an ord. / naturale / normale word or the next indication (Gould
+//    p. 423). R3-HARM-ART: an artificial harmonic (two notes, one a diamond) with a glissando on only
+//    one of them (Gould p. 424). One row per chord and rule.
+//---------------------------------------------------------
+
+static bool isHarmonicNote(const Note* n)
+      {
+      if (n->headGroup() == NoteHead::Group::HEAD_DIAMOND || n->headGroup() == NoteHead::Group::HEAD_DIAMOND_OLD)
+            return true;
+      for (const Articulation* a : n->chord()->articulations())
+            if (isHarmonicCircle(a->symId()))
+                  return true;
+      for (const Element* x : n->el())
+            if (x->isSymbol() && isHarmonicCircle(toSymbol(x)->sym()))
+                  return true;
+      return false;
+      }
+
+static Note* glissandoTo(const Note* n)
+      {
+      for (Spanner* sp : n->spannerFor())
+            if (sp->isGlissando() && sp->endElement() && sp->endElement()->isNote())
+                  return toNote(sp->endElement());
+      return nullptr;
+      }
+
+static bool hasStringNumber(const Note* n)
+      {
+      for (const Element* e : n->el())
+            if (e->isFingering() && toTextBase(e)->tid() == Tid::STRING_NUMBER)
+                  return true;
+      return false;
+      }
+
+void Pass::checkStringGliss(Part* part, const QString& staffName)
+      {
+      bool any = false;
+      for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i)
+            any |= instrumentAt(part, Fraction::fromTicks(i->first)).valid();
+      if (!any)
+            return;
+      static const QRegularExpression LETTER(R3_STRING_LETTER);
+      static const QRegularExpression SUL("\\b[Ss]ul(?:la)?\\s+(?:the\\s+)?([A-G]|IV|I{1,3})(?![A-Za-z])");
+      static const QRegularExpression ROMAN(R3_STRING_ROMAN);
+      static const QRegularExpression OFF = wordList(N1_ORD_WORDS);
+      for (int si = 0; si < part->nstaves(); ++si) {
+            const int st = part->staff(si)->idx();
+            const StaffTexts tx = staffTexts(st);
+            StateList indication;
+            for (const TechText& t : techTexts(st)) {
+                  const Fraction tick = Fraction::fromTicks(t.tick);
+                  if (SUL.match(t.text).hasMatch() || ROMAN.match(t.text).hasMatch())
+                        indication.changes.push_back({ t.tick, 1 });
+                  else if (OFF.match(t.text).hasMatch())
+                        indication.changes.push_back({ t.tick, 0 });
+                  QRegularExpressionMatch m = LETTER.match(t.text);
+                  const StringInstrument in = tunedAt(part, tick, tx);
+                  if (!m.hasMatch() || !in.valid())
+                        continue;
+                  bool found = false;
+                  for (int k = 0; k < int(in.strings.size()); ++k)
+                        found |= stringName(in, k).startsWith(m.captured(1));
+                  if (!found)
+                        textRow(t, st, staffName, "stringGliss",
+                                QString("\"sul %1\": the %2 has no %1 string (solo and section) (Gould p. 394; Adler p. 54)")
+                                .arg(m.captured(1), in.name.toLower()));
+                  }
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  for (int track = st * VOICES; track < st * VOICES + VOICES; ++track) {
+                        Element* e = s->element(track);
+                        if (!e || !e->isChord())
+                              continue;
+                        const StringInstrument in = tunedAt(part, s->tick(), tx);
+                        if (!in.valid())
+                              continue;
+                        Chord* main = toChord(e);
+                        std::vector<Chord*> chords(main->graceNotes().begin(), main->graceNotes().end());
+                        chords.push_back(main);
+                        const int tick = s->tick().ticks();
+                        for (Chord* c : chords) {
+                              std::vector<std::pair<Note*, Note*>> gl;
+                              for (Note* n : c->notes())
+                                    if (Note* to = glissandoTo(n))
+                                          gl.push_back({ n, to });
+                              if (gl.empty())
+                                    continue;
+                              auto names = [&](const std::vector<std::pair<Note*, Note*>>& v) {
+                                    QStringList out;
+                                    for (const auto& g : v)
+                                          out << tpcName(g.first->tpc1(), g.first->ppitch()) + QChar(0x2013) + tpcName(g.second->tpc1(), g.second->ppitch());
+                                    return out.join(" + ");
+                                    };
+                              auto row = [&](const std::vector<Note*>& marked, const QString& reason, const QString& notes) {
+                                    for (Note* n : marked)
+                                          markOver(n, PlayMark::OUT_OF_REACH);
+                                    addRow(tick, tick, track, staffName, "stringGliss", "risky", reason, notes);
+                                    if (c->isGrace())
+                                          _res.rows.back().grace = main->graceNotes().indexOf(c);
+                                    _res.outOfReach++;
+                                    };
+                              // R3-CONTRARY
+                              bool up = false, down = false;
+                              for (const auto& g : gl) {
+                                    up |= g.second->ppitch() > g.first->ppitch();
+                                    down |= g.second->ppitch() < g.first->ppitch();
+                                    }
+                              if (up && down && (in.name == "Violin" || in.name == "Viola")) {
+                                    std::vector<Note*> marked;
+                                    for (const auto& g : gl)
+                                          marked.insert(marked.end(), { g.first, g.second });
+                                    row(marked, QString("double-stop glissandos in contrary motion: only cellos and double basses play them "
+                                                        "(solo and section) (Sevsay p. 39)"), names(gl));
+                                    }
+                              // R3-HARM-STRING
+                              bool harmonic = false, numbered = false;
+                              for (const auto& g : gl) {
+                                    harmonic |= isHarmonicNote(g.first) || isHarmonicNote(g.second);
+                                    numbered |= hasStringNumber(g.first);
+                                    }
+                              if (harmonic && !numbered && !indication.on(tick)) {
+                                    std::vector<Note*> marked;
+                                    for (const auto& g : gl)
+                                          marked.push_back(g.first);
+                                    row(marked, QString("harmonic glissando with no string named (\"sul G\", I-IV): the harmonics depend on "
+                                                        "the string (solo and section) (Gould p. 423)"), names(gl));
+                                    }
+                              // R3-HARM-ART
+                              const std::vector<Note*>& ns = c->notes();
+                              if (ns.size() == 2 && isHarmonicNote(ns[0]) != isHarmonicNote(ns[1])
+                                  && ns[0]->headGroup() != ns[1]->headGroup() && gl.size() == 1)
+                                    row({ ns[0], ns[1] }, QString("artificial harmonic glissando with a line on only one note: draw it on both "
+                                                                  "the stopped note and the diamond (solo and section) (Gould p. 424)"), names(gl));
+                              }
+                        }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkVocalNotation (R4)
+//    voice staves (R4_VOICE_IDS; the name when there is no id), each voice's chords and rests in
+//    order. A syllable's span: its chord and the chords without a lyric after it, up to the next
+//    chord with one (rests passed over). R4-MELISMA-SLUR: one or more of them not tied
+//    continuations, no rest before the last, and no slur from the syllable's chord to the last
+//    (Gould p. 435). R4-EXTENDER: a lyric whose syllabic is single or end held over more than one
+//    written note (its chord and the chords after it before a rest, ties included) with no extender
+//    (Lyrics::ticks(), the melisma line) (Gould p. 447). R4-HYPHEN: an extender on a begin or middle
+//    syllable (Gould p. 448). R4-TENOR-CLEF: a tenor staff (R4_TENOR_ID) with a treble clef, not
+//    treble 8vb (Gould p. 433). The syllable's (or the clef's first) chord is marked.
+//---------------------------------------------------------
+
+void Pass::checkVocalNotation(Part* part, const QString& staffName)
+      {
+      static const QRegularExpression ID(R4_VOICE_IDS);
+      static const QRegularExpression NAME(R4_VOICE_NAMES, QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression NOT_VOICE("sax|trombone|tuba|clarinet|flute|oboe|recorder|guitar|viol|horn|trumpet|"
+                                                "bassoon|drum|gamba|ukulele|banjo|balalaika|crumhorn|cornet|bugle|sackbut",
+                                                QRegularExpression::CaseInsensitiveOption);
+      QString id, name;
+      partIdName(part, &id, &name);
+      const bool voice = id.isEmpty() ? NAME.match(name).hasMatch() && !NOT_VOICE.match(name).hasMatch() : ID.match(id).hasMatch();
+      if (!voice)
+            return;
+      const bool tenor = id == R4_TENOR_ID;
+      collectSpanners();
+      for (int si = 0; si < part->nstaves(); ++si) {
+            const int st = part->staff(si)->idx();
+            // R4-TENOR-CLEF
+            if (tenor)
+                  for (Segment* s = _score->firstSegment(SegmentType::HeaderClef | SegmentType::Clef); s;
+                       s = s->next1(SegmentType::HeaderClef | SegmentType::Clef)) {
+                        Element* e = s->element(st * VOICES);
+                        if (e && e->isClef() && !e->generated() && toClef(e)->clefType() == ClefType::G)
+                              chordRow(s, st, staffName, "vocal", "tenor in a plain treble clef: use treble 8vb (solo and section) (Gould p. 433)",
+                                       "treble clef");
+                        }
+            for (int v = 0; v < VOICES; ++v) {
+                  const int track = st * VOICES + v;
+                  std::vector<ChordRest*> crs;
+                  for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                        Element* e = s->element(track);
+                        if (e && (e->isChord() || e->isRest()))
+                              crs.push_back(toChordRest(e));
+                        }
+                  for (size_t i = 0; i < crs.size(); ++i) {
+                        if (!crs[i]->isChord() || crs[i]->lyrics().empty())
+                              continue;
+                        Chord* c = toChord(crs[i]);
+                        Chord* last = c;
+                        int held = 1;
+                        bool rest = false, restInside = false, melisma = false;
+                        for (size_t j = i + 1; j < crs.size(); ++j) {
+                              if (crs[j]->isRest()) {
+                                    rest = true;
+                                    continue;
+                                    }
+                              Chord* d = toChord(crs[j]);
+                              if (!d->lyrics().empty())
+                                    break;
+                              last = d;
+                              restInside |= rest;
+                              if (!rest)
+                                    ++held;
+                              bool tied = true;
+                              for (Note* n : d->notes())
+                                    tied &= n->tieBack() != nullptr;
+                              melisma |= !tied;
+                              }
+                        const int tick = c->tick().ticks();
+                        auto row = [&](const Lyrics* l, const QString& reason) {
+                              for (Note* n : c->notes())
+                                    markOver(n, PlayMark::OUT_OF_REACH);
+                              addRow(tick, last->tick().ticks(), track, staffName, "vocal", "risky", reason, "\"" + l->plainText() + "\"");
+                              _res.outOfReach++;
+                              };
+                        const Lyrics* first = c->lyrics().front();
+                        for (const Lyrics* l : c->lyrics())
+                              if (l->no() < first->no())
+                                    first = l;
+                        if (melisma && !restInside && !slurredOver(track, tick, last->tick().ticks()))
+                              row(first, "melisma with no slur: slur the notes of one syllable (solo and section) (Gould p. 435)");
+                        for (const Lyrics* l : c->lyrics()) {
+                              const bool extender = l->ticks() > Fraction(0, 1);
+                              const Lyrics::Syllabic sy = l->syllabic();
+                              if ((sy == Lyrics::Syllabic::SINGLE || sy == Lyrics::Syllabic::END) && held > 1 && !extender)
+                                    row(l, "final syllable held over more than one note with no extender line (solo and section) (Gould p. 447)");
+                              if ((sy == Lyrics::Syllabic::BEGIN || sy == Lyrics::Syllabic::MIDDLE) && extender)
+                                    row(l, "extender line after a syllable the word goes on from: use a hyphen (solo and section) (Gould p. 448)");
+                              }
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkVocalTessitura (R5)
+//    voice parts with a central pitch (R5_CENTRES by voice id; others not checked): every staff and
+//    voice of the part, each sung note's time in seconds (the tempo map, secondsBetween; ties merged,
+//    rests left out, grace notes not counted) at its sounding pitch, inside the band (central pitch
+//    ± R5_BAND, both ends inside) or outside. Under R5_MIN_SHARE inside, every chord with notes
+//    outside is a row and those notes are marked (Blatter p. 380).
+//---------------------------------------------------------
+
+void Pass::checkVocalTessitura(Part* part, const QString& staffName)
+      {
+      QString id, name;
+      partIdName(part, &id, &name);
+      const VoiceCentre* centre = nullptr;
+      for (const VoiceCentre& c : R5_CENTRES)
+            if (id == c.id)
+                  centre = &c;
+      if (!centre)
+            return;
+      const int lo = centre->pitch - R5_BAND, hi = centre->pitch + R5_BAND;
+      double inside = 0, outside = 0;
+      std::vector<std::pair<Chord*, std::vector<Note*>>> out;
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* e = s->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  Chord* c = toChord(e);
+                  std::vector<Note*> far;
+                  for (Note* n : c->notes()) {
+                        if (n->tieBack())
+                              continue;
+                        const Chord* lc = n->lastTiedNote()->chord();
+                        const double secs = secondsBetween(c->tick().ticks(), (lc->tick() + lc->actualTicks()).ticks());
+                        if (n->ppitch() >= lo && n->ppitch() <= hi)
+                              inside += secs;
+                        else {
+                              outside += secs;
+                              far.push_back(n);
+                              }
+                        }
+                  if (!far.empty())
+                        out.push_back({ c, far });
+                  }
+      if (inside + outside <= 0 || inside / (inside + outside) >= R5_MIN_SHARE)
+            return;
+      const int pct = int(std::floor(100 * inside / (inside + outside)));
+      QString voice = QString(centre->id).mid(6);
+      if (voice == "child")
+            voice = "boy soprano";
+      const QString reason = QString::fromUtf8("only %1 % of the sung time lies within a 5th of the %2 central pitch %3 (%4–%5); "
+                                               "most of it should (75-80 %), trained singers may go beyond it (solo and section) "
+                                               "(Blatter p. 380)")
+                             .arg(pct).arg(voice, tpcName(centre->tpc, centre->pitch),
+                                           tpcName(centre->tpc - 1, lo), tpcName(centre->tpc + 1, hi));
+      for (const auto& o : out) {
+            QStringList names;
+            for (Note* n : o.second) {
+                  markOver(n, PlayMark::OUT_OF_REACH);
+                  names << tpcName(n->tpc1(), n->ppitch());
+                  }
+            const int tick = o.first->tick().ticks();
+            addRow(tick, tick, o.first->track(), staffName, "tessitura", "risky", reason, names.join(" + "));
+            _res.outOfReach++;
+            }
+      }
+
+//---------------------------------------------------------
 //   checkWindTrills
 //    W5, the owner's spec SPEC-w5: woodwind trills and two-note tremolos the books call hard (dark
 //    yellow) or impossible (red), or a note for the panel only (playabilitywindtrills.h, generated
@@ -3073,6 +3561,11 @@ void Pass::run()
             checkLeftHandPizz(part, staffName);
             checkTimpaniGliss(part, staffName);
             checkDoubleReedFlutter(part, staffName);
+            checkMalletChords(part, staffName);
+            checkClarinetKey(part, staffName);
+            checkStringGliss(part, staffName);
+            checkVocalNotation(part, staffName);
+            checkVocalTessitura(part, staffName);
             }
       for (int st = 0; st < _score->nstaves(); ++st) {
             Part* part = _score->staff(st)->part();

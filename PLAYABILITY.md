@@ -305,6 +305,51 @@ headless test scores and their checked results are the parity tests.
   Tests `techniqueCancels`, `sharedAccidentals`, `stoppedHorn`, `leftHandPizz`, `timpaniGliss`, `doubleReedFlutter`
   (n1n2t-tests.mscx from `tools/playability/gen_n1n2t_tests.py`, cases listed in its docstring) and
   `n1n2tOnOldFixtures` (none of these kinds on the older fixtures). 46 pass, 1 skipped.
+- Mallet chords (R1, SPEC-r1r4, owner-approved 2026-10-11): marimba, vibraphone, xylophone, glockenspiel
+  (`R1_MALLET_IDS`, MusicXML ids `pitched-percussion.*`; the name when there is no id), one player, every staff and
+  voice of the part together (`partMoments`). The different pitches struck at one moment (tied continuations are not
+  struck): more than 4 "risky" (R1-COUNT; Adler pp. 437-441, Blatter pp. 200, 204, K&G pp. 235-241, Sevsay
+  pp. 147-153). A chord of 2-4 not marked by R1-COUNT: the lower notes to the left hand, the upper to the right, at
+  most 2 a hand; "risky" when every such split has a hand spanning more than an octave (R1-SPAN, `R1_HAND_SPAN_MAX`
+  12; K&G p. 238, Sevsay p. 147). Crossed hands are not tried (they always need a wider hand). Kind `malletChord`.
+- Clarinet key choice (R2): each key signature on the staff (not the ones layout repeats; custom and atonal ones
+  skipped), as the part shows it, i.e. written: with concert pitch on, the stored concert key is transposed back
+  with the instrument's interval flipped (`transposeKey`, as `cmdConcertPitchChanged`). Only instruments whose
+  transposition changes the key (chromatic not a multiple of 12). R2-RESPELL-7: 7 sharps or flats, write the
+  5-accidental key (Gould p. 252; K&G pp. 90, 117). R2-BB-TO-A / R2-A-TO-BB, not on a key R2-RESPELL-7 marked:
+  B♭ clarinets (ids `wind.reed.clarinet`, `.bflat`, `.a`, transposition -2) with 5+ sharps or 6+ flats, A
+  clarinets (-3) with 6+ of either (K&G pp. 89-90, 117, 209); bass and other clarinets are not offered the other
+  instrument. R2-RESPELL-6: instruments in A, D, G (chromatic mod 12 = 9, 2, 7) with 6 flats, in B♭, F, E♭ (10, 5, 3)
+  with 6 sharps (Gould p. 252). "Risky" on the first chord after the key signature. Kind `clarinetKey`.
+- String glissando (R3): bowed strings, the tuning in force (`tunedAt`: String Data, scordatura). R3-STRING-NAME: a
+  "sul X" text, X a note letter (the research notes list no German or Italian string names), naming no string of
+  the instrument (Gould p. 394; Adler p. 54), on the text's first chord. R3-CONTRARY: a violin or viola chord whose
+  notes' glissandos go up and down (Sevsay p. 39). R3-HARM-STRING: a glissando from or to a harmonic (diamond
+  notehead, or the harmonic circle, as the strings pass reads harmonics) with no string indication in force: "sul
+  X" / "sul I-IV", a text led by a roman numeral I-IV ("IV", "II sempre"), or a string number on the start note; in
+  force until an ord. / naturale / normale word (`N1_ORD_WORDS`) or the next indication (Gould p. 423). R3-HARM-ART:
+  an artificial harmonic (two notes, one a diamond) with a glissando on only one of them (Gould p. 424). No rule for
+  glissandos across strings or for the "gliss." label. Kind `stringGliss`.
+- Vocal notation (R4): voice staves (`R4_VOICE_IDS`, MusicXML `voice.*` but the kazoo; the name when there is no
+  id), each voice's chords and rests in order; a syllable's span is its chord and the chords without a lyric after
+  it, up to the next chord with one (rests passed over). R4-MELISMA-SLUR: some of them not tied continuations, no
+  rest before the last, and no slur from the syllable's chord to the last (Gould p. 435). R4-EXTENDER: a lyric whose
+  syllabic is single or end over more than one written note (its chord and the chords after it before a rest, ties
+  included) with no extender, i.e. `Lyrics::ticks()` 0 (MuseScore's melisma line) (Gould p. 447). R4-HYPHEN: a begin
+  or middle syllable with `ticks()` > 0, drawn as an extender (Gould p. 448). R4-TENOR-CLEF: a `voice.tenor` staff with
+  a treble clef (`ClefType::G`) instead of treble 8vb (Gould p. 433). The syllable's (the clef's first) chord is
+  marked. Kind `vocal`.
+- Vocal tessitura (R5, added to SPEC-r1r4 2026-10-11): voice parts with a central pitch (`R5_CENTRES` by voice id,
+  sounding as printed, Blatter pp. 314-319: soprano and boy soprano B♭4, mezzo-soprano A4, alto/contralto and
+  countertenor G4, tenor B3, baritone F3, bass D3; other voice ids not checked). Every staff and voice of the part,
+  each sung note's time in seconds (the tempo map, `secondsBetween`; ties merged, rests out, grace notes not counted)
+  at its sounding pitch, inside the band (central pitch ± 7 semitones, both ends inside: soprano E♭4-F5) or not.
+  Under 75 % inside (`R5_MIN_SHARE`, Blatter's 75-80 % at its lower end), every chord with notes outside is a "risky"
+  row giving the share (rounded down) and those notes are marked; trained singers may go beyond it (Blatter p. 380).
+  Kind `tessitura`.
+  Tests `malletChords`, `clarinetKey`, `stringGliss`, `vocalNotation`, `vocalTessitura` (r1r4-tests.mscx from
+  `tools/playability/gen_r1r4_tests.py`, cases in its docstring) and `r1r4OnOldFixtures` (none of these kinds on the older
+  fixtures, n1n2t-tests.mscx included). 52 pass, 1 skipped.
 - No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
   unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
   (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1

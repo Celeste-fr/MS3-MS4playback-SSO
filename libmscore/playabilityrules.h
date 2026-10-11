@@ -504,6 +504,47 @@ constexpr int LH_PIZZ_RUN_MAX = 5;                  // semitones, a perfect 4th
 // T4 flutter-tongue on double reeds (Adler p. 174; Kennan & Grantham p. 109; Sevsay p. 121; Blatter p. 80)
 constexpr const char* T4_FLUTTER_WORDS = "flz\\.?|flatterzunge|flatterz\\.|flutter[-\\s]?tongu(?:e|ed|ing)|frullato|fltg\\.?";
 
+//---------------------------------------------------------
+//   R1 mallet chords, R2 clarinet key choice, R3 string glissando, R4 vocal notation (SPEC-r1r4,
+//   owner-approved 2026-10-11; research/r1r2-notes.md, r3r4-notes.md). Every row "risky".
+//---------------------------------------------------------
+
+// R1 marimba, vibraphone, xylophone, glockenspiel (instrument ids; else the name when there is no id)
+constexpr const char* R1_MALLET_IDS = "^pitched-percussion\\.(marimba|vibraphone|xylophone|glockenspiel)(\\.|$)";
+constexpr const char* R1_MALLET_NAMES = "marimba|vibraphone|xylophone|glockenspiel";
+// R1-COUNT: more than 4 notes struck at one onset, one player, two mallets per hand
+// (Adler pp. 437-441; Blatter pp. 200, 204; Kennan & Grantham pp. 235-241; Sevsay pp. 147-153)
+constexpr int R1_MAX_NOTES = 4;
+constexpr int R1_MAX_PER_HAND = 2;
+// R1-SPAN: one hand's two mallets at most an octave apart (Kennan & Grantham p. 238; Sevsay p. 147)
+constexpr int R1_HAND_SPAN_MAX = 12;                // semitones; more is marked
+
+// R2 written key signature of a transposing part (Kennan & Grantham pp. 89-90, 117, 209; Gould p. 252)
+constexpr int R2_BB_TO_A_SHARPS = 5;                // B♭ clarinet: 5+ sharps -> A clarinet (K&G pp. 89-90)
+constexpr int R2_BB_TO_A_FLATS = 6;                 // B♭ clarinet: 6+ flats -> A clarinet (K&G pp. 117, 209)
+constexpr int R2_A_TO_BB = 6;                       // A clarinet: 6+ sharps or flats -> B♭ clarinet (K&G pp. 90, 117, 209)
+constexpr int R2_RESPELL_7 = 7;                     // 7 sharps / flats -> the 5-accidental key (Gould p. 252; K&G pp. 90, 117)
+constexpr int R2_RESPELL_6 = 6;                     // 6 on the wrong side for the instrument's key (Gould p. 252)
+
+// R3 string indications (Gould p. 394; Adler p. 54): "sul" + a note letter, or a roman numeral I-IV
+// leading the text ("IV", "II sempre"). The research notes list no German or Italian string names.
+constexpr const char* R3_STRING_LETTER = "\\bsul(?:la)?\\s+(?:the\\s+)?([A-G])(?![A-Za-z])";
+constexpr const char* R3_STRING_ROMAN = "^(IV|I{1,3})(?![A-Za-z])";
+
+// R4 voice staves: MusicXML ids voice.* (not the kazoo); tenor: voice.tenor (Gould p. 433: treble 8vb)
+constexpr const char* R4_VOICE_IDS = "^voice\\.(?!kazoo)";
+constexpr const char* R4_VOICE_NAMES = "\\b(voice|choir|chorus|soprano|mezzo|alto|contralto|countertenor|tenor|baritone|bass)\\b";
+constexpr const char* R4_TENOR_ID = "voice.tenor";
+// R5 tessitura (Blatter p. 380; central pitches Blatter pp. 314-319, sounding, as printed): most of the sung time within a
+// perfect 5th either side of the voice's central pitch; under R5_MIN_SHARE the notes outside are marked
+constexpr int R5_BAND = 7;                          // semitones either side, both ends inside
+constexpr double R5_MIN_SHARE = 0.75;               // Blatter's 75-80 %, the lower end
+struct VoiceCentre { const char* id; int pitch; int tpc; };        // the band's ends: tpc -1 / +1 (a 5th down / up)
+constexpr VoiceCentre R5_CENTRES[] = {
+      { "voice.soprano", 70, 12 }, { "voice.child", 70, 12 }, { "voice.mezzo-soprano", 69, 17 },
+      { "voice.alto", 67, 15 }, { "voice.countertenor", 67, 15 }, { "voice.tenor", 59, 19 },
+      { "voice.baritone", 53, 13 }, { "voice.bass", 50, 16 } };
+
 }     // namespace Playability
 }     // namespace Ms
 
