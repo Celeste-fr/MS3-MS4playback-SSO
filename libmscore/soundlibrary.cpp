@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <mutex>
 #include <set>
 
@@ -1222,7 +1223,7 @@ PartMix partMix(const Part* part, bool withSolo)
 //   routes
 //---------------------------------------------------------
 
-std::vector<Route> routes(const Score* score, const Library& library)
+std::vector<Route> routes(const Score* score, const Library& library, bool forLive)
       {
       std::vector<Route> result;
       int k = 0;
@@ -1251,17 +1252,26 @@ std::vector<Route> routes(const Score* score, const Library& library)
             if (li->kit && std::find(used.begin() + 1, used.end(), true) == used.end())
                   continue;
             std::vector<int> laneCount(patches.size(), 1);
-            if (library.varispeed && !li->kit) {
+            std::vector<std::vector<double>> fixed(patches.size());
+            const bool laned = library.varispeed && !li->kit;
+            if (laned) {
                   const LaneSettings ls = laneSettings(score, library);
-                  laneCount = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes).count;
+                  const Lanes l = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes, forLive);
+                  laneCount = l.count;
+                  fixed = l.fixed;
+                  fixed.resize(patches.size());
                   }
             for (int p = 0; p < int(patches.size()); ++p) {
                   if (p > 0 && (!used[p] || !available(*patches[p])))
                         continue;
-                  for (int lane = 0; lane < std::max(1, laneCount[size_t(p)]); ++lane) {
+                  const int count = std::max(1, laneCount[size_t(p)]);
+                  for (int lane = 0; lane < count; ++lane) {
                         if (k / 16 >= MAX_PORTS)
                               return result;
-                        result.push_back(Route { part, patches[p], k / 16, k % 16, p, lane });
+                        // (a lane's tuning: fixed; untuned without lanes; else it may vary)
+                        const double cents = lane < int(fixed[size_t(p)].size()) ? fixed[size_t(p)][size_t(lane)]
+                                             : !laned ? 0.0 : std::numeric_limits<double>::quiet_NaN();
+                        result.push_back(Route { part, patches[p], k / 16, k % 16, p, lane, cents });
                         ++k;
                         }
                   }
@@ -1493,7 +1503,7 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
 //---------------------------------------------------------
 
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
-            double toleranceCents, double tailSeconds, int maxLanes)
+            double toleranceCents, double tailSeconds, int maxLanes, bool fixedTuning)
       {
       Lanes out;
       out.count.assign(patches.size(), patches.empty() ? 0 : 1);
@@ -1575,12 +1585,36 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             int lastTrack { -1 };
             };
       std::vector<std::vector<Lane>> byPatch(patches.size());
+      // (fixedTuning: the patches whose lanes keep their tuning: those that don't bend)
+      std::vector<bool> fixed(patches.size(), false);
+      if (fixedTuning) {
+            const bool bend = Playback::on("tuning/pitchBend", score);
+            for (size_t p = 0; p < patches.size(); ++p)
+                  fixed[p] = !(bend && patches[p]->bendCents > 0);
+            }
       for (const Item& it : items) {
             std::vector<Lane>& lanes = byPatch[size_t(it.patch)];
             if (lanes.empty())
                   lanes.emplace_back();
             int chosen = -1;
             double cents = it.cents;
+            if (fixed[size_t(it.patch)]) {
+                  for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)
+                        if (!lanes[l].tuned || std::fabs(lanes[l].cents - it.cents) <= toleranceCents)
+                              chosen = l;
+                  if (chosen < 0) {
+                        chosen = int(lanes.size());
+                        lanes.emplace_back();
+                        }
+                  Lane& lane = lanes[size_t(chosen)];
+                  if (!lane.tuned) {
+                        lane.cents = it.cents;
+                        lane.tuned = true;
+                        }
+                  out.lane[it.note] = chosen;
+                  out.cents[it.note] = lane.cents;
+                  continue;
+                  }
             if (it.slurred) {                                                // legato: its lane, which glides
                   for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)
                         if (lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)
@@ -1614,6 +1648,34 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             lane.lastTrack = it.track;
             out.lane[it.note] = chosen;
             out.cents[it.note] = cents;
+            }
+      // (fixed: lane 0 the tuning nearest 0, then by distance, below first)
+      out.fixed.assign(patches.size(), std::vector<double>());
+      for (size_t p = 0; p < patches.size(); ++p) {
+            if (!fixed[p])
+                  continue;
+            if (byPatch[p].empty()) {                       // (no notes: its one lane untuned)
+                  out.fixed[p].push_back(0.0);
+                  continue;
+                  }
+            std::vector<int> order(byPatch[p].size());
+            for (size_t l = 0; l < order.size(); ++l)
+                  order[l] = int(l);
+            std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+                  const double ca = byPatch[p][size_t(a)].cents, cb = byPatch[p][size_t(b)].cents;
+                  return std::fabs(ca) != std::fabs(cb) ? std::fabs(ca) < std::fabs(cb) : ca < cb;
+                  });
+            std::vector<int> newIndex(order.size());
+            for (size_t l = 0; l < order.size(); ++l) {
+                  newIndex[size_t(order[l])] = int(l);
+                  out.fixed[p].push_back(byPatch[p][size_t(order[l])].cents);
+                  }
+            for (const Item& it : items)
+                  if (it.patch == int(p)) {
+                        auto nl = out.lane.find(it.note);
+                        if (nl != out.lane.end())
+                              nl->second = newIndex[size_t(nl->second)];
+                        }
             }
       for (const auto& t : tiedTo) {
             auto l = out.lane.find(t.second);

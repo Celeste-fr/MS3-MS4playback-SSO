@@ -1450,7 +1450,86 @@ bool setMaxVoices(QByteArray& program, int maxVoices, int* before)
       return false;
       }
 
+//---------------------------------------------------------
+//   the instrument's Tune (Instrument header › Tune): in the program's own public data, after its name
+//   (u32 length, UTF-16): f64 size of samples, u8 MIDI transpose, f32 Volume, f32 Pan, f32 Tune as a
+//   frequency ratio (1: 0 cents), then the velocity range and the key range (a byte each end), as
+//   tools/soundlibraries/extract_library_files.py reads an .nki's program. The same in Kontakt's states of SSO's
+//   All techniques (Violins 1, Violas, Celli) and Performance patches (2026-10-10). Measured (VM, real library, kthost):
+//   with the ratio 2^(+-50/1200) written there Kontakt 8 plays Long, Spiccato and Short 0.5 that many cents
+//   away (Violins 1 Long -50.1 / +50.1), levels within 0.34 dB, attacks 6-15 ms later (down) / earlier (up):
+//   Kontakt resamples, as varispeed does
+//---------------------------------------------------------
+
+int tuneOffset(const QByteArray& pub)
+      {
+      if (pub.size() < 4)
+            return -1;
+      const quint32 chars = get32(pub, 0);
+      if (chars > 1000)
+            return -1;
+      const int nameEnd = 4 + 2 * int(chars);
+      const int at = nameEnd + 17;
+      if (pub.size() < at + 8)
+            return -1;
+      auto f32 = [&](int i) { return qFromLittleEndian<float>(reinterpret_cast<const uchar*>(pub.constData() + i)); };
+      const float volume = f32(nameEnd + 9);
+      const float tune = f32(at);
+      const uchar v0 = uchar(pub.at(at + 4)), v1 = uchar(pub.at(at + 5)), k0 = uchar(pub.at(at + 6)), k1 = uchar(pub.at(at + 7));
+      const bool ranges = v0 <= v1 && v1 <= 127 && k0 <= k1 && k1 <= 127;
+      return ranges && volume >= 0.0f && volume <= 10.0f && tune >= 0.12f && tune <= 8.1f ? at : -1;
+      }
+
+// the program's Tune set to ratio (true: changed); *before: what it was in cents (NaN: none found)
+bool setTune(QByteArray& program, float ratio, double* before)
+      {
+      *before = std::nan("");
+      Struct st;
+      if (!st.read(program))
+            return false;
+      const int at = tuneOffset(st.pub);
+      if (at < 0)
+            return false;
+      const float was = qFromLittleEndian<float>(reinterpret_cast<const uchar*>(st.pub.constData() + at));
+      *before = 1200.0 * std::log2(double(was));
+      if (was == ratio)
+            return false;
+      QByteArray b(4, 0);
+      qToLittleEndian<float>(ratio, reinterpret_cast<uchar*>(b.data()));
+      st.pub.replace(at, 4, b);
+      program = st.body();
+      return true;
+      }
+
 } // namespace
+
+QByteArray withTune(const QByteArray& component, double cents, QString* error, double* before)
+      {
+      QString dummy;
+      if (!error)
+            error = &dummy;
+      double was = std::nan("");
+      bool changed = false;
+      const float ratio = float(std::pow(2.0, cents / 1200.0));
+      const QByteArray out = editSlotProgram(component, [&](QByteArray& program) {
+            return setTune(program, ratio, &was);
+            }, error, &changed);
+      if (before)
+            *before = was;
+      if (!out.isEmpty() && std::isnan(was))
+            *error = "the program has no Tune where Kontakt keeps it";
+      return out;
+      }
+
+double tune(const QByteArray& program)
+      {
+      Struct st;
+      if (!st.read(program))
+            return std::nan("");
+      const int at = tuneOffset(st.pub);
+      return at < 0 ? std::nan("") : 1200.0 * std::log2(double(qFromLittleEndian<float>(
+                                                reinterpret_cast<const uchar*>(st.pub.constData() + at))));
+      }
 
 QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& set, QString* error,
                             int* valuesSet)

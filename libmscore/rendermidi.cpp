@@ -4781,7 +4781,7 @@ void MidiRenderer::updateState()
             if (library) {
                   const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
                   const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
-                  const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
+                  const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : routes) {
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
@@ -4866,7 +4866,8 @@ void MidiRenderer::updateState()
                         bool tuned = false;           // (a part with no microtones: no bends either)
                         if (library->varispeed && !r.instrument->kit) {
                               const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *library);
-                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes);
+                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes,
+                                                                          forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;

@@ -420,9 +420,13 @@ struct Route {
       int channel { 0 };
       int patch { 0 };                    // its index in the main patch's patches()
       int lane { 0 };                     // a copy of the patch for another tuning (Library::varispeed)
+      double cents { 0 };                 // the copy's tuning when it never changes (forLive: Lanes::fixed); NaN: it
+                                          // varies (a lane retuned once silent, a bending patch's lanes)
       };
 
-std::vector<Route> routes(const Score* score, const Library& library);
+// forLive: the routes of Live's tracks (Create Live Set, Live's clips): a copy per tuning, each at a fixed tuning
+// (lanes(…, fixedTuning)), which a copy's Kontakt keeps as its Tune (KontaktSetup::withTune): Live can't varispeed
+std::vector<Route> routes(const Score* score, const Library& library, bool forLive = false);
 
 //---------------------------------------------------------
 //   PartMix
@@ -463,11 +467,18 @@ struct Lanes {
       std::vector<int> count;
       std::map<const Note*, int> lane;
       std::map<const Note*, double> cents;          // the tuning each note plays at (its lane's)
+      std::vector<std::vector<double>> fixed;       // per patch, per lane: its tuning (cents) when it never changes
+                                                    // (fixedTuning), NaN where it does; empty: none fixed
       };
 // (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
 // releaseMs ([tuning] waitForRelease); < 0: plus the note's laneRing. maxLanes <= 0: memoryMaxLanes)
+// fixedTuning (Live: no varispeed there; the owner, 2026-10-10: "I will not accept losing microtones"): a patch that
+// doesn't bend ([tuning] pitchBend, its bendCents) gets a lane per tuning (within the tolerance), never retuned: a
+// note goes to the lane at its tuning, a slurred one too (an All techniques patch plays each note's own attack: no
+// transition is lost), however many that takes (no memory maximum: a tuning without its lane would play out of
+// tune); lane 0 the tuning nearest 0 cents, then by distance from it (below first). A bending patch's lanes as without
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
-            double toleranceCents, double tailSeconds, int maxLanes = 0);
+            double toleranceCents, double tailSeconds, int maxLanes = 0, bool fixedTuning = false);
 
 //---------------------------------------------------------
 //   LaneSettings
