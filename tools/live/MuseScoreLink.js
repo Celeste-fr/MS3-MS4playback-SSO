@@ -108,13 +108,15 @@ outlets = 10;     // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2:
                   // 6: the lanes to keep in the Live Set ([pattr Lanes]),
                   // 7: "set msl_m<track id>" to the [receive] that plays MuseScore's notes for a clip tab,
                   // 8: OSC to the MuseScore Envelopes script ([udpsend 127.0.0.1 9005]: what is kept in the set),
-                  // 9: the velocity shaper ("bias <ticks>", "log 0/1") and the carriers' gate ("gate 1/2": Carriers)
+                  // 9: the velocity shaper ("bias <ticks>", "log 0/1"), the carriers' gate ("gate 1/2": Carriers) and
+                  //    the written clips' timing ("tgate 1/2", "tdef <on> <off>", "tbias <ticks>": Written clips)
 
-var PROTOCOL = 8;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+var PROTOCOL = 9;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
                                         // 5: the tracks' parameters and the clips' places (automation lanes of any track);
                                         // 6: an arrangement clip's place in the song, Live's tempo reported as it changes;
                                         // 7: velocity curves of clip tabs, kept through the MuseScore Envelopes script;
-                                        // 8: carriers converted only on a track holding a MuseScore clip (Carriers)
+                                        // 8: carriers converted only on a track holding a MuseScore clip (Carriers);
+                                        // 9: written clips, their timing put back by the patcher (Written clips)
 var CLIP_PREFIX = "MuseScore: ";        // liveclips.cpp clipName
 var CARRIER_NAMES_EVERY = 5;            // s: the clips' names read again (a rename) without a change of their ids
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
@@ -276,6 +278,7 @@ function bang() {
             keptChanged("lanes");
       paramsCheck(!!saved);
       velTask = new Task(velFill, this);
+      timTask = new Task(timFill, this);
       velObserve();
       velChanged();
       carriersCheck(true);
@@ -301,6 +304,7 @@ function beat() {
             elect();
       paramsCheck();
       velFill();
+      timFill();
       carriersCheck(false);
       }
 
@@ -411,6 +415,8 @@ function anything() {
             }
       if (messagename === "lanes")                            // ([pattr Lanes]: the value the Live Set kept)
             return restoreSaved(a);
+      if (messagename === "timing")                           // ([pattr Timing]: written clips' timing, the set kept)
+            return timSet(a);
       if (messagename === "posvalue")                         // ([snapshot~]: a "pos" probe's answer)
             return answerPos(num(a[0]));
       if (messagename === "msl_keep") {                       // (the hub got a track's kept values from the script)
@@ -2607,7 +2613,7 @@ function velChanged() {
 function velObserve() {
       if (typeof LiveAPI === "undefined" || !me.track)
             return;
-      var cb = function() { velSig = ""; if (velTask) velTask.schedule(0); };
+      var cb = function() { velSig = ""; if (velTask) velTask.schedule(0); if (timTask) timTask.schedule(0); };
       try {
             var props = [["id " + me.track, "playing_slot_index"], ["id " + me.track, "fired_slot_index"], ["live_set", "is_playing"]];
             for (var i = 0; i < props.length; ++i) {
@@ -2827,6 +2833,158 @@ function carriersCheck(force) {
             }
       }
 
+//---------------------------------------------------------
+//   written clips (protocol 9; libmscore/livetiming.h; the owner, 2026-10-11: "Live clips hold the WRITTEN notes -- on the
+//   grid, exact written lengths, rests -- never the played timing", the timing "applied at PLAYBACK", "a device is fine")
+//
+//   A track whose clips hold written notes has a timing record: the plain set's technique tracks get it from Create Live
+//   Set in the device's saved data ([pattr Timing], LiveSetWriter::linkBlob): "msl-timing" 1 lookahead on off n, then per
+//   exception start end pitch on off (start / end: the written note's song time in UNITS; ms). The track's Track Delay is
+//   lookahead ms earlier than its own (Live's lookahead); the patcher delays every note-on by `on` ms and every note-off
+//   by `off` ms (the defaults), and the exceptions' by theirs, so each note sounds where MuseScore plays it. Controllers
+//   (a technique's switch: Live's Bank / Sub at a clip's start) go with the next note-on.
+//   The patcher reads the delays where it reads the velocity shaper's codes: [buffer~ ---mslt] (2 channels: a note-on's
+//   code, a note-off's), one cell a tick of song time (480 a beat), cell = tick mod VEL_RING, code = 1 + ms (0: the
+//   default, "tdef on off"); this script fills it every second from the song position on, like the velocity ring, while
+//   the track plays the arrangement (its clips are at their song times), and opens the patcher's timing gates ("tgate 1";
+//   "tgate 2": every message straight on, as without a record). Each exception's code goes into its own cell and the one
+//   on each side (a note read a tick off still finds it; a cell's own note wins).
+//   Where the patcher reads (TIM_SEES_TRACK_DELAY): with a Track Delay of -L ms Live sends the track's notes L ms before
+//   their song time; the song position the patcher sees then is taken to be L ms before the note's (the cells are read
+//   L ms of ticks ahead: "tbias", with the velocity shaper's one signal vector). Only Live can confirm it (LIVE.md ›
+//   Written clips › What only Live can show); false: the cells are read at the song position itself.
+//---------------------------------------------------------
+
+var TIM_SEES_TRACK_DELAY = true;
+var timSaved = null;          // copy: the record the set kept ([pattr Timing])
+var timRec = null;            // copy: the record in force
+var timGate = 2;              // copy: the gates as last set (1 through the delays, 2 straight: the patcher's initial)
+var timDef = "0 0";           // copy: "tdef" as last sent (the patcher's initial)
+var timBias = null;
+var timSized = false;
+var timTask = null;           // copy: the ring at once (Live's transport started, the track's clip changed: velObserve)
+
+// the record's atoms -> { look, on, off, ex: [{ start, end, pitch, on, off }] }; null: not a record
+function timParse(a) {
+      if (!a || str(a[0]) !== "msl-timing" || num(a[1]) !== 1)
+            return null;
+      var r = { look: num(a[2]), on: num(a[3]), off: num(a[4]), ex: [] };
+      var n = num(a[5]);
+      for (var i = 0; i < n; ++i) {
+            var k = 6 + 5 * i;
+            if (k + 4 >= a.length)
+                  break;
+            r.ex.push({ start: num(a[k]), end: num(a[k + 1]), pitch: num(a[k + 2]), on: num(a[k + 3]), off: num(a[k + 4]) });
+            }
+      return r;
+      }
+
+// the codes of ticks t0 … t0 + n - 1 of song time: { on: [n], off: [n] } (code 1 + ms; 0 the default)
+function timCells(rec, t0, n) {
+      var on = [], off = [], i;
+      for (i = 0; i < n; ++i) {
+            on.push(0);
+            off.push(0);
+            }
+      if (!rec)
+            return { on: on, off: off };
+      var per = UNITS / TICKS;                    // units a tick
+      var put = function(cells, own, units, code) {
+            var c = Math.round(units / per) - t0;
+            for (var d = -1; d <= 1; ++d) {
+                  var k = c + d;
+                  if (k < 0 || k >= n)
+                        continue;
+                  if (d === 0) {
+                        cells[k] = code;
+                        own[k] = true;
+                        }
+                  else if (!own[k])
+                        cells[k] = code;
+                  }
+            };
+      var ownOn = [], ownOff = [];
+      // (the neighbours first, so that a cell's own note wins: by start, each note's own cell after the one before's)
+      for (i = 0; i < rec.ex.length; ++i) {
+            var e = rec.ex[i];
+            put(on, ownOn, e.start, 1 + e.on);
+            put(off, ownOff, e.end, 1 + e.off);
+            }
+      return { on: on, off: off };
+      }
+
+function timRingName() { return prefix.replace(/mslp$/, "mslt"); }
+
+function timSet(a) {
+      timSaved = timParse(a);
+      timChanged();
+      }
+
+function timChanged() {
+      timRec = timSaved;
+      timFill();
+      }
+
+// the ticks the cells are read ahead of the song position the patcher sees
+function timBiasTicks(rec, bpm) {
+      var b = velSr > 0 ? velVs / velSr * bpm / 60 * TICKS : 0;
+      if (rec && TIM_SEES_TRACK_DELAY)
+            b += rec.look / 1000 * bpm / 60 * TICKS;
+      return b;
+      }
+
+// the ring from the song position on (each second, and at once on a change)
+function timFill() {
+      if (!me.track || !prefix)
+            return;
+      var rec = timRec;
+      var arrangement = false;
+      if (rec) {
+            var tr = new LiveAPI("id " + me.track);
+            arrangement = num(tr.get("playing_slot_index")) < 0 && !num(tr.get("back_to_arranger"));
+            }
+      var gate = arrangement ? 1 : 2;
+      if (gate !== timGate) {
+            timGate = gate;
+            outlet(9, "tgate", gate);
+            }
+      var def = rec ? rec.on + " " + rec.off : "0 0";
+      if (def !== timDef) {
+            timDef = def;
+            outlet(9, "tdef", rec ? rec.on : 0, rec ? rec.off : 0);
+            }
+      if (!arrangement)
+            return;
+      var song = new LiveAPI("live_set");
+      var nowB = num(song.get("current_song_time"));
+      var bpm = liveTempo();
+      var bias = timBiasTicks(rec, bpm);
+      if (bias !== timBias) {
+            timBias = bias;
+            outlet(9, "tbias", bias);
+            }
+      var b = new Buffer(timRingName());
+      if (!timSized) {
+            b.send("sizeinsamps", VEL_RING, 2);
+            timSized = true;
+            }
+      var t0 = Math.floor(nowB * TICKS);
+      var cells = Math.min(VEL_RING / 2, Math.ceil(VEL_AHEAD_S * bpm / 60 * TICKS + bias) + 2);
+      var c = timCells(rec, t0, cells);
+      var start = t0 % VEL_RING;
+      for (var ch = 1; ch <= 2; ++ch) {
+            var vals = ch === 1 ? c.on : c.off;
+            for (var i = 0; i < cells; i += POKE) {
+                  var part = vals.slice(i, Math.min(cells, i + POKE));
+                  var at = (start + i) % VEL_RING;
+                  var first = Math.min(part.length, VEL_RING - at);
+                  b.poke(ch, at, part.slice(0, first));
+                  if (first < part.length)
+                        b.poke(ch, 0, part.slice(first));
+                  }
+            }
+      }
+
 // (Node tests)
 if (typeof module !== "undefined")
       module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,
@@ -2839,11 +2997,13 @@ if (typeof module !== "undefined")
                          velClipAtoms: velClipAtoms, velTrack: velTrack, velTrackAtoms: velTrackAtoms, velFill: velFill,
                          velClipTime: velClipTime, velGrid: velGrid, chunkAtoms: chunkAtoms, beat: beat,
                          carriersCheck: carriersCheck,
+                         timParse: timParse, timCells: timCells, timSet: timSet, timFill: timFill,
+                         timBiasTicks: timBiasTicks,
                          VEL_RING: VEL_RING, KEEP_PACKET: KEEP_PACKET,
                          decodeSaved: decodeSaved, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,
                                         edits: edits, slots: slots, bases: bases, waiting: waiting, prefix: prefix,
                                         pendingParams: pendingParams, saved: saved, keptByScript: keptByScript,
                                         velRec: velRec, velReady: velReady, velAsks: velAsks,
-                                        carrierGate: carrierGate };
+                                        carrierGate: carrierGate, timRec: timRec, timGate: timGate };
                                } };
