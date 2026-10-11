@@ -226,6 +226,10 @@ struct Want {
       // a slurred note shorter than its held articulation's peak (playback setting slurs/quick): 0 the held one,
       // 1 a "tenuto" short (SSO's Short 1.0), 2 the "espressivo" long (SSO's Long (Rachm.)); choose()
       int slurQuick { 0 };
+      // a slurred note (playback setting slurs/performance, not under "non performance"): as under staff text
+      // "performance" where that gives a Performance legato with measured attacks (the string sections'), and then
+      // without [slurs] quick's swap; choose()
+      bool slurPerformance { false };
       };
 
 //---------------------------------------------------------
@@ -391,9 +395,10 @@ const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector
 // the dynamics CC value for a patch other than the held note's (the owner's check of 2026-09-28:
 // Violas' All techniques Long 10 dB over the Performance legato at pp): the value at which the
 // patch's own long (longValue) is as loud as the held note at cc; -1: a curve missing or not on
-// the controller
+// the controller. By ear where both are measured so (as calibratedVelocity), at the pitch's curves where measured.
+// [levels] calibrated plays a Performance legato note so (rendermidi.cpp, performanceLevel)
 int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
-                         const QString& refPatch, int refValue, int cc);
+                         const QString& refPatch, int refValue, int cc, int pitch = -1);
 // a technique on velocity ([levels] calibrated): the velocity at which it is db louder than the held note
 // (refPatch, refValue) at the dynamics CC value cc; -1: a curve missing or the technique not on velocity
 // (pitch: the note's, for a technique measured at several pitches; -1: its one curve)
@@ -544,12 +549,15 @@ struct TextState {
       bool tremolo { false };             // trem. / flz.
       bool harmonics { false };
       QStringList modifiers;
+      // "non performance" (until "performance"): slurred notes stay off the Performance patch with slurs/performance
+      // on ("ord." doesn't end it: it ends techniques, and this is the absence of one)
+      bool performanceOff { false };
       // the level of the text that set the technique (Inspector, articulation.h MarcatoLevel), dB: until the next
       // text that changes the technique
       double db { 0.0 };
       bool sameTechnique(const TextState& o) const {
             return pizzicato == o.pizzicato && colLegno == o.colLegno && tremolo == o.tremolo && harmonics == o.harmonics
-                   && modifiers == o.modifiers;
+                   && modifiers == o.modifiers && performanceOff == o.performanceOff;
             }
       };
 

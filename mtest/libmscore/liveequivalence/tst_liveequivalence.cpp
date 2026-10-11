@@ -56,6 +56,7 @@
 #include "mscore/soundlibraryhost.h"
 #include "mscore/playbacksettingswidget.h"
 #include "libmscore/playbacksettings.h"
+#include "libmscore/tuning.h"
 #include <QDoubleSpinBox>
 #include <QTreeWidget>
 #include "mtest/testutils.h"
@@ -103,6 +104,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetReadBack();
       void plainSetTrackDelays();
       void delayedTrackLevel();
+      void livePerformanceLevel();
       void liveTracksJson();
       void dumpEvents();
       void playbackSettingsWidget();
@@ -2099,6 +2101,171 @@ void TestLiveEquivalence::delayedTrackLevel()
       }
 
 //---------------------------------------------------------
+//   livePerformanceLevel
+//    [slurs] performance with [levels] calibrated (2026-10-10): the Performance legato's notes' CC1 mapped to the
+//    held Long's loudness (straight test curves: Long -45 + 0.2 x dB, Performance -40 + 0.1 x: 2 x - 50) reach
+//    Live's clips as MuseScore renders them (per route: the notes, the CC1 values in order) and the plain set's
+//    CC1 lanes (each calibrated value a point)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::livePerformanceLevel()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setDynamicsCalibration(nullptr); SoundLib::setCurrent(nullptr);
+                                Playback::setIniValuesForTest({}); } } reset;
+      auto line = [](double a, double b) {
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = "controller";
+            for (int x : { 16, 32, 48, 64, 80, 96, 112, 127 }) {
+                  c.points.push_back({ x, a + b * x });
+                  c.perceived.push_back({ x, a + b * x });
+                  }
+            return c;
+            };
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal->setCurve("Violin", 1, line(-45, 0.2));
+      cal->setCurve("Violin - Performance", 20, line(-40, 0.1));
+      SoundLib::setDynamicsCalibration(cal);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+
+      // the CC1 in force at each note-on of the Performance patch (the slurred C5's), per render
+      int performancePatch = -1;
+      auto performanceValues = [&performancePatch](const EventMap& ev) {
+            std::set<int> out;
+            std::map<int, int> inForce;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch())
+                        continue;
+                  const int route = e.extPort() * 16 + e.extChannel();
+                  if (e.type() == ME_CONTROLLER && e.controller() == 1)
+                        inForce[route] = e.value();
+                  else if (e.type() == ME_NOTEON && e.velo() > 0) {
+                        if (e.pitch() == 72)
+                              performancePatch = e.libraryPatch();
+                        if (e.libraryPatch() == performancePatch && inForce.count(route))
+                              out.insert(inForce[route]);
+                        }
+                  }
+            return out;
+            };
+
+      // uncalibrated first: the values the calibration maps
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" } });
+      EventMap plain;
+      score->renderMidi(&plain, false, true, SynthesizerState());
+      const std::set<int> plainValues = performanceValues(plain);
+      QVERIFY(performancePatch >= 0);
+      QVERIFY(!plainValues.empty());
+
+      Playback::setIniValuesForTest({ { "levels/calibrated", "1" }, { "slurs/performance", "1" } });
+      score->setPlaylistDirty();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const std::set<int> calibrated = performanceValues(events);
+      QVERIFY(!calibrated.empty());
+      for (int v : plainValues) {
+            bool found = false;
+            for (int d : { -1, 0, 1 })
+                  found |= calibrated.count(qBound(1, 2 * v - 50 + d, 127)) > 0;
+            QVERIFY2(found, qPrintable(QString("CC1 %1 not mapped to %2").arg(v).arg(2 * v - 50)));
+            }
+
+      // Live's clips: per route the notes and the CC1 values in order, as rendered
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl);
+      std::map<QString, QStringList> fromEvents, fromClips;
+      std::map<QString, std::vector<std::pair<int, int>>> cc1;            // route -> (units, value)
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch())
+                  continue;
+            const QString key = QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1);
+            if (e.type() == ME_NOTEON && e.velo() > 0)
+                  fromEvents[key] << QString("%1 %2").arg(e.pitch()).arg(e.velo());
+            else if (e.type() == ME_CONTROLLER && e.controller() == 1) {
+                  std::vector<std::pair<int, int>>& v = cc1[key];
+                  const int at = tl.units(te.first);
+                  if (!v.empty() && v.back().first == at)
+                        v.back().second = e.value();
+                  else
+                        v.push_back({ at, e.value() });
+                  }
+            }
+      auto values = [](const std::vector<std::pair<int, int>>& v) {
+            QStringList out;
+            for (const auto& p : v)
+                  if (out.isEmpty() || out.last() != QString::number(p.second))
+                        out << QString::number(p.second);
+            return out.join(' ');
+            };
+      for (const auto& c : cc1)
+            fromEvents[c.first] << "cc1: " + values(c.second);
+      for (const LiveClips::Track& c : clips) {
+            std::vector<std::pair<int, int>> carrier;
+            std::vector<LiveClips::Note> notes = c.notes;
+            std::sort(notes.begin(), notes.end());
+            for (const LiveClips::Note& n : notes) {
+                  if (n.pitch < LiveClips::CARRIER_LOW)
+                        fromClips[c.key] << QString("%1 %2").arg(n.pitch).arg(n.velocity);
+                  else if (n.pitch == LiveClips::carrierPitch(1))
+                        carrier.push_back({ n.start, LiveClips::carrierValue(n.pitch, n.velocity) });
+                  }
+            if (!carrier.empty())
+                  fromClips[c.key] << "cc1: " + values(carrier);
+            }
+      for (auto& r : fromEvents)
+            r.second.sort();
+      for (auto& r : fromClips)
+            r.second.sort();
+      for (const auto& r : fromEvents)
+            QVERIFY2(fromClips[r.first] == r.second, qPrintable(r.first + ": MuseScore " + r.second.join(", ") + " / Live "
+                                                               + fromClips[r.first].join(", ")));
+
+      // the plain set: each calibrated value a point of a CC1 lane
+      score->setPlaylistDirty();
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      EventMap chunked;
+      for (int utick = 0;;) {
+            const MidiRenderer::Chunk c = r.getChunkAt(utick);
+            if (!c)
+                  break;
+            r.renderChunk(c, &chunked, ctx);
+            utick = c.utick2();
+            }
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, chunked, tl);
+      std::set<int> lanes;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                        for (const PlainLiveSet::Lane& lane : k.lanes)
+                              if (lane.cc == 1)
+                                    for (const auto& pt : lane.points)
+                                          lanes.insert(pt.second);
+      for (int v : calibrated)
+            QVERIFY2(lanes.count(v), qPrintable(QString("CC1 %1 not in the plain set's lanes").arg(v)));
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   liveTracksJson
 //    the metaTag "liveTracks": left out when empty, the same after a round trip
 //---------------------------------------------------------
@@ -2255,9 +2422,11 @@ void TestLiveEquivalence::dumpEvents()
             QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
             f.write((m.second.join("\n") + "\n").toUtf8());
             }
-      // the written notes (notes.txt: "part|seconds|end|pitch|bar|slur", slur: the index of the slur it lies under,
-      // -1 none; tied notes once) and the bars' starts (bars.txt), for in-context levels per slurred group
+      // the written notes (notes.txt: "part|seconds|end|pitch|bar|slur|cents", slur: the index of the slur it lies under,
+      // -1 none; cents: its playback tuning; tied notes once) and the bars' starts (bars.txt), for in-context levels per
+      // slurred group and to find each microtonal note's route
       {
+            ScoreTuningScope tuningScope(score);
             QStringList bars, notes;
             for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
                   bars << QString::number(score->utick2utime(m->tick().ticks()), 'f', 6);
@@ -2286,9 +2455,9 @@ void TestLiveEquivalence::dumpEvents()
                                     while (last->tieFor() && last->tieFor()->endNote())
                                           last = last->tieFor()->endNote();
                                     const int end = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks();
-                                    notes << QString("%1|%2|%3|%4|%5|%6").arg(c->part()->partName())
+                                    notes << QString("%1|%2|%3|%4|%5|%6|%7").arg(c->part()->partName())
                                              .arg(score->utick2utime(tick), 0, 'f', 6).arg(score->utick2utime(end), 0, 'f', 6)
-                                             .arg(n->ppitch()).arg(bar).arg(slur);
+                                             .arg(n->ppitch()).arg(bar).arg(slur).arg(playbackTuning(n), 0, 'f', 2);
                                     }
                               }
                         }

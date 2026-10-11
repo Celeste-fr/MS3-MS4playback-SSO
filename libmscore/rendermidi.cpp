@@ -1278,8 +1278,57 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return quickLevel && c && c.swapped
                                ? c.articulation->quickLevelAt(note->ppitch(), SoundLib::noteSeconds(note) * 1000) : 0.0;
                         };
+                  // a Performance legato note (attacks listed: slurs/performance or staff text "performance") with
+                  // [levels] calibrated: on its dynamics CC, the value at which its patch sounds as loud as the part's
+                  // held note at the value in force (both measured: dynamics.json, by ear where measured;
+                  // SoundLib::calibratedController), for each value 0 … 127; empty: not calibrated
+                  std::map<std::pair<const SoundLib::Articulation*, int>, std::shared_ptr<const std::vector<int>>> performanceMaps;
+                  auto performanceLevel = [&](const Note* note, const SoundLib::Choice& c) {
+                        std::shared_ptr<const std::vector<int>> none;
+                        if (!c || !libHeld || c.articulation->attacks.empty() || library->dynamicsCC < 0
+                            || library->dynamicsCC == CTRL_EXPRESSION)
+                              return none;
+                        const std::pair<const SoundLib::Articulation*, int> key { c.articulation, note->ppitch() };
+                        auto m = performanceMaps.find(key);
+                        if (m != performanceMaps.end())
+                              return m->second;
+                        auto table = std::make_shared<std::vector<int>>(128, -1);
+                        for (int x = 1; x < 128; ++x)
+                              (*table)[x] = SoundLib::calibratedController(*cal, libPatches[c.patch]->name, c.articulation->value,
+                                                                          libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                          x, note->ppitch());
+                        if ((*table)[1] < 0)
+                              table.reset();
+                        else
+                              (*table)[0] = 0;
+                        performanceMaps[key] = table;
+                        return std::shared_ptr<const std::vector<int>>(table);
+                        };
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
                         const double db = levelOf(note) + quickDb(note, c);
+                        const std::shared_ptr<const std::vector<int>> performance = velocity > 0 ? nullptr : performanceLevel(note, c);
+                        if (performance) {
+                              // its own level on top: louder along its own curve from the calibrated value, softer by
+                              // CC11 (a plain volume on SSO's Performance patches: measured 2026-10-02, HANDOFF.md › Legato level balance)
+                              const SoundLib::DynamicsCurve* ownCurve = cal->curve(libPatches[c.patch]->name, c.articulation->value);
+                              SoundLib::DynamicsCurve own = ownCurve ? ownCurve->atPitch(note->ppitch()) : SoundLib::DynamicsCurve();
+                              const double up = db > 0 ? db : 0.0;
+                              LibLevel l;
+                              l.controller = library->dynamicsCC;
+                              l.fallback = Ms4::expressionLevel(dynLevel);
+                              l.map = [performance, own, up](int x) {
+                                    if (x <= 0)
+                                          return x;
+                                    int y = (*performance)[qBound(0, x, 127)];
+                                    if (up > 0)
+                                          y = own.points.size() < 2 ? MarcatoLevel::velocity(y, up) : qMax(y, own.raise(y, up));
+                                    return qBound(1, y, 127);
+                                    };
+                              if (db < 0)
+                                    l.volumeDb = db;
+                              libLevels[note] = l;
+                              return;
+                              }
                         if (db == 0.0 || !c)
                               return;
                         const SoundLib::DynamicsCurve* ownCurve = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
@@ -1523,8 +1572,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
                   // articulation with a measured onset: how early it may start (utick). The note just before on its
                   // track, when it plays on the same patch, keeps keepMs of its length as played; not before the
-                  // chunk or the pass; -1: not at all (grace notes or an arpeggio before it)
-                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c) -> int {
+                  // chunk or the pass; -1: not at all (grace notes or an arpeggio before it). gapMs: how long before
+                  // this note's note-on the note before ends (a Performance re-attack's reattackGap, performanceNote):
+                  // it keeps keepMs after that (without, Whence's slurs' last sixteenths on Violas - Performance
+                  // sounded 1 ms: 136 ms written, the next attack 87.5 ms early, the gap 54 ms)
+                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, double gapMs) -> int {
                         Chord* ch = note->chord();
                         if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
                               return -1;
@@ -1547,7 +1599,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.patch != c.patch)
                                     continue;
-                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep);
+                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep + gapMs / 1000.0);
                               return std::max(earliest, cap);
                               }
                         return earliest;
@@ -1739,7 +1791,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                                    libPatches[libChoice.patch]->name, oa->name,
                                                                    n->ppitch(), byPitch ? oa->onsetAt(n->ppitch())
                                                                                                 : oa->onsetMedian()));
-                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
+                                    // (a Performance re-attack: the note before ends its gap before this note-on,
+                                    // so it keeps keepMs after that gap)
+                                    const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
+                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice, gapMs) : -1;
                                     const double earlyMs = onsetMs * libOnsetEarly / 100.0;
                                     if (earliest >= 0 && earlyMs > 0) {
                                           config.libEarly = earlyMs / 1000.0;

@@ -26,6 +26,7 @@
 #include "libmscore/fraction.h"
 #include "libmscore/fifo.h"
 #include "libmscore/midisync.h"
+#include "libmscore/playstart.h"
 
 #include "audio/midi/event.h"
 #include "audiodrivers/driver.h"
@@ -188,6 +189,7 @@ class Seq : public QObject, public Sequencer {
       int endUTick;                       // the final tick of midi events collected by collectEvents()
 
       EventMap::const_iterator playPos;   // moved in real time thread
+      PlayStart _playStart;               // where playback was started (setPos): the pre-roll before it, realtime thread
       EventMap::const_iterator countInPlayPos;
       EventMap::const_iterator guiPos;    // moved in gui thread
 

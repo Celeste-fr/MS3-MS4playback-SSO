@@ -796,9 +796,28 @@ static Choice chooseSlurred(const std::vector<const LibInstrument*>& patches, co
       return held;
       }
 
+// a slurred note with slurs/performance (Want::slurPerformance): as under staff text "performance" when the note
+// would otherwise play a plain technique (no modifier: a muted or sul pont. slur keeps its own) and "performance" then
+// gives a legato articulation with measured attacks (<Articulation attacks>: SSO's five string sections' Performance
+// legato; the solo strings' and the winds' have none and keep [slurs] quick). No swap: the Performance legato is the
+// quick technique (the owner, 2026-10-10)
+static Choice choosePerformance(const std::vector<const LibInstrument*>& patches, const Want& want, const Choice& held)
+      {
+      if (!want.slurPerformance || !held || !held.articulation->modifiers.isEmpty() || want.modifiers.contains("performance"))
+            return Choice();
+      Want w = want;
+      w.modifiers.append("performance");
+      const Choice c = chooseBases(patches, w);
+      if (!c || c.base != "legato" || !c.articulation->modifiers.contains("performance") || c.articulation->attacks.empty())
+            return Choice();
+      return c;
+      }
+
 Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want)
       {
-      return chooseSlurred(patches, want, chooseBases(patches, want));
+      const Choice held = chooseBases(patches, want);
+      const Choice performance = choosePerformance(patches, want, held);
+      return performance ? performance : chooseSlurred(patches, want, held);
       }
 
 //---------------------------------------------------------
@@ -1107,13 +1126,19 @@ std::shared_ptr<const DynamicsCalibration> dynamicsCalibration()
       }
 
 int calibratedController(const DynamicsCalibration& cal, const QString& patch, int longValue,
-                         const QString& refPatch, int refValue, int cc)
+                         const QString& refPatch, int refValue, int cc, int pitch)
       {
-      const DynamicsCurve* c = cal.curve(patch, longValue);
-      const DynamicsCurve* ref = cal.curve(refPatch, refValue);
-      if (!c || !ref || (c->drivenBy != "controller" && c->drivenBy != "both") || c->points.size() < 2 || ref->points.size() < 2)
+      const DynamicsCurve* cp = cal.curve(patch, longValue);
+      const DynamicsCurve* rp = cal.curve(refPatch, refValue);
+      if (!cp || !rp || (cp->drivenBy != "controller" && cp->drivenBy != "both"))
             return -1;
-      return c->inverse(ref->at(cc));
+      const DynamicsCurve c = cp->atPitch(pitch);
+      const DynamicsCurve ref = rp->atPitch(pitch);
+      if (c.points.size() < 2 || ref.points.size() < 2)
+            return -1;
+      if (c.byEar() && ref.byEar())                           // as loud by ear, as calibratedVelocity
+            return c.perceivedInverse(ref.perceivedAt(cc));
+      return c.inverse(ref.at(cc));
       }
 
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
@@ -1733,11 +1758,16 @@ void TextTechniques::apply(const QString& text, TextState& s)
             addModifier(s, "espressivo");
       if (has("\\b(pres\\s+de\\s+la\\s+table|p\\.?\\s*d\\.?\\s*l\\.?\\s*t\\b)"))
             addModifier(s, "pdlt");
-      // Spitfire's Performance legato (the owner, 2026-10-07: only where the score asks for it); "ord." ends it too
-      if (has("\\b(non|senza|no)\\s+performance\\b"))
+      // Spitfire's Performance legato (the owner, 2026-10-07: only where the score asks for it); "ord." ends it too.
+      // "non performance" also keeps slurred notes off it with slurs/performance on (Want::slurPerformance)
+      if (has("\\b(non|senza|no)\\s+performance\\b")) {
             s.modifiers.removeAll("performance");
-      else if (has("\\bperformance\\b"))
+            s.performanceOff = true;
+            }
+      else if (has("\\bperformance\\b")) {
             addModifier(s, "performance");
+            s.performanceOff = false;
+            }
       if (has("\\b(multi|double|triple)[\\s-]*tongu") || has("\\b(doppel|tripel)zunge"))
             addModifier(s, "multitongue");
       if (has("\\bharm(?!on)"))
@@ -1899,6 +1929,7 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
       else if (has(Art::Legato)) {
             b << "legato" << "long";
             w.slurQuick = int(Playback::value("slurs/quick", score));
+            w.slurPerformance = !text.performanceOff && Playback::on("slurs/performance", score);
             }
       else
             b << "long";

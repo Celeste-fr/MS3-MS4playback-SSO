@@ -13,6 +13,44 @@ named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
 
+## Performance legato for the strings' slurs in Recommended (2026-10-10)
+
+The owner (2026-10-10, after hand-building *Whence*'s Live set R): Recommended plays the five string sections' slurs on
+their Performance patches. `[slurs] performance` (1 in Recommended and by default, 0 in Library default) plays a slurred
+note as under staff text "performance" (staff text "non performance" opts out); it replaces `[slurs] quick`'s Long
+(Rachm.) swap for those notes; the solo strings and the winds keep `[slurs] quick`. A staccato before a slur stays on All
+techniques, so the slur starts from silence (an attack). With `[levels] calibrated` the Performance notes' CC1 is mapped
+so they sound as loud as Long (`calibratedController`; docs/PLAYBACK_SETTINGS.md › Performance legato in Recommended).
+This reverses the section below for Recommended only, and with it approves what branch `legato-pair-delays` left
+waiting for the owner (the Violas - Performance transitions at velocity 100, map `legatoVelocity`; already merged).
+No track delay was added. Measured on *Whence* 12-TET (Recommended, `dumpEvents`): the renderer already starts each
+slur's first note (an attack, velocity 112 / 106) early by the Legato's onset, Violins 1 50.0 ms, Violas 87.5, Celli
+70.5 (the map's onset at that velocity), and plays the transitions on the beat; Live's clips carry the same times. R's
+-50 ms TrackDelay on a set made from these clips would count the attacks' early start twice (100 / 137.5 / 120.5 ms) and
+move the transitions 50 ms early, which MuseScore doesn't. R's own clips sit on the grid, so there the -50 ms is the
+only early start.
+
+Open:
+- **The playback audit has no model of a transition's arrival**: it judges Performance transitions by the attack
+  onset, so on *Whence* (Recommended) ARRIVAL reads 19 fail / 136 warn (before: 1 fail) and CAPPED 289 info (226 transitions, nearly
+  all on the beat, and 63 re-attacks held back by the keep below). It needs the measured transition delays (`sso_legato_*.json`, `legatoDelay`) before
+  those counts mean anything.
+- **A re-attack keeps the note before** (fixed 2026-10-10, integrate-2026-10-10): a slur's last sixteenth (136 ms at
+  *Whence*'s tempo) followed by a new attack on the same Performance patch sounded 1.1 ms (Violas: the attack 87.5 ms
+  early, the map's reattackGap 54 ms), 11.4 ms (Celli) and 31.8 ms (Violins 1): 63 notes. `onsetEarliest` now keeps
+  `[legato] keepMs` (40) after the re-attack gap: those notes sound 39.8 ms and their attacks start 42.0 ms early
+  instead of 87.5 / 70.5 / 50 (predicted arrival 45.5 / 28.5 / 8 ms late; Rasch's fail is > 50). Owner to hear.
+- **Quarter tones on the Performance patches glide**: with `[slurs] performance` the strings' slurred quarter-tone
+  notes play on the bending copies (pitch bend timed to the transition's arrival), not on Kontakt-Tune copies. On
+  *Whence* (quarter tones, Recommended, dumpEvents MS_DUMP_LIVE, Live's clips): 147 quarter-tone notes on bending
+  copies, 141 of them at their tuning (within 5 cents) for under half their sounding length; with
+  `slurs/performance=0` every quarter-tone note is on a tuned copy (14 Kontakts, now 20). Owner to decide.
+- **Levels against R**: the calibration predicts Performance over All +2.7 dB (Violins 1), +3.8 (Violas), +7.8 (Celli)
+  at *Whence*'s CC1 64 (perceived curves of `Spitfire Symphony Orchestra.dynamics.json`, Long minus Performance
+  Legato); the owner's R faders say +13.1, +8.6, +14.0 (Violins 1 bars 13-16: +6.6). Measured on held notes along
+  velocity = CC1, one pitch; R's slurs are 136 ms sixteenths (tempo 110), and the All techniques faders also balance the
+  spiccatos. The owner decides by ear; nothing was tuned.
+
 ## No Performance patches (2026-10-06)
 
 The owner: "NO using performance patches. with all technique patches we have control of release, tightness, CC
