@@ -2519,6 +2519,20 @@ void TestLiveEquivalence::dumpEvents()
                               ks << QString("%1|%2|%3|%4|%5|%6").arg(p.name, k.patch).arg(k.lane).arg(k.cents, 0, 'f', 2).arg(n)
                                     .arg(ts.join(", "));
                               }
+            // (multis.txt: the set's Kontakt instances, "part|patch|slot channel:lane:Tune cents …", PlainLiveSet::multis)
+            QStringList mu;
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const std::vector<size_t>& g : PlainLiveSet::multis(p.kontakts)) {
+                              QStringList sl;
+                              for (size_t i = 0; i < g.size(); ++i)
+                                    sl << QString("%1:%2:%3").arg(i + 1).arg(p.kontakts[g[i]].lane)
+                                             .arg(p.kontakts[g[i]].cents, 0, 'f', 2);
+                              mu << QString("%1|%2|%3").arg(p.name, g.empty() ? QString() : p.kontakts[g[0]].patch, sl.join(" "));
+                              }
+            QFile mf(out + "/multis.txt");
+            QVERIFY(mf.open(QIODevice::WriteOnly | QIODevice::Text));
+            mf.write((mu.join("\n") + "\n").toUtf8());
             for (const SoundLib::Route& r : SoundLib::routes(score, *lib, false))
                   rs << QString("%1|%2|%3").arg(r.part ? r.part->partName() : QString(),
                                                 r.instrument ? r.instrument->name : QString()).arg(r.lane);
@@ -2529,6 +2543,30 @@ void TestLiveEquivalence::dumpEvents()
             QVERIFY(rf.open(QIODevice::WriteOnly | QIODevice::Text));
             rf.write((rs.join("\n") + "\n").toUtf8());
             }
+      // the routes with their tuning (routemap.txt: "port-channel|part|patch|lane|cents|bendCents", the routes this
+      // dump rendered to: Live's with MS_DUMP_LIVE, else the hosted ones; cents nan: varies) and each note-on's
+      // varispeed (tunings.txt: "port-channel|seconds|pitch|tuning cents"; 0 where a bend or a fixed tuning plays it),
+      // to check that no microtone falls back to 12-TET
+      {
+            QStringList rm, tn;
+            const bool live = qEnvironmentVariableIsSet("MS_DUMP_LIVE") && !qEnvironmentVariableIsSet("MS_DUMP_CHUNKED");
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib, live))
+                  rm << QString("%1-%2|%3|%4|%5|%6|%7").arg(r.port).arg(r.channel + 1).arg(r.part ? r.part->partName() : QString(),
+                           r.instrument ? r.instrument->name : QString()).arg(r.lane).arg(r.cents, 0, 'f', 2)
+                           .arg(r.instrument ? r.instrument->bendCents : 0.0, 0, 'f', 1);
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch())
+                        tn << QString("%1-%2|%3|%4|%5").arg(e.extPort()).arg(e.extChannel() + 1)
+                              .arg(score->utick2utime(te.first), 0, 'f', 6).arg(e.pitch()).arg(e.tuning(), 0, 'f', 2);
+                  }
+            QFile rmf(out + "/routemap.txt");
+            QVERIFY(rmf.open(QIODevice::WriteOnly | QIODevice::Text));
+            rmf.write((rm.join("\n") + "\n").toUtf8());
+            QFile tnf(out + "/tunings.txt");
+            QVERIFY(tnf.open(QIODevice::WriteOnly | QIODevice::Text));
+            tnf.write((tn.join("\n") + "\n").toUtf8());
+      }
       std::map<QString, QStringList> ms;
       for (const auto& te : events) {
             const NPlayEvent& e = te.second;
