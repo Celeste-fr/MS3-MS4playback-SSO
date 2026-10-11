@@ -117,6 +117,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackSettingsLayers();
       void slurPerformance();
       void levelContext();
+      void levelSectionBalance();
       void playbackPresets();
       void renderKit();
       void renderKitRoll();
@@ -1821,22 +1822,22 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ncontext=%6\ncalibrated=%3\n\n[slurs]\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\nsectionBalance=%6\ncontext=%6\ncalibrated=%3\n\n[slurs]\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ncontext=0\ncalibrated=0\n\n[slurs]\nperformance=0\nquick=0\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nperformance=0\nquick=0\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncontext=1\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncontext=1\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1866,7 +1867,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "levels/context", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
@@ -1883,11 +1884,15 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                         { "slurs/performance", 0 }, { "levels/context", 0 } }),
+                                         { "slurs/performance", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/context", 0 } }), QString());
+      // sectionBalance left out: its default 1, Recommended's; Library default needs 0
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 },
+                                         { "levels/context", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
       Playback::setIniPath(QString());
       Playback::setIniValuesForTest({});
@@ -2288,6 +2293,141 @@ void TestSoundLibrary::levelContext()
       Playback::setIniValuesForTest({});
       delete score;
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   levelSectionBalance
+//    [levels] sectionBalance (contextlevel.h): the map's <Instrument sectionLevel> (the main patch's, its extras take
+//    it); every patch of the section that much louder by its volume, staccatos and Performance alike; with [levels]
+//    context each part's Performance patch at its own largest gain plus the level, everything lower together so the
+//    loudest stays at +6 (S'); each note's level (CC11 dB + the patch's volume) is the rule's plus its section's level,
+//    less one common constant. Layers: default on, the ini's 0, the score's 1 over it; a map without levels: the rule's
+//---------------------------------------------------------
+
+void TestSoundLibrary::levelSectionBalance()
+      {
+      // gain = 8 + (pitch - 60) / 2 at every CC and spacing: the Violin's slurs C5 D5 E5 (median 74) 15 dB and A4 B4
+      // (70) 13 dB, the Viola's C4 D4 E4 (62) 9 dB; levels Violin -1.5, Viola +2
+      QString grid;
+      for (int cc : { 1, 127 })
+            for (int ms : { 50, 5000 })
+                  for (int p : { 40, 100 })
+                        grid += QString("%1/%2/%3:%4 ").arg(cc).arg(ms).arg(p).arg(8 + (p - 60) / 2.0);
+      auto map = [this, &grid](const QString& violin, const QString& viola) {
+            const QString perf = "<Switch type='none'/>"
+               "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+               " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+               " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='" + grid.trimmed() + "'/>";
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Violin' ids='violin'%1><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+               "<Instrument name='Viola' ids='viola'%2><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+               "<Instrument name='Violin - Performance' with='Violin'>%3</Instrument>"
+               "<Instrument name='Viola - Performance' with='Viola'>%3</Instrument>"
+               "</SoundLibrary>").arg(violin, viola, perf).toUtf8().constData());
+            };
+      auto lib = map(" sectionLevel='-1.5'", " sectionLevel='2'");
+      QVERIFY(lib);
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            QCOMPARE(li.sectionLevelDb, li.name.startsWith("Violin") ? -1.5 : 2.0);        // (extras take the main's)
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(score->parts().size(), 2);
+      const Part* violin = score->parts()[0];
+      const Part* viola = score->parts()[1];
+      // each note's level in dB: its route's CC11 in force plus its patch's volume (TrackDelays::patchGain)
+      auto levels = [&]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::map<int, const SoundLib::Route*> byRoute;
+            const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *SoundLib::current());
+            for (const SoundLib::Route& r : routes)
+                  byRoute[r.port * 16 + r.channel] = &r;
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+            std::map<int, int> cc11;
+            std::map<int, double> out;          // pitch -> dB
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION)
+                        cc11[route] = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && byRoute.count(route)) {
+                        const SoundLib::Route* r = byRoute[route];
+                        const double gain = TrackDelays::patchGain(*SoundLib::current(), TrackDelays::of(r->part, delays), r->instrument->name);
+                        out[ev.pitch()] = 20 * std::log10((cc11.count(route) ? cc11[route] : 127) / 127.0) + 20 * std::log10(gain);
+                        }
+                  }
+            return out;
+            };
+      const std::vector<int> slurV { 72, 74, 76 }, slurV2 { 69, 71 }, plainV { 79 }, slurA { 60, 62, 64 }, plainA { 57 };
+      // the rule alone: G 15, S 9, both Performance patches +6, the rest -9; the Viola's slur 6 dB under by CC11
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/sectionBalance", "0" } });
+      std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QCOMPARE(int(v.size()), 2);
+      QVERIFY(std::fabs(v[viola].top - 15) < 1e-9 && std::fabs(v[viola].patchDb["Viola - Performance"] - 6) < 1e-9);
+      QVERIFY(std::fabs(v[viola].patchDb["Viola"] + 9) < 1e-9);
+      const std::map<int, double> rule = levels();
+      // on (the default): S' = max(15 - 1.5, 9 + 2) - 6 = 7.5; each Performance patch at T = min(G, S' + 6 - O) plus O
+      // less S': the Violin's T 15 (G), the Viola's 11.5 (G would put it over +6), its slur's CC11 9 - 11.5
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[violin].top - 15) < 1e-9 && std::fabs(v[viola].top - 11.5) < 1e-9);
+      QVERIFY(std::fabs(v[violin].patchDb["Violin - Performance"] - 6) < 1e-9);
+      QVERIFY(std::fabs(v[violin].patchDb["Violin"] + 9) < 1e-9);
+      QVERIFY(std::fabs(v[viola].patchDb["Viola - Performance"] - 6) < 1e-9);
+      QVERIFY(std::fabs(v[viola].patchDb["Viola"] + 5.5) < 1e-9);
+      const std::map<int, double> balanced = levels();
+      QCOMPARE(balanced.size(), rule.size());
+      auto check = [&](const std::map<int, double>& got, const std::vector<int>& pitches, double expected) {
+            for (int p : pitches) {
+                  QVERIFY2(got.count(p), qPrintable(QString("pitch %1 not played").arg(p)));
+                  // (CC11 is 7-bit: within its step at these levels)
+                  QVERIFY2(std::fabs(got.at(p) - expected) < 0.35, qPrintable(QString("pitch %1: %2 dB, expected %3").arg(p).arg(got.at(p)).arg(expected)));
+                  }
+            };
+      check(rule, slurV, 6);
+      check(rule, slurV2, 4);
+      check(rule, plainV, -9);
+      check(rule, slurA, 0);
+      check(rule, plainA, -9);
+      check(balanced, slurV, 6);
+      check(balanced, slurV2, 4);
+      check(balanced, plainV, -9);
+      check(balanced, slurA, 3.5);              // the rule's 0 + (2 - -1.5)
+      check(balanced, plainA, -5.5);
+      // the rule off, the balance on: the levels alone (nothing over +6: S' 0)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" } });
+      v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[violin].patchDb["Violin - Performance"] + 1.5) < 1e-9 && std::fabs(v[violin].patchDb["Violin"] + 1.5) < 1e-9);
+      QVERIFY(std::fabs(v[viola].patchDb["Viola - Performance"] - 2) < 1e-9 && std::fabs(v[viola].patchDb["Viola"] - 2) < 1e-9);
+      const std::map<int, double> alone = levels();
+      check(alone, plainV, -1.5);
+      check(alone, plainA, 2);
+      // layers: the ini's 0 off, the score's 1 over it
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/sectionBalance", "0" } });
+      QCOMPARE(levels().at(57), rule.at(57));
+      score->setMetaTag(Playback::metaTag, "levels/sectionBalance=1");
+      QCOMPARE(levels().at(57), balanced.at(57));
+      score->setMetaTag(Playback::metaTag, "");
+      delete score;
+      // a map without levels: on plays the rule's
+      auto plain = map("", "");
+      QVERIFY(plain);
+      SoundLib::setCurrent(plain);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[score->parts()[1]].top - 15) < 1e-9 && std::fabs(v[score->parts()[1]].patchDb["Viola"] + 9) < 1e-9);
+      delete score;
       }
 
 //---------------------------------------------------------

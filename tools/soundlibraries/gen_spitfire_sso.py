@@ -1429,6 +1429,17 @@ def contextLevel(patch, sound):
         return None
     key = lambda k: tuple(int(x) for x in k.split('|'))
     return ' '.join(f'{d}/{ms}/{p}:{cells[k]:g}' for k in sorted(cells, key=key) for d, ms, p in [key(k)])
+# - sectionLevel= (dB, on the five string sections' main Instrument; their Performance patches take it): [levels]
+#   sectionBalance plays every patch of the section that much louder (contextlevel.h). Source: the owner's Whence R faders,
+#   2026-10-11 (Live set R, "Whence 1-16 UACC lowered": the All techniques tracks' faders, set by ear; the owner approved
+#   A′ = R with the rule's Performance levels and preferred it over the own hand balance). Relative to what the level
+#   rule plays (every non-Performance patch at -S), the section's offset is its fader + S, S = 9.293 dB: the rule's
+#   headroom on Whence 12-TET, Recommended (S = G - 6, G = 15.293, the rule's dump of 2026-10-11). Measured: these don't
+#   equalise loudness, they tilt the violins down and the low strings up against SSO's own balance (HANDOFF.md).
+SECTION_FADERS = {'Violins 1': -10.8, 'Violins 2': -10.2, 'Violas': -7.3, 'Celli': -8.0, 'Basses': -7.3}
+SECTION_RULE_S = 9.293
+def sectionLevel(name):
+    return round(SECTION_FADERS[name] + SECTION_RULE_S, 3)
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
@@ -1447,6 +1458,9 @@ for i, line in enumerate(out):
             if b:
                 end = '/>' if line.endswith('/>') else '>'
                 out[i] = line[:-len(end)] + f' bend="{b:g}"' + end
+            if current in SECTION_FADERS:
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:

@@ -13,6 +13,20 @@ named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
 
+## Section balance, `[levels] sectionBalance` (2026-10-11)
+
+Branch `section-balance`: MuseScore plays A′ (the owner approved it and prefers it over the owner's own balance,
+2026-10-11). Each string section's patches play its map `sectionLevel` O louder (R's faders + the rule's S 9.293:
+Violins 1 -1.507, Violins 2 -0.907, Violas +1.993, Celli +1.293, Basses +1.993; `gen_spitfire_sso.py`
+`SECTION_FADERS`), a phrase at gain + O, all lower by S' = max(0, loudest gain + O - 6) (docs/PLAYBACK_SETTINGS.md ›
+Section balance). On in Recommended and by default, 0 in Library default.
+
+Whence 12-TET, Recommended (`dumpEvents`, chunked, on the Linux dev machine; no Kontakt): S' 10.586; volumes Violins 1
+-12.093 / Performance +3.200, Violins 2 -11.493, Violas -8.593 / +6.000, Celli -9.293 / +6.000, Basses -8.593. Each
+note's level (CC11 + volume) against A′ (bars 1-16, 454 notes): -1.293 dB for every note of every track except Violas -
+Performance, -1.337 .. -1.210 (7-bit CC11: its CC11 is gain - 14.593, A′'s was gain - G 15.293, each rounded); max
+deviation from one constant 0.064 dB. Live's clips carry the same CC11 at every note-on. Not yet heard by the owner.
+
 ## The level rule, `[levels] context` (2026-10-10)
 
 The owner (2026-10-10): the same written dynamic sounds equally loud in every string part and technique, judged in the
@@ -36,8 +50,8 @@ owner's lowered R set (render + faders), loudest 50 ms per note, median, after o
 
 Approved by the owner on A′ (2026-10-11; HANDOFF › No Performance patches' Whence decisions). Open:
 - ~~Violins 1 bars 13-16 slurs +6.7 dB against R~~: the owner approved the rule's level (A′, 2026-10-11, below).
-- **The All techniques balance between sections** (Violins 1 / 2 +3.1 / +2.5, Celli -2.2 / -1.3): `[levels] calibrated`,
-  not this rule. The measured staccato offsets (fit `a`: Violins 1 -1.5, Violins 2 -1.1, Violas +2.1, Celli +0.6,
+- ~~The All techniques balance between sections~~: `[levels] sectionBalance` (below, Section balance) plays A′'s.
+  Before (Violins 1 / 2 +3.1 / +2.5, Celli -2.2 / -1.3): `[levels] calibrated`, not this rule. The measured staccato offsets (fit `a`: Violins 1 -1.5, Violins 2 -1.1, Violas +2.1, Celli +0.6,
   Basses -0.1 dB) point the other way from R's faders (violins lower, violas higher), so equalising measured level
   would move further from R. Not applied.
 - Held out (the fit without a block of cells, against each cell's own measured gain; cells' take-to-take noise 0.9-1.3
@@ -172,8 +186,8 @@ sections' Performance patches not measured.
   1 13-16) with only the three Performance tracks' levels set by the rule (each note's gain 20·log10(CC11/127) + G from
   the rule's dump, plus the section's All techniques fader). Against R (B): Violins 1 -3.0 dB bars 1-12, +3.0 bars 13-16;
   Violas +0.1 / -0.9; Celli -0.1. Violins 1 solo, bars 13-16: "I think A' sounds good", "yeah I think A' sounds good":
-  Violins 1 bars 13-16 keep the rule's level, no per-score override. Still open: the All techniques balance between
-  sections (the rule moves every non-Performance track by -S; R has a fader per section); R's grid + -50 ms timing
+  Violins 1 bars 13-16 keep the rule's level, no per-score override. The All techniques balance between sections: done,
+  `[levels] sectionBalance` (Section balance, below). Still open: R's grid + -50 ms timing
   against MuseScore's per-note onsets. Fixed separately: Celli - Performance C3's bad round robin at high velocity.
 - **A hand-built set must switch techniques by clip Bank / Sub**, never a CC32 clip envelope (LIVE.md: Live 12.4.6 drops
   it at load): sets R … W did, so in Live every All techniques track played Long throughout (the owner's Kontakt window,

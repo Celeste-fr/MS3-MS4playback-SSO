@@ -40,7 +40,7 @@
   <Onset early="100"/>
   <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>
   <Files registry="Spitfire Symphony Orchestra"/>
-  <Instrument name="Violins 1" ids="violins" nki="Instruments/Symphonic Strings/Violins 1 - All techniques.nki" setup="$iooxo=3" pitch="76">
+  <Instrument name="Violins 1" ids="violins" nki="Instruments/Symphonic Strings/Violins 1 - All techniques.nki" setup="$iooxo=3" pitch="76" sectionLevel="-1.507">
     <Articulation name="Long" value="1" techniques="long legato" release="920" onset="55:84 59:74 60:56 61:56 62:72 63:72 66:32 67:32 68:77 71:66 72:101 73:101 74:49 78:40 79:40 80:81 81:87 83:85 84:40 89:53 90:38 93:33 94:19 95:19 96:52 97:54" peak="1063"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted" release="1135" onset="55:180 62:170 65:220 70:225 71:220 72:160 75:195 87:145 89:105 97:110" peak="1253"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="1215" onset="79:420 81:365 83:355 84:375 85:350 86:275 87:260 88:425 89:405 90:275 91:255 92:320 93:310 94:425 97:370 98:235 99:220 100:280 101:260 102:280 105:235 106:115 107:105" peak="1333"/>
@@ -83,7 +83,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
     <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
-  <Instrument name="Violins 2" ids="violins" partName="\b(2|II)\b|\bsecond\b|\b2nd\b" nki="Instruments/Symphonic Strings/Violins 2 - All techniques.nki" setup="$iooxo=3" pitch="76">
+  <Instrument name="Violins 2" ids="violins" partName="\b(2|II)\b|\bsecond\b|\b2nd\b" nki="Instruments/Symphonic Strings/Violins 2 - All techniques.nki" setup="$iooxo=3" pitch="76" sectionLevel="-0.907">
     <Articulation name="Long" value="1" techniques="long legato" release="945" onset="55:75 60:150 67:115 69:160 76:175 97:155" peak="1088"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted" release="1105" onset="55:275 57:325 62:280 73:325 77:225 82:225 97:295" peak="1213"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="990" onset="79:275 80:195 81:185 82:350 83:330 84:160 85:155 87:155 88:190 89:180 90:220 91:205 92:235 97:145 99:145 100:180 103:155 104:200 105:185 106:215 107:205" peak="1123"/>
@@ -123,7 +123,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
     <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
-  <Instrument name="Violas" ids="violas" nki="Instruments/Symphonic Strings/Violas - All techniques.nki" setup="$iooxo=3" pitch="69">
+  <Instrument name="Violas" ids="violas" nki="Instruments/Symphonic Strings/Violas - All techniques.nki" setup="$iooxo=3" pitch="69" sectionLevel="1.993">
     <Articulation name="Long" value="1" techniques="long legato" release="1125" onset="48:46 49:66 54:57 55:73 56:78 57:115 58:115 59:72 62:64 63:51 64:51 66:67 68:64 69:41 72:46 73:80 76:86 77:48 80:57 81:12 84:27 85:59 86:59 87:27 90:22" peak="773"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted" release="1095" onset="48:170 52:195 53:250 56:250 60:230 61:180 70:220 80:145 88:170 90:125" peak="1198"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="930" onset="72:150 74:135 75:230 76:250 78:230 79:285 82:205 83:250 86:205 87:150 88:135 89:225 92:160 93:215 96:155 97:245 100:185 101:130 102:145" peak="1173"/>
@@ -163,7 +163,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
     <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
-  <Instrument name="Celli" ids="violoncellos" nki="Instruments/Symphonic Strings/Celli - All techniques.nki" setup="$iooxo=3" pitch="59">
+  <Instrument name="Celli" ids="violoncellos" nki="Instruments/Symphonic Strings/Celli - All techniques.nki" setup="$iooxo=3" pitch="59" sectionLevel="1.293">
     <Articulation name="Long" value="1" techniques="long legato" release="1280" onset="36:105 49:90 50:95 51:180 54:180 55:145 62:160 63:120 71:115 82:50" peak="1193"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted" release="1520" onset="36:235 44:190 48:250 49:340 52:340 53:280 57:245 64:295 70:265 74:165 82:195" peak="1303"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="935" onset="60:290 61:235 62:220 63:80 64:70 65:220 66:205 67:315 68:295 69:175 72:100 73:220 74:205 75:145 76:135 77:245 78:230 79:250 84:205 85:135 86:125 87:215 90:185 91:315 92:300 93:250 96:210" peak="1268"/>
@@ -206,7 +206,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
     <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
-  <Instrument name="Basses" ids="contrabasses contrabass double-bass" nki="Instruments/Symphonic Strings/Basses - All techniques.nki" setup="$iooxo=3" pitch="39">
+  <Instrument name="Basses" ids="contrabasses contrabass double-bass" nki="Instruments/Symphonic Strings/Basses - All techniques.nki" setup="$iooxo=3" pitch="39" sectionLevel="1.993">
     <Articulation name="Long" value="1" techniques="long legato" release="1630" onset="24:126 33:181 41:151 43:211 46:161 54:191" peak="1363"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" release="1040" onset="60:355 61:230 62:210 63:515 64:480 65:360 66:340 67:390 68:375 69:160 70:150 71:515 72:480 73:200 74:190 75:375 76:350 77:275 78:435" peak="1348"/>
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando" release="1760" onset="24:260 26:260 27:420 28:405 30:470 31:405 33:340 36:290 37:200 38:185 39:550 40:520 41:360 42:350 43:490 44:460 45:295 48:270 49:370 50:350 51:445 52:430 53:570 54:560" peak="1458"/>

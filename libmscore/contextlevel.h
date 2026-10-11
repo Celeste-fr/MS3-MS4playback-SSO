@@ -32,6 +32,14 @@
 //   and each phrase plays gain - G by CC11 (<= 0). The volumes go through TrackDelays::patchGain (the Kontakt slot's
 //   volume in MuseScore, LiveSetWriter::kontaktVolume / the plain set's Kontakt track Volume in Live); the CC11 goes
 //   through the renderer's per-note levels (libraryNoteLevels), so Live's clips and the plain set carry it.
+//
+//   The section balance (playback setting [levels] sectionBalance; the owner, 2026-10-11: A′, the rule on the owner's
+//   Live set R, approved and preferred over the owner's own balance): every patch of a section with a map level O
+//   (<Instrument sectionLevel>, dB: SSO's five string sections, R's All techniques faders by ear plus the rule's S on
+//   Whence 12-TET, gen_spitfire_sso.py SECTION_FADERS) plays O dB louder, staccatos and Performance alike, by the same
+//   volumes. With the rule a phrase plays gain + O, a staccato O, everything less S' = max(0, the loudest phrase's
+//   gain + O - 6): MuseScore plays A′ less one common constant. A part's Performance patch carries T = min(G, S' + 6 - O)
+//   (its phrases' CC11: gain less T; G where it fits under +6, so the CC11 values are the rule's). Off: the rule alone.
 //---------------------------------------------------------
 
 #include <map>
@@ -50,6 +58,8 @@ namespace ContextLevel {
 
 // whether the setting is on for the score
 bool on(const Score* score);
+// whether [levels] sectionBalance is on for the score
+bool sectionBalance(const Score* score);
 // whether the articulation has a measured context level
 bool has(const SoundLib::Articulation* a);
 // whether a patch has an articulation with one (a Performance patch)
@@ -60,10 +70,10 @@ bool has(const SoundLib::LibInstrument* patch);
 double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset);
 
 struct Volumes {
-      std::map<QString, double> patchDb;    // patch -> its volume in dB (P or -S)
-      double top { 0.0 };                   // G
+      std::map<QString, double> patchDb;    // patch -> its volume in dB (P or -S; section balance: O (+ the part's G) - S')
+      double top { 0.0 };                   // G (section balance: min(G, S' + MAX_DB - O))
       };
-// per library part (none: off, no library, or no phrase on such an articulation)
+// per library part (none: both settings off, no library, or the rule alone and no phrase on such an articulation)
 std::map<const Part*, Volumes> volumes(const MasterScore* score);
 
 }     // namespace ContextLevel

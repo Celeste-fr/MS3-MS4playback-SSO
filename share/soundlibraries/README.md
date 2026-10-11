@@ -254,6 +254,10 @@ switch value of each articulation. For example:
     semitones can ring twice as long as the rest: Violins 1 - Performance 855 ms at its test pitch, 2180 at D4).
   - `bend` on an `Instrument` (cents): the patch bends its pitch this far either way at full pitch
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
+  - `sectionLevel` on an `Instrument` (dB): with playback setting `[levels] sectionBalance`, every patch of
+    the section (the main patch and its `with` patches, which take its value) plays this much louder, by
+    its volume (`libmscore/contextlevel.h`). SSO's five string sections: the owner's faders in Whence's Live
+    set R plus the level rule's headroom there (2026-10-11; `gen_spitfire_sso.py` `SECTION_FADERS`).
 
   ```xml
   <Onset early="100"/>
