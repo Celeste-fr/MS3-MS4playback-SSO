@@ -1782,7 +1782,7 @@ void TestPlayability::techniqueCancels()
             rowText(8, "Trumpet", "risky", n1("con sordino / gestopft", "senza sordino / open / offen", 7, brass), "\"con sord.\""),
             rowText(4, "Horn 1", "risky", n1("stopped", "open / offen / aperto", 3, "Adler p. 323"), "\"chiuso\""),
             rowText(7, "Horn 1", "risky", n1("con sordino", "senza sordino / open", 6, brass), "\"con sord.\""),
-            rowText(4, "Flute", "risky", n1("senza / non vibrato", "con vibrato / normale / ord.", 3, vib), "\"non vibrato\""),
+            rowText(4, "Flute", "risky", n1("senza / non vibrato", "con vibrato / normale / ord.", 3, vib), "\"non vib.\""),
             // flutter-tongue tied into a plain eighth with no "ord." (bar 1); with "ord." (bar 2), untied (bar 3): clean
             rowText(1, "Flute 2", "risky", "flutter-tongue tied into a plain note with no \"ord.\": mark where the flutter ends "
                     "(solo and section) (Gould, Behind Bars p. 247)", "C5") };

@@ -14,7 +14,7 @@ N1 uncancelled techniques (texts over whole notes)
               8 "con sord." W (gestopft = muted on the trumpet)
   Horn 1      1 "con sord."  2 "senza sord."  3 "gestopft" (stopped, not muted)  4 "chiuso" W  5 "aperto"
               6 "con sord." (clean: gestopft was no mute)  7 "con sord." W         sounding F4 = written C5
-  Flute       1 "senza vibrato"  2 "normale"  3 "non vibrato"  4 "non vibrato" W  5 "flz." (T4 clean)
+  Flute       1 "senza vibrato"  2 "normale"  3 "non vibrato"  4 "non vib." W  5 "flz." (T4 clean)
 N1 flutter-tongue tied into a plain note (Flute 2; strokes = single-note tremolo)
   1 "flz." half C5 + strokes tied to an eighth C5 W   2 "flz." the same, "ord." at the eighth
   3 "flz." quarter C5 + strokes, quarter D5 + strokes, half E5 plain (untied)
@@ -127,7 +127,7 @@ staves.append((part('Trumpet', 'brass.trumpet', 'G', 56),
 staves.append((part('Horn 1', 'brass.french-horn', 'G', 60),
                texts('G', 'F4', ['con sord.', 'senza sord.', 'gestopft', 'chiuso', 'aperto', 'con sord.', 'con sord.'])))
 staves.append((part('Flute', 'wind.flutes.flute', 'G', 73),
-               texts('G', 'C5', ['senza vibrato', 'normale', 'non vibrato', 'non vibrato', 'flz.'])))
+               texts('G', 'C5', ['senza vibrato', 'normale', 'non vibrato', 'non vib.', 'flz.'])))
 TREM = '<Tremolo><subtype>r32</subtype></Tremolo>'
 FTIE_START = '<Spanner type="Tie"><Tie></Tie><next><location><fractions>1/2</fractions></location></next></Spanner>'
 FTIE_END = '<Spanner type="Tie"><prev><location><fractions>-1/2</fractions></location></prev></Spanner>'

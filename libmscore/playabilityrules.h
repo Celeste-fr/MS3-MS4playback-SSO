@@ -458,7 +458,7 @@ constexpr const char* WIND_DIVISI_WORDS = "\\b(div|divisi)\\b";
 constexpr const char* N1_ORD_WORDS = "ord\\.?|ordinario|modo\\s+ordinario|normale|normal|naturale|natural|nat\\.|naturel|ordinaire|"
                                      "natürlich|ordinary|gewöhnlich";
 // senza / non vibrato -> con vibrato, normale, ord. (Adler p. 171; Kennan & Grantham p. 66; Sevsay pp. 32, 122; Blatter p. 40)
-constexpr const char* N1_VIB_ON = "senza\\s+vibrato|non\\s+vibrato|white\\s+tone";
+constexpr const char* N1_VIB_ON = "senza\\s+vibrato|non\\s+vibrato|senza\\s+vib\\.|non\\s+vib\\.|kein\\s+vib\\.|white\\s+tone";
 constexpr const char* N1_VIB_OFF = "con\\s+vibrato|con\\s+vib\\.|mit\\s+vib\\.|normal\\s+vibrato";
 // strings con sordino -> senza sordino (Kennan & Grantham p. 64; Sevsay p. 47; Blatter p. 36)
 constexpr const char* N1_STR_MUTE_ON = "con\\s+(?:la\\s+)?sord(?:ino|ina|\\.)|with\\s+(?:a\\s+)?mutes?|mutes?\\s+on|muted|"
