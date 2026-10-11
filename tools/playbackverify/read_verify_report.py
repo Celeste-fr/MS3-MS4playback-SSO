@@ -56,11 +56,48 @@ def mmss(s):
     return f'{int(s // 60)}:{s % 60:06.3f}'
 
 
+def file_text(f):
+    if not f or not f.get('path'):
+        return 'none'
+    if not f.get('exists'):
+        return f'{f["path"]} (none there)'
+    return f'{f["path"]} (sha256 {f["sha256"]}, {f["modified"]}, {int(f["size"])} bytes)'
+
+
+def preflight(j):
+    """What the render played with (report.json "preflight", since 2026-10-11): calibration, setups, playback.ini."""
+    p = j.get('preflight')
+    if not p:
+        print('preflight: none in this report (a MuseScore before 2026-10-11: which calibration and setups it used is unknown)')
+        return
+    cal = p.get('calibration', {})
+    print('preflight:')
+    print(f'  calibration, shipped: {file_text(cal.get("shipped"))}' + ('' if cal.get('shippedRead') else ' NOT READ'))
+    print(f'  calibration, user\'s:  {file_text(cal.get("user"))}'
+          + (' NOT READ' if cal.get('user', {}).get('exists') and not cal.get('userRead') else ''))
+    per = cal.get('patches', {})
+    user = sorted(k for k, v in per.items() if v == 'user')
+    print(f'  calibration per patch: {sum(1 for v in per.values() if v == "shipped")} from the shipped file, {len(user)} from the user\'s'
+          + (': ' + ', '.join(user) if user else ''))
+    st = p.get('setups', {})
+    if st.get('mode') == 'main' or st.get('folder') == st.get('mainFolder'):
+        print(f'  setups: {st.get("folder")} (the main folder)')
+    else:
+        print(f'  setups: {st.get("folder")} ({st.get("mode")} of {st.get("mainFolder")}; {st.get("copied", 0)} file(s) copied)')
+    for n in st.get('notes', []):
+        print(f'  setups: {n}')
+    ini = p.get('playbackIni', {})
+    print(f'  playback.ini: {file_text(ini)}; preset: {ini.get("preset") or "custom"}')
+    for w in p.get('warnings', []):
+        print(f'  {w}')
+
+
 def overview(rep):
     j = json.loads(rep.read('report.json'))
     print(f'{rep.name}\n{j["verdict"].upper()}: {j["findingCount"]} findings; MuseScore {j["museScore"]} {j.get("build", "")}; '
           f'library {j["library"]}' + (f'; checked the file {j["audio"]}' if j.get('audio') else ''))
     print('totals:', ', '.join(f'{v} {k}' for k, v in sorted(j['totals'].items()) if v))
+    preflight(j)
     for sc in j['scores']:
         print(f'\n# {sc["file"]}' + (f'  ERROR: {sc["error"]}' if 'error' in sc else ''))
         if 'error' in sc:

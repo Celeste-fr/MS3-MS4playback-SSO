@@ -136,6 +136,7 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/playbacksettings.h"
 #include "soundlibraryhost.h"
+#include "libmscore/renderpreflight.h"
 #include "liveintegration.h"
 #include "liveclips.h"
 #include "liveclipedit.h"
@@ -5005,15 +5006,17 @@ static bool extractInBackground(const QStringList& argv)
             ArticulationCheckDialog::logBackground(QString("a %1 is already running; this one stops").arg(what));
             return false;
             }
-      int copied = 0;
-      for (const QFileInfo& fi : QDir(mine).entryInfoList(QDir::Files)) {
-            if (fi.fileName() == "load times.log" || QFileInfo::exists(copy + "/" + fi.fileName()))
-                  continue;
-            copied += QFile::copy(fi.absoluteFilePath(), copy + "/" + fi.fileName());
-            }
+      // (what the copy lacks copied; a file that differs from the main folder's kept, as this job's own results, and
+      // said loudly in the log's preflight: RenderPreflight::syncJobCopy, JOB)
+      const RenderPreflight::Setups synced = RenderPreflight::syncJobCopy(mine, copy, RenderPreflight::CopyMode::JOB,
+                                                                          SoundLibraryHost::makesSetups(*library));
+      RenderPreflight::setSetups(synced);
+      const QString job = picturesMode ? QString("background window pictures") : scanKeysMode ? QString("background key scan") : what;
       ArticulationCheckDialog::logBackground(QString("%4 started; setups in %1 (%2 copied from %3)")
-                                             .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine))
-                                             .arg(picturesMode ? QString("background window pictures") : scanKeysMode ? QString("background key scan") : what));
+                                             .arg(QDir::toNativeSeparators(copy)).arg(synced.copied).arg(QDir::toNativeSeparators(mine))
+                                             .arg(job));
+      for (const QString& line : RenderPreflight::lines(job))
+            ArticulationCheckDialog::logBackground(line);
       if (measureLoadTimesMode) {
             // (the library the scores play, through its plug-in: SoundLibraryHost's setups, SoundLib::routes)
             SoundLib::setCurrent(library);
@@ -5139,21 +5142,17 @@ static bool verifyInBackground(const QStringList& argv)
             log("a playback verification is already running; this one stops");
             return false;
             }
-      int copied = 0;
-      for (const QFileInfo& fi : QDir(mine).entryInfoList(QDir::Files)) {
-            if (fi.fileName() == "load times.log")
-                  continue;
-            // (the calibration always the working one's: this run never changes it)
-            const QString to = copy + "/" + fi.fileName();
-            if (fi.fileName() == "dynamics.json")
-                  QFile::remove(to);
-            else if (QFileInfo::exists(to))
-                  continue;
-            copied += QFile::copy(fi.absoluteFilePath(), to);
-            }
+      // the copy as the working MuseScore plays: the calibration the main folder's (removed when the main folder has
+      // none: a partial dynamics.json left in the copy played Whence's staccatos uncalibrated, 2026-10-11), a newer main
+      // file replacing the copy's; made setups are checked against their .nki at each load (RenderPreflight::syncJobCopy)
+      const RenderPreflight::Setups synced = RenderPreflight::syncJobCopy(mine, copy, RenderPreflight::CopyMode::VERIFY,
+                                                                          SoundLibraryHost::makesSetups(*library));
+      RenderPreflight::setSetups(synced);
       log(QString("playback verification started; setups in %1 (%2 copied from %3)")
-          .arg(QDir::toNativeSeparators(copy)).arg(copied).arg(QDir::toNativeSeparators(mine)));
+          .arg(QDir::toNativeSeparators(copy)).arg(synced.copied).arg(QDir::toNativeSeparators(mine)));
       SoundLibraryHost::loadCalibration();
+      for (const QString& line : RenderPreflight::lines("playback verification"))
+            log(line);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
             std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
@@ -5212,6 +5211,11 @@ static bool liveSetInBackground(const QStringList& argv)
             }
       SoundLib::setCurrent(library);
       SoundLibraryHost::loadCalibration();
+      // what it renders with (the main setups folder, no copy): on the console and in each report
+      const QStringList preflight = RenderPreflight::lines(!liveEquivalenceOut.isEmpty() ? QString("Live against MuseScore")
+                                                           : QString("Create Live Set"));
+      for (const QString& line : preflight)
+            log(line);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
             std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
@@ -5240,7 +5244,7 @@ static bool liveSetInBackground(const QStringList& argv)
                   log(report);
                   QFile f(liveSetOut + ".txt");       // (the console isn't seen on Windows)
                   if (f.open(QIODevice::WriteOnly | QIODevice::Text))
-                        f.write(report.toUtf8());
+                        f.write((report + "\n\n" + preflight.join("\n") + "\n").toUtf8());
                   }
             }
       if (!liveSetReadback.isEmpty()) {
@@ -5262,6 +5266,9 @@ static bool liveSetInBackground(const QStringList& argv)
             const LiveEquivalence::Result r = LiveEquivalence::compare(score.get(), *library, o, log);
             if (!LiveEquivalence::write(r, o.thresholds, liveEquivalenceOut, liveEquivalenceWav, &error))
                   log(error);
+            QFile pf(liveEquivalenceOut + "/preflight.txt");
+            if (pf.open(QIODevice::WriteOnly | QIODevice::Text))
+                  pf.write((preflight.join("\n") + "\n").toUtf8());
             log(LiveEquivalence::reportText(r, o.thresholds).section("\nThe set", 0, 0));
             ok = ok && r.error.isEmpty() && r.passed;
             }
@@ -7503,6 +7510,7 @@ void MuseScore::reloadPlaybackSettings()
       Playback::reload();
       for (MasterScore* ms : qAsConst(scoreList))
             ms->setPlaylistDirty();
+      SoundLibraryHost::logPreflight("playback.ini reloaded");     // (render preflight.log: the ini's hash and preset)
       const QStringList warn = Playback::warnings();
       showMessage(warn.isEmpty() ? tr("Playback settings read from %1").arg(Playback::iniPath())
                                  : tr("Playback settings read, %1 warning(s): %2").arg(warn.size()).arg(warn.join("; ")), 8000);

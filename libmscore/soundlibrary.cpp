@@ -1178,21 +1178,35 @@ bool DynamicsCalibration::read(const QString& file)
       return true;
       }
 
-std::shared_ptr<DynamicsCalibration> readCalibration(const QString& userFile, const QString& shippedFile)
+std::shared_ptr<DynamicsCalibration> readCalibration(const QString& userFile, const QString& shippedFile,
+                                                     RenderPreflight::Calibration* sources)
       {
       DynamicsCalibration shipped, user;
       const bool fromShipped = !shippedFile.isEmpty() && shipped.read(shippedFile);
       const bool own = !userFile.isEmpty() && user.read(userFile);
+      if (sources) {
+            *sources = RenderPreflight::Calibration();
+            sources->shipped = RenderPreflight::fileId(shippedFile);
+            sources->user = RenderPreflight::fileId(userFile);
+            sources->shippedRead = fromShipped;
+            sources->userRead = own;
+            }
       if (!fromShipped && !own)
             return nullptr;
       auto c = std::make_shared<DynamicsCalibration>();
       for (const auto& p : shipped.patches())
-            if (!user.patches().count(p.first))
+            if (!user.patches().count(p.first)) {
                   for (const auto& a : p.second)
                         c->setCurve(p.first, a.first, a.second);
-      for (const auto& p : user.patches())
+                  if (sources)
+                        sources->patchFrom[p.first] = "shipped";
+                  }
+      for (const auto& p : user.patches()) {
             for (const auto& a : p.second)
                   c->setCurve(p.first, a.first, a.second);
+            if (sources)
+                  sources->patchFrom[p.first] = "user";
+            }
       return c;
       }
 

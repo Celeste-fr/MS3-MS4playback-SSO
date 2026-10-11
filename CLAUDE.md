@@ -221,6 +221,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   doesn't show on Windows).
 - Background jobs (own setups copy, lock, log; their `.bat` files in `bin` only with `-DMSCORE_INSTALL_MEASUREMENT_SCRIPTS=ON`, off since 2026-10-02): `--check-dynamics`, `--scan-keys`,
   `--measure-load-times`, `--verify-playback`, `--live-equivalence`, `--create-live-set`, `--live-set-readback`.
+  Each logs a **render preflight** (`libmscore/renderpreflight.h`: calibration files' path + SHA-256 and each
+  patch's source, setups folder / copy, playback.ini + preset; in the verify report, VERIFY.md › Preflight); the
+  copy is synced at start (`syncJobCopy`: verify mirrors the main calibration, measuring jobs keep their own and warn).
 - Measurement runs (supervised: `superviseExtract`, a hang or crash retried then left out; resumable: a start
   skips what earlier runs of the same version did): `--extract-library … --extract-controllers
   --extract-pitch-bend`, `--check-timing`, `--check-rest [--rest-parts range,repeats,controls,legato,onset,shorts,
@@ -305,7 +308,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 78 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-11: bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 81 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›

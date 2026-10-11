@@ -50,6 +50,7 @@
 #include "libmscore/score.h"
 #include "libmscore/sig.h"
 #include "libmscore/soundlibrary.h"
+#include "libmscore/renderpreflight.h"
 #include "audio/midi/event.h"
 #include "audio/midi/msynthesizer.h"
 #include "musescore.h"
@@ -1173,6 +1174,8 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
       top["findingCount"] = report.findings;
       top["verdict"] = report.findings == 0 && !report.totals.count("error") ? "pass" : "fail";
       top["seconds"] = t.elapsed() / 1000.0;
+      // what it rendered with: calibration files and each patch's source, setups (copy), playback.ini (renderpreflight.h)
+      top["preflight"] = RenderPreflight::json();
       top["scores"] = report.scores;
       QFile j(folder + "/report.json");
       if (j.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -1194,6 +1197,7 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
       head << "Each finding: where (measure, beat), KIND, time in the score (and in the audio), part, pitches, what was"
            << "measured | the events at that moment on the part's slots (pedal, switches, dynamics …) [a clip of it]."
            << "Reading it: tools/playbackverify/read_verify_report.py <zip or folder>; VERIFY.md explains the checks.";
+      head << RenderPreflight::lines("playback verification");
       QFile s(folder + "/summary.txt");
       if (s.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
             s.write((head + report.summary).join("\n").toUtf8() + "\n");
