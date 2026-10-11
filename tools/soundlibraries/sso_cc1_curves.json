@@ -1,0 +1,1055 @@
+{
+ "method": {
+  "what": "SSO string sections' All techniques Long (UACC CC32 = 1) against CC1, every 3 semitones over the Long's sounding range (sso_sound_range.json: the map gives none), Celli also at its test pitch 59",
+  "measured": "2026-10-11 on the Windows 11 test VM, the real Spitfire Symphony Orchestra in Kontakt Player 8.13.1 (VST 3), offline, by the VM's test host kthost (one instance per section, 44.1 kHz stereo float, 512-frame blocks split at each event as MuseScore does)",
+  "setups": "the setups MuseScore made from each patch's .nki (maker 2, $iooxo=3) and Kontakt resaved, unedited (MuseScore's setups folder on the VM, copied); the library's defaults: Mic Mix Distance 0.5, Mic 1-5 level 1, Vibrato 1, Release 0.496, Tightness 0.504 (sso_sound_controls.json)",
+  "events": "CC32 1 and CC11 127 once; a warm-up note (not measured); then per pitch, per CC1 value, 4 notes in a row (two round robins alternate: each plays twice), held 3.0 s, 1.5 s apart, velocity = CC1 (MuseScore sends a Long with velocity and CC1 both expressionLevel of the dynamic: Whence at mf, CC1 64, velocity 64), CC1 sent 1 s before its note-on",
+  "ccs": [16, 32, 48, 64, 80, 96, 112, 127],
+  "measures": {"rmsDb": "mean power of both channels 1.5-3.0 s after the note-on, dB full scale", "lufs": "ITU-R BS.1770-4 integrated loudness (pyloudnorm 0.2.0) of the note-on to the note-off, LUFS", "sones": "ISO 532-1 stationary loudness (mosqito 1.2.1 loudness_zwst, free field, resampled to 48 kHz) of the mid channel 1.5-3.0 s after the note-on, samples as pascals: only ratios mean anything", "loudDb": "the dynamics check's measure: the loudest 50 ms (25 ms hop) of the note and 0.5 s of its release", "loud1sDb": "the same over the note's first 1.0 s and 0.5 s more (the dynamics check's 1 s note: comparable with sso_sound_dynamics.json and the rest check's pp)"},
+  "points": "per pitch, per CC1: the median of the 4 repeats and their spread (max - min)",
+  "relative64": "per measure: [cc, median over pitches of (value - value at CC1 64; sones: ratio), min, max, pitches, median repeat spread, largest repeat spread]",
+  "tool": "tools/soundlibraries/sso_cc1_sweep.py (events, analyze, merge)"
+ },
+ "sections": {
+  "Violins 1": {
+   "sampleRate": 44100,
+   "pitches": [55, 58, 61, 64, 67, 70, 73, 76, 79, 82, 85, 88, 91, 94, 97],
+   "ccs": [16, 32, 48, 64, 80, 96, 112, 127],
+   "repeats": 4,
+   "note": 3.0,
+   "switch": 1,
+   "points": {
+    "55": [
+     {"cc": 16, "rmsDb": -42.38, "rmsDbSpread": 1.41, "lufs": -40.49, "lufsSpread": 1.72, "sones": 4.5735, "sonesSpread": 0.635, "loudDb": -39.39, "loudDbSpread": 1.35, "loud1sDb": -42.06, "loud1sDbSpread": 0.52},
+     {"cc": 32, "rmsDb": -39.4, "rmsDbSpread": 1.18, "lufs": -37.31, "lufsSpread": 1.32, "sones": 5.7885, "sonesSpread": 0.533, "loudDb": -36.02, "loudDbSpread": 1.33, "loud1sDb": -38.41, "loud1sDbSpread": 0.67},
+     {"cc": 48, "rmsDb": -36.94, "rmsDbSpread": 0.84, "lufs": -34.48, "lufsSpread": 0.92, "sones": 7.058, "sonesSpread": 0.29, "loudDb": -33.59, "loudDbSpread": 1.11, "loud1sDb": -35.29, "loud1sDbSpread": 0.82},
+     {"cc": 64, "rmsDb": -35.3, "rmsDbSpread": 0.46, "lufs": -32.41, "lufsSpread": 0.36, "sones": 8.059, "sonesSpread": 0.024, "loudDb": -32.69, "loudDbSpread": 0.63, "loud1sDb": -33.22, "loud1sDbSpread": 0.85},
+     {"cc": 80, "rmsDb": -33.34, "rmsDbSpread": 0.3, "lufs": -30.3, "lufsSpread": 0.11, "sones": 9.291, "sonesSpread": 0.164, "loudDb": -31.16, "loudDbSpread": 0.4, "loud1sDb": -31.3, "loud1sDbSpread": 0.69},
+     {"cc": 96, "rmsDb": -31.71, "rmsDbSpread": 0.27, "lufs": -28.66, "lufsSpread": 0.05, "sones": 10.371, "sonesSpread": 0.218, "loudDb": -29.45, "loudDbSpread": 0.25, "loud1sDb": -29.75, "loud1sDbSpread": 0.35},
+     {"cc": 112, "rmsDb": -30.72, "rmsDbSpread": 0.28, "lufs": -27.68, "lufsSpread": 0.04, "sones": 11.0855, "sonesSpread": 0.229, "loudDb": -28.45, "loudDbSpread": 0.56, "loud1sDb": -28.8, "loud1sDbSpread": 0.15},
+     {"cc": 127, "rmsDb": -30.47, "rmsDbSpread": 0.28, "lufs": -27.44, "lufsSpread": 0.03, "sones": 11.2705, "sonesSpread": 0.231, "loudDb": -28.2, "loudDbSpread": 0.63, "loud1sDb": -28.57, "loud1sDbSpread": 0.11}
+    ],
+    "58": [
+     {"cc": 16, "rmsDb": -42.53, "rmsDbSpread": 0.72, "lufs": -40.42, "lufsSpread": 0.71, "sones": 4.589, "sonesSpread": 0.25, "loudDb": -39.7, "loudDbSpread": 1.77, "loud1sDb": -39.89, "loud1sDbSpread": 2.15},
+     {"cc": 32, "rmsDb": -39.56, "rmsDbSpread": 0.48, "lufs": -37.19, "lufsSpread": 0.75, "sones": 5.7505, "sonesSpread": 0.271, "loudDb": -36.12, "loudDbSpread": 1.45, "loud1sDb": -36.12, "loud1sDbSpread": 1.45},
+     {"cc": 48, "rmsDb": -36.97, "rmsDbSpread": 0.38, "lufs": -34.28, "lufsSpread": 0.76, "sones": 6.952, "sonesSpread": 0.316, "loudDb": -33.19, "loudDbSpread": 0.71, "loud1sDb": -33.19, "loud1sDbSpread": 0.71},
+     {"cc": 64, "rmsDb": -35.03, "rmsDbSpread": 0.53, "lufs": -32.08, "lufsSpread": 0.71, "sones": 7.9385, "sonesSpread": 0.387, "loudDb": -31.3, "loudDbSpread": 0.61, "loud1sDb": -31.3, "loud1sDbSpread": 0.61},
+     {"cc": 80, "rmsDb": -32.85, "rmsDbSpread": 0.74, "lufs": -29.84, "lufsSpread": 0.65, "sones": 9.1815, "sonesSpread": 0.495, "loudDb": -29.05, "loudDbSpread": 1.07, "loud1sDb": -29.05, "loud1sDbSpread": 1.07},
+     {"cc": 96, "rmsDb": -31.12, "rmsDbSpread": 0.87, "lufs": -28.09, "lufsSpread": 0.7, "sones": 10.3125, "sonesSpread": 0.605, "loudDb": -27.34, "loudDbSpread": 1.35, "loud1sDb": -27.34, "loud1sDbSpread": 1.35},
+     {"cc": 112, "rmsDb": -30.09, "rmsDbSpread": 0.94, "lufs": -27.06, "lufsSpread": 0.69, "sones": 11.054, "sonesSpread": 0.68, "loudDb": -26.23, "loudDbSpread": 1.2, "loud1sDb": -26.23, "loud1sDbSpread": 1.2},
+     {"cc": 127, "rmsDb": -29.83, "rmsDbSpread": 0.96, "lufs": -26.81, "lufsSpread": 0.68, "sones": 11.241, "sonesSpread": 0.696, "loudDb": -25.95, "loudDbSpread": 1.16, "loud1sDb": -25.95, "loud1sDbSpread": 1.16}
+    ],
+    "61": [
+     {"cc": 16, "rmsDb": -39.26, "rmsDbSpread": 0.67, "lufs": -37.61, "lufsSpread": 0.51, "sones": 5.2475, "sonesSpread": 0.089, "loudDb": -36.16, "loudDbSpread": 1.53, "loud1sDb": -36.53, "loud1sDbSpread": 1.99},
+     {"cc": 32, "rmsDb": -35.82, "rmsDbSpread": 0.1, "lufs": -34.14, "lufsSpread": 0.34, "sones": 6.702, "sonesSpread": 0.036, "loudDb": -32.92, "loudDbSpread": 0.62, "loud1sDb": -33.3, "loud1sDbSpread": 1.39},
+     {"cc": 48, "rmsDb": -32.66, "rmsDbSpread": 0.41, "lufs": -30.75, "lufsSpread": 0.15, "sones": 8.312, "sonesSpread": 0.04, "loudDb": -29.79, "loudDbSpread": 0.24, "loud1sDb": -30.39, "loud1sDbSpread": 0.96},
+     {"cc": 64, "rmsDb": -30.18, "rmsDbSpread": 0.71, "lufs": -28.06, "lufsSpread": 0.14, "sones": 9.7765, "sonesSpread": 0.065, "loudDb": -26.99, "loudDbSpread": 0.48, "loud1sDb": -27.97, "loud1sDbSpread": 1.48},
+     {"cc": 80, "rmsDb": -27.83, "rmsDbSpread": 0.72, "lufs": -25.61, "lufsSpread": 0.2, "sones": 11.435, "sonesSpread": 0.066, "loudDb": -24.41, "loudDbSpread": 0.91, "loud1sDb": -25.27, "loud1sDbSpread": 0.81},
+     {"cc": 96, "rmsDb": -26.07, "rmsDbSpread": 0.65, "lufs": -23.8, "lufsSpread": 0.25, "sones": 12.8035, "sonesSpread": 0.031, "loudDb": -22.59, "loudDbSpread": 1.09, "loud1sDb": -23.4, "loud1sDbSpread": 0.52},
+     {"cc": 112, "rmsDb": -25.04, "rmsDbSpread": 0.61, "lufs": -22.75, "lufsSpread": 0.28, "sones": 13.6885, "sonesSpread": 0.013, "loudDb": -21.48, "loudDbSpread": 1.0, "loud1sDb": -22.25, "loud1sDbSpread": 0.54},
+     {"cc": 127, "rmsDb": -24.78, "rmsDbSpread": 0.6, "lufs": -22.48, "lufsSpread": 0.29, "sones": 13.915, "sonesSpread": 0.012, "loudDb": -21.21, "loudDbSpread": 0.98, "loud1sDb": -21.98, "loud1sDbSpread": 0.55}
+    ],
+    "64": [
+     {"cc": 16, "rmsDb": -44.71, "rmsDbSpread": 1.06, "lufs": -41.98, "lufsSpread": 0.7, "sones": 4.442, "sonesSpread": 0.034, "loudDb": -41.12, "loudDbSpread": 1.25, "loud1sDb": -41.12, "loud1sDbSpread": 1.25},
+     {"cc": 32, "rmsDb": -41.55, "rmsDbSpread": 1.17, "lufs": -38.64, "lufsSpread": 0.66, "sones": 5.4945, "sonesSpread": 0.123, "loudDb": -37.67, "loudDbSpread": 1.18, "loud1sDb": -37.67, "loud1sDbSpread": 1.18},
+     {"cc": 48, "rmsDb": -38.8, "rmsDbSpread": 1.13, "lufs": -35.67, "lufsSpread": 0.48, "sones": 6.535, "sonesSpread": 0.22, "loudDb": -34.77, "loudDbSpread": 0.71, "loud1sDb": -34.77, "loud1sDbSpread": 0.71},
+     {"cc": 64, "rmsDb": -36.81, "rmsDbSpread": 0.89, "lufs": -33.48, "lufsSpread": 0.17, "sones": 7.328, "sonesSpread": 0.298, "loudDb": -32.6, "loudDbSpread": 0.48, "loud1sDb": -32.6, "loud1sDbSpread": 0.48},
+     {"cc": 80, "rmsDb": -34.7, "rmsDbSpread": 0.67, "lufs": -31.29, "lufsSpread": 0.03, "sones": 8.4155, "sonesSpread": 0.353, "loudDb": -30.59, "loudDbSpread": 0.7, "loud1sDb": -30.59, "loud1sDbSpread": 0.7},
+     {"cc": 96, "rmsDb": -33.03, "rmsDbSpread": 0.54, "lufs": -29.58, "lufsSpread": 0.12, "sones": 9.4415, "sonesSpread": 0.383, "loudDb": -29.09, "loudDbSpread": 0.89, "loud1sDb": -29.09, "loud1sDbSpread": 0.89},
+     {"cc": 112, "rmsDb": -32.02, "rmsDbSpread": 0.47, "lufs": -28.57, "lufsSpread": 0.17, "sones": 10.1265, "sonesSpread": 0.399, "loudDb": -28.2, "loudDbSpread": 0.99, "loud1sDb": -28.2, "loud1sDbSpread": 0.99},
+     {"cc": 127, "rmsDb": -31.77, "rmsDbSpread": 0.45, "lufs": -28.32, "lufsSpread": 0.17, "sones": 10.3045, "sonesSpread": 0.403, "loudDb": -27.99, "loudDbSpread": 1.02, "loud1sDb": -27.99, "loud1sDbSpread": 1.02}
+    ],
+    "67": [
+     {"cc": 16, "rmsDb": -43.54, "rmsDbSpread": 2.0, "lufs": -40.68, "lufsSpread": 0.9, "sones": 4.694, "sonesSpread": 0.4, "loudDb": -39.52, "loudDbSpread": 1.27, "loud1sDb": -40.42, "loud1sDbSpread": 0.52},
+     {"cc": 32, "rmsDb": -40.34, "rmsDbSpread": 1.87, "lufs": -37.45, "lufsSpread": 0.65, "sones": 5.8475, "sonesSpread": 0.529, "loudDb": -35.9, "loudDbSpread": 0.84, "loud1sDb": -36.7, "loud1sDbSpread": 0.75},
+     {"cc": 48, "rmsDb": -37.59, "rmsDbSpread": 1.52, "lufs": -34.5, "lufsSpread": 0.51, "sones": 7.004, "sonesSpread": 0.502, "loudDb": -33.2, "loudDbSpread": 0.29, "loud1sDb": -33.71, "loud1sDbSpread": 0.72},
+     {"cc": 64, "rmsDb": -35.63, "rmsDbSpread": 0.98, "lufs": -32.3, "lufsSpread": 0.36, "sones": 7.909, "sonesSpread": 0.298, "loudDb": -31.66, "loudDbSpread": 0.07, "loud1sDb": -31.66, "loud1sDbSpread": 0.07},
+     {"cc": 80, "rmsDb": -33.55, "rmsDbSpread": 0.65, "lufs": -30.09, "lufsSpread": 0.29, "sones": 9.063, "sonesSpread": 0.166, "loudDb": -29.6, "loudDbSpread": 1.14, "loud1sDb": -29.6, "loud1sDbSpread": 1.14},
+     {"cc": 96, "rmsDb": -31.92, "rmsDbSpread": 0.5, "lufs": -28.4, "lufsSpread": 0.28, "sones": 10.1195, "sonesSpread": 0.085, "loudDb": -27.85, "loudDbSpread": 1.24, "loud1sDb": -27.85, "loud1sDbSpread": 1.24},
+     {"cc": 112, "rmsDb": -30.92, "rmsDbSpread": 0.44, "lufs": -27.39, "lufsSpread": 0.26, "sones": 10.832, "sonesSpread": 0.036, "loudDb": -26.75, "loudDbSpread": 1.12, "loud1sDb": -26.75, "loud1sDbSpread": 1.12},
+     {"cc": 127, "rmsDb": -30.68, "rmsDbSpread": 0.43, "lufs": -27.14, "lufsSpread": 0.26, "sones": 11.0145, "sonesSpread": 0.029, "loudDb": -26.48, "loudDbSpread": 1.09, "loud1sDb": -26.48, "loud1sDbSpread": 1.09}
+    ],
+    "70": [
+     {"cc": 16, "rmsDb": -42.44, "rmsDbSpread": 1.43, "lufs": -39.45, "lufsSpread": 0.83, "sones": 4.8125, "sonesSpread": 0.097, "loudDb": -38.23, "loudDbSpread": 0.87, "loud1sDb": -38.23, "loud1sDbSpread": 0.87},
+     {"cc": 32, "rmsDb": -39.41, "rmsDbSpread": 1.19, "lufs": -36.42, "lufsSpread": 0.68, "sones": 5.965, "sonesSpread": 0.154, "loudDb": -34.94, "loudDbSpread": 0.93, "loud1sDb": -35.15, "loud1sDbSpread": 0.5},
+     {"cc": 48, "rmsDb": -36.85, "rmsDbSpread": 1.0, "lufs": -33.82, "lufsSpread": 0.52, "sones": 7.107, "sonesSpread": 0.26, "loudDb": -32.47, "loudDbSpread": 1.18, "loud1sDb": -32.93, "loud1sDbSpread": 0.26},
+     {"cc": 64, "rmsDb": -35.06, "rmsDbSpread": 0.96, "lufs": -31.96, "lufsSpread": 0.42, "sones": 7.948, "sonesSpread": 0.504, "loudDb": -30.6, "loudDbSpread": 0.28, "loud1sDb": -31.24, "loud1sDbSpread": 1.56},
+     {"cc": 80, "rmsDb": -33.02, "rmsDbSpread": 1.05, "lufs": -29.86, "lufsSpread": 0.42, "sones": 9.093, "sonesSpread": 0.748, "loudDb": -28.92, "loudDbSpread": 1.32, "loud1sDb": -29.34, "loud1sDbSpread": 2.17},
+     {"cc": 96, "rmsDb": -31.38, "rmsDbSpread": 1.16, "lufs": -28.2, "lufsSpread": 0.45, "sones": 10.1665, "sonesSpread": 0.903, "loudDb": -27.48, "loudDbSpread": 1.63, "loud1sDb": -27.48, "loud1sDbSpread": 1.63},
+     {"cc": 112, "rmsDb": -30.38, "rmsDbSpread": 1.22, "lufs": -27.18, "lufsSpread": 0.47, "sones": 10.885, "sonesSpread": 0.996, "loudDb": -26.39, "loudDbSpread": 1.35, "loud1sDb": -26.39, "loud1sDbSpread": 1.35},
+     {"cc": 127, "rmsDb": -30.13, "rmsDbSpread": 1.22, "lufs": -26.93, "lufsSpread": 0.47, "sones": 11.0685, "sonesSpread": 1.013, "loudDb": -26.13, "loudDbSpread": 1.28, "loud1sDb": -26.13, "loud1sDbSpread": 1.28}
+    ],
+    "73": [
+     {"cc": 16, "rmsDb": -39.41, "rmsDbSpread": 0.13, "lufs": -36.86, "lufsSpread": 0.51, "sones": 5.467, "sonesSpread": 0.298, "loudDb": -35.05, "loudDbSpread": 1.91, "loud1sDb": -35.66, "loud1sDbSpread": 3.13},
+     {"cc": 32, "rmsDb": -36.71, "rmsDbSpread": 0.4, "lufs": -34.16, "lufsSpread": 0.52, "sones": 6.653, "sonesSpread": 0.358, "loudDb": -32.41, "loudDbSpread": 2.15, "loud1sDb": -32.75, "loud1sDbSpread": 2.85},
+     {"cc": 48, "rmsDb": -34.69, "rmsDbSpread": 0.67, "lufs": -31.94, "lufsSpread": 0.41, "sones": 7.6945, "sonesSpread": 0.355, "loudDb": -30.26, "loudDbSpread": 1.77, "loud1sDb": -30.78, "loud1sDbSpread": 2.48},
+     {"cc": 64, "rmsDb": -33.62, "rmsDbSpread": 0.83, "lufs": -30.48, "lufsSpread": 0.47, "sones": 8.3425, "sonesSpread": 0.207, "loudDb": -29.16, "loudDbSpread": 0.99, "loud1sDb": -29.49, "loud1sDbSpread": 0.31},
+     {"cc": 80, "rmsDb": -31.93, "rmsDbSpread": 0.72, "lufs": -28.59, "lufsSpread": 0.5, "sones": 9.409, "sonesSpread": 0.054, "loudDb": -27.78, "loudDbSpread": 0.36, "loud1sDb": -27.86, "loud1sDbSpread": 0.51},
+     {"cc": 96, "rmsDb": -30.38, "rmsDbSpread": 0.57, "lufs": -26.97, "lufsSpread": 0.52, "sones": 10.4535, "sonesSpread": 0.039, "loudDb": -26.25, "loudDbSpread": 0.32, "loud1sDb": -26.25, "loud1sDbSpread": 0.32},
+     {"cc": 112, "rmsDb": -29.38, "rmsDbSpread": 0.48, "lufs": -25.97, "lufsSpread": 0.52, "sones": 11.172, "sonesSpread": 0.088, "loudDb": -25.08, "loudDbSpread": 0.12, "loud1sDb": -25.08, "loud1sDbSpread": 0.12},
+     {"cc": 127, "rmsDb": -29.13, "rmsDbSpread": 0.46, "lufs": -25.72, "lufsSpread": 0.52, "sones": 11.359, "sonesSpread": 0.098, "loudDb": -24.8, "loudDbSpread": 0.21, "loud1sDb": -24.8, "loud1sDbSpread": 0.21}
+    ],
+    "76": [
+     {"cc": 16, "rmsDb": -45.26, "rmsDbSpread": 0.66, "lufs": -41.41, "lufsSpread": 0.32, "sones": 4.4025, "sonesSpread": 0.125, "loudDb": -42.2, "loudDbSpread": 0.66, "loud1sDb": -42.78, "loud1sDbSpread": 1.83},
+     {"cc": 32, "rmsDb": -42.62, "rmsDbSpread": 0.71, "lufs": -38.68, "lufsSpread": 0.04, "sones": 5.31, "sonesSpread": 0.126, "loudDb": -39.74, "loudDbSpread": 0.6, "loud1sDb": -40.11, "loud1sDbSpread": 1.34},
+     {"cc": 48, "rmsDb": -40.67, "rmsDbSpread": 0.69, "lufs": -36.43, "lufsSpread": 0.08, "sones": 6.0595, "sonesSpread": 0.171, "loudDb": -37.77, "loudDbSpread": 1.35, "loud1sDb": -37.8, "loud1sDbSpread": 1.42},
+     {"cc": 64, "rmsDb": -39.65, "rmsDbSpread": 0.52, "lufs": -34.99, "lufsSpread": 0.12, "sones": 6.467, "sonesSpread": 0.22, "loudDb": -35.81, "loudDbSpread": 1.98, "loud1sDb": -35.81, "loud1sDbSpread": 1.98},
+     {"cc": 80, "rmsDb": -37.95, "rmsDbSpread": 0.35, "lufs": -33.08, "lufsSpread": 0.07, "sones": 7.248, "sonesSpread": 0.268, "loudDb": -33.81, "loudDbSpread": 2.32, "loud1sDb": -33.81, "loud1sDbSpread": 2.32},
+     {"cc": 96, "rmsDb": -36.35, "rmsDbSpread": 0.26, "lufs": -31.43, "lufsSpread": 0.02, "sones": 8.082, "sonesSpread": 0.304, "loudDb": -32.06, "loudDbSpread": 2.14, "loud1sDb": -32.06, "loud1sDbSpread": 2.14},
+     {"cc": 112, "rmsDb": -35.34, "rmsDbSpread": 0.22, "lufs": -30.41, "lufsSpread": 0.05, "sones": 8.672, "sonesSpread": 0.33, "loudDb": -31.02, "loudDbSpread": 2.04, "loud1sDb": -31.02, "loud1sDbSpread": 2.04},
+     {"cc": 127, "rmsDb": -35.08, "rmsDbSpread": 0.21, "lufs": -30.16, "lufsSpread": 0.06, "sones": 8.826, "sonesSpread": 0.336, "loudDb": -30.77, "loudDbSpread": 2.01, "loud1sDb": -30.77, "loud1sDbSpread": 2.01}
+    ],
+    "79": [
+     {"cc": 16, "rmsDb": -42.95, "rmsDbSpread": 1.56, "lufs": -39.23, "lufsSpread": 1.26, "sones": 5.027, "sonesSpread": 0.456, "loudDb": -39.76, "loudDbSpread": 3.54, "loud1sDb": -41.55, "loud1sDbSpread": 1.35},
+     {"cc": 32, "rmsDb": -40.28, "rmsDbSpread": 1.44, "lufs": -36.42, "lufsSpread": 0.92, "sones": 6.0255, "sonesSpread": 0.491, "loudDb": -37.05, "loudDbSpread": 3.7, "loud1sDb": -38.44, "loud1sDbSpread": 0.92},
+     {"cc": 48, "rmsDb": -38.32, "rmsDbSpread": 1.08, "lufs": -34.09, "lufsSpread": 0.54, "sones": 6.881, "sonesSpread": 0.41, "loudDb": -34.94, "loudDbSpread": 2.93, "loud1sDb": -35.46, "loud1sDbSpread": 1.9},
+     {"cc": 64, "rmsDb": -37.39, "rmsDbSpread": 0.35, "lufs": -32.61, "lufsSpread": 0.03, "sones": 7.335, "sonesSpread": 0.106, "loudDb": -33.57, "loudDbSpread": 2.44, "loud1sDb": -33.57, "loud1sDbSpread": 2.44},
+     {"cc": 80, "rmsDb": -35.79, "rmsDbSpread": 0.18, "lufs": -30.71, "lufsSpread": 0.36, "sones": 8.205, "sonesSpread": 0.136, "loudDb": -31.69, "loudDbSpread": 2.36, "loud1sDb": -31.69, "loud1sDbSpread": 2.36},
+     {"cc": 96, "rmsDb": -34.27, "rmsDbSpread": 0.4, "lufs": -29.09, "lufsSpread": 0.45, "sones": 9.103, "sonesSpread": 0.254, "loudDb": -29.98, "loudDbSpread": 1.68, "loud1sDb": -29.98, "loud1sDbSpread": 1.68},
+     {"cc": 112, "rmsDb": -33.28, "rmsDbSpread": 0.47, "lufs": -28.08, "lufsSpread": 0.48, "sones": 9.743, "sonesSpread": 0.306, "loudDb": -28.98, "loudDbSpread": 1.33, "loud1sDb": -28.98, "loud1sDbSpread": 1.33},
+     {"cc": 127, "rmsDb": -33.03, "rmsDbSpread": 0.47, "lufs": -27.83, "lufsSpread": 0.48, "sones": 9.909, "sonesSpread": 0.314, "loudDb": -28.73, "loudDbSpread": 1.25, "loud1sDb": -28.73, "loud1sDbSpread": 1.25}
+    ],
+    "82": [
+     {"cc": 16, "rmsDb": -43.17, "rmsDbSpread": 0.36, "lufs": -39.98, "lufsSpread": 0.45, "sones": 4.6475, "sonesSpread": 0.089, "loudDb": -40.08, "loudDbSpread": 0.61, "loud1sDb": -42.42, "loud1sDbSpread": 0.15},
+     {"cc": 32, "rmsDb": -40.17, "rmsDbSpread": 0.24, "lufs": -36.92, "lufsSpread": 0.35, "sones": 5.741, "sonesSpread": 0.058, "loudDb": -36.69, "loudDbSpread": 0.42, "loud1sDb": -39.46, "loud1sDbSpread": 0.1},
+     {"cc": 48, "rmsDb": -37.56, "rmsDbSpread": 0.08, "lufs": -34.0, "lufsSpread": 0.19, "sones": 6.8835, "sonesSpread": 0.015, "loudDb": -34.13, "loudDbSpread": 1.36, "loud1sDb": -36.32, "loud1sDbSpread": 0.38},
+     {"cc": 64, "rmsDb": -35.64, "rmsDbSpread": 0.08, "lufs": -31.75, "lufsSpread": 0.03, "sones": 7.841, "sonesSpread": 0.132, "loudDb": -32.33, "loudDbSpread": 1.1, "loud1sDb": -33.19, "loud1sDbSpread": 0.15},
+     {"cc": 80, "rmsDb": -33.5, "rmsDbSpread": 0.14, "lufs": -29.46, "lufsSpread": 0.04, "sones": 9.0295, "sonesSpread": 0.193, "loudDb": -30.34, "loudDbSpread": 0.21, "loud1sDb": -30.62, "loud1sDbSpread": 0.02},
+     {"cc": 96, "rmsDb": -31.8, "rmsDbSpread": 0.15, "lufs": -27.73, "lufsSpread": 0.05, "sones": 10.097, "sonesSpread": 0.24, "loudDb": -28.64, "loudDbSpread": 0.1, "loud1sDb": -28.79, "loud1sDbSpread": 0.02},
+     {"cc": 112, "rmsDb": -30.76, "rmsDbSpread": 0.14, "lufs": -26.69, "lufsSpread": 0.06, "sones": 10.8165, "sonesSpread": 0.261, "loudDb": -27.62, "loudDbSpread": 0.09, "loud1sDb": -27.74, "loud1sDbSpread": 0.02},
+     {"cc": 127, "rmsDb": -30.5, "rmsDbSpread": 0.15, "lufs": -26.44, "lufsSpread": 0.05, "sones": 11.0025, "sonesSpread": 0.267, "loudDb": -27.38, "loudDbSpread": 0.08, "loud1sDb": -27.48, "loud1sDbSpread": 0.02}
+    ],
+    "85": [
+     {"cc": 16, "rmsDb": -43.87, "rmsDbSpread": 0.47, "lufs": -40.56, "lufsSpread": 1.31, "sones": 4.1855, "sonesSpread": 0.333, "loudDb": -40.59, "loudDbSpread": 1.81, "loud1sDb": -41.47, "loud1sDbSpread": 3.58},
+     {"cc": 32, "rmsDb": -40.81, "rmsDbSpread": 0.29, "lufs": -37.19, "lufsSpread": 0.76, "sones": 5.199, "sonesSpread": 0.238, "loudDb": -37.77, "loudDbSpread": 1.61, "loud1sDb": -38.0, "loud1sDbSpread": 2.06},
+     {"cc": 48, "rmsDb": -38.16, "rmsDbSpread": 0.05, "lufs": -34.11, "lufsSpread": 0.03, "sones": 6.192, "sonesSpread": 0.024, "loudDb": -35.02, "loudDbSpread": 0.13, "loud1sDb": -35.02, "loud1sDbSpread": 0.13},
+     {"cc": 64, "rmsDb": -36.18, "rmsDbSpread": 0.18, "lufs": -31.74, "lufsSpread": 0.64, "sones": 6.9945, "sonesSpread": 0.233, "loudDb": -33.08, "loudDbSpread": 1.98, "loud1sDb": -33.08, "loud1sDbSpread": 1.98},
+     {"cc": 80, "rmsDb": -34.02, "rmsDbSpread": 0.24, "lufs": -29.44, "lufsSpread": 0.88, "sones": 8.0525, "sonesSpread": 0.333, "loudDb": -30.67, "loudDbSpread": 2.14, "loud1sDb": -30.87, "loud1sDbSpread": 2.54},
+     {"cc": 96, "rmsDb": -32.31, "rmsDbSpread": 0.25, "lufs": -27.69, "lufsSpread": 0.97, "sones": 9.0155, "sonesSpread": 0.369, "loudDb": -28.9, "loudDbSpread": 2.08, "loud1sDb": -29.23, "loud1sDbSpread": 2.73},
+     {"cc": 112, "rmsDb": -31.29, "rmsDbSpread": 0.24, "lufs": -26.66, "lufsSpread": 0.97, "sones": 9.6575, "sonesSpread": 0.377, "loudDb": -27.85, "loudDbSpread": 2.05, "loud1sDb": -28.24, "loud1sDbSpread": 2.82},
+     {"cc": 127, "rmsDb": -31.03, "rmsDbSpread": 0.24, "lufs": -26.4, "lufsSpread": 0.98, "sones": 9.824, "sonesSpread": 0.378, "loudDb": -27.61, "loudDbSpread": 2.03, "loud1sDb": -28.01, "loud1sDbSpread": 2.83}
+    ],
+    "88": [
+     {"cc": 16, "rmsDb": -45.88, "rmsDbSpread": 0.03, "lufs": -41.4, "lufsSpread": 0.32, "sones": 3.6215, "sonesSpread": 0.023, "loudDb": -43.58, "loudDbSpread": 0.98, "loud1sDb": -43.63, "loud1sDbSpread": 1.08},
+     {"cc": 32, "rmsDb": -43.02, "rmsDbSpread": 0.17, "lufs": -38.53, "lufsSpread": 0.51, "sones": 4.446, "sonesSpread": 0.002, "loudDb": -40.56, "loudDbSpread": 0.91, "loud1sDb": -40.56, "loud1sDbSpread": 0.91},
+     {"cc": 48, "rmsDb": -40.72, "rmsDbSpread": 0.39, "lufs": -35.85, "lufsSpread": 0.54, "sones": 5.2385, "sonesSpread": 0.079, "loudDb": -37.95, "loudDbSpread": 0.77, "loud1sDb": -37.95, "loud1sDbSpread": 0.77},
+     {"cc": 64, "rmsDb": -39.23, "rmsDbSpread": 0.66, "lufs": -33.91, "lufsSpread": 0.55, "sones": 5.7875, "sonesSpread": 0.237, "loudDb": -36.33, "loudDbSpread": 0.37, "loud1sDb": -36.33, "loud1sDbSpread": 0.37},
+     {"cc": 80, "rmsDb": -37.31, "rmsDbSpread": 0.77, "lufs": -31.8, "lufsSpread": 0.55, "sones": 6.5955, "sonesSpread": 0.353, "loudDb": -33.94, "loudDbSpread": 0.09, "loud1sDb": -33.97, "loud1sDbSpread": 0.03},
+     {"cc": 96, "rmsDb": -35.69, "rmsDbSpread": 0.78, "lufs": -30.11, "lufsSpread": 0.54, "sones": 7.3675, "sonesSpread": 0.413, "loudDb": -32.14, "loudDbSpread": 0.06, "loud1sDb": -32.14, "loud1sDbSpread": 0.06},
+     {"cc": 112, "rmsDb": -34.68, "rmsDbSpread": 0.78, "lufs": -29.1, "lufsSpread": 0.54, "sones": 7.875, "sonesSpread": 0.448, "loudDb": -31.08, "loudDbSpread": 0.09, "loud1sDb": -31.08, "loud1sDbSpread": 0.09},
+     {"cc": 127, "rmsDb": -34.43, "rmsDbSpread": 0.78, "lufs": -28.84, "lufsSpread": 0.53, "sones": 8.006, "sonesSpread": 0.454, "loudDb": -30.82, "loudDbSpread": 0.1, "loud1sDb": -30.82, "loud1sDbSpread": 0.1}
+    ],
+    "91": [
+     {"cc": 16, "rmsDb": -45.77, "rmsDbSpread": 0.48, "lufs": -40.84, "lufsSpread": 0.28, "sones": 3.6105, "sonesSpread": 0.199, "loudDb": -42.16, "loudDbSpread": 0.91, "loud1sDb": -42.16, "loud1sDbSpread": 0.91},
+     {"cc": 32, "rmsDb": -42.81, "rmsDbSpread": 0.46, "lufs": -37.68, "lufsSpread": 0.28, "sones": 4.4745, "sonesSpread": 0.223, "loudDb": -39.12, "loudDbSpread": 0.83, "loud1sDb": -39.12, "loud1sDbSpread": 0.83},
+     {"cc": 48, "rmsDb": -40.3, "rmsDbSpread": 0.42, "lufs": -34.87, "lufsSpread": 0.26, "sones": 5.3485, "sonesSpread": 0.227, "loudDb": -36.91, "loudDbSpread": 0.66, "loud1sDb": -36.91, "loud1sDbSpread": 0.66},
+     {"cc": 64, "rmsDb": -38.53, "rmsDbSpread": 0.35, "lufs": -32.75, "lufsSpread": 0.19, "sones": 6.0425, "sonesSpread": 0.215, "loudDb": -34.34, "loudDbSpread": 0.78, "loud1sDb": -34.34, "loud1sDbSpread": 0.78},
+     {"cc": 80, "rmsDb": -36.47, "rmsDbSpread": 0.29, "lufs": -30.54, "lufsSpread": 0.16, "sones": 6.936, "sonesSpread": 0.214, "loudDb": -32.17, "loudDbSpread": 1.76, "loud1sDb": -32.17, "loud1sDbSpread": 1.76},
+     {"cc": 96, "rmsDb": -34.8, "rmsDbSpread": 0.27, "lufs": -28.81, "lufsSpread": 0.14, "sones": 7.7475, "sonesSpread": 0.245, "loudDb": -30.66, "loudDbSpread": 1.37, "loud1sDb": -30.66, "loud1sDbSpread": 1.37},
+     {"cc": 112, "rmsDb": -33.78, "rmsDbSpread": 0.25, "lufs": -27.79, "lufsSpread": 0.13, "sones": 8.3065, "sonesSpread": 0.265, "loudDb": -29.64, "loudDbSpread": 1.34, "loud1sDb": -29.64, "loud1sDbSpread": 1.34},
+     {"cc": 127, "rmsDb": -33.53, "rmsDbSpread": 0.26, "lufs": -27.52, "lufsSpread": 0.13, "sones": 8.452, "sonesSpread": 0.27, "loudDb": -29.38, "loudDbSpread": 1.36, "loud1sDb": -29.38, "loud1sDbSpread": 1.36}
+    ],
+    "94": [
+     {"cc": 16, "rmsDb": -45.04, "rmsDbSpread": 0.64, "lufs": -40.03, "lufsSpread": 0.04, "sones": 3.389, "sonesSpread": 0.058, "loudDb": -41.8, "loudDbSpread": 0.19, "loud1sDb": -42.02, "loud1sDbSpread": 0.24},
+     {"cc": 32, "rmsDb": -42.15, "rmsDbSpread": 0.56, "lufs": -37.13, "lufsSpread": 0.16, "sones": 4.196, "sonesSpread": 0.056, "loudDb": -39.18, "loudDbSpread": 0.24, "loud1sDb": -39.45, "loud1sDbSpread": 0.3},
+     {"cc": 48, "rmsDb": -39.82, "rmsDbSpread": 0.4, "lufs": -34.62, "lufsSpread": 0.18, "sones": 5.017, "sonesSpread": 0.028, "loudDb": -36.97, "loudDbSpread": 0.15, "loud1sDb": -36.97, "loud1sDbSpread": 0.15},
+     {"cc": 64, "rmsDb": -38.34, "rmsDbSpread": 0.13, "lufs": -32.88, "lufsSpread": 0.26, "sones": 5.6485, "sonesSpread": 0.049, "loudDb": -35.14, "loudDbSpread": 0.45, "loud1sDb": -35.14, "loud1sDbSpread": 0.45},
+     {"cc": 80, "rmsDb": -36.45, "rmsDbSpread": 0.03, "lufs": -30.84, "lufsSpread": 0.34, "sones": 6.4955, "sonesSpread": 0.109, "loudDb": -32.92, "loudDbSpread": 0.8, "loud1sDb": -32.92, "loud1sDbSpread": 0.8},
+     {"cc": 96, "rmsDb": -34.84, "rmsDbSpread": 0.09, "lufs": -29.17, "lufsSpread": 0.41, "sones": 7.2705, "sonesSpread": 0.127, "loudDb": -31.2, "loudDbSpread": 0.88, "loud1sDb": -31.2, "loud1sDbSpread": 0.88},
+     {"cc": 112, "rmsDb": -33.84, "rmsDbSpread": 0.11, "lufs": -28.16, "lufsSpread": 0.43, "sones": 7.7965, "sonesSpread": 0.147, "loudDb": -30.16, "loudDbSpread": 0.92, "loud1sDb": -30.16, "loud1sDbSpread": 0.92},
+     {"cc": 127, "rmsDb": -33.6, "rmsDbSpread": 0.12, "lufs": -27.91, "lufsSpread": 0.44, "sones": 7.9345, "sonesSpread": 0.151, "loudDb": -29.91, "loudDbSpread": 0.92, "loud1sDb": -29.91, "loud1sDbSpread": 0.92}
+    ],
+    "97": [
+     {"cc": 16, "rmsDb": -44.83, "rmsDbSpread": 0.36, "lufs": -39.06, "lufsSpread": 0.62, "sones": 3.2925, "sonesSpread": 0.015, "loudDb": -41.08, "loudDbSpread": 2.3, "loud1sDb": -41.29, "loud1sDbSpread": 2.72},
+     {"cc": 32, "rmsDb": -41.92, "rmsDbSpread": 0.16, "lufs": -36.23, "lufsSpread": 0.74, "sones": 4.0775, "sonesSpread": 0.043, "loudDb": -38.19, "loudDbSpread": 1.85, "loud1sDb": -38.19, "loud1sDbSpread": 1.85},
+     {"cc": 48, "rmsDb": -39.58, "rmsDbSpread": 0.15, "lufs": -33.75, "lufsSpread": 0.85, "sones": 4.8255, "sonesSpread": 0.089, "loudDb": -35.8, "loudDbSpread": 0.64, "loud1sDb": -35.8, "loud1sDbSpread": 0.64},
+     {"cc": 64, "rmsDb": -38.1, "rmsDbSpread": 0.56, "lufs": -32.09, "lufsSpread": 0.91, "sones": 5.332, "sonesSpread": 0.154, "loudDb": -34.43, "loudDbSpread": 0.3, "loud1sDb": -34.6, "loud1sDbSpread": 0.64},
+     {"cc": 80, "rmsDb": -36.23, "rmsDbSpread": 0.75, "lufs": -30.12, "lufsSpread": 0.9, "sones": 6.051, "sonesSpread": 0.188, "loudDb": -32.64, "loudDbSpread": 0.29, "loud1sDb": -32.64, "loud1sDbSpread": 0.29},
+     {"cc": 96, "rmsDb": -34.64, "rmsDbSpread": 0.79, "lufs": -28.48, "lufsSpread": 0.84, "sones": 6.759, "sonesSpread": 0.222, "loudDb": -30.98, "loudDbSpread": 0.2, "loud1sDb": -30.98, "loud1sDbSpread": 0.2},
+     {"cc": 112, "rmsDb": -33.64, "rmsDbSpread": 0.8, "lufs": -27.48, "lufsSpread": 0.81, "sones": 7.2345, "sonesSpread": 0.237, "loudDb": -29.99, "loudDbSpread": 0.45, "loud1sDb": -29.99, "loud1sDbSpread": 0.45},
+     {"cc": 127, "rmsDb": -33.39, "rmsDbSpread": 0.8, "lufs": -27.23, "lufsSpread": 0.81, "sones": 7.358, "sonesSpread": 0.242, "loudDb": -29.75, "loudDbSpread": 0.5, "loud1sDb": -29.75, "loud1sDbSpread": 0.5}
+    ]
+   },
+   "relative64": {
+    "rmsDb": [
+     [16, -7.24, -9.08, -5.56, 15, 0.66, 2.0],
+     [32, -4.28, -5.64, -2.89, 15, 0.48, 1.87],
+     [48, -1.77, -2.48, -0.93, 15, 0.42, 1.52],
+     [64, 0.0, 0.0, 0.0, 15, 0.53, 0.98],
+     [80, 2.04, 1.6, 2.35, 15, 0.65, 1.05],
+     [96, 3.68, 3.12, 4.11, 15, 0.5, 1.16],
+     [112, 4.68, 4.11, 5.14, 15, 0.47, 1.22],
+     [127, 4.93, 4.36, 5.4, 15, 0.45, 1.22]
+    ],
+    "lufs": [
+     [16, -8.08, -9.55, -6.38, 15, 0.62, 1.72],
+     [32, -4.9, -6.08, -3.68, 15, 0.65, 1.32],
+     [48, -2.07, -2.69, -1.44, 15, 0.48, 0.92],
+     [64, 0.0, 0.0, 0.0, 15, 0.36, 0.91],
+     [80, 2.11, 1.89, 2.45, 15, 0.34, 0.9],
+     [96, 3.8, 3.51, 4.26, 15, 0.41, 0.97],
+     [112, 4.81, 4.51, 5.31, 15, 0.43, 0.97],
+     [127, 5.07, 4.76, 5.58, 15, 0.44, 0.98]
+    ],
+    "sones": [
+     [16, 0.6, 0.537, 0.685, 15, 0.125, 0.635],
+     [32, 0.743, 0.686, 0.821, 15, 0.154, 0.533],
+     [48, 0.888, 0.85, 0.938, 15, 0.22, 0.502],
+     [64, 1.0, 1.0, 1.0, 15, 0.215, 0.504],
+     [80, 1.148, 1.119, 1.17, 15, 0.193, 0.748],
+     [96, 1.282, 1.241, 1.31, 15, 0.245, 0.903],
+     [112, 1.375, 1.328, 1.4, 15, 0.265, 0.996],
+     [127, 1.398, 1.351, 1.423, 15, 0.27, 1.013]
+    ],
+    "loudDb": [
+     [16, -7.51, -9.17, -5.89, 15, 1.27, 3.54],
+     [32, -4.24, -5.93, -3.25, 15, 0.93, 3.7],
+     [48, -1.83, -2.8, -0.9, 15, 0.71, 2.93],
+     [64, 0.0, 0.0, 0.0, 15, 0.61, 2.44],
+     [80, 2.01, 1.38, 2.58, 15, 0.91, 2.36],
+     [96, 3.69, 2.91, 4.4, 15, 1.09, 2.14],
+     [112, 4.71, 4.08, 5.51, 15, 1.0, 2.05],
+     [127, 4.96, 4.36, 5.78, 15, 1.02, 2.03]
+    ],
+    "loud1sDb": [
+     [16, -7.98, -9.23, -6.17, 15, 1.25, 3.58],
+     [32, -4.82, -6.27, -3.26, 15, 0.92, 2.85],
+     [48, -1.94, -3.13, -1.2, 15, 0.71, 2.48],
+     [64, 0.0, 0.0, 0.0, 15, 0.64, 2.44],
+     [80, 2.06, 1.63, 2.7, 15, 0.81, 2.54],
+     [96, 3.76, 3.24, 4.57, 15, 0.89, 2.73],
+     [112, 4.84, 4.4, 5.72, 15, 0.99, 2.82],
+     [127, 5.07, 4.61, 5.99, 15, 1.02, 2.83]
+    ]
+   }
+  },
+  "Violins 2": {
+   "sampleRate": 44100,
+   "pitches": [55, 58, 61, 64, 67, 70, 73, 76, 79, 82, 85, 88, 91, 94, 97],
+   "ccs": [16, 32, 48, 64, 80, 96, 112, 127],
+   "repeats": 4,
+   "note": 3.0,
+   "switch": 1,
+   "points": {
+    "55": [
+     {"cc": 16, "rmsDb": -44.02, "rmsDbSpread": 1.55, "lufs": -42.16, "lufsSpread": 1.26, "sones": 4.3265, "sonesSpread": 0.433, "loudDb": -42.09, "loudDbSpread": 1.97, "loud1sDb": -43.91, "loud1sDbSpread": 1.68},
+     {"cc": 32, "rmsDb": -40.78, "rmsDbSpread": 1.49, "lufs": -38.8, "lufsSpread": 1.32, "sones": 5.5485, "sonesSpread": 0.485, "loudDb": -38.75, "loudDbSpread": 1.81, "loud1sDb": -40.22, "loud1sDbSpread": 1.15},
+     {"cc": 48, "rmsDb": -38.07, "rmsDbSpread": 1.34, "lufs": -35.88, "lufsSpread": 1.35, "sones": 6.797, "sonesSpread": 0.458, "loudDb": -36.23, "loudDbSpread": 1.69, "loud1sDb": -36.81, "loud1sDbSpread": 0.51},
+     {"cc": 64, "rmsDb": -36.27, "rmsDbSpread": 1.09, "lufs": -33.66, "lufsSpread": 1.58, "sones": 7.8015, "sonesSpread": 0.333, "loudDb": -34.16, "loudDbSpread": 1.53, "loud1sDb": -34.59, "loud1sDbSpread": 2.39},
+     {"cc": 80, "rmsDb": -34.34, "rmsDbSpread": 0.91, "lufs": -31.46, "lufsSpread": 1.72, "sones": 8.965, "sonesSpread": 0.258, "loudDb": -31.67, "loudDbSpread": 1.61, "loud1sDb": -32.64, "loud1sDbSpread": 3.54},
+     {"cc": 96, "rmsDb": -32.78, "rmsDbSpread": 0.79, "lufs": -29.78, "lufsSpread": 1.76, "sones": 9.9865, "sonesSpread": 0.241, "loudDb": -29.92, "loudDbSpread": 1.62, "loud1sDb": -31.09, "loud1sDbSpread": 3.95},
+     {"cc": 112, "rmsDb": -31.81, "rmsDbSpread": 0.75, "lufs": -28.77, "lufsSpread": 1.79, "sones": 10.65, "sonesSpread": 0.242, "loudDb": -28.9, "loudDbSpread": 1.62, "loud1sDb": -30.01, "loud1sDbSpread": 3.83},
+     {"cc": 127, "rmsDb": -31.58, "rmsDbSpread": 0.74, "lufs": -28.53, "lufsSpread": 1.8, "sones": 10.8205, "sonesSpread": 0.241, "loudDb": -28.66, "loudDbSpread": 1.61, "loud1sDb": -29.75, "loud1sDbSpread": 3.79}
+    ],
+    "58": [
+     {"cc": 16, "rmsDb": -42.06, "rmsDbSpread": 0.4, "lufs": -40.47, "lufsSpread": 0.04, "sones": 4.618, "sonesSpread": 0.584, "loudDb": -39.34, "loudDbSpread": 0.4, "loud1sDb": -40.72, "loud1sDbSpread": 0.37},
+     {"cc": 32, "rmsDb": -39.0, "rmsDbSpread": 0.55, "lufs": -37.27, "lufsSpread": 0.11, "sones": 5.802, "sonesSpread": 0.644, "loudDb": -35.97, "loudDbSpread": 0.76, "loud1sDb": -37.15, "loud1sDbSpread": 0.26},
+     {"cc": 48, "rmsDb": -36.5, "rmsDbSpread": 0.6, "lufs": -34.52, "lufsSpread": 0.2, "sones": 6.948, "sonesSpread": 0.528, "loudDb": -32.75, "loudDbSpread": 0.51, "loud1sDb": -33.87, "loud1sDbSpread": 0.86},
+     {"cc": 64, "rmsDb": -34.87, "rmsDbSpread": 0.47, "lufs": -32.66, "lufsSpread": 0.16, "sones": 7.779, "sonesSpread": 0.244, "loudDb": -30.55, "loudDbSpread": 0.28, "loud1sDb": -31.94, "loud1sDbSpread": 1.84},
+     {"cc": 80, "rmsDb": -32.96, "rmsDbSpread": 0.28, "lufs": -30.59, "lufsSpread": 0.22, "sones": 8.8815, "sonesSpread": 0.037, "loudDb": -28.69, "loudDbSpread": 0.7, "loud1sDb": -30.22, "loud1sDbSpread": 2.32},
+     {"cc": 96, "rmsDb": -31.39, "rmsDbSpread": 0.15, "lufs": -28.96, "lufsSpread": 0.25, "sones": 9.9075, "sonesSpread": 0.079, "loudDb": -27.25, "loudDbSpread": 0.79, "loud1sDb": -28.88, "loud1sDbSpread": 2.49},
+     {"cc": 112, "rmsDb": -30.43, "rmsDbSpread": 0.1, "lufs": -27.98, "lufsSpread": 0.25, "sones": 10.599, "sonesSpread": 0.136, "loudDb": -26.38, "loudDbSpread": 0.84, "loud1sDb": -27.95, "loud1sDbSpread": 2.29},
+     {"cc": 127, "rmsDb": -30.19, "rmsDbSpread": 0.09, "lufs": -27.73, "lufsSpread": 0.25, "sones": 10.7785, "sonesSpread": 0.149, "loudDb": -26.17, "loudDbSpread": 0.84, "loud1sDb": -27.71, "loud1sDbSpread": 2.24}
+    ],
+    "61": [
+     {"cc": 16, "rmsDb": -37.19, "rmsDbSpread": 0.49, "lufs": -35.36, "lufsSpread": 0.42, "sones": 6.079, "sonesSpread": 0.036, "loudDb": -33.2, "loudDbSpread": 1.17, "loud1sDb": -35.14, "loud1sDbSpread": 1.42},
+     {"cc": 32, "rmsDb": -34.63, "rmsDbSpread": 0.53, "lufs": -33.05, "lufsSpread": 0.55, "sones": 7.308, "sonesSpread": 0.012, "loudDb": -30.75, "loudDbSpread": 0.56, "loud1sDb": -32.46, "loud1sDbSpread": 1.46},
+     {"cc": 48, "rmsDb": -32.94, "rmsDbSpread": 0.57, "lufs": -31.27, "lufsSpread": 0.53, "sones": 8.2655, "sonesSpread": 0.055, "loudDb": -29.05, "loudDbSpread": 0.19, "loud1sDb": -30.55, "loud1sDbSpread": 1.45},
+     {"cc": 64, "rmsDb": -32.47, "rmsDbSpread": 0.59, "lufs": -30.56, "lufsSpread": 0.35, "sones": 8.6835, "sonesSpread": 0.161, "loudDb": -28.33, "loudDbSpread": 1.38, "loud1sDb": -29.57, "loud1sDbSpread": 1.11},
+     {"cc": 80, "rmsDb": -31.16, "rmsDbSpread": 0.56, "lufs": -28.95, "lufsSpread": 0.35, "sones": 9.6165, "sonesSpread": 0.249, "loudDb": -26.89, "loudDbSpread": 0.96, "loud1sDb": -27.95, "loud1sDbSpread": 1.17},
+     {"cc": 96, "rmsDb": -29.73, "rmsDbSpread": 0.53, "lufs": -27.38, "lufsSpread": 0.33, "sones": 10.654, "sonesSpread": 0.308, "loudDb": -25.38, "loudDbSpread": 0.05, "loud1sDb": -26.29, "loud1sDbSpread": 1.76},
+     {"cc": 112, "rmsDb": -28.76, "rmsDbSpread": 0.51, "lufs": -26.36, "lufsSpread": 0.33, "sones": 11.4035, "sonesSpread": 0.347, "loudDb": -24.48, "loudDbSpread": 0.47, "loud1sDb": -25.26, "loud1sDbSpread": 2.04},
+     {"cc": 127, "rmsDb": -28.51, "rmsDbSpread": 0.49, "lufs": -26.09, "lufsSpread": 0.33, "sones": 11.6005, "sonesSpread": 0.353, "loudDb": -24.26, "loudDbSpread": 0.59, "loud1sDb": -25.01, "loud1sDbSpread": 2.09}
+    ],
+    "64": [
+     {"cc": 16, "rmsDb": -43.38, "rmsDbSpread": 0.67, "lufs": -41.03, "lufsSpread": 0.47, "sones": 4.7065, "sonesSpread": 0.047, "loudDb": -41.44, "loudDbSpread": 1.48, "loud1sDb": -42.77, "loud1sDbSpread": 0.16},
+     {"cc": 32, "rmsDb": -40.73, "rmsDbSpread": 0.47, "lufs": -38.41, "lufsSpread": 0.19, "sones": 5.745, "sonesSpread": 0.094, "loudDb": -39.03, "loudDbSpread": 0.65, "loud1sDb": -39.94, "loud1sDbSpread": 0.07},
+     {"cc": 48, "rmsDb": -38.83, "rmsDbSpread": 0.22, "lufs": -36.34, "lufsSpread": 0.04, "sones": 6.67, "sonesSpread": 0.142, "loudDb": -36.89, "loudDbSpread": 0.27, "loud1sDb": -37.8, "loud1sDbSpread": 0.9},
+     {"cc": 64, "rmsDb": -37.98, "rmsDbSpread": 0.04, "lufs": -35.32, "lufsSpread": 0.4, "sones": 7.217, "sonesSpread": 0.148, "loudDb": -35.72, "loudDbSpread": 0.37, "loud1sDb": -37.14, "loud1sDbSpread": 2.0},
+     {"cc": 80, "rmsDb": -36.44, "rmsDbSpread": 0.07, "lufs": -33.54, "lufsSpread": 0.6, "sones": 8.086, "sonesSpread": 0.126, "loudDb": -34.08, "loudDbSpread": 0.57, "loud1sDb": -34.95, "loud1sDbSpread": 2.29},
+     {"cc": 96, "rmsDb": -34.93, "rmsDbSpread": 0.0, "lufs": -31.93, "lufsSpread": 0.64, "sones": 8.969, "sonesSpread": 0.104, "loudDb": -32.24, "loudDbSpread": 1.09, "loud1sDb": -33.01, "loud1sDbSpread": 2.62},
+     {"cc": 112, "rmsDb": -33.95, "rmsDbSpread": 0.06, "lufs": -30.91, "lufsSpread": 0.65, "sones": 9.5755, "sonesSpread": 0.093, "loudDb": -31.14, "loudDbSpread": 1.35, "loud1sDb": -31.86, "loud1sDbSpread": 2.78},
+     {"cc": 127, "rmsDb": -33.7, "rmsDbSpread": 0.07, "lufs": -30.66, "lufsSpread": 0.64, "sones": 9.736, "sonesSpread": 0.09, "loudDb": -30.88, "loudDbSpread": 1.41, "loud1sDb": -31.58, "loud1sDbSpread": 2.82}
+    ],
+    "67": [
+     {"cc": 16, "rmsDb": -44.44, "rmsDbSpread": 0.6, "lufs": -41.52, "lufsSpread": 0.65, "sones": 4.5275, "sonesSpread": 0.029, "loudDb": -41.64, "loudDbSpread": 0.89, "loud1sDb": -41.67, "loud1sDbSpread": 0.83},
+     {"cc": 32, "rmsDb": -41.72, "rmsDbSpread": 0.82, "lufs": -38.8, "lufsSpread": 0.96, "sones": 5.5195, "sonesSpread": 0.061, "loudDb": -38.78, "loudDbSpread": 0.83, "loud1sDb": -39.24, "loud1sDbSpread": 0.92},
+     {"cc": 48, "rmsDb": -39.62, "rmsDbSpread": 0.88, "lufs": -36.59, "lufsSpread": 1.01, "sones": 6.42, "sonesSpread": 0.196, "loudDb": -36.6, "loudDbSpread": 0.18, "loud1sDb": -37.77, "loud1sDbSpread": 1.25},
+     {"cc": 64, "rmsDb": -38.38, "rmsDbSpread": 0.57, "lufs": -35.3, "lufsSpread": 0.69, "sones": 6.9915, "sonesSpread": 0.293, "loudDb": -35.38, "loudDbSpread": 0.57, "loud1sDb": -36.85, "loud1sDbSpread": 1.39},
+     {"cc": 80, "rmsDb": -36.55, "rmsDbSpread": 0.15, "lufs": -33.43, "lufsSpread": 0.44, "sones": 7.916, "sonesSpread": 0.278, "loudDb": -33.53, "loudDbSpread": 0.37, "loud1sDb": -35.15, "loud1sDbSpread": 1.14},
+     {"cc": 96, "rmsDb": -34.96, "rmsDbSpread": 0.1, "lufs": -31.81, "lufsSpread": 0.28, "sones": 8.8185, "sonesSpread": 0.261, "loudDb": -31.82, "loudDbSpread": 0.02, "loud1sDb": -33.49, "loud1sDbSpread": 0.98},
+     {"cc": 112, "rmsDb": -33.95, "rmsDbSpread": 0.23, "lufs": -30.8, "lufsSpread": 0.19, "sones": 9.4265, "sonesSpread": 0.225, "loudDb": -30.79, "loudDbSpread": 0.14, "loud1sDb": -32.41, "loud1sDbSpread": 0.81},
+     {"cc": 127, "rmsDb": -33.7, "rmsDbSpread": 0.25, "lufs": -30.55, "lufsSpread": 0.18, "sones": 9.5855, "sonesSpread": 0.217, "loudDb": -30.54, "loudDbSpread": 0.18, "loud1sDb": -32.14, "loud1sDbSpread": 0.79}
+    ],
+    "70": [
+     {"cc": 16, "rmsDb": -40.26, "rmsDbSpread": 0.16, "lufs": -38.3, "lufsSpread": 0.73, "sones": 5.2705, "sonesSpread": 0.207, "loudDb": -36.14, "loudDbSpread": 2.58, "loud1sDb": -39.4, "loud1sDbSpread": 2.86},
+     {"cc": 32, "rmsDb": -37.74, "rmsDbSpread": 0.33, "lufs": -35.54, "lufsSpread": 0.8, "sones": 6.3655, "sonesSpread": 0.295, "loudDb": -33.84, "loudDbSpread": 1.27, "loud1sDb": -36.24, "loud1sDbSpread": 1.48},
+     {"cc": 48, "rmsDb": -35.92, "rmsDbSpread": 0.5, "lufs": -33.41, "lufsSpread": 0.83, "sones": 7.2255, "sonesSpread": 0.321, "loudDb": -32.28, "loudDbSpread": 0.42, "loud1sDb": -33.3, "loud1sDbSpread": 0.05},
+     {"cc": 64, "rmsDb": -34.97, "rmsDbSpread": 0.5, "lufs": -32.01, "lufsSpread": 0.48, "sones": 7.661, "sonesSpread": 0.206, "loudDb": -30.76, "loudDbSpread": 1.02, "loud1sDb": -31.07, "loud1sDbSpread": 1.65},
+     {"cc": 80, "rmsDb": -33.2, "rmsDbSpread": 0.32, "lufs": -30.17, "lufsSpread": 0.0, "sones": 8.578, "sonesSpread": 0.04, "loudDb": -28.3, "loudDbSpread": 1.32, "loud1sDb": -28.71, "loud1sDbSpread": 2.14},
+     {"cc": 96, "rmsDb": -31.55, "rmsDbSpread": 0.17, "lufs": -28.52, "lufsSpread": 0.16, "sones": 9.5735, "sonesSpread": 0.089, "loudDb": -26.34, "loudDbSpread": 0.96, "loud1sDb": -26.84, "loud1sDbSpread": 1.97},
+     {"cc": 112, "rmsDb": -30.48, "rmsDbSpread": 0.09, "lufs": -27.5, "lufsSpread": 0.21, "sones": 10.2705, "sonesSpread": 0.159, "loudDb": -25.2, "loudDbSpread": 0.71, "loud1sDb": -25.74, "loud1sDbSpread": 1.81},
+     {"cc": 127, "rmsDb": -30.23, "rmsDbSpread": 0.07, "lufs": -27.24, "lufsSpread": 0.22, "sones": 10.4495, "sonesSpread": 0.167, "loudDb": -24.92, "loudDbSpread": 0.66, "loud1sDb": -25.48, "loud1sDbSpread": 1.77}
+    ],
+    "73": [
+     {"cc": 16, "rmsDb": -41.6, "rmsDbSpread": 2.44, "lufs": -38.92, "lufsSpread": 1.62, "sones": 5.1185, "sonesSpread": 0.675, "loudDb": -38.59, "loudDbSpread": 2.05, "loud1sDb": -38.97, "loud1sDbSpread": 1.85},
+     {"cc": 32, "rmsDb": -38.76, "rmsDbSpread": 2.4, "lufs": -36.16, "lufsSpread": 1.64, "sones": 6.235, "sonesSpread": 0.77, "loudDb": -35.76, "loudDbSpread": 2.48, "loud1sDb": -36.59, "loud1sDbSpread": 1.53},
+     {"cc": 48, "rmsDb": -36.63, "rmsDbSpread": 2.08, "lufs": -34.16, "lufsSpread": 1.36, "sones": 7.1405, "sonesSpread": 0.811, "loudDb": -33.79, "loudDbSpread": 2.72, "loud1sDb": -34.85, "loud1sDbSpread": 1.12},
+     {"cc": 64, "rmsDb": -35.59, "rmsDbSpread": 1.33, "lufs": -33.08, "lufsSpread": 0.96, "sones": 7.536, "sonesSpread": 0.664, "loudDb": -32.42, "loudDbSpread": 1.0, "loud1sDb": -33.76, "loud1sDbSpread": 0.62},
+     {"cc": 80, "rmsDb": -34.08, "rmsDbSpread": 0.64, "lufs": -31.44, "lufsSpread": 0.59, "sones": 8.281, "sonesSpread": 0.546, "loudDb": -30.45, "loudDbSpread": 0.09, "loud1sDb": -31.75, "loud1sDbSpread": 0.85},
+     {"cc": 96, "rmsDb": -32.67, "rmsDbSpread": 0.28, "lufs": -29.93, "lufsSpread": 0.39, "sones": 9.093, "sonesSpread": 0.498, "loudDb": -28.94, "loudDbSpread": 0.51, "loud1sDb": -30.12, "loud1sDbSpread": 0.89},
+     {"cc": 112, "rmsDb": -31.75, "rmsDbSpread": 0.12, "lufs": -28.95, "lufsSpread": 0.29, "sones": 9.6775, "sonesSpread": 0.479, "loudDb": -28.02, "loudDbSpread": 0.75, "loud1sDb": -29.14, "loud1sDbSpread": 0.87},
+     {"cc": 127, "rmsDb": -31.52, "rmsDbSpread": 0.08, "lufs": -28.71, "lufsSpread": 0.28, "sones": 9.8335, "sonesSpread": 0.477, "loudDb": -27.79, "loudDbSpread": 0.81, "loud1sDb": -28.91, "loud1sDbSpread": 0.87}
+    ],
+    "76": [
+     {"cc": 16, "rmsDb": -44.92, "rmsDbSpread": 0.56, "lufs": -41.11, "lufsSpread": 1.16, "sones": 4.4155, "sonesSpread": 0.199, "loudDb": -42.66, "loudDbSpread": 1.33, "loud1sDb": -43.95, "loud1sDbSpread": 1.58},
+     {"cc": 32, "rmsDb": -42.35, "rmsDbSpread": 0.44, "lufs": -38.5, "lufsSpread": 0.85, "sones": 5.3005, "sonesSpread": 0.197, "loudDb": -40.22, "loudDbSpread": 1.02, "loud1sDb": -41.25, "loud1sDbSpread": 1.26},
+     {"cc": 48, "rmsDb": -40.62, "rmsDbSpread": 0.27, "lufs": -36.5, "lufsSpread": 0.63, "sones": 5.9595, "sonesSpread": 0.121, "loudDb": -38.61, "loudDbSpread": 0.73, "loud1sDb": -39.12, "loud1sDbSpread": 0.92},
+     {"cc": 64, "rmsDb": -40.11, "rmsDbSpread": 0.01, "lufs": -35.62, "lufsSpread": 0.31, "sones": 6.1425, "sonesSpread": 0.031, "loudDb": -37.82, "loudDbSpread": 0.32, "loud1sDb": -37.82, "loud1sDbSpread": 0.32},
+     {"cc": 80, "rmsDb": -38.78, "rmsDbSpread": 0.09, "lufs": -33.97, "lufsSpread": 0.16, "sones": 6.6885, "sonesSpread": 0.145, "loudDb": -35.84, "loudDbSpread": 0.01, "loud1sDb": -35.84, "loud1sDbSpread": 0.01},
+     {"cc": 96, "rmsDb": -37.35, "rmsDbSpread": 0.1, "lufs": -32.42, "lufsSpread": 0.13, "sones": 7.357, "sonesSpread": 0.194, "loudDb": -34.16, "loudDbSpread": 0.04, "loud1sDb": -34.16, "loud1sDbSpread": 0.04},
+     {"cc": 112, "rmsDb": -36.39, "rmsDbSpread": 0.07, "lufs": -31.44, "lufsSpread": 0.14, "sones": 7.856, "sonesSpread": 0.204, "loudDb": -33.15, "loudDbSpread": 0.11, "loud1sDb": -33.15, "loud1sDbSpread": 0.11},
+     {"cc": 127, "rmsDb": -36.14, "rmsDbSpread": 0.07, "lufs": -31.19, "lufsSpread": 0.14, "sones": 7.9875, "sonesSpread": 0.207, "loudDb": -32.89, "loudDbSpread": 0.12, "loud1sDb": -32.89, "loud1sDbSpread": 0.12}
+    ],
+    "79": [
+     {"cc": 16, "rmsDb": -42.52, "rmsDbSpread": 0.14, "lufs": -39.47, "lufsSpread": 0.24, "sones": 4.846, "sonesSpread": 0.074, "loudDb": -39.34, "loudDbSpread": 0.76, "loud1sDb": -40.17, "loud1sDbSpread": 2.42},
+     {"cc": 32, "rmsDb": -39.95, "rmsDbSpread": 0.21, "lufs": -36.86, "lufsSpread": 0.09, "sones": 5.8185, "sonesSpread": 0.005, "loudDb": -36.48, "loudDbSpread": 0.64, "loud1sDb": -37.42, "loud1sDbSpread": 1.95},
+     {"cc": 48, "rmsDb": -38.21, "rmsDbSpread": 0.78, "lufs": -34.96, "lufsSpread": 0.28, "sones": 6.6015, "sonesSpread": 0.225, "loudDb": -34.58, "loudDbSpread": 0.21, "loud1sDb": -35.53, "loud1sDbSpread": 0.83},
+     {"cc": 64, "rmsDb": -37.72, "rmsDbSpread": 1.69, "lufs": -34.0, "lufsSpread": 0.82, "sones": 6.9395, "sonesSpread": 0.645, "loudDb": -34.42, "loudDbSpread": 0.77, "loud1sDb": -34.66, "loud1sDbSpread": 0.53},
+     {"cc": 80, "rmsDb": -36.42, "rmsDbSpread": 2.21, "lufs": -32.39, "lufsSpread": 1.13, "sones": 7.6795, "sonesSpread": 0.957, "loudDb": -32.54, "loudDbSpread": 0.04, "loud1sDb": -32.54, "loud1sDbSpread": 0.04},
+     {"cc": 96, "rmsDb": -35.0, "rmsDbSpread": 2.29, "lufs": -30.86, "lufsSpread": 1.21, "sones": 8.523, "sonesSpread": 1.102, "loudDb": -30.93, "loudDbSpread": 0.32, "loud1sDb": -30.93, "loud1sDbSpread": 0.32},
+     {"cc": 112, "rmsDb": -34.03, "rmsDbSpread": 2.26, "lufs": -29.87, "lufsSpread": 1.21, "sones": 9.116, "sonesSpread": 1.184, "loudDb": -29.96, "loudDbSpread": 0.49, "loud1sDb": -29.96, "loud1sDbSpread": 0.49},
+     {"cc": 127, "rmsDb": -33.78, "rmsDbSpread": 2.24, "lufs": -29.62, "lufsSpread": 1.21, "sones": 9.272, "sonesSpread": 1.206, "loudDb": -29.73, "loudDbSpread": 0.53, "loud1sDb": -29.73, "loud1sDbSpread": 0.53}
+    ],
+    "82": [
+     {"cc": 16, "rmsDb": -42.8, "rmsDbSpread": 0.67, "lufs": -39.01, "lufsSpread": 0.89, "sones": 4.7475, "sonesSpread": 0.223, "loudDb": -39.55, "loudDbSpread": 0.43, "loud1sDb": -39.58, "loud1sDbSpread": 0.36},
+     {"cc": 32, "rmsDb": -40.24, "rmsDbSpread": 0.47, "lufs": -36.34, "lufsSpread": 0.83, "sones": 5.7105, "sonesSpread": 0.171, "loudDb": -36.99, "loudDbSpread": 0.33, "loud1sDb": -36.99, "loud1sDbSpread": 0.33},
+     {"cc": 48, "rmsDb": -38.49, "rmsDbSpread": 0.22, "lufs": -34.39, "lufsSpread": 0.69, "sones": 6.508, "sonesSpread": 0.082, "loudDb": -35.09, "loudDbSpread": 0.2, "loud1sDb": -35.09, "loud1sDbSpread": 0.2},
+     {"cc": 64, "rmsDb": -37.86, "rmsDbSpread": 0.09, "lufs": -33.42, "lufsSpread": 0.49, "sones": 6.9005, "sonesSpread": 0.031, "loudDb": -34.36, "loudDbSpread": 0.78, "loud1sDb": -34.36, "loud1sDbSpread": 0.78},
+     {"cc": 80, "rmsDb": -36.39, "rmsDbSpread": 0.17, "lufs": -31.77, "lufsSpread": 0.35, "sones": 7.705, "sonesSpread": 0.046, "loudDb": -32.58, "loudDbSpread": 0.06, "loud1sDb": -32.58, "loud1sDbSpread": 0.06},
+     {"cc": 96, "rmsDb": -34.89, "rmsDbSpread": 0.12, "lufs": -30.21, "lufsSpread": 0.32, "sones": 8.566, "sonesSpread": 0.016, "loudDb": -31.13, "loudDbSpread": 0.55, "loud1sDb": -31.13, "loud1sDbSpread": 0.55},
+     {"cc": 112, "rmsDb": -33.89, "rmsDbSpread": 0.07, "lufs": -29.21, "lufsSpread": 0.32, "sones": 9.158, "sonesSpread": 0.012, "loudDb": -30.17, "loudDbSpread": 0.68, "loud1sDb": -30.17, "loud1sDbSpread": 0.68},
+     {"cc": 127, "rmsDb": -33.64, "rmsDbSpread": 0.05, "lufs": -28.95, "lufsSpread": 0.31, "sones": 9.3135, "sonesSpread": 0.021, "loudDb": -29.89, "loudDbSpread": 0.62, "loud1sDb": -29.89, "loud1sDbSpread": 0.62}
+    ],
+    "85": [
+     {"cc": 16, "rmsDb": -43.74, "rmsDbSpread": 0.64, "lufs": -39.11, "lufsSpread": 0.04, "sones": 4.4095, "sonesSpread": 0.149, "loudDb": -40.4, "loudDbSpread": 0.0, "loud1sDb": -40.98, "loud1sDbSpread": 1.17},
+     {"cc": 32, "rmsDb": -41.12, "rmsDbSpread": 0.61, "lufs": -36.45, "lufsSpread": 0.09, "sones": 5.3575, "sonesSpread": 0.195, "loudDb": -38.14, "loudDbSpread": 0.33, "loud1sDb": -38.6, "loud1sDbSpread": 0.58},
+     {"cc": 48, "rmsDb": -39.16, "rmsDbSpread": 0.49, "lufs": -34.44, "lufsSpread": 0.2, "sones": 6.166, "sonesSpread": 0.174, "loudDb": -36.7, "loudDbSpread": 0.11, "loud1sDb": -36.85, "loud1sDbSpread": 0.2},
+     {"cc": 64, "rmsDb": -38.11, "rmsDbSpread": 0.26, "lufs": -33.33, "lufsSpread": 0.38, "sones": 6.6205, "sonesSpread": 0.075, "loudDb": -35.65, "loudDbSpread": 0.39, "loud1sDb": -35.65, "loud1sDbSpread": 0.39},
+     {"cc": 80, "rmsDb": -36.37, "rmsDbSpread": 0.11, "lufs": -31.58, "lufsSpread": 0.5, "sones": 7.4215, "sonesSpread": 0.051, "loudDb": -33.77, "loudDbSpread": 0.11, "loud1sDb": -33.77, "loud1sDbSpread": 0.11},
+     {"cc": 96, "rmsDb": -34.75, "rmsDbSpread": 0.05, "lufs": -29.97, "lufsSpread": 0.52, "sones": 8.225, "sonesSpread": 0.136, "loudDb": -32.16, "loudDbSpread": 0.12, "loud1sDb": -32.16, "loud1sDbSpread": 0.12},
+     {"cc": 112, "rmsDb": -33.73, "rmsDbSpread": 0.04, "lufs": -28.95, "lufsSpread": 0.53, "sones": 8.789, "sonesSpread": 0.188, "loudDb": -31.13, "loudDbSpread": 0.32, "loud1sDb": -31.13, "loud1sDbSpread": 0.32},
+     {"cc": 127, "rmsDb": -33.48, "rmsDbSpread": 0.03, "lufs": -28.7, "lufsSpread": 0.52, "sones": 8.9375, "sonesSpread": 0.201, "loudDb": -30.88, "loudDbSpread": 0.35, "loud1sDb": -30.88, "loud1sDbSpread": 0.35}
+    ],
+    "88": [
+     {"cc": 16, "rmsDb": -45.14, "rmsDbSpread": 0.09, "lufs": -40.48, "lufsSpread": 0.12, "sones": 4.0215, "sonesSpread": 0.019, "loudDb": -41.53, "loudDbSpread": 2.23, "loud1sDb": -42.05, "loud1sDbSpread": 1.41},
+     {"cc": 32, "rmsDb": -42.62, "rmsDbSpread": 0.18, "lufs": -37.89, "lufsSpread": 0.26, "sones": 4.7975, "sonesSpread": 0.011, "loudDb": -39.0, "loudDbSpread": 1.52, "loud1sDb": -39.3, "loud1sDbSpread": 0.92},
+     {"cc": 48, "rmsDb": -40.95, "rmsDbSpread": 0.34, "lufs": -36.08, "lufsSpread": 0.4, "sones": 5.374, "sonesSpread": 0.044, "loudDb": -37.37, "loudDbSpread": 0.33, "loud1sDb": -37.42, "loud1sDbSpread": 0.21},
+     {"cc": 64, "rmsDb": -40.48, "rmsDbSpread": 0.59, "lufs": -35.34, "lufsSpread": 0.45, "sones": 5.5005, "sonesSpread": 0.173, "loudDb": -36.86, "loudDbSpread": 0.35, "loud1sDb": -36.86, "loud1sDbSpread": 0.35},
+     {"cc": 80, "rmsDb": -39.16, "rmsDbSpread": 0.73, "lufs": -33.8, "lufsSpread": 0.35, "sones": 5.998, "sonesSpread": 0.3, "loudDb": -35.5, "loudDbSpread": 0.14, "loud1sDb": -35.5, "loud1sDbSpread": 0.14},
+     {"cc": 96, "rmsDb": -37.7, "rmsDbSpread": 0.75, "lufs": -32.28, "lufsSpread": 0.25, "sones": 6.638, "sonesSpread": 0.384, "loudDb": -33.8, "loudDbSpread": 0.03, "loud1sDb": -33.8, "loud1sDbSpread": 0.03},
+     {"cc": 112, "rmsDb": -36.71, "rmsDbSpread": 0.74, "lufs": -31.29, "lufsSpread": 0.19, "sones": 7.113, "sonesSpread": 0.424, "loudDb": -32.56, "loudDbSpread": 0.17, "loud1sDb": -32.56, "loud1sDbSpread": 0.17},
+     {"cc": 127, "rmsDb": -36.46, "rmsDbSpread": 0.74, "lufs": -31.04, "lufsSpread": 0.17, "sones": 7.239, "sonesSpread": 0.434, "loudDb": -32.27, "loudDbSpread": 0.2, "loud1sDb": -32.27, "loud1sDbSpread": 0.2}
+    ],
+    "91": [
+     {"cc": 16, "rmsDb": -44.62, "rmsDbSpread": 0.88, "lufs": -39.89, "lufsSpread": 1.46, "sones": 3.994, "sonesSpread": 0.126, "loudDb": -42.6, "loudDbSpread": 1.56, "loud1sDb": -43.06, "loud1sDbSpread": 0.7},
+     {"cc": 32, "rmsDb": -42.03, "rmsDbSpread": 0.87, "lufs": -37.18, "lufsSpread": 1.4, "sones": 4.8145, "sonesSpread": 0.189, "loudDb": -39.83, "loudDbSpread": 1.04, "loud1sDb": -40.19, "loud1sDbSpread": 1.39},
+     {"cc": 48, "rmsDb": -40.28, "rmsDbSpread": 0.79, "lufs": -35.27, "lufsSpread": 1.37, "sones": 5.465, "sonesSpread": 0.234, "loudDb": -37.65, "loudDbSpread": 1.22, "loud1sDb": -37.88, "loud1sDbSpread": 1.68},
+     {"cc": 64, "rmsDb": -39.8, "rmsDbSpread": 0.57, "lufs": -34.28, "lufsSpread": 1.01, "sones": 5.6705, "sonesSpread": 0.249, "loudDb": -36.65, "loudDbSpread": 1.76, "loud1sDb": -36.65, "loud1sDbSpread": 1.76},
+     {"cc": 80, "rmsDb": -38.53, "rmsDbSpread": 0.33, "lufs": -32.75, "lufsSpread": 0.62, "sones": 6.1875, "sonesSpread": 0.251, "loudDb": -35.05, "loudDbSpread": 1.55, "loud1sDb": -35.05, "loud1sDbSpread": 1.55},
+     {"cc": 96, "rmsDb": -37.16, "rmsDbSpread": 0.21, "lufs": -31.23, "lufsSpread": 0.51, "sones": 6.809, "sonesSpread": 0.246, "loudDb": -33.53, "loudDbSpread": 1.57, "loud1sDb": -33.53, "loud1sDbSpread": 1.57},
+     {"cc": 112, "rmsDb": -36.21, "rmsDbSpread": 0.16, "lufs": -30.26, "lufsSpread": 0.48, "sones": 7.277, "sonesSpread": 0.24, "loudDb": -32.52, "loudDbSpread": 1.57, "loud1sDb": -32.52, "loud1sDbSpread": 1.57},
+     {"cc": 127, "rmsDb": -35.97, "rmsDbSpread": 0.15, "lufs": -30.02, "lufsSpread": 0.47, "sones": 7.4005, "sonesSpread": 0.235, "loudDb": -32.28, "loudDbSpread": 1.57, "loud1sDb": -32.28, "loud1sDbSpread": 1.57}
+    ],
+    "94": [
+     {"cc": 16, "rmsDb": -45.01, "rmsDbSpread": 1.26, "lufs": -40.36, "lufsSpread": 1.8, "sones": 3.618, "sonesSpread": 0.4, "loudDb": -41.76, "loudDbSpread": 1.03, "loud1sDb": -43.22, "loud1sDbSpread": 1.32},
+     {"cc": 32, "rmsDb": -42.47, "rmsDbSpread": 1.25, "lufs": -37.86, "lufsSpread": 1.59, "sones": 4.3555, "sonesSpread": 0.467, "loudDb": -39.3, "loudDbSpread": 1.3, "loud1sDb": -40.59, "loud1sDbSpread": 1.37},
+     {"cc": 48, "rmsDb": -40.8, "rmsDbSpread": 1.18, "lufs": -36.1, "lufsSpread": 1.46, "sones": 4.9055, "sonesSpread": 0.489, "loudDb": -37.93, "loudDbSpread": 1.66, "loud1sDb": -39.0, "loud1sDbSpread": 1.41},
+     {"cc": 64, "rmsDb": -40.41, "rmsDbSpread": 0.99, "lufs": -35.6, "lufsSpread": 1.36, "sones": 5.0045, "sonesSpread": 0.431, "loudDb": -37.8, "loudDbSpread": 1.11, "loud1sDb": -38.98, "loud1sDbSpread": 1.45},
+     {"cc": 80, "rmsDb": -39.19, "rmsDbSpread": 0.81, "lufs": -34.25, "lufsSpread": 1.19, "sones": 5.4355, "sonesSpread": 0.399, "loudDb": -36.65, "loudDbSpread": 0.8, "loud1sDb": -37.2, "loud1sDbSpread": 1.89},
+     {"cc": 96, "rmsDb": -37.8, "rmsDbSpread": 0.72, "lufs": -32.81, "lufsSpread": 1.14, "sones": 6.0065, "sonesSpread": 0.409, "loudDb": -35.03, "loudDbSpread": 1.5, "loud1sDb": -35.53, "loud1sDbSpread": 2.51},
+     {"cc": 112, "rmsDb": -36.84, "rmsDbSpread": 0.68, "lufs": -31.84, "lufsSpread": 1.13, "sones": 6.42, "sonesSpread": 0.424, "loudDb": -34.02, "loudDbSpread": 1.93, "loud1sDb": -34.48, "loud1sDbSpread": 2.87},
+     {"cc": 127, "rmsDb": -36.59, "rmsDbSpread": 0.67, "lufs": -31.59, "lufsSpread": 1.13, "sones": 6.5305, "sonesSpread": 0.427, "loudDb": -33.76, "loudDbSpread": 2.02, "loud1sDb": -34.23, "loud1sDbSpread": 2.95}
+    ],
+    "97": [
+     {"cc": 16, "rmsDb": -46.27, "rmsDbSpread": 0.55, "lufs": -40.84, "lufsSpread": 0.11, "sones": 3.122, "sonesSpread": 0.128, "loudDb": -42.32, "loudDbSpread": 1.24, "loud1sDb": -43.25, "loud1sDbSpread": 3.1},
+     {"cc": 32, "rmsDb": -43.63, "rmsDbSpread": 0.5, "lufs": -38.18, "lufsSpread": 0.2, "sones": 3.8115, "sonesSpread": 0.177, "loudDb": -39.64, "loudDbSpread": 1.65, "loud1sDb": -40.43, "loud1sDbSpread": 3.22},
+     {"cc": 48, "rmsDb": -41.72, "rmsDbSpread": 0.39, "lufs": -36.23, "lufsSpread": 0.27, "sones": 4.3845, "sonesSpread": 0.231, "loudDb": -38.06, "loudDbSpread": 2.16, "loud1sDb": -38.52, "loud1sDbSpread": 3.08},
+     {"cc": 64, "rmsDb": -40.78, "rmsDbSpread": 0.22, "lufs": -35.29, "lufsSpread": 0.26, "sones": 4.6675, "sonesSpread": 0.257, "loudDb": -37.8, "loudDbSpread": 1.73, "loud1sDb": -37.91, "loud1sDbSpread": 1.95},
+     {"cc": 80, "rmsDb": -39.15, "rmsDbSpread": 0.11, "lufs": -33.68, "lufsSpread": 0.18, "sones": 5.2165, "sonesSpread": 0.271, "loudDb": -36.7, "loudDbSpread": 0.33, "loud1sDb": -36.83, "loud1sDbSpread": 0.6},
+     {"cc": 96, "rmsDb": -37.58, "rmsDbSpread": 0.08, "lufs": -32.15, "lufsSpread": 0.1, "sones": 5.809, "sonesSpread": 0.274, "loudDb": -35.16, "loudDbSpread": 0.01, "loud1sDb": -35.52, "loud1sDbSpread": 0.07},
+     {"cc": 112, "rmsDb": -36.58, "rmsDbSpread": 0.08, "lufs": -31.16, "lufsSpread": 0.06, "sones": 6.235, "sonesSpread": 0.284, "loudDb": -34.03, "loudDbSpread": 0.23, "loud1sDb": -34.67, "loud1sDbSpread": 0.21},
+     {"cc": 127, "rmsDb": -36.33, "rmsDbSpread": 0.07, "lufs": -30.91, "lufsSpread": 0.06, "sones": 6.347, "sonesSpread": 0.286, "loudDb": -33.75, "loudDbSpread": 0.27, "loud1sDb": -34.45, "loud1sDbSpread": 0.27}
+    ]
+   },
+   "relative64": {
+    "rmsDb": [
+     [16, -5.29, -7.75, -4.6, 15, 0.6, 2.44],
+     [32, -2.75, -4.51, -2.06, 15, 0.53, 2.4],
+     [48, -0.85, -1.8, -0.39, 15, 0.57, 2.08],
+     [64, 0.0, 0.0, 0.0, 15, 0.57, 1.69],
+     [80, 1.51, 1.22, 1.93, 15, 0.32, 2.21],
+     [96, 2.97, 2.61, 3.49, 15, 0.17, 2.29],
+     [112, 3.97, 3.57, 4.49, 15, 0.12, 2.26],
+     [127, 4.22, 3.82, 4.74, 15, 0.09, 2.24]
+    ],
+    "lufs": [
+     [16, -5.61, -8.5, -4.76, 15, 0.65, 1.8],
+     [32, -2.92, -5.14, -2.26, 15, 0.8, 1.64],
+     [48, -0.99, -2.22, -0.5, 15, 0.63, 1.46],
+     [64, 0.0, 0.0, 0.0, 15, 0.48, 1.58],
+     [80, 1.65, 1.35, 2.2, 15, 0.44, 1.72],
+     [96, 3.2, 2.79, 3.88, 15, 0.33, 1.76],
+     [112, 4.2, 3.76, 4.89, 15, 0.32, 1.79],
+     [127, 4.47, 4.01, 5.13, 15, 0.31, 1.8]
+    ],
+    "sones": [
+     [16, 0.688, 0.555, 0.731, 15, 0.149, 0.675],
+     [32, 0.828, 0.711, 0.872, 15, 0.189, 0.77],
+     [48, 0.943, 0.871, 0.98, 15, 0.225, 0.811],
+     [64, 1.0, 1.0, 1.0, 15, 0.244, 0.664],
+     [80, 1.117, 1.086, 1.149, 15, 0.251, 0.957],
+     [96, 1.241, 1.198, 1.28, 15, 0.246, 1.102],
+     [112, 1.327, 1.279, 1.365, 15, 0.24, 1.184],
+     [127, 1.349, 1.3, 1.387, 15, 0.235, 1.206]
+    ],
+    "loudDb": [
+     [16, -5.19, -8.79, -3.96, 15, 1.24, 2.58],
+     [32, -2.63, -5.42, -1.5, 15, 1.02, 2.48],
+     [48, -1.0, -2.2, -0.13, 15, 0.42, 2.72],
+     [64, 0.0, 0.0, 0.0, 15, 0.78, 1.76],
+     [80, 1.85, 1.1, 2.49, 15, 0.37, 1.61],
+     [96, 3.48, 2.64, 4.42, 15, 0.51, 1.62],
+     [112, 4.4, 3.77, 5.56, 15, 0.68, 1.93],
+     [127, 4.63, 4.04, 5.84, 15, 0.62, 2.02]
+    ],
+    "loud1sDb": [
+     [16, -5.51, -9.32, -4.24, 15, 1.41, 3.1],
+     [32, -2.83, -5.63, -1.61, 15, 1.26, 3.22],
+     [48, -0.98, -2.23, -0.02, 15, 0.9, 3.08],
+     [64, 0.0, 0.0, 0.0, 15, 1.39, 2.39],
+     [80, 1.78, 1.08, 2.36, 15, 1.14, 3.54],
+     [96, 3.45, 2.39, 4.23, 15, 0.98, 3.95],
+     [112, 4.5, 3.24, 5.33, 15, 0.87, 3.83],
+     [127, 4.75, 3.46, 5.59, 15, 0.87, 3.79]
+    ]
+   }
+  },
+  "Violas": {
+   "sampleRate": 44100,
+   "pitches": [48, 51, 54, 57, 60, 63, 66, 69, 72, 75, 78, 81, 84, 87, 90],
+   "ccs": [16, 32, 48, 64, 80, 96, 112, 127],
+   "repeats": 4,
+   "note": 3.0,
+   "switch": 1,
+   "points": {
+    "48": [
+     {"cc": 16, "rmsDb": -39.42, "rmsDbSpread": 0.86, "lufs": -37.2, "lufsSpread": 0.45, "sones": 5.6155, "sonesSpread": 0.419, "loudDb": -36.45, "loudDbSpread": 0.28, "loud1sDb": -37.69, "loud1sDbSpread": 2.76},
+     {"cc": 32, "rmsDb": -36.88, "rmsDbSpread": 1.03, "lufs": -34.59, "lufsSpread": 0.08, "sones": 6.801, "sonesSpread": 0.506, "loudDb": -34.22, "loudDbSpread": 0.33, "loud1sDb": -34.83, "loud1sDbSpread": 0.9},
+     {"cc": 48, "rmsDb": -35.01, "rmsDbSpread": 1.16, "lufs": -32.66, "lufsSpread": 0.33, "sones": 7.866, "sonesSpread": 0.556, "loudDb": -32.4, "loudDbSpread": 0.36, "loud1sDb": -32.91, "loud1sDbSpread": 1.32},
+     {"cc": 64, "rmsDb": -33.97, "rmsDbSpread": 1.15, "lufs": -31.47, "lufsSpread": 1.0, "sones": 8.567, "sonesSpread": 0.45, "loudDb": -30.62, "loudDbSpread": 0.42, "loud1sDb": -31.77, "loud1sDbSpread": 2.72},
+     {"cc": 80, "rmsDb": -32.13, "rmsDbSpread": 0.98, "lufs": -29.59, "lufsSpread": 1.2, "sones": 9.708, "sonesSpread": 0.356, "loudDb": -28.45, "loudDbSpread": 0.61, "loud1sDb": -29.79, "loud1sDbSpread": 3.28},
+     {"cc": 96, "rmsDb": -30.45, "rmsDbSpread": 0.85, "lufs": -28.34, "lufsSpread": 1.57, "sones": 10.8545, "sonesSpread": 0.297, "loudDb": -26.98, "loudDbSpread": 0.14, "loud1sDb": -28.45, "loud1sDbSpread": 3.07},
+     {"cc": 112, "rmsDb": -29.38, "rmsDbSpread": 0.78, "lufs": -27.27, "lufsSpread": 1.5, "sones": 11.6415, "sonesSpread": 0.281, "loudDb": -25.96, "loudDbSpread": 0.11, "loud1sDb": -27.38, "loud1sDbSpread": 2.95},
+     {"cc": 127, "rmsDb": -29.11, "rmsDbSpread": 0.75, "lufs": -27.0, "lufsSpread": 1.48, "sones": 11.8465, "sonesSpread": 0.277, "loudDb": -25.71, "loudDbSpread": 0.11, "loud1sDb": -27.12, "loud1sDbSpread": 2.92}
+    ],
+    "51": [
+     {"cc": 16, "rmsDb": -39.08, "rmsDbSpread": 0.57, "lufs": -36.32, "lufsSpread": 0.22, "sones": 5.3855, "sonesSpread": 0.135, "loudDb": -35.37, "loudDbSpread": 0.55, "loud1sDb": -35.37, "loud1sDbSpread": 0.55},
+     {"cc": 32, "rmsDb": -36.5, "rmsDbSpread": 0.12, "lufs": -33.62, "lufsSpread": 0.34, "sones": 6.575, "sonesSpread": 0.08, "loudDb": -32.53, "loudDbSpread": 0.14, "loud1sDb": -32.53, "loud1sDbSpread": 0.14},
+     {"cc": 48, "rmsDb": -34.59, "rmsDbSpread": 0.34, "lufs": -31.61, "lufsSpread": 0.48, "sones": 7.621, "sonesSpread": 0.016, "loudDb": -30.6, "loudDbSpread": 0.18, "loud1sDb": -30.6, "loud1sDbSpread": 0.18},
+     {"cc": 64, "rmsDb": -33.5, "rmsDbSpread": 0.54, "lufs": -30.56, "lufsSpread": 0.53, "sones": 8.285, "sonesSpread": 0.06, "loudDb": -30.06, "loudDbSpread": 0.65, "loud1sDb": -30.1, "loud1sDbSpread": 0.72},
+     {"cc": 80, "rmsDb": -31.66, "rmsDbSpread": 0.29, "lufs": -28.89, "lufsSpread": 0.46, "sones": 9.3765, "sonesSpread": 0.213, "loudDb": -28.71, "loudDbSpread": 0.69, "loud1sDb": -28.94, "loud1sDbSpread": 0.24},
+     {"cc": 96, "rmsDb": -29.97, "rmsDbSpread": 0.0, "lufs": -28.0, "lufsSpread": 0.32, "sones": 10.467, "sonesSpread": 0.376, "loudDb": -27.06, "loudDbSpread": 0.59, "loud1sDb": -27.59, "loud1sDbSpread": 0.45},
+     {"cc": 112, "rmsDb": -28.91, "rmsDbSpread": 0.17, "lufs": -27.01, "lufsSpread": 0.24, "sones": 11.2155, "sonesSpread": 0.481, "loudDb": -26.04, "loudDbSpread": 0.5, "loud1sDb": -26.56, "loud1sDbSpread": 0.55},
+     {"cc": 127, "rmsDb": -28.65, "rmsDbSpread": 0.2, "lufs": -26.76, "lufsSpread": 0.23, "sones": 11.413, "sonesSpread": 0.514, "loudDb": -25.79, "loudDbSpread": 0.49, "loud1sDb": -26.32, "loud1sDbSpread": 0.57}
+    ],
+    "54": [
+     {"cc": 16, "rmsDb": -35.5, "rmsDbSpread": 0.95, "lufs": -33.44, "lufsSpread": 1.39, "sones": 6.334, "sonesSpread": 0.202, "loudDb": -31.35, "loudDbSpread": 0.24, "loud1sDb": -32.59, "loud1sDbSpread": 2.25},
+     {"cc": 32, "rmsDb": -32.96, "rmsDbSpread": 0.74, "lufs": -30.86, "lufsSpread": 1.07, "sones": 7.664, "sonesSpread": 0.112, "loudDb": -28.68, "loudDbSpread": 0.88, "loud1sDb": -29.82, "loud1sDbSpread": 1.39},
+     {"cc": 48, "rmsDb": -31.34, "rmsDbSpread": 0.41, "lufs": -29.08, "lufsSpread": 0.8, "sones": 8.7345, "sonesSpread": 0.089, "loudDb": -26.48, "loudDbSpread": 0.43, "loud1sDb": -27.46, "loud1sDbSpread": 1.52},
+     {"cc": 64, "rmsDb": -31.14, "rmsDbSpread": 0.1, "lufs": -28.57, "lufsSpread": 0.39, "sones": 9.1485, "sonesSpread": 0.365, "loudDb": -25.58, "loudDbSpread": 1.32, "loud1sDb": -26.08, "loud1sDbSpread": 2.32},
+     {"cc": 80, "rmsDb": -30.12, "rmsDbSpread": 0.38, "lufs": -27.34, "lufsSpread": 0.14, "sones": 10.054, "sonesSpread": 0.49, "loudDb": -24.76, "loudDbSpread": 2.81, "loud1sDb": -24.79, "loud1sDbSpread": 2.88},
+     {"cc": 96, "rmsDb": -28.83, "rmsDbSpread": 0.38, "lufs": -26.72, "lufsSpread": 0.14, "sones": 11.0915, "sonesSpread": 0.465, "loudDb": -25.14, "loudDbSpread": 0.74, "loud1sDb": -25.23, "loud1sDbSpread": 0.91},
+     {"cc": 112, "rmsDb": -27.91, "rmsDbSpread": 0.33, "lufs": -25.79, "lufsSpread": 0.12, "sones": 11.838, "sonesSpread": 0.432, "loudDb": -24.52, "loudDbSpread": 0.95, "loud1sDb": -24.55, "loud1sDbSpread": 1.02},
+     {"cc": 127, "rmsDb": -27.66, "rmsDbSpread": 0.31, "lufs": -25.55, "lufsSpread": 0.1, "sones": 12.037, "sonesSpread": 0.422, "loudDb": -24.33, "loudDbSpread": 1.05, "loud1sDb": -24.38, "loud1sDbSpread": 1.04}
+    ],
+    "57": [
+     {"cc": 16, "rmsDb": -35.61, "rmsDbSpread": 0.18, "lufs": -32.2, "lufsSpread": 1.17, "sones": 6.6225, "sonesSpread": 0.475, "loudDb": -30.16, "loudDbSpread": 0.75, "loud1sDb": -30.16, "loud1sDbSpread": 0.75},
+     {"cc": 32, "rmsDb": -32.84, "rmsDbSpread": 0.24, "lufs": -29.52, "lufsSpread": 1.38, "sones": 8.047, "sonesSpread": 0.509, "loudDb": -27.98, "loudDbSpread": 0.54, "loud1sDb": -27.98, "loud1sDbSpread": 0.54},
+     {"cc": 48, "rmsDb": -30.61, "rmsDbSpread": 0.21, "lufs": -27.41, "lufsSpread": 1.31, "sones": 9.329, "sonesSpread": 0.41, "loudDb": -26.27, "loudDbSpread": 1.25, "loud1sDb": -26.27, "loud1sDbSpread": 1.25},
+     {"cc": 64, "rmsDb": -29.19, "rmsDbSpread": 0.04, "lufs": -26.2, "lufsSpread": 0.99, "sones": 10.1755, "sonesSpread": 0.137, "loudDb": -24.63, "loudDbSpread": 0.71, "loud1sDb": -24.73, "loud1sDbSpread": 0.9},
+     {"cc": 80, "rmsDb": -27.28, "rmsDbSpread": 0.12, "lufs": -24.45, "lufsSpread": 0.67, "sones": 11.516, "sonesSpread": 0.076, "loudDb": -22.88, "loudDbSpread": 0.35, "loud1sDb": -23.09, "loud1sDbSpread": 0.76},
+     {"cc": 96, "rmsDb": -25.66, "rmsDbSpread": 0.23, "lufs": -23.43, "lufsSpread": 0.4, "sones": 12.802, "sonesSpread": 0.152, "loudDb": -21.51, "loudDbSpread": 0.14, "loud1sDb": -21.84, "loud1sDbSpread": 0.8},
+     {"cc": 112, "rmsDb": -24.63, "rmsDbSpread": 0.27, "lufs": -22.36, "lufsSpread": 0.49, "sones": 13.665, "sonesSpread": 0.19, "loudDb": -20.67, "loudDbSpread": 0.06, "loud1sDb": -21.05, "loud1sDbSpread": 0.82},
+     {"cc": 127, "rmsDb": -24.39, "rmsDbSpread": 0.28, "lufs": -22.11, "lufsSpread": 0.48, "sones": 13.8895, "sonesSpread": 0.199, "loudDb": -20.46, "loudDbSpread": 0.04, "loud1sDb": -20.86, "loud1sDbSpread": 0.83}
+    ],
+    "60": [
+     {"cc": 16, "rmsDb": -38.5, "rmsDbSpread": 2.54, "lufs": -35.95, "lufsSpread": 1.63, "sones": 6.3885, "sonesSpread": 0.389, "loudDb": -35.66, "loudDbSpread": 2.85, "loud1sDb": -35.66, "loud1sDbSpread": 2.85},
+     {"cc": 32, "rmsDb": -35.83, "rmsDbSpread": 2.25, "lufs": -33.22, "lufsSpread": 1.32, "sones": 7.7005, "sonesSpread": 0.419, "loudDb": -32.73, "loudDbSpread": 2.45, "loud1sDb": -33.09, "loud1sDbSpread": 1.72},
+     {"cc": 48, "rmsDb": -33.86, "rmsDbSpread": 1.65, "lufs": -31.2, "lufsSpread": 0.81, "sones": 8.837, "sonesSpread": 0.372, "loudDb": -30.6, "loudDbSpread": 1.77, "loud1sDb": -31.4, "loud1sDbSpread": 0.18},
+     {"cc": 64, "rmsDb": -32.97, "rmsDbSpread": 0.54, "lufs": -30.18, "lufsSpread": 0.08, "sones": 9.463, "sonesSpread": 0.2, "loudDb": -29.93, "loudDbSpread": 0.44, "loud1sDb": -30.91, "loud1sDbSpread": 1.52},
+     {"cc": 80, "rmsDb": -31.43, "rmsDbSpread": 0.2, "lufs": -28.55, "lufsSpread": 0.31, "sones": 10.5685, "sonesSpread": 0.125, "loudDb": -29.01, "loudDbSpread": 0.73, "loud1sDb": -29.2, "loud1sDbSpread": 1.13},
+     {"cc": 96, "rmsDb": -29.93, "rmsDbSpread": 0.46, "lufs": -27.53, "lufsSpread": 0.09, "sones": 11.733, "sonesSpread": 0.12, "loudDb": -27.49, "loudDbSpread": 0.92, "loud1sDb": -28.41, "loud1sDbSpread": 0.91},
+     {"cc": 112, "rmsDb": -28.95, "rmsDbSpread": 0.52, "lufs": -26.55, "lufsSpread": 0.1, "sones": 12.5505, "sonesSpread": 0.137, "loudDb": -26.38, "loudDbSpread": 0.92, "loud1sDb": -27.31, "loud1sDbSpread": 0.94},
+     {"cc": 127, "rmsDb": -28.7, "rmsDbSpread": 0.53, "lufs": -26.3, "lufsSpread": 0.1, "sones": 12.7645, "sonesSpread": 0.139, "loudDb": -26.1, "loudDbSpread": 0.91, "loud1sDb": -27.04, "loud1sDbSpread": 0.95}
+    ],
+    "63": [
+     {"cc": 16, "rmsDb": -39.28, "rmsDbSpread": 0.51, "lufs": -36.58, "lufsSpread": 0.58, "sones": 6.0095, "sonesSpread": 0.077, "loudDb": -36.59, "loudDbSpread": 0.3, "loud1sDb": -36.75, "loud1sDbSpread": 0.01},
+     {"cc": 32, "rmsDb": -36.49, "rmsDbSpread": 0.83, "lufs": -33.78, "lufsSpread": 0.72, "sones": 7.259, "sonesSpread": 0.122, "loudDb": -33.62, "loudDbSpread": 0.38, "loud1sDb": -34.07, "loud1sDbSpread": 0.56},
+     {"cc": 48, "rmsDb": -34.35, "rmsDbSpread": 1.14, "lufs": -31.57, "lufsSpread": 0.72, "sones": 8.3045, "sonesSpread": 0.201, "loudDb": -31.23, "loudDbSpread": 1.58, "loud1sDb": -31.93, "loud1sDbSpread": 0.18},
+     {"cc": 64, "rmsDb": -33.13, "rmsDbSpread": 1.31, "lufs": -30.2, "lufsSpread": 0.45, "sones": 8.815, "sonesSpread": 0.288, "loudDb": -29.26, "loudDbSpread": 1.02, "loud1sDb": -30.03, "loud1sDbSpread": 0.52},
+     {"cc": 80, "rmsDb": -31.38, "rmsDbSpread": 1.21, "lufs": -28.36, "lufsSpread": 0.13, "sones": 9.8045, "sonesSpread": 0.383, "loudDb": -27.11, "loudDbSpread": 0.1, "loud1sDb": -27.52, "loud1sDbSpread": 0.91},
+     {"cc": 96, "rmsDb": -29.84, "rmsDbSpread": 1.07, "lufs": -27.38, "lufsSpread": 0.38, "sones": 10.8555, "sonesSpread": 0.447, "loudDb": -26.77, "loudDbSpread": 1.79, "loud1sDb": -27.94, "loud1sDbSpread": 0.04},
+     {"cc": 112, "rmsDb": -28.85, "rmsDbSpread": 0.98, "lufs": -26.38, "lufsSpread": 0.29, "sones": 11.6025, "sonesSpread": 0.489, "loudDb": -25.83, "loudDbSpread": 1.54, "loud1sDb": -26.84, "loud1sDbSpread": 0.13},
+     {"cc": 127, "rmsDb": -28.6, "rmsDbSpread": 0.96, "lufs": -26.2, "lufsSpread": 0.12, "sones": 11.7995, "sonesSpread": 0.499, "loudDb": -25.6, "loudDbSpread": 1.48, "loud1sDb": -26.58, "loud1sDbSpread": 0.18}
+    ],
+    "66": [
+     {"cc": 16, "rmsDb": -35.3, "rmsDbSpread": 1.82, "lufs": -32.72, "lufsSpread": 1.19, "sones": 6.9525, "sonesSpread": 0.301, "loudDb": -30.91, "loudDbSpread": 2.0, "loud1sDb": -30.91, "loud1sDbSpread": 2.0},
+     {"cc": 32, "rmsDb": -32.86, "rmsDbSpread": 1.55, "lufs": -30.08, "lufsSpread": 1.04, "sones": 8.4175, "sonesSpread": 0.365, "loudDb": -27.77, "loudDbSpread": 0.98, "loud1sDb": -27.77, "loud1sDbSpread": 0.98},
+     {"cc": 48, "rmsDb": -31.15, "rmsDbSpread": 1.12, "lufs": -28.17, "lufsSpread": 0.78, "sones": 9.737, "sonesSpread": 0.37, "loudDb": -25.52, "loudDbSpread": 0.09, "loud1sDb": -25.52, "loud1sDbSpread": 0.09},
+     {"cc": 64, "rmsDb": -30.38, "rmsDbSpread": 0.55, "lufs": -27.27, "lufsSpread": 0.39, "sones": 10.5645, "sonesSpread": 0.235, "loudDb": -24.21, "loudDbSpread": 0.15, "loud1sDb": -24.21, "loud1sDbSpread": 0.15},
+     {"cc": 80, "rmsDb": -28.67, "rmsDbSpread": 0.38, "lufs": -25.66, "lufsSpread": 0.19, "sones": 11.911, "sonesSpread": 0.164, "loudDb": -22.81, "loudDbSpread": 0.12, "loud1sDb": -22.81, "loud1sDbSpread": 0.12},
+     {"cc": 96, "rmsDb": -26.99, "rmsDbSpread": 0.46, "lufs": -24.63, "lufsSpread": 0.19, "sones": 13.236, "sonesSpread": 0.182, "loudDb": -22.04, "loudDbSpread": 0.06, "loud1sDb": -22.04, "loud1sDbSpread": 0.06},
+     {"cc": 112, "rmsDb": -25.91, "rmsDbSpread": 0.55, "lufs": -23.62, "lufsSpread": 0.18, "sones": 14.16, "sonesSpread": 0.196, "loudDb": -21.31, "loudDbSpread": 0.0, "loud1sDb": -21.31, "loud1sDbSpread": 0.0},
+     {"cc": 127, "rmsDb": -25.64, "rmsDbSpread": 0.57, "lufs": -23.36, "lufsSpread": 0.18, "sones": 14.403, "sonesSpread": 0.2, "loudDb": -21.12, "loudDbSpread": 0.03, "loud1sDb": -21.12, "loud1sDbSpread": 0.03}
+    ],
+    "69": [
+     {"cc": 16, "rmsDb": -37.19, "rmsDbSpread": 1.66, "lufs": -34.4, "lufsSpread": 0.74, "sones": 6.465, "sonesSpread": 0.234, "loudDb": -33.23, "loudDbSpread": 1.23, "loud1sDb": -33.76, "loud1sDbSpread": 0.16},
+     {"cc": 32, "rmsDb": -34.42, "rmsDbSpread": 1.29, "lufs": -31.66, "lufsSpread": 0.62, "sones": 7.8535, "sonesSpread": 0.157, "loudDb": -30.19, "loudDbSpread": 0.58, "loud1sDb": -31.2, "loud1sDbSpread": 0.85},
+     {"cc": 48, "rmsDb": -32.41, "rmsDbSpread": 0.71, "lufs": -29.53, "lufsSpread": 0.22, "sones": 9.0435, "sonesSpread": 0.053, "loudDb": -27.94, "loudDbSpread": 0.73, "loud1sDb": -28.94, "loud1sDbSpread": 0.85},
+     {"cc": 64, "rmsDb": -31.5, "rmsDbSpread": 0.15, "lufs": -28.4, "lufsSpread": 0.3, "sones": 9.706, "sonesSpread": 0.374, "loudDb": -26.46, "loudDbSpread": 1.06, "loud1sDb": -27.38, "loud1sDbSpread": 0.78},
+     {"cc": 80, "rmsDb": -29.99, "rmsDbSpread": 0.62, "lufs": -26.74, "lufsSpread": 0.54, "sones": 10.819, "sonesSpread": 0.58, "loudDb": -24.73, "loudDbSpread": 0.75, "loud1sDb": -25.34, "loud1sDbSpread": 0.48},
+     {"cc": 96, "rmsDb": -28.54, "rmsDbSpread": 0.74, "lufs": -25.9, "lufsSpread": 0.55, "sones": 11.953, "sonesSpread": 0.656, "loudDb": -23.2, "loudDbSpread": 0.45, "loud1sDb": -24.01, "loud1sDbSpread": 1.16},
+     {"cc": 112, "rmsDb": -27.59, "rmsDbSpread": 0.74, "lufs": -24.93, "lufsSpread": 0.53, "sones": 12.7465, "sonesSpread": 0.667, "loudDb": -22.23, "loudDbSpread": 0.33, "loud1sDb": -23.02, "loud1sDbSpread": 1.25},
+     {"cc": 127, "rmsDb": -27.35, "rmsDbSpread": 0.73, "lufs": -24.68, "lufsSpread": 0.52, "sones": 12.954, "sonesSpread": 0.668, "loudDb": -21.98, "loudDbSpread": 0.31, "loud1sDb": -22.77, "loud1sDbSpread": 1.27}
+    ],
+    "72": [
+     {"cc": 16, "rmsDb": -41.22, "rmsDbSpread": 0.98, "lufs": -36.92, "lufsSpread": 0.25, "sones": 5.8585, "sonesSpread": 0.505, "loudDb": -38.05, "loudDbSpread": 1.06, "loud1sDb": -38.11, "loud1sDbSpread": 1.18},
+     {"cc": 32, "rmsDb": -38.37, "rmsDbSpread": 0.62, "lufs": -34.07, "lufsSpread": 0.12, "sones": 7.112, "sonesSpread": 0.488, "loudDb": -35.03, "loudDbSpread": 0.08, "loud1sDb": -35.29, "loud1sDbSpread": 0.6},
+     {"cc": 48, "rmsDb": -36.16, "rmsDbSpread": 0.11, "lufs": -31.81, "lufsSpread": 0.06, "sones": 8.24, "sonesSpread": 0.288, "loudDb": -32.7, "loudDbSpread": 0.49, "loud1sDb": -33.0, "loud1sDbSpread": 0.68},
+     {"cc": 64, "rmsDb": -34.89, "rmsDbSpread": 0.55, "lufs": -30.41, "lufsSpread": 0.27, "sones": 8.879, "sonesSpread": 0.068, "loudDb": -31.04, "loudDbSpread": 0.87, "loud1sDb": -31.16, "loud1sDbSpread": 1.12},
+     {"cc": 80, "rmsDb": -33.15, "rmsDbSpread": 0.84, "lufs": -28.57, "lufsSpread": 0.36, "sones": 9.9245, "sonesSpread": 0.341, "loudDb": -28.98, "loudDbSpread": 0.96, "loud1sDb": -28.98, "loud1sDbSpread": 0.96},
+     {"cc": 96, "rmsDb": -31.6, "rmsDbSpread": 0.89, "lufs": -27.77, "lufsSpread": 0.45, "sones": 10.9865, "sonesSpread": 0.467, "loudDb": -28.05, "loudDbSpread": 1.77, "loud1sDb": -28.32, "loud1sDbSpread": 2.3},
+     {"cc": 112, "rmsDb": -30.62, "rmsDbSpread": 0.88, "lufs": -26.78, "lufsSpread": 0.46, "sones": 11.717, "sonesSpread": 0.516, "loudDb": -27.23, "loudDbSpread": 1.99, "loud1sDb": -27.36, "loud1sDbSpread": 2.25},
+     {"cc": 127, "rmsDb": -30.38, "rmsDbSpread": 0.87, "lufs": -26.53, "lufsSpread": 0.46, "sones": 11.909, "sonesSpread": 0.528, "loudDb": -27.02, "loudDbSpread": 2.05, "loud1sDb": -27.12, "loud1sDbSpread": 2.24}
+    ],
+    "75": [
+     {"cc": 16, "rmsDb": -39.97, "rmsDbSpread": 0.03, "lufs": -36.12, "lufsSpread": 0.15, "sones": 6.0845, "sonesSpread": 0.129, "loudDb": -36.66, "loudDbSpread": 1.65, "loud1sDb": -37.24, "loud1sDbSpread": 1.04},
+     {"cc": 32, "rmsDb": -37.14, "rmsDbSpread": 0.18, "lufs": -33.25, "lufsSpread": 0.3, "sones": 7.391, "sonesSpread": 0.114, "loudDb": -33.47, "loudDbSpread": 1.07, "loud1sDb": -34.0, "loud1sDbSpread": 0.02},
+     {"cc": 48, "rmsDb": -34.89, "rmsDbSpread": 0.46, "lufs": -30.93, "lufsSpread": 0.44, "sones": 8.575, "sonesSpread": 0.044, "loudDb": -30.93, "loudDbSpread": 0.14, "loud1sDb": -30.93, "loud1sDbSpread": 0.14},
+     {"cc": 64, "rmsDb": -33.48, "rmsDbSpread": 0.73, "lufs": -29.44, "lufsSpread": 0.52, "sones": 9.312, "sonesSpread": 0.072, "loudDb": -28.97, "loudDbSpread": 0.41, "loud1sDb": -28.97, "loud1sDbSpread": 0.41},
+     {"cc": 80, "rmsDb": -31.6, "rmsDbSpread": 0.8, "lufs": -27.52, "lufsSpread": 0.47, "sones": 10.4795, "sonesSpread": 0.153, "loudDb": -27.14, "loudDbSpread": 0.53, "loud1sDb": -27.14, "loud1sDbSpread": 0.53},
+     {"cc": 96, "rmsDb": -29.98, "rmsDbSpread": 0.77, "lufs": -26.54, "lufsSpread": 0.44, "sones": 11.646, "sonesSpread": 0.188, "loudDb": -25.68, "loudDbSpread": 0.21, "loud1sDb": -25.68, "loud1sDbSpread": 0.21},
+     {"cc": 112, "rmsDb": -28.98, "rmsDbSpread": 0.74, "lufs": -25.54, "lufsSpread": 0.42, "sones": 12.445, "sonesSpread": 0.208, "loudDb": -24.72, "loudDbSpread": 0.04, "loud1sDb": -24.72, "loud1sDbSpread": 0.04},
+     {"cc": 127, "rmsDb": -28.73, "rmsDbSpread": 0.73, "lufs": -25.28, "lufsSpread": 0.41, "sones": 12.6525, "sonesSpread": 0.215, "loudDb": -24.49, "loudDbSpread": 0.0, "loud1sDb": -24.49, "loud1sDbSpread": 0.0}
+    ],
+    "78": [
+     {"cc": 16, "rmsDb": -38.86, "rmsDbSpread": 0.35, "lufs": -34.72, "lufsSpread": 0.13, "sones": 6.2245, "sonesSpread": 0.293, "loudDb": -34.37, "loudDbSpread": 0.6, "loud1sDb": -34.37, "loud1sDbSpread": 0.6},
+     {"cc": 32, "rmsDb": -36.1, "rmsDbSpread": 0.16, "lufs": -31.95, "lufsSpread": 0.17, "sones": 7.5985, "sonesSpread": 0.253, "loudDb": -31.64, "loudDbSpread": 0.12, "loud1sDb": -31.84, "loud1sDbSpread": 0.28},
+     {"cc": 48, "rmsDb": -33.99, "rmsDbSpread": 0.08, "lufs": -29.85, "lufsSpread": 0.23, "sones": 8.789, "sonesSpread": 0.172, "loudDb": -29.59, "loudDbSpread": 0.37, "loud1sDb": -30.02, "loud1sDbSpread": 0.49},
+     {"cc": 64, "rmsDb": -32.8, "rmsDbSpread": 0.32, "lufs": -28.71, "lufsSpread": 0.28, "sones": 9.5565, "sonesSpread": 0.051, "loudDb": -28.46, "loudDbSpread": 0.48, "loud1sDb": -28.82, "loud1sDbSpread": 1.21},
+     {"cc": 80, "rmsDb": -31.05, "rmsDbSpread": 0.38, "lufs": -27.01, "lufsSpread": 0.28, "sones": 10.761, "sonesSpread": 0.002, "loudDb": -27.16, "loudDbSpread": 1.09, "loud1sDb": -27.16, "loud1sDbSpread": 1.09},
+     {"cc": 96, "rmsDb": -29.48, "rmsDbSpread": 0.34, "lufs": -26.24, "lufsSpread": 0.18, "sones": 11.946, "sonesSpread": 0.008, "loudDb": -26.39, "loudDbSpread": 0.17, "loud1sDb": -27.45, "loud1sDbSpread": 0.09},
+     {"cc": 112, "rmsDb": -28.48, "rmsDbSpread": 0.31, "lufs": -25.26, "lufsSpread": 0.18, "sones": 12.763, "sonesSpread": 0.024, "loudDb": -25.48, "loudDbSpread": 0.26, "loud1sDb": -26.37, "loud1sDbSpread": 0.4},
+     {"cc": 127, "rmsDb": -28.23, "rmsDbSpread": 0.3, "lufs": -25.02, "lufsSpread": 0.17, "sones": 12.9725, "sonesSpread": 0.033, "loudDb": -25.24, "loudDbSpread": 0.26, "loud1sDb": -26.08, "loud1sDbSpread": 0.46}
+    ],
+    "81": [
+     {"cc": 16, "rmsDb": -40.58, "rmsDbSpread": 0.44, "lufs": -35.39, "lufsSpread": 0.55, "sones": 5.473, "sonesSpread": 0.122, "loudDb": -37.03, "loudDbSpread": 1.46, "loud1sDb": -37.03, "loud1sDbSpread": 1.46},
+     {"cc": 32, "rmsDb": -37.89, "rmsDbSpread": 0.49, "lufs": -32.72, "lufsSpread": 0.43, "sones": 6.645, "sonesSpread": 0.182, "loudDb": -34.33, "loudDbSpread": 1.26, "loud1sDb": -34.33, "loud1sDbSpread": 1.26},
+     {"cc": 48, "rmsDb": -35.89, "rmsDbSpread": 0.59, "lufs": -30.7, "lufsSpread": 0.31, "sones": 7.6425, "sonesSpread": 0.257, "loudDb": -32.25, "loudDbSpread": 1.22, "loud1sDb": -32.25, "loud1sDbSpread": 1.22},
+     {"cc": 64, "rmsDb": -34.83, "rmsDbSpread": 0.76, "lufs": -29.57, "lufsSpread": 0.21, "sones": 8.228, "sonesSpread": 0.38, "loudDb": -31.52, "loudDbSpread": 0.94, "loud1sDb": -31.59, "loud1sDbSpread": 1.09},
+     {"cc": 80, "rmsDb": -33.12, "rmsDbSpread": 0.85, "lufs": -27.8, "lufsSpread": 0.23, "sones": 9.225, "sonesSpread": 0.488, "loudDb": -29.53, "loudDbSpread": 0.68, "loud1sDb": -29.53, "loud1sDbSpread": 0.68},
+     {"cc": 96, "rmsDb": -31.55, "rmsDbSpread": 0.88, "lufs": -27.13, "lufsSpread": 0.03, "sones": 10.238, "sonesSpread": 0.538, "loudDb": -28.59, "loudDbSpread": 0.75, "loud1sDb": -28.93, "loud1sDbSpread": 1.43},
+     {"cc": 112, "rmsDb": -30.55, "rmsDbSpread": 0.89, "lufs": -26.12, "lufsSpread": 0.06, "sones": 10.934, "sonesSpread": 0.574, "loudDb": -27.65, "loudDbSpread": 0.78, "loud1sDb": -27.97, "loud1sDbSpread": 1.41},
+     {"cc": 127, "rmsDb": -30.3, "rmsDbSpread": 0.89, "lufs": -25.86, "lufsSpread": 0.07, "sones": 11.116, "sonesSpread": 0.582, "loudDb": -27.41, "loudDbSpread": 0.79, "loud1sDb": -27.73, "loud1sDbSpread": 1.41}
+    ],
+    "84": [
+     {"cc": 16, "rmsDb": -42.34, "rmsDbSpread": 0.63, "lufs": -36.55, "lufsSpread": 1.43, "sones": 4.7555, "sonesSpread": 0.043, "loudDb": -37.7, "loudDbSpread": 2.84, "loud1sDb": -37.7, "loud1sDbSpread": 2.84},
+     {"cc": 32, "rmsDb": -39.53, "rmsDbSpread": 0.53, "lufs": -33.72, "lufsSpread": 1.22, "sones": 5.73, "sonesSpread": 0.066, "loudDb": -34.91, "loudDbSpread": 2.73, "loud1sDb": -34.91, "loud1sDbSpread": 2.73},
+     {"cc": 48, "rmsDb": -37.33, "rmsDbSpread": 0.36, "lufs": -31.49, "lufsSpread": 0.91, "sones": 6.5685, "sonesSpread": 0.083, "loudDb": -33.05, "loudDbSpread": 2.4, "loud1sDb": -33.05, "loud1sDbSpread": 2.4},
+     {"cc": 64, "rmsDb": -36.0, "rmsDbSpread": 0.12, "lufs": -30.15, "lufsSpread": 0.54, "sones": 6.9885, "sonesSpread": 0.091, "loudDb": -32.42, "loudDbSpread": 1.15, "loud1sDb": -32.42, "loud1sDbSpread": 1.15},
+     {"cc": 80, "rmsDb": -34.17, "rmsDbSpread": 0.01, "lufs": -28.32, "lufsSpread": 0.4, "sones": 7.7695, "sonesSpread": 0.083, "loudDb": -30.8, "loudDbSpread": 0.26, "loud1sDb": -30.8, "loud1sDbSpread": 0.26},
+     {"cc": 96, "rmsDb": -32.59, "rmsDbSpread": 0.05, "lufs": -27.55, "lufsSpread": 0.31, "sones": 8.6055, "sonesSpread": 0.093, "loudDb": -30.31, "loudDbSpread": 0.67, "loud1sDb": -30.41, "loud1sDbSpread": 0.85},
+     {"cc": 112, "rmsDb": -31.58, "rmsDbSpread": 0.06, "lufs": -26.56, "lufsSpread": 0.32, "sones": 9.2065, "sonesSpread": 0.095, "loudDb": -29.27, "loudDbSpread": 0.54, "loud1sDb": -29.43, "loud1sDbSpread": 0.86},
+     {"cc": 127, "rmsDb": -31.33, "rmsDbSpread": 0.06, "lufs": -26.31, "lufsSpread": 0.32, "sones": 9.365, "sonesSpread": 0.096, "loudDb": -29.02, "loudDbSpread": 0.51, "loud1sDb": -29.19, "loud1sDbSpread": 0.85}
+    ],
+    "87": [
+     {"cc": 16, "rmsDb": -42.25, "rmsDbSpread": 0.72, "lufs": -37.23, "lufsSpread": 0.69, "sones": 4.496, "sonesSpread": 0.116, "loudDb": -37.53, "loudDbSpread": 1.07, "loud1sDb": -37.53, "loud1sDbSpread": 1.07},
+     {"cc": 32, "rmsDb": -39.59, "rmsDbSpread": 0.67, "lufs": -34.53, "lufsSpread": 0.73, "sones": 5.438, "sonesSpread": 0.142, "loudDb": -34.83, "loudDbSpread": 1.36, "loud1sDb": -34.83, "loud1sDbSpread": 1.36},
+     {"cc": 48, "rmsDb": -37.73, "rmsDbSpread": 0.55, "lufs": -32.58, "lufsSpread": 0.77, "sones": 6.258, "sonesSpread": 0.124, "loudDb": -33.02, "loudDbSpread": 1.38, "loud1sDb": -33.09, "loud1sDbSpread": 1.51},
+     {"cc": 64, "rmsDb": -37.04, "rmsDbSpread": 0.3, "lufs": -31.63, "lufsSpread": 0.81, "sones": 6.6645, "sonesSpread": 0.027, "loudDb": -32.19, "loudDbSpread": 2.48, "loud1sDb": -32.19, "loud1sDbSpread": 2.48},
+     {"cc": 80, "rmsDb": -35.66, "rmsDbSpread": 0.11, "lufs": -30.05, "lufsSpread": 0.82, "sones": 7.436, "sonesSpread": 0.034, "loudDb": -30.52, "loudDbSpread": 2.93, "loud1sDb": -30.52, "loud1sDbSpread": 2.93},
+     {"cc": 96, "rmsDb": -34.23, "rmsDbSpread": 0.03, "lufs": -29.36, "lufsSpread": 0.65, "sones": 8.232, "sonesSpread": 0.1, "loudDb": -29.91, "loudDbSpread": 1.46, "loud1sDb": -29.91, "loud1sDbSpread": 1.46},
+     {"cc": 112, "rmsDb": -33.28, "rmsDbSpread": 0.01, "lufs": -28.38, "lufsSpread": 0.65, "sones": 8.7905, "sonesSpread": 0.129, "loudDb": -28.95, "loudDbSpread": 1.42, "loud1sDb": -28.95, "loud1sDbSpread": 1.42},
+     {"cc": 127, "rmsDb": -33.05, "rmsDbSpread": 0.01, "lufs": -28.12, "lufsSpread": 0.65, "sones": 8.9375, "sonesSpread": 0.135, "loudDb": -28.72, "loudDbSpread": 1.41, "loud1sDb": -28.72, "loud1sDbSpread": 1.41}
+    ],
+    "90": [
+     {"cc": 16, "rmsDb": -42.41, "rmsDbSpread": 0.19, "lufs": -36.8, "lufsSpread": 0.85, "sones": 4.652, "sonesSpread": 0.084, "loudDb": -38.12, "loudDbSpread": 0.94, "loud1sDb": -38.12, "loud1sDbSpread": 0.94},
+     {"cc": 32, "rmsDb": -39.79, "rmsDbSpread": 0.08, "lufs": -34.19, "lufsSpread": 0.95, "sones": 5.6595, "sonesSpread": 0.179, "loudDb": -36.01, "loudDbSpread": 1.22, "loud1sDb": -36.01, "loud1sDbSpread": 1.22},
+     {"cc": 48, "rmsDb": -37.91, "rmsDbSpread": 0.48, "lufs": -32.28, "lufsSpread": 1.08, "sones": 6.5255, "sonesSpread": 0.307, "loudDb": -34.94, "loudDbSpread": 1.97, "loud1sDb": -34.94, "loud1sDbSpread": 1.97},
+     {"cc": 64, "rmsDb": -37.05, "rmsDbSpread": 1.02, "lufs": -31.34, "lufsSpread": 1.23, "sones": 6.991, "sonesSpread": 0.506, "loudDb": -33.86, "loudDbSpread": 1.16, "loud1sDb": -33.86, "loud1sDbSpread": 1.16},
+     {"cc": 80, "rmsDb": -35.46, "rmsDbSpread": 1.24, "lufs": -29.66, "lufsSpread": 1.26, "sones": 7.8195, "sonesSpread": 0.625, "loudDb": -31.65, "loudDbSpread": 0.4, "loud1sDb": -31.65, "loud1sDbSpread": 0.4},
+     {"cc": 96, "rmsDb": -33.91, "rmsDbSpread": 1.23, "lufs": -29.05, "lufsSpread": 1.18, "sones": 8.6805, "sonesSpread": 0.709, "loudDb": -31.49, "loudDbSpread": 0.8, "loud1sDb": -31.75, "loud1sDbSpread": 1.32},
+     {"cc": 112, "rmsDb": -32.91, "rmsDbSpread": 1.2, "lufs": -28.03, "lufsSpread": 1.16, "sones": 9.2935, "sonesSpread": 0.751, "loudDb": -30.38, "loudDbSpread": 0.73, "loud1sDb": -30.7, "loud1sDbSpread": 1.35},
+     {"cc": 127, "rmsDb": -32.66, "rmsDbSpread": 1.19, "lufs": -27.77, "lufsSpread": 1.15, "sones": 9.4535, "sonesSpread": 0.763, "loudDb": -30.09, "loudDbSpread": 0.69, "loud1sDb": -30.43, "loud1sDbSpread": 1.35}
+    ]
+   },
+   "relative64": {
+    "rmsDb": [
+     [16, -5.69, -6.49, -4.36, 15, 0.63, 2.54],
+     [32, -3.0, -3.66, -1.82, 15, 0.62, 2.25],
+     [48, -1.06, -1.42, -0.2, 15, 0.48, 1.65],
+     [64, 0.0, 0.0, 0.0, 15, 0.54, 1.31],
+     [80, 1.74, 1.02, 1.91, 15, 0.38, 1.24],
+     [96, 3.29, 2.31, 3.53, 15, 0.46, 1.23],
+     [112, 4.28, 3.23, 4.59, 15, 0.55, 1.2],
+     [127, 4.53, 3.48, 4.86, 15, 0.57, 1.19]
+    ],
+    "lufs": [
+     [16, -5.82, -6.68, -4.87, 15, 0.69, 1.63],
+     [32, -3.15, -3.81, -2.29, 15, 0.72, 1.38],
+     [48, -1.13, -1.49, -0.51, 15, 0.72, 1.31],
+     [64, 0.0, 0.0, 0.0, 15, 0.45, 1.23],
+     [80, 1.7, 1.23, 1.92, 15, 0.4, 1.26],
+     [96, 2.6, 1.85, 3.13, 15, 0.38, 1.57],
+     [112, 3.59, 2.78, 4.2, 15, 0.32, 1.5],
+     [127, 3.84, 3.02, 4.47, 15, 0.32, 1.48]
+    ],
+    "sones": [
+     [16, 0.665, 0.65, 0.692, 15, 0.202, 0.505],
+     [32, 0.808, 0.791, 0.838, 15, 0.179, 0.509],
+     [48, 0.929, 0.917, 0.955, 15, 0.201, 0.556],
+     [64, 1.0, 1.0, 1.0, 15, 0.2, 0.506],
+     [80, 1.119, 1.099, 1.133, 15, 0.213, 0.625],
+     [96, 1.242, 1.212, 1.267, 15, 0.297, 0.709],
+     [112, 1.329, 1.294, 1.359, 15, 0.281, 0.751],
+     [127, 1.351, 1.316, 1.383, 15, 0.277, 0.763]
+    ],
+    "loudDb": [
+     [16, -5.77, -7.69, -4.26, 15, 1.06, 2.85],
+     [32, -3.18, -4.5, -2.15, 15, 0.88, 2.73],
+     [48, -1.13, -1.97, -0.54, 15, 0.73, 2.4],
+     [64, 0.0, 0.0, 0.0, 15, 0.87, 2.48],
+     [80, 1.73, 0.82, 2.21, 15, 0.68, 2.93],
+     [96, 2.49, 0.44, 3.64, 15, 0.67, 1.79],
+     [112, 3.55, 1.06, 4.66, 15, 0.54, 1.99],
+     [127, 3.83, 1.25, 4.91, 15, 0.51, 2.05]
+    ],
+    "loud1sDb": [
+     [16, -5.55, -8.27, -4.26, 15, 1.07, 2.85],
+     [32, -3.06, -5.03, -2.15, 15, 0.9, 2.73],
+     [48, -1.2, -1.96, -0.49, 15, 0.85, 2.4],
+     [64, 0.0, 0.0, 0.0, 15, 1.12, 2.72],
+     [80, 1.71, 1.16, 2.51, 15, 0.76, 3.28],
+     [96, 2.5, 0.85, 3.37, 15, 0.91, 3.07],
+     [112, 3.54, 1.53, 4.39, 15, 0.94, 2.95],
+     [127, 3.78, 1.7, 4.65, 15, 0.95, 2.92]
+    ]
+   }
+  },
+  "Celli": {
+   "sampleRate": 44100,
+   "pitches": [36, 39, 42, 45, 48, 51, 54, 57, 59, 60, 63, 66, 69, 72, 75, 78, 81],
+   "ccs": [16, 32, 48, 64, 80, 96, 112, 127],
+   "repeats": 4,
+   "note": 3.0,
+   "switch": 1,
+   "points": {
+    "36": [
+     {"cc": 16, "rmsDb": -36.88, "rmsDbSpread": 1.49, "lufs": -34.8, "lufsSpread": 2.35, "sones": 4.384, "sonesSpread": 0.24, "loudDb": -34.0, "loudDbSpread": 2.54, "loud1sDb": -34.0, "loud1sDbSpread": 2.54},
+     {"cc": 32, "rmsDb": -34.38, "rmsDbSpread": 1.05, "lufs": -32.29, "lufsSpread": 2.1, "sones": 5.38, "sonesSpread": 0.228, "loudDb": -31.52, "loudDbSpread": 2.66, "loud1sDb": -31.52, "loud1sDbSpread": 2.66},
+     {"cc": 48, "rmsDb": -32.6, "rmsDbSpread": 0.54, "lufs": -30.66, "lufsSpread": 1.62, "sones": 6.1885, "sonesSpread": 0.235, "loudDb": -30.16, "loudDbSpread": 2.63, "loud1sDb": -30.16, "loud1sDbSpread": 2.63},
+     {"cc": 64, "rmsDb": -31.75, "rmsDbSpread": 0.12, "lufs": -30.38, "lufsSpread": 0.63, "sones": 6.5895, "sonesSpread": 0.211, "loudDb": -29.64, "loudDbSpread": 1.04, "loud1sDb": -30.71, "loud1sDbSpread": 2.01},
+     {"cc": 80, "rmsDb": -30.02, "rmsDbSpread": 0.24, "lufs": -29.16, "lufsSpread": 0.11, "sones": 7.322, "sonesSpread": 0.218, "loudDb": -28.0, "loudDbSpread": 0.26, "loud1sDb": -30.7, "loud1sDbSpread": 1.03},
+     {"cc": 96, "rmsDb": -28.37, "rmsDbSpread": 0.47, "lufs": -27.73, "lufsSpread": 0.01, "sones": 8.117, "sonesSpread": 0.248, "loudDb": -26.43, "loudDbSpread": 0.71, "loud1sDb": -29.72, "loud1sDbSpread": 0.44},
+     {"cc": 112, "rmsDb": -27.3, "rmsDbSpread": 0.64, "lufs": -26.74, "lufsSpread": 0.01, "sones": 8.683, "sonesSpread": 0.28, "loudDb": -25.34, "loudDbSpread": 0.67, "loud1sDb": -29.01, "loud1sDbSpread": 1.17},
+     {"cc": 127, "rmsDb": -27.04, "rmsDbSpread": 0.67, "lufs": -26.49, "lufsSpread": 0.02, "sones": 8.8315, "sonesSpread": 0.291, "loudDb": -25.06, "loudDbSpread": 0.66, "loud1sDb": -28.8, "loud1sDbSpread": 1.33}
+    ],
+    "39": [
+     {"cc": 16, "rmsDb": -38.02, "rmsDbSpread": 0.21, "lufs": -36.41, "lufsSpread": 0.81, "sones": 4.0875, "sonesSpread": 0.381, "loudDb": -35.33, "loudDbSpread": 0.51, "loud1sDb": -36.57, "loud1sDbSpread": 1.98},
+     {"cc": 32, "rmsDb": -35.41, "rmsDbSpread": 0.75, "lufs": -33.92, "lufsSpread": 0.96, "sones": 5.041, "sonesSpread": 0.496, "loudDb": -32.94, "loudDbSpread": 0.13, "loud1sDb": -33.97, "loud1sDbSpread": 1.31},
+     {"cc": 48, "rmsDb": -33.66, "rmsDbSpread": 1.35, "lufs": -32.38, "lufsSpread": 1.11, "sones": 5.832, "sonesSpread": 0.572, "loudDb": -31.11, "loudDbSpread": 1.31, "loud1sDb": -32.39, "loud1sDbSpread": 0.65},
+     {"cc": 64, "rmsDb": -33.07, "rmsDbSpread": 1.86, "lufs": -31.76, "lufsSpread": 1.18, "sones": 6.2035, "sonesSpread": 0.557, "loudDb": -30.41, "loudDbSpread": 2.14, "loud1sDb": -31.74, "loud1sDbSpread": 0.34},
+     {"cc": 80, "rmsDb": -31.68, "rmsDbSpread": 1.73, "lufs": -30.27, "lufsSpread": 1.07, "sones": 6.956, "sonesSpread": 0.49, "loudDb": -29.02, "loudDbSpread": 1.71, "loud1sDb": -29.84, "loud1sDbSpread": 0.07},
+     {"cc": 96, "rmsDb": -30.21, "rmsDbSpread": 1.39, "lufs": -28.7, "lufsSpread": 0.93, "sones": 7.767, "sonesSpread": 0.438, "loudDb": -27.48, "loudDbSpread": 0.77, "loud1sDb": -27.83, "loud1sDbSpread": 0.09},
+     {"cc": 112, "rmsDb": -29.24, "rmsDbSpread": 1.18, "lufs": -27.69, "lufsSpread": 0.87, "sones": 8.3405, "sonesSpread": 0.413, "loudDb": -26.54, "loudDbSpread": 0.24, "loud1sDb": -26.62, "loud1sDbSpread": 0.07},
+     {"cc": 127, "rmsDb": -28.99, "rmsDbSpread": 1.13, "lufs": -27.41, "lufsSpread": 0.85, "sones": 8.4945, "sonesSpread": 0.408, "loudDb": -26.3, "loudDbSpread": 0.13, "loud1sDb": -26.33, "loud1sDbSpread": 0.08}
+    ],
+    "42": [
+     {"cc": 16, "rmsDb": -33.58, "rmsDbSpread": 1.14, "lufs": -32.1, "lufsSpread": 1.61, "sones": 4.6165, "sonesSpread": 0.015, "loudDb": -30.91, "loudDbSpread": 1.17, "loud1sDb": -31.77, "loud1sDbSpread": 2.89},
+     {"cc": 32, "rmsDb": -30.63, "rmsDbSpread": 1.3, "lufs": -29.36, "lufsSpread": 1.72, "sones": 5.748, "sonesSpread": 0.198, "loudDb": -28.08, "loudDbSpread": 1.56, "loud1sDb": -28.98, "loud1sDbSpread": 3.36},
+     {"cc": 48, "rmsDb": -28.43, "rmsDbSpread": 1.34, "lufs": -27.32, "lufsSpread": 1.68, "sones": 6.7535, "sonesSpread": 0.481, "loudDb": -25.77, "loudDbSpread": 1.73, "loud1sDb": -26.66, "loud1sDbSpread": 3.11},
+     {"cc": 64, "rmsDb": -27.38, "rmsDbSpread": 1.13, "lufs": -26.32, "lufsSpread": 1.29, "sones": 7.2625, "sonesSpread": 0.723, "loudDb": -24.47, "loudDbSpread": 1.74, "loud1sDb": -25.27, "loud1sDbSpread": 1.85},
+     {"cc": 80, "rmsDb": -25.93, "rmsDbSpread": 0.8, "lufs": -24.73, "lufsSpread": 0.83, "sones": 8.1095, "sonesSpread": 0.809, "loudDb": -23.12, "loudDbSpread": 1.39, "loud1sDb": -23.66, "loud1sDbSpread": 0.64},
+     {"cc": 96, "rmsDb": -24.58, "rmsDbSpread": 0.52, "lufs": -23.27, "lufsSpread": 0.55, "sones": 8.9765, "sonesSpread": 0.855, "loudDb": -21.86, "loudDbSpread": 0.76, "loud1sDb": -22.28, "loud1sDbSpread": 0.08},
+     {"cc": 112, "rmsDb": -23.7, "rmsDbSpread": 0.39, "lufs": -22.31, "lufsSpread": 0.42, "sones": 9.5855, "sonesSpread": 0.873, "loudDb": -20.94, "loudDbSpread": 0.13, "loud1sDb": -21.29, "loud1sDbSpread": 0.58},
+     {"cc": 127, "rmsDb": -23.48, "rmsDbSpread": 0.36, "lufs": -22.07, "lufsSpread": 0.4, "sones": 9.745, "sonesSpread": 0.876, "loudDb": -20.7, "loudDbSpread": 0.01, "loud1sDb": -20.99, "loud1sDbSpread": 0.59}
+    ],
+    "45": [
+     {"cc": 16, "rmsDb": -39.13, "rmsDbSpread": 0.96, "lufs": -37.77, "lufsSpread": 0.75, "sones": 3.855, "sonesSpread": 0.306, "loudDb": -36.83, "loudDbSpread": 0.57, "loud1sDb": -37.48, "loud1sDbSpread": 0.74},
+     {"cc": 32, "rmsDb": -36.51, "rmsDbSpread": 0.74, "lufs": -35.27, "lufsSpread": 0.39, "sones": 4.7235, "sonesSpread": 0.329, "loudDb": -34.36, "loudDbSpread": 0.71, "loud1sDb": -35.03, "loud1sDbSpread": 0.62},
+     {"cc": 48, "rmsDb": -34.8, "rmsDbSpread": 0.38, "lufs": -33.56, "lufsSpread": 0.05, "sones": 5.4235, "sonesSpread": 0.289, "loudDb": -32.92, "loudDbSpread": 0.88, "loud1sDb": -33.64, "loud1sDbSpread": 0.36},
+     {"cc": 64, "rmsDb": -34.48, "rmsDbSpread": 0.25, "lufs": -33.14, "lufsSpread": 0.53, "sones": 5.6985, "sonesSpread": 0.073, "loudDb": -32.5, "loudDbSpread": 0.12, "loud1sDb": -33.02, "loud1sDbSpread": 0.91},
+     {"cc": 80, "rmsDb": -33.45, "rmsDbSpread": 0.69, "lufs": -31.93, "lufsSpread": 0.87, "sones": 6.291, "sonesSpread": 0.156, "loudDb": -31.2, "loudDbSpread": 0.81, "loud1sDb": -31.83, "loud1sDbSpread": 2.05},
+     {"cc": 96, "rmsDb": -32.2, "rmsDbSpread": 0.83, "lufs": -30.55, "lufsSpread": 0.93, "sones": 6.963, "sonesSpread": 0.322, "loudDb": -30.05, "loudDbSpread": 1.32, "loud1sDb": -30.61, "loud1sDbSpread": 2.43},
+     {"cc": 112, "rmsDb": -31.31, "rmsDbSpread": 0.85, "lufs": -29.6, "lufsSpread": 0.92, "sones": 7.4425, "sonesSpread": 0.401, "loudDb": -29.14, "loudDbSpread": 1.69, "loud1sDb": -29.48, "loud1sDbSpread": 2.37},
+     {"cc": 127, "rmsDb": -31.09, "rmsDbSpread": 0.85, "lufs": -29.35, "lufsSpread": 0.92, "sones": 7.5865, "sonesSpread": 0.415, "loudDb": -28.89, "loudDbSpread": 1.72, "loud1sDb": -29.21, "loud1sDbSpread": 2.36}
+    ],
+    "48": [
+     {"cc": 16, "rmsDb": -39.66, "rmsDbSpread": 1.83, "lufs": -38.55, "lufsSpread": 1.53, "sones": 4.2625, "sonesSpread": 0.333, "loudDb": -37.73, "loudDbSpread": 1.67, "loud1sDb": -39.27, "loud1sDbSpread": 0.83},
+     {"cc": 32, "rmsDb": -36.94, "rmsDbSpread": 1.88, "lufs": -35.98, "lufsSpread": 1.41, "sones": 5.1975, "sonesSpread": 0.421, "loudDb": -34.95, "loudDbSpread": 2.02, "loud1sDb": -36.96, "loud1sDbSpread": 0.78},
+     {"cc": 48, "rmsDb": -34.98, "rmsDbSpread": 1.66, "lufs": -34.21, "lufsSpread": 1.02, "sones": 5.938, "sonesSpread": 0.444, "loudDb": -33.09, "loudDbSpread": 2.25, "loud1sDb": -35.69, "loud1sDbSpread": 0.61},
+     {"cc": 64, "rmsDb": -34.16, "rmsDbSpread": 0.88, "lufs": -33.63, "lufsSpread": 0.12, "sones": 6.2265, "sonesSpread": 0.317, "loudDb": -32.29, "loudDbSpread": 1.88, "loud1sDb": -35.52, "loud1sDbSpread": 0.81},
+     {"cc": 80, "rmsDb": -32.76, "rmsDbSpread": 0.06, "lufs": -32.28, "lufsSpread": 0.63, "sones": 6.8925, "sonesSpread": 0.163, "loudDb": -30.62, "loudDbSpread": 1.93, "loud1sDb": -34.07, "loud1sDbSpread": 2.2},
+     {"cc": 96, "rmsDb": -31.38, "rmsDbSpread": 0.39, "lufs": -30.83, "lufsSpread": 0.94, "sones": 7.6465, "sonesSpread": 0.061, "loudDb": -29.05, "loudDbSpread": 1.48, "loud1sDb": -32.66, "loud1sDbSpread": 2.58},
+     {"cc": 112, "rmsDb": -30.47, "rmsDbSpread": 0.6, "lufs": -29.86, "lufsSpread": 1.04, "sones": 8.1855, "sonesSpread": 0.005, "loudDb": -28.06, "loudDbSpread": 1.17, "loud1sDb": -31.66, "loud1sDbSpread": 2.5},
+     {"cc": 127, "rmsDb": -30.23, "rmsDbSpread": 0.63, "lufs": -29.61, "lufsSpread": 1.04, "sones": 8.327, "sonesSpread": 0.02, "loudDb": -27.82, "loudDbSpread": 1.11, "loud1sDb": -31.38, "loud1sDbSpread": 2.4}
+    ],
+    "51": [
+     {"cc": 16, "rmsDb": -39.2, "rmsDbSpread": 0.73, "lufs": -37.52, "lufsSpread": 0.26, "sones": 4.4375, "sonesSpread": 0.065, "loudDb": -36.22, "loudDbSpread": 0.71, "loud1sDb": -37.03, "loud1sDbSpread": 0.9},
+     {"cc": 32, "rmsDb": -36.31, "rmsDbSpread": 0.2, "lufs": -34.66, "lufsSpread": 0.61, "sones": 5.4585, "sonesSpread": 0.001, "loudDb": -33.83, "loudDbSpread": 0.02, "loud1sDb": -34.7, "loud1sDbSpread": 1.72},
+     {"cc": 48, "rmsDb": -34.36, "rmsDbSpread": 0.4, "lufs": -32.73, "lufsSpread": 1.03, "sones": 6.2315, "sonesSpread": 0.129, "loudDb": -31.64, "loudDbSpread": 1.12, "loud1sDb": -33.17, "loud1sDbSpread": 1.94},
+     {"cc": 64, "rmsDb": -33.84, "rmsDbSpread": 1.07, "lufs": -32.21, "lufsSpread": 1.3, "sones": 6.3775, "sonesSpread": 0.245, "loudDb": -30.56, "loudDbSpread": 1.64, "loud1sDb": -32.3, "loud1sDbSpread": 1.09},
+     {"cc": 80, "rmsDb": -32.86, "rmsDbSpread": 1.27, "lufs": -31.05, "lufsSpread": 0.88, "sones": 6.866, "sonesSpread": 0.296, "loudDb": -29.19, "loudDbSpread": 1.55, "loud1sDb": -30.48, "loud1sDbSpread": 0.13},
+     {"cc": 96, "rmsDb": -31.75, "rmsDbSpread": 1.16, "lufs": -29.81, "lufsSpread": 0.4, "sones": 7.509, "sonesSpread": 0.28, "loudDb": -28.05, "loudDbSpread": 1.48, "loud1sDb": -28.84, "loud1sDbSpread": 0.73},
+     {"cc": 112, "rmsDb": -30.97, "rmsDbSpread": 1.02, "lufs": -28.98, "lufsSpread": 0.11, "sones": 7.999, "sonesSpread": 0.24, "loudDb": -27.32, "loudDbSpread": 1.44, "loud1sDb": -27.84, "loud1sDbSpread": 1.04},
+     {"cc": 127, "rmsDb": -30.76, "rmsDbSpread": 0.98, "lufs": -28.75, "lufsSpread": 0.03, "sones": 8.1315, "sonesSpread": 0.225, "loudDb": -27.13, "loudDbSpread": 1.44, "loud1sDb": -27.59, "loud1sDbSpread": 1.11}
+    ],
+    "54": [
+     {"cc": 16, "rmsDb": -35.98, "rmsDbSpread": 0.71, "lufs": -33.47, "lufsSpread": 0.16, "sones": 5.146, "sonesSpread": 0.096, "loudDb": -31.89, "loudDbSpread": 0.24, "loud1sDb": -31.89, "loud1sDbSpread": 0.24},
+     {"cc": 32, "rmsDb": -33.42, "rmsDbSpread": 0.8, "lufs": -30.93, "lufsSpread": 0.56, "sones": 6.2035, "sonesSpread": 0.145, "loudDb": -29.36, "loudDbSpread": 1.03, "loud1sDb": -29.36, "loud1sDbSpread": 1.03},
+     {"cc": 48, "rmsDb": -31.45, "rmsDbSpread": 0.79, "lufs": -29.05, "lufsSpread": 0.8, "sones": 7.045, "sonesSpread": 0.168, "loudDb": -27.46, "loudDbSpread": 1.1, "loud1sDb": -27.46, "loud1sDbSpread": 1.1},
+     {"cc": 64, "rmsDb": -30.24, "rmsDbSpread": 0.59, "lufs": -27.93, "lufsSpread": 0.71, "sones": 7.395, "sonesSpread": 0.078, "loudDb": -26.77, "loudDbSpread": 0.31, "loud1sDb": -27.0, "loud1sDbSpread": 0.78},
+     {"cc": 80, "rmsDb": -28.34, "rmsDbSpread": 0.37, "lufs": -26.11, "lufsSpread": 0.15, "sones": 8.2205, "sonesSpread": 0.025, "loudDb": -25.09, "loudDbSpread": 0.99, "loud1sDb": -25.34, "loud1sDbSpread": 0.49},
+     {"cc": 96, "rmsDb": -26.66, "rmsDbSpread": 0.29, "lufs": -24.45, "lufsSpread": 0.28, "sones": 9.117, "sonesSpread": 0.044, "loudDb": -23.51, "loudDbSpread": 1.45, "loud1sDb": -23.59, "loud1sDbSpread": 1.29},
+     {"cc": 112, "rmsDb": -25.59, "rmsDbSpread": 0.26, "lufs": -23.41, "lufsSpread": 0.47, "sones": 9.757, "sonesSpread": 0.074, "loudDb": -22.52, "loudDbSpread": 1.66, "loud1sDb": -22.52, "loud1sDbSpread": 1.65},
+     {"cc": 127, "rmsDb": -25.34, "rmsDbSpread": 0.26, "lufs": -23.21, "lufsSpread": 0.66, "sones": 9.9265, "sonesSpread": 0.082, "loudDb": -22.27, "loudDbSpread": 1.71, "loud1sDb": -22.27, "loud1sDbSpread": 1.72}
+    ],
+    "57": [
+     {"cc": 16, "rmsDb": -42.05, "rmsDbSpread": 0.84, "lufs": -39.84, "lufsSpread": 0.01, "sones": 3.7425, "sonesSpread": 0.069, "loudDb": -38.42, "loudDbSpread": 0.34, "loud1sDb": -38.66, "loud1sDbSpread": 0.14},
+     {"cc": 32, "rmsDb": -39.67, "rmsDbSpread": 0.52, "lufs": -37.44, "lufsSpread": 0.01, "sones": 4.527, "sonesSpread": 0.006, "loudDb": -36.14, "loudDbSpread": 0.65, "loud1sDb": -36.14, "loud1sDbSpread": 0.65},
+     {"cc": 48, "rmsDb": -38.31, "rmsDbSpread": 0.07, "lufs": -36.02, "lufsSpread": 0.01, "sones": 5.0565, "sonesSpread": 0.135, "loudDb": -34.67, "loudDbSpread": 1.39, "loud1sDb": -34.67, "loud1sDbSpread": 1.39},
+     {"cc": 64, "rmsDb": -38.5, "rmsDbSpread": 0.59, "lufs": -36.03, "lufsSpread": 0.14, "sones": 5.035, "sonesSpread": 0.324, "loudDb": -34.42, "loudDbSpread": 0.97, "loud1sDb": -34.52, "loud1sDbSpread": 1.15},
+     {"cc": 80, "rmsDb": -37.64, "rmsDbSpread": 0.78, "lufs": -35.04, "lufsSpread": 0.32, "sones": 5.404, "sonesSpread": 0.392, "loudDb": -33.8, "loudDbSpread": 0.21, "loud1sDb": -34.18, "loud1sDbSpread": 0.96},
+     {"cc": 96, "rmsDb": -36.31, "rmsDbSpread": 0.6, "lufs": -33.69, "lufsSpread": 0.39, "sones": 5.9855, "sonesSpread": 0.321, "loudDb": -32.89, "loudDbSpread": 0.23, "loud1sDb": -33.53, "loud1sDbSpread": 1.05},
+     {"cc": 112, "rmsDb": -35.34, "rmsDbSpread": 0.41, "lufs": -32.71, "lufsSpread": 0.44, "sones": 6.4325, "sonesSpread": 0.241, "loudDb": -31.88, "loudDbSpread": 0.33, "loud1sDb": -32.37, "loud1sDbSpread": 1.3},
+     {"cc": 127, "rmsDb": -35.08, "rmsDbSpread": 0.37, "lufs": -32.45, "lufsSpread": 0.45, "sones": 6.554, "sonesSpread": 0.22, "loudDb": -31.63, "loudDbSpread": 0.47, "loud1sDb": -32.02, "loud1sDbSpread": 1.25}
+    ],
+    "59": [
+     {"cc": 16, "rmsDb": -40.28, "rmsDbSpread": 1.47, "lufs": -36.98, "lufsSpread": 2.83, "sones": 4.6945, "sonesSpread": 0.157, "loudDb": -35.11, "loudDbSpread": 3.94, "loud1sDb": -35.11, "loud1sDbSpread": 3.94},
+     {"cc": 32, "rmsDb": -38.15, "rmsDbSpread": 1.11, "lufs": -34.67, "lufsSpread": 2.55, "sones": 5.606, "sonesSpread": 0.156, "loudDb": -32.75, "loudDbSpread": 4.07, "loud1sDb": -32.75, "loud1sDbSpread": 4.07},
+     {"cc": 48, "rmsDb": -37.06, "rmsDbSpread": 0.66, "lufs": -33.45, "lufsSpread": 2.12, "sones": 6.223, "sonesSpread": 0.148, "loudDb": -31.35, "loudDbSpread": 3.82, "loud1sDb": -31.35, "loud1sDbSpread": 3.82},
+     {"cc": 64, "rmsDb": -37.42, "rmsDbSpread": 0.3, "lufs": -33.89, "lufsSpread": 1.41, "sones": 6.278, "sonesSpread": 0.162, "loudDb": -31.26, "loudDbSpread": 1.96, "loud1sDb": -31.26, "loud1sDbSpread": 1.96},
+     {"cc": 80, "rmsDb": -36.28, "rmsDbSpread": 0.67, "lufs": -33.22, "lufsSpread": 1.13, "sones": 6.8465, "sonesSpread": 0.257, "loudDb": -30.8, "loudDbSpread": 0.4, "loud1sDb": -30.8, "loud1sDbSpread": 0.4},
+     {"cc": 96, "rmsDb": -34.62, "rmsDbSpread": 1.18, "lufs": -31.91, "lufsSpread": 1.28, "sones": 7.624, "sonesSpread": 0.378, "loudDb": -29.96, "loudDbSpread": 0.02, "loud1sDb": -29.96, "loud1sDbSpread": 0.02},
+     {"cc": 112, "rmsDb": -33.45, "rmsDbSpread": 1.44, "lufs": -30.88, "lufsSpread": 1.45, "sones": 8.2175, "sonesSpread": 0.463, "loudDb": -29.24, "loudDbSpread": 0.09, "loud1sDb": -29.24, "loud1sDbSpread": 0.09},
+     {"cc": 127, "rmsDb": -33.15, "rmsDbSpread": 1.5, "lufs": -30.62, "lufsSpread": 1.5, "sones": 8.377, "sonesSpread": 0.484, "loudDb": -29.05, "loudDbSpread": 0.13, "loud1sDb": -29.05, "loud1sDbSpread": 0.13}
+    ],
+    "60": [
+     {"cc": 16, "rmsDb": -40.28, "rmsDbSpread": 1.27, "lufs": -36.97, "lufsSpread": 2.78, "sones": 4.7785, "sonesSpread": 0.125, "loudDb": -35.16, "loudDbSpread": 3.93, "loud1sDb": -35.16, "loud1sDbSpread": 3.93},
+     {"cc": 32, "rmsDb": -38.05, "rmsDbSpread": 1.18, "lufs": -34.66, "lufsSpread": 2.52, "sones": 5.7175, "sonesSpread": 0.157, "loudDb": -32.81, "loudDbSpread": 4.1, "loud1sDb": -32.81, "loud1sDbSpread": 4.1},
+     {"cc": 48, "rmsDb": -36.81, "rmsDbSpread": 1.11, "lufs": -33.41, "lufsSpread": 2.13, "sones": 6.3705, "sonesSpread": 0.197, "loudDb": -31.38, "loudDbSpread": 3.77, "loud1sDb": -31.38, "loud1sDbSpread": 3.77},
+     {"cc": 64, "rmsDb": -37.01, "rmsDbSpread": 1.14, "lufs": -33.81, "lufsSpread": 1.47, "sones": 6.4695, "sonesSpread": 0.269, "loudDb": -31.3, "loudDbSpread": 1.98, "loud1sDb": -31.3, "loud1sDbSpread": 1.98},
+     {"cc": 80, "rmsDb": -35.93, "rmsDbSpread": 1.34, "lufs": -33.11, "lufsSpread": 1.17, "sones": 7.0625, "sonesSpread": 0.349, "loudDb": -30.83, "loudDbSpread": 0.48, "loud1sDb": -30.83, "loud1sDbSpread": 0.48},
+     {"cc": 96, "rmsDb": -34.39, "rmsDbSpread": 1.51, "lufs": -31.79, "lufsSpread": 1.3, "sones": 7.845, "sonesSpread": 0.428, "loudDb": -30.0, "loudDbSpread": 0.06, "loud1sDb": -30.0, "loud1sDbSpread": 0.06},
+     {"cc": 112, "rmsDb": -33.3, "rmsDbSpread": 1.58, "lufs": -30.77, "lufsSpread": 1.44, "sones": 8.4355, "sonesSpread": 0.483, "loudDb": -29.27, "loudDbSpread": 0.13, "loud1sDb": -29.27, "loud1sDbSpread": 0.13},
+     {"cc": 127, "rmsDb": -33.02, "rmsDbSpread": 1.59, "lufs": -30.51, "lufsSpread": 1.49, "sones": 8.595, "sonesSpread": 0.496, "loudDb": -29.08, "loudDbSpread": 0.18, "loud1sDb": -29.08, "loud1sDbSpread": 0.18}
+    ],
+    "63": [
+     {"cc": 16, "rmsDb": -39.87, "rmsDbSpread": 1.2, "lufs": -36.51, "lufsSpread": 0.58, "sones": 4.6365, "sonesSpread": 0.195, "loudDb": -34.63, "loudDbSpread": 0.38, "loud1sDb": -34.86, "loud1sDbSpread": 0.83},
+     {"cc": 32, "rmsDb": -37.22, "rmsDbSpread": 1.51, "lufs": -33.92, "lufsSpread": 0.57, "sones": 5.626, "sonesSpread": 0.236, "loudDb": -32.03, "loudDbSpread": 1.13, "loud1sDb": -32.08, "loud1sDbSpread": 1.23},
+     {"cc": 48, "rmsDb": -35.29, "rmsDbSpread": 1.72, "lufs": -32.15, "lufsSpread": 0.56, "sones": 6.4415, "sonesSpread": 0.221, "loudDb": -30.13, "loudDbSpread": 1.16, "loud1sDb": -30.14, "loud1sDbSpread": 1.18},
+     {"cc": 64, "rmsDb": -34.3, "rmsDbSpread": 1.66, "lufs": -31.51, "lufsSpread": 0.54, "sones": 6.8405, "sonesSpread": 0.081, "loudDb": -29.76, "loudDbSpread": 1.45, "loud1sDb": -29.76, "loud1sDbSpread": 1.45},
+     {"cc": 80, "rmsDb": -32.63, "rmsDbSpread": 1.34, "lufs": -30.09, "lufsSpread": 0.55, "sones": 7.669, "sonesSpread": 0.042, "loudDb": -28.74, "loudDbSpread": 1.09, "loud1sDb": -28.87, "loud1sDbSpread": 1.34},
+     {"cc": 96, "rmsDb": -31.07, "rmsDbSpread": 1.08, "lufs": -28.61, "lufsSpread": 0.57, "sones": 8.5785, "sonesSpread": 0.109, "loudDb": -27.5, "loudDbSpread": 0.2, "loud1sDb": -27.75, "loud1sDbSpread": 0.71},
+     {"cc": 112, "rmsDb": -30.07, "rmsDbSpread": 0.96, "lufs": -27.63, "lufsSpread": 0.59, "sones": 9.2215, "sonesSpread": 0.159, "loudDb": -26.74, "loudDbSpread": 0.3, "loud1sDb": -26.84, "loud1sDbSpread": 0.09},
+     {"cc": 127, "rmsDb": -29.82, "rmsDbSpread": 0.92, "lufs": -27.39, "lufsSpread": 0.6, "sones": 9.387, "sonesSpread": 0.174, "loudDb": -26.51, "loudDbSpread": 0.33, "loud1sDb": -26.58, "loud1sDbSpread": 0.19}
+    ],
+    "66": [
+     {"cc": 16, "rmsDb": -39.72, "rmsDbSpread": 1.93, "lufs": -37.2, "lufsSpread": 1.14, "sones": 4.7105, "sonesSpread": 0.363, "loudDb": -35.62, "loudDbSpread": 2.73, "loud1sDb": -35.62, "loud1sDbSpread": 2.73},
+     {"cc": 32, "rmsDb": -37.19, "rmsDbSpread": 1.91, "lufs": -34.7, "lufsSpread": 1.11, "sones": 5.7475, "sonesSpread": 0.413, "loudDb": -33.25, "loudDbSpread": 3.46, "loud1sDb": -33.25, "loud1sDbSpread": 3.46},
+     {"cc": 48, "rmsDb": -35.52, "rmsDbSpread": 1.91, "lufs": -33.09, "lufsSpread": 1.11, "sones": 6.5625, "sonesSpread": 0.501, "loudDb": -31.45, "loudDbSpread": 3.09, "loud1sDb": -31.45, "loud1sDbSpread": 3.09},
+     {"cc": 64, "rmsDb": -35.1, "rmsDbSpread": 1.89, "lufs": -32.72, "lufsSpread": 1.14, "sones": 6.841, "sonesSpread": 0.606, "loudDb": -31.15, "loudDbSpread": 2.24, "loud1sDb": -31.15, "loud1sDbSpread": 2.24},
+     {"cc": 80, "rmsDb": -33.85, "rmsDbSpread": 1.89, "lufs": -31.46, "lufsSpread": 1.23, "sones": 7.504, "sonesSpread": 0.742, "loudDb": -30.21, "loudDbSpread": 1.1, "loud1sDb": -30.5, "loud1sDbSpread": 0.85},
+     {"cc": 96, "rmsDb": -32.45, "rmsDbSpread": 1.87, "lufs": -30.01, "lufsSpread": 1.28, "sones": 8.2715, "sonesSpread": 0.851, "loudDb": -28.45, "loudDbSpread": 0.87, "loud1sDb": -28.98, "loud1sDbSpread": 1.09},
+     {"cc": 112, "rmsDb": -31.48, "rmsDbSpread": 1.87, "lufs": -29.03, "lufsSpread": 1.3, "sones": 8.821, "sonesSpread": 0.904, "loudDb": -27.41, "loudDbSpread": 0.79, "loud1sDb": -27.86, "loud1sDbSpread": 1.52},
+     {"cc": 127, "rmsDb": -31.23, "rmsDbSpread": 1.87, "lufs": -28.77, "lufsSpread": 1.31, "sones": 8.9685, "sonesSpread": 0.915, "loudDb": -27.15, "loudDbSpread": 0.77, "loud1sDb": -27.59, "loud1sDbSpread": 1.62}
+    ],
+    "69": [
+     {"cc": 16, "rmsDb": -43.36, "rmsDbSpread": 1.03, "lufs": -40.19, "lufsSpread": 1.03, "sones": 4.2025, "sonesSpread": 0.321, "loudDb": -39.42, "loudDbSpread": 2.38, "loud1sDb": -40.05, "loud1sDbSpread": 1.12},
+     {"cc": 32, "rmsDb": -40.81, "rmsDbSpread": 1.25, "lufs": -37.66, "lufsSpread": 1.2, "sones": 5.093, "sonesSpread": 0.408, "loudDb": -37.08, "loudDbSpread": 3.28, "loud1sDb": -37.6, "loud1sDbSpread": 2.25},
+     {"cc": 48, "rmsDb": -39.19, "rmsDbSpread": 1.49, "lufs": -36.0, "lufsSpread": 1.41, "sones": 5.733, "sonesSpread": 0.452, "loudDb": -35.44, "loudDbSpread": 3.29, "loud1sDb": -36.08, "loud1sDbSpread": 3.26},
+     {"cc": 64, "rmsDb": -38.9, "rmsDbSpread": 1.7, "lufs": -35.54, "lufsSpread": 1.64, "sones": 5.872, "sonesSpread": 0.398, "loudDb": -35.36, "loudDbSpread": 2.79, "loud1sDb": -35.36, "loud1sDbSpread": 2.79},
+     {"cc": 80, "rmsDb": -37.78, "rmsDbSpread": 1.61, "lufs": -34.23, "lufsSpread": 1.65, "sones": 6.3755, "sonesSpread": 0.329, "loudDb": -34.03, "loudDbSpread": 1.99, "loud1sDb": -34.03, "loud1sDbSpread": 1.99},
+     {"cc": 96, "rmsDb": -36.45, "rmsDbSpread": 1.43, "lufs": -32.78, "lufsSpread": 1.56, "sones": 7.004, "sonesSpread": 0.306, "loudDb": -32.4, "loudDbSpread": 2.42, "loud1sDb": -32.4, "loud1sDbSpread": 2.42},
+     {"cc": 112, "rmsDb": -35.52, "rmsDbSpread": 1.31, "lufs": -31.8, "lufsSpread": 1.5, "sones": 7.4805, "sonesSpread": 0.299, "loudDb": -31.3, "loudDbSpread": 2.41, "loud1sDb": -31.3, "loud1sDbSpread": 2.41},
+     {"cc": 127, "rmsDb": -35.28, "rmsDbSpread": 1.28, "lufs": -31.55, "lufsSpread": 1.48, "sones": 7.6095, "sonesSpread": 0.297, "loudDb": -31.03, "loudDbSpread": 2.4, "loud1sDb": -31.03, "loud1sDbSpread": 2.4}
+    ],
+    "72": [
+     {"cc": 16, "rmsDb": -44.07, "rmsDbSpread": 0.1, "lufs": -40.36, "lufsSpread": 0.79, "sones": 4.3015, "sonesSpread": 0.039, "loudDb": -40.92, "loudDbSpread": 1.07, "loud1sDb": -41.66, "loud1sDbSpread": 2.54},
+     {"cc": 32, "rmsDb": -41.46, "rmsDbSpread": 0.06, "lufs": -37.77, "lufsSpread": 0.76, "sones": 5.1725, "sonesSpread": 0.099, "loudDb": -38.27, "loudDbSpread": 0.67, "loud1sDb": -38.85, "loud1sDbSpread": 1.82},
+     {"cc": 48, "rmsDb": -39.55, "rmsDbSpread": 0.17, "lufs": -35.92, "lufsSpread": 0.64, "sones": 5.92, "sonesSpread": 0.138, "loudDb": -36.41, "loudDbSpread": 0.13, "loud1sDb": -36.92, "loud1sDbSpread": 0.89},
+     {"cc": 64, "rmsDb": -38.59, "rmsDbSpread": 0.09, "lufs": -35.11, "lufsSpread": 0.37, "sones": 6.3335, "sonesSpread": 0.117, "loudDb": -35.41, "loudDbSpread": 1.42, "loud1sDb": -36.22, "loud1sDbSpread": 0.2},
+     {"cc": 80, "rmsDb": -36.91, "rmsDbSpread": 0.13, "lufs": -33.53, "lufsSpread": 0.15, "sones": 7.134, "sonesSpread": 0.048, "loudDb": -33.53, "loudDbSpread": 1.58, "loud1sDb": -34.69, "loud1sDbSpread": 0.73},
+     {"cc": 96, "rmsDb": -35.32, "rmsDbSpread": 0.3, "lufs": -31.98, "lufsSpread": 0.08, "sones": 7.9815, "sonesSpread": 0.011, "loudDb": -31.85, "loudDbSpread": 1.23, "loud1sDb": -33.11, "loud1sDbSpread": 1.29},
+     {"cc": 112, "rmsDb": -34.3, "rmsDbSpread": 0.39, "lufs": -30.98, "lufsSpread": 0.05, "sones": 8.5445, "sonesSpread": 0.021, "loudDb": -30.77, "loudDbSpread": 0.91, "loud1sDb": -32.01, "loud1sDbSpread": 1.55},
+     {"cc": 127, "rmsDb": -34.05, "rmsDbSpread": 0.4, "lufs": -30.72, "lufsSpread": 0.04, "sones": 8.695, "sonesSpread": 0.03, "loudDb": -30.51, "loudDbSpread": 0.84, "loud1sDb": -31.72, "loud1sDbSpread": 1.58}
+    ],
+    "75": [
+     {"cc": 16, "rmsDb": -44.31, "rmsDbSpread": 0.02, "lufs": -40.73, "lufsSpread": 0.39, "sones": 4.1455, "sonesSpread": 0.055, "loudDb": -42.02, "loudDbSpread": 0.1, "loud1sDb": -42.75, "loud1sDbSpread": 0.77},
+     {"cc": 32, "rmsDb": -41.89, "rmsDbSpread": 0.2, "lufs": -38.23, "lufsSpread": 0.38, "sones": 4.957, "sonesSpread": 0.118, "loudDb": -39.75, "loudDbSpread": 0.31, "loud1sDb": -39.95, "loud1sDbSpread": 0.02},
+     {"cc": 48, "rmsDb": -40.42, "rmsDbSpread": 0.47, "lufs": -36.65, "lufsSpread": 0.28, "sones": 5.5215, "sonesSpread": 0.197, "loudDb": -37.75, "loudDbSpread": 0.13, "loud1sDb": -38.05, "loud1sDbSpread": 0.72},
+     {"cc": 64, "rmsDb": -40.4, "rmsDbSpread": 0.7, "lufs": -36.47, "lufsSpread": 0.05, "sones": 5.548, "sonesSpread": 0.22, "loudDb": -37.03, "loudDbSpread": 0.88, "loud1sDb": -37.5, "loud1sDbSpread": 1.82},
+     {"cc": 80, "rmsDb": -39.39, "rmsDbSpread": 0.6, "lufs": -35.42, "lufsSpread": 0.41, "sones": 5.9625, "sonesSpread": 0.129, "loudDb": -35.78, "loudDbSpread": 1.57, "loud1sDb": -36.3, "loud1sDbSpread": 2.61},
+     {"cc": 96, "rmsDb": -38.03, "rmsDbSpread": 0.39, "lufs": -34.11, "lufsSpread": 0.59, "sones": 6.554, "sonesSpread": 0.012, "loudDb": -34.44, "loudDbSpread": 1.52, "loud1sDb": -35.05, "loud1sDbSpread": 2.75},
+     {"cc": 112, "rmsDb": -37.06, "rmsDbSpread": 0.24, "lufs": -33.17, "lufsSpread": 0.65, "sones": 7.019, "sonesSpread": 0.07, "loudDb": -33.61, "loudDbSpread": 1.46, "loud1sDb": -34.22, "loud1sDbSpread": 2.68},
+     {"cc": 127, "rmsDb": -36.81, "rmsDbSpread": 0.2, "lufs": -32.93, "lufsSpread": 0.66, "sones": 7.1455, "sonesSpread": 0.091, "loudDb": -33.41, "loudDbSpread": 1.45, "loud1sDb": -34.0, "loud1sDbSpread": 2.65}
+    ],
+    "78": [
+     {"cc": 16, "rmsDb": -43.58, "rmsDbSpread": 0.34, "lufs": -39.78, "lufsSpread": 0.28, "sones": 4.3455, "sonesSpread": 0.021, "loudDb": -39.88, "loudDbSpread": 1.38, "loud1sDb": -39.88, "loud1sDbSpread": 1.38},
+     {"cc": 32, "rmsDb": -41.16, "rmsDbSpread": 0.37, "lufs": -37.39, "lufsSpread": 0.19, "sones": 5.181, "sonesSpread": 0.032, "loudDb": -37.6, "loudDbSpread": 1.06, "loud1sDb": -37.6, "loud1sDbSpread": 1.06},
+     {"cc": 48, "rmsDb": -39.77, "rmsDbSpread": 0.31, "lufs": -36.06, "lufsSpread": 0.03, "sones": 5.7245, "sonesSpread": 0.005, "loudDb": -36.61, "loudDbSpread": 0.6, "loud1sDb": -36.61, "loud1sDbSpread": 0.6},
+     {"cc": 64, "rmsDb": -40.05, "rmsDbSpread": 0.12, "lufs": -36.42, "lufsSpread": 0.36, "sones": 5.623, "sonesSpread": 0.132, "loudDb": -37.39, "loudDbSpread": 1.0, "loud1sDb": -37.93, "loud1sDbSpread": 0.08},
+     {"cc": 80, "rmsDb": -39.46, "rmsDbSpread": 0.78, "lufs": -35.85, "lufsSpread": 0.74, "sones": 5.899, "sonesSpread": 0.328, "loudDb": -36.86, "loudDbSpread": 2.04, "loud1sDb": -37.4, "loud1sDbSpread": 2.11},
+     {"cc": 96, "rmsDb": -38.35, "rmsDbSpread": 1.2, "lufs": -34.69, "lufsSpread": 0.87, "sones": 6.4225, "sonesSpread": 0.473, "loudDb": -35.44, "loudDbSpread": 1.39, "loud1sDb": -36.05, "loud1sDbSpread": 2.24},
+     {"cc": 112, "rmsDb": -37.47, "rmsDbSpread": 1.38, "lufs": -33.77, "lufsSpread": 0.88, "sones": 6.8555, "sonesSpread": 0.545, "loudDb": -34.5, "loudDbSpread": 1.04, "loud1sDb": -35.02, "loud1sDbSpread": 1.96},
+     {"cc": 127, "rmsDb": -37.23, "rmsDbSpread": 1.41, "lufs": -33.52, "lufsSpread": 0.88, "sones": 6.974, "sonesSpread": 0.562, "loudDb": -34.26, "loudDbSpread": 0.96, "loud1sDb": -34.75, "loud1sDbSpread": 1.91}
+    ],
+    "81": [
+     {"cc": 16, "rmsDb": -45.2, "rmsDbSpread": 1.85, "lufs": -41.46, "lufsSpread": 0.96, "sones": 3.3135, "sonesSpread": 0.205, "loudDb": -40.66, "loudDbSpread": 0.05, "loud1sDb": -40.66, "loud1sDbSpread": 0.05},
+     {"cc": 32, "rmsDb": -42.57, "rmsDbSpread": 1.66, "lufs": -38.77, "lufsSpread": 0.84, "sones": 4.0855, "sonesSpread": 0.203, "loudDb": -37.92, "loudDbSpread": 0.29, "loud1sDb": -37.92, "loud1sDbSpread": 0.29},
+     {"cc": 48, "rmsDb": -40.67, "rmsDbSpread": 1.34, "lufs": -36.8, "lufsSpread": 0.75, "sones": 4.7615, "sonesSpread": 0.183, "loudDb": -36.2, "loudDbSpread": 0.59, "loud1sDb": -36.2, "loud1sDbSpread": 0.59},
+     {"cc": 64, "rmsDb": -39.78, "rmsDbSpread": 0.83, "lufs": -35.81, "lufsSpread": 0.74, "sones": 5.1365, "sonesSpread": 0.189, "loudDb": -35.71, "loudDbSpread": 0.3, "loud1sDb": -35.71, "loud1sDbSpread": 0.3},
+     {"cc": 80, "rmsDb": -38.2, "rmsDbSpread": 0.55, "lufs": -34.18, "lufsSpread": 0.84, "sones": 5.799, "sonesSpread": 0.244, "loudDb": -34.61, "loudDbSpread": 2.0, "loud1sDb": -34.61, "loud1sDbSpread": 2.0},
+     {"cc": 96, "rmsDb": -36.66, "rmsDbSpread": 0.48, "lufs": -32.62, "lufsSpread": 0.92, "sones": 6.483, "sonesSpread": 0.298, "loudDb": -33.16, "loudDbSpread": 2.16, "loud1sDb": -33.16, "loud1sDbSpread": 2.16},
+     {"cc": 112, "rmsDb": -35.66, "rmsDbSpread": 0.48, "lufs": -31.63, "lufsSpread": 0.96, "sones": 6.9565, "sonesSpread": 0.341, "loudDb": -32.12, "loudDbSpread": 1.99, "loud1sDb": -32.12, "loud1sDbSpread": 1.99},
+     {"cc": 127, "rmsDb": -35.41, "rmsDbSpread": 0.48, "lufs": -31.38, "lufsSpread": 0.97, "sones": 7.081, "sonesSpread": 0.352, "loudDb": -31.87, "loudDbSpread": 1.95, "loud1sDb": -31.87, "loud1sDbSpread": 1.95}
+    ]
+   },
+   "relative64": {
+    "rmsDb": [
+     [16, -4.95, -6.2, -2.86, 17, 1.03, 1.93],
+     [32, -2.34, -3.25, -0.73, 17, 1.05, 1.91],
+     [48, -0.52, -1.21, 0.36, 17, 0.79, 1.91],
+     [64, 0.0, 0.0, 0.0, 17, 0.83, 1.89],
+     [80, 1.25, 0.59, 1.9, 17, 0.78, 1.89],
+     [96, 2.78, 1.7, 3.58, 17, 0.83, 1.87],
+     [112, 3.69, 2.58, 4.65, 17, 0.85, 1.87],
+     [127, 3.93, 2.82, 4.9, 17, 0.85, 1.87]
+    ],
+    "lufs": [
+     [16, -4.65, -5.78, -3.09, 17, 0.81, 2.83],
+     [32, -2.13, -3.04, -0.78, 17, 0.84, 2.55],
+     [48, -0.46, -1.12, 0.44, 17, 1.02, 2.13],
+     [64, 0.0, 0.0, 0.0, 17, 0.71, 1.64],
+     [80, 1.26, 0.57, 1.82, 17, 0.83, 1.65],
+     [96, 2.71, 1.73, 3.48, 17, 0.87, 1.56],
+     [112, 3.69, 2.65, 4.52, 17, 0.87, 1.5],
+     [127, 3.95, 2.9, 4.72, 17, 0.85, 1.5]
+    ],
+    "sones": [
+     [16, 0.689, 0.636, 0.773, 17, 0.157, 0.381],
+     [32, 0.839, 0.791, 0.921, 17, 0.198, 0.496],
+     [48, 0.954, 0.927, 1.018, 17, 0.197, 0.572],
+     [64, 1.0, 1.0, 1.0, 17, 0.22, 0.723],
+     [80, 1.104, 1.049, 1.129, 17, 0.257, 0.809],
+     [96, 1.222, 1.142, 1.262, 17, 0.306, 0.855],
+     [112, 1.309, 1.219, 1.354, 17, 0.299, 0.904],
+     [127, 1.334, 1.24, 1.379, 17, 0.297, 0.915]
+    ],
+    "loudDb": [
+     [16, -4.87, -6.44, -2.49, 17, 1.07, 3.94],
+     [32, -2.21, -3.61, -0.21, 17, 1.06, 4.1],
+     [48, -0.49, -1.3, 0.78, 17, 1.31, 3.82],
+     [64, 0.0, 0.0, 0.0, 17, 1.45, 2.79],
+     [80, 1.3, 0.46, 1.88, 17, 1.39, 2.04],
+     [96, 2.59, 1.3, 3.56, 17, 1.23, 2.42],
+     [112, 3.53, 2.02, 4.64, 17, 0.91, 2.41],
+     [127, 3.77, 2.21, 4.9, 17, 0.84, 2.4]
+    ],
+    "loud1sDb": [
+     [16, -4.69, -6.5, -1.95, 17, 1.12, 3.94],
+     [32, -2.21, -3.71, 0.33, 17, 1.31, 4.1],
+     [48, -0.46, -1.39, 1.32, 17, 1.18, 3.82],
+     [64, 0.0, 0.0, 0.0, 17, 1.15, 2.79],
+     [80, 1.19, 0.01, 1.9, 17, 0.96, 2.61],
+     [96, 2.45, 0.99, 3.91, 17, 1.09, 2.75],
+     [112, 3.54, 1.7, 5.12, 17, 1.52, 2.68],
+     [127, 3.81, 1.91, 5.41, 17, 1.58, 2.65]
+    ]
+   }
+  },
+  "Basses": {
+   "sampleRate": 44100,
+   "pitches": [24, 27, 30, 33, 36, 39, 42, 45, 48, 51, 54],
+   "ccs": [16, 32, 48, 64, 80, 96, 112, 127],
+   "repeats": 4,
+   "note": 3.0,
+   "switch": 1,
+   "points": {
+    "24": [
+     {"cc": 16, "rmsDb": -41.34, "rmsDbSpread": 0.53, "lufs": -42.3, "lufsSpread": 0.13, "sones": 1.057, "sonesSpread": 0.124, "loudDb": -38.32, "loudDbSpread": 2.42, "loud1sDb": -41.3, "loud1sDbSpread": 3.31},
+     {"cc": 32, "rmsDb": -36.32, "rmsDbSpread": 1.36, "lufs": -37.42, "lufsSpread": 1.31, "sones": 1.751, "sonesSpread": 0.174, "loudDb": -34.21, "loudDbSpread": 3.26, "loud1sDb": -36.09, "loud1sDbSpread": 1.94},
+     {"cc": 48, "rmsDb": -33.39, "rmsDbSpread": 1.18, "lufs": -34.05, "lufsSpread": 0.77, "sones": 2.444, "sonesSpread": 0.15, "loudDb": -31.26, "loudDbSpread": 1.37, "loud1sDb": -33.07, "loud1sDbSpread": 1.76},
+     {"cc": 64, "rmsDb": -32.33, "rmsDbSpread": 1.06, "lufs": -32.84, "lufsSpread": 0.57, "sones": 2.728, "sonesSpread": 0.146, "loudDb": -30.2, "loudDbSpread": 0.74, "loud1sDb": -31.91, "loud1sDbSpread": 1.35},
+     {"cc": 80, "rmsDb": -32.29, "rmsDbSpread": 1.4, "lufs": -33.34, "lufsSpread": 1.35, "sones": 2.7095, "sonesSpread": 0.139, "loudDb": -29.64, "loudDbSpread": 0.29, "loud1sDb": -32.84, "loud1sDbSpread": 4.77},
+     {"cc": 96, "rmsDb": -28.82, "rmsDbSpread": 1.84, "lufs": -28.05, "lufsSpread": 1.17, "sones": 3.802, "sonesSpread": 0.314, "loudDb": -25.32, "loudDbSpread": 2.24, "loud1sDb": -25.71, "loud1sDbSpread": 1.45},
+     {"cc": 112, "rmsDb": -24.8, "rmsDbSpread": 2.07, "lufs": -23.85, "lufsSpread": 1.1, "sones": 5.395, "sonesSpread": 0.504, "loudDb": -21.32, "loudDbSpread": 3.12, "loud1sDb": -21.76, "loud1sDbSpread": 2.24},
+     {"cc": 127, "rmsDb": -23.53, "rmsDbSpread": 2.06, "lufs": -22.56, "lufsSpread": 1.09, "sones": 5.9605, "sonesSpread": 0.557, "loudDb": -20.02, "loudDbSpread": 3.05, "loud1sDb": -20.44, "loud1sDbSpread": 2.2}
+    ],
+    "27": [
+     {"cc": 16, "rmsDb": -40.88, "rmsDbSpread": 0.84, "lufs": -41.55, "lufsSpread": 0.56, "sones": 1.0495, "sonesSpread": 0.039, "loudDb": -38.66, "loudDbSpread": 2.42, "loud1sDb": -40.76, "loud1sDbSpread": 1.4},
+     {"cc": 32, "rmsDb": -35.61, "rmsDbSpread": 2.47, "lufs": -35.81, "lufsSpread": 3.58, "sones": 1.8215, "sonesSpread": 0.125, "loudDb": -33.66, "loudDbSpread": 0.96, "loud1sDb": -36.45, "loud1sDbSpread": 6.54},
+     {"cc": 48, "rmsDb": -32.45, "rmsDbSpread": 3.55, "lufs": -32.16, "lufsSpread": 4.0, "sones": 2.595, "sonesSpread": 0.328, "loudDb": -31.21, "loudDbSpread": 4.16, "loud1sDb": -31.21, "loud1sDbSpread": 4.16},
+     {"cc": 64, "rmsDb": -31.33, "rmsDbSpread": 3.69, "lufs": -30.96, "lufsSpread": 4.09, "sones": 2.925, "sonesSpread": 0.362, "loudDb": -29.69, "loudDbSpread": 3.7, "loud1sDb": -29.69, "loud1sDbSpread": 3.7},
+     {"cc": 80, "rmsDb": -32.67, "rmsDbSpread": 4.69, "lufs": -31.92, "lufsSpread": 3.81, "sones": 2.6245, "sonesSpread": 0.395, "loudDb": -29.84, "loudDbSpread": 2.11, "loud1sDb": -29.84, "loud1sDbSpread": 2.11},
+     {"cc": 96, "rmsDb": -30.21, "rmsDbSpread": 3.95, "lufs": -29.68, "lufsSpread": 1.47, "sones": 3.434, "sonesSpread": 0.502, "loudDb": -27.23, "loudDbSpread": 0.09, "loud1sDb": -27.94, "loud1sDbSpread": 1.49},
+     {"cc": 112, "rmsDb": -27.44, "rmsDbSpread": 1.37, "lufs": -26.3, "lufsSpread": 0.01, "sones": 4.7195, "sonesSpread": 0.283, "loudDb": -24.51, "loudDbSpread": 1.67, "loud1sDb": -24.51, "loud1sDbSpread": 1.67},
+     {"cc": 127, "rmsDb": -26.27, "rmsDbSpread": 1.11, "lufs": -25.03, "lufsSpread": 0.09, "sones": 5.2305, "sonesSpread": 0.271, "loudDb": -23.24, "loudDbSpread": 1.63, "loud1sDb": -23.24, "loud1sDbSpread": 1.63}
+    ],
+    "30": [
+     {"cc": 16, "rmsDb": -44.14, "rmsDbSpread": 0.34, "lufs": -43.53, "lufsSpread": 0.01, "sones": 0.8355, "sonesSpread": 0.059, "loudDb": -41.19, "loudDbSpread": 0.64, "loud1sDb": -43.03, "loud1sDbSpread": 0.14},
+     {"cc": 32, "rmsDb": -39.92, "rmsDbSpread": 3.85, "lufs": -38.67, "lufsSpread": 0.1, "sones": 1.518, "sonesSpread": 0.326, "loudDb": -35.36, "loudDbSpread": 0.19, "loud1sDb": -37.34, "loud1sDbSpread": 3.79},
+     {"cc": 48, "rmsDb": -36.03, "rmsDbSpread": 3.61, "lufs": -35.13, "lufsSpread": 0.2, "sones": 2.264, "sonesSpread": 0.428, "loudDb": -31.87, "loudDbSpread": 0.15, "loud1sDb": -33.53, "loud1sDbSpread": 3.49},
+     {"cc": 64, "rmsDb": -34.66, "rmsDbSpread": 3.37, "lufs": -33.89, "lufsSpread": 0.22, "sones": 2.565, "sonesSpread": 0.464, "loudDb": -30.71, "loudDbSpread": 0.17, "loud1sDb": -32.34, "loud1sDbSpread": 3.43},
+     {"cc": 80, "rmsDb": -34.02, "rmsDbSpread": 2.37, "lufs": -33.81, "lufsSpread": 0.1, "sones": 2.508, "sonesSpread": 0.408, "loudDb": -30.7, "loudDbSpread": 0.7, "loud1sDb": -33.23, "loud1sDbSpread": 4.36},
+     {"cc": 96, "rmsDb": -33.39, "rmsDbSpread": 0.84, "lufs": -30.59, "lufsSpread": 0.09, "sones": 2.9235, "sonesSpread": 0.039, "loudDb": -28.16, "loudDbSpread": 1.47, "loud1sDb": -28.16, "loud1sDbSpread": 1.47},
+     {"cc": 112, "rmsDb": -31.23, "rmsDbSpread": 0.57, "lufs": -27.54, "lufsSpread": 0.78, "sones": 3.7835, "sonesSpread": 0.237, "loudDb": -24.78, "loudDbSpread": 1.3, "loud1sDb": -24.78, "loud1sDbSpread": 1.3},
+     {"cc": 127, "rmsDb": -30.07, "rmsDbSpread": 0.71, "lufs": -26.33, "lufsSpread": 0.86, "sones": 4.191, "sonesSpread": 0.304, "loudDb": -23.55, "loudDbSpread": 1.35, "loud1sDb": -23.55, "loud1sDbSpread": 1.35}
+    ],
+    "33": [
+     {"cc": 16, "rmsDb": -38.34, "rmsDbSpread": 5.32, "lufs": -39.81, "lufsSpread": 4.8, "sones": 0.9235, "sonesSpread": 0.183, "loudDb": -36.21, "loudDbSpread": 5.12, "loud1sDb": -36.91, "loud1sDbSpread": 5.13},
+     {"cc": 32, "rmsDb": -34.94, "rmsDbSpread": 4.06, "lufs": -36.39, "lufsSpread": 3.56, "sones": 1.572, "sonesSpread": 0.076, "loudDb": -32.47, "loudDbSpread": 3.26, "loud1sDb": -33.23, "loud1sDbSpread": 1.75},
+     {"cc": 48, "rmsDb": -33.35, "rmsDbSpread": 1.98, "lufs": -34.45, "lufsSpread": 1.19, "sones": 2.1355, "sonesSpread": 0.139, "loudDb": -30.46, "loudDbSpread": 0.37, "loud1sDb": -31.43, "loud1sDbSpread": 2.3},
+     {"cc": 64, "rmsDb": -32.68, "rmsDbSpread": 1.26, "lufs": -33.63, "lufsSpread": 0.46, "sones": 2.3665, "sonesSpread": 0.207, "loudDb": -29.73, "loudDbSpread": 1.52, "loud1sDb": -30.77, "loud1sDbSpread": 3.59},
+     {"cc": 80, "rmsDb": -33.8, "rmsDbSpread": 0.74, "lufs": -34.69, "lufsSpread": 1.42, "sones": 2.1815, "sonesSpread": 0.055, "loudDb": -31.59, "loudDbSpread": 0.44, "loud1sDb": -31.63, "loud1sDbSpread": 0.36},
+     {"cc": 96, "rmsDb": -30.47, "rmsDbSpread": 1.02, "lufs": -31.08, "lufsSpread": 1.7, "sones": 3.0945, "sonesSpread": 0.217, "loudDb": -27.13, "loudDbSpread": 0.99, "loud1sDb": -28.52, "loud1sDbSpread": 1.79},
+     {"cc": 112, "rmsDb": -26.3, "rmsDbSpread": 1.75, "lufs": -27.02, "lufsSpread": 2.68, "sones": 4.424, "sonesSpread": 0.184, "loudDb": -23.56, "loudDbSpread": 0.77, "loud1sDb": -24.72, "loud1sDbSpread": 1.56},
+     {"cc": 127, "rmsDb": -25.03, "rmsDbSpread": 1.96, "lufs": -25.72, "lufsSpread": 2.72, "sones": 4.8995, "sonesSpread": 0.189, "loudDb": -22.3, "loudDbSpread": 0.68, "loud1sDb": -23.41, "loud1sDbSpread": 1.53}
+    ],
+    "36": [
+     {"cc": 16, "rmsDb": -43.17, "rmsDbSpread": 3.15, "lufs": -43.16, "lufsSpread": 2.2, "sones": 1.047, "sonesSpread": 0.108, "loudDb": -39.5, "loudDbSpread": 1.27, "loud1sDb": -40.22, "loud1sDbSpread": 0.13},
+     {"cc": 32, "rmsDb": -37.7, "rmsDbSpread": 2.67, "lufs": -38.41, "lufsSpread": 1.96, "sones": 1.917, "sonesSpread": 0.07, "loudDb": -34.54, "loudDbSpread": 0.88, "loud1sDb": -35.96, "loud1sDbSpread": 0.8},
+     {"cc": 48, "rmsDb": -34.78, "rmsDbSpread": 2.26, "lufs": -34.98, "lufsSpread": 2.38, "sones": 2.6585, "sonesSpread": 0.013, "loudDb": -31.33, "loudDbSpread": 1.42, "loud1sDb": -32.38, "loud1sDbSpread": 2.69},
+     {"cc": 64, "rmsDb": -33.75, "rmsDbSpread": 2.15, "lufs": -33.77, "lufsSpread": 2.5, "sones": 2.957, "sonesSpread": 0.022, "loudDb": -30.19, "loudDbSpread": 1.65, "loud1sDb": -31.12, "loud1sDbSpread": 3.13},
+     {"cc": 80, "rmsDb": -35.08, "rmsDbSpread": 2.71, "lufs": -34.91, "lufsSpread": 0.96, "sones": 2.826, "sonesSpread": 0.014, "loudDb": -32.28, "loudDbSpread": 0.49, "loud1sDb": -32.94, "loud1sDbSpread": 0.25},
+     {"cc": 96, "rmsDb": -32.96, "rmsDbSpread": 3.06, "lufs": -32.2, "lufsSpread": 1.11, "sones": 4.0085, "sonesSpread": 0.567, "loudDb": -29.49, "loudDbSpread": 1.61, "loud1sDb": -30.74, "loud1sDbSpread": 0.89},
+     {"cc": 112, "rmsDb": -29.39, "rmsDbSpread": 2.87, "lufs": -28.08, "lufsSpread": 1.96, "sones": 5.5035, "sonesSpread": 0.625, "loudDb": -26.14, "loudDbSpread": 3.55, "loud1sDb": -26.14, "loud1sDbSpread": 3.55},
+     {"cc": 127, "rmsDb": -28.16, "rmsDbSpread": 2.81, "lufs": -26.78, "lufsSpread": 2.02, "sones": 6.0675, "sonesSpread": 0.653, "loudDb": -24.86, "loudDbSpread": 3.9, "loud1sDb": -24.86, "loud1sDbSpread": 3.9}
+    ],
+    "39": [
+     {"cc": 16, "rmsDb": -43.07, "rmsDbSpread": 0.32, "lufs": -43.67, "lufsSpread": 0.7, "sones": 0.902, "sonesSpread": 0.082, "loudDb": -41.89, "loudDbSpread": 0.24, "loud1sDb": -43.42, "loud1sDbSpread": 0.61},
+     {"cc": 32, "rmsDb": -41.02, "rmsDbSpread": 3.99, "lufs": -40.45, "lufsSpread": 0.06, "sones": 1.402, "sonesSpread": 0.222, "loudDb": -36.8, "loudDbSpread": 1.52, "loud1sDb": -39.02, "loud1sDbSpread": 5.96},
+     {"cc": 48, "rmsDb": -38.39, "rmsDbSpread": 3.51, "lufs": -37.1, "lufsSpread": 0.06, "sones": 2.0195, "sonesSpread": 0.221, "loudDb": -34.19, "loudDbSpread": 2.74, "loud1sDb": -34.53, "loud1sDbSpread": 3.42},
+     {"cc": 64, "rmsDb": -37.14, "rmsDbSpread": 2.87, "lufs": -35.84, "lufsSpread": 0.05, "sones": 2.2975, "sonesSpread": 0.187, "loudDb": -33.14, "loudDbSpread": 2.73, "loud1sDb": -33.14, "loud1sDbSpread": 2.73},
+     {"cc": 80, "rmsDb": -36.18, "rmsDbSpread": 1.94, "lufs": -35.17, "lufsSpread": 0.78, "sones": 2.4205, "sonesSpread": 0.129, "loudDb": -32.13, "loudDbSpread": 1.44, "loud1sDb": -32.49, "loud1sDbSpread": 0.72},
+     {"cc": 96, "rmsDb": -34.58, "rmsDbSpread": 0.87, "lufs": -31.02, "lufsSpread": 1.95, "sones": 3.5765, "sonesSpread": 0.507, "loudDb": -27.58, "loudDbSpread": 5.09, "loud1sDb": -27.58, "loud1sDbSpread": 5.09},
+     {"cc": 112, "rmsDb": -29.64, "rmsDbSpread": 0.84, "lufs": -27.27, "lufsSpread": 2.39, "sones": 5.106, "sonesSpread": 0.702, "loudDb": -24.01, "loudDbSpread": 5.34, "loud1sDb": -24.43, "loud1sDbSpread": 6.18},
+     {"cc": 127, "rmsDb": -28.31, "rmsDbSpread": 0.98, "lufs": -26.04, "lufsSpread": 2.43, "sones": 5.6505, "sonesSpread": 0.731, "loudDb": -22.77, "loudDbSpread": 5.29, "loud1sDb": -23.25, "loud1sDbSpread": 6.24}
+    ],
+    "42": [
+     {"cc": 16, "rmsDb": -44.53, "rmsDbSpread": 1.9, "lufs": -44.02, "lufsSpread": 0.16, "sones": 0.935, "sonesSpread": 0.216, "loudDb": -39.98, "loudDbSpread": 1.44, "loud1sDb": -43.02, "loud1sDbSpread": 7.52},
+     {"cc": 32, "rmsDb": -40.46, "rmsDbSpread": 1.66, "lufs": -39.39, "lufsSpread": 0.62, "sones": 1.5145, "sonesSpread": 0.323, "loudDb": -35.44, "loudDbSpread": 1.62, "loud1sDb": -36.73, "loud1sDbSpread": 4.21},
+     {"cc": 48, "rmsDb": -37.06, "rmsDbSpread": 2.54, "lufs": -35.81, "lufsSpread": 0.29, "sones": 2.1845, "sonesSpread": 0.409, "loudDb": -32.84, "loudDbSpread": 0.57, "loud1sDb": -34.02, "loud1sDbSpread": 2.92},
+     {"cc": 64, "rmsDb": -35.82, "rmsDbSpread": 2.78, "lufs": -34.58, "lufsSpread": 0.17, "sones": 2.4705, "sonesSpread": 0.451, "loudDb": -31.44, "loudDbSpread": 0.3, "loud1sDb": -32.86, "loud1sDbSpread": 3.13},
+     {"cc": 80, "rmsDb": -37.92, "rmsDbSpread": 4.15, "lufs": -35.81, "lufsSpread": 1.15, "sones": 2.331, "sonesSpread": 0.236, "loudDb": -32.63, "loudDbSpread": 0.78, "loud1sDb": -33.03, "loud1sDbSpread": 0.01},
+     {"cc": 96, "rmsDb": -31.21, "rmsDbSpread": 2.99, "lufs": -30.09, "lufsSpread": 2.27, "sones": 3.7155, "sonesSpread": 0.255, "loudDb": -26.95, "loudDbSpread": 0.15, "loud1sDb": -26.95, "loud1sDbSpread": 0.15},
+     {"cc": 112, "rmsDb": -26.42, "rmsDbSpread": 3.23, "lufs": -25.18, "lufsSpread": 1.71, "sones": 5.5565, "sonesSpread": 0.677, "loudDb": -23.27, "loudDbSpread": 3.48, "loud1sDb": -23.69, "loud1sDbSpread": 2.65},
+     {"cc": 127, "rmsDb": -25.09, "rmsDbSpread": 3.23, "lufs": -23.84, "lufsSpread": 1.67, "sones": 6.163, "sonesSpread": 0.778, "loudDb": -21.95, "loudDbSpread": 3.57, "loud1sDb": -22.4, "loud1sDbSpread": 2.68}
+    ],
+    "45": [
+     {"cc": 16, "rmsDb": -48.52, "rmsDbSpread": 3.3, "lufs": -47.94, "lufsSpread": 2.32, "sones": 0.79, "sonesSpread": 0.194, "loudDb": -45.73, "loudDbSpread": 3.03, "loud1sDb": -47.56, "loud1sDbSpread": 0.58},
+     {"cc": 32, "rmsDb": -43.59, "rmsDbSpread": 2.17, "lufs": -43.66, "lufsSpread": 2.55, "sones": 1.339, "sonesSpread": 0.276, "loudDb": -41.41, "loudDbSpread": 1.82, "loud1sDb": -44.53, "loud1sDbSpread": 3.55},
+     {"cc": 48, "rmsDb": -39.83, "rmsDbSpread": 1.38, "lufs": -39.97, "lufsSpread": 1.93, "sones": 1.91, "sonesSpread": 0.292, "loudDb": -37.39, "loudDbSpread": 0.81, "loud1sDb": -40.78, "loud1sDbSpread": 4.24},
+     {"cc": 64, "rmsDb": -38.53, "rmsDbSpread": 1.25, "lufs": -38.67, "lufsSpread": 1.8, "sones": 2.168, "sonesSpread": 0.342, "loudDb": -36.13, "loudDbSpread": 0.66, "loud1sDb": -39.54, "loud1sDbSpread": 4.32},
+     {"cc": 80, "rmsDb": -38.88, "rmsDbSpread": 1.24, "lufs": -38.6, "lufsSpread": 1.98, "sones": 2.175, "sonesSpread": 0.122, "loudDb": -37.21, "loudDbSpread": 1.4, "loud1sDb": -38.32, "loud1sDbSpread": 3.46},
+     {"cc": 96, "rmsDb": -34.47, "rmsDbSpread": 1.86, "lufs": -32.28, "lufsSpread": 0.74, "sones": 3.3595, "sonesSpread": 0.549, "loudDb": -29.97, "loudDbSpread": 1.14, "loud1sDb": -30.95, "loud1sDbSpread": 3.1},
+     {"cc": 112, "rmsDb": -29.75, "rmsDbSpread": 2.0, "lufs": -27.85, "lufsSpread": 0.5, "sones": 5.0085, "sonesSpread": 0.647, "loudDb": -25.37, "loudDbSpread": 0.8, "loud1sDb": -26.79, "loud1sDbSpread": 3.63},
+     {"cc": 127, "rmsDb": -28.43, "rmsDbSpread": 2.0, "lufs": -26.55, "lufsSpread": 0.49, "sones": 5.5565, "sonesSpread": 0.705, "loudDb": -24.08, "loudDbSpread": 0.78, "loud1sDb": -25.52, "loud1sDbSpread": 3.67}
+    ],
+    "48": [
+     {"cc": 16, "rmsDb": -51.41, "rmsDbSpread": 2.6, "lufs": -50.77, "lufsSpread": 0.22, "sones": 0.7825, "sonesSpread": 0.141, "loudDb": -47.72, "loudDbSpread": 1.09, "loud1sDb": -50.53, "loud1sDbSpread": 4.55},
+     {"cc": 32, "rmsDb": -48.25, "rmsDbSpread": 1.51, "lufs": -46.97, "lufsSpread": 0.08, "sones": 1.393, "sonesSpread": 0.054, "loudDb": -44.78, "loudDbSpread": 1.13, "loud1sDb": -45.66, "loud1sDbSpread": 0.61},
+     {"cc": 48, "rmsDb": -45.02, "rmsDbSpread": 0.56, "lufs": -43.8, "lufsSpread": 0.51, "sones": 2.051, "sonesSpread": 0.01, "loudDb": -41.89, "loudDbSpread": 1.14, "loud1sDb": -43.12, "loud1sDbSpread": 1.32},
+     {"cc": 64, "rmsDb": -43.78, "rmsDbSpread": 0.99, "lufs": -42.55, "lufsSpread": 0.67, "sones": 2.3335, "sonesSpread": 0.039, "loudDb": -40.67, "loudDbSpread": 1.39, "loud1sDb": -42.17, "loud1sDbSpread": 1.6},
+     {"cc": 80, "rmsDb": -43.38, "rmsDbSpread": 1.95, "lufs": -42.14, "lufsSpread": 0.07, "sones": 2.3605, "sonesSpread": 0.167, "loudDb": -39.18, "loudDbSpread": 0.42, "loud1sDb": -40.91, "loud1sDbSpread": 3.04},
+     {"cc": 96, "rmsDb": -38.02, "rmsDbSpread": 4.06, "lufs": -36.5, "lufsSpread": 2.16, "sones": 3.6425, "sonesSpread": 0.485, "loudDb": -34.28, "loudDbSpread": 3.25, "loud1sDb": -34.94, "loud1sDbSpread": 3.19},
+     {"cc": 112, "rmsDb": -33.84, "rmsDbSpread": 2.97, "lufs": -32.09, "lufsSpread": 1.35, "sones": 5.1215, "sonesSpread": 0.507, "loudDb": -29.71, "loudDbSpread": 2.2, "loud1sDb": -29.84, "loud1sDbSpread": 2.46},
+     {"cc": 127, "rmsDb": -32.59, "rmsDbSpread": 2.87, "lufs": -30.8, "lufsSpread": 1.27, "sones": 5.647, "sonesSpread": 0.544, "loudDb": -28.4, "loudDbSpread": 2.18, "loud1sDb": -28.52, "loud1sDbSpread": 2.41}
+    ],
+    "51": [
+     {"cc": 16, "rmsDb": -54.89, "rmsDbSpread": 1.98, "lufs": -54.09, "lufsSpread": 0.48, "sones": 0.81, "sonesSpread": 0.032, "loudDb": -52.76, "loudDbSpread": 1.76, "loud1sDb": -55.11, "loud1sDbSpread": 2.94},
+     {"cc": 32, "rmsDb": -50.01, "rmsDbSpread": 1.3, "lufs": -48.86, "lufsSpread": 0.82, "sones": 1.646, "sonesSpread": 0.146, "loudDb": -47.48, "loudDbSpread": 1.53, "loud1sDb": -48.98, "loud1sDbSpread": 1.87},
+     {"cc": 48, "rmsDb": -46.55, "rmsDbSpread": 1.09, "lufs": -45.25, "lufsSpread": 1.13, "sones": 2.3805, "sonesSpread": 0.175, "loudDb": -43.72, "loudDbSpread": 0.78, "loud1sDb": -44.8, "loud1sDbSpread": 2.53},
+     {"cc": 64, "rmsDb": -45.33, "rmsDbSpread": 1.07, "lufs": -43.98, "lufsSpread": 1.15, "sones": 2.653, "sonesSpread": 0.184, "loudDb": -42.46, "loudDbSpread": 0.7, "loud1sDb": -43.5, "loud1sDbSpread": 2.66},
+     {"cc": 80, "rmsDb": -45.45, "rmsDbSpread": 0.07, "lufs": -43.91, "lufsSpread": 0.41, "sones": 2.7, "sonesSpread": 0.236, "loudDb": -42.55, "loudDbSpread": 0.97, "loud1sDb": -42.95, "loud1sDbSpread": 1.76},
+     {"cc": 96, "rmsDb": -41.35, "rmsDbSpread": 1.66, "lufs": -38.16, "lufsSpread": 1.22, "sones": 3.9265, "sonesSpread": 0.337, "loudDb": -37.8, "loudDbSpread": 0.83, "loud1sDb": -37.8, "loud1sDbSpread": 0.83},
+     {"cc": 112, "rmsDb": -37.08, "rmsDbSpread": 0.8, "lufs": -33.97, "lufsSpread": 1.1, "sones": 5.482, "sonesSpread": 0.284, "loudDb": -33.5, "loudDbSpread": 1.23, "loud1sDb": -33.5, "loud1sDbSpread": 1.23},
+     {"cc": 127, "rmsDb": -35.8, "rmsDbSpread": 0.73, "lufs": -32.69, "lufsSpread": 1.08, "sones": 6.0415, "sonesSpread": 0.295, "loudDb": -32.21, "loudDbSpread": 1.24, "loud1sDb": -32.21, "loud1sDbSpread": 1.24}
+    ],
+    "54": [
+     {"cc": 16, "rmsDb": -52.95, "rmsDbSpread": 2.02, "lufs": -51.98, "lufsSpread": 2.71, "sones": 0.9235, "sonesSpread": 0.145, "loudDb": -49.21, "loudDbSpread": 1.82, "loud1sDb": -51.14, "loud1sDbSpread": 4.2},
+     {"cc": 32, "rmsDb": -49.0, "rmsDbSpread": 1.31, "lufs": -47.47, "lufsSpread": 0.78, "sones": 1.425, "sonesSpread": 0.07, "loudDb": -45.44, "loudDbSpread": 1.43, "loud1sDb": -47.06, "loud1sDbSpread": 1.37},
+     {"cc": 48, "rmsDb": -45.95, "rmsDbSpread": 0.61, "lufs": -44.44, "lufsSpread": 0.39, "sones": 2.0385, "sonesSpread": 0.169, "loudDb": -42.8, "loudDbSpread": 0.15, "loud1sDb": -43.8, "loud1sDbSpread": 2.14},
+     {"cc": 64, "rmsDb": -44.8, "rmsDbSpread": 0.45, "lufs": -43.27, "lufsSpread": 0.55, "sones": 2.3015, "sonesSpread": 0.183, "loudDb": -41.73, "loudDbSpread": 0.42, "loud1sDb": -42.59, "loud1sDbSpread": 2.13},
+     {"cc": 80, "rmsDb": -44.0, "rmsDbSpread": 1.19, "lufs": -41.58, "lufsSpread": 4.3, "sones": 2.4905, "sonesSpread": 0.449, "loudDb": -39.84, "loudDbSpread": 4.57, "loud1sDb": -41.14, "loud1sDbSpread": 7.15},
+     {"cc": 96, "rmsDb": -38.91, "rmsDbSpread": 0.91, "lufs": -35.69, "lufsSpread": 3.65, "sones": 4.2055, "sonesSpread": 0.101, "loudDb": -33.33, "loudDbSpread": 4.36, "loud1sDb": -35.0, "loud1sDbSpread": 7.69},
+     {"cc": 112, "rmsDb": -34.77, "rmsDbSpread": 0.81, "lufs": -31.55, "lufsSpread": 3.83, "sones": 5.8765, "sonesSpread": 0.247, "loudDb": -29.62, "loudDbSpread": 4.61, "loud1sDb": -31.4, "loud1sDbSpread": 8.16},
+     {"cc": 127, "rmsDb": -33.5, "rmsDbSpread": 0.79, "lufs": -30.29, "lufsSpread": 3.83, "sones": 6.4625, "sonesSpread": 0.279, "loudDb": -28.38, "loudDbSpread": 4.67, "loud1sDb": -30.16, "loud1sDbSpread": 8.22}
+    ]
+   },
+   "relative64": {
+    "rmsDb": [
+     [16, -9.01, -9.99, -5.66, 11, 1.98, 5.32],
+     [32, -4.28, -5.26, -2.26, 11, 2.17, 4.06],
+     [48, -1.22, -1.37, -0.67, 11, 1.98, 3.61],
+     [64, 0.0, 0.0, 0.0, 11, 1.26, 3.69],
+     [80, -0.12, -2.1, 0.96, 11, 1.94, 4.69],
+     [96, 3.51, 0.79, 5.89, 11, 1.84, 4.06],
+     [112, 7.53, 3.43, 10.03, 11, 1.75, 3.23],
+     [127, 8.83, 4.59, 11.3, 11, 1.96, 3.23]
+    ],
+    "lufs": [
+     [16, -9.39, -10.59, -6.18, 11, 0.56, 4.8],
+     [32, -4.64, -4.99, -2.76, 11, 0.82, 3.58],
+     [48, -1.23, -1.3, -0.82, 11, 0.77, 4.0],
+     [64, 0.0, 0.0, 0.0, 11, 0.57, 4.09],
+     [80, 0.07, -1.23, 1.69, 11, 1.15, 4.3],
+     [96, 4.79, 1.28, 7.58, 11, 1.47, 3.65],
+     [112, 8.99, 4.66, 11.72, 11, 1.35, 3.83],
+     [127, 10.28, 5.93, 12.98, 11, 1.27, 3.83]
+    ],
+    "sones": [
+     [16, 0.364, 0.305, 0.401, 11, 0.124, 0.216],
+     [32, 0.619, 0.592, 0.664, 11, 0.146, 0.326],
+     [48, 0.886, 0.879, 0.902, 11, 0.175, 0.428],
+     [64, 1.0, 1.0, 1.0, 11, 0.187, 0.464],
+     [80, 0.993, 0.897, 1.082, 11, 0.167, 0.449],
+     [96, 1.48, 1.14, 1.827, 11, 0.337, 0.567],
+     [112, 2.066, 1.475, 2.553, 11, 0.504, 0.702],
+     [127, 2.277, 1.634, 2.808, 11, 0.544, 0.778]
+    ],
+    "loudDb": [
+     [16, -8.75, -10.48, -6.48, 11, 1.76, 5.12],
+     [32, -4.01, -5.28, -2.74, 11, 1.52, 3.26],
+     [48, -1.16, -1.52, -0.73, 11, 0.81, 4.16],
+     [64, 0.0, 0.0, 0.0, 11, 0.74, 3.7],
+     [80, -0.09, -2.09, 1.89, 11, 0.78, 4.57],
+     [96, 4.66, 0.7, 8.4, 11, 1.47, 5.09],
+     [112, 8.88, 4.05, 12.11, 11, 2.2, 5.34],
+     [127, 10.18, 5.33, 13.35, 11, 2.18, 5.29]
+    ],
+    "loud1sDb": [
+     [16, -9.39, -11.61, -6.14, 11, 2.94, 7.52],
+     [32, -4.84, -6.76, -2.46, 11, 1.94, 6.54],
+     [48, -1.21, -1.52, -0.66, 11, 2.69, 4.24],
+     [64, 0.0, 0.0, 0.0, 11, 3.13, 4.32],
+     [80, -0.15, -1.82, 1.45, 11, 2.11, 7.15],
+     [96, 5.7, 0.38, 8.59, 11, 1.49, 7.69],
+     [112, 9.17, 4.98, 12.75, 11, 2.46, 8.16],
+     [127, 10.46, 6.26, 14.02, 11, 2.41, 8.22]
+    ]
+   }
+  }
+ }
+}
