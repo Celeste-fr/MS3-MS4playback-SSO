@@ -15,6 +15,7 @@
 #include "playabilitywinds.h"
 #include "playabilitywindtrills.h"
 #include "playabilitybrassentry.h"
+#include "playabilitybrasstrills.h"
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -207,6 +208,9 @@ class Pass {
       std::vector<BrassEntryEvent> brassEntryEvents(int st);
       bool slurredOver(int track, int from, int to) const;
       void checkBrassEntries(int st, const QString& staffName);
+      // brass trills and two-note tremolos (SPEC-b8)
+      void checkBrassTrills(Part* part, const QString& staffName);
+      void brassTrillNotes(Chord* chord, ChordInfo& info);
 
    public:
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
@@ -1205,6 +1209,177 @@ void Pass::checkWindTrills(Part* part, const QString& staffName)
       }
 
 //---------------------------------------------------------
+//   checkBrassTrills
+//    B8, the owner's spec SPEC-b8: brass trills and two-note tremolos (playabilitybrasstrills.h,
+//    generated from tools/playability/b8_rules.py), read exactly as W5 reads them (windTrillEvents).
+//    Groups: trumpets in C and Bb, cornet, flugelhorn and the horn by their playabilitywinds.h id
+//    (windAt); euphonium, tubas and trombones by the diagrams' Brass type (brassPart). Written =
+//    sounding - the WindData transposition (the horn read as in F). The valve rules count the valves
+//    whose state differs between a fingering of the main note and one of the upper note, from the
+//    valve diagrams' lists (valveEntries: Blatter's charts and the approved derivation, the part's
+//    valves as the diagrams take them, "N valves" texts included), every entry the instrument can
+//    play; the horn's F and Bb sides both, the thumb a valve; the smallest count over all pairs
+//    (B8-D2). One row per trill or tremolo and rule; a warning marks the trill's main note or both
+//    tremolo notes dark yellow.
+//---------------------------------------------------------
+
+static bool listed(const std::vector<const char*>& ids, const QString& id)
+      {
+      for (const char* i : ids)
+            if (id == QLatin1String(i))
+                  return true;
+      return false;
+      }
+
+// the B8 groups of the instrument at the tick; *tr its WindData transposition (0 if none)
+static int brassTrillGroups(const Part* part, int tick, Brass type, int* tr)
+      {
+      QString id = windAt(part, tick);
+      auto wd = windData().find(id);
+      *tr = wd == windData().end() ? 0 : wd->second.tr;
+      int g = 0;
+      if (wd != windData().end() && listed(b8TrumpetIds(), id))
+            g |= B8_TRUMPETS;
+      if (wd != windData().end() && listed(b8HornIds(), id))
+            g |= B8_HORN;
+      if (std::find(b8LowTypes().begin(), b8LowTypes().end(), type) != b8LowTypes().end())
+            g |= B8_LOW;
+      if (std::find(b8TromboneTypes().begin(), b8TromboneTypes().end(), type) != b8TromboneTypes().end())
+            g |= B8_TROMBONES;
+      return g;
+      }
+
+// the fewest valves (the horn's thumb one of them) that change between a fingering of each sounding
+// pitch, over the fingerings the instrument can play; -1 when a pitch has none
+static int trillValveChanges(const BrassPart& bp, int transposeChromatic, int a, int b)
+      {
+      auto masks = [&](int sounding) {
+            std::vector<int> out;
+            for (const BrassEntry& e : valveEntries(bp.type, bp.valves, brassChartPitch(bp.type, sounding, transposeChromatic)))
+                  if (e.playable && !e.extra)
+                        out.push_back(e.mask);
+            return out;
+            };
+      std::vector<int> ma = masks(a), mb = masks(b);
+      int best = -1;
+      for (int x : ma)
+            for (int y : mb) {
+                  int n = 0;
+                  for (int d = (x ^ y) & 0x3f; d; d &= d - 1)
+                        ++n;
+                  if (best < 0 || n < best)
+                        best = n;
+                  }
+      return best;
+      }
+
+// does a B8 rule hit this trill or tremolo? *changes: the valve count, worked out once (-2 = not yet)
+static bool brassTrillHits(const BrassTrillRule& r, int groups, int tr, const BrassPart& bp, int tc,
+                           const WindTrillEvent& e, int* changes)
+      {
+      if (!(r.groups & groups) || (e.tremolo ? !r.tremolo : !r.trill))
+            return false;
+      int x = r.written ? e.pa - tr : e.pa;
+      int y = r.written ? e.pb - tr : e.pb;
+      if (!r.pairs.empty()) {
+            bool hit = false;
+            for (const auto& p : r.pairs)
+                  hit |= (x == p.first && y == p.second) || (e.tremolo && x == p.second && y == p.first);
+            if (!hit)
+                  return false;
+            }
+      if (r.atLeast >= 0 && std::abs(x - y) < r.atLeast)
+            return false;
+      if (r.valvesLo >= 0) {
+            if (bp.type == Brass::NONE || isTrombone(bp.type))
+                  return false;
+            if (*changes == -2)
+                  *changes = trillValveChanges(bp, tc, e.pa, e.pb);
+            if (*changes < r.valvesLo || (r.valvesHi >= 0 && *changes > r.valvesHi))
+                  return false;
+            }
+      return true;
+      }
+
+// every B8 rule a trill or tremolo falls under, in the table's order, with its message
+static std::vector<std::pair<const BrassTrillRule*, QString>> brassTrillRulesFor(int groups, int tr, const BrassPart& bp, int tc,
+                                                                                 const WindTrillEvent& e)
+      {
+      std::vector<std::pair<const BrassTrillRule*, QString>> out;
+      std::vector<bool> hit(brassTrillRules().size(), false);
+      int changes = -2;
+      for (size_t k = 0; k < brassTrillRules().size(); ++k) {
+            const BrassTrillRule& r = brassTrillRules()[k];
+            bool skip = false;
+            for (int u : r.unless)
+                  skip |= hit[u];
+            if (skip || !brassTrillHits(r, groups, tr, bp, tc, e, &changes))
+                  continue;
+            hit[k] = true;
+            out.push_back({ &r, QString(r.text) + " (" + r.source + ")" });
+            }
+      return out;
+      }
+
+void Pass::checkBrassTrills(Part* part, const QString& staffName)
+      {
+      QString id, name;
+      partIdName(part, &id, &name);
+      Brass type = brassType(id, name);
+      bool any = false;
+      for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i) {
+            int tr;
+            if (brassTrillGroups(part, i->first, type, &tr))
+                  any = true;
+            }
+      if (!any)
+            return;
+      const BrassPart bp = brassPart(part);
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* el = s->element(track);
+                  if (!el || !el->isChord())
+                        continue;
+                  Chord* c = toChord(el);
+                  int tick = c->tick().ticks();
+                  int tr;
+                  int groups = brassTrillGroups(part, tick, bp.type, &tr);
+                  if (!groups)
+                        continue;
+                  int tc = part->instrument(c->tick())->transpose().chromatic;
+                  for (const WindTrillEvent& e : windTrillEvents(c, false)) {
+                        for (const auto& hit : brassTrillRulesFor(groups, tr, bp, tc, e)) {
+                              if (hit.first->kind == BrassTrillKind::NOTE)
+                                    continue;
+                              for (Note* n : { e.a, e.b })
+                                    if (n)
+                                          markOver(n, PlayMark::OUT_OF_REACH);
+                              addRow(e.tick, e.tickEnd, track, staffName, e.tremolo ? "tremolo" : "trill", "risky",
+                                     hit.second, e.name);
+                              _res.outOfReach++;
+                              }
+                        }
+                  }
+            }
+      }
+
+// B8 for the panel: the chord's trills and the two-note tremolo it is part of, every rule (panel notes too)
+void Pass::brassTrillNotes(Chord* chord, ChordInfo& info)
+      {
+      Part* part = chord->part();
+      Chord* main = chord->isGrace() ? toChord(chord->parent()) : chord;
+      const BrassPart bp = brassPart(part);
+      int tr;
+      int groups = brassTrillGroups(part, main->tick().ticks(), bp.type, &tr);
+      if (!groups)
+            return;
+      int tc = part->instrument(main->tick())->transpose().chromatic;
+      for (const WindTrillEvent& e : windTrillEvents(chord, true))
+            for (const auto& hit : brassTrillRulesFor(groups, tr, bp, tc, e))
+                  info.windNotes << e.name + ": " + hit.second;
+      }
+
+//---------------------------------------------------------
 //   checkBrassEntries
 //    B3, the owner's spec SPEC-b3: brass entrances above the safe limits (dark yellow), trumpet slurred
 //    leaps (dark yellow), tuba low notes reached by a leap (red) and the horn's wide leaps (panel only)
@@ -2188,6 +2363,7 @@ void Pass::run()
                   staffName = part->partName();
             checkWindDynamics(part, staffName);
             checkWindTrills(part, staffName);
+            checkBrassTrills(part, staffName);
             }
       for (int st = 0; st < _score->nstaves(); ++st) {
             Part* part = _score->staff(st)->part();
@@ -2256,8 +2432,10 @@ ChordInfo Pass::inspect(Chord* chord)
       int tick = main->tick().ticks();
       QString id = windAt(chord->part(), tick);
       auto wd = windData().find(id);
-      if (wd == windData().end())
+      if (wd == windData().end()) {
+            brassTrillNotes(chord, info);       // B8: the contrabass trombone has no wind data
             return info;
+            }
       collectSpanners();
       std::vector<Note*> notes(chord->notes().begin(), chord->notes().end());
       std::stable_sort(notes.begin(), notes.end(), [](const Note* a, const Note* b) { return a->ppitch() < b->ppitch(); });
@@ -2280,6 +2458,8 @@ ChordInfo Pass::inspect(Chord* chord)
                         if (brassEntryHits(r, e, &on, &name, &msg))
                               info.windNotes << name + ": " + msg;
                         }
+      // B8: brass trills and two-note tremolos
+      brassTrillNotes(chord, info);
       return info;
       }
 
