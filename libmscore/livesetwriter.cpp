@@ -243,7 +243,7 @@ void midiTrack(Writer& w, const Spec& spec, int index)
             w.routing("AudioOutputRouting", "AudioOut/Main", "Master", "");
       if (t.midiTo >= 0 && t.midiTo < int(spec.tracks.size())) {
             const Track& to = spec.tracks[size_t(t.midiTo)];
-            midiToRouting(w, trackIdOf(t.midiTo), to.name);
+            midiToRouting(w, trackIdOf(t.midiTo), to.name, t.midiToChannel, to.hasPlugin ? to.plugin.name : QString("Kontakt 8"));
             }
       else
             w.routing("MidiOutputRouting", "MidiOut/None", "None", "");

@@ -178,9 +178,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   **Live and MIDI out** (no varispeed; the owner, 2026-10-10: "I will not accept losing microtones"):
   `SoundLib::routes(…, forLive)` / `lanes(…, fixedTuning)` give a patch without `bend=` a fixed copy per tuning
   (`Lanes::fixed`, `Route::cents`; lane 0 nearest 0 cents; no max), which the export tunes by Kontakt's instrument
-  Tune (`KontaktSetup::withTune`, measured within 2 cents in kthost and Live 12.4.6); the plain set gives every route
-  its own Kontakt, a bending patch's copies their bends as the clip's pitch-bend envelope (−8192 … 8191, measured).
-  LIVE.md › The plain set › Microtones.
+  Tune (`KontaktSetup::withTune`, measured within 2 cents in kthost and Live 12.4.6); the plain set gives a patch's
+  copies one Kontakt multi (`PlainLiveSet::multis`, `KontaktSetup::withSlots`: a slot per copy, slot i on MIDI
+  channel i; each other copy a MIDI track with its Controllers clip, MIDI To `DeviceIn.0.<i−1>`; measured identical
+  to a Kontakt per copy, ~85-90 MB less each, Whence 20 Kontakts → 8), a bending patch's copies their bends as the
+  clip's pitch-bend envelope (−8192 … 8191, measured). LIVE.md › The plain set › Microtones.
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
   Mixer and playback edits never leave playback stopped (the owner, 2026-10-07): track delays / levels render again
   while playing (`Seq::renderAgainPlaying`, swapped in by the realtime thread); changes that may load patches (part
@@ -288,7 +290,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 72 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-10: kontaktTune, tuningLanesLive; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 73 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-10: kontaktTune, tuningLanesLive, kontaktSlots; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›

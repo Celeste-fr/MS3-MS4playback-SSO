@@ -330,7 +330,28 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             // SSO 2026-10-10: ±50 cents within 2, levels within 0.34 dB; in a set Live 12.4.6 played, -50 cents gave
             // -51.3 on Long and -49.8 on staccatos, levels within 0.2 dB). A bending patch's copies bend instead
             // (their Controllers clip's bend envelope)
-            if (std::isfinite(t.cents) && std::fabs(t.cents) >= 0.005) {
+            if (!t.slotCents.empty()) {
+                  // a patch's copies in one Kontakt (PlainLiveSet::multis): the patch's slot once per copy, each tuned,
+                  // slot i on MIDI channel i (KontaktSetup::withSlots; measured identical to a Kontakt per copy)
+                  QString err;
+                  const QByteArray multi = KontaktSetup::withSlots(t.plugin.component, t.slotCents, &err);
+                  QStringList slotNames;
+                  for (size_t i = 0; i < t.slotCents.size(); ++i) {
+                        const double c = t.slotCents[i];
+                        slotNames << QString("%1: %2").arg(i + 1).arg(std::isfinite(c)
+                                       ? QString("%1%2 cents").arg(c > 0 ? "+" : "").arg(c, 0, 'f', 2)
+                                       : QObject::tr("bent"));
+                        }
+                  if (multi.isEmpty() || !err.isEmpty())
+                        plan->notes << QObject::tr("%1: its tuning copies could not be set as slots (%2): they play at the key's pitch")
+                                       .arg(t.name, err);
+                  else {
+                        t.plugin.component = multi;
+                        tunedTracks << QObject::tr("%1 (one Kontakt, a slot per tuning, by MIDI channel: %2)")
+                                       .arg(t.name, slotNames.join(", "));
+                        }
+                  }
+            else if (std::isfinite(t.cents) && std::fabs(t.cents) >= 0.005) {
                   QString err;
                   double before = 0;
                   const QByteArray tuned = KontaktSetup::withTune(t.plugin.component, t.cents, &err, &before);
@@ -461,7 +482,9 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
                   continue;
                   }
             if (t.midiTo >= 0) {
-                  text += line + " — " + QObject::tr("MIDI To %1").arg(plan.spec.tracks[size_t(t.midiTo)].name) + "\n";
+                  const QString to = plan.spec.tracks[size_t(t.midiTo)].name;
+                  text += line + " — " + (t.midiToChannel > 0 ? QObject::tr("MIDI To %1, channel %2").arg(to).arg(t.midiToChannel)
+                                                              : QObject::tr("MIDI To %1").arg(to)) + "\n";
                   continue;
                   }
             QStringList devices;

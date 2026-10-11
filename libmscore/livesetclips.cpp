@@ -221,12 +221,18 @@ int controllerTarget(int controller)
 //---------------------------------------------------------
 //   midiToRouting
 //    as Live 12.4.6 saves a MIDI track's MIDI To another track: "MidiOut/Track.<id>/TrackIn", the track's name,
-//    "Track In" (the receiving track plays it when its monitoring is In)
+//    "Track In" (the receiving track plays it when its monitoring is In); to a channel of its first device (channel
+//    1-16: a Kontakt multi's slot, plainliveset.h): "MidiOut/Track.<id>/DeviceIn.0.<channel - 1>", "<channel>-<device>"
+//    (Live 12.4.6, 2026-10-10: a set saved with a MIDI track routed to "2-Kontakt 8")
 //---------------------------------------------------------
 
-void midiToRouting(Writer& w, int trackId, const QString& trackName)
+void midiToRouting(Writer& w, int trackId, const QString& trackName, int channel, const QString& deviceName)
       {
-      w.routing("MidiOutputRouting", QString("MidiOut/Track.%1/TrackIn").arg(trackId), trackName, "Track In");
+      if (channel >= 1 && channel <= 16)
+            w.routing("MidiOutputRouting", QString("MidiOut/Track.%1/DeviceIn.0.%2").arg(trackId).arg(channel - 1), trackName,
+                      QString("%1-%2").arg(channel).arg(deviceName));
+      else
+            w.routing("MidiOutputRouting", QString("MidiOut/Track.%1/TrackIn").arg(trackId), trackName, "Track In");
       }
 
 //---------------------------------------------------------

@@ -39,6 +39,11 @@
 //   bending patch (Performance) keeps MuseScore's lanes, slurred notes on one lane gliding by the bend: a Kontakt per
 //   lane too ("Violins 1 - Performance (copy 2)", cents NaN), its bends on its Controllers clip's bend envelope
 //   (Live's -8192 .. 8191: MIDI's bend less 8192, measured 2026-10-10). Every tuning's Kontakt has its patch's volume.
+//   A patch's copies share one Kontakt (multis; since 2026-10-10): a slot per copy, slot i on MIDI channel i
+//   (KontaktSetup::withSlots: the export copies the patch's slot and tunes each), the first copy's techniques and
+//   Controllers on the Kontakt track (channel 1), each other copy a MIDI track of its own ("Violins 1 (−50 cents)",
+//   its Controllers clip, LiveSetWriter::Track::tuningCopy) with its techniques under it, all MIDI To the Kontakt's
+//   channel (Live: "<n>-Kontakt 8"). Measured identical to a Kontakt per copy and ~85-90 MB less each (multis).
 //   The Mixer's mute and solo are not in the notes (the owner, 2026-10-06: a part soloed when the set was made left the
 //   others' clips silent): a note is muted only where its voice doesn't play (Staff::playbackVoice); a muted part's
 //   Kontakt track is written deactivated, a solo is left out (adjusted in Live).
@@ -140,6 +145,10 @@ bool laneController(int cc, const SoundLib::LibInstrument* instrument);
 
 // a technique's name: the articulation's of the switch value on the patch; the patch's when it doesn't switch
 QString techniqueName(const SoundLib::LibInstrument* li, int value);
+
+// a part's Kontakts as Kontakt tracks: indices into kontakts, more than one when a patch's tuning copies share a
+// Kontakt (a slot each; a copy with parameter automation alone, the others one Kontakt per headroom, 16 at most)
+std::vector<std::vector<size_t>> multis(const std::vector<Kontakt>& kontakts);
 
 // a tuned Kontakt's name suffix: " (−50 cents)"; a bending patch's copy " (copy 2)"; none on lane 0 at 0 cents or bending
 QString tuningName(const Kontakt& k);

@@ -306,6 +306,25 @@ in a section collapsible at the same time".
   (Performance) keeps MuseScore's lanes (slurred notes on one lane, the glide by the bend), a Kontakt per lane
   ("… (copy 2)"), its bends as the Controllers clip's pitch-bend envelope. Every tuning's Kontakt has its patch's
   volume and gain. Tests: `tst_liveequivalence` `plainTuned`, `tst_soundlibrary` `tuningLanesLive`, `kontaktTune`.
+- **A patch's copies share one Kontakt** (since 2026-10-10, `PlainLiveSet::multis`): a Kontakt multi, the patch's
+  slot once per copy, each slot its own Tune (bent copies as made), slot *i* on MIDI channel *i*
+  (`KontaktSetup::withSlots`, by the export). The Kontakt track carries the first copy's Controllers clip and its
+  techniques (channel 1); each other copy is a MIDI track of its own, "Violins 1 (−50 cents)" (its Controllers clip:
+  dynamics, CC11, bends), its techniques under it, all MIDI To the Kontakt's channel of their slot (Live shows
+  "2-Kontakt 8"; the set writes `MidiOut/Track.<id>/DeviceIn.0.<channel − 1>`, as Live 12.4.6 saves it). A copy with
+  plug-in parameter automation (Live automates the whole instrument) keeps a Kontakt of its own; the others share one
+  per track-level headroom, 16 at most. Measured 2026-10-10 on the VM, Kontakt 8 + SSO: in kthost a multi against a Kontakt per copy nulls at
+  −111 dB (Violins 1, fixed Tune) and −107.9 dB (Violins 1 - Performance, bends on channel 2; run to run −109 dB);
+  each copy ~85-90 MB less (a slot ~222 MB, an instance ~312 MB: samples are not shared between slots); in Live 12.4.6
+  the slots played −3.0 / −51.5 / +48.5 cents by channel and the multi survived Live's save. The Kontakt track's own
+  clip reaches channel 1 only (CC1 64 there left channels 2-3 8.7 dB louder): hence a Controllers clip per copy.
+  Whence (quarter tones, Recommended + `slurs/performance`, counted on the integration branch with Performance
+  patches): 20 Kontakts → 8, ~1 GB less; on `main`'s patches 14 → 5. The Whence set (written by `tst_liveequivalence`
+  `plainSetLinked` with the VM's Kontakt states, as the export does) opened in Live 12.4.6: 5 Kontakts, every
+  technique track on its slot's channel; Violas recorded per channel (bars 2-3, short Long (Rachm.) notes):
+  −10 / −56 / +51 cents against 0 / −50 / +50 (short notes: ±10 cents). Read back, a copy's track
+  is kind "copy" (`livetracks.h`): its Controllers unchanged are MuseScore's render, changed ones are reported. Tests:
+  `plainTuned`, `tst_soundlibrary` `kontaktSlots`.
 - **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
   the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.
 - **With MuseScore Link on each technique track** (`LiveSetKind::PLAIN_LINKED`, `PlainLiveSet::tracks(layout, true)`;
@@ -800,8 +819,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   plays them by varispeed on copies of the patch, a copy retuned once silent and slurred notes gliding on one copy
   (at most `[tuning] maxLanes` copies); Live has no varispeed, so its routes (MIDI out's too) give a copy per tuning,
   fixed by Kontakt's Tune (the plain set above; the route set the same), and a slurred note of another tuning starts
-  on its own copy: no varispeed glide (the All techniques longs give each note its own attack anyway). More Kontakts
-  than MuseScore hosts: one per tuning a patch plays. Pitches agree within 2 cents (measured). (The Performance
+  on its own copy: no varispeed glide (the All techniques longs give each note its own attack anyway). More Kontakt
+  slots than MuseScore hosts: one per tuning a patch plays (the plain set: one Kontakt per patch, a slot per tuning;
+  the route set: a Kontakt per copy). Pitches agree within 2 cents (measured). (The Performance
   patches, Solo Cello and the tuned percussion bend: those match.) A route set made before 2026-10-10 has no tuned
   copies: make it again.
 - **A note at the very start** (time 0) waits in Live for its carriers, which can't go before the clip's start: the

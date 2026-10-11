@@ -122,6 +122,7 @@ class TestSoundLibrary : public QObject, public MTest
       void kontaktScriptValues();
       void kontaktMaxVoices();
       void kontaktTune();
+      void kontaktSlots();
       void kontaktScriptValueLengths();
       void kontaktKickstartUnpurge();
       void kontaktSetupReal();
@@ -2557,6 +2558,54 @@ void TestSoundLibrary::kontaktTune()
       // already so: the very bytes; no program in the first slot: an error
       QCOMPARE(withTune(made, 0.0, &error, &before), made);
       QVERIFY(withTune(empty, -50.0, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
+//   kontaktSlots
+//    a multi of one patch (KontaktSetup::withSlots, the plain set's tuning copies: PlainLiveSet::multis): the patch's
+//    slot once per copy, each its own Tune (NaN: as made, a bent copy), slot i on MIDI channel i (measured with
+//    Kontakt 8 + SSO 2026-10-10: identical to a Kontakt per copy); the first slot's program as made at 0 cents
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktSlots()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      QString error;
+      const QByteArray made = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings", { { "$iooxo", "3" } }, &error);
+      QVERIFY2(!made.isEmpty(), qPrintable(error));
+      const std::vector<Slot> one = slotsOf(made);
+      QCOMPARE(int(one.size()), 1);
+      QCOMPARE(one[0].channel, 0);                  // (a made setup: Omni)
+      QCOMPARE(one[0].cents, 0.0);
+
+      const double nan = std::numeric_limits<double>::quiet_NaN();
+      const QByteArray multi = withSlots(made, { 0.0, -50.0, 50.0, nan }, &error);
+      QVERIFY2(!multi.isEmpty() && error.isEmpty(), qPrintable(error));
+      const std::vector<Slot> four = slotsOf(multi);
+      QCOMPARE(int(four.size()), 4);
+      const std::vector<double> cents = { 0.0, -50.0, 50.0, 0.0 };
+      for (size_t i = 0; i < 4; ++i) {
+            QCOMPARE(four[i].channel, int(i) + 1);
+            QVERIFY2(std::abs(four[i].cents - cents[i]) < 1e-3, qPrintable(QString("slot %1: %2").arg(i).arg(four[i].cents)));
+            }
+      // the first slot's program as made, the samples and the marker too
+      QCOMPARE(slotProgram(multi, nullptr), slotProgram(made, nullptr));
+      QCOMPARE(samplePaths(multi, &error), samplePaths(made, &error));
+      QCOMPARE(presetTail(multi), presetTail(made));
+      // made again: the same bytes
+      QCOMPARE(withSlots(made, { 0.0, -50.0, 50.0, nan }, &error), multi);
+      // none, more than 16, no program: an error
+      QVERIFY(withSlots(made, {}, &error).isEmpty());
+      QVERIFY(withSlots(made, std::vector<double>(17, 0.0), &error).isEmpty());
+      error.clear();
+      QVERIFY(withSlots(empty, { 0.0, -50.0 }, &error).isEmpty());
       QVERIFY(!error.isEmpty());
       }
 

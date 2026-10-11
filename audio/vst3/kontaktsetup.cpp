@@ -1531,6 +1531,148 @@ double tune(const QByteArray& program)
                                                 reinterpret_cast<const uchar*>(st.pub.constData() + at))));
       }
 
+//---------------------------------------------------------
+//   withSlots
+//    the slot list (u64 used mask, then a PROGRAM_CONTAINER per slot) with the first slot's container copied
+//    into cents.size() slots, each its Tune; MULTI_CONFIGURATION: a 28-byte row per slot, byte 0 its MIDI channel
+//    (0 Omni, n channel n; Kontakt's own default: row i = i + 1, row 0 Omni). Found 2026-10-10 by setting
+//    channels in Kontakt 8's window and diffing its saved states; a set Live 12.4.6 saved keeps them
+//---------------------------------------------------------
+
+QByteArray withSlots(const QByteArray& component, const std::vector<double>& cents, QString* error)
+      {
+      QString dummy;
+      if (!error)
+            error = &dummy;
+      if (cents.empty() || cents.size() > 16) {
+            *error = "a multi has 1 to 16 slots here";
+            return QByteArray();
+            }
+      Item root;
+      Preset preset;
+      std::vector<PChunk> top;
+      if (!readRoot(component, root, preset, error, "Kontakt's state") || !chunks(preset.data, top)) {
+            if (error->isEmpty())
+                  *error = "Kontakt's state: its preset data could not be read";
+            return QByteArray();
+            }
+      bool slotsDone = false, channelsDone = false;
+      for (PChunk& t : top) {
+            if (t.id != BANK)
+                  continue;
+            Struct bank;
+            std::vector<PChunk> kids;
+            if (!bank.read(t.body) || !chunks(bank.kids, kids))
+                  break;
+            for (PChunk& k : kids) {
+                  if (k.id == SLOT_LIST && k.body.size() >= 8) {
+                        std::vector<PChunk> slotChunks;
+                        if (!chunks(k.body.mid(8), slotChunks) || slotChunks.empty())
+                              break;
+                        Struct container;
+                        std::vector<PChunk> ckids;
+                        if (!container.read(slotChunks[0].body) || !chunks(container.kids, ckids))
+                              break;
+                        std::vector<PChunk> out;
+                        quint64 used = 0;
+                        for (size_t i = 0; i < cents.size(); ++i) {
+                              std::vector<PChunk> c = ckids;
+                              bool program = false;
+                              for (PChunk& p : c) {
+                                    if (p.id != PROGRAM_LIST || p.body.size() <= 4)
+                                          continue;
+                                    program = true;
+                                    if (std::isfinite(cents[i]) && std::fabs(cents[i]) >= 0.005) {
+                                          QByteArray prog = p.body.mid(4);
+                                          double was = std::nan("");
+                                          setTune(prog, float(std::pow(2.0, cents[i] / 1200.0)), &was);
+                                          if (std::isnan(was)) {
+                                                *error = "the program has no Tune where Kontakt keeps it";
+                                                return QByteArray();
+                                                }
+                                          p.body = p.body.left(4) + prog;
+                                          }
+                                    }
+                              if (!program) {
+                                    *error = "no program in the first slot";
+                                    return QByteArray();
+                                    }
+                              Struct s = container;
+                              s.kids = join(c);
+                              out.push_back({ slotChunks[0].id, s.body() });
+                              used |= quint64(1) << i;
+                              }
+                        QByteArray mask(8, 0);
+                        qToLittleEndian<quint64>(used, reinterpret_cast<uchar*>(mask.data()));
+                        k.body = mask + join(out);
+                        slotsDone = true;
+                        }
+                  else if (k.id == MULTI_CONFIGURATION) {
+                        if (k.body.size() < int(cents.size()) * 28)
+                              break;
+                        for (size_t i = 0; i < cents.size(); ++i)
+                              k.body[int(i) * 28] = char(i + 1);
+                        channelsDone = true;
+                        }
+                  }
+            bank.kids = join(kids);
+            t.body = bank.body();
+            break;
+            }
+      if (!slotsDone || !channelsDone) {
+            *error = slotsDone ? "Kontakt's state has no multi configuration" : "no program in the first slot";
+            return QByteArray();
+            }
+      preset.set(join(top));
+      rebuild(root);
+      return root.toBytes();
+      }
+
+std::vector<Slot> slotsOf(const QByteArray& component)
+      {
+      std::vector<Slot> out;
+      QString error;
+      Item root;
+      Preset preset;
+      std::vector<PChunk> top;
+      if (!readRoot(component, root, preset, &error, "Kontakt's state") || !chunks(preset.data, top))
+            return out;
+      for (const PChunk& t : top) {
+            if (t.id != BANK)
+                  continue;
+            Struct bank;
+            std::vector<PChunk> kids;
+            if (!bank.read(t.body) || !chunks(bank.kids, kids))
+                  break;
+            QByteArray config;
+            for (const PChunk& k : kids) {
+                  if (k.id == MULTI_CONFIGURATION)
+                        config = k.body;
+                  if (k.id != SLOT_LIST || k.body.size() < 8)
+                        continue;
+                  std::vector<PChunk> slotChunks;
+                  if (!chunks(k.body.mid(8), slotChunks))
+                        break;
+                  for (const PChunk& sc : slotChunks) {
+                        Slot s;
+                        s.cents = std::nan("");
+                        Struct container;
+                        std::vector<PChunk> ckids;
+                        if (container.read(sc.body) && chunks(container.kids, ckids))
+                              for (const PChunk& p : ckids)
+                                    if (p.id == PROGRAM_LIST && p.body.size() > 4)
+                                          s.cents = tune(p.body.mid(4));
+                        out.push_back(s);
+                        }
+                  }
+            for (size_t i = 0; i < out.size(); ++i)
+                  if (int(i) * 28 < config.size())
+                        out[i].channel = uchar(config.at(int(i) * 28));
+            break;
+            }
+      return out;
+      }
+
 QByteArray withScriptValues(const QByteArray& component, const std::map<QString, QByteArray>& set, QString* error,
                             int* valuesSet)
       {

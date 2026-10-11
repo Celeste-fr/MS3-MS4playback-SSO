@@ -263,7 +263,7 @@ std::map<QString, Written> written(const Score* score, const std::vector<LiveSet
             if (t.group)
                   w.kind = t.groupIndex < 0 ? "section" : "part";
             else
-                  w.kind = t.midiTo >= 0 ? "technique" : "kontakt";
+                  w.kind = t.tuningCopy ? "copy" : (t.midiTo >= 0 ? "technique" : "kontakt");
             if (t.partRef && score) {           // (a part group's: its part)
                   const QList<Part*>& parts = score->masterScore()->parts();
                   for (int i = 0; i < parts.size(); ++i)
@@ -273,7 +273,7 @@ std::map<QString, Written> written(const Score* score, const std::vector<LiveSet
             w.delayKey = t.delayKey;
             if (w.kind == "kontakt")
                   w.patch = t.routePatch;
-            else if (w.kind == "technique" && t.midiTo < int(tracks.size()))
+            else if ((w.kind == "technique" || w.kind == "copy") && t.midiTo < int(tracks.size()))
                   w.patch = tracks[size_t(t.midiTo)].routePatch;
             auto r = read.find(t.annotation);
             if (r != read.end() && !t.group)
@@ -447,6 +447,13 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         if (written && hashes.count(cc) && hashes.at(cc) == w.hashes.at(cc))
                               continue;
                         notImported << QObject::tr("Track \"%1\", %2: an extra patch's Kontakt (no lane plays it)").arg(t.name, what);
+                        continue;
+                        }
+                  else if (w.kind == "copy") {
+                        // a tuning copy's Controllers (its slot's channel of the patch's Kontakt): MuseScore's render
+                        if (written && hashes.count(cc) && hashes.at(cc) == w.hashes.at(cc))
+                              continue;
+                        notImported << QObject::tr("Track \"%1\", %2: a tuning copy's Controllers (no lane plays it)").arg(t.name, what);
                         continue;
                         }
                   else if (w.kind == "technique" && written)

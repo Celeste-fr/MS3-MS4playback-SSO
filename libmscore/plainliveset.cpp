@@ -319,6 +319,57 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
       }
 
 //---------------------------------------------------------
+//   multis
+//    a part's Kontakts grouped by patch: a patch's tuning copies (its lanes, fixed Tune or bent) play from one
+//    Kontakt, a slot per copy, each slot on its own MIDI channel (KontaktSetup::withSlots). Measured identical to
+//    a Kontakt per copy (Kontakt 8 + SSO offline, 2026-10-10: All techniques nulls -111 dB, Performance with
+//    bends -107.9 dB, run to run -109 dB; Live 12.4.6: MIDI To a channel plays its slot only), ~85-90 MB less per
+//    copy. Copies share a Kontakt only when nothing tells them apart but the tuning: a copy with parameter
+//    automation (Live automates the instrument, every slot at once) keeps a Kontakt of its own; the others share
+//    one per headroom (the track's Volume), at most 16 (MIDI channels) in one.
+//---------------------------------------------------------
+
+std::vector<std::vector<size_t>> multis(const std::vector<Kontakt>& kontakts)
+      {
+      std::vector<std::vector<size_t>> byPatch;
+      for (size_t i = 0; i < kontakts.size(); ++i) {
+            bool found = false;
+            for (std::vector<size_t>& g : byPatch) {
+                  const Kontakt& f = kontakts[g.front()];
+                  if (f.patchIndex == kontakts[i].patchIndex && f.patch == kontakts[i].patch) {
+                        g.push_back(i);
+                        found = true;
+                        break;
+                        }
+                  }
+            if (!found)
+                  byPatch.push_back({ i });
+            }
+      std::vector<std::vector<size_t>> out;
+      for (const std::vector<size_t>& g : byPatch) {
+            // (a copy with parameter automation alone; the others by headroom, 16 at most in one)
+            std::vector<std::vector<size_t>> merged;
+            for (size_t i : g) {
+                  bool found = false;
+                  if (kontakts[i].params.empty()) {
+                        for (std::vector<size_t>& m : merged) {
+                              const Kontakt& f = kontakts[m.front()];
+                              if (f.params.empty() && f.gain == kontakts[i].gain && m.size() < 16) {
+                                    m.push_back(i);
+                                    found = true;
+                                    break;
+                                    }
+                              }
+                        }
+                  if (!found)
+                        merged.push_back({ i });
+                  }
+            out.insert(out.end(), merged.begin(), merged.end());
+            }
+      return out;
+      }
+
+//---------------------------------------------------------
 //   the tracks
 //---------------------------------------------------------
 
@@ -496,7 +547,31 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                   pg.partRef = p.part;
                   out.push_back(pg);
                   const SoundLib::PartMix mix = SoundLib::partMix(p.part, false);
-                  for (const Kontakt& k : p.kontakts) {
+                  // a Kontakt's lanes as a "Controllers" clip
+                  auto controllersClip = [&layout](const Kontakt& k, std::vector<LiveSetWriter::Clip>* clips) {
+                        if (k.lanes.empty())
+                              return;
+                        LiveSetWriter::Clip c;
+                        c.name = QObject::tr("Controllers");
+                        c.end = beats(layout.length);
+                        for (const Lane& l : k.lanes) {
+                              // Live's clip bend envelope: -8192 .. 8191, MIDI's bend less 8192 (measured: Live 12.4.6
+                              // with SSO's Violins 1 - Performance, bend= 99.1 cents, 2026-10-10: 4096, -4096 and 8191
+                              // bent it +55, -50 and +103 cents, within the section's ±10-20 cents of spread)
+                              const bool bend = l.cc == PITCH_BEND;
+                              LiveSetWriter::Clip::Envelope e;
+                              e.controller = bend ? LiveSetWriter::PITCH_BEND_ENVELOPE : l.cc;
+                              for (const auto& pt : l.points)
+                                    e.points.push_back({ beats(pt.first), double(bend ? pt.second - 8192 : pt.second) });
+                              c.envelopes.push_back(e);
+                              }
+                        if (!c.envelopes.empty())
+                              clips->push_back(c);
+                        };
+                  // a patch's tuning copies (its lanes) share one Kontakt, a slot each (multi() below)
+                  std::vector<std::vector<size_t>> groups = multis(p.kontakts);
+                  for (const std::vector<size_t>& g : groups) {
+                        const Kontakt& k = p.kontakts[g.front()];
                         LiveSetWriter::Track kt;
                         kt.name = LiveSetWriter::trackName(p.name, k.patch, k.patchIndex == 0, 0) + tuningName(k);
                         kt.link = false;
@@ -519,24 +594,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         kt.active = !mix.muted;
                         kt.delayKey = TrackDelays::trackKey(k.patch);
                         kt.delayMs = TrackDelays::own(p.delays, kt.delayKey);
-                        if (!k.lanes.empty()) {
-                              LiveSetWriter::Clip c;
-                              c.name = QObject::tr("Controllers");
-                              c.end = beats(layout.length);
-                              for (const Lane& l : k.lanes) {
-                                    // Live's clip bend envelope: -8192 .. 8191, MIDI's bend less 8192 (measured: Live 12.4.6
-                                    // with SSO's Violins 1 - Performance, bend= 99.1 cents, 2026-10-10: 4096, -4096 and 8191
-                                    // bent it +55, -50 and +103 cents, within the section's ±10-20 cents of spread)
-                                    const bool bend = l.cc == PITCH_BEND;
-                                    LiveSetWriter::Clip::Envelope e;
-                                    e.controller = bend ? LiveSetWriter::PITCH_BEND_ENVELOPE : l.cc;
-                                    for (const auto& pt : l.points)
-                                          e.points.push_back({ beats(pt.first), double(bend ? pt.second - 8192 : pt.second) });
-                                    c.envelopes.push_back(e);
-                                    }
-                              if (!c.envelopes.empty())
-                                    kt.clips.push_back(c);
-                              }
+                        controllersClip(k, &kt.clips);
                         for (const ParamLane& pl : k.params) {
                               LiveSetWriter::ParameterAutomation a;
                               a.name = pl.title;
@@ -544,22 +602,52 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                                     a.points.push_back({ beats(pt.first), double(pt.second) });
                               kt.automation.push_back(a);
                               }
+                        if (g.size() > 1) {
+                              for (size_t i : g)
+                                    kt.slotCents.push_back(p.kontakts[i].cents);
+                              }
                         const int kontaktIndex = int(out.size());
                         out.push_back(kt);
-                        for (size_t i = 0; i < k.techniques.size(); ++i) {
-                              LiveSetWriter::Track tt;
-                              tt.name = QString("%1 – %2").arg(out[size_t(kontaktIndex)].name, k.techniques[i].name);
-                              tt.link = link;
-                              tt.color = color;
-                              tt.groupIndex = partIndex;
-                              tt.midiTo = kontaktIndex;
-                              tt.part = p.name;
-                              tt.partRef = p.part;
-                              tt.clips = switchClips(k, i, layout.length);
-                              tt.delayKey = TrackDelays::trackKey(k.patch, k.techniques[i].name);
-                              tt.delayMs = TrackDelays::own(p.delays, tt.delayKey);
-                        tt.annotation = trackKey({ s.name, p.name, out[size_t(kontaktIndex)].name, k.techniques[i].name });
-                              out.push_back(tt);
+                        for (size_t slot = 0; slot < g.size(); ++slot) {
+                              const Kontakt& kc = p.kontakts[g[slot]];
+                              const int channel = g.size() > 1 ? int(slot) + 1 : 0;
+                              QString name = out[size_t(kontaktIndex)].name;
+                              if (slot > 0) {
+                                    // the copy's own MIDI track: its Controllers (bends, CC1 …) on its slot's channel
+                                    LiveSetWriter::Track ct;
+                                    ct.name = LiveSetWriter::trackName(p.name, kc.patch, kc.patchIndex == 0, 0) + tuningName(kc);
+                                    name = ct.name;
+                                    ct.link = false;
+                                    ct.tuningCopy = true;
+                                    ct.color = color;
+                                    ct.groupIndex = partIndex;
+                                    ct.midiTo = kontaktIndex;
+                                    ct.midiToChannel = channel;
+                                    ct.part = p.name;
+                                    ct.partRef = p.part;
+                                    ct.patch = kc.patch;
+                                    ct.lane = kc.lane;
+                                    ct.cents = kc.cents;
+                                    controllersClip(kc, &ct.clips);
+                                    ct.annotation = trackKey({ s.name, p.name, ct.name });
+                                    out.push_back(ct);
+                                    }
+                              for (size_t i = 0; i < kc.techniques.size(); ++i) {
+                                    LiveSetWriter::Track tt;
+                                    tt.name = QString("%1 – %2").arg(name, kc.techniques[i].name);
+                                    tt.link = link;
+                                    tt.color = color;
+                                    tt.groupIndex = partIndex;
+                                    tt.midiTo = kontaktIndex;
+                                    tt.midiToChannel = channel;
+                                    tt.part = p.name;
+                                    tt.partRef = p.part;
+                                    tt.clips = switchClips(kc, i, layout.length);
+                                    tt.delayKey = TrackDelays::trackKey(kc.patch, kc.techniques[i].name);
+                                    tt.delayMs = TrackDelays::own(p.delays, tt.delayKey);
+                                    tt.annotation = trackKey({ s.name, p.name, name, kc.techniques[i].name });
+                                    out.push_back(tt);
+                                    }
                               }
                         }
                   }
