@@ -1222,14 +1222,13 @@ void TestPlayability::windDynRules()
       for (const WindDynRule& r : Ms::windDynRules())
             (r.kind == WindDynKind::NOTE ? notes : marks)++;
       QCOMPARE(marks, 11);
-      QCOMPARE(notes, 6);
+      QCOMPARE(notes, 5);
       const WindDynRule* r = windRule("W2-OB-HIGH");
       QVERIFY(r && r->lo == 89 && r->hi == 93 && r->level == WindLevel::FFF && r->kind == WindDynKind::RED && !r->written);
       r = windRule("B1-TPT-LOW");
       QVERIFY(r && r->lo == 54 && r->hi == 59 && r->written && r->instruments.size() == 3);
-      r = windRule("W2-CL-HIGH");
-      QVERIFY(r && r->lo == 93 && r->hi == 127 && r->written && r->level == WindLevel::SOFT);
-      // levels: soft = pp or softer, p/mp = exactly p or mp, fff = past halfway between ff 112 and fff 126
+      QVERIFY(!windRule("W2-CL-HIGH"));                                  // removed by the owner, 2026-10-10
+      // levels: soft = pp or softer, p/mp = exactly p or mp, fff = 126 or more (MuseScore's fff)
       using Playability::windLevelMatches;
       for (int v : { 16, 33, 40 })
             QVERIFY(windLevelMatches(WindLevel::SOFT, v) && !windLevelMatches(WindLevel::P_MP, v));
@@ -1350,11 +1349,11 @@ void TestPlayability::windDynamics()
       QCOMPARE(notesAt(12, Q), QStringList({ line("G3", "W2-AFL-LOW") }));
       QCOMPARE(notesAt(12, 2 * Q), QStringList({ line("F4", "W2-AFL-LOW") }));
       QVERIFY(notesAt(12, 3 * Q).isEmpty());
-      // clarinet written A6 and up, soft only (G#6 outside; p: no note)
+      // clarinet top: no rule (the owner removed the panel note, 2026-10-10)
       QVERIFY(notesAt(13, 0).isEmpty());
-      QCOMPARE(notesAt(13, Q), QStringList({ line("G6", "W2-CL-HIGH") }));
+      QVERIFY(notesAt(13, Q).isEmpty());
       QVERIFY(notesAt(13, BAR).isEmpty());
-      QCOMPARE(notesAt(14, 0), QStringList({ line("F#6", "W2-CL-HIGH") }));
+      QVERIFY(notesAt(14, 0).isEmpty());
       // E-flat clarinet Ab6-C7 sounding (written F6-A6)
       QVERIFY(notesAt(15, 0).isEmpty());
       QCOMPARE(notesAt(15, Q), QStringList({ line("Ab6", "W2-ECL-TOP") }));

@@ -156,7 +156,7 @@ headless test scores and their checked results are the parity tests.
   soft (W), F6–A6 at fff (R); bassoon B♭1–F2 soft (W); every saxophone written B♭3–F4 at p/mp (W) and soft
   (R); horn D5–F5 sounding soft (W, any horn id, read as in F like the valve check); trumpets in C and
   B♭ written B5–D6 soft (R) and F♯3–B3 soft (W); cornet and flugelhorn not covered. Panel notes (no
-  mark): low flute, low piccolo, low alto flute, soft clarinet written A6 and up (the books disagree),
+  mark): low flute, low piccolo, low alto flute,
   top E♭ clarinet, high bassoon. Soft = the pp tier of `dynamicTier` (pp or softer), p/mp = its p tier,
   fff = velocity 126 or more (MuseScore's fff); the level is
   `levelAt` at the note's chord (dynamics and hairpins); one set of numbers for section and soloist (no book separates them; D28–D32): every mark says "solo and section", nothing detects a2 or doubling; the horn mark adds that unison doubling helps (Blatter p. 151, Kennan & Grantham p. 132); low flute, piccolo, alto flute and high bassoon notes say they are only effective solo or with light accompaniment (Adler p. 180).

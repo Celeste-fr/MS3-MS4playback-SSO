@@ -21,7 +21,6 @@
 SAXOPHONES = ['sopranino-saxophone', 'soprano-saxophone', 'alto-saxophone', 'tenor-saxophone', 'saxophone',
               'baritone-saxophone', 'bass-saxophone']
 TRUMPETS = ['trumpet', 'bb-trumpet', 'c-trumpet']          # C and Bb only; not cornet, flugelhorn (D27)
-CLARINETS_BB_A = ['clarinet', 'bb-clarinet', 'a-clarinet']
 
 RULES = [
     # marks
@@ -58,9 +57,6 @@ RULES = [
          text='low piccolo: too weak to be heard in a tutti, only effective solo or with light accompaniment', source='Kennan & Grantham p. 80; Adler p. 180'),
     dict(id='W2-AFL-LOW', instruments=['alto-flute'], pitch='sounding', lo='G3', hi='F4', check=('written below', 'B4'),
          level='any', kind='note', text='low alto flute: only effective solo or with light accompaniment', source='Blatter p. 92; Adler p. 180'),
-    dict(id='W2-CL-HIGH', instruments=CLARINETS_BB_A, pitch='written', lo='A6', hi=None, level='soft', kind='note',
-         text='soft top clarinet (written A6 and up): the books disagree whether it works',
-         source='Sevsay p. 81 against Adler p. 206'),
     dict(id='W2-ECL-TOP', instruments=['eb-clarinet'], pitch='sounding', lo='Ab6', hi='C7', check=('written', 'F6', 'A6'),
          level='any', kind='note', text='top Eb clarinet: dynamics may be limited; shrill when loud',
          source='Adler p. 211; Blatter p. 110'),
