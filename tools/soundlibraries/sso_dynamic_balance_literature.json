@@ -1,0 +1,777 @@
+{
+ "cc1_per_dynamic": {
+  "pp": 32,
+  "p": 48,
+  "mp": 64,
+  "mf": 80,
+  "f": 96,
+  "ff": 112
+ },
+ "common_range_midi": {
+  "Violins 1": [
+   55,
+   91
+  ],
+  "Violins 2": [
+   55,
+   91
+  ],
+  "Violas": [
+   48,
+   90
+  ],
+  "Celli": [
+   36,
+   82
+  ],
+  "Basses": [
+   28,
+   54
+  ]
+ },
+ "fractions": {
+  "A_demoucron": {
+   "pp": 0.0,
+   "p": 0.18,
+   "mp": 0.35,
+   "mf": 0.53,
+   "f": 0.77,
+   "ff": 1.0
+  },
+  "C1_askenfelt_player1": {
+   "pp": 0.0,
+   "p": 0.18,
+   "mp": 0.32,
+   "mf": 0.46,
+   "f": 0.82,
+   "ff": 1.0
+  },
+  "C2_askenfelt_player2": {
+   "pp": 0.0,
+   "p": 0.18,
+   "mp": 0.29,
+   "mf": 0.39,
+   "f": 0.82,
+   "ff": 1.0
+  },
+  "B_equal_steps": {
+   "pp": 0.0,
+   "p": 0.2,
+   "mp": 0.4,
+   "mf": 0.6,
+   "f": 0.8,
+   "ff": 1.0
+  },
+  "bound_pp_profile": {
+   "pp": 0.0,
+   "p": 0.0,
+   "mp": 0.0,
+   "mf": 0.0,
+   "f": 0.0,
+   "ff": 0.0
+  },
+  "bound_ff_profile": {
+   "pp": 1.0,
+   "p": 1.0,
+   "mp": 1.0,
+   "mf": 1.0,
+   "f": 1.0,
+   "ff": 1.0
+  }
+ },
+ "check_shipped_M_reproduced": {
+  "Violins 1": -3.81,
+  "Violins 2": -2.66,
+  "Violas": -2.12,
+  "Celli": 2.77,
+  "Basses": 5.81
+ },
+ "M": {
+  "A_demoucron": {
+   "pp": {
+    "Violins 1": -4.8,
+    "Violins 2": -4.94,
+    "Violas": -2.14,
+    "Celli": 3.17,
+    "Basses": 8.71
+   },
+   "p": {
+    "Violins 1": -4.23,
+    "Violins 2": -3.79,
+    "Violas": -1.99,
+    "Celli": 3.0,
+    "Basses": 7.01
+   },
+   "mp": {
+    "Violins 1": -4.03,
+    "Violins 2": -2.88,
+    "Violas": -2.11,
+    "Celli": 2.96,
+    "Basses": 6.06
+   },
+   "mf": {
+    "Violins 1": -3.92,
+    "Violins 2": -2.59,
+    "Violas": -2.52,
+    "Celli": 2.33,
+    "Basses": 6.69
+   },
+   "f": {
+    "Violins 1": -2.41,
+    "Violins 2": -1.04,
+    "Violas": -1.45,
+    "Celli": 2.08,
+    "Basses": 2.82
+   },
+   "ff": {
+    "Violins 1": -0.78,
+    "Violins 2": 0.63,
+    "Violas": -0.91,
+    "Celli": 1.77,
+    "Basses": -0.71
+   }
+  },
+  "C1_askenfelt_player1": {
+   "pp": {
+    "Violins 1": -4.8,
+    "Violins 2": -4.94,
+    "Violas": -2.14,
+    "Celli": 3.17,
+    "Basses": 8.71
+   },
+   "p": {
+    "Violins 1": -4.22,
+    "Violins 2": -3.79,
+    "Violas": -1.99,
+    "Celli": 2.99,
+    "Basses": 7.0
+   },
+   "mp": {
+    "Violins 1": -4.19,
+    "Violins 2": -3.03,
+    "Violas": -2.1,
+    "Celli": 3.08,
+    "Basses": 6.23
+   },
+   "mf": {
+    "Violins 1": -4.24,
+    "Violins 2": -2.91,
+    "Violas": -2.49,
+    "Celli": 2.6,
+    "Basses": 7.05
+   },
+   "f": {
+    "Violins 1": -2.14,
+    "Violins 2": -0.77,
+    "Violas": -1.47,
+    "Celli": 1.86,
+    "Basses": 2.52
+   },
+   "ff": {
+    "Violins 1": -0.78,
+    "Violins 2": 0.63,
+    "Violas": -0.91,
+    "Celli": 1.77,
+    "Basses": -0.71
+   }
+  },
+  "C2_askenfelt_player2": {
+   "pp": {
+    "Violins 1": -4.8,
+    "Violins 2": -4.94,
+    "Violas": -2.14,
+    "Celli": 3.17,
+    "Basses": 8.71
+   },
+   "p": {
+    "Violins 1": -4.22,
+    "Violins 2": -3.79,
+    "Violas": -1.99,
+    "Celli": 2.99,
+    "Basses": 7.0
+   },
+   "mp": {
+    "Violins 1": -4.36,
+    "Violins 2": -3.21,
+    "Violas": -2.08,
+    "Celli": 3.23,
+    "Basses": 6.42
+   },
+   "mf": {
+    "Violins 1": -4.59,
+    "Violins 2": -3.25,
+    "Violas": -2.47,
+    "Celli": 2.88,
+    "Basses": 7.43
+   },
+   "f": {
+    "Violins 1": -2.14,
+    "Violins 2": -0.77,
+    "Violas": -1.47,
+    "Celli": 1.86,
+    "Basses": 2.52
+   },
+   "ff": {
+    "Violins 1": -0.78,
+    "Violins 2": 0.63,
+    "Violas": -0.91,
+    "Celli": 1.77,
+    "Basses": -0.71
+   }
+  },
+  "B_equal_steps": {
+   "pp": {
+    "Violins 1": -4.8,
+    "Violins 2": -4.94,
+    "Violas": -2.14,
+    "Celli": 3.17,
+    "Basses": 8.71
+   },
+   "p": {
+    "Violins 1": -4.11,
+    "Violins 2": -3.68,
+    "Violas": -2.0,
+    "Celli": 2.91,
+    "Basses": 6.89
+   },
+   "mp": {
+    "Violins 1": -3.81,
+    "Violins 2": -2.66,
+    "Violas": -2.12,
+    "Celli": 2.77,
+    "Basses": 5.81
+   },
+   "mf": {
+    "Violins 1": -3.59,
+    "Violins 2": -2.25,
+    "Violas": -2.54,
+    "Celli": 2.06,
+    "Basses": 6.32
+   },
+   "f": {
+    "Violins 1": -2.24,
+    "Violins 2": -0.87,
+    "Violas": -1.47,
+    "Celli": 1.95,
+    "Basses": 2.63
+   },
+   "ff": {
+    "Violins 1": -0.78,
+    "Violins 2": 0.63,
+    "Violas": -0.91,
+    "Celli": 1.77,
+    "Basses": -0.71
+   }
+  },
+  "bound_pp_profile": {
+   "pp": {
+    "Violins 1": -4.8,
+    "Violins 2": -4.94,
+    "Violas": -2.14,
+    "Celli": 3.17,
+    "Basses": 8.71
+   },
+   "p": {
+    "Violins 1": -5.08,
+    "Violins 2": -4.65,
+    "Violas": -1.93,
+    "Celli": 3.7,
+    "Basses": 7.96
+   },
+   "mp": {
+    "Violins 1": -5.74,
+    "Violins 2": -4.58,
+    "Violas": -1.99,
+    "Celli": 4.36,
+    "Basses": 7.95
+   },
+   "mf": {
+    "Violins 1": -6.48,
+    "Violins 2": -5.15,
+    "Violas": -2.34,
+    "Celli": 4.44,
+    "Basses": 9.53
+   },
+   "f": {
+    "Violins 1": -6.1,
+    "Violins 2": -4.73,
+    "Violas": -1.19,
+    "Celli": 5.12,
+    "Basses": 6.9
+   },
+   "ff": {
+    "Violins 1": -5.6,
+    "Violins 2": -4.19,
+    "Violas": -0.57,
+    "Celli": 5.73,
+    "Basses": 4.63
+   }
+  },
+  "bound_ff_profile": {
+   "pp": {
+    "Violins 1": 0.02,
+    "Violins 2": -0.11,
+    "Violas": -2.48,
+    "Celli": -0.79,
+    "Basses": 3.37
+   },
+   "p": {
+    "Violins 1": -0.26,
+    "Violins 2": 0.18,
+    "Violas": -2.27,
+    "Celli": -0.26,
+    "Basses": 2.61
+   },
+   "mp": {
+    "Violins 1": -0.91,
+    "Violins 2": 0.24,
+    "Violas": -2.33,
+    "Celli": 0.39,
+    "Basses": 2.61
+   },
+   "mf": {
+    "Violins 1": -1.66,
+    "Violins 2": -0.32,
+    "Violas": -2.68,
+    "Celli": 0.47,
+    "Basses": 4.19
+   },
+   "f": {
+    "Violins 1": -1.28,
+    "Violins 2": 0.09,
+    "Violas": -1.53,
+    "Celli": 1.15,
+    "Basses": 1.56
+   },
+   "ff": {
+    "Violins 1": -0.78,
+    "Violins 2": 0.63,
+    "Violas": -0.91,
+    "Celli": 1.77,
+    "Basses": -0.71
+   }
+  }
+ },
+ "main_minus_shipped": {
+  "pp": {
+   "Violins 1": -0.99,
+   "Violins 2": -2.28,
+   "Violas": -0.02,
+   "Celli": 0.4,
+   "Basses": 2.9
+  },
+  "p": {
+   "Violins 1": -0.42,
+   "Violins 2": -1.13,
+   "Violas": 0.13,
+   "Celli": 0.23,
+   "Basses": 1.2
+  },
+  "mp": {
+   "Violins 1": -0.22,
+   "Violins 2": -0.22,
+   "Violas": 0.01,
+   "Celli": 0.19,
+   "Basses": 0.25
+  },
+  "mf": {
+   "Violins 1": -0.11,
+   "Violins 2": 0.07,
+   "Violas": -0.4,
+   "Celli": -0.44,
+   "Basses": 0.88
+  },
+  "f": {
+   "Violins 1": 1.4,
+   "Violins 2": 1.62,
+   "Violas": 0.67,
+   "Celli": -0.69,
+   "Basses": -2.99
+  },
+  "ff": {
+   "Violins 1": 3.03,
+   "Violins 2": 3.29,
+   "Violas": 1.21,
+   "Celli": -1.0,
+   "Basses": -6.52
+  }
+ },
+ "spread_over_literature_sets": {
+  "pp": {
+   "Violins 1": [
+    -4.8,
+    -4.8
+   ],
+   "Violins 2": [
+    -4.94,
+    -4.94
+   ],
+   "Violas": [
+    -2.14,
+    -2.14
+   ],
+   "Celli": [
+    3.17,
+    3.17
+   ],
+   "Basses": [
+    8.71,
+    8.71
+   ]
+  },
+  "p": {
+   "Violins 1": [
+    -4.23,
+    -4.22
+   ],
+   "Violins 2": [
+    -3.79,
+    -3.79
+   ],
+   "Violas": [
+    -1.99,
+    -1.99
+   ],
+   "Celli": [
+    2.99,
+    3.0
+   ],
+   "Basses": [
+    7.0,
+    7.01
+   ]
+  },
+  "mp": {
+   "Violins 1": [
+    -4.36,
+    -4.03
+   ],
+   "Violins 2": [
+    -3.21,
+    -2.88
+   ],
+   "Violas": [
+    -2.11,
+    -2.08
+   ],
+   "Celli": [
+    2.96,
+    3.23
+   ],
+   "Basses": [
+    6.06,
+    6.42
+   ]
+  },
+  "mf": {
+   "Violins 1": [
+    -4.59,
+    -3.92
+   ],
+   "Violins 2": [
+    -3.25,
+    -2.59
+   ],
+   "Violas": [
+    -2.52,
+    -2.47
+   ],
+   "Celli": [
+    2.33,
+    2.88
+   ],
+   "Basses": [
+    6.69,
+    7.43
+   ]
+  },
+  "f": {
+   "Violins 1": [
+    -2.41,
+    -2.14
+   ],
+   "Violins 2": [
+    -1.04,
+    -0.77
+   ],
+   "Violas": [
+    -1.47,
+    -1.45
+   ],
+   "Celli": [
+    1.86,
+    2.08
+   ],
+   "Basses": [
+    2.52,
+    2.82
+   ]
+  },
+  "ff": {
+   "Violins 1": [
+    -0.78,
+    -0.78
+   ],
+   "Violins 2": [
+    0.63,
+    0.63
+   ],
+   "Violas": [
+    -0.91,
+    -0.91
+   ],
+   "Celli": [
+    1.77,
+    1.77
+   ],
+   "Basses": [
+    -0.71,
+    -0.71
+   ]
+  }
+ },
+ "spread_over_bounds": {
+  "pp": {
+   "Violins 1": [
+    -4.8,
+    0.02
+   ],
+   "Violins 2": [
+    -4.94,
+    -0.11
+   ],
+   "Violas": [
+    -2.48,
+    -2.14
+   ],
+   "Celli": [
+    -0.79,
+    3.17
+   ],
+   "Basses": [
+    3.37,
+    8.71
+   ]
+  },
+  "p": {
+   "Violins 1": [
+    -5.08,
+    -0.26
+   ],
+   "Violins 2": [
+    -4.65,
+    0.18
+   ],
+   "Violas": [
+    -2.27,
+    -1.93
+   ],
+   "Celli": [
+    -0.26,
+    3.7
+   ],
+   "Basses": [
+    2.61,
+    7.96
+   ]
+  },
+  "mp": {
+   "Violins 1": [
+    -5.74,
+    -0.91
+   ],
+   "Violins 2": [
+    -4.58,
+    0.24
+   ],
+   "Violas": [
+    -2.33,
+    -1.99
+   ],
+   "Celli": [
+    0.39,
+    4.36
+   ],
+   "Basses": [
+    2.61,
+    7.95
+   ]
+  },
+  "mf": {
+   "Violins 1": [
+    -6.48,
+    -1.66
+   ],
+   "Violins 2": [
+    -5.15,
+    -0.32
+   ],
+   "Violas": [
+    -2.68,
+    -2.34
+   ],
+   "Celli": [
+    0.47,
+    4.44
+   ],
+   "Basses": [
+    4.19,
+    9.53
+   ]
+  },
+  "f": {
+   "Violins 1": [
+    -6.1,
+    -1.28
+   ],
+   "Violins 2": [
+    -4.73,
+    0.09
+   ],
+   "Violas": [
+    -1.53,
+    -1.19
+   ],
+   "Celli": [
+    1.15,
+    5.12
+   ],
+   "Basses": [
+    1.56,
+    6.9
+   ]
+  },
+  "ff": {
+   "Violins 1": [
+    -5.6,
+    -0.78
+   ],
+   "Violins 2": [
+    -4.19,
+    0.63
+   ],
+   "Violas": [
+    -0.91,
+    -0.57
+   ],
+   "Celli": [
+    1.77,
+    5.73
+   ],
+   "Basses": [
+    -0.71,
+    4.63
+   ]
+  }
+ },
+ "sso_term_change_from_mp": {
+  "pp": {
+   "Violins 1": 0.94,
+   "Violins 2": -0.35,
+   "Violas": -0.16,
+   "Celli": -1.18,
+   "Basses": 0.76
+  },
+  "p": {
+   "Violins 1": 0.66,
+   "Violins 2": -0.06,
+   "Violas": 0.06,
+   "Celli": -0.66,
+   "Basses": 0.0
+  },
+  "mp": {
+   "Violins 1": 0.0,
+   "Violins 2": 0.0,
+   "Violas": 0.0,
+   "Celli": 0.0,
+   "Basses": 0.0
+  },
+  "mf": {
+   "Violins 1": -0.75,
+   "Violins 2": -0.56,
+   "Violas": -0.35,
+   "Celli": 0.08,
+   "Basses": 1.58
+  },
+  "f": {
+   "Violins 1": -0.36,
+   "Violins 2": -0.14,
+   "Violas": 0.79,
+   "Celli": 0.76,
+   "Basses": -1.05
+  },
+  "ff": {
+   "Violins 1": 0.14,
+   "Violins 2": 0.39,
+   "Violas": 1.42,
+   "Celli": 1.37,
+   "Basses": -3.32
+  }
+ },
+ "flags_5dB_from_shipped": [
+  {
+   "section": "Basses",
+   "dynamic": "ff",
+   "main_minus_shipped": -6.52,
+   "all_literature_sets_beyond_5dB": true
+  }
+ ],
+ "tu_berlin_violin_ff_minus_pp_dB": {
+  "median": 30.98,
+  "min": 23.0,
+  "max": 35.22
+ },
+ "literature_violin_pp_to_ff_dB": {
+  "Demoucron 2008 (pp..ff)": 13.0,
+  "Clark & Luce 1965 via Askenfelt 1988": 14.0,
+  "Askenfelt 1988 p..f, two players": [
+   9.0,
+   9.0
+  ]
+ },
+ "sources": [
+  {
+   "ref": "Demoucron, M. (2008). On the control of virtual violins. Doctoral thesis, KTH / UPMC, TRITA-CSC-A 2008:17, ch. 6, \"Detache at different dynamic levels\", Figs. 6.4-6.5 (open at diva-portal.org)",
+   "measured": "sound level of the recorded audio, relative dB; 1 professional violinist, G4 on the D string, whole notes 4 s, whole bow, bow velocity held at about 13 cm/s by instruction",
+   "values": "mf -> ff +6.1 dB, mf -> pp -6.9 dB (averages)"
+  },
+  {
+   "ref": "Askenfelt, A. (1988). Measurement of the bowing parameters in violin playing. STL-QPSR 29(1), 1-30, sec. III.A.1(d), Fig. 3d (open at speech.kth.se/qpsr)",
+   "measured": "top-plate vibration (acceleration) near the bass-side bridge foot, relative dB, 0.5 dB resolution; 2 professional violinists, open G string, detache whole notes about 2 s, averages over about 10 s",
+   "values": "f -> mf about 5 and 6 dB, mf -> p 4 and 3 dB (9 dB p..f each; 10 dB on one repeat)"
+  },
+  {
+   "ref": "Clark, M. & Luce, D. (1965). Intensities of orchestral instrument scales played at prescribed dynamic markings. JAES 13(2), 151-157",
+   "measured": "NOT READ (AES e-library paywall); only the violin pp..ff figure quoted by Askenfelt 1988, p. 9",
+   "values": "violin about 14 dB between ff and pp \"appropriate for typical orchestra music\" (secondary)"
+  },
+  {
+   "ref": "Meyer, J. (2009). Acoustics and the Performance of Music, 5th ed.; Meyer, J. (1990). Zur Dynamik und Schalleistung von Orchesterinstrumenten. Acustica 71",
+   "measured": "NOT READ (no accessible copy found)",
+   "values": "none used; Weinzierl et al. 2018 (read) compare with Meyer 1990: ff within 4 dB (mean 2 dB), pp within 10 dB (mean 6.8 dB) over 12 instruments"
+  },
+  {
+   "ref": "Weinzierl, S. et al. (2018). Sound power and timbre as cues for the dynamic strength of orchestral instruments. JASA 144(3), 1347 (read: depositonce.tu-berlin.de)",
+   "measured": "sound power, ISO 3745, 32 microphones at 2.1 m, one player per instrument, pp and ff only",
+   "values": "the pp / ff endpoints of the real side (3_Audio_Features.csv)"
+  },
+  {
+   "ref": "Patynen, J. & Lokki, T. (2010). Directivities of symphony orchestra instruments. Acta Acust. united Ac. 96 (read)",
+   "measured": "p, f, ff recorded, but directivity is published normalised: no level per dynamic",
+   "values": "none usable"
+  },
+  {
+   "ref": "Jansson, E. & Karlsson, K. (1982). STL-QPSR 23(1) 31-48 (read)",
+   "measured": "whole-orchestra levels at players' positions, p / mf / ff chosen from level plots",
+   "values": "none usable (not per instrument, not per marked dynamic)"
+  }
+ ],
+ "choices": [
+  "Only violin data could be read; the violin fractions are used for all four instruments.",
+  "Main set A: Demoucron mf; p, mp at 1/3, 2/3 of pp..mf and f halfway mf..ff (equal dB steps between the measured marks). C1/C2: Askenfelt per player inside Clark & Luce 14 dB, outer 5 dB split equally, mp halfway p..mf. B: MuseScore scale linear in dB (the shipped rule). Bounds: pp or ff profile only.",
+  "The fraction is applied to the TU Berlin per-pitch pp..ff (extremes of single tones), which is wider than the literature's musical pp..ff (13-14 dB, violin): the markings are placed inside the extremes by fraction.",
+  "SSO side: loudDb (loudest 50 ms of the note and 0.5 s release), All techniques Long, library default mics, CC1 = velocity, median of 4 repeats, every 3 semitones, linear in dB between; same as shipped M.",
+  "Section = one player + 10 log10 N; whole common range, equal weights; centred over the five sections; M = dB to add to the section."
+ ],
+ "licences": "TU Berlin database CC BY-NC-SA 4.0 and SSO measurements: derived numbers only"
+}
