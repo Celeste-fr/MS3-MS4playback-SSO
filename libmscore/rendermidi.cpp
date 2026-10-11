@@ -1790,6 +1790,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           t.joinMs = perf.before ? int(std::lround(perf.endMs)) : PerformanceTechnique::JOIN_AUTO;
                                           }
                                     }
+                              // an attack at a velocity whose recording at this key is faulty (the map's avoid: SSO's
+                              // Celli - Performance C3, a round robin with its own narrow tone near 1180 Hz): the nearest
+                              // clean velocity measured ([notes] avoidBadSamples; a note's own velocity stays)
+                              if (!from && libAvoidBad && libNote.velocity > 0 && libChoice && libChoice.articulation && !libChoice.articulation->avoid.empty()
+                                  && note->libraryVelocity() <= 0) {
+                                    const int v = libChoice.articulation->avoidVelocity(note->ppitch(), libNote.velocity);
+                                    if (v != libNote.velocity) {
+                                          libNote.velocity = v;
+                                          if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                                libTrace->back().velocity = v;
+                                          }
+                                    }
                               if (!from) {
                                     // (no transition: its bend is set at its note-on, no glide; an earlier render's
                                     // entries go)
@@ -4734,6 +4746,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libChunkStart = chunk.utick1();
       libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
       libOnsetByPitch = Playback::on("heldNotes/byPitch", score);
+      libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;

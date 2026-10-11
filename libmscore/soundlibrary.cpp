@@ -86,7 +86,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
-//               reattackGap="54" overlap="24"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
+//               reattackGap="54" overlap="24"] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
 //               [bendGlide="136:-8:100 300:70:230 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
@@ -226,6 +226,14 @@ double Articulation::onsetMedian() const
       std::sort(v.begin(), v.end());
       const size_t n = v.size();
       return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+      }
+
+int Articulation::avoidVelocity(int key, int velocity) const
+      {
+      for (const Avoid& a : avoid)
+            if (key >= a.keyLow && key <= a.keyHigh && velocity >= a.low && velocity <= a.high)
+                  return a.velocity;
+      return velocity;
       }
 
 const Articulation::Technique* Articulation::attack(const QString& name) const
@@ -407,6 +415,22 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             };
       if (!readTechniques("attacks", art.attacks) || !readTechniques("transitions", art.transitions))
             return false;
+      // key[-key]:low-high:velocity …, the velocity outside its band
+      if (a.hasAttribute("avoid")) {
+            for (const QString& t : a.value("avoid").toString().split(' ', QString::SkipEmptyParts)) {
+                  const QStringList f = t.split(':');
+                  const QStringList keys = f.value(0).split('-');
+                  const QStringList band = f.value(1).split('-');
+                  bool ok[5] = { false, false, false, false, false };
+                  Articulation::Avoid v { keys.value(0).toInt(&ok[0]), keys.value(keys.size() - 1).toInt(&ok[1]),
+                                          band.value(0).toInt(&ok[2]), band.value(1).toInt(&ok[3]), f.value(2).toInt(&ok[4]) };
+                  if (f.size() != 3 || keys.size() > 2 || band.size() != 2 || !ok[0] || !ok[1] || !ok[2] || !ok[3] || !ok[4]
+                      || v.keyLow < 0 || v.keyHigh > 127 || v.keyLow > v.keyHigh || v.low < 1 || v.high > 127 || v.low > v.high
+                      || v.velocity < 1 || v.velocity > 127 || (v.velocity >= v.low && v.velocity <= v.high))
+                        return false;
+                  art.avoid.push_back(v);
+                  }
+            }
       art.reattackVelocity = a.hasAttribute("reattack") ? a.value("reattack").toInt() : -1;
       if (a.hasAttribute("reattack") && (art.reattackVelocity < 1 || art.reattackVelocity > 127))
             return false;

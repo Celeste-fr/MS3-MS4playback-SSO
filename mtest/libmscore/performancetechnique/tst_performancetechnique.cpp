@@ -156,6 +156,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void ownSaved();
       void trace();
       void lanes();
+      void avoidBadSamples();
       };
 
 //---------------------------------------------------------
@@ -662,6 +663,57 @@ void TestPerformanceTechnique::lanes()
             QCOMPARE(NoteLane::bandAt(bands, d[2])->name, QString::fromUtf8("p–mp"));
       QCOMPARE(NoteLane::bandAt(bands, m[0].velocity) != nullptr, true);
       delete st;
+      }
+
+//---------------------------------------------------------
+//   avoidBadSamples
+//    the map's avoid (sso_bad_samples.json): SSO's Celli - Performance C3 attacks in the faulty round robin's band
+//    play at the nearest clean velocity; on the test score's Violins 1 - Performance a band put at D5 (its re-attack,
+//    106) and E5 / F5 (bowed transitions, 93): D5 moves, the transitions don't, C5 (another key) doesn't; a note's own
+//    velocity stays; [notes] avoidBadSamples 0: as chosen
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::avoidBadSamples()
+      {
+      auto lib = sso();
+      MasterScore* s = score();
+      QVERIFY(lib && s);
+      SoundLib::Articulation* violins = nullptr;
+      const SoundLib::Articulation* celli = nullptr;
+      for (auto* list : { &lib->instruments, &lib->otherPatches })
+            for (auto& i : *list)
+                  for (auto& a : i.articulations) {
+                        if (a.attacks.empty())
+                              QVERIFY2(a.avoid.empty(), qPrintable(i.name));
+                        else if (i.name == "Violins 1 - Performance")
+                              violins = &a;
+                        else if (i.name == "Celli - Performance")
+                              celli = &a;
+                        }
+      QVERIFY(violins && celli);
+      // the measured band (Windows VM, kthost, 2026-10-10): C3 at the re-attack and spiccato velocities moves, below
+      // the band and other keys don't
+      QVERIFY(!celli->avoid.empty());
+      const int clean = celli->avoidVelocity(48, 106);
+      QVERIFY(clean != 106);
+      QCOMPARE(celli->avoidVelocity(48, 112), clean);
+      QCOMPARE(celli->avoidVelocity(48, clean), clean);
+      QCOMPARE(celli->avoidVelocity(48, 80), 80);
+      QCOMPARE(celli->avoidVelocity(60, 106), 106);
+      QCOMPARE(violins->avoidVelocity(74, 106), 106);
+      violins->avoid = { { 74, 74, 100, 116, 90 }, { 76, 77, 85, 127, 50 } };
+      std::map<int, Key> k = render(s, lib);
+      QCOMPARE(k[72].velocity, 112);
+      QCOMPARE(k[74].velocity, 90);
+      QCOMPARE(k[76].velocity, 93);
+      QCOMPARE(k[77].velocity, 93);
+      std::vector<Note*> n = notes(s);
+      set({ n[1] }, Pid::LIBRARY_VELOCITY, 110);
+      QCOMPARE(render(s, lib)[74].velocity, 110);
+      set({ n[1] }, Pid::LIBRARY_VELOCITY, 0);
+      s->setMetaTag(Playback::metaTag, "notes/avoidBadSamples=0");
+      QCOMPARE(render(s, lib)[74].velocity, 106);
+      delete s;
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

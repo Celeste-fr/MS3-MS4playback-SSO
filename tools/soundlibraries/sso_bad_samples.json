@@ -1,0 +1,30 @@
+{
+  "about": "SSO attacks that play a faulty recording: one round robin with its own narrow tone. gen_spitfire_sso.py writes 'avoid' into the map (<Articulation avoid=\"keys:low-high:velocity\">): an attack in the band plays at 'velocity', the nearest velocity measured clean. Measured 2026-10-10 with kthost and Kontakt 8 + SSO on the Windows test VM, the patches' MuseScore setups: 12 isolated attacks per render (0.5 s on, 0.4 s apart), CC1 64, CC11 102 (Whence's Celli under [levels] context); each render starts Kontakt afresh and renders identically (3 in a row per C3 velocity). Metric: per attack the peak in a band round the tone (band_hz; 50-350 ms after the note-on, 16384-point FFT) against the render's median attack: round_robin_5_db the faulty round robin's, largest_attack_db the largest of the 12 where none stands out. The owner heard it in Whence 1-16 strings (A, [levels] context): bars 1.3, 3.2, 5.1, 5.4, Celli C3 re-attacks at 106.",
+  "avoid": {
+    "Celli - Performance": [
+      { "keys": [47, 48], "band": [100, 116], "velocity": 99 }
+    ]
+  },
+  "renders": {
+    "Celli - Performance": {
+      "48": {
+        "band_hz": [1150, 1250],
+        "faulty": "round robin 5 of 6 (attacks 5 and 11 of 12), peak 1184 Hz",
+        "renders_each": 3,
+        "round_robin_5_db": { "20": 0, "40": 0, "60": -1, "75": -3, "90": -3, "92": -3, "94": -3, "96": -3, "98": -3,
+                              "99": -3, "100": 9, "106": 9, "112": 10, "116": 11, "117": 6, "120": 6, "127": 6 },
+        "note": "117-127 is the accented attack (another technique; Auto: under an accent or marcato): +6 dB, not avoided"
+      },
+      "47": { "band_hz": [1090, 1150], "faulty": "the same recording a semitone down (1117 Hz)", "renders_each": 1,
+              "round_robin_5_db": { "90": -4, "98": -5, "106": 10, "116": 11 } },
+      "45": { "band_hz": [990, 1050], "renders_each": 1, "largest_attack_db": { "106": 2 } },
+      "46": { "band_hz": [1050, 1100], "renders_each": 1, "largest_attack_db": { "106": 2 } },
+      "49": { "band_hz": [1220, 1290], "renders_each": 1, "largest_attack_db": { "106": 2 } },
+      "50": { "band_hz": [1290, 1370], "renders_each": 1, "largest_attack_db": { "106": 2 } },
+      "51": { "band_hz": [1370, 1450], "renders_each": 1, "largest_attack_db": { "90": 4, "106": 4 } }
+    },
+    "Violas - Performance": {
+      "note": "Eb3 (51) at 90 and 106, F#3 (54) and A3 (57) at 106, one render each: the narrow-tone screen (each attack's spectrum over the 12's median, 300-4000 Hz) shows no round robin apart from the others (6-14 dB, as on the clean Celli renders); no band measured"
+    }
+  }
+}
