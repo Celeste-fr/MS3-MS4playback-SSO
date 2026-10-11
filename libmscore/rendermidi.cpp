@@ -2971,6 +2971,31 @@ std::vector<OrnamentExcursion> excursions = {
       };
 
 //---------------------------------------------------------
+//   isUpperNeighbourTrill
+//    the playability checker (W5): does playback play this ornament as the main note alternating
+//    with the note above it, and nothing else? (every step of its excursion is 0 or +1, and one is +1;
+//    mordents, turns and the like, which go down or further, are not)
+//---------------------------------------------------------
+
+bool isUpperNeighbourTrill(SymId articulationType, MScore::OrnamentStyle ornamentStyle)
+      {
+      for (auto& oe : excursions) {
+            if (oe.atype == articulationType && (0 == oe.ostyles.size()
+               || oe.ostyles.end() != oe.ostyles.find(ornamentStyle))) {
+                  bool up = false;
+                  for (const std::vector<int>* v : { &oe.prefix, &oe.body, &oe.suffix })
+                        for (int step : *v) {
+                              if (step != 0 && step != 1)
+                                    return false;
+                              up |= step == 1;
+                              }
+                  return up;
+                  }
+            }
+      return false;
+      }
+
+//---------------------------------------------------------
 //   renderNoteArticulation
 //---------------------------------------------------------
 

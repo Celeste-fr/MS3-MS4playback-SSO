@@ -13,6 +13,7 @@
 #include "playabilitybrass.h"
 #include "playabilitydiagram.h"
 #include "playabilitywinds.h"
+#include "playabilitywindtrills.h"
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -24,6 +25,7 @@
 #include "instrument.h"
 #include "measure.h"
 #include "note.h"
+#include "pitchspelling.h"
 #include "part.h"
 #include "score.h"
 #include "segment.h"
@@ -35,6 +37,7 @@
 #include "tempotext.h"
 #include "textbase.h"
 #include "tremolo.h"
+#include "trill.h"
 #include "tuning.h"
 #include "undo.h"
 
@@ -47,6 +50,11 @@
 #include <QStringList>
 
 namespace Ms {
+
+// playback's ornament reading (rendermidi.cpp), shared so a trill's upper note is the one it plays
+int articulationExcursion(Note* noteL, Note* noteR, int deltastep);
+bool isUpperNeighbourTrill(SymId articulationType, MScore::OrnamentStyle ornamentStyle);
+
 namespace Playability {
 
 bool enabled = true;
@@ -189,6 +197,8 @@ class Pass {
       // woodwinds and brass: register x dynamic (SPEC-w2b1)
       double windLevel(const Note* n, int tick);
       void checkWindDynamics(Part* part, const QString& staffName);
+      // woodwind trills and two-note tremolos (SPEC-w5)
+      void checkWindTrills(Part* part, const QString& staffName);
 
    public:
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
@@ -994,6 +1004,198 @@ void Pass::checkWindDynamics(Part* part, const QString& staffName)
             }
       }
 
+//---------------------------------------------------------
+//   checkWindTrills
+//    W5, the owner's spec SPEC-w5: woodwind trills and two-note tremolos the books call hard (dark
+//    yellow) or impossible (red), or a note for the panel only (playabilitywindtrills.h, generated
+//    from tools/playability/w5_rules.py). A trill is a Trill spanner of any type over the chord, or
+//    an ornament playback plays as main note and the note above (isUpperNeighbourTrill); its upper
+//    note is the main note + articulationExcursion(n, n, 1), as playback computes it (key signature,
+//    accidentals earlier in the bar). A tremolo is a two-note tremolo between two single notes.
+//    Pitches compare by MIDI number; written = sounding - the instrument's transposition. Tied
+//    continuations are not checked again. One row per trill or tremolo and rule.
+//---------------------------------------------------------
+
+struct WindTrillEvent {
+      bool tremolo { false };
+      Note* a { nullptr };          // trill: the main note; tremolo: chord1's note
+      Note* b { nullptr };          // tremolo: chord2's note
+      int pa { 0 }, pb { 0 };       // sounding: trill main, upper; tremolo a, b
+      int tick { 0 }, tickEnd { 0 };
+      QString name;
+      };
+
+// a Trill spanner over the chord (as playback's findFirstTrill, whatever its play setting), or an
+// upper-neighbour trill ornament on it
+static bool isTrilled(Chord* c)
+      {
+      int t = c->tick().ticks();
+      auto spanners = c->score()->spannerMap().findOverlapping(t + 1, t + c->actualTicks().ticks() - 1);
+      for (auto i : spanners)
+            if (i.value->isTrill() && i.value->track() == c->track())
+                  return true;
+      for (Articulation* a : c->articulations())
+            if (isUpperNeighbourTrill(a->symId(), a->ornamentStyle()))
+                  return true;
+      return false;
+      }
+
+// the upper note's name: the next letter up (a second), else the nearest spelling
+static QString upperName(const Note* n, int upper)
+      {
+      int tpc = n->tpc1() + 2 + 7 * (upper - n->ppitch() - 2);
+      if (tpc < Tpc::TPC_MIN || tpc > Tpc::TPC_MAX)
+            tpc = pitch2tpc(upper, Key::C, Prefer::NEAREST);
+      return tpcName(tpc, upper);
+      }
+
+// the trills (one per note not tied from before) and the two-note tremolo starting on a chord
+static std::vector<WindTrillEvent> windTrillEvents(Chord* c, bool tremolosEndingHere)
+      {
+      std::vector<WindTrillEvent> out;
+      if (c->isGrace())
+            return out;
+      int tick = c->tick().ticks();
+      if (isTrilled(c)) {
+            for (Note* n : c->notes()) {
+                  if (n->tieBack())
+                        continue;
+                  WindTrillEvent e;
+                  e.a = n;
+                  e.pa = n->ppitch();
+                  e.pb = e.pa + articulationExcursion(n, n, 1);
+                  e.tick = e.tickEnd = tick;
+                  e.name = tpcName(n->tpc1(), e.pa) + " tr " + upperName(n, e.pb);
+                  out.push_back(e);
+                  }
+            }
+      Tremolo* t = c->tremolo();
+      if (t && t->twoNotes() && t->chord1() && t->chord2() && (t->chord1() == c || (tremolosEndingHere && t->chord2() == c))) {
+            Chord* c1 = t->chord1();
+            Chord* c2 = t->chord2();
+            if (c1->notes().size() == 1 && c2->notes().size() == 1) {
+                  WindTrillEvent e;
+                  e.tremolo = true;
+                  e.a = c1->notes()[0];
+                  e.b = c2->notes()[0];
+                  e.pa = e.a->ppitch();
+                  e.pb = e.b->ppitch();
+                  e.tick = c1->tick().ticks();
+                  e.tickEnd = c2->tick().ticks();
+                  e.name = tpcName(e.a->tpc1(), e.pa) + " " + QChar(0x2194) + " " + tpcName(e.b->tpc1(), e.pb);
+                  out.push_back(e);
+                  }
+            }
+      return out;
+      }
+
+static bool inBand(int p, int lo, int hi)
+      {
+      return p >= lo && p <= hi;
+      }
+
+static bool windTrillClauseHolds(const WindTrillClause& c, bool tremolo, int x, int y)
+      {
+      if (tremolo ? !c.tremolo : !c.trill)
+            return false;
+      if (c.pairA >= 0 && !(x == c.pairA && y == c.pairB) && !(tremolo && x == c.pairB && y == c.pairA))
+            return false;
+      if (c.mainLo >= 0 && !inBand(x, c.mainLo, c.mainHi))
+            return false;
+      if (c.mainPcs && !(c.mainPcs & (1 << (x % 12))))
+            return false;
+      if (c.noteLo >= 0 && !inBand(x, c.noteLo, c.noteHi) && !inBand(y, c.noteLo, c.noteHi))
+            return false;
+      if (c.wider >= 0 && std::abs(x - y) <= c.wider)
+            return false;
+      if (c.lowerLo >= 0 && !inBand(std::min(x, y), c.lowerLo, c.lowerHi))
+            return false;
+      return true;
+      }
+
+// does a W5 rule hit this trill or tremolo on this instrument? *message: its text and source
+static bool windTrillHits(const WindTrillRule& r, const QString& id, int tr, const WindTrillEvent& e, QString* message)
+      {
+      bool inst = false;
+      for (const char* i : r.instruments)
+            if (id == QLatin1String(i))
+                  inst = true;
+      if (!inst)
+            return false;
+      int x = r.written ? e.pa - tr : e.pa;
+      int y = r.written ? e.pb - tr : e.pb;
+      if (!e.tremolo)
+            for (const auto& p : r.except)
+                  if (x == p.first && y == p.second)
+                        return false;
+      bool hit = false;
+      for (const WindTrillClause& c : r.clauses)
+            hit |= windTrillClauseHolds(c, e.tremolo, x, y);
+      if (!hit)
+            return false;
+      QString text = r.text;
+      if (r.pairText && ((x == r.notePairA && y == r.notePairB) || (e.tremolo && x == r.notePairB && y == r.notePairA)))
+            text += QString("; ") + r.pairText;
+      *message = text + " (" + r.source + ")";
+      return true;
+      }
+
+// every rule a trill or tremolo falls under, in the table's order, until an exclusive rule hits
+static std::vector<std::pair<const WindTrillRule*, QString>> windTrillRulesFor(const QString& id, int tr, const WindTrillEvent& e)
+      {
+      std::vector<std::pair<const WindTrillRule*, QString>> out;
+      for (const WindTrillRule& r : windTrillRules()) {
+            QString msg;
+            if (!windTrillHits(r, id, tr, e, &msg))
+                  continue;
+            out.push_back({ &r, msg });
+            if (r.exclusive)
+                  break;
+            }
+      return out;
+      }
+
+void Pass::checkWindTrills(Part* part, const QString& staffName)
+      {
+      bool any = false;
+      for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i)
+            if (!windAt(part, i->first).isEmpty())
+                  any = true;
+      if (!any)
+            return;
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* el = s->element(track);
+                  if (!el || !el->isChord())
+                        continue;
+                  Chord* c = toChord(el);
+                  QString id = windAt(part, c->tick().ticks());
+                  auto wd = windData().find(id);
+                  if (wd == windData().end())
+                        continue;
+                  for (const WindTrillEvent& e : windTrillEvents(c, false)) {
+                        for (const auto& hit : windTrillRulesFor(id, wd->second.tr, e)) {
+                              const WindTrillRule& r = *hit.first;
+                              if (r.kind == WindTrillKind::NOTE)
+                                    continue;
+                              bool red = r.kind == WindTrillKind::RED;
+                              for (Note* n : { e.a, e.b }) {
+                                    if (!n)
+                                          continue;
+                                    if (red)
+                                          mark(n, PlayMark::IMPOSSIBLE);
+                                    else
+                                          markOver(n, PlayMark::OUT_OF_REACH);
+                                    }
+                              addRow(e.tick, e.tickEnd, track, staffName, e.tremolo ? "tremolo" : "trill", red ? "impossible" : "risky",
+                                     hit.second, e.name);
+                              (red ? _res.impossible : _res.outOfReach)++;
+                              }
+                        }
+                  }
+            }
+      }
+
 // does an arpeggio sign reach the hand's staff at this moment?
 static bool arpeggioOver(const PartMoment& m, int hand)
       {
@@ -1764,6 +1966,7 @@ void Pass::run()
             if (staffName.isEmpty())
                   staffName = part->partName();
             checkWindDynamics(part, staffName);
+            checkWindTrills(part, staffName);
             }
       for (PlayabilityRow& r : _res.rows)
             r.staffShort = shortStaffName(_score->staff(r.track / VOICES)->part(), r.staff, r.tick);
@@ -1795,6 +1998,10 @@ ChordInfo Pass::inspect(Chord* chord)
                   if (windRuleHits(r, id, wd->second.tr, n->ppitch(), level))
                         info.windNotes << tpcName(n->tpc1(), n->ppitch()) + ": " + r.text + " (" + r.source + ")";
             }
+      // W5: the chord's trills and the two-note tremolo it is part of, every rule (panel notes too)
+      for (const WindTrillEvent& e : windTrillEvents(chord, true))
+            for (const auto& hit : windTrillRulesFor(id, wd->second.tr, e))
+                  info.windNotes << e.name + ": " + hit.second;
       return info;
       }
 
