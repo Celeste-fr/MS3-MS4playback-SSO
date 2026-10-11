@@ -1961,19 +1961,7 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
             }
       // the Mixer: volume, pan and mute of each library part (an export plays mute but not solo,
       // as MuseScore's own sounds in it: exportaudio.cpp)
-      {
-            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-            if (library) {
-                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
-                        _vst->setExportMix(k, 100, 64, false);
-                  const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
-                  for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
-                        const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
-                        const double gain = TrackDelays::patchGain(*library, TrackDelays::of(r.part, delays), r.instrument->name);
-                        _vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, m.muted, float(gain));
-                        }
-                  }
-      }
+      setExportMix(_vst, score, true);
       _synth = synth;
       _synth->addGuest(_vst);
       _vst->beginExport(sampleRate);
@@ -1984,13 +1972,14 @@ SoundLibraryExport::SoundLibraryExport(Score* score, MasterSynthesizer* synth, f
 #endif
       }
 
-SoundLibraryExport::SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own)
+SoundLibraryExport::SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own, Score* score, bool mute)
       {
 #ifdef USE_VST3
       if (!own)
             return;
       _own = own;
       _vst = _own.get();
+      setExportMix(_vst, score, mute);
       _synth = synth;
       _synth->addGuest(_vst);
       _vst->beginExport(sampleRate);
@@ -1998,6 +1987,29 @@ SoundLibraryExport::SoundLibraryExport(MasterSynthesizer* synth, float sampleRat
       Q_UNUSED(synth);
       Q_UNUSED(sampleRate);
       Q_UNUSED(own);
+      Q_UNUSED(score);
+      Q_UNUSED(mute);
+#endif
+      }
+
+void SoundLibraryExport::setExportMix(Vst3Synth* vst, Score* score, bool mute)
+      {
+#ifdef USE_VST3
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!vst || !score || !library)
+            return;
+      for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+            vst->setExportMix(k, 100, 64, false);
+      const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
+      for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+            const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
+            const double gain = TrackDelays::patchGain(*library, TrackDelays::of(r.part, delays), r.instrument->name);
+            vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, mute && m.muted, float(gain));
+            }
+#else
+      Q_UNUSED(vst);
+      Q_UNUSED(score);
+      Q_UNUSED(mute);
 #endif
       }
 

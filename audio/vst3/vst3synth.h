@@ -119,6 +119,7 @@ class Vst3Synth : public Synthesizer {
       // top (a track level's headroom, TrackDelays::patchGain)
       void setMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
       void setExportMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
+      void exportMix(int slot, float* left, float* right) const;    // a slot's export gains, as set
       static float volumeGain(int volume);
       static void panGains(int pan, float* left, float* right);
 

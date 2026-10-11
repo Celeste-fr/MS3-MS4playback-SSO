@@ -28,6 +28,7 @@
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
+#include "audio/midi/msynthesizer.h"
 #include "libmscore/articulation.h"
 #include "libmscore/chord.h"
 #include "libmscore/instrument.h"
@@ -106,6 +107,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetReadBack();
       void plainSetTrackDelays();
       void delayedTrackLevel();
+      void verifyExportMix();
       void livePerformanceLevel();
       void liveContextLevel();
       void liveSectionBalance();
@@ -2173,6 +2175,64 @@ void TestLiveEquivalence::delayedTrackLevel()
       QCOMPARE(first, at);
       delete score;
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   verifyExportMix
+//    the playback verification's renders (SoundLibraryExport with instances loaded before) play each slot at its
+//    part's Mixer volume and pan times its patch's volume (TrackDelays::patchGain), as playback and the export do;
+//    a muted part still plays there. Before (2026-10-11) every slot played at 0 dB: in the Windows VM's renders of
+//    Whence 12-TET, SSO's Performance patches (+6 / -0.58 / +1.11 dB) came out 9-15 dB under what playback sends
+//    against the All techniques patches (-9.29 .. -14.18 dB)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::verifyExportMix()
+      {
+      LiveHost host(this, "", { "Violin" });
+      QVERIFY(host.ok);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Part* violin = score->parts().front();
+      score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"" + violin->partName() + "\","
+                        "\"levels\":{\"Violin / Long\":6}}]");
+      setPartMix(violin, 80, 32, true);
+      const double gain = TrackDelays::patchGain(*host.lib, TrackDelays::of(violin, TrackDelays::read(score)), "Violin");
+      QVERIFY(std::fabs(20 * std::log10(gain) - 6.0) < 1e-6);
+      QString error;
+      std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000.f, &error);
+      QVERIFY2(vst, qPrintable(error));
+      std::set<int> routed;
+      for (const SoundLib::Route& r : SoundLib::routes(score, *host.lib))
+            routed.insert(r.port * 16 + r.channel);
+      QVERIFY(!routed.empty());
+      MasterSynthesizer synth;
+      for (bool mute : { false, true }) {
+            Vst3Synth expected;
+            expected.setExportMix(0, 80, 32, mute, float(gain));
+            float el, er;
+            expected.exportMix(0, &el, &er);
+            {
+                  SoundLibraryExport e(&synth, 48000.f, vst, score, mute);
+                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k) {
+                        float l, r;
+                        vst->exportMix(k, &l, &r);
+                        if (routed.count(k)) {
+                              QCOMPARE(l, el);
+                              QCOMPARE(r, er);
+                              }
+                        else {
+                              QCOMPARE(l, 1.f);
+                              QCOMPARE(r, 1.f);
+                              }
+                        }
+                  }
+            if (!mute)
+                  QVERIFY(el > 1.f);          // +6 dB, more than volume 80's and the pan's loss
+            else
+                  QCOMPARE(el, 0.f);
+            }
+      delete score;
       }
 
 //---------------------------------------------------------

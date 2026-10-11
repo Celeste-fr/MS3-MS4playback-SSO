@@ -372,6 +372,16 @@ void Vst3Synth::setExportMix(int slot, int volume, int pan, bool muted, float ga
       _exportMix[size_t(slot)].right = r;
       }
 
+void Vst3Synth::exportMix(int slot, float* left, float* right) const
+      {
+      if (slot < 0 || slot >= MAX_SLOTS) {
+            *left = *right = 0.f;
+            return;
+            }
+      *left = _exportMix[size_t(slot)].left;
+      *right = _exportMix[size_t(slot)].right;
+      }
+
 void Vst3Synth::allSoundsOff(int slot)
       {
       allNotesOff(slot);

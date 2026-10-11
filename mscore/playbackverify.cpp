@@ -287,7 +287,10 @@ static Render render(MasterScore* score, const EventMap& events, int rate, const
       MScore::sampleRate = rate;
       std::unique_ptr<SoundLibraryExport> library;
       if (vst)
-            library.reset(new SoundLibraryExport(synth.get(), float(rate), vst));
+            // each slot at its part's Mixer volume and pan times its patch's volume, as playback and the export
+            // (without it every slot played at 0 dB: SSO's Performance patches 9-15 dB under the rest, 2026-10-11);
+            // a muted part still plays (its notes are checked)
+            library.reset(new SoundLibraryExport(synth.get(), float(rate), vst, score, false));
       std::unique_ptr<WavWriter> writer;
       if (!wav.isEmpty())
             writer.reset(new WavWriter(wav, 2, rate, true));
