@@ -455,6 +455,13 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       std::sort(art.bendGlides.begin(), art.bendGlides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
             return x.lenBeforeMs < y.lenBeforeMs;
             });
+      // bendSmoothing="tau" (ms, the patch's one-pole smoothing of a bend; negative: malformed)
+      if (a.hasAttribute("bendSmoothing")) {
+            bool ok = false;
+            art.bendSmoothingMs = a.value("bendSmoothing").toDouble(&ok);
+            if (!ok || art.bendSmoothingMs < 0)
+                  return false;
+            }
       if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))
             return false;
       // (legatoLevel / legatoLevelLong: the legato level balance's, removed 2026-10-07; an older map's are ignored)

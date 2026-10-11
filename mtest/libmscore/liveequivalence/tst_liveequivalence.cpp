@@ -1347,73 +1347,82 @@ void TestLiveEquivalence::plainTuned()
       // the bend envelope as Live plays it (linear between breakpoints, two at one time a step) is the bend MuseScore
       // sends: each value held up to the next change (a hold pair), a glide's tick-apart steps on their straight
       // stretches; with a measured glide (a bend every tick while it glides), to half a bend unit
-      auto glided = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
-         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
-         "<Instrument name='Violin' ids='violin' bend='200'>"
-         "<Articulation name='Long' value='1' techniques='legato long' bendGlide='136:0:100 600:100:300'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(glided);
-      SoundLib::setCurrent(glided);
-      score = readScore(DIR + "quartertones.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      EventMap glideEvents;
-      {
-            MidiRenderer r(score);
-            r.setForLiveClips(true);
-            SynthesizerState ss;
-            MidiRenderer::Context ctx(ss);
-            ctx.metronome = false;
-            r.renderScore(&glideEvents, ctx);
-      }
-      const PlainLiveSet::Layout gl = PlainLiveSet::layout(score, *glided, glideEvents, LiveClips::timeline(score));
-      const std::vector<LiveSetWriter::Track> gt = PlainLiveSet::tracks(gl);
-      int checked = 0, glideSteps = 0;
-      size_t envelopePoints = 0;
-      for (const PlainLiveSet::Kontakt& k : gl.sections[0].parts[0].kontakts) {
-            const PlainLiveSet::Lane* bend = nullptr;
-            for (const PlainLiveSet::Lane& lane : k.lanes)
-                  if (lane.cc == PlainLiveSet::PITCH_BEND)
-                        bend = &lane;
-            QVERIFY(bend);
-            glideSteps += int(bend->glides.size());
-            // its Controllers clip: the Kontakt track's (lane 0) or its copy's MIDI track
-            const LiveSetWriter::Clip::Envelope* env = nullptr;
-            for (const LiveSetWriter::Track& t : gt)
-                  if (!t.group && (t.midiTo < 0 || t.tuningCopy) && t.lane == k.lane)
-                        for (const LiveSetWriter::Clip& c : t.clips)
-                              for (const LiveSetWriter::Clip::Envelope& e : c.envelopes)
-                                    if (e.controller == LiveSetWriter::PITCH_BEND_ENVELOPE)
-                                          env = &e;
-            QVERIFY(env);
-            envelopePoints += env->points.size();
-            // Live's value at a beat: just after it (a step's later point) or just before it
-            auto live = [env](double beat, bool after) {
-                  const auto& p = env->points;
-                  for (size_t i = 0; i + 1 < p.size(); ++i) {
-                        if (after ? (p[i].first <= beat && beat < p[i + 1].first) : (p[i].first < beat && beat <= p[i + 1].first))
-                              return p[i].second + (p[i + 1].second - p[i].second) * (beat - p[i].first) / (p[i + 1].first - p[i].first);
-                        }
-                  return beat < p.front().first ? p.front().second : p.back().second;
-                  };
-            const auto& pts = bend->points;
-            for (size_t i = 0; i < pts.size(); ++i) {
-                  const double at = double(pts[i].first) / LiveClips::UNITS_PER_BEAT;
-                  QVERIFY2(std::fabs(live(at, true) - (pts[i].second - 8192)) <= 0.5 + 1e-6,
-                           qPrintable(QString("lane %1 point %2: Live %3, sent %4").arg(k.lane).arg(i).arg(live(at, true)).arg(pts[i].second - 8192)));
-                  if (i + 1 < pts.size() && !bend->glides.count(pts[i + 1].first)) {
-                        const double next = double(pts[i + 1].first) / LiveClips::UNITS_PER_BEAT;
-                        QVERIFY(std::fabs(live(next, false) - (pts[i].second - 8192)) <= 0.5 + 1e-6);     // (held up to the step)
-                        }
-                  ++checked;
-                  }
+      // (and with the map's bendSmoothing: the glide sent as steps so that the bend as heard arrives in time)
+      for (bool smoothed : { false, true }) {
+            auto glided = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+               "<Instrument name='Violin' ids='violin' bend='200'>"
+               "<Articulation name='Long' value='1' techniques='legato long' bendGlide='136:0:100 600:100:300'%1/>"
+               "</Instrument></SoundLibrary>").arg(smoothed ? " bendSmoothing='70'" : ""));
+            QVERIFY(glided);
+            SoundLib::setCurrent(glided);
+            score = readScore(DIR + "quartertones.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            EventMap glideEvents;
+            {
+                  MidiRenderer r(score);
+                  r.setForLiveClips(true);
+                  SynthesizerState ss;
+                  MidiRenderer::Context ctx(ss);
+                  ctx.metronome = false;
+                  r.renderScore(&glideEvents, ctx);
             }
-      QVERIFY(glideSteps > 100);                        // (the transitions glide a bend a tick)
-      QVERIFY(checked > glideSteps);
-      QVERIFY2(envelopePoints < size_t(checked), qPrintable(QString("%1 points for %2 values").arg(envelopePoints).arg(checked)));
-      delete score;
-      SoundLib::setCurrent(nullptr);
+            const PlainLiveSet::Layout gl = PlainLiveSet::layout(score, *glided, glideEvents, LiveClips::timeline(score));
+            const std::vector<LiveSetWriter::Track> gt = PlainLiveSet::tracks(gl);
+            int checked = 0, glideSteps = 0, beyond = 0;
+            size_t envelopePoints = 0;
+            for (const PlainLiveSet::Kontakt& k : gl.sections[0].parts[0].kontakts) {
+                  const PlainLiveSet::Lane* bend = nullptr;
+                  for (const PlainLiveSet::Lane& lane : k.lanes)
+                        if (lane.cc == PlainLiveSet::PITCH_BEND)
+                              bend = &lane;
+                  QVERIFY(bend);
+                  glideSteps += int(bend->glides.size());
+                  // its Controllers clip: the Kontakt track's (lane 0) or its copy's MIDI track
+                  const LiveSetWriter::Clip::Envelope* env = nullptr;
+                  for (const LiveSetWriter::Track& t : gt)
+                        if (!t.group && (t.midiTo < 0 || t.tuningCopy) && t.lane == k.lane)
+                              for (const LiveSetWriter::Clip& c : t.clips)
+                                    for (const LiveSetWriter::Clip::Envelope& e : c.envelopes)
+                                          if (e.controller == LiveSetWriter::PITCH_BEND_ENVELOPE)
+                                                env = &e;
+                  QVERIFY(env);
+                  envelopePoints += env->points.size();
+                  // Live's value at a beat: just after it (a step's later point) or just before it
+                  auto live = [env](double beat, bool after) {
+                        const auto& p = env->points;
+                        for (size_t i = 0; i + 1 < p.size(); ++i) {
+                              if (after ? (p[i].first <= beat && beat < p[i + 1].first) : (p[i].first < beat && beat <= p[i + 1].first))
+                                    return p[i].second + (p[i + 1].second - p[i].second) * (beat - p[i].first) / (p[i + 1].first - p[i].first);
+                              }
+                        return beat < p.front().first ? p.front().second : p.back().second;
+                        };
+                  const auto& pts = bend->points;
+                  for (size_t i = 0; i < pts.size(); ++i) {
+                        const double at = double(pts[i].first) / LiveClips::UNITS_PER_BEAT;
+                        QVERIFY2(std::fabs(live(at, true) - (pts[i].second - 8192)) <= 0.5 + 1e-6,
+                                 qPrintable(QString("lane %1 point %2: Live %3, sent %4").arg(k.lane).arg(i).arg(live(at, true)).arg(pts[i].second - 8192)));
+                        if (i + 1 < pts.size() && !bend->glides.count(pts[i + 1].first)) {
+                              const double next = double(pts[i + 1].first) / LiveClips::UNITS_PER_BEAT;
+                              QVERIFY(std::fabs(live(next, false) - (pts[i].second - 8192)) <= 0.5 + 1e-6);     // (held up to the step)
+                              }
+                        ++checked;
+                        if (std::abs(pts[i].second - 8192) > 2048 + 20)
+                              ++beyond;
+                        }
+                  }
+            if (smoothed)
+                  QVERIFY(beyond > 0);                        // (bendSmoothing: a transition's value beyond its tuning, ±50 c)
+            else {
+                  QVERIFY(glideSteps > 100);                  // (the transitions glide a bend a tick)
+                  QVERIFY(checked > glideSteps);
+                  QVERIFY2(envelopePoints < size_t(checked), qPrintable(QString("%1 points for %2 values").arg(envelopePoints).arg(checked)));
+                  }
+            delete score;
+            SoundLib::setCurrent(nullptr);
+            }
       }
 
 //---------------------------------------------------------

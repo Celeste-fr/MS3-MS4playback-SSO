@@ -1179,10 +1179,14 @@ def bendRange(name):
 # Windows VM, f0 by YIN): bendGlide= on the Legato articulation: "IOI:leave:arrive" ms, when the transition's f0 leaves
 # the note before (a tenth of the way) and reaches the new note (nine tenths) after the note-on, after a note before
 # that long (glide.py: slurred runs of steps, as Whence plays them, medians; sso_legato_glide.json). Only the five
-# sections measured; the renderer glides the bend with the transition (MidiRenderer::libraryPitchBends). (The bend's
-# smoothing on a held note, sso_bend_smoothing.json, is measured but not used: rendermidi.cpp)
+# sections measured; the renderer glides the bend with the transition (MidiRenderer::libraryPitchBends).
+# bendSmoothing= (ms) beside it: the patch's one-pole smoothing of a bend step on a held note (fit.py,
+# sso_bend_smoothing.json, tau_ms); the renderer sends the glide so that the bend as heard reaches the tuning at the
+# arrival (2026-10-11, branch legato-bend-settle)
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
+BEND_SMOOTHING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_bend_smoothing.json'),
+                                encoding='utf-8'))
 # - onset= (ms): a sustained articulation's attack, by pitch: when it is heard, its level 15 dB under the note's peak
 #   (the renderer starts a held note that is no legato transition that much early, times <Onset early> percent).
 #   Measured on the VM (2026-10-01, build ce7d801, lone held notes at 3 registers and pp / mf / ff on 13 instruments
@@ -1521,6 +1525,8 @@ for i, line in enumerate(out):
             octaveCount += 1
         if current in LEGATO_GLIDE:
             extra += ' bendGlide="%s"' % ' '.join(f'{g[0]}:{g[1]}:{g[2]}' for g in LEGATO_GLIDE[current]['glide'])
+            if current in BEND_SMOOTHING:
+                extra += f' bendSmoothing="{BEND_SMOOTHING[current]["tau_ms"]}"'
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
     f = shortFrom(current, sound)
     if f:

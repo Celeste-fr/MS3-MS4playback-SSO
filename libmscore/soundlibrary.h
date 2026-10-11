@@ -133,6 +133,11 @@ struct Articulation {
       // the leave and arrival (ms after the note-on) after a note lenBeforeMs long: linear between the measured
       // lengths, the nearest one's outside them; false: none measured
       bool bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const;
+      // how the patch smooths a pitch bend (<Articulation bendSmoothing="73.1">: a one-pole low-pass's time constant,
+      // ms, fitted to the f0 of a held note under bend steps, Kontakt 8 + SSO, tools/soundlibraries/
+      // sso_bend_smoothing.json): with a bendGlide, the renderer sends the bend so that the bend as heard reaches the
+      // note's tuning at the measured arrival (libraryPitchBends). 0: unknown (the glide is sent as the path itself)
+      double bendSmoothingMs { 0 };
       // a sustained note's attack: it is heard (its level 15 dB under its peak) this long after its note-on
       // (<Articulation onset>: one number or "pitch:ms" pairs by played pitch): a note that is not a legato
       // transition starts early by it (the renderer, onsetEarly()); -1: unknown / not shifted

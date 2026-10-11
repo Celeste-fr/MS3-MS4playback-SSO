@@ -1822,7 +1822,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // octaveDown; playback.ini [legato.delay] by patch: an offset or its own table); after
                                     // a short note SSO's transition is quicker ([legato] fastShare, fastFullMs)
                                     LibGlide g;
-                                    if (!libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs)) {
+                                    if (libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs))
+                                          g.smoothingMs = libChoice.articulation->bendSmoothingMs;
+                                    else {
                                           g.arriveMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
                                                                                      libChoice.articulation->name, interval,
                                                                                      libChoice.articulation->legatoDelayAt(interval, from->ppitch())),
@@ -2953,9 +2955,18 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
 //      0.81-0.91 of the time at 300 ms a note, 0.91-0.95 at 600 (a cent a tick from the arrival, the glide before
 //      2026-10-11: 0.14-0.15 and 0.83-0.85), the note before untouched until the transition leaves it (0.98-1.00).
 //      A glide as long as 100-300 ms moves under half a cent a tick (the owner's criterion of 2026-10-03, "each step
-//      at most one cent"). The patch smooths a bend step on a held note as one pole of 29-80 ms
-//      (sso_bend_smoothing.json); a path sent through that pole's inverse overshot by ~15 cents in context and
-//      did no better: not used;
+//      at most one cent"). The patch smooths a bend as one pole of 29-80 ms (sso_bend_smoothing.json, the map's
+//      bendSmoothing): sent as the path itself, the bend as heard lags it by about a time constant, and in 136 ms
+//      sixteenths (arrival 100-130 ms) was still 35-43 % of the step short at the next note-on. So where the map has
+//      bendSmoothing the glide is sent so that the bend as heard reaches the tuning at the arrival: the note before's
+//      tuning until the leave, then one value, (target - heard e) / (1 - e) with e = exp(-(arrive - leave) / tau) and
+//      heard the modelled bend at the leave (1.01-1.40 times the step for SSO's five sections at IOI 136), then the
+//      tuning at the arrival (heard: there, held; a constant rather than the pole's inverse of the straight path,
+//      which sends 1 + tau / glide times the step and overshot ~15 cents in context). Over the step taus measured
+//      (sso_bend_smoothing.json, four per patch) the heard bend at the arrival is within -19 .. +16 % of the step
+//      (Violins 2; the others within 8 %). A note-on on the lane before the arrival (a fresh attack starting
+//      early ends the note: Whence's slurs ending on a quarter tone, 94 ms on its lane) brings the arrival to it. The
+//      heard path moves smoothly (the pole), no audible step;
 //    - a transition on an unmeasured patch, or with [tuning] bendAtArrival off: from its arrival (the legato delay,
 //      libFastDelay; off: its note-on), a cent a tick, at the latest by the lane's next note-on (the one before
 //      2026-10-11 for every patch);
@@ -2975,7 +2986,8 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
       const int utick2 = chunk.utick2();
       const bool atArrival = Playback::on("tuning/bendAtArrival", score);      // (playback settings [tuning])
       // a note-on's path to target: a glide from t0 to t1 (seconds); oneCent: a cent a tick from t1
-      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; };
+      // tau: the patch's smoothing of a bend (seconds, bendSmoothing; 0: unknown: the glide is sent as the path)
+      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; double tau; };
       std::map<std::pair<int, int>, std::vector<Start>> starts;                // (port, channel) -> note-ons' paths
       std::map<std::pair<int, int>, std::pair<int, int>> source;               // (port, channel) -> its notes' channel and staff
       std::map<std::pair<int, int>, int> patchOf;                              // (port, channel) -> its patch
@@ -3009,7 +3021,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             source[route] = { ev.channel(), ev.getOriginatingStaff() };
             patchOf[route] = ev.libraryPatch();
             const double on = score->utick2utime(i->first);
-            Start st { i->first, target, target, on, on, false, false, range };
+            Start st { i->first, target, target, on, on, false, false, range, 0.0 };
             auto g = libGlideFrom.find(ev.note());
             auto gl = libGlide.find(ev.note());
             if (g != libGlideFrom.end() && gl != libGlide.end() && laneOf(g->second) == laneOf(ev.note())) {
@@ -3021,6 +3033,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   st.oneCent = leave >= arrive;
                   st.t0 = on + std::max(0.0, leave) / 1000.0;
                   st.t1 = on + std::max(0.0, arrive) / 1000.0;
+                  st.tau = atArrival ? gl->second.smoothingMs / 1000.0 : 0.0;
                   }
             std::vector<Start>& rs = starts[route];
             if (!rs.empty() && rs.back().tick == i->first) {
@@ -3037,9 +3050,66 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             std::vector<std::pair<int, int>> bends;                    // (tick, value), in order
             double at = sts.front().from;                              // the bend sent last (cents)
             int sent = -1;
+            // the bend as heard: the values sent through the patch's one-pole smoothing (tau, s; 0: as sent), from the
+            // lane's first note-on (taken as settled there)
+            double tau = 0;
+            for (const Start& st : sts)
+                  if (st.tau > 0) {
+                        tau = st.tau;
+                        break;
+                        }
+            double heard = sts.front().from;
+            double heardAt = score->utick2utime(sts.front().tick);
+            double sentCents = heard;
+            auto hear = [&](double t) {                                // (the bend as heard at t, the last value held)
+                  if (t > heardAt) {
+                        heard = tau > 0 ? sentCents + (heard - sentCents) * std::exp(-(t - heardAt) / tau) : sentCents;
+                        heardAt = t;
+                        }
+                  };
+            auto unitOf = [](double cents, double range) {
+                  return qBound(0, int(std::lround(8192.0 + cents / range * (cents < 0 ? 8192.0 : 8191.0))), 16383);
+                  };
+            auto send = [&](int tick, int v, double range, bool force) {
+                  if (force || v != sent) {
+                        bends.push_back({ tick, v });
+                        hear(score->utick2utime(tick));
+                        sentCents = (v - 8192) * range / (v < 8192 ? 8192.0 : 8191.0);
+                        }
+                  sent = v;
+                  };
             for (size_t k = 0; k < sts.size(); ++k) {
                   const Start& st = sts[k];
                   const int nextTick = k + 1 < sts.size() ? sts[k + 1].tick : -1;
+                  if (st.glide && !st.oneCent && st.tau > 0) {
+                        // a measured glide on a patch whose smoothing is measured: the note before's tuning until the
+                        // transition leaves it (t0), then one value until the arrival (t1) such that the bend as heard
+                        // (the smoothing's one pole from where it is at t0) reaches the note's tuning at t1, then the
+                        // tuning (heard: held there). Sent as the path itself, the heard bend reached the tuning about
+                        // two time constants (140-160 ms) after the arrival: in 136 ms sixteenths, never
+                        tau = st.tau;
+                        const int t0Tick = std::max(st.tick, score->utime2utick(st.t0));
+                        // (a note-on on the lane before the arrival -- a fresh attack starting early, a shorter note --
+                        // ends the note: there at the latest)
+                        int t1Tick = std::max(t0Tick + 1, score->utime2utick(st.t1));
+                        if (nextTick > t0Tick)
+                              t1Tick = std::min(t1Tick, nextTick);
+                        if (t0Tick > st.tick)
+                              send(st.tick, unitOf(st.from, st.range), st.range, true);
+                        at = st.from;
+                        if (nextTick >= 0 && t0Tick >= nextTick)
+                              continue;
+                        hear(score->utick2utime(t0Tick));
+                        const double e = std::exp(-(score->utick2utime(t1Tick) - score->utick2utime(t0Tick)) / st.tau);
+                        const double u = qBound(-st.range, (st.target - heard * e) / (1.0 - e), st.range);
+                        send(t0Tick, unitOf(u, st.range), st.range, t0Tick == st.tick);
+                        at = u;
+                        if (nextTick < 0 || t1Tick < nextTick) {
+                              send(t1Tick, unitOf(st.target, st.range), st.range, false);
+                              at = st.target;
+                              }
+                        continue;
+                        }
                   // the path: from where the lane is (a path cut short by this note-on: there) to the target
                   const double from = st.glide ? (k == 0 ? st.from : at) : at;
                   const int steps = st.oneCent ? std::max(1, int(std::ceil(std::fabs(st.target - from) - st.range / 8191.0))) : 0;
@@ -3059,10 +3129,8 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                               const double t = score->utick2utime(tick);
                               want = t <= st.t0 ? from : t >= st.t1 ? st.target : from + (st.target - from) * (t - st.t0) / (st.t1 - st.t0);
                               }
-                        const int v = qBound(0, int(std::lround(8192.0 + want / st.range * (want < 0 ? 8192.0 : 8191.0))), 16383);
-                        if (tick == st.tick || v != sent)
-                              bends.push_back({ tick, v });
-                        sent = v;
+                        const int v = unitOf(want, st.range);
+                        send(tick, v, st.range, tick == st.tick);
                         at = want;
                         if (tick >= endTick && nextTick >= 0 && v == bends.back().second && want == st.target)
                               break;            // (played: held to the next note-on)
