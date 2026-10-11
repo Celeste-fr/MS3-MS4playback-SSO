@@ -1231,14 +1231,14 @@ void TestLiveEquivalence::plainTuned()
       delete score;
       SoundLib::setCurrent(nullptr);
 
-      // a patch that bends (Performance): MuseScore's lanes, a Kontakt each (cents NaN, the copy named), every note on
+      // a patch that bends (Performance; legato first: its slurs play transitions, which glide): MuseScore's lanes, a Kontakt each (cents NaN, the copy named), every note on
       // one, each tuning by the bend on its Controllers clip, in Live's scale (MIDI's bend less 8192: -50 cents of a
       // 200-cent bend -2048)
       auto bent = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
          "<Instrument name='Violin' ids='violin' bend='200'>"
-         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Long' value='1' techniques='legato long'/>"
          "</Instrument></SoundLibrary>");
       QVERIFY(bent);
       SoundLib::setCurrent(bent);
@@ -1268,16 +1268,32 @@ void TestLiveEquivalence::plainTuned()
       QCOMPARE(notes, 8);
       std::set<int> envelopeValues;
       QStringList bentNames;
+      // (Live ramps between a clip envelope's breakpoints: a change is a step, the value before held up to it at the same
+      // time; a glide's steps (m7's slurred notes: 50 cents each) one sample of 44.1 kHz apart, each at most a cent)
+      const double sample = bl.bpm / 60.0 / 44100.0;
+      int glideSteps = 0;
       for (const LiveSetWriter::Track& t : PlainLiveSet::tracks(bl)) {
             if (t.group || t.midiTo >= 0)
                   continue;
             bentNames << t.name;
             for (const LiveSetWriter::Clip& c : t.clips)
-                  for (const LiveSetWriter::Clip::Envelope& e : c.envelopes)
+                  for (const LiveSetWriter::Clip::Envelope& e : c.envelopes) {
+                        for (size_t k = 1; k < e.points.size(); ++k) {
+                              const double dt = e.points[k].first - e.points[k - 1].first;
+                              QVERIFY(dt >= 0);
+                              if (e.points[k].second == e.points[k - 1].second || dt == 0)
+                                    continue;
+                              QVERIFY2(e.controller == LiveSetWriter::PITCH_BEND_ENVELOPE && std::fabs(dt - sample) < 1e-9
+                                       && std::fabs(e.points[k].second - e.points[k - 1].second) * 200.0 / 8192 <= 1.0 + 200.0 / 8191,
+                                       qPrintable(QString("%1 cc %2: a ramp at beat %3").arg(t.name).arg(e.controller).arg(e.points[k].first)));
+                              ++glideSteps;
+                              }
                         if (e.controller == LiveSetWriter::PITCH_BEND_ENVELOPE)
                               for (const auto& pt : e.points)
                                     envelopeValues.insert(int(pt.second));
+                        }
             }
+      QCOMPARE(glideSteps, 2 * 49);
       QCOMPARE(bentNames.first(), QString("Violin"));
       QCOMPARE(bentNames.value(1), QString("Violin (copy 2)"));
       QVERIFY(envelopeValues.count(-2048));
@@ -2260,6 +2276,7 @@ void TestLiveEquivalence::dumpEvents()
       if (qEnvironmentVariableIsSet("MS_DUMP_SETTINGS"))         // (the score's playback settings, e.g. heldNotes/byPitch=0)
             score->setMetaTag(Playback::metaTag, qEnvironmentVariable("MS_DUMP_SETTINGS"));
       EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;                  // (MS_DUMP_LIVE: trace.txt)
       if (qEnvironmentVariableIsSet("MS_DUMP_CHUNKED")) {         // (as Seq plays it: 10-measure chunks, each in its own map)
             score->masterScore()->setExpandRepeats(true);
             MidiRenderer midi(score);
@@ -2275,6 +2292,7 @@ void TestLiveEquivalence::dumpEvents()
       else if (qEnvironmentVariableIsSet("MS_DUMP_LIVE")) {       // (as Live's clips and sets render: Live's routes)
             MidiRenderer r(score);
             r.setForLiveClips(true);
+            r.setLibraryTrace(&trace);
             SynthesizerState ss;
             MidiRenderer::Context ctx(ss);
             ctx.metronome = false;
@@ -2307,6 +2325,18 @@ void TestLiveEquivalence::dumpEvents()
             QFile kf(out + "/kontakts.txt");
             QVERIFY(kf.open(QIODevice::WriteOnly | QIODevice::Text));
             kf.write((ks.join("\n") + "\n").toUtf8());
+            // each library note's Performance kind and its transition's arrival (trace.txt: "part|seconds|pitch|kind|
+            // delayMs", kind attack / transition / -, delayMs -1: no transition), for the bends' timing
+            QStringList ts;
+            for (const MidiRenderer::LibTrace& t : trace)
+                  ts << QString("%1|%2|%3|%4|%5").arg(t.note->part()->partName())
+                        .arg(score->utick2utime(t.utick), 0, 'f', 6).arg(t.note->ppitch())
+                        .arg(t.performance == MidiRenderer::LibPerformance::ATTACK ? "attack"
+                             : t.performance == MidiRenderer::LibPerformance::TRANSITION ? "transition" : "-")
+                        .arg(t.glideDelayMs, 0, 'f', 1);
+            QFile tf(out + "/trace.txt");
+            QVERIFY(tf.open(QIODevice::WriteOnly | QIODevice::Text));
+            tf.write((ts.join("\n") + "\n").toUtf8());
             QFile rf(out + "/routes.txt");
             QVERIFY(rf.open(QIODevice::WriteOnly | QIODevice::Text));
             rf.write((rs.join("\n") + "\n").toUtf8());

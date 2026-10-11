@@ -133,6 +133,7 @@ class TestSoundLibrary : public QObject, public MTest
       void vst3Plugin();
       void vst3LoadTimes();
       void vst3LooseTitle();
+      void bendGlideSteps();
       void vst3Render();
       void vst3Settle();
       void articulationCheck();
@@ -3873,7 +3874,7 @@ void TestSoundLibrary::tuningBendAtArrival()
       QVERIFY(score);
       score->rebuildMidiMapping();
       struct On { int tick; int pitch; int channel; };
-      struct Bend { int tick; int channel; int value; };
+      struct Bend { int tick; int channel; int value; int step; };
       std::vector<On> ons;
       std::vector<Bend> bends;
       auto render = [&]() {
@@ -3890,7 +3891,7 @@ void TestSoundLibrary::tuningBendAtArrival()
                   if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch())
                         ons.push_back({ te.first, ev.pitch(), ev.extChannel() });
                   else if (ev.type() == ME_PITCHBEND)
-                        bends.push_back({ te.first, ev.extChannel(), ev.dataA() | (ev.dataB() << 7) });
+                        bends.push_back({ te.first, ev.extChannel(), ev.dataA() | (ev.dataB() << 7), int(ev.tuning()) });
                   }
             QCOMPARE(int(ons.size()), 8);
             };
@@ -3908,7 +3909,8 @@ void TestSoundLibrary::tuningBendAtArrival()
             };
       auto ticksOf = [](double msec) { return int(std::lround(msec * 0.96)); };
       // on: D5+ starts on its beat, its bend holds C5's 8192 until 173.75 ms (167 ticks) later (the transition's
-      // arrival), then glides to 10240 (+50 cents of ±200) one cent a tick: 50 steps on the next 50 ticks; E5 the same from 10240 to 8192
+      // arrival), then glides to 10240 (+50 cents of ±200) one cent a step: 50 steps at that tick, numbered 1 … 50 in their
+      // tuning (the players space them finer than a tick); E5 the same from 10240 to 8192
       render();
       QCOMPARE(ons[6].pitch, 74);
       QCOMPARE(ons[7].pitch, 76);
@@ -3924,8 +3926,10 @@ void TestSoundLibrary::tuningBendAtArrival()
                      qPrintable(QString("glide %1 starts at %2, arrival %3").arg(g).arg(b[1].tick).arg(arrival)));
             QCOMPARE(b.back().value, g == 6 ? 10240 : 8192);
             QCOMPARE(int(b.size()), 1 + 50);
-            for (size_t k = 2; k < b.size(); ++k) {
-                  QCOMPARE(b[k].tick, b[k - 1].tick + 1);                                  // a step a tick
+            QCOMPARE(b.front().step, 0);
+            for (size_t k = 1; k < b.size(); ++k) {
+                  QCOMPARE(b[k].tick, b[1].tick);                                          // all at the arrival
+                  QCOMPARE(b[k].step, int(k));                                             // in order, numbered
                   QVERIFY(std::abs(b[k].value - b[k - 1].value) * 200.0 / 8192 <= 1.0 + 200.0 / 8191);  // of at most a cent (to a bend unit)
                   }
             }
@@ -3936,7 +3940,7 @@ void TestSoundLibrary::tuningBendAtArrival()
             QCOMPARE(b.front().tick, ons[i].tick);
             }
       // the clamp: 600 ms, 521 after a quarter; D5+'s transition would arrive 521 ms after its note-on, after E5's
-      // note-on (12480): the glide ends just before E5's note-on, the value reached
+      // note-on (12480): the glide a tick before E5's note-on, the value reached
       SoundLib::setCurrent(mapWith("600"));
       render();
       {
@@ -3944,7 +3948,8 @@ void TestSoundLibrary::tuningBendAtArrival()
             QCOMPARE(ons[7].tick, 12480);
             QCOMPARE(b.back().value, 10240);
             QVERIFY(b.back().tick < ons[7].tick && b.back().tick >= ons[7].tick - ticksOf(5));
-            QCOMPARE(b[1].tick, ons[7].tick - 50);          // (50 steps, the last a tick before E5)
+            QCOMPARE(b[1].tick, ons[7].tick - 1);           // (50 steps, all a tick before E5)
+            QCOMPARE(int(b.size()), 1 + 50);
       }
       SoundLib::setCurrent(lib);
       // the layers: ini off (the glide at the note-on), the score's on over it, the score's off
@@ -3964,10 +3969,90 @@ void TestSoundLibrary::tuningBendAtArrival()
       }
 
 //---------------------------------------------------------
+//   bendGlideSteps
+//    hosted, a glide's steps (pitch bends numbered 1 … in their tuning: MidiRenderer::libraryPitchBends) reach the
+//    plug-in one a process call of one frame (Vst3Plugin::midi), in order; a bend of its own ends a glide still
+//    queued; through Vst3Synth also with varispeed engaged. The test synth reports the bend each call got
+//---------------------------------------------------------
+
+void TestSoundLibrary::bendGlideSteps()
+      {
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      std::vector<float> buffer(2 * 512, 0.f);
+      p->midi(ME_NOTEON, 0, 69, 100);
+      p->process(512, buffer.data());
+      p->takeReported();
+      auto bends = [&]() {
+            std::vector<int> out;
+            for (const auto& r : p->takeReported())
+                  if (long(r.first) == p->parameterId("Pitch Bend"))
+                        out.push_back(int(std::lround(r.second * 16383)));
+            return out;
+            };
+      auto glide = [&](int from, int steps) {
+            for (int k = 1; k <= steps; ++k) {
+                  const int v = from + 40 * k;
+                  p->midi(ME_PITCHBEND, 0, v & 0x7f, v >> 7, float(k));
+                  }
+            };
+      // 50 steps: 50 calls of a frame, then the rest of the block in one
+      glide(8192, 50);
+      p->process(512, buffer.data());
+      std::vector<int> got = bends();
+      QCOMPARE(int(got.size()), 50);
+      for (int k = 1; k <= 50; ++k)
+            QCOMPARE(got[size_t(k - 1)], 8192 + 40 * k);
+      // spread over blocks: 30 frames, then the other 20
+      glide(8192, 50);
+      p->process(30, buffer.data());
+      QCOMPARE(int(bends().size()), 30);
+      p->process(512, buffer.data());
+      got = bends();
+      QCOMPARE(int(got.size()), 20);
+      QCOMPARE(got.back(), 8192 + 40 * 50);
+      // a new glide (step 1) replaces what's left of one; a bend of its own ends it
+      glide(8192, 50);
+      p->process(10, buffer.data());
+      bends();
+      glide(4000, 3);
+      p->process(512, buffer.data());
+      QCOMPARE(bends(), std::vector<int>({ 4040, 4080, 4120 }));
+      glide(8192, 50);
+      p->midi(ME_PITCHBEND, 0, 0, 64);
+      p->process(512, buffer.data());
+      QCOMPARE(bends(), std::vector<int>({ 8192 }));
+
+      // through Vst3Synth with varispeed engaged: the steps' numbers reach the plug-in
+      Vst3Synth synth;
+      synth.init(48000);
+      synth.setVarispeed(true);
+      synth.setPlugin(0, std::move(p));
+      Vst3Plugin* q = synth.plugin(0);
+      std::vector<float> out(2 * 512, 0.f);
+      PlayEvent on(ME_NOTEON, 0, 69, 100);
+      on.setTuning(50.f);                   // (varispeed: the tuning as speed)
+      synth.play(on);
+      synth.process(512, out.data(), nullptr, nullptr);
+      q->takeReported();
+      for (int k = 1; k <= 5; ++k) {
+            PlayEvent b(ME_PITCHBEND, 0, (8192 + k) & 0x7f, (8192 + k) >> 7);
+            b.setTuning(float(k));
+            synth.play(b);
+            }
+      synth.process(512, out.data(), nullptr, nullptr);
+      int n = 0;
+      for (const auto& r : q->takeReported())
+            n += long(r.first) == q->parameterId("Pitch Bend") ? 1 : 0;
+      QCOMPARE(n, 5);
+      }
+
+//---------------------------------------------------------
 //   tuningBend
 //    microtones by the patch's own pitch bend (<Instrument bend>, SoundLib::bendValue): each note-on on
 //    a lane of a bending patch gets its tuning's bend right before it and plays untuned (no varispeed);
-//    a slurred note's lane glides from the note before's bend one cent a tick; a tuning beyond the range
+//    a slurred note's lane glides from the note before's bend a cent a step; a tuning beyond the range
 //    plays by varispeed with the bend at the centre. Played on the test synth (it bends ±200 cents):
 //    ±50 cents heard within a few cents, and no varispeed engaged (quartertones.musicxml, ♩ = 120)
 //---------------------------------------------------------
@@ -4111,7 +4196,8 @@ void TestSoundLibrary::tuningBend()
             else
                   QCOMPARE(last, value[i]);
             }
-      // m7's glides: from the note-on, a step of at most a cent a tick (50 cents: 50 ticks) to the note's bend, rising
+      // m7's glides: at the note-on (no legato delay), steps of at most a cent (50 cents: 50 steps, all at that tick,
+      // after the note-on) to the note's bend, rising
       for (int g : { 6, 7 }) {
             std::vector<Bend> steps;
             for (const Bend& b : bends)
@@ -4119,7 +4205,7 @@ void TestSoundLibrary::tuningBend()
                         steps.push_back(b);
             QVERIFY2(steps.size() == 51, qPrintable(QString("glide %1: %2 steps").arg(g).arg(steps.size())));
             QCOMPARE(steps.back().value, value[size_t(g)]);
-            QCOMPARE(steps.back().tick - ons[size_t(g)].tick, 50);
+            QCOMPARE(steps.back().tick - ons[size_t(g)].tick, 0);
             for (size_t k = 1; k < steps.size(); ++k)
                   QVERIFY(std::abs(steps[k].value - steps[k - 1].value) * 200.0 / 8192 <= 1.0 + 200.0 / 8191);   // (to a bend unit)
             for (size_t k = 1; k < steps.size(); ++k)

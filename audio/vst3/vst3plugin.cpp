@@ -321,6 +321,13 @@ class Vst3PluginPrivate {
       std::vector<std::pair<ParamID, ParamValue>> fromProcessor;      // for the controller (idle)
       std::vector<std::pair<ParamID, ParamValue>> reported;           // the processor's own, for takeReported()
       std::mutex fromProcessorMutex;
+      // a pitch bend glide's steps (MidiRenderer::libraryPitchBends: all at one tick, step k marked by
+      // k in the event's tuning): one a process call of a frame each, from the next process() on (a
+      // parameter queue's points within one block reach Kontakt only partly: of 50 one-cent steps at
+      // different offsets SSO's patches went to ~28 cents, 2026-10-10); allocated once (audio thread)
+      std::vector<std::pair<ParamID, ParamValue>> glide = std::vector<std::pair<ParamID, ParamValue>>(1024);
+      size_t glideCount { 0 };
+      size_t glideNext { 0 };
 
       // parameterId's index: loose title -> id, of all the parameters (Kontakt has 4145; each play
       // looks up every controller of every instance). Remade after setState, a change of titles, or
@@ -648,6 +655,25 @@ void Vst3Plugin::midi(int type, int channel, int a, int b, float tuning)
             if (lock.owns_lock())
                   d->fromProcessor.emplace_back(id, qBound(0.0, value, 1.0));
             };
+      if (type == ME_PITCHBEND && tuning >= 1.f && !d->ccParam.empty()) {
+            // a glide's step: queued, one a frame (processDirect)
+            const ParamID id = d->ccParam[channel * 130 + kPitchBend];
+            const ParamValue value = ((b << 7) | a) / 16383.0;
+            if (id == kNoParamId)
+                  return;
+            if (tuning < 1.5f)
+                  d->glideCount = d->glideNext = 0;       // (step 1: a new glide)
+            if (d->glideCount < d->glide.size())
+                  d->glide[d->glideCount++] = { id, value };
+            else
+                  d->addParam(id, value);
+            std::unique_lock<std::mutex> lock(d->fromProcessorMutex, std::try_to_lock);
+            if (lock.owns_lock())
+                  d->fromProcessor.emplace_back(id, value);
+            return;
+            }
+      if (type == ME_PITCHBEND)
+            d->glideCount = d->glideNext = 0;             // (a bend of its own ends a glide)
       switch (type) {
             case ME_NOTEON:
                   note(b > 0, a & 0x7f, b);
@@ -811,7 +837,14 @@ void Vst3Plugin::processDirect(int frames, float* buffer)
       }
       int done = 0;
       while (done < frames) {
-            const int n = std::min(frames - done, d->maxBlock);
+            int n = std::min(frames - done, d->maxBlock);
+            if (d->glideNext < d->glideCount) {
+                  // (a glide's next step, a frame on its own)
+                  d->addParam(d->glide[d->glideNext].first, d->glide[d->glideNext].second);
+                  if (++d->glideNext == d->glideCount)
+                        d->glideCount = d->glideNext = 0;
+                  n = 1;
+                  }
             d->context.state = ProcessContext::kPlaying | ProcessContext::kTempoValid;
             d->context.sampleRate = d->sampleRate;
             d->context.tempo = 120.0;

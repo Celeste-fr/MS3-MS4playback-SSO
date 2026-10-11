@@ -180,7 +180,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - Microtones: Kontakt ignores VST 3 note tuning. **Tuning lanes** (patch copies per tuning, metaTag
   `soundLibraryLanes`) play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends
   cleanly (`<Instrument bend>`; varispeed can't reach Live). A legato transition's bend glides when the
-  transition arrives (note-on + its measured delay, ending before the next note-on; `[tuning] bendAtArrival`).
+  transition arrives (note-on + its measured delay, at the latest a tick before the next note-on; `[tuning] bendAtArrival`),
+  a cent a step, all steps at one tick, spaced by each player (hosted: a frame each; plain set: a sample apart).
+  Live ramps linearly between clip-envelope breakpoints: the plain set writes every envelope as hold pairs.
   **Live and MIDI out** (no varispeed; the owner, 2026-10-10: "I will not accept losing microtones"):
   `SoundLib::routes(…, forLive)` / `lanes(…, fixedTuning)` give a patch without `bend=` a fixed copy per tuning
   (`Lanes::fixed`, `Route::cents`; lane 0 nearest 0 cents; no max), which the export tunes by Kontakt's instrument
@@ -294,7 +296,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 74 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-10: kontaktTune, tuningLanesLive, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 75 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-10: bendGlideSteps, kontaktTune, tuningLanesLive, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›

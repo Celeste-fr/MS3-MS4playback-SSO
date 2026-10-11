@@ -90,6 +90,7 @@ struct Builder {
       std::map<int, size_t> techniqueOf;            // switch value -> its index in techniques
       std::map<int, std::set<int>> startsAt;        // units -> the switch values of the notes starting there
       std::map<int, std::vector<std::pair<int, int>>> lanes;       // cc (PITCH_BEND) -> (units, value)
+      std::map<int, std::vector<int>> glides;       // units -> a bend glide's steps there (Lane::glides)
       std::map<int, std::vector<std::pair<int, float>>> params;    // the event's index -> (units, value)
       };
 
@@ -229,8 +230,17 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         if (laneController(e.controller(), li))
                               putPoint(b.lanes[e.controller()], at, e.value());
                         }
-                  else if (e.type() == ME_PITCHBEND)
-                        putPoint(b.lanes[PITCH_BEND], at, (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f));
+                  else if (e.type() == ME_PITCHBEND) {
+                        const int v = (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f);
+                        putPoint(b.lanes[PITCH_BEND], at, v);
+                        // a glide's step k (MidiRenderer::libraryPitchBends: all at one tick, k in the tuning)
+                        if (e.tuning() >= 1.f) {
+                              std::vector<int>& g = b.glides[at];
+                              if (e.tuning() < 1.5f)
+                                    g.clear();
+                              g.push_back(v);
+                              }
+                        }
                   else if (e.type() == ME_PARAMETER) {
                         const int pk = e.dataA() == LiveClips::LIVE_PARAM ? LiveClips::LIVE_PARAM_KEY + e.dataB() : e.dataA();
                         putPoint(b.params[pk], at, e.tuning());
@@ -279,8 +289,16 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   if (l.first != PITCH_BEND)
                         k.lanes.push_back({ l.first, l.second });
             auto bend = b.lanes.find(PITCH_BEND);
-            if (bend != b.lanes.end())
-                  k.lanes.push_back({ PITCH_BEND, bend->second });
+            if (bend != b.lanes.end()) {
+                  Lane l { PITCH_BEND, bend->second, {} };
+                  // (a glide whose last step is the lane's value there: one a later bend at its time replaced isn't)
+                  for (const auto& pt : l.points) {
+                        auto g = b.glides.find(pt.first);
+                        if (g != b.glides.end() && g->second.size() > 1 && g->second.back() == pt.second)
+                              l.glides[pt.first] = g->second;
+                        }
+                  k.lanes.push_back(l);
+                  }
             // the parameter lanes: titled by the part's main patch's controllers (the renderer's index), or the
             // part's lanes on its Live track ("live:<d>/<p>")
             const SoundLib::LibInstrument* main = nullptr;
@@ -523,15 +541,35 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                               LiveSetWriter::Clip c;
                               c.name = QObject::tr("Controllers");
                               c.end = beats(layout.length);
+                              // (a sample of 44.1 kHz in Live's beats: Live plays at one tempo, Timeline::bpm)
+                              const double sample = layout.bpm / 60.0 / 44100.0;
                               for (const Lane& l : k.lanes) {
                                     // Live's clip bend envelope: -8192 .. 8191, MIDI's bend less 8192 (measured: Live 12.4.6
                                     // with SSO's Violins 1 - Performance, bend= 99.1 cents, 2026-10-10: 4096, -4096 and 8191
                                     // bent it +55, -50 and +103 cents, within the section's ±10-20 cents of spread)
                                     const bool bend = l.cc == PITCH_BEND;
+                                    auto value = [bend](int v) { return double(bend ? v - 8192 : v); };
                                     LiveSetWriter::Clip::Envelope e;
                                     e.controller = bend ? LiveSetWriter::PITCH_BEND_ENVELOPE : l.cc;
-                                    for (const auto& pt : l.points)
-                                          e.points.push_back({ beats(pt.first), double(bend ? pt.second - 8192 : pt.second) });
+                                    // each change a step: the value before held up to it, then the new one at the same time
+                                    // (Live ramps linearly between a clip envelope's breakpoints: measured, Live 12.4.6,
+                                    // 2026-10-10, a bend 0.8 s between two points went 50 -> 0 cents in a straight line);
+                                    // a glide's steps one sample apart from its time on, each a breakpoint (Live sends each as
+                                    // its own message; a ramp it sends only every ~4.55 ms, and one of 1 ms as one jump)
+                                    for (size_t i = 0; i < l.points.size(); ++i) {
+                                          const auto& pt = l.points[i];
+                                          if (i > 0)
+                                                e.points.push_back({ beats(pt.first), value(l.points[i - 1].second) });
+                                          auto g = l.glides.find(pt.first);
+                                          if (g == l.glides.end()) {
+                                                e.points.push_back({ beats(pt.first), value(pt.second) });
+                                                continue;
+                                                }
+                                          const double next = i + 1 < l.points.size() ? beats(l.points[i + 1].first) : 1e300;
+                                          for (size_t s = 0; s < g->second.size(); ++s)
+                                                e.points.push_back({ std::min(beats(pt.first) + double(s) * sample, next),
+                                                                     value(g->second[s]) });
+                                          }
                                     c.envelopes.push_back(e);
                                     }
                               if (!c.envelopes.empty())
@@ -540,8 +578,12 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         for (const ParamLane& pl : k.params) {
                               LiveSetWriter::ParameterAutomation a;
                               a.name = pl.title;
-                              for (const auto& pt : pl.points)
-                                    a.points.push_back({ beats(pt.first), double(pt.second) });
+                              // (steps, as the clip's envelopes: Live ramps between breakpoints)
+                              for (size_t i = 0; i < pl.points.size(); ++i) {
+                                    if (i > 0)
+                                          a.points.push_back({ beats(pl.points[i].first), double(pl.points[i - 1].second) });
+                                    a.points.push_back({ beats(pl.points[i].first), double(pl.points[i].second) });
+                                    }
                               kt.automation.push_back(a);
                               }
                         const int kontaktIndex = int(out.size());

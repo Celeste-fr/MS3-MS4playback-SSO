@@ -127,6 +127,11 @@ int bendOf(const NPlayEvent& e)
       {
       return (e.dataB() & 0x7f) << 7 | (e.dataA() & 0x7f);
       }
+// a glide's step k (MidiRenderer::libraryPitchBends: k in the bend's tuning)
+bool isGlideStep(const NPlayEvent& e)
+      {
+      return e.type() == ME_PITCHBEND && e.tuning() >= 1.f;
+      }
 }
 
 std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, int endUtick)
@@ -161,7 +166,8 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                   auto isNoteOn = [](const NPlayEvent& e) {
                         return !e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0;
                         };
-                  // the tick's controllers before its first note, and after it
+                  // the tick's controllers before its first note, and after it (a glide's steps after: they
+                  // start at the tick, MidiRenderer::libraryPitchBends, one carrier slot apart from it on)
                   std::vector<const NPlayEvent*> before, after;
                   bool noteSeen = false;
                   for (size_t k = i; k < j; ++k) {
@@ -169,14 +175,17 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                         if (isNoteOn(e))
                               noteSeen = true;
                         else if (isControl(e))
-                              (noteSeen ? after : before).push_back(&e);
+                              (noteSeen || isGlideStep(e) ? after : before).push_back(&e);
                         }
-                  // a controller (or the bend) set twice at a tick: the last value (keyswitches all kept)
+                  // a controller (or the bend) set twice at a tick: the last value (keyswitches and a glide's steps
+                  // all kept)
                   auto dedupe = [](std::vector<const NPlayEvent*>& v) {
                         std::vector<const NPlayEvent*> o;
                         for (size_t k = 0; k < v.size(); ++k) {
                               bool later = false;
-                              if (v[k]->type() == ME_CONTROLLER)
+                              if (isGlideStep(*v[k]))
+                                    ;
+                              else if (v[k]->type() == ME_CONTROLLER)
                                     for (size_t m = k + 1; m < v.size(); ++m)
                                           later = later || (v[m]->type() == ME_CONTROLLER && v[m]->controller() == v[k]->controller());
                               else if (v[k]->type() == ME_PITCHBEND)

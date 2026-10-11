@@ -174,7 +174,8 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   also in an export or a freeze, and chased when playback starts in the middle (Live's *Chase MIDI
   Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
   placed just before it (0.26 ms at 120 bpm apart): switches first, then the controllers, the pitch bend
-  last; at a tick without a note (a glide's step) the last of them is at the tick itself.
+  last; at a tick without a note the last of them is at the tick itself. A glide's steps (all at one tick,
+  numbered by `MidiRenderer::libraryPitchBends`) follow the tick a carrier slot apart, in order.
   Plug-in parameter events (MuseScore's own automation lanes of Kontakt's parameters: Vibrato, mics …) are
   not notes: the device sets those parameters itself while Live plays ([Automation lanes in MuseScore and in
   Live](#automation-lanes-in-musescore-and-in-live)); lanes Live's set already holds are left to Live. The part's *Controllers…* that are plug-in parameters are in each patch's state in the Live Set
@@ -304,7 +305,10 @@ in a section collapsible at the same time".
   Measured 2026-10-10 on the VM with SSO: in kthost ±50 cents within 2 cents, levels within 0.34 dB; in a set Live
   12.4.6 played, −50 cents gave −51.3 (Long) and −49.8 (staccatos), levels within 0.2 dB. A patch with `bend=`
   (Performance) keeps MuseScore's lanes (slurred notes on one lane, the glide by the bend), a Kontakt per lane
-  ("… (copy 2)"), its bends as the Controllers clip's pitch-bend envelope. Every tuning's Kontakt has its patch's
+  ("… (copy 2)"), its bends as the Controllers clip's pitch-bend envelope. Live 12.4.6 ramps linearly between a
+  clip envelope's breakpoints (measured 2026-10-10 on the VM: a ramp sent about every 4.55 ms, a 1 ms ramp one jump,
+  separate breakpoints each sent), so every envelope (CC1, CC11, CC64, bend) is written as hold pairs: the value
+  before at the change time, then the new one; a glide's steps one sample of 44.1 kHz apart. Every tuning's Kontakt has its patch's
   volume and gain. Tests: `tst_liveequivalence` `plainTuned`, `tst_soundlibrary` `tuningLanesLive`, `kontaktTune`.
 - **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
   the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.

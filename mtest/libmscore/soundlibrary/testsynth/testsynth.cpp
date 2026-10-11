@@ -238,8 +238,15 @@ class Processor : public AudioEffect {
                                     level = v;
                               else if (q->getParameterId() == kTone)
                                     tone = v;
-                              else if (q->getParameterId() == kBend)
+                              else if (q->getParameterId() == kBend) {
                                     bend = v;
+                                    // (reported back, the value this call plays: a test sees what each process call got)
+                                    int32 index = 0;
+                                    int32 point = 0;
+                                    if (data.outputParameterChanges)
+                                          if (IParamValueQueue* o = data.outputParameterChanges->addParameterData(kBend, index))
+                                                o->addPoint(0, v, point);
+                                    }
                               }
                         }
                   }

@@ -84,6 +84,9 @@ struct Technique {
 struct Lane {
       int cc { 0 };                       // the controller; PITCH_BEND: the bend (0-16383, centre 8192)
       std::vector<std::pair<int, int>> points;        // (units, value), by time, a value only where it changes
+      // the bend's glides (MidiRenderer::libraryPitchBends): units -> its steps there, the last the point's value;
+      // in Live's clip envelope one sample of 44.1 kHz apart from that time on
+      std::map<int, std::vector<int>> glides;
       };
 constexpr int PITCH_BEND = -1;
 

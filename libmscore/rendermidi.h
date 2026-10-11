@@ -186,6 +186,8 @@ class MidiRenderer {
             LibPerformance performance { LibPerformance::NONE };
             int joinMs { PerformanceTechnique::JOIN_AUTO };   // the note before ends this long after its note-on
                                                               // (< 0: before it); JOIN_AUTO: not joined
+            double glideDelayMs { -1 };               // a legato transition's arrival after its note-on (its tuning
+                                                      // lane's bend glides then: libraryPitchBends); -1: no transition
             // a technique on velocity: the velocity a plain note of it plays at each MS4 dynamic (DYNAMIC_LEVELS, ppp
             // … fff: libVelocity; without the articulations' Inspector levels); empty: its velocity is no dynamic
             std::vector<int> dynamicVelocities;

@@ -45,6 +45,11 @@ Open:
   *Whence* (quarter tones, Recommended, dumpEvents MS_DUMP_LIVE, Live's clips): 147 quarter-tone notes on bending
   copies, 141 of them at their tuning (within 5 cents) for under half their sounding length; with
   `slurs/performance=0` every quarter-tone note is on a tuned copy (14 Kontakts, now 20). Owner to decide.
+  Branch `subtick-bend-glide` (2026-10-10): the glide's steps now come at the arrival, sub-tick (no bend moves before
+  it: 135 transitions did, median 56 ms early). Kontakt's own bend smoothing (τ ≈ 71 ms, kthost) caps the gain: the
+  fraction of arrival → next arrival within 5 cents stays 0/76 transitions ≥ 95 % (attacks 0/6 → 2/6), 65 notes end
+  before their arrival. ≥ 95 % needs the next arrival ≥ ~170 ms later, or an earlier glide (overdrive: settles in
+  ~43 ms) — owner decision.
 - **Levels against R**: the calibration predicts Performance over All +2.7 dB (Violins 1), +3.8 (Violas), +7.8 (Celli)
   at *Whence*'s CC1 64 (perceived curves of `Spitfire Symphony Orchestra.dynamics.json`, Long minus Performance
   Legato); the owner's R faders say +13.1, +8.6, +14.0 (Violins 1 bars 13-16: +6.6). Measured on held notes along

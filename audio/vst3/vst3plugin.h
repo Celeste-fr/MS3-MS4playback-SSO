@@ -73,7 +73,9 @@ class Vst3Plugin {
 
       // audio thread
       // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament
-      // (the score's tuning: tuning.h) goes in VST 3's NoteOnEvent::tuning, for the plug-ins that honour it
+      // (the score's tuning: tuning.h) goes in VST 3's NoteOnEvent::tuning, for the plug-ins that honour it.
+      // A pitch bend's tuning k >= 1: step k of a glide (MidiRenderer::libraryPitchBends), queued and played
+      // one step a process call of one frame (1 starts a new glide; a bend without one ends it)
       void midi(int type, int channel, int a, int b, float tuning = 0.f);
       void process(int frames, float* interleavedStereo);   // adds its output
       // varispeed: the plug-in played faster or slower, so everything it plays is higher or lower

@@ -248,7 +248,9 @@ void Vst3Synth::deliver(const PlayEvent& event)
             ++sounding[size_t(key)];
       else if (noteOff && sounding[size_t(key)] > 0)
             --sounding[size_t(key)];
-      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB(), _varispeed ? 0.f : event.tuning());
+      // (a pitch bend's tuning: its step in a glide, MidiRenderer::libraryPitchBends; Vst3Plugin::midi spaces them)
+      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB(),
+                         _varispeed && event.type() != ME_PITCHBEND ? 0.f : event.tuning());
       }
 
 void Vst3Synth::play(const PlayEvent& event)
