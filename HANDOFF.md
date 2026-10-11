@@ -84,8 +84,11 @@ sections' Performance patches not measured.
   Performance R - 0.7 (Violins 1 +2.3, Violas +1.3, Celli +6.0), All techniques R - 5.7 (Violins 1 -10.8, Violins 2
   -10.2, Violas -7.3, Celli -8.0, Basses -7.3). R's Celli - Performance (+6.7) and B's Violas (+7.0) were past +6.
   Measured on the page's stems (K-weighted, BS.1770): Violins 1 at most +0.6 LU over the loudest other part (bars 5, 8).
-  Open: bars 13-16, where Violins 1's slurs come out about 6.7 dB hotter against its staccatos than the Violas relation
-  approved in bars 9-12 (matching it needed Violins 1 - Performance -1.7 dB alone, which the rule rules out).
+  Bars 13-16: the model "slurs about as loud as the staccatos around them" (the Violas' approved relation, median -1.3
+  dB) predicted Violins 1 - Performance -1.7 dB from R; the owner heard -1.5 as "about right" (2026-10-10). In the
+  lowered set that is Violins 1 - Performance -4.2 in bars 13-16 (volume automation, step in bar 11 where the track is
+  silent): an exception to moving together, which the owner heard; the rule-keeping alternative (Violins 1 All
+  techniques +6.5 in bars 13-16) is unheard.
 - **A hand-built set must switch techniques by clip Bank / Sub**, never a CC32 clip envelope (LIVE.md: Live 12.4.6 drops
   it at load): sets R … W did, so in Live every All techniques track played Long throughout (the owner's Kontakt window,
   2026-10-10) while the renders, which send CC32 directly, played Spiccato.
