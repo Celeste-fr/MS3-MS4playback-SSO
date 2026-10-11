@@ -43,7 +43,7 @@
 //     {"tracks": {key: {"volume": gain, "pan": -1…1, "active": false,
 //                       "envelopes": [{"target": "volume" | "pan" | "speaker", "initial": v,
 //                                      "events": [[time, value], [time, value, c1x, c1y, c2x, c2y], …]}]}},
-//      "written": {key: {"kind": "section" | "part" | "kontakt" | "technique", "part": index, "patch": n,
+//      "written": {key: {"kind": "section" | "part" | "kontakt" | "copy" | "technique", "part": index, "patch": n,
 //                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key}}}
 //   Track delays: each part's tracks' TrackDelay comes back as the part's delays (trackdelays.h; "part": its group's,
 //   "delayKey": a Kontakt's or technique's); one in samples (Live's toggle) is reported, not imported.
@@ -90,7 +90,8 @@ struct State {
 
 // a track Create Live Set wrote
 struct Written {
-      QString kind;                 // "section", "part", "kontakt", "technique"
+      QString kind;                 // "section", "part", "kontakt", "copy" (a tuning copy's MIDI track: its Controllers
+                                    // to a slot of the patch's Kontakt), "technique"
       int part { -1 };              // the part's index in the score (kontakt, technique)
       int patch { 0 };              // 0: the part's main patch, else its extra's index + 1
       std::map<QString, QString> hashes;  // "cc<n>": the eventsHash of its clips' envelopes on CC n ("," between clips)

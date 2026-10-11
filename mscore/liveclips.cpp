@@ -803,7 +803,7 @@ QString LiveClipsLink::routeKey(const Part* part) const
       if (!part || !lib || !_on || !active() || !_score || part->masterScore() != _score.data())
             return QString();
       const Part* master = PartPlaybackModes::masterPart(part);
-      for (const SoundLib::Route& r : SoundLib::routes(_score.data(), *lib))
+      for (const SoundLib::Route& r : SoundLib::routes(_score.data(), *lib, true))
             if (r.part == master && r.patch == 0 && r.lane == 0)
                   return QString("%1:%2").arg(r.port).arg(r.channel + 1);
       return QString();

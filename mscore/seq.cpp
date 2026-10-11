@@ -593,7 +593,10 @@ void Seq::guiStop()
       if (!cs)
             return;
 
-      int tck = cs->repeatList().utick2tick(cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate)));
+      int utick = cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate));
+      if (_playStart.preRoll(utick))      // (stopped in the pre-roll: where it was to start)
+            utick = _playStart.utick();
+      int tck = cs->repeatList().utick2tick(utick);
       cs->setPlayPos(Fraction::fromTicks(tck));
       cs->update();
       emit stopped();
@@ -1269,7 +1272,8 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                                     qreal framesPerPeriodInTime = static_cast<qreal>(framesPerPeriod) / MScore::sampleRate;
                                     int framesPerPeriodInTicks = cs->utime2utick(framesPerPeriodInTime);
                                     // Also make sure we are inside the loop
-                                    if (playPosUTick >= loopOutUTick - 2 * framesPerPeriodInTicks || cs->repeatList().utick2tick(playPosUTick) < cs->loopInTick().ticks()) {
+                                    if (playPosUTick >= loopOutUTick - 2 * framesPerPeriodInTicks
+                                        || (!_playStart.preRoll(playPosUTick) && cs->repeatList().utick2tick(playPosUTick) < cs->loopInTick().ticks())) {
                                           qDebug ("Process: playPosUTick = %d, cs->loopInTick().ticks() = %d, cs->loopOutTick().ticks() = %d, getCurTick() = %d, loopOutUTick = %d, playFrame = %d",
                                                             playPosUTick,      cs->loopInTick().ticks(),      cs->loopOutTick().ticks(),      getCurTick(),      loopOutUTick,    *pPlayFrame);
                                           if (cachedPrefs.useJackTransport) {
@@ -1328,6 +1332,12 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                               }
                         }
                   const NPlayEvent& event = (*pPlayPos)->second;
+                  if (!inCountIn && _playStart.skips(playPosUTick, event)) {    // (before the start: the previous notes)
+                        mutex.lock();
+                        ++(*pPlayPos);
+                        mutex.unlock();
+                        continue;
+                        }
                   syncFlush(framePos);
                   playEvent(event, framePos);
                   if (event.type() == ME_TICK1) {
@@ -1766,8 +1776,12 @@ void Seq::setPos(int utick)
       if (_driver && _driver->canOutputSync() && !_liveClips)
             syncClock.locate(utick, 0, [this](const MidiSync::Message& m) { _driver->putSync(m.status, m.value, 0); });
 
-      playFrame = cs->utick2utime(utick) * MScore::sampleRate;
-      playPos   = events.lower_bound(utick);
+      // the transport starts where the first note written at or after utick starts to sound (an early start by its
+      // onset, a negative track delay: its note on, switch and dynamic sit before utick); what comes before utick
+      // plays but the previous notes (playstart.h)
+      _playStart = PlayStart(cs, events, utick);
+      playFrame = cs->utick2utime(_playStart.start()) * MScore::sampleRate;
+      playPos   = events.lower_bound(_playStart.start());
       mutex.unlock();
       }
 
@@ -2571,7 +2585,7 @@ std::vector<std::pair<int, int>> Seq::libraryOuts(const Part* part)
             }
       if (_libOutsStale || _libOutsScore != cs || _libOutsGeneration != SoundLib::routesGeneration()) {
             _libOuts.clear();
-            for (const SoundLib::Route& r : SoundLib::routes(cs, *library))
+            for (const SoundLib::Route& r : SoundLib::routes(cs, *library, true))     // (MIDI out: no varispeed)
                   _libOuts.push_back({ r.part, { r.port, r.channel } });
             _libOutsScore = cs;
             _libOutsGeneration = SoundLib::routesGeneration();
@@ -2650,7 +2664,7 @@ void Seq::libraryControllersChanged(MasterScore* score, const Part* part, const 
       if (channel < 0 || channel >= int(cs->midiMapping().size()))
             return;
       const int tick = state == Transport::PLAY ? cs->repeatList().utick2tick(getCurTick()) : cs->playPos().ticks();
-      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(cs, SoundLib::routes(cs, *library), master,
+      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(cs, SoundLib::routes(cs, *library, !hosted), master,
                                                                           before, after, tick)) {
             NPlayEvent ev(ME_CONTROLLER, channel, c.cc, c.to < 0 ? 0 : c.to);
             ev.setExternal(c.port, c.channel);

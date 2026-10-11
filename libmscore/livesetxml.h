@@ -352,7 +352,7 @@ void clipTimeable(Writer& w, const Track& t, int numerator, int denominator, con
 // the MidiControllers index of a controller (a CC, PITCH_BEND_ENVELOPE); -1: none
 int controllerTarget(int controller);
 // MIDI To: the track (its Id) whose plug-in gets the MIDI
-void midiToRouting(Writer& w, int trackId, const QString& trackName);
+void midiToRouting(Writer& w, int trackId, const QString& trackName, int channel = 0, const QString& deviceName = QString());
 
 }     // namespace LiveSetWriter
 }     // namespace Ms

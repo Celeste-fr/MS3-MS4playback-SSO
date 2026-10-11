@@ -296,8 +296,35 @@ in a section collapsible at the same time".
   its notes deactivated); a muted part's Kontakt track is written deactivated, a solo is left out. (*Live plays the
   score* still follows MuseScore's mute and solo: its clips are MuseScore's playback.)
 - **Reported, not in the set**: two techniques of one Kontakt starting at the same instant (one switch can't play
-  both: the report gives the beat), program-change switches, notes of a copy for another tuning (played at the key's
-  pitch), pitch bends (not written yet).
+  both: the report gives the beat), program-change switches.
+- **Microtones** (the owner, 2026-10-10: "I will not accept losing microtones"): the set follows Live's routes
+  (`SoundLib::routes(…, forLive)`, `SoundLib::lanes(…, fixedTuning)`), a Kontakt each. A patch without `bend=` (the
+  All techniques patches) gets a copy per tuning, never retuned, slurred notes too: "Violins 1 (−50 cents)", its state
+  tuned by Kontakt's own instrument Tune (`KontaktSetup::withTune`, by the export; `Route::cents`, `Kontakt::cents`).
+  Measured 2026-10-10 on the VM with SSO: in kthost ±50 cents within 2 cents, levels within 0.34 dB; in a set Live
+  12.4.6 played, −50 cents gave −51.3 (Long) and −49.8 (staccatos), levels within 0.2 dB. A patch with `bend=`
+  (Performance) keeps MuseScore's lanes (slurred notes on one lane, the glide by the bend), a Kontakt per lane
+  ("… (copy 2)"), its bends as the Controllers clip's pitch-bend envelope. Every tuning's Kontakt has its patch's
+  volume and gain. Tests: `tst_liveequivalence` `plainTuned`, `tst_soundlibrary` `tuningLanesLive`, `kontaktTune`.
+- **A patch's copies share one Kontakt** (since 2026-10-10, `PlainLiveSet::multis`): a Kontakt multi, the patch's
+  slot once per copy, each slot its own Tune (bent copies as made), slot *i* on MIDI channel *i*
+  (`KontaktSetup::withSlots`, by the export). The Kontakt track carries the first copy's Controllers clip and its
+  techniques (channel 1); each other copy is a MIDI track of its own, "Violins 1 (−50 cents)" (its Controllers clip:
+  dynamics, CC11, bends), its techniques under it, all MIDI To the Kontakt's channel of their slot (Live shows
+  "2-Kontakt 8"; the set writes `MidiOut/Track.<id>/DeviceIn.0.<channel − 1>`, as Live 12.4.6 saves it). A copy with
+  plug-in parameter automation (Live automates the whole instrument) keeps a Kontakt of its own; the others share one
+  per track-level headroom, 16 at most. Measured 2026-10-10 on the VM, Kontakt 8 + SSO: in kthost a multi against a Kontakt per copy nulls at
+  −111 dB (Violins 1, fixed Tune) and −107.9 dB (Violins 1 - Performance, bends on channel 2; run to run −109 dB);
+  each copy ~85-90 MB less (a slot ~222 MB, an instance ~312 MB: samples are not shared between slots); in Live 12.4.6
+  the slots played −3.0 / −51.5 / +48.5 cents by channel and the multi survived Live's save. The Kontakt track's own
+  clip reaches channel 1 only (CC1 64 there left channels 2-3 8.7 dB louder): hence a Controllers clip per copy.
+  Whence (quarter tones, Recommended + `slurs/performance`, counted on the integration branch with Performance
+  patches): 20 Kontakts → 8, ~1 GB less; on `main`'s patches 14 → 5. The Whence set (written by `tst_liveequivalence`
+  `plainSetLinked` with the VM's Kontakt states, as the export does) opened in Live 12.4.6: 5 Kontakts, every
+  technique track on its slot's channel; Violas recorded per channel (bars 2-3, short Long (Rachm.) notes):
+  −10 / −56 / +51 cents against 0 / −50 / +50 (short notes: ±10 cents). Read back, a copy's track
+  is kind "copy" (`livetracks.h`): its Controllers unchanged are MuseScore's render, changed ones are reported. Tests:
+  `plainTuned`, `tst_soundlibrary` `kontaktSlots`.
 - **Add Missing Tracks** and the Live-against-MuseScore check still use the route set below (a track per route,
   the MuseScore Link device): `LiveSetKind::MISSING_ROUTES`, `ROUTES`.
 - **With MuseScore Link on each technique track** (`LiveSetKind::PLAIN_LINKED`, `PlainLiveSet::tracks(layout, true)`;
@@ -331,7 +358,10 @@ in a section collapsible at the same time".
 - **SSO in Kontakt 8 follows the Sub** (the VM, "Violins 1 - All techniques", 2026-10-06; readings:
   https://claude.ai/artifact/TtoKjRAFT5L2NYF6HCk9B7) in **"UACC & UI only"** (`$iooxo=3`, as MuseScore's setups set it;
   in the library's default "Normal keyswitching" 7 of 8 clips picked a wrong technique), CC0 0 or 1 changes nothing;
-  with the alternating Bank every run switched, also when playback started inside a clip. Pitch bends are left out (reported) until the scale of Live's clip bend envelope is measured. Test:
+  with the alternating Bank every run switched, also when playback started inside a clip. **Live's clip pitch-bend
+  envelope** runs −8192 … 8191, MIDI's bend less 8192 (the VM, Live 12.4.6, "Violins 1 - Performance" (`bend=` 99.1
+  cents), 2026-10-10: 4096, −4096 and 8191 bent it +55, −50 and +103 cents, within the section's ±10-20 cents of
+  spread). Test:
   `tst_liveequivalence` `plainSet` (`MS_PLAIN_SET_OUT=<file.als>` writes its set).
 
 - **Track delays** (`libmscore/trackdelays.*`, metaTag `trackDelays`; the owner, 2026-10-06: "adjust all the
@@ -786,8 +816,14 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   playback setting acts in the renderer (the clips' events) or, `[hosting] maxVoices`, in the Kontakt states the Live
   Set carries, so Live gets it identically.
 - **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): MuseScore
-  plays them by varispeed on copies of the patch; a clip can't carry that, so in Live they play 12-TET. (The
-  Performance patches, Solo Cello and the tuned percussion bend: those match.)
+  plays them by varispeed on copies of the patch, a copy retuned once silent and slurred notes gliding on one copy
+  (at most `[tuning] maxLanes` copies); Live has no varispeed, so its routes (MIDI out's too) give a copy per tuning,
+  fixed by Kontakt's Tune (the plain set above; the route set the same), and a slurred note of another tuning starts
+  on its own copy: no varispeed glide (the All techniques longs give each note its own attack anyway). More Kontakt
+  slots than MuseScore hosts: one per tuning a patch plays (the plain set: one Kontakt per patch, a slot per tuning;
+  the route set: a Kontakt per copy). Pitches agree within 2 cents (measured). (The Performance
+  patches, Solo Cello and the tuned percussion bend: those match.) A route set made before 2026-10-10 has no tuned
+  copies: make it again.
 - **A note at the very start** (time 0) waits in Live for its carriers, which can't go before the clip's start: the
   switch, controllers and bend at 0, 0.26 ms each at 120 bpm (1-4 ms). The wait itself is inaudible, but SSO's
   Performance legato script is sensitive to where a line starts: on the VM the first note of a Solo Violin -

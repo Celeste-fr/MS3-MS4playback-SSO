@@ -1612,8 +1612,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
                   // articulation with a measured onset: how early it may start (utick). The note just before on its
                   // track, when it plays on the same patch, keeps keepMs of its length as played; not before the
-                  // chunk or the pass; -1: not at all (grace notes or an arpeggio before it)
-                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c) -> int {
+                  // chunk or the pass; -1: not at all (grace notes or an arpeggio before it). gapMs: how long before
+                  // this note's note-on the note before ends (a Performance re-attack's reattackGap, performanceNote):
+                  // it keeps keepMs after that (without, Whence's slurs' last sixteenths on Violas - Performance
+                  // sounded 1 ms: 136 ms written, the next attack 87.5 ms early, the gap 54 ms)
+                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, double gapMs) -> int {
                         Chord* ch = note->chord();
                         if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
                               return -1;
@@ -1636,7 +1639,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.patch != c.patch)
                                     continue;
-                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep);
+                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep + gapMs / 1000.0);
                               return std::max(earliest, cap);
                               }
                         return earliest;
@@ -1828,7 +1831,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                                    libPatches[libChoice.patch]->name, oa->name,
                                                                    n->ppitch(), byPitch ? oa->onsetAt(n->ppitch())
                                                                                                 : oa->onsetMedian()));
-                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice) : -1;
+                                    // (a Performance re-attack: the note before ends its gap before this note-on,
+                                    // so it keeps keepMs after that gap)
+                                    const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
+                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice, gapMs) : -1;
                                     const double earlyMs = onsetMs * libOnsetEarly / 100.0;
                                     if (earliest >= 0 && earlyMs > 0) {
                                           config.libEarly = earlyMs / 1000.0;
@@ -4822,7 +4828,7 @@ void MidiRenderer::updateState()
             if (library) {
                   const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
                   const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
-                  const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library);
+                  const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : routes) {
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
@@ -4907,7 +4913,8 @@ void MidiRenderer::updateState()
                         bool tuned = false;           // (a part with no microtones: no bends either)
                         if (library->varispeed && !r.instrument->kit) {
                               const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *library);
-                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes);
+                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes,
+                                                                          forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;

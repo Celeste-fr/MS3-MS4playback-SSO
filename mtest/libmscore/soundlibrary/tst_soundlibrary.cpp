@@ -34,6 +34,7 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
+#include "libmscore/playstart.h"
 #include "libmscore/tuning.h"
 #include "libmscore/trackdelays.h"
 #include "libmscore/contextlevel.h"
@@ -111,6 +112,7 @@ class TestSoundLibrary : public QObject, public MTest
       void legatoOctaveByStartPitch();
       void onsetEarly();
       void onsetLongerThanNote();
+      void playStartEarly();
       void playbackSettingsIni();
       void playbackSettingsLayers();
       void slurPerformance();
@@ -130,6 +132,8 @@ class TestSoundLibrary : public QObject, public MTest
       void kontaktSetup();
       void kontaktScriptValues();
       void kontaktMaxVoices();
+      void kontaktTune();
+      void kontaktSlots();
       void kontaktScriptValueLengths();
       void kontaktKickstartUnpurge();
       void kontaktSetupReal();
@@ -146,6 +150,7 @@ class TestSoundLibrary : public QObject, public MTest
       void pluginExtract();
       void pitchShift();
       void tuningLanes();
+      void tuningLanesLive();
       void computedLaneSettings();
       void tuningBend();
       void tuningBendAtArrival();
@@ -1568,6 +1573,97 @@ void TestSoundLibrary::onsetLongerThanNote()
       }
 
 //---------------------------------------------------------
+//   playStartEarly
+//    playing from a tick (Seq::setPos): a note written at the start that starts early (a held note by its
+//    onset) has its note on, switch and dynamic before the tick; the transport starts at the earliest of them
+//    (PlayStart) and sends them, not the notes before (their note ons, nor their note offs). The owner,
+//    2026-10-10: "when you select a measure and click playback, sometimes the first note wouldn't sound".
+//    legato-early.musicxml: G5 at 4 quarters, unslurred, starts 52 ticks early (its switch to Long with it); F5 before it
+//---------------------------------------------------------
+
+void TestSoundLibrary::playStartEarly()
+      {
+      Playback::setIniValuesForTest(withOld({ { "heldNotes/byPitch", "1" } }));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' onset='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      const int Q = DIVISION;
+
+      // G5 at 4 quarters: its note on, found by its pitch
+      int aOn = -1;
+      for (const auto& te : events)
+            if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && !te.second.librarySwitch()
+                && te.second.pitch() == 79 && te.first > 4 * Q - 100 && te.first < 5 * Q) {
+                  aOn = te.first;
+                  break;
+                  }
+      QVERIFY(aOn > 0 && aOn < 4 * Q);
+
+      // from 4 quarters: the transport starts at G5's note on; what is sent before 4 quarters is its switch
+      // (state; this score has no dynamics, so no CC1) and the note on, not F5 (written at 3 quarters, sounding on) or its note off
+      PlayStart ps(score, events, 4 * Q, 10.0);       // (a long look back: F5's note on is in the window too)
+      QCOMPARE(ps.utick(), 4 * Q);
+      QVERIFY(ps.start() < 4 * Q);
+      QVERIFY(ps.start() <= aOn);
+      bool noteOn = false, switchSent = false;
+      for (auto i = events.lower_bound(ps.start()); i != events.end() && i->first < 4 * Q; ++i) {
+            const NPlayEvent& ev = i->second;
+            if (ps.skips(i->first, ev))
+                  continue;
+            if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch()) {
+                  QVERIFY2(ev.pitch() == 79, qPrintable(QString("pitch %1 at %2 sent before the start").arg(ev.pitch()).arg(i->first)));
+                  noteOn = true;
+                  }
+            else if (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && !ev.librarySwitch()))
+                  QFAIL(qPrintable(QString("a note off at %1 sent before the start").arg(i->first)));
+            else if (ev.type() == ME_CONTROLLER && ev.controller() == 32 && i->first <= aOn)
+                  switchSent = true;
+            }
+      QVERIFY(noteOn);
+      QVERIFY(switchSent);
+      QVERIFY(ps.start() <= aOn);
+      QCOMPARE(ps.start(), aOn);          // (the earliest of its events is the note on or its switch: not later than it)
+
+      // a short look back finds the same start
+      PlayStart shortBack(score, events, 4 * Q, 0.5);
+      QCOMPARE(shortBack.start(), ps.start());
+
+      // F5's note on, asked from this start, is the previous note's: skipped
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.isExternal() && ev.type() == ME_NOTEON && ev.pitch() == 77 && !ev.librarySwitch() && te.first < 4 * Q)
+                  QVERIFY2(ps.skips(te.first, ev), qPrintable(QString("F5 at %1").arg(te.first)));
+            }
+
+      // a note on the beat (a legato transition at 9 quarters): nothing early, the transport starts there
+      PlayStart onBeat(score, events, 9 * Q);
+      QCOMPARE(onBeat.start(), 9 * Q);
+      QVERIFY(!onBeat.preRoll(9 * Q - 1));
+      // the start of the score
+      PlayStart atZero(score, events, 0);
+      QCOMPARE(atZero.start(), 0);
+      // events at or after the tick are never skipped
+      for (auto i = events.lower_bound(4 * Q); i != events.end(); ++i)
+            QVERIFY(!ps.skips(i->first, i->second));
+      delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
 //   playbackSettingsIni
 //    playback.ini (libmscore/playbacksettings.h): written with every key and its default when missing, read
 //    back as the defaults, never overwritten; unknown keys, bad values and values out of range warned (the
@@ -2821,6 +2917,104 @@ void TestSoundLibrary::kontaktMaxVoices()
       }
 
 //---------------------------------------------------------
+//   kontaktTune
+//    the instrument's Tune (Kontakt's instrument header › Tune, a frequency ratio after the program's
+//    name, size of samples, transpose, volume and pan) set in a state by cents; all else as it was
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktTune()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      QString error;
+      const QByteArray made = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings", { { "$iooxo", "3" } }, &error);
+      QVERIFY2(!made.isEmpty(), qPrintable(error));
+      QCOMPARE(tune(slotProgram(made, nullptr)), 0.0);
+
+      double before = 1.0;
+      const QByteArray down = withTune(made, -50.0, &error, &before);
+      QVERIFY2(!down.isEmpty(), qPrintable(error));
+      QCOMPARE(before, 0.0);
+      const QByteArray program = slotProgram(down, &error);
+      QVERIFY(std::abs(tune(program) + 50.0) < 1e-3);
+      QCOMPARE(programName(program), QString("Violins 2 - All techniques"));
+      // the ratio where Kontakt keeps it: 2^(-50/1200) = 0.97153 after name, size, transpose, volume, pan
+      const QByteArray made1 = slotProgram(made, nullptr);
+      QCOMPARE(program.size(), made1.size());
+      int differ = 0;
+      for (int i = 0; i < program.size(); ++i)
+            differ += program.at(i) != made1.at(i);
+      QVERIFY(differ >= 1 && differ <= 4);
+      // all else as it was: script values, voices, the sample list, the marker
+      QCOMPARE(scriptValues(program), scriptValues(made1));
+      QCOMPARE(maxVoices(program), maxVoices(made1));
+      QCOMPARE(samplePaths(down, &error), samplePaths(made, &error));
+      QCOMPARE(presetTail(down), presetTail(made));
+      // a quarter tone up from there, then back to 0: the program as made
+      const QByteArray up = withTune(down, 50.0, &error, &before);
+      QVERIFY(std::abs(before + 50.0) < 1e-3);
+      QVERIFY(std::abs(tune(slotProgram(up, nullptr)) - 50.0) < 1e-3);
+      QCOMPARE(slotProgram(withTune(up, 0.0, &error), nullptr), made1);
+      // already so: the very bytes; no program in the first slot: an error
+      QCOMPARE(withTune(made, 0.0, &error, &before), made);
+      QVERIFY(withTune(empty, -50.0, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
+//   kontaktSlots
+//    a multi of one patch (KontaktSetup::withSlots, the plain set's tuning copies: PlainLiveSet::multis): the patch's
+//    slot once per copy, each its own Tune (NaN: as made, a bent copy), slot i on MIDI channel i (measured with
+//    Kontakt 8 + SSO 2026-10-10: identical to a Kontakt per copy); the first slot's program as made at 0 cents
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktSlots()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violins 2 - All techniques.nki");
+      const QByteArray empty = read("empty.bin");
+      QString error;
+      const QByteArray made = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings", { { "$iooxo", "3" } }, &error);
+      QVERIFY2(!made.isEmpty(), qPrintable(error));
+      const std::vector<Slot> one = slotsOf(made);
+      QCOMPARE(int(one.size()), 1);
+      QCOMPARE(one[0].channel, 0);                  // (a made setup: Omni)
+      QCOMPARE(one[0].cents, 0.0);
+
+      const double nan = std::numeric_limits<double>::quiet_NaN();
+      const QByteArray multi = withSlots(made, { 0.0, -50.0, 50.0, nan }, &error);
+      QVERIFY2(!multi.isEmpty() && error.isEmpty(), qPrintable(error));
+      const std::vector<Slot> four = slotsOf(multi);
+      QCOMPARE(int(four.size()), 4);
+      const std::vector<double> cents = { 0.0, -50.0, 50.0, 0.0 };
+      for (size_t i = 0; i < 4; ++i) {
+            QCOMPARE(four[i].channel, int(i) + 1);
+            QVERIFY2(std::abs(four[i].cents - cents[i]) < 1e-3, qPrintable(QString("slot %1: %2").arg(i).arg(four[i].cents)));
+            }
+      // the first slot's program as made, the samples and the marker too
+      QCOMPARE(slotProgram(multi, nullptr), slotProgram(made, nullptr));
+      QCOMPARE(samplePaths(multi, &error), samplePaths(made, &error));
+      QCOMPARE(presetTail(multi), presetTail(made));
+      // made again: the same bytes
+      QCOMPARE(withSlots(made, { 0.0, -50.0, 50.0, nan }, &error), multi);
+      // none, more than 16, no program: an error
+      QVERIFY(withSlots(made, {}, &error).isEmpty());
+      QVERIFY(withSlots(made, std::vector<double>(17, 0.0), &error).isEmpty());
+      error.clear();
+      QVERIFY(withSlots(empty, { 0.0, -50.0 }, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
 //   kontaktScriptValueLengths
 //    a script value set with another length than the saved one (a Kickstart percussion patch's
 //    technique arrays, %4jwcn keys / %c2lsa on-off, made longer to switch techniques on): the
@@ -3493,6 +3687,7 @@ void TestSoundLibrary::pitchShift()
 
 void TestSoundLibrary::tuningLanes()
       {
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);          // (varispeed: hosted; MIDI out and Live: tuningLanesLive)
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
@@ -3721,6 +3916,118 @@ void TestSoundLibrary::vst3Settle()
       QVERIFY2(std::fabs(dB(held, lost) - dB(0.2, 1.0)) < 0.5, qPrintable(QString("%1 dB").arg(dB(held, lost))));
       // without the "script": set at once, it holds as well
       QVERIFY2(std::fabs(dB(level(false), lost) - dB(0.2, 1.0)) < 0.5, "no MSTESTSYNTH_INIT_MS");
+      }
+
+//---------------------------------------------------------
+//   tuningLanesLive
+//    Live (and MIDI out) have no varispeed (the owner, 2026-10-10: "I will not accept losing microtones"): a patch
+//    that doesn't bend gets a copy per tuning, never retuned (SoundLib::lanes fixedTuning), each a route with its
+//    fixed tuning (Route::cents), which the set's Kontakt plays by its Tune: quartertones.musicxml's 0, +50 and -50
+//    on three copies, lane 0 at 0, then -50, then +50; a slurred note goes to its tuning's copy too; the renderer
+//    for Live's clips routes each note so. A bending patch's lanes as hosted (its bend glides a slur)
+//---------------------------------------------------------
+
+void TestSoundLibrary::tuningLanesLive()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const SoundLib::LibInstrument* violin = &lib->instruments[0];
+
+      // hosted: two lanes, their tuning varying
+      const std::vector<SoundLib::Route> hosted = SoundLib::routes(score, *lib);
+      QCOMPARE(int(hosted.size()), 2);
+      QVERIFY(std::isnan(hosted[1].cents));
+      // Live: a lane per tuning
+      const SoundLib::Lanes l = SoundLib::lanes(score, score->parts()[0], { violin }, 3, 0.5, 0, true);
+      QCOMPARE(l.count[0], 3);
+      QCOMPARE(int(l.fixed.size()), 1);
+      QCOMPARE(l.fixed[0], std::vector<double>({ 0.0, -50.0, 50.0 }));
+      // (a maximum of one copy doesn't apply: a tuning without its copy would play out of tune)
+      QCOMPARE(SoundLib::lanes(score, score->parts()[0], { violin }, 3, 0.5, 1, true).count[0], 3);
+      const std::vector<SoundLib::Route> live = SoundLib::routes(score, *lib, true);
+      QCOMPARE(int(live.size()), 3);
+      for (int i = 0; i < 3; ++i) {
+            QCOMPARE(live[size_t(i)].lane, i);
+            QCOMPARE(live[size_t(i)].cents, l.fixed[0][size_t(i)]);
+            QCOMPARE(live[size_t(i)].channel, i);
+            }
+      // each note on its tuning's copy: m1 C5, C5+; m3 D5+; m5 C5, E5-; m7 the slur C5, D5+, E5
+      std::vector<std::pair<int, int>> got;         // pitch, lane
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  for (const Note* n : toChord(s->element(0))->notes())
+                        got.push_back({ n->pitch(), l.lane.count(n) ? l.lane.at(n) : 0 });
+      const std::vector<std::pair<int, int>> expected = { { 72, 0 }, { 72, 2 }, { 74, 2 }, { 72, 0 }, { 76, 1 }, { 72, 0 }, { 74, 2 }, { 76, 0 } };
+      QCOMPARE(int(got.size()), int(expected.size()));
+      for (size_t i = 0; i < got.size(); ++i)
+            QVERIFY2(got[i] == expected[i], qPrintable(QString("note %1: pitch %2 lane %3").arg(i).arg(got[i].first).arg(got[i].second)));
+
+      // rendered for Live's clips: each note-on on its copy's channel, at its tuning; CC1 and the switch on every copy
+      auto render = [&](bool forLive) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(forLive);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      const EventMap events = render(true);
+      std::vector<std::pair<int, int>> onChannel;
+      std::map<int, int> cc1, switches;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            if (ev.librarySwitch())
+                  ++switches[ev.extChannel()];
+            else if (ev.type() == ME_CONTROLLER && ev.controller() == 1)
+                  ++cc1[ev.extChannel()];
+            else if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                  onChannel.push_back({ ev.pitch(), ev.extChannel() });
+                  QVERIFY(std::fabs(ev.tuning() - live[size_t(ev.extChannel())].cents) < 0.01);
+                  }
+            }
+      QCOMPARE(onChannel, expected);
+      for (int c = 0; c < 3; ++c)
+            QVERIFY(cc1[c] > 0 && switches[c] > 0);
+      // MIDI out (no varispeed either): the same copies
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      int midiOn = 0;
+      for (const auto& te : render(false))
+            if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && !te.second.librarySwitch())
+                  QCOMPARE(te.second.extChannel(), expected[size_t(midiOn++)].second);
+      QCOMPARE(midiOn, 8);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+
+      // a bending patch: its lanes as hosted (a slur glides on its lane)
+      auto bending = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin' bend='200'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(bending);
+      const SoundLib::Lanes b = SoundLib::lanes(score, score->parts()[0], { &bending->instruments[0] }, 3, 0.5, 0, true);
+      QCOMPARE(b.count[0], 2);
+      QVERIFY(b.fixed[0].empty());
+      SoundLib::setCurrent(bending);
+      const std::vector<SoundLib::Route> bent = SoundLib::routes(score, *bending, true);
+      QCOMPARE(int(bent.size()), 2);
+      QVERIFY(std::isnan(bent[1].cents));
+      SoundLib::setCurrent(nullptr);
+      delete score;
       }
 
 //---------------------------------------------------------
@@ -6480,12 +6787,18 @@ void TestSoundLibrary::liveSetTestSynth()
       QVERIFY(score);
       score->rebuildMidiMapping();
       const std::vector<Track> lanes = tracks(score, *tuned, { "MuseScore A" });
-      QCOMPARE(int(lanes.size()), 2);
+      // (Live's routes: a fixed copy per tuning, each tuned by its Tune, where the hosted varispeed lanes share two)
+      QCOMPARE(int(lanes.size()), 3);
       const QString p0 = score->parts()[0]->partName();
       QCOMPARE(lanes[0].name, p0);
       QCOMPARE(lanes[1].name, p0 + " (2)");
-      QVERIFY(lanes[0].mainPatch && !lanes[1].mainPatch);
-      QCOMPARE(lanes[1].instrument, lanes[0].instrument);           // the same patch (one state for both)
+      QCOMPARE(lanes[2].name, p0 + " (3)");
+      QVERIFY(lanes[0].mainPatch && !lanes[1].mainPatch && !lanes[2].mainPatch);
+      QCOMPARE(lanes[1].instrument, lanes[0].instrument);           // the same patch (one state for all)
+      QCOMPARE(lanes[2].instrument, lanes[0].instrument);
+      QCOMPARE(lanes[0].cents, 0.0);
+      QVERIFY2(std::fabs(lanes[1].cents) > 1.0 && std::fabs(lanes[2].cents) > 1.0 && lanes[1].cents != lanes[2].cents,
+               qPrintable(QString("%1 %2").arg(lanes[1].cents).arg(lanes[2].cents)));
       delete score;
       }
 

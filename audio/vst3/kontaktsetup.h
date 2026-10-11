@@ -92,6 +92,28 @@ QByteArray withScriptValues(const QByteArray& component, const std::map<QString,
 QByteArray withMaxVoices(const QByteArray& component, int maxVoices, QString* error, int* before = nullptr);
 int maxVoices(const QByteArray& program);       // a program's (slotProgram, nkiProgram); -1: not found
 
+// the instrument's Tune (Kontakt's instrument header › Tune, kept as a frequency ratio): a state with its
+// first slot's program tuned by cents, everything else kept (the very bytes when it already is); *before: what
+// it was in cents (NaN, and *error, when the program has none where Kontakt keeps it: the state comes back
+// unchanged). Empty with *error when the state has no program in its first slot. For a tuning lane's copy in
+// Live (Kontakt ignores VST 3 note tuning; All techniques patches don't bend)
+QByteArray withTune(const QByteArray& component, double cents, QString* error, double* before = nullptr);
+double tune(const QByteArray& program);         // a program's Tune in cents; NaN: not found
+
+// a multi of the first slot's program: slot i a copy of it tuned by cents[i] (Tune as withTune; NaN or 0: kept),
+// listening to MIDI channel i + 1 only (MULTI_CONFIGURATION's row i, byte 0: 0 Omni, n channel n); at most 16 slots.
+// For a patch's tuning copies in Live: one Kontakt, each copy's techniques MIDI To its channel (plainliveset.h).
+// Measured with SSO (VM, kthost, 2026-10-10): a 3-slot multi of Violins 1 at 0 / -50 / +50 cents plays as three
+// instances (null -111 dB at a -35 dB signal), a 2-slot Violins 1 - Performance with bends on one channel as two
+// (-108 dB, as two runs of one); each slot ~222 MB (All techniques) where an instance takes ~312 MB: Kontakt
+// shares no samples between slots. Empty with *error when the state has no program in its first slot
+QByteArray withSlots(const QByteArray& component, const std::vector<double>& cents, QString* error);
+struct Slot {
+      double cents { 0 };                 // its program's Tune (NaN: not found)
+      int channel { -1 };                 // its MULTI_CONFIGURATION channel byte (0 Omni, n channel n)
+      };
+std::vector<Slot> slotsOf(const QByteArray& component);   // a state's slots, in order
+
 } // namespace KontaktSetup
 } // namespace Ms
 #endif

@@ -104,7 +104,7 @@ struct Clip {
       // a MIDI controller's envelope in the clip: (beats from the clip's start, value), by time; the first point's value
       // is the value before it too; two points at one time are a step
       struct Envelope {
-            int controller { 0 };         // the CC; PITCH_BEND_ENVELOPE: the bend (0-16383)
+            int controller { 0 };         // the CC; PITCH_BEND_ENVELOPE: the bend (Live's -8192 .. 8191: MIDI's less 8192)
             std::vector<std::pair<double, double>> points;
             };
       std::vector<Envelope> envelopes;
@@ -166,6 +166,10 @@ struct Track {
       int groupIndex { -1 };              // the group it is in (its index in Spec::tracks, before this one); -1: none
       bool unfolded { true };             // a group: its tracks shown
       int midiTo { -1 };                  // MIDI To: the track (its index in Spec::tracks) whose plug-in plays this one's MIDI
+      int midiToChannel { 0 };            // 1-16: To that channel of its plug-in (a multi's slot); 0: Track In
+      std::vector<double> slotCents;      // a Kontakt hosting a patch's tuning copies: slot i's Tune in cents (NaN: a
+                                          // bending copy, untuned), listening to channel i + 1 (KontaktSetup::withSlots,
+                                          // by the export); empty: one slot, as made
       std::vector<Clip> clips;            // arrangement clips, by start, not overlapping
       std::vector<ParameterAutomation> automation;
       std::vector<MixerAutomation> mixerAutomation;   // (a group's too)
@@ -179,9 +183,12 @@ struct Track {
       const SoundLib::LibInstrument* instrument { nullptr };  // the patch
       const Part* partRef { nullptr };    // the route (SoundLib::Route); the plain set's part group: its part
       QString delayKey;                   // the plain set's Kontakt or technique track: its trackdelays.h key
+      bool tuningCopy { false };          // the plain set's MIDI track of a tuning copy (a multi's slot): its Controllers
       int port { 0 };
       int routePatch { 0 };
       int lane { 0 };
+      double cents { 0 };                 // the tuning its Kontakt plays at, by its Tune (SoundLib::Route::cents: a copy's
+                                          // fixed tuning, KontaktSetup::withTune by the export); NaN: it varies
       };
 
 struct Spec {

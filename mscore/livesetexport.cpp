@@ -148,12 +148,6 @@ static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const S
                         if (k.instrument && k.instrument->switchType == SoundLib::SwitchType::PROGRAM && k.techniques.size() > 1)
                               plan->notes << QObject::tr("%1 – %2: switches by program change, which the technique tracks don't "
                                                          "send yet: choose each technique in Kontakt").arg(p.name, k.patch);
-                        if (k.untuned)
-                              plan->notes << QObject::tr("%1 – %2: %n note(s) of a copy for another tuning play at the key's "
-                                                         "pitch", "", k.untuned).arg(p.name, k.patch);
-                        for (const PlainLiveSet::Lane& l : k.lanes)
-                              if (l.cc == PlainLiveSet::PITCH_BEND)
-                                    plan->notes << QObject::tr("%1 – %2: its pitch bends are not written yet").arg(p.name, k.patch);
                         }
       std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(layout, link);
       // what the score keeps of Live's tracks (livetracks.h): their mixer and its automation
@@ -247,6 +241,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
       const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score);
       std::map<std::pair<const Part*, QString>, std::vector<SoundLibraryHost::AppliedParameter>> laneParameters;
       int slow = 0;
+      QStringList tunedTracks;
       for (LiveSetWriter::Track& t : tracks) {
             if (!plugin)
                   break;
@@ -331,6 +326,43 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   if (withControllers.count(key))
                         t.plugin = withControllers[key];
                   }
+            // a copy for another tuning: Kontakt's own Tune (Live has no varispeed; KontaktSetup::withTune, measured with
+            // SSO 2026-10-10: ±50 cents within 2, levels within 0.34 dB; in a set Live 12.4.6 played, -50 cents gave
+            // -51.3 on Long and -49.8 on staccatos, levels within 0.2 dB). A bending patch's copies bend instead
+            // (their Controllers clip's bend envelope)
+            if (!t.slotCents.empty()) {
+                  // a patch's copies in one Kontakt (PlainLiveSet::multis): the patch's slot once per copy, each tuned,
+                  // slot i on MIDI channel i (KontaktSetup::withSlots; measured identical to a Kontakt per copy)
+                  QString err;
+                  const QByteArray multi = KontaktSetup::withSlots(t.plugin.component, t.slotCents, &err);
+                  QStringList slotNames;
+                  for (size_t i = 0; i < t.slotCents.size(); ++i) {
+                        const double c = t.slotCents[i];
+                        slotNames << QString("%1: %2").arg(i + 1).arg(std::isfinite(c)
+                                       ? QString("%1%2 cents").arg(c > 0 ? "+" : "").arg(c, 0, 'f', 2)
+                                       : QObject::tr("bent"));
+                        }
+                  if (multi.isEmpty() || !err.isEmpty())
+                        plan->notes << QObject::tr("%1: its tuning copies could not be set as slots (%2): they play at the key's pitch")
+                                       .arg(t.name, err);
+                  else {
+                        t.plugin.component = multi;
+                        tunedTracks << QObject::tr("%1 (one Kontakt, a slot per tuning, by MIDI channel: %2)")
+                                       .arg(t.name, slotNames.join(", "));
+                        }
+                  }
+            else if (std::isfinite(t.cents) && std::fabs(t.cents) >= 0.005) {
+                  QString err;
+                  double before = 0;
+                  const QByteArray tuned = KontaktSetup::withTune(t.plugin.component, t.cents, &err, &before);
+                  if (tuned.isEmpty() || !err.isEmpty())
+                        plan->notes << QObject::tr("%1: its tuning (%2 cents) could not be set (%3): it plays at the key's pitch")
+                                       .arg(t.name).arg(t.cents, 0, 'f', 2).arg(err);
+                  else {
+                        t.plugin.component = tuned;
+                        tunedTracks << QString("%1 (%2%3)").arg(t.name).arg(t.cents > 0 ? "+" : "").arg(t.cents, 0, 'f', 2);
+                        }
+                  }
             // its automation lanes of plug-in parameters (the automation editor): in Live's panel too (Configure), so the
             // MuseScore Link device finds them on the track and plays them (live.remote~); the patch's own value
             QStringList titles;
@@ -373,6 +405,9 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             }
       for (const auto& n : controllerNotes)
             plan->controllers << n.second;
+      if (!tunedTracks.isEmpty())
+            plan->notes << QObject::tr("%n Kontakt(s) for other tunings, tuned by Kontakt's Tune (cents): %1", "", tunedTracks.size())
+                           .arg(tunedTracks.join(", "));
       if (slow)
             plan->notes << QObject::tr("%n patch(es) were never loaded in MuseScore: their setup is made from the .nki, which Kontakt "
                                        "loads slowly the first time (play the score once in MuseScore first to have Kontakt's own "
@@ -447,7 +482,9 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
                   continue;
                   }
             if (t.midiTo >= 0) {
-                  text += line + " — " + QObject::tr("MIDI To %1").arg(plan.spec.tracks[size_t(t.midiTo)].name) + "\n";
+                  const QString to = plan.spec.tracks[size_t(t.midiTo)].name;
+                  text += line + " — " + (t.midiToChannel > 0 ? QObject::tr("MIDI To %1, channel %2").arg(to).arg(t.midiToChannel)
+                                                              : QObject::tr("MIDI To %1").arg(to)) + "\n";
                   continue;
                   }
             QStringList devices;

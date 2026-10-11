@@ -675,7 +675,7 @@ std::vector<PartInfo> partInfos(const MasterScore* score, const QStringList& por
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!score || !library)
             return out;
-      for (const SoundLib::Route& r : SoundLib::routes(score, *library)) {
+      for (const SoundLib::Route& r : SoundLib::routes(score, *library, true)) {
             if (r.patch != 0 || r.lane != 0 || !r.instrument)
                   continue;
             PartInfo pi;
