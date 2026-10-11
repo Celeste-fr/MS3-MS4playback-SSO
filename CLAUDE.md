@@ -244,8 +244,8 @@ events of a whole score checked against the map's own onsets (not the real sound
 swapped / early techniques or no onset, capped early starts (the cut), predicted arrival against neighbours (sent +
 onset - written; Rasch 1979: > 50 ms fails) and level steps under a slur (values; proposed threshold 0.69 dB, Jesteadt,
 Wier & Green 1977, owner to approve). The renderer
-reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (Recommended) before any
-build goes to the owner.**
+reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (quarter tones,
+`Whence.mscz`; Recommended) before any build goes to the owner.**
 
 ## Building and testing
 
@@ -287,10 +287,12 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   `MS_KONTAKT_MAX_VOICES`, `MS_SOUNDLIBRARY_LOAD_THREADS`, `MS_LIVESET_OUT=<file>` (liveSetWrite's set).
 - Other tests: `tools/soundlibraries/test_make_setups.py`, `test_extract_library_files.py`; Node in
   `tools/live/test/`. Test data: `test-scores/`, `share/verifyplayback/`, each mtest's folder.
-- **Standard test score**: the owner's *Whence* in 12-TET, `~/MuseScore/ms3fork/test-scores/Whence 12-TET.mscz`
-  (and `.mscx`) on the dev VM, **never in the repo** (the owner's score). Use it for dumps (`dumpEvents`), Create Live
-  Set, VM runs and test instructions unless a test needs microtones (then the original, quarter tones). Made
-  2026-10-06 by rounding each quarter tone down, as "Whence simple 2" played: the key's D / B quarter-flats → ♭, its
+- **Standard test score** (the owner, 2026-10-11): *Whence*, the quarter-tone original,
+  `~/MuseScore/ms3fork/test-scores/Whence.mscz` on the dev VM, **never in the repo** (the owner's score). Use it for the
+  playback audit, dumps (`dumpEvents`, with `MS_DUMP_LIVE` for the Live path), Create Live Set, VM runs and test
+  instructions: its quarter tones exercise the tuning lanes, Kontakt Tune and bends. *Whence 12-TET*
+  (`Whence 12-TET.mscz` / `.mscx`, same folder) only where a test needs no tuning lanes; numbers below marked
+  "Whence 12-TET" were measured on it. Whence 12-TET was made 2026-10-06 by rounding each quarter tone down, as "Whence simple 2" played: the key's D / B quarter-flats → ♭, its
   G quarter-sharp dropped (key E♭ B♭ D♭ F♯), each E quarter-sharp → E♮; checked with the fork's dump (107 D / B
   notes a semitone lower, the other 347 and all times unchanged; 10 routes instead of 26: no tuning lanes).
 

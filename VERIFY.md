@@ -139,10 +139,11 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   difference limen of Jesteadt, Wier & Green 1977 (JASA 61, 169-177; dI/I = 0.463 (I/I0)^-0.072 as Praat's manual
   quotes it), 0.69 dB at 60 dB sensation level (0.93 at 40, 0.50 at 80); steps above it are marked "> DL".
 
-Run it on the standard score (Recommended), through the worktree's wrappers:
+Run it on the standard score, *Whence* (quarter tones, `Whence.mscz`, since 2026-10-11; Recommended), through the
+worktree's wrappers:
 
 ```sh
-./run-<name>.sh 'cd mtest/libmscore/playbackaudit && MS_AUDIT_SCORE="$HOME/MuseScore/ms3fork/test-scores/Whence 12-TET.mscz" \
+./run-<name>.sh 'cd mtest/libmscore/playbackaudit && MS_AUDIT_SCORE="$HOME/MuseScore/ms3fork/test-scores/Whence.mscz" \
   MS_AUDIT_OUT=/tmp/audit-whence.txt QT_QPA_PLATFORM=offscreen ./tst_playbackaudit auditScore'
 ```
 

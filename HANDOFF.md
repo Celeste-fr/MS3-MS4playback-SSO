@@ -7,7 +7,7 @@ a section there when you need the background of that topic. Commit messages desc
 
 ## Before a build goes to the owner (2026-10-09)
 
-Run the playback audit on *Whence 12-TET* with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
+Run the playback audit on *Whence* (the quarter-tone original, `Whence.mscz`, the standard score since 2026-10-11) with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
 with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every ARRIVAL fail and CAPPED note left must be
 named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
@@ -67,7 +67,7 @@ only early start.
 
 Open:
 - **The playback audit has no model of a transition's arrival**: it judges Performance transitions by the attack
-  onset, so on *Whence* (Recommended) ARRIVAL reads 19 fail / 136 warn (before: 1 fail) and CAPPED 289 info (226 transitions, nearly
+  onset, so on *Whence 12-TET* (Recommended) ARRIVAL reads 19 fail / 136 warn (before: 1 fail) and CAPPED 289 info (226 transitions, nearly
   all on the beat, and 63 re-attacks held back by the keep below). It needs the measured transition delays (`sso_legato_*.json`, `legatoDelay`) before
   those counts mean anything.
 - **A re-attack keeps the note before** (fixed 2026-10-10, integrate-2026-10-10): a slur's last sixteenth (136 ms at
@@ -254,8 +254,9 @@ velocity 100 is unmeasured, and any start shift changes SSO's transition, above)
 
 ## Where things are (2026-10-02)
 
-- **Standard test score** (2026-10-06): the owner's *Whence* in 12-TET, `~/MuseScore/ms3fork/test-scores/Whence
-  12-TET.mscz` on the dev VM (not in the repo; CLAUDE.md › Building and testing).
+- **Standard test score** (2026-10-11): the owner's *Whence*, the quarter-tone original,
+  `~/MuseScore/ms3fork/test-scores/Whence.mscz` on the dev VM (not in the repo; CLAUDE.md › Building and testing);
+  *Whence 12-TET* (`Whence 12-TET.mscz`, 2026-10-06's standard) only where a test needs no tuning lanes.
 - `main` has everything: `live-set-export` / `claude/intelligent-volta-gx7gmw`, `automation-editor`, the
   measurement branch `claude/intelligent-cray-6pd4o1` and `playability-checker` were merged on 2026-10-02 (the
   branches are kept). Work on a branch; finished work by Claude and its subagents is merged into `main` without asking (the owner, 2026-10-02), anything incomplete or changing an owner-decided value waits for the owner.
