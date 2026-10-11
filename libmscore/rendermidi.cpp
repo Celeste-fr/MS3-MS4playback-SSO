@@ -1780,7 +1780,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     lenBefore = perf.lenBefore;
                                     if (perf.velocity > 0)
                                           libNote.velocity = perf.velocity;
-                                    if (perf.before)
+                                    if (perf.before && !writtenTiming)      // (written timing: the note before as written)
                                           libJoins.push_back({ noteChannel, libChoice.patch, perf.before->ppitch(), note,
                                                                note->chord()->tick().ticks() + tickOffset, perf.endMs });
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
@@ -4744,7 +4744,8 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   ms4Active.insert(part);
 
       libChunkStart = chunk.utick1();
-      libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
+      // (written timing, Live's clips: no early start; LiveTiming moves the notes in Live instead)
+      libOnsetEarly = library && !writtenTiming ? SoundLib::onsetEarly(score, *library) : 0;
       libOnsetByPitch = Playback::on("heldNotes/byPitch", score);
       libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;

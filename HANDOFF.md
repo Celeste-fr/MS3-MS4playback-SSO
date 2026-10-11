@@ -13,6 +13,39 @@ named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
 
+## Written clips in the plain set (2026-10-11)
+
+Branch `live-written-clips` (from `claude/whence-listen-2`). The owner (2026-10-11): Live clips hold the WRITTEN notes;
+the timing is applied at playback, per technique by Track Delay, the rest by the MuseScore Link device. LIVE.md › The
+plain set › Written clips has the design; `libmscore/livetiming.h`, MuseScoreLink.js › Written clips.
+
+Where played timing reached Live before: the plain set's technique clips (onset early, keepMs cap, the note before cut,
+Performance joins, the same-key note-off after them, so also the switch runs' clip starts): now written. The Kontakt
+track's Controllers clip: still at played times (controllers, not notes; meets the notes as before). *Live plays the
+score*'s route clips, the route set and `--live-equivalence`: still played (open, below). Clip tabs: show the clip, so
+the written notes now.
+
+Step 2, measured on the Linux dev machine (`tst_liveequivalence dumpEvents` with `MS_DUMP_TIMING`, the shipped SSO map,
+no Kontakt), 454 notes, Whence 12-TET, Recommended (`heldNotes/byPitch` 0), MuseScore's played times against Live:
+- Track Delay alone (each technique track minus its most common early start; the median gives the same): note-ons
+  equal for 377, off for 77 (all > 30 ms, 9 > 50, max 87.5 ms: capped or cut notes); note-offs off for 439 (median 26 ms,
+  78 > 30 ms, max 170.5 ms: the note-off stays where written while the track moves it early, and the note before an early
+  start is cut there).
+- With `byPitch` 1: note-ons off for 95 (84 > 30 ms, max 95.5), note-offs 439 (max 179.5).
+- Whence (quarter tones, 28 technique tracks): as Whence 12-TET by the median.
+- Track Delay (the lookahead: the earliest note-on or note-off before its written place, 59.1-170.5 ms by track, most
+  94.4) plus the device's delays: every note-on and note-off at MuseScore's time (0.00 ms, all three runs). Before the
+  lookahead covered note-offs too, 42 note-offs (Performance re-attacks: the note before ends its gap before the next
+  one's early start) came up to 52 ms late.
+
+Open, for the owner:
+- *Live plays the score* (and the route set it uses): written clips there need each route track's Track Delay, which
+  Live's API can't set and those tracks are often made by hand; left played. Decide whether to change it (the route set
+  could write the Track Delay; hand-made tracks would need it typed in).
+- Only real Live 12.4 can confirm the device's side (LIVE.md › Create Live Set › What is tested: the Track Delay on a
+  MIDI track moving its MIDI To output, the song position the patcher sees under a negative Track Delay
+  (`TIM_SEES_TRACK_DELAY`), Bank / Sub through the device, `[pipe]`'s precision, the `"Timing"` store). Not run on the VM.
+
 ## Section balance, `[levels] sectionBalance` (2026-10-11)
 
 Branch `section-balance-m` (from main; section-balance's mechanism + `sso-cc1-curves`'s measurements): the owner chose

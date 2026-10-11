@@ -290,7 +290,38 @@ in a section collapsible at the same time".
   don't use) to the value and back after the run. A keyswitch patch: one clip, a key note one unit long per run. The
   Kontakt track's "Controllers" clip holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters
   MuseScore automates are automation on the Kontakt track.
-- **No automatic timing or levels**: what the playback settings say, off by default (docs/PLAYBACK_SETTINGS.md).
+- **Written clips** (the owner, 2026-10-11: "Live clips hold the WRITTEN notes -- on the grid, exact written lengths,
+  rests -- never the played timing"; the timing "is applied at PLAYBACK", per technique by Track Delay, the rest by the
+  device: "a device is fine"; `libmscore/livetiming.h`). The technique tracks' clips hold each note where the notation
+  puts it (MuseScore's note model, in ticks: a second render with `MidiRenderer::setWrittenTiming`, which leaves out
+  every timing the renderer gives library notes in seconds: the early start by the measured onset (`[heldNotes] early`,
+  `byPitch`, a `[slurs] quick` swap's own onset, a Performance attack's), its `[legato] keepMs` cap, the note before on
+  the patch cut at that early start, a Performance note's join (`overlap`, `reattackGap`), and the same-key note-off that
+  follows from them). Each written note keeps MuseScore's played start and end (from the played render, paired by note
+  and key). At playback:
+  - the technique track's **Track Delay** is its *lookahead* earlier: the earliest MuseScore plays any of its note-ons
+    or note-offs before the written place (a technique's median onset with `[heldNotes] byPitch` 0, Recommended; more
+    where a Performance re-attack ends the note before its gap before the next one's early start: Whence 59-171 ms). Live's own lookahead: a note can only sound before its clip time if Live reads it early;
+  - its **MuseScore Link** copy delays each note-on and note-off into MuseScore's time (≥ 0 ms; the device's patcher,
+    MuseScoreLink.js › Written clips): most notes share one pair of delays (the note-ons 0, the note-offs the lookahead:
+    the note was moved early, its end stays), the others (a capped or per-pitch start, a note before cut by the next
+    one's early start, a Performance join) are listed by their written start. The record goes into the device's saved
+    data (`"Timing"`, `LiveSetWriter::linkBlob`), so the set plays it without MuseScore; the patcher reads the delays
+    from a ring the script fills each second (as the velocity shaper's), at the note's song tick, and plays the note
+    through a `[pipe]`. A technique's switch (the Bank / Sub Live sends at a run's clip start, a CC envelope's step, a
+    keyswitch note) goes with the run's first note;
+  - the Kontakt track's Controllers clip holds the controllers where MuseScore plays them (a note's dynamic, CC11 and
+    bend right before its played note-on, a glide after it); the Kontakt track has no technique's delay, so they meet
+    the notes as in MuseScore.
+  Live then plays what MuseScore plays: `tst_liveequivalence` `plainWritten` takes every note-on and note-off of
+  MuseScore's own render and finds it at the same time (within a unit, 0.13 ms at 120 bpm) from the written clips, the
+  Track Delays and the device's delays, by pitch and by the median, with keepMs caps and an onset longer than the notes;
+  `tools/live/test/test_patch.js` › written clips runs the patcher's path on a model of Max's objects, `test_timing.js`
+  the script's ring. Without the device (`LiveSetKind::PLAIN`) the Track Delay is the technique's most common early
+  start and every note is as written, moved by it (step 2's numbers: HANDOFF.md › Written clips in the plain set). Read back
+  (`livetracks.*`), a technique track's TrackDelay gets its lookahead added back (`Written::lookahead`), so the score's
+  track delays stay the technique's own. A clip tab shows and edits the written notes; a note edited there (moved,
+  added) plays with the track's most common delays (its own exception, keyed by its old place, no longer applies).
 - **The Mixer's mute and solo** (2026-10-06, after the owner's first set came out with only the soloed Violas' notes
   playing): the notes are written as played whatever the Mixer says (only a voice switched off for playback leaves
   its notes deactivated); a muted part's Kontakt track is written deactivated, a solo is left out. (*Live plays the
@@ -556,6 +587,23 @@ Only real Live can show (to check first):
   the same values (the state itself was checked in real Kontakt on the VM: "Measured with SSO");
 - the mixer: each track's fader and pan at the written values (e.g. -3.9 dB, 25L), a muted part's track deactivated.
 
+Written clips (the plain set, 2026-10-11; tested here only on the model of Max's objects and against MuseScore's own
+render, `plainWritten`, `test_patch.js`, `test_timing.js`), only real Live 12.4 can show (to check first, the VM's Live
+12.4.6 with a recorder track taking each technique track's output, as on 2026-10-07):
+- that a negative Track Delay on a MIDI track moves what it sends MIDI To the Kontakt earlier (the manual: "every
+  track"; untried), and that Live keeps a value with one decimal (−86.1 ms);
+- the song position the device's patcher sees for a note Live sends early by the Track Delay: the note's own less the
+  delay (`TIM_SEES_TRACK_DELAY` true, the cells read that far ahead) or the note's own (false): play a technique track
+  with a known exception and log the patcher's note-ons (the `vlog` probe);
+- that a clip's Bank / Sub (the UACC switch) passes through the device before Kontakt (if Live sends it past the
+  chain, a capped first note of a run would get its switch early: as before, the switch at the run's clip start);
+- how close `[pipe]` lands a delayed note to its time in Live's scheduler (the clip's own notes are sample-timed; a
+  recorder track shows the difference), in playback and in *Export Audio/Video* (offline: the scheduler follows the
+  render?);
+- that the device's `"Timing"` store comes back from the set (`[pattr Timing]`, as the `"Lanes"` stores do) and that
+  `peek~ ---mslt 2`, `buffer~` with two channels and `[pipe 0 0 0]` with its delay in the right inlet behave as
+  modelled.
+
 ### Open questions for the owner
 
 - Live asks where to save a set opened from outside a project: save it next to the score, or in a Live project?
@@ -810,6 +858,17 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   repeats).
 
 ### What still differs
+
+- **Written clips** (the plain set, 2026-10-11, above): the device's delays are kept to 0.01 ms and Live's Track Delay to
+  0.1 ms; the device reads its delays at the song position it sees, assumed to be the Track Delay before the note's
+  (`TIM_SEES_TRACK_DELAY`, only Live can confirm), a tick on each side tolerated; a note moved or added in Live (or in a
+  clip tab) plays with its track's most common delays; Max's `[pipe]` runs in the scheduler, not sample-timed as the
+  clip's own notes (only Live can say how close). A clip tab playing through its Live track (MuseScore's notes sent to
+  the track at once, `/ms/midi`) plays the written notes as written (no onset): MuseScore plays a clip tab as notation.
+  *Live plays the score*'s clips (and so the route set and `--live-equivalence`) still hold the played timing: their
+  tracks are found or made by hand and Live's API (the Live Object Model) has no Track Delay to set, so written notes
+  there would play late by each route's lookahead until the owner set every track's Track Delay by hand (the owner to
+  decide; HANDOFF.md › Written clips in the plain set).
 
 - **Host-only playback settings** (docs/PLAYBACK_SETTINGS.md; playback.ini `[hosting]`): `settleSeconds` (how long a
   freshly loaded patch runs before MuseScore sets its controllers) acts
@@ -1511,8 +1570,10 @@ do.
 (Live plays the score; carrier notes 114-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
 tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
 (`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
-`libmscore/plainliveset.*` (the plain set), `libmscore/livetracks.*` (the plain set read back: track keys in the
-Info text, metaTag `liveTracks`), `libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
+`libmscore/plainliveset.*` (the plain set; its technique clips hold the written notes, `libmscore/livetiming.*` puts
+the played timing back by Track Delay and the device: `MidiRenderer::setWrittenTiming`, `LiveTiming::track`, the
+device's `"Timing"` store and `---mslt` ring, MuseScoreLink.js › Written clips), `libmscore/livetracks.*` (the plain set
+read back: track keys in the Info text, metaTag `liveTracks`; a technique's TrackDelay plus its lookahead), `libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
 `tools/live/test/compare_als_skeleton.py`), `mscore/liveequivalence.*`, `tools/live/` (Max for Live device, Node
 tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Live through the device (`/ms/params`,
 `/ms/pvals`; tables played by `live.remote~` at Live's song position; Kontakt's slots "#001" matched by

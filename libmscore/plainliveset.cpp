@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "plainliveset.h"
+#include "livetiming.h"
 
 #include <algorithm>
 #include <cmath>
@@ -111,7 +112,7 @@ void putPoint(std::vector<std::pair<int, V>>& points, int at, V value)
 }     // namespace
 
 Layout layout(const Score* score, const SoundLib::Library& library, const EventMap& events,
-              const LiveClips::Timeline& tl)
+              const LiveClips::Timeline& tl, const EventMap* written)
       {
       Layout out;
       out.bpm = tl.bpm;
@@ -168,6 +169,17 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
       for (const auto& te : events)
             if (te.second.isExternal())
                   byRoute[te.second.extPort() * 16 + te.second.extChannel()].push_back({ te.first, &te.second });
+      // written (livetiming.h): the written render's events by route, its note-ons' keys, and each note's played times
+      std::map<int, std::vector<std::pair<int, const NPlayEvent*>>> writtenByRoute;
+      std::map<const void*, LiveTiming::Key> writtenKeys;
+      std::map<LiveTiming::Key, LiveTiming::Span> playedTimes;
+      if (written) {
+            for (const auto& te : *written)
+                  if (te.second.isExternal())
+                        writtenByRoute[te.second.extPort() * 16 + te.second.extChannel()].push_back({ te.first, &te.second });
+            LiveTiming::noteTimes(*written, &writtenKeys);
+            playedTimes = LiveTiming::noteTimes(events);
+            }
       for (const auto& r : byRoute) {
             auto bi = builders.find(r.first);
             if (bi == builders.end())
@@ -218,6 +230,18 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   std::stable_sort(items.begin(), items.end(), [](const std::pair<int, const NPlayEvent*>& a,
                                                                   const std::pair<int, const NPlayEvent*>& b) { return a.first < b.first; });
                   }
+            // the technique of a switch value (made at its first note)
+            auto techniqueFor = [&](int value) {
+                  auto t = b.techniqueOf.find(value);
+                  if (t == b.techniqueOf.end()) {
+                        Technique tq;
+                        tq.name = techniqueName(li, value);
+                        tq.value = li && li->switchType != SoundLib::SwitchType::NONE ? value : -1;
+                        k.techniques.push_back(tq);
+                        t = b.techniqueOf.insert({ value, k.techniques.size() - 1 }).first;
+                        }
+                  return t->second;
+                  };
             int value = -1;                               // the switch in force
             std::map<int, std::deque<std::pair<size_t, LiveClips::Note>>> open;   // pitch -> (technique, note)
             for (const auto& item : items) {
@@ -253,23 +277,18 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         putPoint(b.params[pk], at, e.tuning());
                         }
                   else if (on) {
-                        auto t = b.techniqueOf.find(value);
-                        if (t == b.techniqueOf.end()) {
-                              Technique tq;
-                              tq.name = techniqueName(li, value);
-                              tq.value = li && li->switchType != SoundLib::SwitchType::NONE ? value : -1;
-                              k.techniques.push_back(tq);
-                              t = b.techniqueOf.insert({ value, k.techniques.size() - 1 }).first;
-                              }
+                        const size_t t = techniqueFor(value);
+                        b.startsAt[at].insert(value);
+                        if (written)
+                              continue;               // (the notes as written, below)
                         LiveClips::Note n;
                         n.pitch = e.pitch();
                         n.start = at;
                         n.velocity = e.velo();
                         n.muted = voiceOff(e);
-                        open[n.pitch].push_back({ t->second, n });
-                        b.startsAt[at].insert(value);
+                        open[n.pitch].push_back({ t, n });
                         }
-                  else if (off) {
+                  else if (off && !written) {
                         auto o = open.find(e.pitch());
                         if (o == open.end() || o->second.empty())
                               continue;
@@ -284,14 +303,60 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         tn.second.length = std::max(1, endUnits - tn.second.start);
                         k.techniques[tn.first].notes.push_back(tn.second);
                         }
+            // written (livetiming.h): the notes as written, each with its played start and end
+            if (written) {
+                  auto wi = writtenByRoute.find(r.first);
+                  if (wi == writtenByRoute.end())
+                        continue;
+                  int wvalue = -1;
+                  std::map<int, std::deque<std::pair<size_t, LiveClips::Note>>> wopen;
+                  for (const auto& item : wi->second) {
+                        const NPlayEvent& e = *item.second;
+                        const int at = tl.units(item.first);
+                        if (setsSwitch(e, wvalue))
+                              continue;
+                        if (e.type() == ME_NOTEON && e.velo() > 0) {
+                              LiveClips::Note n;
+                              n.pitch = e.pitch();
+                              n.start = at;
+                              n.velocity = e.velo();
+                              n.muted = voiceOff(e);
+                              auto key = writtenKeys.find(&e);
+                              auto span = key == writtenKeys.end() ? playedTimes.end() : playedTimes.find(key->second);
+                              if (span != playedTimes.end()) {
+                                    n.timed = true;
+                                    n.playedStart = tl.units(span->second.on);
+                                    n.playedEnd = tl.units(span->second.off);
+                                    }
+                              wopen[n.pitch].push_back({ techniqueFor(wvalue), n });
+                              }
+                        else if (e.type() == ME_NOTEOFF || e.type() == ME_NOTEON) {
+                              auto o = wopen.find(e.pitch());
+                              if (o == wopen.end() || o->second.empty())
+                                    continue;
+                              auto tn = o->second.front();
+                              o->second.pop_front();
+                              tn.second.length = std::max(1, at - tn.second.start);
+                              k.techniques[tn.first].notes.push_back(tn.second);
+                              }
+                        }
+                  for (auto& o : wopen)
+                        for (auto tn : o.second) {
+                              tn.second.length = std::max(1, endUnits - tn.second.start);
+                              k.techniques[tn.first].notes.push_back(tn.second);
+                              }
+                  }
             }
 
       // the lanes, clashes; notes in order
       for (auto& bi : builders) {
             Builder& b = bi.second;
             Kontakt& k = *b.kontakt;
-            for (Technique& t : k.techniques)
+            for (Technique& t : k.techniques) {
                   std::stable_sort(t.notes.begin(), t.notes.end());
+                  if (written)
+                        t.timing = LiveTiming::track(t.notes, tl.bpm);
+                  }
             for (auto& l : b.lanes)
                   if (l.first != PITCH_BEND)
                         k.lanes.push_back({ l.first, l.second, b.glides[l.first] });
@@ -699,6 +764,14 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                                     tt.clips = switchClips(kc, i, layout.length);
                                     tt.delayKey = TrackDelays::trackKey(kc.patch, kc.techniques[i].name);
                                     tt.delayMs = TrackDelays::own(p.delays, tt.delayKey);
+                                    // written notes (livetiming.h): Live's lookahead on the track, the device's delays
+                                    // into place on its MuseScore Link copy; without the device the most common early
+                                    // start alone (each note as written, moved by it)
+                                    const LiveTiming::Track& timing = kc.techniques[i].timing;
+                                    tt.lookaheadMs = link ? timing.lookaheadMs : timing.commonEarlyMs;
+                                    tt.delayMs -= tt.lookaheadMs;
+                                    if (link && timing.any())
+                                          tt.linkTiming = LiveTiming::record(timing);
                                     tt.annotation = trackKey({ s.name, p.name, name, kc.techniques[i].name });
                                     out.push_back(tt);
                                     }

@@ -161,6 +161,11 @@ struct Note {
       int length { 1 };             // units
       int velocity { 100 };
       bool muted { false };         // silenced in MuseScore (the Mixer's mute or solo, a voice not played)
+      // a written note (livetiming.h): where MuseScore plays it, units (the device and Track Delay put it there in
+      // Live); not part of the clip
+      bool timed { false };
+      int playedStart { 0 };
+      int playedEnd { 0 };
       bool operator==(const Note& o) const {
             return pitch == o.pitch && start == o.start && length == o.length && velocity == o.velocity && muted == o.muted;
             }

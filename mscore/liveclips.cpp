@@ -622,10 +622,11 @@ void LiveClipsLink::resolveParameterIds(std::vector<LiveClips::Track>* tracks, c
             }
       }
 
-void LiveClipsLink::renderEvents(MasterScore* score, EventMap* events)
+void LiveClipsLink::renderEvents(MasterScore* score, EventMap* events, bool written)
       {
       MidiRenderer r(score);
       r.setForLiveClips(true);
+      r.setWrittenTiming(written);
       const SynthesizerState ss = mscore ? mscore->synthesizerState() : SynthesizerState();
       MidiRenderer::Context ctx(ss);
       ctx.metronome = false;
