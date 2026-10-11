@@ -33,6 +33,7 @@
 #include "score.h"
 #include "segment.h"
 #include "staff.h"
+#include "stafftype.h"
 #include "stringdata.h"
 #include "sym.h"
 #include "symbol.h"
@@ -213,6 +214,9 @@ class Pass {
       void checkBrassTrills(Part* part, const QString& staffName);
       // chimes: at most two notes at once (P4)
       void checkChimes(Part* part, const QString& staffName);
+      // ledger lines (G7) and "divisi" in wind and brass parts (G8), SPEC-g7g8
+      void checkLedgerLines(Part* part, const QString& staffName);
+      void checkWindDivisi(Part* part, const QString& staffName);
       void brassTrillNotes(Chord* chord, ChordInfo& info);
 
    public:
@@ -1058,6 +1062,114 @@ void Pass::checkChimes(Part* part, const QString& staffName)
             if (int(pitches.size()) > CHIMES_MAX_NOTES)
                   momentRow(m, on, staffName, "chimes", false,
                             "more than two chime notes at once (two players can take two each) (solo and section) (Adler p. 442; Sevsay p. 155)");
+            }
+      }
+
+//---------------------------------------------------------
+//   checkLedgerLines (G7, SPEC-g7g8, owner-approved 2026-10-11)
+//    ledger lines from the note's displayed line (Note::line(): after clef and ottava), counted
+//    exactly as Chord::addLedgerLines draws them, on 5-line pitched staves only. Double bass:
+//    LEDGER_DB_CLEF_MIN or more, a clef change (Adler p. 84); every other pitched instrument:
+//    more than LEDGER_OTTAVA_MAX, 8va / 15ma / 8vb (Adler p. 767). Grace and small notes count.
+//    One row per chord and rule, kind "ledger".
+//---------------------------------------------------------
+
+static int ledgerLines(const Note* n, int stepOffset)
+      {
+      const int lineBelow = 8;                  // a 5-line staff's bottom line
+      int l = n->line() + stepOffset;
+      if (l < -1)
+            return (-l) / 2;                    // -2/-3: one line, -4/-5: two, ...
+      if (l > lineBelow + 1)
+            return (l - lineBelow) / 2;         // 10/11: one line, 12/13: two, ...
+      return 0;
+      }
+
+void Pass::checkLedgerLines(Part* part, const QString& staffName)
+      {
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* el = s->element(track);
+                  if (!el || !el->isChord())
+                        continue;
+                  Chord* main = toChord(el);
+                  Fraction tick = s->tick();
+                  const bool bass = instrumentAt(part, tick).name == "Double bass";
+                  auto check = [&](Chord* c, int grace) {
+                        Staff* st = _score->staff(c->staffIdx() + c->staffMove());
+                        if (!st || st->lines(tick) != 5)
+                              return;
+                        const StaffType* type = st->staffType(tick);
+                        if (!type || type->group() != StaffGroup::STANDARD)
+                              return;
+                        std::vector<Note*> hits;
+                        for (Note* n : c->notes()) {
+                              int k = ledgerLines(n, type->stepOffset());
+                              if (bass ? k >= LEDGER_DB_CLEF_MIN : k > LEDGER_OTTAVA_MAX)
+                                    hits.push_back(n);
+                              }
+                        if (hits.empty())
+                              return;
+                        std::stable_sort(hits.begin(), hits.end(), [](const Note* a, const Note* b) { return a->ppitch() < b->ppitch(); });
+                        QStringList names;
+                        for (Note* n : hits) {
+                              markOver(n, PlayMark::OUT_OF_REACH);
+                              QString nm = tpcName(n->tpc1(), n->ppitch());
+                              if (!names.contains(nm))
+                                    names << nm;
+                              }
+                        QString reason = bass
+                              ? QString("%1 or more ledger lines: consider a clef change (solo and section) (Adler p. 84)").arg(LEDGER_DB_CLEF_MIN)
+                              : QString("more than %1 ledger lines: consider 8va / 15ma / 8vb (solo and section) (Adler p. 767)").arg(LEDGER_OTTAVA_MAX);
+                        addRow(tick.ticks(), tick.ticks(), track, staffName, "ledger", "risky", reason, names.join(" + "));
+                        _res.rows.back().grace = grace;
+                        _res.outOfReach++;
+                        };
+                  const QVector<Chord*>& graces = main->graceNotes();
+                  for (int g = 0; g < graces.size(); ++g)
+                        check(graces[g], g);
+                  check(main, -1);
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkWindDivisi (G8, SPEC-g7g8, owner-approved 2026-10-11)
+//    a staff or system text on a woodwind or brass staff (windAt) with "div.", "div" or "divisi"
+//    as a whole word (also in "non div."): divisi is for strings (Adler p. 179). A text cannot be
+//    coloured, so the first chord on the staff at (else after) its tick is marked.
+//---------------------------------------------------------
+
+void Pass::checkWindDivisi(Part* part, const QString& staffName)
+      {
+      static const QRegularExpression DIV(WIND_DIVISI_WORDS, QRegularExpression::CaseInsensitiveOption);
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            for (Element* e : s->annotations()) {
+                  if (!(e->isStaffText() || e->isSystemText()))
+                        continue;
+                  int st = e->staffIdx();
+                  if (st < 0 || _score->staff(st)->part() != part)
+                        continue;
+                  int tick = s->tick().ticks();
+                  if (windAt(part, tick).isEmpty())
+                        continue;
+                  QString text = plainText(toTextBase(e)->xmlText()).simplified();
+                  if (!DIV.match(text).hasMatch())
+                        continue;
+                  Chord* chord = nullptr;
+                  for (Segment* t = s; t && !chord; t = t->next1(SegmentType::ChordRest))
+                        for (int v = 0; v < VOICES && !chord; ++v) {
+                              Element* c = t->element(st * VOICES + v);
+                              if (c && c->isChord() && !toChord(c)->notes().empty())
+                                    chord = toChord(c);
+                              }
+                  if (chord)
+                        for (Note* n : chord->notes())
+                              markOver(n, PlayMark::OUT_OF_REACH);
+                  addRow(tick, tick, chord ? chord->track() : st * VOICES, staffName, "divisi", "risky",
+                         "divisi is for strings; use a 2 / 1. / 2. (solo and section) (Adler p. 179)", "\"" + text + "\"");
+                  _res.outOfReach++;
+                  }
             }
       }
 
@@ -2410,6 +2522,8 @@ void Pass::run()
             checkWindTrills(part, staffName);
             checkBrassTrills(part, staffName);
             checkChimes(part, staffName);
+            checkLedgerLines(part, staffName);
+            checkWindDivisi(part, staffName);
             }
       for (int st = 0; st < _score->nstaves(); ++st) {
             Part* part = _score->staff(st)->part();

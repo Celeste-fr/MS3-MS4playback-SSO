@@ -440,6 +440,14 @@ QString fingeringName(int mask);
 int slideGlissando(Brass b, int attachments, int from, int to, QString* reason);
 constexpr int GLISSANDO_MAX = 6;                    // a tritone (Adler p. 347, TB17)
 
+// G7 ledger lines (SPEC-g7g8, owner-approved 2026-10-11), counted from the note's displayed staff line on
+// 5-line pitched staves, the way Chord::addLedgerLines draws them
+constexpr int LEDGER_DB_CLEF_MIN = 3;               // double bass: 3 or more, a clef change (Adler p. 84)
+constexpr int LEDGER_OTTAVA_MAX = 4;                // every other pitched instrument: more than 4, 8va / 15ma / 8vb (Adler p. 767)
+// G8: "div." / "div" / "divisi" as a whole word in a wind or brass staff's text (Adler p. 179)
+constexpr const char* WIND_DIVISI_WORDS = "\\b(div|divisi)\\b";
+
 }     // namespace Playability
 }     // namespace Ms
+
 #endif

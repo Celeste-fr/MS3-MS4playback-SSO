@@ -242,6 +242,26 @@ headless test scores and their checked results are the parity tests.
   kind `chimes` per moment, all sounding notes marked. Test `chimes` (chimes-tests.mscx from
   `tools/playability/gen_chimes_tests.py`: 2-note chord clean, 3-note chord, two voices making 3 pitches,
   held note + 2-note chord, vibraphone 3-note chord clean).
+- Ledger lines (G7, SPEC-g7g8, owner-approved 2026-10-11): counted from the note's displayed line
+  (`Note::line()`: after clef and ottava; MuseScore 3 stores the written pitch under an 8va) exactly as
+  `Chord::addLedgerLines` draws them, on 5-line pitched staves only (percussion, tablature and other line
+  counts skipped); grace and small notes count. Double bass (every id the string tables read as the double
+  bass): 3 or more ledger lines above or below, "risky", consider a clef change (`LEDGER_DB_CLEF_MIN`; Adler
+  p. 84); every other pitched instrument: more than 4, "risky", consider 8va / 15ma / 8vb
+  (`LEDGER_OTTAVA_MAX`; Adler p. 767); a bass note is checked by the first rule only. "(solo and section)".
+  `Pass::checkLedgerLines`: one row of kind `ledger` per chord, the notes past the limit marked.
+- "Divisi" in wind and brass parts (G8, SPEC-g7g8): a staff, expression or system text on a staff the wind
+  passes treat as winds (`windAt`: woodwinds, saxophones, brass) whose words include "div", "div." or
+  "divisi" as a whole word, any case (also "non div."; not "Dividing" or "individual"; `WIND_DIVISI_WORDS`):
+  "risky", divisi is for strings; use a 2 / 1. / 2. (Adler p. 179; "(solo and section)"). A text cannot be
+  coloured, so the first chord on the staff at (else after) its tick is marked. `Pass::checkWindDivisi`: one
+  row of kind `divisi` per text, the text in the notes column. Tests `ledgerLines`, `windDivisi`
+  (ledger-divisi-tests.mscx from `tools/playability/gen_ledger_divisi_tests.py`: bass 2 / 3 ledger lines in
+  bass, tenor and treble clef and below; violin 4 / 5 above and 5 under an 8va; piano 5 below; flute "div.",
+  "divisi", "non div." against "Dividing", "individual"; a violin's "div." clean). Older fixtures: the
+  test-strings.mscx double bass now has its instrument's F8vb clef (the plugin parity is unchanged); the
+  W2 test's high flute, oboe and bass-clef bassoon notes and W5's bass-clef bassoon carry G7 marks.
+  39 pass, 1 skipped.
 - No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
   unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
   (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1

@@ -82,6 +82,8 @@ class TestPlayability : public QObject, public MTest
       void brassTrillRules();
       void brassTrills();
       void chimes();
+      void ledgerLines();
+      void windDivisi();
       void noDynamic();
       };
 
@@ -1314,7 +1316,10 @@ void TestPlayability::windDynamics()
             "Tenor Saxophone | 0 | 44 | impossible", "Tenor Saxophone | 480 | 51 | impossible",
             "Tenor Saxophone | 1920 | 44 | outOfReach",
             "Baritone Saxophone | 0 | 44 | impossible", "Baritone Saxophone | 2400 | 37 | outOfReach",
-            "Soprano Saxophone | 0 | 56 | impossible" };
+            "Soprano Saxophone | 0 | 56 | impossible",
+            // G7: more than 4 ledger lines (flute B6-D#7, oboe A#6; bassoon D#5-E5 in bass clef)
+            "Flute | 1440 | 99 | outOfReach", "Flute | 1920 | 95 | outOfReach", "Flute | 2400 | 98 | outOfReach",
+            "Oboe | 9120 | 94 | outOfReach", "Bassoon | 4800 | 75 | outOfReach", "Bassoon | 5280 | 76 | outOfReach" };
       wantMarks.sort();
       compare(m, wantMarks);
       QCOMPARE(m, wantMarks);
@@ -1496,11 +1501,13 @@ void TestPlayability::windTrills()
                                 mk("Bassoon", 9 * BAR + Q, 73, "impossible"),     // C#5: FLATS red, HIGH warning
                                 mk("Bassoon", 12 * BAR, 45, "outOfReach"), mk("Bassoon", 12 * BAR + 2 * Q, 51, "outOfReach") })
             QVERIFY2(m.contains(x), qPrintable(x));
+      // the high bassoon notes are written in bass clef: 5 ledger lines, G7's mark (not W5's)
+      const bool ledger9 = !htkRows(r, { "ledger" }).filter(QRegularExpression("^9 \\| Bassoon \\|")).isEmpty();
       for (const QString& x : m) {
             QVERIFY2(!x.startsWith("Clarinet"), qPrintable(x));
             QVERIFY2(!x.startsWith("Flute | " + QString::number(15 * BAR + 2 * Q)), qPrintable(x));   // the tied G6
             QVERIFY2(!x.startsWith("Flute | " + QString::number(5 * BAR + 3 * Q)), qPrintable(x));    // the mordent
-            QVERIFY2(!x.startsWith("Bassoon | " + QString::number(8 * BAR)), qPrintable(x));          // D#5-E5: panel only
+            QVERIFY2(!x.startsWith("Bassoon | " + QString::number(8 * BAR)) || ledger9, qPrintable(x)); // D#5-E5: panel only (G7 may mark it)
             QVERIFY2(!x.startsWith("English Horn | " + QString::number(2 * BAR + Q)), qPrintable(x)); // written E#4-F#4
             }
 
@@ -1699,6 +1706,44 @@ void TestPlayability::chimes()
       want.sort();
       QCOMPARE(got, want);
       QCOMPARE(r.rows.size(), 3);                // the vibraphone chord and the first entrances add none
+      }
+
+void TestPlayability::ledgerLines()
+      {
+      MasterScore* score = readScore(DIR + "ledger-divisi-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString db = "3 or more ledger lines: consider a clef change (solo and section) (Adler p. 84)";
+      const QString ott = "more than 4 ledger lines: consider 8va / 15ma / 8vb (solo and section) (Adler p. 767)";
+      QStringList got = htkRows(r, { "ledger" });
+      QStringList want = { rowText(2, "Double Bass", "risky", db, "G4"),           // bass clef, 3 above
+                           rowText(3, "Double Bass", "risky", db, "A1"),           // 3 below
+                           rowText(6, "Double Bass", "risky", db, "D5"),           // tenor clef, 3 above
+                           rowText(8, "Double Bass", "risky", db, "E6"),           // treble clef, 3 above
+                           rowText(2, "Violin", "risky", ott, "B6"),               // 5 above; under 8va (bar 3) clean
+                           rowText(2, "Piano", "risky", ott, "B2") };              // 5 below
+      want.sort();
+      QCOMPARE(got, want);
+      QStringList m = markList(r);
+      for (const char* hit : { "2 | 67", "3 | 33", "6 | 74", "8 | 88", "2 | 95", "2 | 47" })
+            QVERIFY2(m.contains(QString(hit) + " | outOfReach"), hit);
+      // clean: bass E4, C2, C6 (2 ledger lines), violin A6 and piano C3 (4), the violin's B6 under 8va
+      for (const char* clean : { "1 | 64", "4 | 36", "7 | 84", "1 | 93", "1 | 48", "3 | 83" })
+            QVERIFY2(!m.contains(QString(clean) + " | outOfReach"), clean);
+      }
+
+void TestPlayability::windDivisi()
+      {
+      MasterScore* score = readScore(DIR + "ledger-divisi-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString why = "divisi is for strings; use a 2 / 1. / 2. (solo and section) (Adler p. 179)";
+      QStringList got = htkRows(r, { "divisi" });
+      QStringList want = { rowText(1, "Flute", "risky", why, "\"div.\""),
+                           rowText(2, "Flute", "risky", why, "\"divisi\""),
+                           rowText(5, "Flute", "risky", why, "\"non div.\"") };   // not "Dividing", "individual", nor the violin's "div."
+      want.sort();
+      QCOMPARE(got, want);
       }
 
 void TestPlayability::brassTrills()
