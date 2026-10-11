@@ -1662,7 +1662,7 @@ void TestPlayability::brassTrillRules()
       QCOMPARE(int(Ms::b8TrumpetIds().size()), 5);
       for (const char* i : Ms::b8TrumpetIds())
             QVERIFY2(!QString(i).contains("bass"), i);
-      QCOMPARE(int(Ms::b8LowTypes().size()), 5);                  // euphonium, F, Eb, CC, BBb tubas
+      QCOMPARE(int(Ms::b8LowTypes().size()), 6);                  // euphonium, baritone, F, Eb, CC, BBb tubas
       QCOMPARE(int(Ms::b8TromboneTypes().size()), 4);             // tenor, bass, alto, contrabass
       const BrassTrillRule* r = b8Rule("B8-TPT-PAIRS");          // written Ab3-Bb3, C4-Db4; trills and tremolos
       QVERIFY(r && r->groups == B8_TRUMPETS && r->written && r->trill && r->tremolo && r->pairs.size() == 2
