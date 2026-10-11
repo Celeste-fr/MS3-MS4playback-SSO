@@ -108,6 +108,12 @@ Open:
   context). 69 of the 147 quarter-tone notes on bending copies have no steady time at all (in 136 ms sixteenths the
   patch's own f0 never settles). With `slurs/performance=0` every quarter-tone note is on a tuned copy. Owner to
   decide by ear (mp3 pairs in the dev VM's `uploads/legato-bends/`).
+- **Quarter tones settle in sixteenths** (branch `legato-bend-settle`, 2026-10-11, untested with SSO): Kontakt smooths a
+  bend as one pole (71-80 ms), so the glide sent as the straight path (arrive 100-130 ms at IOI 136) was heard 35-43 % of
+  the step short at the next note-on. Now (map `bendSmoothing`) one value from the leave makes the heard bend reach the
+  tuning at the arrival (or an earlier note-on on the lane: slurs ending on a quarter tone before a re-attack, 94 ms);
+  Whence dump with the pole modelled: within 5 cents before the next note-on 139 of 140 transitions (before 5), median 80
+  ms after the written time, then held (median 33 ms). Needs a real render (cents per note) and the owner's ear.
 - **Levels against R**: the calibration predicts Performance over All +2.7 dB (Violins 1), +3.8 (Violas), +7.8 (Celli)
   at *Whence*'s CC1 64 (perceived curves of `Spitfire Symphony Orchestra.dynamics.json`, Long minus Performance
   Legato); the owner's R faders say +13.1, +8.6, +14.0 (Violins 1 bars 13-16: +6.6). Measured on held notes along

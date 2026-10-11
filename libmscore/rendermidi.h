@@ -136,7 +136,7 @@ class MidiRenderer {
       std::map<const Note*, const Note*> libGlideFrom;            // a legato transition's note before (its lane glides)
       // its bend's glide, ms after its note-on: from leave to arrive (the patch's own transition as measured:
       // Articulation::bendGlideAt; else both at its legato delay)
-      struct LibGlide { double leaveMs; double arriveMs; };
+      struct LibGlide { double leaveMs; double arriveMs; double smoothingMs { 0 }; };   // (smoothing: bendSmoothing)
       std::map<const Note*, LibGlide> libGlide;
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)

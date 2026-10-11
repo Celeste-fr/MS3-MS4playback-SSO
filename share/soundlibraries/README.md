@@ -265,6 +265,12 @@ switch value of each articulation. For example:
     one's beyond (SSO's five string sections: `sso_legato_glide.json`, `legato_glide/glide.py`, slurred runs of
     steps pitch-tracked). A transition bent to another tuning glides its bend then, with the transition; left
     out, from the arrival (`legatoDelay`) one cent a tick.
+  - `bendSmoothing` on an `Articulation` with a `bendGlide` (ms): the patch smooths a pitch bend as a one-pole
+    low-pass with this time constant (SSO's five string sections' Performance Legato: `sso_bend_smoothing.json`,
+    `legato_glide/fit.py`, bend steps on a held note pitch-tracked). The glide is then sent so that the bend as
+    heard reaches the tuning at the arrival: the note before's tuning until the leave, one value from the leave to
+    the arrival (from where the heard bend is: (target - heard e) / (1 - e), e = exp(-(arrive - leave) / tau)),
+    then the tuning. Left out: the glide is sent as the straight path itself.
   - `sectionLevel` on an `Instrument` (dB): with playback setting `[levels] sectionBalance`, every patch of
     the section (the main patch and its `with` patches, which take its value) plays this much louder, by
     its volume (`libmscore/contextlevel.h`). SSO's five string sections: a real orchestra's balance at mp

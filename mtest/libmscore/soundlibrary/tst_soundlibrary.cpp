@@ -158,6 +158,7 @@ class TestSoundLibrary : public QObject, public MTest
       void tuningBend();
       void tuningBendAtArrival();
       void bendGlideMeasured();
+      void bendGlideSmoothed();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -4397,6 +4398,89 @@ void TestSoundLibrary::bendGlideMeasured()
       QCOMPARE(at4->second, 6144);
       delete score;
       SoundLib::setCurrent(nullptr);
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   bendGlideSmoothed
+//    a measured glide on a patch whose bend smoothing is measured (<Articulation bendSmoothing>: a one-pole low-pass,
+//    tau ms): the note before's tuning until the transition leaves it, then one value until the arrival such that the
+//    bend as heard (the sent values through that pole) reaches the note's tuning at the arrival, then the tuning: heard
+//    in tune from the arrival to the next note-on. quartertones.musicxml at 120 as in bendGlideMeasured (m7's C5,
+//    D5+ at 12000, E5 at 12480; leave 78.4 ms, arrive 256.9 after the note-on); tau 70 ms. Sent as the path itself
+//    (bendGlideMeasured's map), the bend as heard is still far from the tuning at the arrival
+//---------------------------------------------------------
+
+void TestSoundLibrary::bendGlideSmoothed()
+      {
+      Playback::setIniValuesForTest(withOld({}));
+      const double tau = 0.070;
+      for (bool smoothed : { true, false }) {
+            auto lib = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+               "<Instrument name='Violin' ids='violin' bend='200'>"
+               "<Articulation name='Long' value='1' techniques='legato long' legatoDelay='200' bendGlide='600:100:300 136:0:100'%1/>"
+               "</Instrument></SoundLibrary>").arg(smoothed ? " bendSmoothing='70'" : ""));
+            QVERIFY(lib);
+            QCOMPARE(lib->instruments[0].articulations[0].bendSmoothingMs, smoothed ? 70.0 : 0.0);
+            SoundLib::setCurrent(lib);
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            MasterScore* score = readScore(DIR + "quartertones.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            int channel = -1;
+            std::vector<std::pair<int, int>> s;                         // (tick, value) on m7's lane
+            for (const auto& te : events)
+                  if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && te.first == 12000
+                      && !te.second.librarySwitch())
+                        channel = te.second.extChannel();
+            QVERIFY(channel >= 0);
+            for (const auto& te : events)
+                  if (te.second.isExternal() && te.second.type() == ME_PITCHBEND && te.second.extChannel() == channel)
+                        s.push_back({ te.first, te.second.dataA() | (te.second.dataB() << 7) });
+            auto cents = [](int v) { return (v - 8192) * 200.0 / (v < 8192 ? 8192.0 : 8191.0); };
+            // the bend as heard from m7's C5 (heard at 0 cents there) on, a tick at a time
+            double heard = 0, held = 0;
+            size_t k = 0;
+            while (k < s.size() && s[k].first <= 11600)
+                  held = cents(s[k++].second);
+            heard = held;
+            const double lv = 364.0 / 464.0 * 0.100, ar = 0.100 + 364.0 / 464.0 * 0.200;
+            const double on6 = score->utick2utime(12000), on7 = score->utick2utime(12480);
+            double worstHeld = 0;                     // the heard bend's distance from the tuning, arrival to next note-on
+            double maxSent = 0;
+            for (int tick = 11600; tick < 12480 + 480; ++tick) {
+                  const double dt = score->utick2utime(tick + 1) - score->utick2utime(tick);
+                  while (k < s.size() && s[k].first <= tick)
+                        held = cents(s[k++].second);
+                  maxSent = std::max(maxSent, std::fabs(held));
+                  const double t = score->utick2utime(tick);
+                  if (smoothed) {
+                        // the note before's tuning until the transition leaves it
+                        if (t < on6 + lv - 0.002)
+                              QVERIFY2(std::fabs(held) < 0.03, qPrintable(QString("tick %1: %2").arg(tick).arg(held)));
+                        if (t >= on7 && t < on7 + lv - 0.002)
+                              QVERIFY2(std::fabs(held - 50) < 0.03, qPrintable(QString("tick %1: %2").arg(tick).arg(held)));
+                        }
+                  const double want = t < on7 ? 50.0 : 0.0;
+                  const double arrival = (t < on7 ? on6 : on7) + ar;
+                  if (t >= arrival + 0.002 && (t < on7 || t < on7 + 0.480))
+                        worstHeld = std::max(worstHeld, std::fabs(heard - want));
+                  heard = held + (heard - held) * std::exp(-dt / tau);
+                  }
+            if (smoothed) {
+                  QVERIFY2(worstHeld < 0.5, qPrintable(QString::number(worstHeld)));      // (in tune from the arrival on)
+                  QVERIFY(maxSent <= 200.0);
+                  QVERIFY(maxSent > 50.0);              // (beyond the tuning while it glides: the pole's lag made up)
+                  }
+            else
+                  QVERIFY2(worstHeld > 10.0, qPrintable(QString::number(worstHeld)));     // (the path itself: lags)
+            delete score;
+            SoundLib::setCurrent(nullptr);
+            }
       Playback::setIniValuesForTest({});
       }
 
