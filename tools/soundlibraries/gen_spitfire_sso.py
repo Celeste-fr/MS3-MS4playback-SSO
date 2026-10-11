@@ -1437,6 +1437,25 @@ def contextLevel(patch, sound):
         return None
     key = lambda k: tuple(int(x) for x in k.split('|'))
     return ' '.join(f'{d}/{ms}/{p}:{cells[k]:g}' for k in sorted(cells, key=key) for d, ms, p in [key(k)])
+# - sectionLevel= (dB, on the five string sections' main Instrument; their Performance patches take it): [levels]
+#   sectionBalance plays every patch of the section that much louder (contextlevel.h), against what MuseScore plays
+#   without it (the level rule: every section at the same level). The owner's choice, 2026-10-11: M, the balance at the
+#   CC1 Whence plays (64), centred over the five sections (the five add up to 0):
+#   - real side: Weinzierl, Lepa, Schultz, Detzner, von Coler & Behler 2018, "Sound power and timbre as cues for the
+#     dynamic strength of orchestral instruments", JASA 144(3) (TU Berlin database v3, 3_Audio_Features.csv: SoundPower
+#     of single tones per MIDI pitch, linear in dB between measured pitches); total sound power (no directivity: beyond
+#     the critical distance the reverberant level follows the power); mp placed 0.4 of the way from pp to ff, linear in
+#     dB (CC1 64 = level 4750 on MuseScore's scale pp 3750 .. ff 6250, taken as linear in dB: a choice); a section is one
+#     player + 10 log10 N, N = 16 / 14 / 12 / 10 / 8 (SSO's section sizes, Spitfire's product page);
+#   - SSO side: measured on the Windows test VM, All techniques Long at CC1 = velocity 64, the loudest 50 ms of the note
+#     (loudDb), every 3 semitones, median of 4 (sso_cc1_curves.json, commit 329681d3a2), linear in dB between them;
+#   - every semitone of the Long's range the database also measured, equal weights; M = -(SSO - real section), centred.
+#   The session's m_final.py, key M_loudDb, 0.01 dB (variants not used: by the sustain's RMS -3.69 -3.00 -1.47 +2.60
+#   +5.56, by LUFS -4.63 -3.66 -2.46 +2.99 +7.75). Listening (ABX, blind, the owner, 2026-10-11): the basses' 1.6-3.6 dB
+#   differences heard soloed 14/14, not in the full mix (5/8); the owner chose M for its model.
+SECTION_FADERS = {'Violins 1': -3.81, 'Violins 2': -2.66, 'Violas': -2.12, 'Celli': 2.77, 'Basses': 5.81}
+def sectionLevel(name):
+    return round(SECTION_FADERS[name], 3)
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
@@ -1455,6 +1474,9 @@ for i, line in enumerate(out):
             if b:
                 end = '/>' if line.endswith('/>') else '>'
                 out[i] = line[:-len(end)] + f' bend="{b:g}"' + end
+            if current in SECTION_FADERS:
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:

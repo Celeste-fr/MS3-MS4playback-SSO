@@ -260,6 +260,11 @@ switch value of each articulation. For example:
     one's beyond (SSO's five string sections: `sso_legato_glide.json`, `legato_glide/glide.py`, slurred runs of
     steps pitch-tracked). A transition bent to another tuning glides its bend then, with the transition; left
     out, from the arrival (`legatoDelay`) one cent a tick.
+  - `sectionLevel` on an `Instrument` (dB): with playback setting `[levels] sectionBalance`, every patch of
+    the section (the main patch and its `with` patches, which take its value) plays this much louder, by
+    its volume (`libmscore/contextlevel.h`). SSO's five string sections: a real orchestra's balance at mp
+    (Weinzierl et al. 2018's sound power, SSO's section sizes) against SSO's measured levels at CC1 64,
+    centred (the owner's M, 2026-10-11; `gen_spitfire_sso.py` `SECTION_FADERS` has the source).
 
   ```xml
   <Onset early="100"/>

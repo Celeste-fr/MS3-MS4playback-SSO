@@ -625,6 +625,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.kit = a.value("kit").toString() == "1";
                   li.keyScan = a.value("keyScan").toString() == "1";
                   li.bendCents = std::max(0.0, a.value("bend").toDouble());
+                  li.sectionLevelDb = a.value("sectionLevel").toDouble();
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -684,6 +685,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   return fail(QString("%1: \"%2\" is with \"%3\", which the map lacks").arg(path, li.name, li.with));
             if (li.ids.isEmpty())
                   li.ids = main->ids;
+            if (li.sectionLevelDb == 0.0)
+                  li.sectionLevelDb = main->sectionLevelDb;
             main->extras.push_back(&li);
             }
       return lib;
