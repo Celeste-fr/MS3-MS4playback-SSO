@@ -253,8 +253,14 @@ class SoundLibraryExport {
    public:
       SoundLibraryExport(Score* score, MasterSynthesizer* synth, float sampleRate);
       // with instances loaded before (loadInstances): the playback verification renders a score
-      // several times (mixed, each part alone) and loads the library's patches once
-      SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own);
+      // several times (mixed, each part alone) and loads the library's patches once. The score's mix
+      // as the other form's (setExportMix; mute false: a muted part still plays)
+      SoundLibraryExport(MasterSynthesizer* synth, float sampleRate, std::shared_ptr<Vst3Synth> own, Score* score, bool mute = true);
+      // each slot's export mix: every slot at 100 / 64, each route of the score at its part's Mixer
+      // values (volume, pan, mute if mute) times its patch's volume (TrackDelays::patchGain: a track
+      // level's headroom, [levels] context's G - S). Without it the slots play at 0 dB: the verification's
+      // renders had SSO's Performance patches 9-15 dB under the others (2026-10-11)
+      static void setExportMix(Vst3Synth* vst, Score* score, bool mute);
       ~SoundLibraryExport() { finish(); }
       // instances of its own for the score's library parts (no sequencer: a conversion from the
       // command line); patches: slot -> the patch loaded there
