@@ -72,6 +72,15 @@ sections' Performance patches not measured.
   figure notes' 96.38 ms (V), and 4.1 dB quieter by CC1 48 (W). V's attack measured clearest (2-8 kHz step +6.4 dB against
   T's +0.5), but the owner: "all of these are worse than not doing anything". The eighth stays on the All techniques
   patch and the slur starts from silence.
+- **Slurs after staccatos need the Performance patch louder** (the owner, 2026-10-10, chose B): in *Whence* bars 9-12
+  (renders as above; loudest 50 ms per note, median) MuseScore's own playback has the Violas slurs 2.5 dB under the
+  staccatos around them (-36.6 / -34.1 dB), the set R (Violas - Performance fader +2.0, Violas -1.6, levelled over bars
+  5-8) 5.0 dB (-37.1 / -32.2). The Performance patch's short slur notes are no quieter than bars 3-8's (-42 against
+  -40 … -44 dB raw); the staccatos (Spiccato 110) are what's louder. Offered +2.5 / +5.0 dB on Violas - Performance; the
+  owner chose +5.0 (fader +7.0: slurs as loud as the staccatos). Raises bars 1-8's Violas slurs too.
+- **A hand-built set must switch techniques by clip Bank / Sub**, never a CC32 clip envelope (LIVE.md: Live 12.4.6 drops
+  it at load): sets R … W did, so in Live every All techniques track played Long throughout (the owner's Kontakt window,
+  2026-10-10) while the renders, which send CC32 directly, played Spiccato.
 - Intervals ±1..±12 transition; over an octave (±13..±24) no transition: the new note plays its own attack by its
   velocity (v5 slow, v127 fast) and the old one releases.
 - Speed (pair 69 v5 → 71, three passes per IOI; passes at slow IOIs agree within 0.1-1 dB, so round robins don't blur):
