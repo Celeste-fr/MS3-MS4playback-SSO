@@ -1,0 +1,4234 @@
+{
+ "what": "Real string players' level at pp / mf / ff measured from fixed-gain recordings, and the SSO string section balance it implies at each MuseScore dynamic (pp p mp mf f ff), against the fixed balance M (Vn1 -3.81, Vn2 -2.66, Va -2.12, Vc +2.77, Cb +5.81). Research only (2026-10-11): no playback change.",
+ "made_by": "tools/soundlibraries/real_string_dynamics.py measure + analyze (python3 -P -E; numpy, soundfile, librosa 1.0.0 YIN, pyloudnorm 0.2.0)",
+ "sources": {
+  "iowaPre2011": {
+   "what": "University of Iowa Musical Instrument Samples, pre-2011 strings: Violin, Viola, Cello, Double Bass, arco, pp / mf / ff chromatic scales note by note, mono 16 bit 44.1 kHz, one Neumann KM 84, anechoic chamber (Wendell Johnson Speech and Hearing Center). 143 files, 676 MB.",
+   "url": "https://theremin.music.uiowa.edu/MIS.html (pages MISviolin / MISviola / MIScello / MISdoublebass.html)",
+   "licence": "\"may be downloaded and used for any projects, without restrictions\" (MIS.html, read 2026-10-11). Only derived numbers are kept here; no audio in git.",
+   "fixedGain": "MIS.html, of the recordings until 2011: \"Because the recordings represent the complete dynamic structure of the instrument, input volume levels were not changed during the recording session.\" Checked here (gainCheck): cello and double bass, the 4-16 kHz noise between notes is the same at pp / mf / ff within 0.06-0.51 dB on every string, at -89.4 to -92.2 dB, 7-10 dB above the 16-bit TPDF dither floor in that band (-99.0 dB, computed with the same function in the test): a gain change would move it. Violin and viola: the gaps were edited to near digital silence (no 0.1 s block without exact zeros), so unchecked; the statement stands alone."
+  },
+  "iowa2012": {
+   "what": "Iowa MIS strings recorded December 2011 - May 2012 (MISPost2012Intro.html), the centre microphone of three Earthworks QTC-40 downsampled to 16 bit 44.1 kHz mono (MIS.html); other players. 129 files, 922 MB. The post-2012 edited files were normalized to -0.4 dB (MISPost2012Intro.html step 11) and are not used.",
+   "licence": "as above",
+   "fixedGain": "not stated for these. Checked (gainCheck2012): viola 4-16 kHz gap noise within 0.04-0.12 dB over pp / mf / ff on every string (-94.1 dB, 5 dB above the dither floor): fixed. Double bass: no 4-16 kHz blocks, broadband gap noise within 0.68-3.09 dB per string: fixed within about 3 dB at worst, weaker evidence. Violin (4-16 kHz gap noise moves 22.6-47.9 dB, pp notes barely above a -49 dB noise) and cello (broadband gap noise moves up to 8.9 dB) fail and are not used for level. Many file names do not match the notes (e.g. Viola.arco.sulA.mf.C5B5 holds Bb3-A4) and YIN pitches are unreliable, so these players enter as pitch-agnostic session spans only (players2012)."
+  },
+  "weinzierl2018": {
+   "what": "Weinzierl, Lepa, Schultz, Detzner, von Coler, Behler (2018), \"Sound power and timbre as cues for the dynamic strength of orchestral instruments\", JASA 144(3) 1347-1355, doi 10.1121/1.5053113: single-note sound power at pp (\"as soft as possible\") and ff (\"as loud as possible\"), Table I. Per-note values: database version 3, 3_Audio_Features.csv, column SoundPower in dB, _et_ files, modern instruments (doi 10.14279/depositonce-5861.3).",
+   "licence": "CC BY-NC-SA 4.0 (0_Documentation.pdf of the database, lines \"The database is provided under a Creative Commons BY-NC-SA licence\"): derived numbers only."
+  },
+  "clarkLuce1965": "Clark & Luce (1965), \"Intensities of orchestral instrument scales played at prescribed dynamic markings\", JAES 13(2) 151-157: abstract only (secondary, via the 2026-10-11 literature search): average pp -> ff range about 11 dB for non-percussive instruments.",
+  "sso": "sso_cc1_curves.json (branch sso-cc1-curves, commit 329681d3a2, md5 7787c2044af6fb89a73c63d2532f96f9): SSO All techniques Long at CC1 16-127 every 3 semitones, measured 2026-10-11 on the Windows VM with the real library (Kontakt Player 8.13.1), median of 4 repeats.",
+  "museScoreLevels": "libmscore/ms4playback.cpp: ordinaryLevel pp 3750 p 4250 mp 4750 mf 5250 f 5750 ff 6250; expressionLevel -> CC1 32 48 64 80 96 112."
+ },
+ "method": [
+  "Notes: 50 ms level above the file's noise floor + 10 dB and within 40 dB of its loudest, >= 0.5 s (2012: >= 2.0 s, its gaps hold noise bursts); gaps < 0.3 s bridged. Pitch: YIN (librosa) median over the note's middle half, within the file name's range +- 1 semitone (pre-2011; 67 of 143 files hold another number of notes than the name says, and some pitches sit between semitones, e.g. Cello.arco.pp.sulC.C2Gb2: 12 notes 65.7-91.2 Hz), the instrument's range (2012).",
+  "Measures as the SSO side (sso_cc1_sweep.py): loudDb = loudest 50 ms (25 ms hop) of the note and 0.5 s after; rmsDb = mean power 1.5-3.0 s after the onset, or the middle half of notes shorter than 3.0 s (many Iowa notes last 1.5-2.5 s: a choice); lufs = BS.1770-4 integrated (pyloudnorm 0.2.0). Notes under 20 dB SNR left out (a choice; 10 and 30 dB in changePpToFfOtherSnr).",
+  "Spans: per string (one recording session, one gain) each dynamic linear in dB between its notes, on the semitones all three dynamics cover; pp->mf and mf->ff per semitone, averaged over strings. Absolute levels are never compared across sessions or instruments.",
+  "Real side of the balance: one player's level at MuseScore level L piecewise linear in dB through the measured pp (3750), mf (5250), ff (6250) (p, mp between pp and mf; f between mf and ff: a choice), anchored to Weinzierl's sound power at ff (main: both are a player's loudest single notes, while Iowa's pp spans only 25-65 % of Weinzierl's \"as soft as possible\"), at pp, or at the pp-ff midpoint (variants); section = player + 10 log10 N (16/14/12/10/8). Outside Iowa's semitones the nearest span (balanceWithinIowaRange restricts instead).",
+  "Balance as M (m_final.py): per section D = mean over M's pitch range of SSO(p, CC1 of the dynamic) - real section(p, dynamic); offset = -(D - mean of the five D). Anchor \"wlinear\" is the M / M_dyn model (Weinzierl alone, linear between pp and ff): at mp it reproduces M exactly (mpWeinzierlLinearMinusFixedM = 0).",
+  "Uncertainty: bootstrapChangePpToFf resamples each instrument's span semitones (understates: neighbours share notes); acrossStringsSdPpFf = SD of the pp->ff span between strings at one pitch (same player, other session); players2012 = a second viola and double bass player; three measures; SNR 10 / 30.",
+  "Not used: TU Berlin anechoic Beethoven 8 (Boehm, Ackermann, Weinzierl 2020, CC BY 4.0): in-context dynamics of real section players, but period instruments, the open excerpt is 0.6-0.7 GB per movement (disk had < 3 GB free) and it needs score-to-audio alignment; the next source to try."
+ ],
+ "summary": {
+  "note": "main result: pre-2011 Iowa players, per-semitone spans, loudDb, anchored at Weinzierl ff; dB to add to each section, centred over the five",
+  "spansPpMfFf": {
+   "violin": {
+    "pp_mf": 8.12,
+    "mf_ff": 7.95,
+    "pp_ff": 15.94
+   },
+   "viola": {
+    "pp_mf": 2.97,
+    "mf_ff": 3.46,
+    "pp_ff": 6.23
+   },
+   "cello": {
+    "pp_mf": 8.34,
+    "mf_ff": 5.68,
+    "pp_ff": 14.15
+   },
+   "doublebass": {
+    "pp_mf": 3.62,
+    "mf_ff": 6.35,
+    "pp_ff": 9.79
+   }
+  },
+  "mfFraction": {
+   "violin": 0.48,
+   "viola": 0.45,
+   "cello": 0.59,
+   "doublebass": 0.36
+  },
+  "balance": {
+   "pp": {
+    "Violins 1": -3.66,
+    "Violins 2": -3.79,
+    "Violas": 3.49,
+    "Celli": -1.64,
+    "Basses": 5.6
+   },
+   "mf": {
+    "Violins 1": -3.28,
+    "Violins 2": -1.95,
+    "Violas": 0.12,
+    "Celli": 1.33,
+    "Basses": 3.78
+   },
+   "ff": {
+    "Violins 1": -0.78,
+    "Violins 2": 0.63,
+    "Violas": -0.91,
+    "Celli": 1.77,
+    "Basses": -0.71
+   }
+  },
+  "changePpToFf": {
+   "Violins 1": 2.88,
+   "Violins 2": 4.42,
+   "Violas": -4.4,
+   "Celli": 3.41,
+   "Basses": -6.31
+  },
+  "over3dB": [
+   "Violins 2",
+   "Violas",
+   "Celli",
+   "Basses"
+  ],
+  "mfMinusFixedM": {
+   "Violins 1": 0.53,
+   "Violins 2": 0.71,
+   "Violas": 2.24,
+   "Celli": -1.44,
+   "Basses": -2.03
+  }
+ },
+ "measures": {
+  "loudDb": {
+   "instruments": {
+    "violin": {
+     "semitones": [
+      55,
+      105
+     ],
+     "n": 51,
+     "notesKept": {
+      "pp": 113,
+      "mf": 90,
+      "ff": 80
+     },
+     "pp_mf": {
+      "median": 8.12,
+      "p10": 4.34,
+      "p90": 10.62
+     },
+     "mf_ff": {
+      "median": 7.95,
+      "p10": 4.89,
+      "p90": 13.05
+     },
+     "pp_ff": {
+      "median": 15.94,
+      "p10": 12.97,
+      "p90": 21.23
+     },
+     "mfFraction": {
+      "median": 0.48,
+      "p10": 0.29,
+      "p90": 0.65
+     },
+     "mfOnMuseScoreScale": 4950.61,
+     "acrossStringsSdPpFf": {
+      "median": 3.66,
+      "max": 8.48,
+      "pitches": 30
+     },
+     "byOctave": [
+      {
+       "octave": "C3-B3",
+       "pitches": 5,
+       "pp_mf": 8.3,
+       "mf_ff": 6.7,
+       "pp_ff": 15.9
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 8.4,
+       "mf_ff": 7.3,
+       "pp_ff": 14.9
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 12,
+       "pp_mf": 9.0,
+       "mf_ff": 7.2,
+       "pp_ff": 15.9
+      },
+      {
+       "octave": "C6-B6",
+       "pitches": 12,
+       "pp_mf": 5.6,
+       "mf_ff": 11.1,
+       "pp_ff": 16.9
+      },
+      {
+       "octave": "C7-B7",
+       "pitches": 10,
+       "pp_mf": 8.0,
+       "mf_ff": 12.5,
+       "pp_ff": 18.5
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 29.17,
+      "ffShapeRmsDiff": 3.92
+     }
+    },
+    "viola": {
+     "semitones": [
+      48,
+      91
+     ],
+     "n": 44,
+     "notesKept": {
+      "pp": 79,
+      "mf": 92,
+      "ff": 99
+     },
+     "pp_mf": {
+      "median": 2.97,
+      "p10": 0.41,
+      "p90": 4.82
+     },
+     "mf_ff": {
+      "median": 3.46,
+      "p10": 1.56,
+      "p90": 5.58
+     },
+     "pp_ff": {
+      "median": 6.23,
+      "p10": 2.68,
+      "p90": 8.11
+     },
+     "mfFraction": {
+      "median": 0.45,
+      "p10": 0.11,
+      "p90": 0.67
+     },
+     "mfOnMuseScoreScale": 4872.38,
+     "acrossStringsSdPpFf": {
+      "median": 1.14,
+      "max": 4.03,
+      "pitches": 28
+     },
+     "byOctave": [
+      {
+       "octave": "C3-B3",
+       "pitches": 12,
+       "pp_mf": 1.3,
+       "mf_ff": 5.0,
+       "pp_ff": 6.6
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 3.4,
+       "mf_ff": 3.4,
+       "pp_ff": 6.4
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 12,
+       "pp_mf": 3.1,
+       "mf_ff": 2.9,
+       "pp_ff": 6.3
+      },
+      {
+       "octave": "C6-B6",
+       "pitches": 8,
+       "pp_mf": 3.5,
+       "mf_ff": 0.2,
+       "pp_ff": 3.0
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 25.3,
+      "ffShapeRmsDiff": 2.69
+     }
+    },
+    "cello": {
+     "semitones": [
+      37,
+      80
+     ],
+     "n": 44,
+     "notesKept": {
+      "pp": 124,
+      "mf": 110,
+      "ff": 113
+     },
+     "pp_mf": {
+      "median": 8.34,
+      "p10": 4.13,
+      "p90": 10.11
+     },
+     "mf_ff": {
+      "median": 5.68,
+      "p10": 3.1,
+      "p90": 7.93
+     },
+     "pp_ff": {
+      "median": 14.15,
+      "p10": 8.52,
+      "p90": 16.51
+     },
+     "mfFraction": {
+      "median": 0.59,
+      "p10": 0.44,
+      "p90": 0.68
+     },
+     "mfOnMuseScoreScale": 5223.32,
+     "acrossStringsSdPpFf": {
+      "median": 3.17,
+      "max": 7.38,
+      "pitches": 31
+     },
+     "byOctave": [
+      {
+       "octave": "C2-B2",
+       "pitches": 11,
+       "pp_mf": 7.4,
+       "mf_ff": 5.0,
+       "pp_ff": 11.8
+      },
+      {
+       "octave": "C3-B3",
+       "pitches": 12,
+       "pp_mf": 9.3,
+       "mf_ff": 5.8,
+       "pp_ff": 15.0
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 8.0,
+       "mf_ff": 6.4,
+       "pp_ff": 13.6
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 9,
+       "pp_mf": 5.2,
+       "mf_ff": 3.4,
+       "pp_ff": 8.3
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 21.86,
+      "ffShapeRmsDiff": 3.17
+     }
+    },
+    "doublebass": {
+     "semitones": [
+      30,
+      58
+     ],
+     "n": 29,
+     "notesKept": {
+      "pp": 41,
+      "mf": 75,
+      "ff": 93
+     },
+     "pp_mf": {
+      "median": 3.62,
+      "p10": 0.07,
+      "p90": 5.6
+     },
+     "mf_ff": {
+      "median": 6.35,
+      "p10": 4.24,
+      "p90": 7.96
+     },
+     "pp_ff": {
+      "median": 9.79,
+      "p10": 6.28,
+      "p90": 11.96
+     },
+     "mfFraction": {
+      "median": 0.36,
+      "p10": 0.01,
+      "p90": 0.54
+     },
+     "mfOnMuseScoreScale": 4639.42,
+     "acrossStringsSdPpFf": {
+      "median": 2.5,
+      "max": 6.17,
+      "pitches": 22
+     },
+     "byOctave": [
+      {
+       "octave": "C1-B1",
+       "pitches": 6,
+       "pp_mf": 5.2,
+       "mf_ff": 5.7,
+       "pp_ff": 11.1
+      },
+      {
+       "octave": "C2-B2",
+       "pitches": 12,
+       "pp_mf": 3.4,
+       "mf_ff": 7.1,
+       "pp_ff": 10.5
+      },
+      {
+       "octave": "C3-B3",
+       "pitches": 11,
+       "pp_mf": 1.8,
+       "mf_ff": 6.1,
+       "pp_ff": 7.0
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 21.0,
+      "ffShapeRmsDiff": 3.08
+     }
+    }
+   },
+   "whyItMoves": {
+    "Violins 1": {
+     "ssoCc32To112": 9.12,
+     "realPpToFf": 15.55
+    },
+    "Violins 2": {
+     "ssoCc32To112": 7.57,
+     "realPpToFf": 15.55
+    },
+    "Violas": {
+     "ssoCc32To112": 6.75,
+     "realPpToFf": 5.9
+    },
+    "Celli": {
+     "ssoCc32To112": 5.76,
+     "realPpToFf": 12.72
+    },
+    "Basses": {
+     "ssoCc32To112": 12.39,
+     "realPpToFf": 9.63
+    }
+   },
+   "ranges": {
+    "M": {
+     "Violins 1": [
+      55,
+      91
+     ],
+     "Violins 2": [
+      55,
+      91
+     ],
+     "Violas": [
+      48,
+      90
+     ],
+     "Celli": [
+      36,
+      82
+     ],
+     "Basses": [
+      28,
+      54
+     ]
+    },
+    "withinIowa": {
+     "Violins 1": [
+      55,
+      91
+     ],
+     "Violins 2": [
+      55,
+      91
+     ],
+     "Violas": [
+      48,
+      90
+     ],
+     "Celli": [
+      37,
+      80
+     ],
+     "Basses": [
+      30,
+      54
+     ]
+    }
+   },
+   "balance": {
+    "ff": {
+     "pp": {
+      "Violins 1": -3.66,
+      "Violins 2": -3.79,
+      "Violas": 3.49,
+      "Celli": -1.64,
+      "Basses": 5.6
+     },
+     "p": {
+      "Violins 1": -3.25,
+      "Violins 2": -2.82,
+      "Violas": 2.64,
+      "Celli": -0.54,
+      "Basses": 3.97
+     },
+     "mp": {
+      "Violins 1": -3.22,
+      "Violins 2": -2.07,
+      "Violas": 1.53,
+      "Celli": 0.68,
+      "Basses": 3.08
+     },
+     "mf": {
+      "Violins 1": -3.28,
+      "Violins 2": -1.95,
+      "Violas": 0.12,
+      "Celli": 1.33,
+      "Basses": 3.78
+     },
+     "f": {
+      "Violins 1": -2.09,
+      "Violins 2": -0.72,
+      "Violas": -0.14,
+      "Celli": 1.58,
+      "Basses": 1.36
+     },
+     "ff": {
+      "Violins 1": -0.78,
+      "Violins 2": 0.63,
+      "Violas": -0.91,
+      "Celli": 1.77,
+      "Basses": -0.71
+     }
+    },
+    "pp": {
+     "pp": {
+      "Violins 1": -4.8,
+      "Violins 2": -4.94,
+      "Violas": -2.14,
+      "Celli": 3.17,
+      "Basses": 8.71
+     },
+     "p": {
+      "Violins 1": -4.39,
+      "Violins 2": -3.96,
+      "Violas": -2.99,
+      "Celli": 4.27,
+      "Basses": 7.07
+     },
+     "mp": {
+      "Violins 1": -4.37,
+      "Violins 2": -3.22,
+      "Violas": -4.1,
+      "Celli": 5.5,
+      "Basses": 6.19
+     },
+     "mf": {
+      "Violins 1": -4.43,
+      "Violins 2": -3.09,
+      "Violas": -5.51,
+      "Celli": 6.15,
+      "Basses": 6.89
+     },
+     "f": {
+      "Violins 1": -3.23,
+      "Violins 2": -1.86,
+      "Violas": -5.77,
+      "Celli": 6.4,
+      "Basses": 4.46
+     },
+     "ff": {
+      "Violins 1": -1.92,
+      "Violins 2": -0.52,
+      "Violas": -6.54,
+      "Celli": 6.58,
+      "Basses": 2.4
+     }
+    },
+    "mid": {
+     "pp": {
+      "Violins 1": -4.23,
+      "Violins 2": -4.36,
+      "Violas": 0.67,
+      "Celli": 0.77,
+      "Basses": 7.15
+     },
+     "p": {
+      "Violins 1": -3.82,
+      "Violins 2": -3.39,
+      "Violas": -0.18,
+      "Celli": 1.86,
+      "Basses": 5.52
+     },
+     "mp": {
+      "Violins 1": -3.79,
+      "Violins 2": -2.64,
+      "Violas": -1.29,
+      "Celli": 3.09,
+      "Basses": 4.64
+     },
+     "mf": {
+      "Violins 1": -3.86,
+      "Violins 2": -2.52,
+      "Violas": -2.7,
+      "Celli": 3.74,
+      "Basses": 5.33
+     },
+     "f": {
+      "Violins 1": -2.66,
+      "Violins 2": -1.29,
+      "Violas": -2.95,
+      "Celli": 3.99,
+      "Basses": 2.91
+     },
+     "ff": {
+      "Violins 1": -1.35,
+      "Violins 2": 0.06,
+      "Violas": -3.72,
+      "Celli": 4.17,
+      "Basses": 0.84
+     }
+    },
+    "wlinear": {
+     "pp": {
+      "Violins 1": -4.8,
+      "Violins 2": -4.94,
+      "Violas": -2.14,
+      "Celli": 3.17,
+      "Basses": 8.71
+     },
+     "p": {
+      "Violins 1": -4.11,
+      "Violins 2": -3.68,
+      "Violas": -2.0,
+      "Celli": 2.91,
+      "Basses": 6.89
+     },
+     "mp": {
+      "Violins 1": -3.81,
+      "Violins 2": -2.66,
+      "Violas": -2.12,
+      "Celli": 2.77,
+      "Basses": 5.81
+     },
+     "mf": {
+      "Violins 1": -3.59,
+      "Violins 2": -2.25,
+      "Violas": -2.54,
+      "Celli": 2.06,
+      "Basses": 6.32
+     },
+     "f": {
+      "Violins 1": -2.24,
+      "Violins 2": -0.87,
+      "Violas": -1.47,
+      "Celli": 1.95,
+      "Basses": 2.63
+     },
+     "ff": {
+      "Violins 1": -0.78,
+      "Violins 2": 0.63,
+      "Violas": -0.91,
+      "Celli": 1.77,
+      "Basses": -0.71
+     }
+    }
+   },
+   "balanceWithinIowaRange": {
+    "pp": {
+     "Violins 1": -3.7,
+     "Violins 2": -3.83,
+     "Violas": 3.45,
+     "Celli": -1.75,
+     "Basses": 5.83
+    },
+    "p": {
+     "Violins 1": -3.29,
+     "Violins 2": -2.85,
+     "Violas": 2.6,
+     "Celli": -0.62,
+     "Basses": 4.16
+    },
+    "mp": {
+     "Violins 1": -3.26,
+     "Violins 2": -2.11,
+     "Violas": 1.49,
+     "Celli": 0.64,
+     "Basses": 3.25
+    },
+    "mf": {
+     "Violins 1": -3.32,
+     "Violins 2": -1.99,
+     "Violas": 0.07,
+     "Celli": 1.32,
+     "Basses": 3.92
+    },
+    "f": {
+     "Violins 1": -2.13,
+     "Violins 2": -0.76,
+     "Violas": -0.18,
+     "Celli": 1.66,
+     "Basses": 1.41
+    },
+    "ff": {
+     "Violins 1": -0.84,
+     "Violins 2": 0.56,
+     "Violas": -0.98,
+     "Celli": 1.92,
+     "Basses": -0.66
+    }
+   },
+   "changePpToFf": {
+    "Violins 1": 2.88,
+    "Violins 2": 4.42,
+    "Violas": -4.4,
+    "Celli": 3.41,
+    "Basses": -6.31
+   },
+   "changePpToFfWithinIowaRange": {
+    "Violins 1": 2.85,
+    "Violins 2": 4.4,
+    "Violas": -4.42,
+    "Celli": 3.67,
+    "Basses": -6.5
+   },
+   "changePpToFfWeinzierlLinear": {
+    "Violins 1": 4.02,
+    "Violins 2": 5.57,
+    "Violas": 1.23,
+    "Celli": -1.41,
+    "Basses": -9.42
+   },
+   "mfMinusFixedM": {
+    "ff": {
+     "Violins 1": 0.53,
+     "Violins 2": 0.71,
+     "Violas": 2.24,
+     "Celli": -1.44,
+     "Basses": -2.03
+    },
+    "pp": {
+     "Violins 1": -0.62,
+     "Violins 2": -0.43,
+     "Violas": -3.39,
+     "Celli": 3.38,
+     "Basses": 1.08
+    },
+    "mid": {
+     "Violins 1": -0.05,
+     "Violins 2": 0.14,
+     "Violas": -0.58,
+     "Celli": 0.97,
+     "Basses": -0.48
+    },
+    "wlinear": {
+     "Violins 1": 0.22,
+     "Violins 2": 0.41,
+     "Violas": -0.42,
+     "Celli": -0.71,
+     "Basses": 0.51
+    }
+   },
+   "mpWeinzierlLinearMinusFixedM": {
+    "Violins 1": 0.0,
+    "Violins 2": 0.0,
+    "Violas": -0.0,
+    "Celli": 0.0,
+    "Basses": 0.0
+   },
+   "bootstrapChangePpToFf": {
+    "Violins 1": [
+     2.35,
+     2.86,
+     3.44
+    ],
+    "Violins 2": [
+     3.9,
+     4.41,
+     4.98
+    ],
+    "Violas": [
+     -5.0,
+     -4.36,
+     -3.79
+    ],
+    "Celli": [
+     2.6,
+     3.39,
+     4.12
+    ],
+    "Basses": [
+     -7.0,
+     -6.26,
+     -5.65
+    ]
+   },
+   "changePpToFfOtherSnr": {
+    "minSnr10": {
+     "Violins 1": 2.39,
+     "Violins 2": 3.94,
+     "Violas": -4.88,
+     "Celli": 2.92,
+     "Basses": -4.38
+    },
+    "minSnr30": {
+     "Violins 1": 3.61,
+     "Violins 2": 5.16,
+     "Violas": -3.66,
+     "Celli": 0.97,
+     "Basses": -6.07
+    }
+   },
+   "players2012": {
+    "used": [
+     "viola",
+     "doublebass"
+    ],
+    "sessionSpans2012": {
+     "violin": {
+      "strings": {
+       "A": {
+        "pp_mf": -18.98,
+        "mf_ff": 12.89,
+        "pp_ff": -6.09,
+        "notes": {
+         "pp": 5,
+         "mf": 26,
+         "ff": 13
+        }
+       },
+       "D": {
+        "pp_mf": 1.95,
+        "mf_ff": 6.41,
+        "pp_ff": 8.37,
+        "notes": {
+         "pp": 9,
+         "mf": 13,
+         "ff": 10
+        }
+       },
+       "E": {
+        "pp_mf": -0.92,
+        "mf_ff": 0.25,
+        "pp_ff": -0.68,
+        "notes": {
+         "pp": 3,
+         "mf": 1,
+         "ff": 4
+        }
+       },
+       "G": {
+        "pp_mf": 1.89,
+        "mf_ff": 9.64,
+        "pp_ff": 11.52,
+        "notes": {
+         "pp": 3,
+         "mf": 17,
+         "ff": 8
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 0.48,
+       "mf_ff": 8.03,
+       "pp_ff": 3.85
+      }
+     },
+     "viola": {
+      "strings": {
+       "A": {
+        "pp_mf": 15.6,
+        "mf_ff": 5.91,
+        "pp_ff": 21.51,
+        "notes": {
+         "pp": 34,
+         "mf": 27,
+         "ff": 26
+        }
+       },
+       "C": {
+        "pp_mf": 11.99,
+        "mf_ff": 4.51,
+        "pp_ff": 16.5,
+        "notes": {
+         "pp": 21,
+         "mf": 21,
+         "ff": 21
+        }
+       },
+       "D": {
+        "pp_mf": 11.61,
+        "mf_ff": 4.95,
+        "pp_ff": 16.56,
+        "notes": {
+         "pp": 29,
+         "mf": 16,
+         "ff": 25
+        }
+       },
+       "G": {
+        "pp_mf": 12.11,
+        "mf_ff": 4.05,
+        "pp_ff": 16.16,
+        "notes": {
+         "pp": 26,
+         "mf": 21,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 12.05,
+       "mf_ff": 4.73,
+       "pp_ff": 16.53
+      }
+     },
+     "cello": {
+      "strings": {
+       "A": {
+        "pp_mf": 3.42,
+        "mf_ff": 7.04,
+        "pp_ff": 10.46,
+        "notes": {
+         "pp": 6,
+         "mf": 9,
+         "ff": 23
+        }
+       },
+       "C": {
+        "pp_mf": 1.12,
+        "mf_ff": 6.63,
+        "pp_ff": 7.75,
+        "notes": {
+         "pp": 8,
+         "mf": 20,
+         "ff": 27
+        }
+       },
+       "D": {
+        "pp_mf": 0.98,
+        "mf_ff": 7.82,
+        "pp_ff": 8.8,
+        "notes": {
+         "pp": 1,
+         "mf": 16,
+         "ff": 24
+        }
+       },
+       "G": {
+        "pp_mf": -1.66,
+        "mf_ff": 7.36,
+        "pp_ff": 5.7,
+        "notes": {
+         "pp": 1,
+         "mf": 24,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 1.05,
+       "mf_ff": 7.2,
+       "pp_ff": 8.28
+      }
+     },
+     "doublebass": {
+      "strings": {
+       "A": {
+        "pp_mf": 3.16,
+        "mf_ff": 5.31,
+        "pp_ff": 8.47,
+        "notes": {
+         "pp": 24,
+         "mf": 23,
+         "ff": 22
+        }
+       },
+       "C": {
+        "pp_mf": 7.31,
+        "mf_ff": 5.13,
+        "pp_ff": 12.44,
+        "notes": {
+         "pp": 4,
+         "mf": 4,
+         "ff": 4
+        }
+       },
+       "D": {
+        "pp_mf": 6.35,
+        "mf_ff": 6.35,
+        "pp_ff": 12.7,
+        "notes": {
+         "pp": 22,
+         "mf": 26,
+         "ff": 15
+        }
+       },
+       "E": {
+        "pp_mf": 3.06,
+        "mf_ff": 4.97,
+        "pp_ff": 8.04,
+        "notes": {
+         "pp": 24,
+         "mf": 26,
+         "ff": 24
+        }
+       },
+       "G": {
+        "pp_mf": 6.76,
+        "mf_ff": 6.28,
+        "pp_ff": 13.04,
+        "notes": {
+         "pp": 25,
+         "mf": 22,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 6.35,
+       "mf_ff": 5.31,
+       "pp_ff": 12.44
+      }
+     }
+    },
+    "sessionSpansPre2011": {
+     "violin": {
+      "strings": {
+       "A": {
+        "pp_mf": 9.94,
+        "mf_ff": 10.83,
+        "pp_ff": 20.77,
+        "notes": {
+         "pp": 27,
+         "mf": 21,
+         "ff": 19
+        }
+       },
+       "D": {
+        "pp_mf": 8.86,
+        "mf_ff": 5.38,
+        "pp_ff": 14.24,
+        "notes": {
+         "pp": 26,
+         "mf": 23,
+         "ff": 19
+        }
+       },
+       "E": {
+        "pp_mf": 3.72,
+        "mf_ff": 12.82,
+        "pp_ff": 16.54,
+        "notes": {
+         "pp": 31,
+         "mf": 22,
+         "ff": 21
+        }
+       },
+       "G": {
+        "pp_mf": 8.48,
+        "mf_ff": 6.48,
+        "pp_ff": 14.96,
+        "notes": {
+         "pp": 28,
+         "mf": 24,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 8.67,
+       "mf_ff": 8.65,
+       "pp_ff": 15.75
+      }
+     },
+     "viola": {
+      "strings": {
+       "A": {
+        "pp_mf": 4.16,
+        "mf_ff": 2.62,
+        "pp_ff": 6.78,
+        "notes": {
+         "pp": 18,
+         "mf": 23,
+         "ff": 25
+        }
+       },
+       "C": {
+        "pp_mf": 2.78,
+        "mf_ff": 4.18,
+        "pp_ff": 6.96,
+        "notes": {
+         "pp": 20,
+         "mf": 22,
+         "ff": 23
+        }
+       },
+       "D": {
+        "pp_mf": 4.15,
+        "mf_ff": 3.45,
+        "pp_ff": 7.6,
+        "notes": {
+         "pp": 18,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "G": {
+        "pp_mf": 1.28,
+        "mf_ff": 3.54,
+        "pp_ff": 4.82,
+        "notes": {
+         "pp": 23,
+         "mf": 22,
+         "ff": 25
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 3.47,
+       "mf_ff": 3.5,
+       "pp_ff": 6.87
+      }
+     },
+     "cello": {
+      "strings": {
+       "A": {
+        "pp_mf": 3.22,
+        "mf_ff": 5.99,
+        "pp_ff": 9.21,
+        "notes": {
+         "pp": 28,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "C": {
+        "pp_mf": 7.14,
+        "mf_ff": 5.85,
+        "pp_ff": 12.99,
+        "notes": {
+         "pp": 39,
+         "mf": 26,
+         "ff": 31
+        }
+       },
+       "D": {
+        "pp_mf": 11.55,
+        "mf_ff": 5.62,
+        "pp_ff": 17.16,
+        "notes": {
+         "pp": 26,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "G": {
+        "pp_mf": 8.86,
+        "mf_ff": 7.0,
+        "pp_ff": 15.86,
+        "notes": {
+         "pp": 31,
+         "mf": 34,
+         "ff": 30
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 8.0,
+       "mf_ff": 5.92,
+       "pp_ff": 14.42
+      }
+     },
+     "doublebass": {
+      "strings": {
+       "A": {
+        "pp_mf": 1.23,
+        "mf_ff": 7.89,
+        "pp_ff": 9.12,
+        "notes": {
+         "pp": 6,
+         "mf": 22,
+         "ff": 25
+        }
+       },
+       "D": {
+        "pp_mf": 3.23,
+        "mf_ff": 3.09,
+        "pp_ff": 6.32,
+        "notes": {
+         "pp": 2,
+         "mf": 13,
+         "ff": 20
+        }
+       },
+       "E": {
+        "pp_mf": 3.04,
+        "mf_ff": 6.4,
+        "pp_ff": 9.45,
+        "notes": {
+         "pp": 18,
+         "mf": 23,
+         "ff": 23
+        }
+       },
+       "G": {
+        "pp_mf": 1.64,
+        "mf_ff": 4.29,
+        "pp_ff": 5.93,
+        "notes": {
+         "pp": 15,
+         "mf": 17,
+         "ff": 25
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 2.34,
+       "mf_ff": 5.35,
+       "pp_ff": 7.72
+      }
+     }
+    },
+    "changePpToFf_pre2011Constant": {
+     "Violins 1": 3.88,
+     "Violins 2": 5.42,
+     "Violas": -4.11,
+     "Celli": 3.83,
+     "Basses": -9.03
+    },
+    "changePpToFf_viola": {
+     "Violins 1": 1.92,
+     "Violins 2": 3.46,
+     "Violas": 3.74,
+     "Celli": 1.87,
+     "Basses": -10.99
+    },
+    "balance_viola": {
+     "pp": {
+      "Violins 1": -2.7,
+      "Violins 2": -2.83,
+      "Violas": -4.66,
+      "Celli": -0.1,
+      "Basses": 10.28
+     },
+     "p": {
+      "Violins 1": -2.73,
+      "Violins 2": -2.3,
+      "Violas": -3.08,
+      "Celli": 0.45,
+      "Basses": 7.66
+     },
+     "mp": {
+      "Violins 1": -3.15,
+      "Violins 2": -2.0,
+      "Violas": -1.76,
+      "Celli": 1.12,
+      "Basses": 5.79
+     },
+     "mf": {
+      "Violins 1": -3.65,
+      "Violins 2": -2.32,
+      "Violas": -0.75,
+      "Celli": 1.22,
+      "Basses": 5.5
+     },
+     "f": {
+      "Violins 1": -2.27,
+      "Violins 2": -0.9,
+      "Violas": -0.57,
+      "Celli": 1.53,
+      "Basses": 2.22
+     },
+     "ff": {
+      "Violins 1": -0.78,
+      "Violins 2": 0.63,
+      "Violas": -0.91,
+      "Celli": 1.77,
+      "Basses": -0.71
+     }
+    },
+    "changePpToFf_doublebass": {
+     "Violins 1": 3.09,
+     "Violins 2": 4.63,
+     "Violas": -4.9,
+     "Celli": 3.04,
+     "Basses": -5.85
+    },
+    "balance_doublebass": {
+     "pp": {
+      "Violins 1": -3.86,
+      "Violins 2": -4.0,
+      "Violas": 3.99,
+      "Celli": -1.27,
+      "Basses": 5.14
+     },
+     "p": {
+      "Violins 1": -3.6,
+      "Violins 2": -3.16,
+      "Violas": 3.01,
+      "Celli": -0.42,
+      "Basses": 4.16
+     },
+     "mp": {
+      "Violins 1": -3.71,
+      "Violins 2": -2.56,
+      "Violas": 1.77,
+      "Celli": 0.56,
+      "Basses": 3.93
+     },
+     "mf": {
+      "Violins 1": -3.91,
+      "Violins 2": -2.57,
+      "Violas": 0.23,
+      "Celli": 0.96,
+      "Basses": 5.28
+     },
+     "f": {
+      "Violins 1": -2.4,
+      "Violins 2": -1.03,
+      "Violas": -0.08,
+      "Celli": 1.4,
+      "Basses": 2.11
+     },
+     "ff": {
+      "Violins 1": -0.78,
+      "Violins 2": 0.63,
+      "Violas": -0.91,
+      "Celli": 1.77,
+      "Basses": -0.71
+     }
+    },
+    "changePpToFf_viola+doublebass": {
+     "Violins 1": 1.12,
+     "Violins 2": 2.67,
+     "Violas": 2.95,
+     "Celli": 1.07,
+     "Basses": -7.81
+    },
+    "balance_viola+doublebass": {
+     "pp": {
+      "Violins 1": -1.9,
+      "Violins 2": -2.04,
+      "Violas": -3.86,
+      "Celli": 0.69,
+      "Basses": 7.1
+     },
+     "p": {
+      "Violins 1": -2.2,
+      "Violins 2": -1.77,
+      "Violas": -2.55,
+      "Celli": 0.97,
+      "Basses": 5.55
+     },
+     "mp": {
+      "Violins 1": -2.89,
+      "Violins 2": -1.74,
+      "Violas": -1.5,
+      "Celli": 1.38,
+      "Basses": 4.75
+     },
+     "mf": {
+      "Violins 1": -3.66,
+      "Violins 2": -2.33,
+      "Violas": -0.75,
+      "Celli": 1.21,
+      "Basses": 5.53
+     },
+     "f": {
+      "Violins 1": -2.28,
+      "Violins 2": -0.91,
+      "Violas": -0.57,
+      "Celli": 1.52,
+      "Basses": 2.23
+     },
+     "ff": {
+      "Violins 1": -0.78,
+      "Violins 2": 0.63,
+      "Violas": -0.91,
+      "Celli": 1.77,
+      "Basses": -0.71
+     }
+    }
+   }
+  },
+  "rmsDb": {
+   "instruments": {
+    "violin": {
+     "semitones": [
+      55,
+      105
+     ],
+     "n": 51,
+     "notesKept": {
+      "pp": 113,
+      "mf": 90,
+      "ff": 80
+     },
+     "pp_mf": {
+      "median": 8.73,
+      "p10": 5.24,
+      "p90": 11.8
+     },
+     "mf_ff": {
+      "median": 7.51,
+      "p10": 3.45,
+      "p90": 13.9
+     },
+     "pp_ff": {
+      "median": 15.97,
+      "p10": 11.73,
+      "p90": 24.91
+     },
+     "mfFraction": {
+      "median": 0.51,
+      "p10": 0.33,
+      "p90": 0.73
+     },
+     "mfOnMuseScoreScale": 5031.12,
+     "acrossStringsSdPpFf": {
+      "median": 4.46,
+      "max": 8.17,
+      "pitches": 30
+     },
+     "byOctave": [
+      {
+       "octave": "C3-B3",
+       "pitches": 5,
+       "pp_mf": 9.0,
+       "mf_ff": 5.8,
+       "pp_ff": 14.3
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 8.5,
+       "mf_ff": 5.1,
+       "pp_ff": 13.0
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 12,
+       "pp_mf": 8.9,
+       "mf_ff": 7.4,
+       "pp_ff": 16.7
+      },
+      {
+       "octave": "C6-B6",
+       "pitches": 12,
+       "pp_mf": 6.8,
+       "mf_ff": 11.9,
+       "pp_ff": 18.8
+      },
+      {
+       "octave": "C7-B7",
+       "pitches": 10,
+       "pp_mf": 9.1,
+       "mf_ff": 12.9,
+       "pp_ff": 22.3
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 29.17,
+      "ffShapeRmsDiff": 3.98
+     }
+    },
+    "viola": {
+     "semitones": [
+      48,
+      91
+     ],
+     "n": 44,
+     "notesKept": {
+      "pp": 79,
+      "mf": 92,
+      "ff": 99
+     },
+     "pp_mf": {
+      "median": 4.75,
+      "p10": 1.62,
+      "p90": 8.82
+     },
+     "mf_ff": {
+      "median": 3.66,
+      "p10": 0.71,
+      "p90": 7.73
+     },
+     "pp_ff": {
+      "median": 8.12,
+      "p10": 4.69,
+      "p90": 12.53
+     },
+     "mfFraction": {
+      "median": 0.58,
+      "p10": 0.2,
+      "p90": 0.83
+     },
+     "mfOnMuseScoreScale": 5188.92,
+     "acrossStringsSdPpFf": {
+      "median": 2.69,
+      "max": 7.74,
+      "pitches": 28
+     },
+     "byOctave": [
+      {
+       "octave": "C3-B3",
+       "pitches": 12,
+       "pp_mf": 1.9,
+       "mf_ff": 6.5,
+       "pp_ff": 9.7
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 6.3,
+       "mf_ff": 3.4,
+       "pp_ff": 9.5
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 12,
+       "pp_mf": 4.3,
+       "mf_ff": 2.7,
+       "pp_ff": 7.0
+      },
+      {
+       "octave": "C6-B6",
+       "pitches": 8,
+       "pp_mf": 6.3,
+       "mf_ff": -0.2,
+       "pp_ff": 7.0
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 25.3,
+      "ffShapeRmsDiff": 2.87
+     }
+    },
+    "cello": {
+     "semitones": [
+      37,
+      80
+     ],
+     "n": 44,
+     "notesKept": {
+      "pp": 124,
+      "mf": 110,
+      "ff": 113
+     },
+     "pp_mf": {
+      "median": 8.44,
+      "p10": 4.43,
+      "p90": 10.07
+     },
+     "mf_ff": {
+      "median": 4.37,
+      "p10": -0.94,
+      "p90": 6.62
+     },
+     "pp_ff": {
+      "median": 11.78,
+      "p10": 6.57,
+      "p90": 15.24
+     },
+     "mfFraction": {
+      "median": 0.64,
+      "p10": 0.46,
+      "p90": 1.07
+     },
+     "mfOnMuseScoreScale": 5353.47,
+     "acrossStringsSdPpFf": {
+      "median": 3.28,
+      "max": 10.6,
+      "pitches": 31
+     },
+     "byOctave": [
+      {
+       "octave": "C2-B2",
+       "pitches": 11,
+       "pp_mf": 7.0,
+       "mf_ff": 1.4,
+       "pp_ff": 8.3
+      },
+      {
+       "octave": "C3-B3",
+       "pitches": 12,
+       "pp_mf": 9.2,
+       "mf_ff": 4.7,
+       "pp_ff": 14.2
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 7.9,
+       "mf_ff": 5.0,
+       "pp_ff": 13.4
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 9,
+       "pp_mf": 5.5,
+       "mf_ff": 4.2,
+       "pp_ff": 8.1
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 21.86,
+      "ffShapeRmsDiff": 4.7
+     }
+    },
+    "doublebass": {
+     "semitones": [
+      30,
+      58
+     ],
+     "n": 29,
+     "notesKept": {
+      "pp": 41,
+      "mf": 75,
+      "ff": 93
+     },
+     "pp_mf": {
+      "median": 3.4,
+      "p10": 0.62,
+      "p90": 6.21
+     },
+     "mf_ff": {
+      "median": 6.65,
+      "p10": 3.95,
+      "p90": 8.17
+     },
+     "pp_ff": {
+      "median": 9.81,
+      "p10": 7.04,
+      "p90": 12.1
+     },
+     "mfFraction": {
+      "median": 0.34,
+      "p10": 0.08,
+      "p90": 0.58
+     },
+     "mfOnMuseScoreScale": 4605.13,
+     "acrossStringsSdPpFf": {
+      "median": 2.07,
+      "max": 5.85,
+      "pitches": 22
+     },
+     "byOctave": [
+      {
+       "octave": "C1-B1",
+       "pitches": 6,
+       "pp_mf": 4.9,
+       "mf_ff": 5.3,
+       "pp_ff": 11.0
+      },
+      {
+       "octave": "C2-B2",
+       "pitches": 12,
+       "pp_mf": 2.9,
+       "mf_ff": 7.1,
+       "pp_ff": 11.0
+      },
+      {
+       "octave": "C3-B3",
+       "pitches": 11,
+       "pp_mf": 1.9,
+       "mf_ff": 6.2,
+       "pp_ff": 7.7
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 21.0,
+      "ffShapeRmsDiff": 3.18
+     }
+    }
+   },
+   "whyItMoves": {
+    "Violins 1": {
+     "ssoCc32To112": 8.83,
+     "realPpToFf": 15.22
+    },
+    "Violins 2": {
+     "ssoCc32To112": 6.86,
+     "realPpToFf": 15.22
+    },
+    "Violas": {
+     "ssoCc32To112": 7.25,
+     "realPpToFf": 8.87
+    },
+    "Celli": {
+     "ssoCc32To112": 5.91,
+     "realPpToFf": 10.97
+    },
+    "Basses": {
+     "ssoCc32To112": 11.61,
+     "realPpToFf": 9.73
+    }
+   },
+   "ranges": {
+    "M": {
+     "Violins 1": [
+      55,
+      91
+     ],
+     "Violins 2": [
+      55,
+      91
+     ],
+     "Violas": [
+      48,
+      90
+     ],
+     "Celli": [
+      36,
+      82
+     ],
+     "Basses": [
+      28,
+      54
+     ]
+    },
+    "withinIowa": {
+     "Violins 1": [
+      55,
+      91
+     ],
+     "Violins 2": [
+      55,
+      91
+     ],
+     "Violas": [
+      48,
+      90
+     ],
+     "Celli": [
+      37,
+      80
+     ],
+     "Basses": [
+      30,
+      54
+     ]
+    }
+   },
+   "balance": {
+    "ff": {
+     "pp": {
+      "Violins 1": -3.14,
+      "Violins 2": -3.81,
+      "Violas": 1.18,
+      "Celli": 0.18,
+      "Basses": 5.59
+     },
+     "p": {
+      "Violins 1": -2.78,
+      "Violins 2": -2.9,
+      "Violas": 0.99,
+      "Celli": 1.02,
+      "Basses": 3.66
+     },
+     "mp": {
+      "Violins 1": -2.82,
+      "Violins 2": -2.14,
+      "Violas": 0.58,
+      "Celli": 1.89,
+      "Basses": 2.48
+     },
+     "mf": {
+      "Violins 1": -2.99,
+      "Violins 2": -1.86,
+      "Violas": -0.29,
+      "Celli": 2.16,
+      "Basses": 2.97
+     },
+     "f": {
+      "Violins 1": -1.97,
+      "Violins 2": -0.7,
+      "Violas": -0.8,
+      "Celli": 1.69,
+      "Basses": 1.78
+     },
+     "ff": {
+      "Violins 1": -0.67,
+      "Violins 2": 0.64,
+      "Violas": -1.11,
+      "Celli": 1.33,
+      "Basses": -0.2
+     }
+    },
+    "pp": {
+     "pp": {
+      "Violins 1": -4.75,
+      "Violins 2": -5.41,
+      "Violas": -1.61,
+      "Celli": 3.11,
+      "Basses": 8.66
+     },
+     "p": {
+      "Violins 1": -4.38,
+      "Violins 2": -4.51,
+      "Violas": -1.8,
+      "Celli": 3.96,
+      "Basses": 6.73
+     },
+     "mp": {
+      "Violins 1": -4.43,
+      "Violins 2": -3.74,
+      "Violas": -2.21,
+      "Celli": 4.83,
+      "Basses": 5.55
+     },
+     "mf": {
+      "Violins 1": -4.6,
+      "Violins 2": -3.47,
+      "Violas": -3.08,
+      "Celli": 5.1,
+      "Basses": 6.05
+     },
+     "f": {
+      "Violins 1": -3.58,
+      "Violins 2": -2.3,
+      "Violas": -3.59,
+      "Celli": 4.63,
+      "Basses": 4.85
+     },
+     "ff": {
+      "Violins 1": -2.27,
+      "Violins 2": -0.97,
+      "Violas": -3.9,
+      "Celli": 4.27,
+      "Basses": 2.87
+     }
+    },
+    "mid": {
+     "pp": {
+      "Violins 1": -3.95,
+      "Violins 2": -4.61,
+      "Violas": -0.21,
+      "Celli": 1.65,
+      "Basses": 7.12
+     },
+     "p": {
+      "Violins 1": -3.58,
+      "Violins 2": -3.7,
+      "Violas": -0.4,
+      "Celli": 2.49,
+      "Basses": 5.2
+     },
+     "mp": {
+      "Violins 1": -3.62,
+      "Violins 2": -2.94,
+      "Violas": -0.82,
+      "Celli": 3.36,
+      "Basses": 4.02
+     },
+     "mf": {
+      "Violins 1": -3.79,
+      "Violins 2": -2.66,
+      "Violas": -1.68,
+      "Celli": 3.63,
+      "Basses": 4.51
+     },
+     "f": {
+      "Violins 1": -2.78,
+      "Violins 2": -1.5,
+      "Violas": -2.2,
+      "Celli": 3.16,
+      "Basses": 3.32
+     },
+     "ff": {
+      "Violins 1": -1.47,
+      "Violins 2": -0.16,
+      "Violas": -2.5,
+      "Celli": 2.8,
+      "Basses": 1.34
+     }
+    },
+    "wlinear": {
+     "pp": {
+      "Violins 1": -4.75,
+      "Violins 2": -5.41,
+      "Violas": -1.61,
+      "Celli": 3.11,
+      "Basses": 8.66
+     },
+     "p": {
+      "Violins 1": -4.01,
+      "Violins 2": -4.14,
+      "Violas": -1.43,
+      "Celli": 2.84,
+      "Basses": 6.74
+     },
+     "mp": {
+      "Violins 1": -3.69,
+      "Violins 2": -3.0,
+      "Violas": -1.47,
+      "Celli": 2.6,
+      "Basses": 5.56
+     },
+     "mf": {
+      "Violins 1": -3.48,
+      "Violins 2": -2.35,
+      "Violas": -1.97,
+      "Celli": 1.75,
+      "Basses": 6.05
+     },
+     "f": {
+      "Violins 1": -2.22,
+      "Violins 2": -0.95,
+      "Violas": -1.64,
+      "Celli": 1.49,
+      "Basses": 3.32
+     },
+     "ff": {
+      "Violins 1": -0.67,
+      "Violins 2": 0.64,
+      "Violas": -1.11,
+      "Celli": 1.33,
+      "Basses": -0.2
+     }
+    }
+   },
+   "balanceWithinIowaRange": {
+    "pp": {
+     "Violins 1": -3.15,
+     "Violins 2": -3.81,
+     "Violas": 1.18,
+     "Celli": 0.02,
+     "Basses": 5.76
+    },
+    "p": {
+     "Violins 1": -2.8,
+     "Violins 2": -2.92,
+     "Violas": 0.97,
+     "Celli": 0.92,
+     "Basses": 3.83
+    },
+    "mp": {
+     "Violins 1": -2.85,
+     "Violins 2": -2.17,
+     "Violas": 0.55,
+     "Celli": 1.86,
+     "Basses": 2.61
+    },
+    "mf": {
+     "Violins 1": -3.03,
+     "Violins 2": -1.9,
+     "Violas": -0.33,
+     "Celli": 2.2,
+     "Basses": 3.06
+    },
+    "f": {
+     "Violins 1": -2.02,
+     "Violins 2": -0.75,
+     "Violas": -0.85,
+     "Celli": 1.8,
+     "Basses": 1.82
+    },
+    "ff": {
+     "Violins 1": -0.73,
+     "Violins 2": 0.58,
+     "Violas": -1.17,
+     "Celli": 1.5,
+     "Basses": -0.19
+    }
+   },
+   "changePpToFf": {
+    "Violins 1": 2.48,
+    "Violins 2": 4.44,
+    "Violas": -2.29,
+    "Celli": 1.15,
+    "Basses": -5.78
+   },
+   "changePpToFfWithinIowaRange": {
+    "Violins 1": 2.42,
+    "Violins 2": 4.39,
+    "Violas": -2.35,
+    "Celli": 1.49,
+    "Basses": -5.95
+   },
+   "changePpToFfWeinzierlLinear": {
+    "Violins 1": 4.08,
+    "Violins 2": 6.05,
+    "Violas": 0.5,
+    "Celli": -1.78,
+    "Basses": -8.86
+   },
+   "mfMinusFixedM": {
+    "ff": {
+     "Violins 1": 0.82,
+     "Violins 2": 0.8,
+     "Violas": 1.83,
+     "Celli": -0.61,
+     "Basses": -2.84
+    },
+    "pp": {
+     "Violins 1": -0.79,
+     "Violins 2": -0.81,
+     "Violas": -0.96,
+     "Celli": 2.33,
+     "Basses": 0.24
+    },
+    "mid": {
+     "Violins 1": 0.02,
+     "Violins 2": -0.0,
+     "Violas": 0.44,
+     "Celli": 0.86,
+     "Basses": -1.3
+    },
+    "wlinear": {
+     "Violins 1": 0.33,
+     "Violins 2": 0.31,
+     "Violas": 0.15,
+     "Celli": -1.02,
+     "Basses": 0.24
+    }
+   },
+   "mpWeinzierlLinearMinusFixedM": {
+    "Violins 1": 0.12,
+    "Violins 2": -0.34,
+    "Violas": 0.65,
+    "Celli": -0.17,
+    "Basses": -0.25
+   },
+   "players2012": {
+    "used": [
+     "viola",
+     "doublebass"
+    ],
+    "sessionSpans2012": {
+     "violin": {
+      "strings": {
+       "A": {
+        "pp_mf": -5.4,
+        "mf_ff": 8.42,
+        "pp_ff": 3.02,
+        "notes": {
+         "pp": 5,
+         "mf": 26,
+         "ff": 13
+        }
+       },
+       "D": {
+        "pp_mf": 1.97,
+        "mf_ff": 4.35,
+        "pp_ff": 6.32,
+        "notes": {
+         "pp": 9,
+         "mf": 13,
+         "ff": 10
+        }
+       },
+       "E": {
+        "pp_mf": 3.15,
+        "mf_ff": 0.75,
+        "pp_ff": 3.9,
+        "notes": {
+         "pp": 3,
+         "mf": 1,
+         "ff": 4
+        }
+       },
+       "G": {
+        "pp_mf": 2.1,
+        "mf_ff": 7.13,
+        "pp_ff": 9.23,
+        "notes": {
+         "pp": 3,
+         "mf": 17,
+         "ff": 8
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 2.04,
+       "mf_ff": 5.74,
+       "pp_ff": 5.11
+      }
+     },
+     "viola": {
+      "strings": {
+       "A": {
+        "pp_mf": 12.8,
+        "mf_ff": 9.44,
+        "pp_ff": 22.25,
+        "notes": {
+         "pp": 34,
+         "mf": 27,
+         "ff": 26
+        }
+       },
+       "C": {
+        "pp_mf": 10.23,
+        "mf_ff": 7.54,
+        "pp_ff": 17.77,
+        "notes": {
+         "pp": 21,
+         "mf": 21,
+         "ff": 21
+        }
+       },
+       "D": {
+        "pp_mf": 10.88,
+        "mf_ff": 4.75,
+        "pp_ff": 15.63,
+        "notes": {
+         "pp": 29,
+         "mf": 16,
+         "ff": 25
+        }
+       },
+       "G": {
+        "pp_mf": 14.92,
+        "mf_ff": 5.49,
+        "pp_ff": 20.4,
+        "notes": {
+         "pp": 26,
+         "mf": 21,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 11.84,
+       "mf_ff": 6.51,
+       "pp_ff": 19.09
+      }
+     },
+     "cello": {
+      "strings": {
+       "A": {
+        "pp_mf": 6.06,
+        "mf_ff": 2.28,
+        "pp_ff": 8.34,
+        "notes": {
+         "pp": 6,
+         "mf": 9,
+         "ff": 23
+        }
+       },
+       "C": {
+        "pp_mf": 1.11,
+        "mf_ff": 6.8,
+        "pp_ff": 7.9,
+        "notes": {
+         "pp": 8,
+         "mf": 20,
+         "ff": 27
+        }
+       },
+       "D": {
+        "pp_mf": 6.64,
+        "mf_ff": 3.1,
+        "pp_ff": 9.74,
+        "notes": {
+         "pp": 1,
+         "mf": 16,
+         "ff": 24
+        }
+       },
+       "G": {
+        "pp_mf": -2.09,
+        "mf_ff": 6.64,
+        "pp_ff": 4.55,
+        "notes": {
+         "pp": 1,
+         "mf": 24,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 3.58,
+       "mf_ff": 4.87,
+       "pp_ff": 8.12
+      }
+     },
+     "doublebass": {
+      "strings": {
+       "A": {
+        "pp_mf": 1.02,
+        "mf_ff": 6.12,
+        "pp_ff": 7.14,
+        "notes": {
+         "pp": 24,
+         "mf": 23,
+         "ff": 22
+        }
+       },
+       "C": {
+        "pp_mf": 6.83,
+        "mf_ff": 4.11,
+        "pp_ff": 10.94,
+        "notes": {
+         "pp": 4,
+         "mf": 4,
+         "ff": 4
+        }
+       },
+       "D": {
+        "pp_mf": 3.09,
+        "mf_ff": 4.8,
+        "pp_ff": 7.89,
+        "notes": {
+         "pp": 22,
+         "mf": 26,
+         "ff": 15
+        }
+       },
+       "E": {
+        "pp_mf": 3.16,
+        "mf_ff": 5.32,
+        "pp_ff": 8.49,
+        "notes": {
+         "pp": 24,
+         "mf": 26,
+         "ff": 24
+        }
+       },
+       "G": {
+        "pp_mf": 5.42,
+        "mf_ff": 5.54,
+        "pp_ff": 10.96,
+        "notes": {
+         "pp": 25,
+         "mf": 22,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 3.16,
+       "mf_ff": 5.32,
+       "pp_ff": 8.49
+      }
+     }
+    },
+    "sessionSpansPre2011": {
+     "violin": {
+      "strings": {
+       "A": {
+        "pp_mf": 10.6,
+        "mf_ff": 12.25,
+        "pp_ff": 22.85,
+        "notes": {
+         "pp": 27,
+         "mf": 21,
+         "ff": 19
+        }
+       },
+       "D": {
+        "pp_mf": 8.37,
+        "mf_ff": 3.76,
+        "pp_ff": 12.13,
+        "notes": {
+         "pp": 26,
+         "mf": 23,
+         "ff": 19
+        }
+       },
+       "E": {
+        "pp_mf": 6.04,
+        "mf_ff": 12.85,
+        "pp_ff": 18.89,
+        "notes": {
+         "pp": 31,
+         "mf": 22,
+         "ff": 21
+        }
+       },
+       "G": {
+        "pp_mf": 8.89,
+        "mf_ff": 5.3,
+        "pp_ff": 14.18,
+        "notes": {
+         "pp": 28,
+         "mf": 24,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 8.63,
+       "mf_ff": 8.77,
+       "pp_ff": 16.54
+      }
+     },
+     "viola": {
+      "strings": {
+       "A": {
+        "pp_mf": 5.63,
+        "mf_ff": 2.82,
+        "pp_ff": 8.45,
+        "notes": {
+         "pp": 18,
+         "mf": 23,
+         "ff": 25
+        }
+       },
+       "C": {
+        "pp_mf": 2.65,
+        "mf_ff": 5.8,
+        "pp_ff": 8.45,
+        "notes": {
+         "pp": 20,
+         "mf": 22,
+         "ff": 23
+        }
+       },
+       "D": {
+        "pp_mf": 6.55,
+        "mf_ff": 2.98,
+        "pp_ff": 9.53,
+        "notes": {
+         "pp": 18,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "G": {
+        "pp_mf": 2.88,
+        "mf_ff": 3.35,
+        "pp_ff": 6.23,
+        "notes": {
+         "pp": 23,
+         "mf": 22,
+         "ff": 25
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 4.26,
+       "mf_ff": 3.16,
+       "pp_ff": 8.45
+      }
+     },
+     "cello": {
+      "strings": {
+       "A": {
+        "pp_mf": 3.85,
+        "mf_ff": 4.83,
+        "pp_ff": 8.68,
+        "notes": {
+         "pp": 28,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "C": {
+        "pp_mf": 7.73,
+        "mf_ff": 3.94,
+        "pp_ff": 11.67,
+        "notes": {
+         "pp": 39,
+         "mf": 26,
+         "ff": 31
+        }
+       },
+       "D": {
+        "pp_mf": 10.86,
+        "mf_ff": 4.91,
+        "pp_ff": 15.77,
+        "notes": {
+         "pp": 26,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "G": {
+        "pp_mf": 9.51,
+        "mf_ff": 5.5,
+        "pp_ff": 15.01,
+        "notes": {
+         "pp": 31,
+         "mf": 34,
+         "ff": 30
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 8.62,
+       "mf_ff": 4.87,
+       "pp_ff": 13.34
+      }
+     },
+     "doublebass": {
+      "strings": {
+       "A": {
+        "pp_mf": 1.36,
+        "mf_ff": 9.2,
+        "pp_ff": 10.56,
+        "notes": {
+         "pp": 6,
+         "mf": 22,
+         "ff": 25
+        }
+       },
+       "D": {
+        "pp_mf": 2.63,
+        "mf_ff": 3.74,
+        "pp_ff": 6.38,
+        "notes": {
+         "pp": 2,
+         "mf": 13,
+         "ff": 20
+        }
+       },
+       "E": {
+        "pp_mf": 2.96,
+        "mf_ff": 6.71,
+        "pp_ff": 9.68,
+        "notes": {
+         "pp": 18,
+         "mf": 23,
+         "ff": 23
+        }
+       },
+       "G": {
+        "pp_mf": 2.36,
+        "mf_ff": 4.91,
+        "pp_ff": 7.27,
+        "notes": {
+         "pp": 15,
+         "mf": 17,
+         "ff": 25
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 2.5,
+       "mf_ff": 5.81,
+       "pp_ff": 8.47
+      }
+     }
+    },
+    "changePpToFf_pre2011Constant": {
+     "Violins 1": 3.86,
+     "Violins 2": 5.82,
+     "Violas": -4.54,
+     "Celli": 2.87,
+     "Basses": -8.01
+    },
+    "changePpToFf_viola": {
+     "Violins 1": 1.67,
+     "Violins 2": 3.64,
+     "Violas": 4.21,
+     "Celli": 0.68,
+     "Basses": -10.2
+    },
+    "balance_viola": {
+     "pp": {
+      "Violins 1": -2.34,
+      "Violins 2": -3.0,
+      "Violas": -5.31,
+      "Celli": 0.65,
+      "Basses": 10.0
+     },
+     "p": {
+      "Violins 1": -2.37,
+      "Violins 2": -2.49,
+      "Violas": -3.8,
+      "Celli": 1.36,
+      "Basses": 7.3
+     },
+     "mp": {
+      "Violins 1": -2.81,
+      "Violins 2": -2.13,
+      "Violas": -2.51,
+      "Celli": 2.11,
+      "Basses": 5.34
+     },
+     "mf": {
+      "Violins 1": -3.38,
+      "Violins 2": -2.25,
+      "Violas": -1.67,
+      "Celli": 2.25,
+      "Basses": 5.05
+     },
+     "f": {
+      "Violins 1": -2.17,
+      "Violins 2": -0.89,
+      "Violas": -1.49,
+      "Celli": 1.73,
+      "Basses": 2.82
+     },
+     "ff": {
+      "Violins 1": -0.67,
+      "Violins 2": 0.64,
+      "Violas": -1.11,
+      "Celli": 1.33,
+      "Basses": -0.2
+     }
+    },
+    "changePpToFf_doublebass": {
+     "Violins 1": 3.82,
+     "Violins 2": 5.79,
+     "Violas": -4.58,
+     "Celli": 2.83,
+     "Basses": -7.87
+    },
+    "balance_doublebass": {
+     "pp": {
+      "Violins 1": -4.49,
+      "Violins 2": -5.15,
+      "Violas": 3.47,
+      "Celli": -1.5,
+      "Basses": 7.67
+     },
+     "p": {
+      "Violins 1": -4.06,
+      "Violins 2": -4.18,
+      "Violas": 2.92,
+      "Celli": -0.32,
+      "Basses": 5.65
+     },
+     "mp": {
+      "Violins 1": -4.04,
+      "Violins 2": -3.35,
+      "Violas": 2.14,
+      "Celli": 0.88,
+      "Basses": 4.37
+     },
+     "mf": {
+      "Violins 1": -4.15,
+      "Violins 2": -3.02,
+      "Violas": 0.91,
+      "Celli": 1.48,
+      "Basses": 4.77
+     },
+     "f": {
+      "Violins 1": -2.55,
+      "Violins 2": -1.28,
+      "Violas": -0.2,
+      "Celli": 1.35,
+      "Basses": 2.68
+     },
+     "ff": {
+      "Violins 1": -0.67,
+      "Violins 2": 0.64,
+      "Violas": -1.11,
+      "Celli": 1.33,
+      "Basses": -0.2
+     }
+    },
+    "changePpToFf_viola+doublebass": {
+     "Violins 1": 1.63,
+     "Violins 2": 3.6,
+     "Violas": 4.17,
+     "Celli": 0.65,
+     "Basses": -10.05
+    },
+    "balance_viola+doublebass": {
+     "pp": {
+      "Violins 1": -2.3,
+      "Violins 2": -2.96,
+      "Violas": -5.28,
+      "Celli": 0.69,
+      "Basses": 9.85
+     },
+     "p": {
+      "Violins 1": -2.38,
+      "Violins 2": -2.5,
+      "Violas": -3.81,
+      "Celli": 1.36,
+      "Basses": 7.33
+     },
+     "mp": {
+      "Violins 1": -2.86,
+      "Violins 2": -2.18,
+      "Violas": -2.56,
+      "Celli": 2.05,
+      "Basses": 5.55
+     },
+     "mf": {
+      "Violins 1": -3.48,
+      "Violins 2": -2.35,
+      "Violas": -1.77,
+      "Celli": 2.15,
+      "Basses": 5.44
+     },
+     "f": {
+      "Violins 1": -2.22,
+      "Violins 2": -0.94,
+      "Violas": -1.54,
+      "Celli": 1.69,
+      "Basses": 3.02
+     },
+     "ff": {
+      "Violins 1": -0.67,
+      "Violins 2": 0.64,
+      "Violas": -1.11,
+      "Celli": 1.33,
+      "Basses": -0.2
+     }
+    }
+   }
+  },
+  "lufs": {
+   "instruments": {
+    "violin": {
+     "semitones": [
+      55,
+      105
+     ],
+     "n": 51,
+     "notesKept": {
+      "pp": 113,
+      "mf": 90,
+      "ff": 80
+     },
+     "pp_mf": {
+      "median": 8.66,
+      "p10": 5.28,
+      "p90": 11.48
+     },
+     "mf_ff": {
+      "median": 8.36,
+      "p10": 5.1,
+      "p90": 15.45
+     },
+     "pp_ff": {
+      "median": 17.57,
+      "p10": 13.78,
+      "p90": 23.97
+     },
+     "mfFraction": {
+      "median": 0.49,
+      "p10": 0.32,
+      "p90": 0.65
+     },
+     "mfOnMuseScoreScale": 4972.41,
+     "acrossStringsSdPpFf": {
+      "median": 3.93,
+      "max": 8.14,
+      "pitches": 30
+     },
+     "byOctave": [
+      {
+       "octave": "C3-B3",
+       "pitches": 5,
+       "pp_mf": 8.7,
+       "mf_ff": 7.2,
+       "pp_ff": 16.6
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 8.9,
+       "mf_ff": 6.9,
+       "pp_ff": 15.4
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 12,
+       "pp_mf": 9.9,
+       "mf_ff": 7.6,
+       "pp_ff": 17.6
+      },
+      {
+       "octave": "C6-B6",
+       "pitches": 12,
+       "pp_mf": 7.4,
+       "mf_ff": 12.2,
+       "pp_ff": 19.0
+      },
+      {
+       "octave": "C7-B7",
+       "pitches": 10,
+       "pp_mf": 7.9,
+       "mf_ff": 13.5,
+       "pp_ff": 22.2
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 29.17,
+      "ffShapeRmsDiff": 3.56
+     }
+    },
+    "viola": {
+     "semitones": [
+      48,
+      91
+     ],
+     "n": 44,
+     "notesKept": {
+      "pp": 79,
+      "mf": 92,
+      "ff": 99
+     },
+     "pp_mf": {
+      "median": 3.91,
+      "p10": 1.69,
+      "p90": 5.79
+     },
+     "mf_ff": {
+      "median": 4.12,
+      "p10": 2.3,
+      "p90": 6.47
+     },
+     "pp_ff": {
+      "median": 8.27,
+      "p10": 5.4,
+      "p90": 10.07
+     },
+     "mfFraction": {
+      "median": 0.45,
+      "p10": 0.22,
+      "p90": 0.68
+     },
+     "mfOnMuseScoreScale": 4877.18,
+     "acrossStringsSdPpFf": {
+      "median": 1.65,
+      "max": 3.59,
+      "pitches": 28
+     },
+     "byOctave": [
+      {
+       "octave": "C3-B3",
+       "pitches": 12,
+       "pp_mf": 2.9,
+       "mf_ff": 6.3,
+       "pp_ff": 8.9
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 4.7,
+       "mf_ff": 3.9,
+       "pp_ff": 8.4
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 12,
+       "pp_mf": 3.8,
+       "mf_ff": 3.7,
+       "pp_ff": 7.4
+      },
+      {
+       "octave": "C6-B6",
+       "pitches": 8,
+       "pp_mf": 4.3,
+       "mf_ff": 1.5,
+       "pp_ff": 6.0
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 25.3,
+      "ffShapeRmsDiff": 2.68
+     }
+    },
+    "cello": {
+     "semitones": [
+      37,
+      80
+     ],
+     "n": 44,
+     "notesKept": {
+      "pp": 124,
+      "mf": 110,
+      "ff": 113
+     },
+     "pp_mf": {
+      "median": 8.93,
+      "p10": 4.94,
+      "p90": 10.66
+     },
+     "mf_ff": {
+      "median": 5.72,
+      "p10": 3.84,
+      "p90": 7.08
+     },
+     "pp_ff": {
+      "median": 14.65,
+      "p10": 9.35,
+      "p90": 16.4
+     },
+     "mfFraction": {
+      "median": 0.61,
+      "p10": 0.45,
+      "p90": 0.69
+     },
+     "mfOnMuseScoreScale": 5280.02,
+     "acrossStringsSdPpFf": {
+      "median": 3.29,
+      "max": 7.76,
+      "pitches": 31
+     },
+     "byOctave": [
+      {
+       "octave": "C2-B2",
+       "pitches": 11,
+       "pp_mf": 7.4,
+       "mf_ff": 4.6,
+       "pp_ff": 12.3
+      },
+      {
+       "octave": "C3-B3",
+       "pitches": 12,
+       "pp_mf": 9.7,
+       "mf_ff": 5.9,
+       "pp_ff": 15.4
+      },
+      {
+       "octave": "C4-B4",
+       "pitches": 12,
+       "pp_mf": 8.2,
+       "mf_ff": 5.8,
+       "pp_ff": 13.7
+      },
+      {
+       "octave": "C5-B5",
+       "pitches": 9,
+       "pp_mf": 5.3,
+       "mf_ff": 4.9,
+       "pp_ff": 9.4
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 21.86,
+      "ffShapeRmsDiff": 3.13
+     }
+    },
+    "doublebass": {
+     "semitones": [
+      30,
+      58
+     ],
+     "n": 29,
+     "notesKept": {
+      "pp": 41,
+      "mf": 75,
+      "ff": 93
+     },
+     "pp_mf": {
+      "median": 3.76,
+      "p10": 0.67,
+      "p90": 5.27
+     },
+     "mf_ff": {
+      "median": 6.53,
+      "p10": 3.86,
+      "p90": 8.58
+     },
+     "pp_ff": {
+      "median": 10.04,
+      "p10": 7.03,
+      "p90": 12.04
+     },
+     "mfFraction": {
+      "median": 0.34,
+      "p10": 0.07,
+      "p90": 0.58
+     },
+     "mfOnMuseScoreScale": 4602.39,
+     "acrossStringsSdPpFf": {
+      "median": 2.35,
+      "max": 3.99,
+      "pitches": 22
+     },
+     "byOctave": [
+      {
+       "octave": "C1-B1",
+       "pitches": 6,
+       "pp_mf": 5.0,
+       "mf_ff": 5.8,
+       "pp_ff": 11.2
+      },
+      {
+       "octave": "C2-B2",
+       "pitches": 12,
+       "pp_mf": 2.7,
+       "mf_ff": 7.2,
+       "pp_ff": 10.5
+      },
+      {
+       "octave": "C3-B3",
+       "pitches": 11,
+       "pp_mf": 1.9,
+       "mf_ff": 6.5,
+       "pp_ff": 7.5
+      }
+     ],
+     "weinzierl": {
+      "pp_ff_samePitches": 21.0,
+      "ffShapeRmsDiff": 2.98
+     }
+    }
+   },
+   "whyItMoves": {
+    "Violins 1": {
+     "ssoCc32To112": 9.64,
+     "realPpToFf": 16.55
+    },
+    "Violins 2": {
+     "ssoCc32To112": 7.57,
+     "realPpToFf": 16.55
+    },
+    "Violas": {
+     "ssoCc32To112": 6.75,
+     "realPpToFf": 7.88
+    },
+    "Celli": {
+     "ssoCc32To112": 5.8,
+     "realPpToFf": 13.07
+    },
+    "Basses": {
+     "ssoCc32To112": 13.06,
+     "realPpToFf": 9.74
+    }
+   },
+   "ranges": {
+    "M": {
+     "Violins 1": [
+      55,
+      91
+     ],
+     "Violins 2": [
+      55,
+      91
+     ],
+     "Violas": [
+      48,
+      90
+     ],
+     "Celli": [
+      36,
+      82
+     ],
+     "Basses": [
+      28,
+      54
+     ]
+    },
+    "withinIowa": {
+     "Violins 1": [
+      55,
+      91
+     ],
+     "Violins 2": [
+      55,
+      91
+     ],
+     "Violas": [
+      48,
+      90
+     ],
+     "Celli": [
+      37,
+      80
+     ],
+     "Basses": [
+      30,
+      54
+     ]
+    }
+   },
+   "balance": {
+    "ff": {
+     "pp": {
+      "Violins 1": -4.31,
+      "Violins 2": -4.88,
+      "Violas": 1.84,
+      "Celli": -1.13,
+      "Basses": 8.48
+     },
+     "p": {
+      "Violins 1": -3.96,
+      "Violins 2": -3.86,
+      "Violas": 1.29,
+      "Celli": 0.06,
+      "Basses": 6.47
+     },
+     "mp": {
+      "Violins 1": -4.06,
+      "Violins 2": -3.09,
+      "Violas": 0.49,
+      "Celli": 1.3,
+      "Basses": 5.35
+     },
+     "mf": {
+      "Violins 1": -4.13,
+      "Violins 2": -2.75,
+      "Violas": -0.73,
+      "Celli": 1.87,
+      "Basses": 5.74
+     },
+     "f": {
+      "Violins 1": -2.99,
+      "Violins 2": -1.5,
+      "Violas": -0.69,
+      "Celli": 1.89,
+      "Basses": 3.29
+     },
+     "ff": {
+      "Violins 1": -1.6,
+      "Violins 2": -0.09,
+      "Violas": -1.22,
+      "Celli": 1.94,
+      "Basses": 0.96
+     }
+    },
+    "pp": {
+     "pp": {
+      "Violins 1": -5.34,
+      "Violins 2": -5.91,
+      "Violas": -2.7,
+      "Celli": 3.14,
+      "Basses": 10.81
+     },
+     "p": {
+      "Violins 1": -4.99,
+      "Violins 2": -4.89,
+      "Violas": -3.25,
+      "Celli": 4.34,
+      "Basses": 8.79
+     },
+     "mp": {
+      "Violins 1": -5.09,
+      "Violins 2": -4.12,
+      "Violas": -4.05,
+      "Celli": 5.57,
+      "Basses": 7.68
+     },
+     "mf": {
+      "Violins 1": -5.15,
+      "Violins 2": -3.78,
+      "Violas": -5.27,
+      "Celli": 6.15,
+      "Basses": 8.06
+     },
+     "f": {
+      "Violins 1": -4.02,
+      "Violins 2": -2.53,
+      "Violas": -5.24,
+      "Celli": 6.17,
+      "Basses": 5.61
+     },
+     "ff": {
+      "Violins 1": -2.63,
+      "Violins 2": -1.12,
+      "Violas": -5.76,
+      "Celli": 6.22,
+      "Basses": 3.28
+     }
+    },
+    "mid": {
+     "pp": {
+      "Violins 1": -4.83,
+      "Violins 2": -5.39,
+      "Violas": -0.43,
+      "Celli": 1.0,
+      "Basses": 9.64
+     },
+     "p": {
+      "Violins 1": -4.48,
+      "Violins 2": -4.37,
+      "Violas": -0.98,
+      "Celli": 2.2,
+      "Basses": 7.63
+     },
+     "mp": {
+      "Violins 1": -4.57,
+      "Violins 2": -3.6,
+      "Violas": -1.78,
+      "Celli": 3.44,
+      "Basses": 6.52
+     },
+     "mf": {
+      "Violins 1": -4.64,
+      "Violins 2": -3.27,
+      "Violas": -3.0,
+      "Celli": 4.01,
+      "Basses": 6.9
+     },
+     "f": {
+      "Violins 1": -3.5,
+      "Violins 2": -2.01,
+      "Violas": -2.97,
+      "Celli": 4.03,
+      "Basses": 4.45
+     },
+     "ff": {
+      "Violins 1": -2.11,
+      "Violins 2": -0.6,
+      "Violas": -3.49,
+      "Celli": 4.08,
+      "Basses": 2.12
+     }
+    },
+    "wlinear": {
+     "pp": {
+      "Violins 1": -5.34,
+      "Violins 2": -5.91,
+      "Violas": -2.7,
+      "Celli": 3.14,
+      "Basses": 10.81
+     },
+     "p": {
+      "Violins 1": -4.76,
+      "Violins 2": -4.66,
+      "Violas": -2.45,
+      "Celli": 3.04,
+      "Basses": 8.83
+     },
+     "mp": {
+      "Violins 1": -4.63,
+      "Violins 2": -3.66,
+      "Violas": -2.46,
+      "Celli": 2.99,
+      "Basses": 7.75
+     },
+     "mf": {
+      "Violins 1": -4.47,
+      "Violins 2": -3.09,
+      "Violas": -2.88,
+      "Celli": 2.27,
+      "Basses": 8.18
+     },
+     "f": {
+      "Violins 1": -3.16,
+      "Violins 2": -1.67,
+      "Violas": -1.77,
+      "Celli": 2.09,
+      "Basses": 4.5
+     },
+     "ff": {
+      "Violins 1": -1.6,
+      "Violins 2": -0.09,
+      "Violas": -1.22,
+      "Celli": 1.94,
+      "Basses": 0.96
+     }
+    }
+   },
+   "balanceWithinIowaRange": {
+    "pp": {
+     "Violins 1": -4.35,
+     "Violins 2": -4.91,
+     "Violas": 1.81,
+     "Celli": -1.2,
+     "Basses": 8.66
+    },
+    "p": {
+     "Violins 1": -4.01,
+     "Violins 2": -3.9,
+     "Violas": 1.25,
+     "Celli": 0.04,
+     "Basses": 6.62
+    },
+    "mp": {
+     "Violins 1": -4.11,
+     "Violins 2": -3.14,
+     "Violas": 0.44,
+     "Celli": 1.34,
+     "Basses": 5.46
+    },
+    "mf": {
+     "Violins 1": -4.18,
+     "Violins 2": -2.8,
+     "Violas": -0.78,
+     "Celli": 1.98,
+     "Basses": 5.78
+    },
+    "f": {
+     "Violins 1": -3.04,
+     "Violins 2": -1.55,
+     "Violas": -0.75,
+     "Celli": 2.05,
+     "Basses": 3.29
+    },
+    "ff": {
+     "Violins 1": -1.67,
+     "Violins 2": -0.16,
+     "Violas": -1.3,
+     "Celli": 2.13,
+     "Basses": 1.0
+    }
+   },
+   "changePpToFf": {
+    "Violins 1": 2.72,
+    "Violins 2": 4.79,
+    "Violas": -3.06,
+    "Celli": 3.08,
+    "Basses": -7.52
+   },
+   "changePpToFfWithinIowaRange": {
+    "Violins 1": 2.68,
+    "Violins 2": 4.75,
+    "Violas": -3.1,
+    "Celli": 3.33,
+    "Basses": -7.66
+   },
+   "changePpToFfWeinzierlLinear": {
+    "Violins 1": 3.75,
+    "Violins 2": 5.82,
+    "Violas": 1.48,
+    "Celli": -1.2,
+    "Basses": -9.84
+   },
+   "mfMinusFixedM": {
+    "ff": {
+     "Violins 1": -0.32,
+     "Violins 2": -0.09,
+     "Violas": 1.39,
+     "Celli": -0.9,
+     "Basses": -0.07
+    },
+    "pp": {
+     "Violins 1": -1.34,
+     "Violins 2": -1.12,
+     "Violas": -3.15,
+     "Celli": 3.38,
+     "Basses": 2.25
+    },
+    "mid": {
+     "Violins 1": -0.83,
+     "Violins 2": -0.61,
+     "Violas": -0.88,
+     "Celli": 1.24,
+     "Basses": 1.09
+    },
+    "wlinear": {
+     "Violins 1": -0.66,
+     "Violins 2": -0.43,
+     "Violas": -0.76,
+     "Celli": -0.5,
+     "Basses": 2.37
+    }
+   },
+   "mpWeinzierlLinearMinusFixedM": {
+    "Violins 1": -0.82,
+    "Violins 2": -1.0,
+    "Violas": -0.34,
+    "Celli": 0.22,
+    "Basses": 1.94
+   },
+   "players2012": {
+    "used": [
+     "viola",
+     "doublebass"
+    ],
+    "sessionSpans2012": {
+     "violin": {
+      "strings": {
+       "A": {
+        "pp_mf": 10.13,
+        "mf_ff": 8.93,
+        "pp_ff": 19.06,
+        "notes": {
+         "pp": 5,
+         "mf": 26,
+         "ff": 13
+        }
+       },
+       "D": {
+        "pp_mf": 7.39,
+        "mf_ff": 5.26,
+        "pp_ff": 12.65,
+        "notes": {
+         "pp": 9,
+         "mf": 13,
+         "ff": 10
+        }
+       },
+       "E": {
+        "pp_mf": 11.15,
+        "mf_ff": 7.67,
+        "pp_ff": 18.83,
+        "notes": {
+         "pp": 3,
+         "mf": 1,
+         "ff": 4
+        }
+       },
+       "G": {
+        "pp_mf": 3.0,
+        "mf_ff": 8.0,
+        "pp_ff": 11.0,
+        "notes": {
+         "pp": 3,
+         "mf": 17,
+         "ff": 8
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 8.76,
+       "mf_ff": 7.84,
+       "pp_ff": 15.74
+      }
+     },
+     "viola": {
+      "strings": {
+       "A": {
+        "pp_mf": 14.9,
+        "mf_ff": 6.03,
+        "pp_ff": 20.93,
+        "notes": {
+         "pp": 26,
+         "mf": 25,
+         "ff": 25
+        }
+       },
+       "C": {
+        "pp_mf": 13.34,
+        "mf_ff": 4.38,
+        "pp_ff": 17.72,
+        "notes": {
+         "pp": 21,
+         "mf": 19,
+         "ff": 21
+        }
+       },
+       "D": {
+        "pp_mf": 12.62,
+        "mf_ff": 3.27,
+        "pp_ff": 15.89,
+        "notes": {
+         "pp": 25,
+         "mf": 15,
+         "ff": 25
+        }
+       },
+       "G": {
+        "pp_mf": 12.0,
+        "mf_ff": 5.98,
+        "pp_ff": 17.98,
+        "notes": {
+         "pp": 22,
+         "mf": 21,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 12.98,
+       "mf_ff": 5.18,
+       "pp_ff": 17.85
+      }
+     },
+     "cello": {
+      "strings": {
+       "A": {
+        "pp_mf": 8.41,
+        "mf_ff": 3.68,
+        "pp_ff": 12.09,
+        "notes": {
+         "pp": 6,
+         "mf": 9,
+         "ff": 23
+        }
+       },
+       "C": {
+        "pp_mf": 1.33,
+        "mf_ff": 6.96,
+        "pp_ff": 8.29,
+        "notes": {
+         "pp": 8,
+         "mf": 20,
+         "ff": 27
+        }
+       },
+       "D": {
+        "pp_mf": 2.46,
+        "mf_ff": 3.64,
+        "pp_ff": 6.1,
+        "notes": {
+         "pp": 1,
+         "mf": 16,
+         "ff": 24
+        }
+       },
+       "G": {
+        "pp_mf": -0.59,
+        "mf_ff": 7.18,
+        "pp_ff": 6.59,
+        "notes": {
+         "pp": 1,
+         "mf": 24,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 1.9,
+       "mf_ff": 5.32,
+       "pp_ff": 7.44
+      }
+     },
+     "doublebass": {
+      "strings": {
+       "A": {
+        "pp_mf": 3.09,
+        "mf_ff": 5.98,
+        "pp_ff": 9.07,
+        "notes": {
+         "pp": 24,
+         "mf": 23,
+         "ff": 22
+        }
+       },
+       "C": {
+        "pp_mf": 7.77,
+        "mf_ff": 4.85,
+        "pp_ff": 12.63,
+        "notes": {
+         "pp": 4,
+         "mf": 4,
+         "ff": 4
+        }
+       },
+       "D": {
+        "pp_mf": 4.48,
+        "mf_ff": 6.03,
+        "pp_ff": 10.52,
+        "notes": {
+         "pp": 22,
+         "mf": 26,
+         "ff": 15
+        }
+       },
+       "E": {
+        "pp_mf": 3.52,
+        "mf_ff": 4.3,
+        "pp_ff": 7.82,
+        "notes": {
+         "pp": 24,
+         "mf": 26,
+         "ff": 24
+        }
+       },
+       "G": {
+        "pp_mf": 6.05,
+        "mf_ff": 6.62,
+        "pp_ff": 12.67,
+        "notes": {
+         "pp": 25,
+         "mf": 22,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 4.48,
+       "mf_ff": 5.98,
+       "pp_ff": 10.52
+      }
+     }
+    },
+    "sessionSpansPre2011": {
+     "violin": {
+      "strings": {
+       "A": {
+        "pp_mf": 10.18,
+        "mf_ff": 11.81,
+        "pp_ff": 21.99,
+        "notes": {
+         "pp": 27,
+         "mf": 21,
+         "ff": 19
+        }
+       },
+       "D": {
+        "pp_mf": 10.75,
+        "mf_ff": 3.78,
+        "pp_ff": 14.53,
+        "notes": {
+         "pp": 26,
+         "mf": 23,
+         "ff": 19
+        }
+       },
+       "E": {
+        "pp_mf": 5.66,
+        "mf_ff": 13.06,
+        "pp_ff": 18.72,
+        "notes": {
+         "pp": 31,
+         "mf": 22,
+         "ff": 21
+        }
+       },
+       "G": {
+        "pp_mf": 9.44,
+        "mf_ff": 7.1,
+        "pp_ff": 16.54,
+        "notes": {
+         "pp": 28,
+         "mf": 24,
+         "ff": 20
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 9.81,
+       "mf_ff": 9.46,
+       "pp_ff": 17.63
+      }
+     },
+     "viola": {
+      "strings": {
+       "A": {
+        "pp_mf": 4.89,
+        "mf_ff": 3.63,
+        "pp_ff": 8.52,
+        "notes": {
+         "pp": 18,
+         "mf": 23,
+         "ff": 25
+        }
+       },
+       "C": {
+        "pp_mf": 3.8,
+        "mf_ff": 5.13,
+        "pp_ff": 8.93,
+        "notes": {
+         "pp": 20,
+         "mf": 22,
+         "ff": 23
+        }
+       },
+       "D": {
+        "pp_mf": 5.38,
+        "mf_ff": 3.5,
+        "pp_ff": 8.89,
+        "notes": {
+         "pp": 18,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "G": {
+        "pp_mf": 3.82,
+        "mf_ff": 3.61,
+        "pp_ff": 7.43,
+        "notes": {
+         "pp": 23,
+         "mf": 22,
+         "ff": 25
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 4.35,
+       "mf_ff": 3.62,
+       "pp_ff": 8.7
+      }
+     },
+     "cello": {
+      "strings": {
+       "A": {
+        "pp_mf": 3.38,
+        "mf_ff": 5.48,
+        "pp_ff": 8.86,
+        "notes": {
+         "pp": 28,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "C": {
+        "pp_mf": 8.48,
+        "mf_ff": 5.58,
+        "pp_ff": 14.06,
+        "notes": {
+         "pp": 39,
+         "mf": 26,
+         "ff": 31
+        }
+       },
+       "D": {
+        "pp_mf": 12.21,
+        "mf_ff": 5.41,
+        "pp_ff": 17.62,
+        "notes": {
+         "pp": 26,
+         "mf": 25,
+         "ff": 26
+        }
+       },
+       "G": {
+        "pp_mf": 9.5,
+        "mf_ff": 7.06,
+        "pp_ff": 16.56,
+        "notes": {
+         "pp": 31,
+         "mf": 34,
+         "ff": 30
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 8.99,
+       "mf_ff": 5.53,
+       "pp_ff": 15.31
+      }
+     },
+     "doublebass": {
+      "strings": {
+       "A": {
+        "pp_mf": 0.74,
+        "mf_ff": 8.17,
+        "pp_ff": 8.91,
+        "notes": {
+         "pp": 6,
+         "mf": 22,
+         "ff": 25
+        }
+       },
+       "D": {
+        "pp_mf": 3.08,
+        "mf_ff": 3.18,
+        "pp_ff": 6.26,
+        "notes": {
+         "pp": 2,
+         "mf": 13,
+         "ff": 20
+        }
+       },
+       "E": {
+        "pp_mf": 3.33,
+        "mf_ff": 6.26,
+        "pp_ff": 9.59,
+        "notes": {
+         "pp": 18,
+         "mf": 23,
+         "ff": 23
+        }
+       },
+       "G": {
+        "pp_mf": 2.96,
+        "mf_ff": 3.8,
+        "pp_ff": 6.76,
+        "notes": {
+         "pp": 15,
+         "mf": 17,
+         "ff": 25
+        }
+       }
+      },
+      "median": {
+       "pp_mf": 3.02,
+       "mf_ff": 5.03,
+       "pp_ff": 7.84
+      }
+     }
+    },
+    "changePpToFf_pre2011Constant": {
+     "Violins 1": 4.37,
+     "Violins 2": 6.45,
+     "Violas": -4.02,
+     "Celli": 3.47,
+     "Basses": -10.27
+    },
+    "changePpToFf_viola": {
+     "Violins 1": 2.33,
+     "Violins 2": 4.41,
+     "Violas": 4.13,
+     "Celli": 1.44,
+     "Basses": -12.31
+    },
+    "balance_viola": {
+     "pp": {
+      "Violins 1": -3.93,
+      "Violins 2": -4.5,
+      "Violas": -5.35,
+      "Celli": 0.51,
+      "Basses": 13.27
+     },
+     "p": {
+      "Violins 1": -4.02,
+      "Violins 2": -3.92,
+      "Violas": -3.68,
+      "Celli": 1.23,
+      "Basses": 10.39
+     },
+     "mp": {
+      "Violins 1": -4.56,
+      "Violins 2": -3.58,
+      "Violas": -2.26,
+      "Celli": 1.99,
+      "Basses": 8.42
+     },
+     "mf": {
+      "Violins 1": -5.06,
+      "Violins 2": -3.69,
+      "Violas": -1.27,
+      "Celli": 2.08,
+      "Basses": 7.94
+     },
+     "f": {
+      "Violins 1": -3.46,
+      "Violins 2": -1.97,
+      "Violas": -0.96,
+      "Celli": 2.0,
+      "Basses": 4.39
+     },
+     "ff": {
+      "Violins 1": -1.6,
+      "Violins 2": -0.09,
+      "Violas": -1.22,
+      "Celli": 1.94,
+      "Basses": 0.96
+     }
+    },
+    "changePpToFf_doublebass": {
+     "Violins 1": 3.89,
+     "Violins 2": 5.96,
+     "Violas": -4.51,
+     "Celli": 2.99,
+     "Basses": -8.33
+    },
+    "balance_doublebass": {
+     "pp": {
+      "Violins 1": -5.49,
+      "Violins 2": -6.05,
+      "Violas": 3.28,
+      "Celli": -1.05,
+      "Basses": 9.3
+     },
+     "p": {
+      "Violins 1": -5.1,
+      "Violins 2": -4.99,
+      "Violas": 2.55,
+      "Celli": 0.15,
+      "Basses": 7.39
+     },
+     "mp": {
+      "Violins 1": -5.15,
+      "Violins 2": -4.18,
+      "Violas": 1.57,
+      "Celli": 1.39,
+      "Basses": 6.38
+     },
+     "mf": {
+      "Violins 1": -5.18,
+      "Violins 2": -3.81,
+      "Violas": 0.17,
+      "Celli": 1.96,
+      "Basses": 6.87
+     },
+     "f": {
+      "Violins 1": -3.52,
+      "Violins 2": -2.03,
+      "Violas": -0.25,
+      "Celli": 1.94,
+      "Basses": 3.85
+     },
+     "ff": {
+      "Violins 1": -1.6,
+      "Violins 2": -0.09,
+      "Violas": -1.22,
+      "Celli": 1.94,
+      "Basses": 0.96
+     }
+    },
+    "changePpToFf_viola+doublebass": {
+     "Violins 1": 1.85,
+     "Violins 2": 3.93,
+     "Violas": 3.64,
+     "Celli": 0.95,
+     "Basses": -10.37
+    },
+    "balance_viola+doublebass": {
+     "pp": {
+      "Violins 1": -3.45,
+      "Violins 2": -4.01,
+      "Violas": -4.86,
+      "Celli": 0.99,
+      "Basses": 11.33
+     },
+     "p": {
+      "Violins 1": -3.63,
+      "Violins 2": -3.53,
+      "Violas": -3.3,
+      "Celli": 1.61,
+      "Basses": 8.85
+     },
+     "mp": {
+      "Violins 1": -4.27,
+      "Violins 2": -3.3,
+      "Violas": -1.98,
+      "Celli": 2.27,
+      "Basses": 7.27
+     },
+     "mf": {
+      "Violins 1": -4.87,
+      "Violins 2": -3.5,
+      "Violas": -1.08,
+      "Celli": 2.27,
+      "Basses": 7.18
+     },
+     "f": {
+      "Violins 1": -3.36,
+      "Violins 2": -1.87,
+      "Violas": -0.87,
+      "Celli": 2.09,
+      "Basses": 4.01
+     },
+     "ff": {
+      "Violins 1": -1.6,
+      "Violins 2": -0.09,
+      "Violas": -1.22,
+      "Celli": 1.94,
+      "Basses": 0.96
+     }
+    }
+   }
+  }
+ },
+ "ccs": {
+  "pp": 32,
+  "p": 48,
+  "mp": 64,
+  "mf": 80,
+  "f": 96,
+  "ff": 112
+ },
+ "files": {
+  "count": 143,
+  "notes": 1172,
+  "nameRangeMismatch": 67
+ },
+ "gainCheck": {
+  "violin": {
+   "A": {
+    "broad": {
+     "ff": -78.49,
+     "mf": -81.14,
+     "pp": -81.27
+    },
+    "broadSpread": 2.78
+   },
+   "D": {
+    "broad": {
+     "ff": -79.33,
+     "mf": -80.54,
+     "pp": -81.42
+    },
+    "broadSpread": 2.09
+   },
+   "E": {
+    "broad": {
+     "ff": -78.55,
+     "mf": -80.81,
+     "pp": -81.21
+    },
+    "broadSpread": 2.66
+   },
+   "G": {
+    "broad": {
+     "ff": -78.74,
+     "mf": -80.87,
+     "pp": -81.67
+    },
+    "broadSpread": 2.93
+   }
+  },
+  "viola": {
+   "A": {
+    "broad": {
+     "ff": -85.86,
+     "mf": -87.31,
+     "pp": -88.89
+    },
+    "broadSpread": 3.03
+   },
+   "C": {
+    "broad": {
+     "ff": -87.63,
+     "mf": -88.77,
+     "pp": -89.39
+    },
+    "broadSpread": 1.77
+   },
+   "D": {
+    "broad": {
+     "ff": -87.2,
+     "mf": -87.06,
+     "pp": -88.05
+    },
+    "broadSpread": 0.99
+   },
+   "G": {
+    "broad": {
+     "ff": -85.78,
+     "mf": -87.09,
+     "pp": -88.4
+    },
+    "broadSpread": 2.62
+   }
+  },
+  "cello": {
+   "A": {
+    "broad": {
+     "ff": -56.32,
+     "mf": -56.38,
+     "pp": -56.29
+    },
+    "broadSpread": 0.09,
+    "hf": {
+     "ff": -91.27,
+     "mf": -91.78,
+     "pp": -91.28
+    },
+    "hfSpread": 0.51
+   },
+   "C": {
+    "broad": {
+     "ff": -62.58,
+     "mf": -60.73,
+     "pp": -59.69
+    },
+    "broadSpread": 2.89,
+    "hf": {
+     "ff": -90.44,
+     "mf": -90.27,
+     "pp": -90.32
+    },
+    "hfSpread": 0.17
+   },
+   "D": {
+    "broad": {
+     "ff": -56.98,
+     "mf": -56.96,
+     "pp": -56.91
+    },
+    "broadSpread": 0.07,
+    "hf": {
+     "ff": -92.16,
+     "mf": -92.21,
+     "pp": -92.25
+    },
+    "hfSpread": 0.09
+   },
+   "G": {
+    "broad": {
+     "ff": -58.05,
+     "mf": -57.8,
+     "pp": -57.6
+    },
+    "broadSpread": 0.45,
+    "hf": {
+     "ff": -89.67,
+     "mf": -90.16,
+     "pp": -89.78
+    },
+    "hfSpread": 0.49
+   }
+  },
+  "doublebass": {
+   "A": {
+    "broad": {
+     "ff": -55.39,
+     "mf": -55.39,
+     "pp": -55.28
+    },
+    "broadSpread": 0.11,
+    "hf": {
+     "ff": -89.67,
+     "mf": -89.71,
+     "pp": -89.58
+    },
+    "hfSpread": 0.13
+   },
+   "D": {
+    "broad": {
+     "ff": -54.48,
+     "mf": -54.36,
+     "pp": -52.58
+    },
+    "broadSpread": 1.9,
+    "hf": {
+     "ff": -89.35,
+     "mf": -89.59,
+     "pp": -89.65
+    },
+    "hfSpread": 0.3
+   },
+   "E": {
+    "broad": {
+     "ff": -57.35,
+     "mf": -57.12,
+     "pp": -57.23
+    },
+    "broadSpread": 0.23,
+    "hf": {
+     "ff": -89.46,
+     "mf": -89.65,
+     "pp": -89.41
+    },
+    "hfSpread": 0.24
+   },
+   "G": {
+    "broad": {
+     "ff": -64.39,
+     "mf": -65.51,
+     "pp": -64.34
+    },
+    "broadSpread": 1.17,
+    "hf": {
+     "ff": -89.7,
+     "mf": -89.64,
+     "pp": -89.66
+    },
+    "hfSpread": 0.06
+   }
+  }
+ },
+ "gainCheck2012": {
+  "violin": {
+   "A": {
+    "broad": {
+     "ff": -78.16,
+     "mf": -75.02,
+     "pp": -48.27
+    },
+    "broadSpread": 29.88,
+    "hf": {
+     "pp": -77.56
+    }
+   },
+   "D": {
+    "broad": {
+     "ff": -46.0,
+     "mf": -48.66,
+     "pp": -47.76
+    },
+    "broadSpread": 2.66,
+    "hf": {
+     "ff": -53.53,
+     "mf": -86.83,
+     "pp": -86.41
+    },
+    "hfSpread": 33.3
+   },
+   "E": {
+    "broad": {
+     "ff": -45.21,
+     "mf": -46.66,
+     "pp": -47.69
+    },
+    "broadSpread": 2.48,
+    "hf": {
+     "ff": -54.66,
+     "mf": -58.64,
+     "pp": -77.23
+    },
+    "hfSpread": 22.57
+   },
+   "G": {
+    "broad": {
+     "ff": -45.65,
+     "mf": -48.92,
+     "pp": -47.47
+    },
+    "broadSpread": 3.27,
+    "hf": {
+     "ff": -47.71,
+     "mf": -95.18,
+     "pp": -95.63
+    },
+    "hfSpread": 47.92
+   }
+  },
+  "viola": {
+   "A": {
+    "broad": {
+     "ff": -70.34,
+     "mf": -70.73,
+     "pp": -71.4
+    },
+    "broadSpread": 1.06,
+    "hf": {
+     "ff": -94.06,
+     "mf": -94.18,
+     "pp": -94.15
+    },
+    "hfSpread": 0.12
+   },
+   "C": {
+    "broad": {
+     "ff": -70.34,
+     "mf": -70.81,
+     "pp": -69.75
+    },
+    "broadSpread": 1.05,
+    "hf": {
+     "ff": -94.05,
+     "mf": -94.1,
+     "pp": -94.08
+    },
+    "hfSpread": 0.05
+   },
+   "D": {
+    "broad": {
+     "ff": -69.89,
+     "mf": -70.63,
+     "pp": -70.12
+    },
+    "broadSpread": 0.74,
+    "hf": {
+     "ff": -94.05,
+     "mf": -94.17,
+     "pp": -94.11
+    },
+    "hfSpread": 0.12
+   },
+   "G": {
+    "broad": {
+     "ff": -69.88,
+     "mf": -70.58,
+     "pp": -70.65
+    },
+    "broadSpread": 0.77,
+    "hf": {
+     "ff": -94.16,
+     "mf": -94.13,
+     "pp": -94.17
+    },
+    "hfSpread": 0.04
+   }
+  },
+  "cello": {
+   "A": {
+    "broad": {
+     "ff": -52.3,
+     "mf": -43.44,
+     "pp": -46.81
+    },
+    "broadSpread": 8.87,
+    "hf": {
+     "ff": -80.62,
+     "mf": -80.83,
+     "pp": -80.61
+    },
+    "hfSpread": 0.22
+   },
+   "C": {
+    "broad": {
+     "ff": -47.12,
+     "mf": -43.4,
+     "pp": -46.5
+    },
+    "broadSpread": 3.71,
+    "hf": {
+     "ff": -81.82,
+     "mf": -80.92,
+     "pp": -81.68
+    },
+    "hfSpread": 0.9
+   },
+   "D": {
+    "broad": {
+     "ff": -43.52,
+     "mf": -43.89,
+     "pp": -42.39
+    },
+    "broadSpread": 1.5,
+    "hf": {
+     "ff": -80.73,
+     "mf": -80.73,
+     "pp": -80.87
+    },
+    "hfSpread": 0.14
+   },
+   "G": {
+    "broad": {
+     "ff": -43.38,
+     "mf": -50.65,
+     "pp": -42.43
+    },
+    "broadSpread": 8.22,
+    "hf": {
+     "ff": -80.7,
+     "mf": -82.06,
+     "pp": -80.53
+    },
+    "hfSpread": 1.53
+   }
+  },
+  "doublebass": {
+   "A": {
+    "broad": {
+     "ff": -71.88,
+     "mf": -71.55,
+     "pp": -72.43
+    },
+    "broadSpread": 0.88,
+    "hf": {
+     "ff": -76.53
+    }
+   },
+   "C": {
+    "broad": {
+     "ff": -69.17,
+     "mf": -68.97,
+     "pp": -72.06
+    },
+    "broadSpread": 3.09
+   },
+   "D": {
+    "broad": {
+     "ff": -70.18,
+     "mf": -72.68,
+     "pp": -72.53
+    },
+    "broadSpread": 2.5,
+    "hf": {
+     "ff": -74.6
+    }
+   },
+   "E": {
+    "broad": {
+     "ff": -72.51,
+     "mf": -72.76,
+     "pp": -73.19
+    },
+    "broadSpread": 0.68
+   },
+   "G": {
+    "broad": {
+     "ff": -71.29,
+     "mf": -72.94,
+     "pp": -72.95
+    },
+    "broadSpread": 1.66
+   }
+  }
+ },
+ "files2012": {
+  "count": 129,
+  "notes": 1130,
+  "notesKeptPerDynamic": {
+   "violin": {
+    "pp": 24,
+    "mf": 60,
+    "ff": 42
+   },
+   "viola": {
+    "pp": 124,
+    "mf": 107,
+    "ff": 102
+   },
+   "cello": {
+    "pp": 16,
+    "mf": 69,
+    "ff": 97
+   },
+   "doublebass": {
+    "pp": 99,
+    "mf": 101,
+    "ff": 85
+   }
+  }
+ }
+}

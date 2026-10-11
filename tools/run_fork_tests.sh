@@ -33,7 +33,7 @@ for n in $NODE; do
   if node "$ROOT/tools/live/test/test_$n.js" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
   printf '%-28s %s\n' "node test_$n" "$r" >> "$OUT"
 done
-for p in tools/live/test/test_envelopes.py tools/soundlibraries/test_make_setups.py tools/soundlibraries/test_extract_library_files.py; do
+for p in tools/live/test/test_envelopes.py tools/soundlibraries/test_make_setups.py tools/soundlibraries/test_extract_library_files.py tools/soundlibraries/test_real_string_dynamics.py; do
   if python3 -I "$ROOT/$p" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
   printf '%-28s %s\n' "python $(basename "$p")" "$r" >> "$OUT"
 done
