@@ -207,6 +207,33 @@ headless test scores and their checked results are the parity tests.
   panel lists the selected chord's entrance and the leaps reaching it, panel notes too, after its W2/B1/W5
   notes (`ChordInfo::windNotes`). Tests `brassEntryRules`, `brassEntries` (brassentry-tests.mscx from
   `tools/playability/gen_brassentry_tests.py`): 34 pass, 1 skipped. B2 (brass endurance) dropped: no book prints a number.
+- B8, brass trills and two-note tremolos (the owner's spec SPEC-b8, approved 2026-10-11; done): trills and
+  two-note tremolos read exactly as W5 reads them (`windTrillEvents`: a Trill spanner or an upper-neighbour
+  ornament, upper note = main + `articulationExcursion`; a tremolo between two single notes, either order).
+  Groups: trumpets in C and B♭, cornet, flugelhorn and the horn by their wind-data id (written = sounding −
+  the wind data's transposition, the horn as in F); euphonium, tubas and trombones (tenor, bass, alto,
+  contrabass) by the diagrams' Brass type. Marks (dark yellow): trumpet-group trill or tremolo written
+  A♭3–B♭3 or C4–D♭4 (Adler p. 335, Kennan & Grantham p. 143); valve trill (trumpet group, horn, euphonium,
+  tubas) whose two notes' fingerings differ in exactly 2 valves ("awkward") or 3+ ("very hard"; Adler
+  p. 335, Sevsay p. 122), not again on a trill the pairs rule marked; horn tremolo of 3+ semitones (Adler
+  pp. 323–324, Sevsay p. 98); trumpet-group tremolo of 3+ semitones, the message adding that same-fingering
+  or one-finger tremolos are easier (Sevsay p. 102, Blatter p. 161); any trombone tremolo (Sevsay p. 107).
+  Panel note (no mark): any trombone trill, lip trills only between neighbouring harmonics a half or whole
+  step apart (Adler p. 307, Kennan & Grantham p. 150). Valve count (B8-D2): the fingerings are the valve
+  diagrams' own lists (`valveEntries`: Blatter's charts and the approved derivation, the part's valves as
+  `brassPart` takes them, "N valves" texts included), every entry the instrument can play; the horn's F and
+  B♭ sides both, the thumb counting as a valve; the count is the smallest number of differing valves over all
+  pairs of one fingering per note (a note with no playable fingering: no valve mark; B6 marks it red). Not
+  built (decisions): B3–C♯4 (D3), trombone A♯2–B2 (D7), euphonium / tuba tremolo interval (D5), horn trill
+  register (D9). Every text ends "(solo and section)" (D10). Rules in `tools/playability/b8_rules.py`;
+  `gen_brasstrills.py` writes `libmscore/playabilitybrasstrills.h`. `Pass::checkBrassTrills` (per part,
+  after `checkWindTrills`): rows of kind `trill` / `tremolo`, one per trill or tremolo and rule; the trill's
+  main note or both tremolo notes marked; the panel lists every B8 rule of the selected chord's trills and
+  tremolo, panel notes too, after its W2/B1/W5/B3 notes (also for the contrabass trombone, which has no wind
+  data). Tests `brassTrillRules`, `brassTrills` (brasstrill-tests.mscx from
+  `tools/playability/gen_brasstrill_tests.py`: 1-, 2-, 3-valve trumpet trills, the pairs not counted twice, a
+  horn trill clean only through the B♭ side, B♭ trumpet and cornet by written pitch, m2 vs m3 tremolos on
+  horn and trumpet, a tuba 4-valve-row trill, trombone trill notes and tremolos): 36 pass, 1 skipped.
 - No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
   unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
   (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1
