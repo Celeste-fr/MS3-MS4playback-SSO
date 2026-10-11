@@ -189,6 +189,24 @@ headless test scores and their checked results are the parity tests.
   continuations not again; the panel lists every W5 rule of the selected chord's trills and tremolo after
   its W2/B1 notes (`ChordInfo::windNotes`). Tests `windTrillRules`, `windTrills` (windtrill-tests.mscx from
   `tools/playability/gen_windtrill_tests.py`): 31 pass, 1 skipped. W3 (clarinet break): no rules (the owner).
+- B3, brass entrances and leaps (the owner's spec SPEC-b3, approved 2026-10-11; done): an entrance (B3-D1)
+  is the first note of a staff or the first note after a rest (any length): nothing sounds on the staff, in
+  any voice, just before it (so `checkEntrance`'s first note is one); with grace notes before it the first
+  grace chord enters; tied continuations and notes led up to inside a phrase never enter. A leap is two
+  consecutive notes of a voice (grace notes included) with no rest or gap between them; between chords the
+  top notes and the bottom notes are compared. Pitches by MIDI number, intervals in semitones. Marks (dark
+  yellow unless red): horn entrance above written G5 (G5 itself safe; read as in F, the wind data's
+  transposition, like B1-HN-HIGH; the message adds that leading up from a P8, P5, P4, M3 or m3 below helps,
+  Blatter p. 151), trumpet in C / B♭ entrance above written G5, tenor trombone entrance above F4 (sounding;
+  no rule for bass, alto, contrabass trombones), trumpet slurred leap (both notes under one slur) up 13+ or
+  down 10+ semitones, tuba note B♭0–D♭1 reached by a leap of 3+ semitones (red). Panel note (no mark): horn
+  leap of 13+ semitones either way. Every text ends "(solo and section)" (B3-D8). Entrances mark the notes
+  above the limit, leaps the note reached. Rules (book and page) in `tools/playability/b3_rules.py`;
+  `gen_brassentry.py` writes `libmscore/playabilitybrassentry.h`. `Pass::checkBrassEntries` (per staff,
+  after `checkEntrance`): rows of kind `entrance` / `leap`, one per entering chord or leap and rule; the
+  panel lists the selected chord's entrance and the leaps reaching it, panel notes too, after its W2/B1/W5
+  notes (`ChordInfo::windNotes`). Tests `brassEntryRules`, `brassEntries` (brassentry-tests.mscx from
+  `tools/playability/gen_brassentry_tests.py`): 34 pass, 1 skipped. B2 (brass endurance) dropped: no book prints a number.
 - No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
   unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
   (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1
