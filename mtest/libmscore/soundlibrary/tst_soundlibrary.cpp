@@ -2239,7 +2239,7 @@ void TestSoundLibrary::levelContext()
                         return x;
             return N { pitch, -1, -1, -1 };
             };
-      auto chordOf = [score](int pitch) -> const Chord* {
+      auto chordOf = [score](int pitch) -> const Ms::Chord* {
             for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
                   if (s->element(0) && s->element(0)->isChord())
                         for (const Note* n : toChord(s->element(0))->notes())
