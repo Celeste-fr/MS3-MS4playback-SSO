@@ -55,6 +55,7 @@
 #include "mscore/soundlibraryhost.h"
 #include "mscore/playbacksettingswidget.h"
 #include "libmscore/playbacksettings.h"
+#include "libmscore/tuning.h"
 #include <QDoubleSpinBox>
 #include <QTreeWidget>
 #include "mtest/testutils.h"
@@ -2333,9 +2334,11 @@ void TestLiveEquivalence::dumpEvents()
             QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
             f.write((m.second.join("\n") + "\n").toUtf8());
             }
-      // the written notes (notes.txt: "part|seconds|end|pitch|bar|slur", slur: the index of the slur it lies under,
-      // -1 none; tied notes once) and the bars' starts (bars.txt), for in-context levels per slurred group
+      // the written notes (notes.txt: "part|seconds|end|pitch|bar|slur|cents", slur: the index of the slur it lies under,
+      // -1 none; cents: its playback tuning; tied notes once) and the bars' starts (bars.txt), for in-context levels per
+      // slurred group and to find each microtonal note's route
       {
+            ScoreTuningScope tuningScope(score);
             QStringList bars, notes;
             for (Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
                   bars << QString::number(score->utick2utime(m->tick().ticks()), 'f', 6);
@@ -2364,9 +2367,9 @@ void TestLiveEquivalence::dumpEvents()
                                     while (last->tieFor() && last->tieFor()->endNote())
                                           last = last->tieFor()->endNote();
                                     const int end = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks();
-                                    notes << QString("%1|%2|%3|%4|%5|%6").arg(c->part()->partName())
+                                    notes << QString("%1|%2|%3|%4|%5|%6|%7").arg(c->part()->partName())
                                              .arg(score->utick2utime(tick), 0, 'f', 6).arg(score->utick2utime(end), 0, 'f', 6)
-                                             .arg(n->ppitch()).arg(bar).arg(slur);
+                                             .arg(n->ppitch()).arg(bar).arg(slur).arg(playbackTuning(n), 0, 'f', 2);
                                     }
                               }
                         }

@@ -32,9 +32,19 @@ only early start.
 
 Open:
 - **The playback audit has no model of a transition's arrival**: it judges Performance transitions by the attack
-  onset, so on *Whence* (Recommended) ARRIVAL reads 127 fail / 28 warn (before: 1 fail) and CAPPED 226 info, nearly
-  all transitions on the beat. It needs the measured transition delays (`sso_legato_*.json`, `legatoDelay`) before
+  onset, so on *Whence* (Recommended) ARRIVAL reads 19 fail / 136 warn (before: 1 fail) and CAPPED 289 info (226 transitions, nearly
+  all on the beat, and 63 re-attacks held back by the keep below). It needs the measured transition delays (`sso_legato_*.json`, `legatoDelay`) before
   those counts mean anything.
+- **A re-attack keeps the note before** (fixed 2026-10-10, integrate-2026-10-10): a slur's last sixteenth (136 ms at
+  *Whence*'s tempo) followed by a new attack on the same Performance patch sounded 1.1 ms (Violas: the attack 87.5 ms
+  early, the map's reattackGap 54 ms), 11.4 ms (Celli) and 31.8 ms (Violins 1): 63 notes. `onsetEarliest` now keeps
+  `[legato] keepMs` (40) after the re-attack gap: those notes sound 39.8 ms and their attacks start 42.0 ms early
+  instead of 87.5 / 70.5 / 50 (predicted arrival 45.5 / 28.5 / 8 ms late; Rasch's fail is > 50). Owner to hear.
+- **Quarter tones on the Performance patches glide**: with `[slurs] performance` the strings' slurred quarter-tone
+  notes play on the bending copies (pitch bend timed to the transition's arrival), not on Kontakt-Tune copies. On
+  *Whence* (quarter tones, Recommended, dumpEvents MS_DUMP_LIVE, Live's clips): 147 quarter-tone notes on bending
+  copies, 141 of them at their tuning (within 5 cents) for under half their sounding length; with
+  `slurs/performance=0` every quarter-tone note is on a tuned copy (14 Kontakts, now 20). Owner to decide.
 - **Levels against R**: the calibration predicts Performance over All +2.7 dB (Violins 1), +3.8 (Violas), +7.8 (Celli)
   at *Whence*'s CC1 64 (perceived curves of `Spitfire Symphony Orchestra.dynamics.json`, Long minus Performance
   Legato); the owner's R faders say +13.1, +8.6, +14.0 (Violins 1 bars 13-16: +6.6). Measured on held notes along
