@@ -78,6 +78,12 @@ static const std::vector<Definition> DEFINITIONS = {
       { "slurs/quickLevel", 1, 0, 1, "on/off",
         "1: a note [slurs] quick swaps plays as loud as its held technique would at its pitch and written length (map "
         "quickLevel: the boost that matches Long in the passage, per register); 0: at the swapped technique's own level", true },
+      // (the owner, 2026-10-10, after hand-building Whence's Live set R with the strings' slurs on the Performance patches:
+      // Recommended plays them so. Reverses "No Performance patches" (2026-10-06) for Recommended only)
+      { "slurs/performance", 1, 0, 1, "on/off",
+        "1: slurred notes of the string sections whose Performance legato has measured attacks (SSO: Violins 1 and 2, Violas, "
+        "Celli, Basses) play as under staff text \"performance\" (staff text \"non performance\" opts out), instead of "
+        "[slurs] quick's swap; 0: on the All techniques patch", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -85,7 +91,8 @@ static const std::vector<Definition> DEFINITIONS = {
       { "levels/calibrated", 1, 0, 1, "on/off",
         "1: a technique on velocity (the map's <Dynamics velocity>: shorts, pizzicato ...), where measured, plays as loud as the "
         "part's held note at the same dynamic, plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a "
-        "plain note's); 0: at the dynamic's level, MuseScore 4's accent share on top (the library's own balance)", true },
+        "plain note's); a Performance legato note (on the dynamics CC) at the CC at which its patch sounds as loud as the part's "
+        "held note; 0: at the dynamic's level, MuseScore 4's accent share on top (the library's own balance)", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
@@ -296,7 +303,7 @@ QString iniTemplate()
 //---------------------------------------------------------
 //   presets
 //    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated) and
-//    the slurred notes' quicker technique (slurs/quick, slurs/quickLevel) differ between them. The other settings are not in the table because: legato/keepMs acts
+//    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance) differ between them. The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -308,10 +315,11 @@ const std::vector<Preset>& presets()
             // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent"; 2026-10-08: "make
             // even early the new recommended": early, each patch by its median onset)
             // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
-            // "1 is the right balance, make it the recommended preset")
+            // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
-                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 } } },
-            { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 } } },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 } } },
+            { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
+                                              { "slurs/performance", 0 } } },
             };
       return P;
       }

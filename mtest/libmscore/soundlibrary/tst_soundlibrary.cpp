@@ -51,6 +51,8 @@
 #include "audio/vst3/vst3synth.h"
 #include "libmscore/segment.h"
 #include "libmscore/slur.h"
+#include "libmscore/measure.h"
+#include "libmscore/stafftext.h"
 #include "libmscore/automation.h"
 #include "libmscore/chord.h"
 #include "libmscore/tempo.h"
@@ -108,6 +110,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playStartEarly();
       void playbackSettingsIni();
       void playbackSettingsLayers();
+      void slurPerformance();
       void playbackPresets();
       void renderKit();
       void renderKitRoll();
@@ -1809,22 +1812,22 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ncalibrated=%3\n\n[slurs]\nquickLevel=1\nquick=%4\n";
-      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2));
+                                + "\n[levels]\ncalibrated=%3\n\n[slurs]\nperformance=%5\nquickLevel=1\nquick=%4\n";
+      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
-      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0));
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ncalibrated=0\n\n[slurs]\nquick=0\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ncalibrated=0\n\n[slurs]\nperformance=0\nquick=0\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1845,7 +1848,7 @@ void TestSoundLibrary::playbackPresets()
       f.close();
       QVERIFY(Playback::applyPreset("recommended", path));
       QVERIFY(f.open(QIODevice::ReadOnly));
-      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1).arg(2));
+      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1).arg(2).arg(1));
       f.close();
       // detection, from the file read and from values
       Playback::setIniPath(path);
@@ -1854,11 +1857,14 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "slurs/quick", 0 } }), QString());
+      // performance left out: its default 1, Recommended's; Library default needs 0
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "slurs/performance", 0 } }), QString());
       // calibrated left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "levels/calibrated", 0 } }), QString());
@@ -1867,7 +1873,8 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
+                                         { "slurs/performance", 0 } }),
                QString("library"));
       QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
       Playback::setIniPath(QString());
@@ -1973,6 +1980,174 @@ void TestSoundLibrary::playbackSettingsLayers()
       score->setMetaTag(Playback::metaTag, "");
       Playback::setIniValuesForTest({});
       delete score;
+      }
+
+//---------------------------------------------------------
+//   slurPerformance
+//    [slurs] performance (2026-10-10, Recommended): slurred notes play the Performance legato (attacks listed) as under
+//    staff text "performance", at each layer (default on, the ini, the score); "non performance" opts out (not ended
+//    by "ord."); the unslurred note stays on the main patch; the slur's first note after silence attacks. With
+//    [levels] calibrated and both curves measured: the Performance notes' CC1 as loud as the held Long's
+//    (calibratedController); a patch without attacks (a plain legato patch) is not taken
+//---------------------------------------------------------
+
+void TestSoundLibrary::slurPerformance()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      // (measure 1: C5 D5 E5 F5 slurred; measure 2: G5, then A4 A4 B4 slurred)
+      struct N { int tick; int pitch; int velo; int patch; int cc1; };
+      auto render = [score]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            std::map<int, int> cc1;           // route -> CC1 in force
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == 1)
+                        cc1[route] = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                        notes.push_back({ te.first, ev.pitch(), ev.velo(), ev.libraryPatch(),
+                                          cc1.count(route) ? cc1[route] : -1 });
+                  }
+            return notes;
+            };
+      auto at = [](const std::vector<N>& n, int pitch) {
+            for (const N& x : n)
+                  if (x.pitch == pitch)
+                        return x;
+            return N { -1, pitch, -1, -1, -1 };
+            };
+      // the default (1, Recommended's): the slurred C5 on another patch than the unslurred G5, attacked (spiccato 112)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      std::vector<N> n = render();
+      const int main = at(n, 79).patch;
+      QVERIFY(at(n, 72).tick >= 0 && at(n, 79).tick >= 0);
+      QVERIFY(at(n, 72).patch != main);
+      QCOMPARE(at(n, 72).velo, 112);
+      QCOMPARE(at(n, 74).patch, at(n, 72).patch);
+      QCOMPARE(at(n, 74).velo, 93);                           // a transition (bowed)
+      const int performancePatch = at(n, 72).patch;
+      // the ini's 0: the main patch
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "0" } });
+      n = render();
+      QCOMPARE(at(n, 72).patch, at(n, 79).patch);
+      // the score's 1 over the ini's 0
+      score->setMetaTag(Playback::metaTag, "slurs/performance=1");
+      n = render();
+      QCOMPARE(at(n, 72).patch, performancePatch);
+      score->setMetaTag(Playback::metaTag, "");
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      // "non performance" at measure 1: both slurs on the main patch; "ord." at measure 2 doesn't end it
+      Measure* m1 = score->firstMeasure();
+      Measure* m2 = m1->nextMeasure();
+      auto addText = [score](Measure* m, const QString& text) {
+            StaffText* t = new StaffText(score);
+            t->setXmlText(text);
+            t->setTrack(0);
+            t->setParent(m->first(SegmentType::ChordRest));
+            score->startCmd();
+            score->undoAddElement(t);
+            score->endCmd();
+            return t;
+            };
+      addText(m1, "non performance");
+      StaffText* ord = addText(m2, "ord.");
+      n = render();
+      QCOMPARE(at(n, 72).patch, main);
+      QCOMPARE(at(n, 69).patch, main);
+      // "performance" ends it
+      score->startCmd();
+      score->undoRemoveElement(ord);
+      score->endCmd();
+      addText(m2, "performance");
+      n = render();
+      QCOMPARE(at(n, 72).patch, main);
+      QCOMPARE(at(n, 69).patch, performancePatch);
+      // the texts' state
+      SoundLib::TextState s;
+      SoundLib::TextTechniques::apply("non performance", s);
+      QVERIFY(s.performanceOff);
+      SoundLib::TextTechniques::apply("ord.", s);
+      QVERIFY(s.performanceOff);
+      SoundLib::TextTechniques::apply("performance", s);
+      QVERIFY(!s.performanceOff && s.modifiers.contains("performance"));
+      std::vector<Ms4::ArtRef> slur { { Ms4::Art::Legato, false } };
+      QVERIFY(SoundLib::want(slur, SoundLib::TextState(), 0.5, 0, score).slurPerformance);
+      SoundLib::TextState off;
+      off.performanceOff = true;
+      QVERIFY(!SoundLib::want(slur, off, 0.5, 0, score).slurPerformance);
+      QVERIFY(!SoundLib::want({}, SoundLib::TextState(), 0.5, 0, score).slurPerformance);
+      delete score;
+
+      // calibrated: Long -45 + 0.2 x dB, the Performance legato -40 + 0.1 x (by ear the same): the Performance note's
+      // CC1 2 x - 50 (calibratedController), the main patch's unchanged
+      score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto line = [](double a, double b) {
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = "controller";
+            for (int x : { 16, 32, 48, 64, 80, 96, 112, 127 }) {
+                  c.points.push_back({ x, a + b * x });
+                  c.perceived.push_back({ x, a + b * x });
+                  }
+            return c;
+            };
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal->setCurve("Violin", 1, line(-45, 0.2));
+      cal->setCurve("Violin - Performance", 20, line(-40, 0.1));
+      SoundLib::setDynamicsCalibration(cal);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      const std::vector<N> plain = render();
+      Playback::setIniValuesForTest({});
+      const std::vector<N> calibrated = render();
+      const int x = at(plain, 72).cc1;
+      QVERIFY(x > 25 && x < 127);
+      QCOMPARE(at(calibrated, 72).cc1, SoundLib::calibratedController(*cal, "Violin - Performance", 20, "Violin", 1, x));
+      QVERIFY(qAbs(at(calibrated, 72).cc1 - (2 * x - 50)) <= 1);
+      QCOMPARE(at(calibrated, 76).cc1, at(calibrated, 72).cc1);
+      QCOMPARE(at(calibrated, 79).cc1, at(plain, 79).cc1);  // (unslurred: Long)
+      QCOMPARE(at(calibrated, 72).velo, at(plain, 72).velo);
+      SoundLib::setDynamicsCalibration(nullptr);
+      Playback::setIniValuesForTest({});
+      delete score;
+
+      // a legato patch without attacks (playbackSettingsLayers' Violin Legato): not taken for slurs/performance
+      auto plainLegato = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' modifiers='performance'/></Instrument></SoundLibrary>");
+      QVERIFY(plainLegato);
+      for (const SoundLib::LibInstrument& li : plainLegato->instruments)
+            if (li.name == "Violin") {
+                  SoundLib::Want w = SoundLib::want(slur, SoundLib::TextState(), 0.5, 0);
+                  QVERIFY(w.slurPerformance);
+                  const SoundLib::Choice c = SoundLib::choose(li.patches(), w);
+                  QVERIFY(c);
+                  QCOMPARE(c.articulation->name, QString("Long"));
+                  }
+      SoundLib::setCurrent(nullptr);
       }
 
 //---------------------------------------------------------

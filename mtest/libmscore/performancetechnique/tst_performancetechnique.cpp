@@ -23,6 +23,7 @@
 #include "libmscore/part.h"
 #include "libmscore/playbackaudit.h"
 #include "libmscore/performancetechnique.h"
+#include "libmscore/playbacksettings.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
@@ -78,6 +79,8 @@ class TestPerformanceTechnique : public QObject, public MTest
                   s->undoAddElement(t);
                   s->endCmd();
                   }
+            else        // the All techniques patch: [slurs] performance (on by default since 2026-10-10) off
+                  s->setMetaTag(Playback::metaTag, "slurs/performance=0");
             return s;
             }
       static std::vector<Note*> notes(Score* score)
@@ -275,7 +278,8 @@ void TestPerformanceTechnique::ownValues()
 
 //---------------------------------------------------------
 //   ownVelocityElsewhere
-//    without "performance" (the All techniques patch) a note's own velocity is sent too; its join changes nothing
+//    without "performance" ([slurs] performance off: the All techniques patch) a note's own velocity is sent too; its
+//    join changes nothing
 //---------------------------------------------------------
 
 void TestPerformanceTechnique::ownVelocityElsewhere()
@@ -419,7 +423,8 @@ void TestPerformanceTechnique::overrides()
 
 //---------------------------------------------------------
 //   withoutPerformance
-//    without staff text "performance" the techniques change nothing: the same events with and without them
+//    without staff text "performance" ([slurs] performance off) the techniques change nothing: the same events with
+//    and without them
 //---------------------------------------------------------
 
 void TestPerformanceTechnique::withoutPerformance()
