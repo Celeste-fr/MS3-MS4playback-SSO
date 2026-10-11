@@ -223,7 +223,7 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
       // [levels] sectionBalance: every patch its section's level O on top; with the rule, each phrase plays gain + O,
       // everything lower together by S' = max(0, the loudest phrase's gain + O - MAX_DB). A Performance patch of a part
       // with the articulation plays at T + O - S', its phrases' CC11 their gain less T, T = min(G, S' + MAX_DB - O):
-      // the score's G as with the rule alone (the same CC11 values: A′'s), lower only where G would put the patch over
+      // the score's G as with the rule alone (the same CC11 values as the rule's), lower only where G would put the patch over
       // MAX_DB (T is at least the part's own largest gain, so no CC11 goes over 0 dB). Without slurs anywhere (staff
       // text "performance" alone) T = S' + MAX_DB - O
       double loudest = 0.0;

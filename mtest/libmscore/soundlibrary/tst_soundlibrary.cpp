@@ -2428,6 +2428,26 @@ void TestSoundLibrary::levelSectionBalance()
       v = ContextLevel::volumes(score);
       QVERIFY(std::fabs(v[score->parts()[1]].top - 15) < 1e-9 && std::fabs(v[score->parts()[1]].patchDb["Viola"] + 9) < 1e-9);
       delete score;
+      // the shipped SSO map: the owner's M (2026-10-11, gen_spitfire_sso.py SECTION_FADERS), centred (the five add up
+      // to 0), every patch of a section with its main patch's level, nothing else with one
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      const std::map<QString, double> M { { "Violins 1", -3.81 }, { "Violins 2", -2.66 }, { "Violas", -2.12 },
+                                          { "Celli", 2.77 }, { "Basses", 5.81 } };
+      double sum = 0;
+      for (const auto& m : M)
+            sum += m.second;
+      QVERIFY(std::fabs(sum) < 0.011);
+      int withLevel = 0;
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            const QString section = li.with.isEmpty() ? li.name : li.with;
+            const double expected = M.count(section) ? M.at(section) : 0.0;
+            QVERIFY2(std::fabs(li.sectionLevelDb - expected) < 1e-9, qPrintable(QString("%1: %2 dB, expected %3")
+                                                                               .arg(li.name).arg(li.sectionLevelDb).arg(expected)));
+            withLevel += li.sectionLevelDb != 0.0;
+            }
+      QVERIFY(withLevel > 5);
       }
 
 //---------------------------------------------------------

@@ -33,12 +33,13 @@
 //   volume in MuseScore, LiveSetWriter::kontaktVolume / the plain set's Kontakt track Volume in Live); the CC11 goes
 //   through the renderer's per-note levels (libraryNoteLevels), so Live's clips and the plain set carry it.
 //
-//   The section balance (playback setting [levels] sectionBalance; the owner, 2026-10-11: A′, the rule on the owner's
-//   Live set R, approved and preferred over the owner's own balance): every patch of a section with a map level O
-//   (<Instrument sectionLevel>, dB: SSO's five string sections, R's All techniques faders by ear plus the rule's S on
-//   Whence 12-TET, gen_spitfire_sso.py SECTION_FADERS) plays O dB louder, staccatos and Performance alike, by the same
-//   volumes. With the rule a phrase plays gain + O, a staccato O, everything less S' = max(0, the loudest phrase's
-//   gain + O - 6): MuseScore plays A′ less one common constant. A part's Performance patch carries T = min(G, S' + 6 - O)
+//   The section balance (playback setting [levels] sectionBalance; the owner, 2026-10-11: M, on in Recommended, off in
+//   Library default): every patch of a section with a map level O (<Instrument sectionLevel>, dB against the rule's
+//   flat level: SSO's five string sections, a real orchestra's balance at CC1 64 (Weinzierl et al. 2018's sound power +
+//   10 log10 of SSO's section sizes) less SSO's measured one (sso_cc1_curves.json), centred; gen_spitfire_sso.py
+//   SECTION_FADERS has the source) plays O dB louder, staccatos and Performance alike, by the same volumes. With the
+//   rule a phrase plays gain + O, a staccato O, everything less S' = max(0, the loudest phrase's gain + O - 6): the rule
+//   with each section O apart, less one common constant (all the Performance tracks move together: none is capped). A part's Performance patch carries T = min(G, S' + 6 - O)
 //   (its phrases' CC11: gain less T; G where it fits under +6, so the CC11 values are the rule's). Off: the rule alone.
 //---------------------------------------------------------
 

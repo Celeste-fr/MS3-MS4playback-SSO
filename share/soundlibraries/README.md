@@ -256,8 +256,9 @@ switch value of each articulation. For example:
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
   - `sectionLevel` on an `Instrument` (dB): with playback setting `[levels] sectionBalance`, every patch of
     the section (the main patch and its `with` patches, which take its value) plays this much louder, by
-    its volume (`libmscore/contextlevel.h`). SSO's five string sections: the owner's faders in Whence's Live
-    set R plus the level rule's headroom there (2026-10-11; `gen_spitfire_sso.py` `SECTION_FADERS`).
+    its volume (`libmscore/contextlevel.h`). SSO's five string sections: a real orchestra's balance at mp
+    (Weinzierl et al. 2018's sound power, SSO's section sizes) against SSO's measured levels at CC1 64,
+    centred (the owner's M, 2026-10-11; `gen_spitfire_sso.py` `SECTION_FADERS` has the source).
 
   ```xml
   <Onset early="100"/>

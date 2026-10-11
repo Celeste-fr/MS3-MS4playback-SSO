@@ -204,8 +204,8 @@ struct LibInstrument {
       // bend linear; measured): a lane's tuning within it is played by pitch bend, not varispeed. 0: it doesn't bend
       double bendCents { 0 };
       // [levels] sectionBalance (contextlevel.h): every patch of the section plays this many dB louder, by its volume
-      // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's faders
-      // in Whence's Live set R, 2026-10-11, gen_spitfire_sso.py SECTION_FADERS). 0: none
+      // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
+      // 2026-10-11, gen_spitfire_sso.py SECTION_FADERS). 0: none
       double sectionLevelDb { 0 };
       QString scan;                       // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound

@@ -2646,8 +2646,8 @@ void TestLiveEquivalence::dumpEvents()
             score->renderMidi(&events, false, true, SynthesizerState());
       const QString out = qEnvironmentVariable("MS_DUMP_OUT");
       QDir().mkpath(out);
-      // MS_DUMP_LIVE: the plain set's Kontakts (kontakts.txt: "part|patch|lane|cents|notes|techniques"; cents nan: a
-      // bending patch's lane, tuned by its bends) and the hosted routes (routes.txt: "part|patch|lane"), to count them
+      // MS_DUMP_LIVE: the plain set's Kontakts (kontakts.txt: "part|patch|lane|cents|notes|techniques|volume dB"; cents nan:
+      // a bending patch's lane, tuned by its bends; volume: its Kontakt track's, TrackDelays::patchGain) and the hosted routes (routes.txt: "part|patch|lane"), to count them
       if (qEnvironmentVariableIsSet("MS_DUMP_LIVE")) {
             QStringList ks, rs;
             const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, LiveClips::timeline(score));
@@ -2660,8 +2660,8 @@ void TestLiveEquivalence::dumpEvents()
                                     n += int(t.notes.size());
                                     ts << QString("%1 %2").arg(t.name).arg(t.notes.size());
                                     }
-                              ks << QString("%1|%2|%3|%4|%5|%6").arg(p.name, k.patch).arg(k.lane).arg(k.cents, 0, 'f', 2).arg(n)
-                                    .arg(ts.join(", "));
+                              ks << QString("%1|%2|%3|%4|%5|%6|%7").arg(p.name, k.patch).arg(k.lane).arg(k.cents, 0, 'f', 2).arg(n)
+                                    .arg(ts.join(", ")).arg(20 * std::log10(k.gain), 0, 'f', 3);
                               }
             for (const SoundLib::Route& r : SoundLib::routes(score, *lib, false))
                   rs << QString("%1|%2|%3").arg(r.part ? r.part->partName() : QString(),

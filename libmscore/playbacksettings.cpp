@@ -100,11 +100,12 @@ static const std::vector<Definition> DEFINITIONS = {
         "CC1 at the written dynamic and one gain per slur (by its dynamic, median note spacing and median pitch) that makes it "
         "1.3 dB louder than its section's staccatos in the music; past CC11's top the Performance patches' volume plays it, "
         "every other patch of the library's parts lower together (Live's Volume top, +6 dB); 0: [levels] calibrated's CC1", true },
-      // (the owner, 2026-10-11: A′, the level rule on the owner's Live set R, approved and preferred over the owner's own hand
-      // balance; R's All techniques faders per section, by ear; contextlevel.h)
+      // (the owner, 2026-10-11: M, the real orchestra's balance at CC1 64 (Weinzierl et al. 2018's sound power, SSO's
+      // section sizes) against SSO's measured one (sso_cc1_curves.json); on in Recommended, off in Library default;
+      // contextlevel.h, gen_spitfire_sso.py SECTION_FADERS)
       { "levels/sectionBalance", 1, 0, 1, "on/off",
-        "1: every patch of a section with a map sectionLevel (SSO's five string sections: the owner's faders in Whence's Live "
-        "set R, 2026-10-11) plays that many dB louder, staccatos and Performance alike, by the patches' volumes (with [levels] "
+        "1: every patch of a section with a map sectionLevel (SSO's five string sections: a real orchestra's balance at mp, "
+        "from measured sound power and section sizes, against SSO's measured levels) plays that many dB louder, staccatos and Performance alike, by the patches' volumes (with [levels] "
         "context the Performance patches' volume carries the section's largest slur gain too; everything lower together so the "
         "loudest stays at Live's Volume top, +6 dB); 0: every section at the same level", true },
       // [notes]
@@ -331,7 +332,7 @@ const std::vector<Preset>& presets()
             // even early the new recommended": early, each patch by its median onset)
             // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
             // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance, and the
-            // level rule: levels/context; 2026-10-11: A′'s section balance, levels/sectionBalance)
+            // level rule: levels/context; 2026-10-11: the section balance M, levels/sectionBalance)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 1 } } },
