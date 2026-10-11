@@ -150,6 +150,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   keys are listed in `REMOVED` and ignored silently). Read a
   setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
   inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended: every measured technique early, each articulation by its median onset, `heldNotes/byPitch` 0 (1: by pitch), calibrated levels, `slurs/quick` 2, `slurs/quickLevel` 1 / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
+- **Play from a tick** (`libmscore/playstart.h`, `Seq::setPos`): notes that start early (onset, negative track delay) have their note-on, switch and controllers before their beat, so the transport starts at the earliest note-on of a note written at or after the tick (`PlayStart::start()`, a pre-roll) and skips the previous notes' note-ons/offs there (`skips`); the cursor stays at the tick (the owner, 2026-10-10: the first note of a selected measure sometimes silent).
 - Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json`; without one, the
   shipped `share/soundlibraries/<library>.dynamics.json` (SSO's from `sso_sound_dynamics.json` by
   `tools/soundlibraries/calibration_from_sound_dynamics.py`; `SoundLibraryHost::loadCalibration`). Read for calibrated
@@ -282,7 +283,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 70 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 71 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-10: playStartEarly; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›

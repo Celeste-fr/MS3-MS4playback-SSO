@@ -34,6 +34,7 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
+#include "libmscore/playstart.h"
 #include "libmscore/tuning.h"
 #include "libmscore/trackdelays.h"
 #include "libmscore/livesetwriter.h"
@@ -104,6 +105,7 @@ class TestSoundLibrary : public QObject, public MTest
       void legatoOctaveByStartPitch();
       void onsetEarly();
       void onsetLongerThanNote();
+      void playStartEarly();
       void playbackSettingsIni();
       void playbackSettingsLayers();
       void playbackPresets();
@@ -1554,6 +1556,97 @@ void TestSoundLibrary::onsetLongerThanNote()
                            qPrintable(QString("note %1 (pitch %2) ends at %3, the next starts at %4")
                                       .arg(i).arg(notes[i].pitch).arg(notes[i].off).arg(notes[i + 1].on)));
             }
+      delete score;
+      Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   playStartEarly
+//    playing from a tick (Seq::setPos): a note written at the start that starts early (a held note by its
+//    onset) has its note on, switch and dynamic before the tick; the transport starts at the earliest of them
+//    (PlayStart) and sends them, not the notes before (their note ons, nor their note offs). The owner,
+//    2026-10-10: "when you select a measure and click playback, sometimes the first note wouldn't sound".
+//    legato-early.musicxml: G5 at 4 quarters, unslurred, starts 52 ticks early (its switch to Long with it); F5 before it
+//---------------------------------------------------------
+
+void TestSoundLibrary::playStartEarly()
+      {
+      Playback::setIniValuesForTest(withOld({ { "heldNotes/byPitch", "1" } }));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' onset='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      const int Q = DIVISION;
+
+      // G5 at 4 quarters: its note on, found by its pitch
+      int aOn = -1;
+      for (const auto& te : events)
+            if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && !te.second.librarySwitch()
+                && te.second.pitch() == 79 && te.first > 4 * Q - 100 && te.first < 5 * Q) {
+                  aOn = te.first;
+                  break;
+                  }
+      QVERIFY(aOn > 0 && aOn < 4 * Q);
+
+      // from 4 quarters: the transport starts at G5's note on; what is sent before 4 quarters is its switch
+      // (state; this score has no dynamics, so no CC1) and the note on, not F5 (written at 3 quarters, sounding on) or its note off
+      PlayStart ps(score, events, 4 * Q, 10.0);       // (a long look back: F5's note on is in the window too)
+      QCOMPARE(ps.utick(), 4 * Q);
+      QVERIFY(ps.start() < 4 * Q);
+      QVERIFY(ps.start() <= aOn);
+      bool noteOn = false, switchSent = false;
+      for (auto i = events.lower_bound(ps.start()); i != events.end() && i->first < 4 * Q; ++i) {
+            const NPlayEvent& ev = i->second;
+            if (ps.skips(i->first, ev))
+                  continue;
+            if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch()) {
+                  QVERIFY2(ev.pitch() == 79, qPrintable(QString("pitch %1 at %2 sent before the start").arg(ev.pitch()).arg(i->first)));
+                  noteOn = true;
+                  }
+            else if (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && !ev.librarySwitch()))
+                  QFAIL(qPrintable(QString("a note off at %1 sent before the start").arg(i->first)));
+            else if (ev.type() == ME_CONTROLLER && ev.controller() == 32 && i->first <= aOn)
+                  switchSent = true;
+            }
+      QVERIFY(noteOn);
+      QVERIFY(switchSent);
+      QVERIFY(ps.start() <= aOn);
+      QCOMPARE(ps.start(), aOn);          // (the earliest of its events is the note on or its switch: not later than it)
+
+      // a short look back finds the same start
+      PlayStart shortBack(score, events, 4 * Q, 0.5);
+      QCOMPARE(shortBack.start(), ps.start());
+
+      // F5's note on, asked from this start, is the previous note's: skipped
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.isExternal() && ev.type() == ME_NOTEON && ev.pitch() == 77 && !ev.librarySwitch() && te.first < 4 * Q)
+                  QVERIFY2(ps.skips(te.first, ev), qPrintable(QString("F5 at %1").arg(te.first)));
+            }
+
+      // a note on the beat (a legato transition at 9 quarters): nothing early, the transport starts there
+      PlayStart onBeat(score, events, 9 * Q);
+      QCOMPARE(onBeat.start(), 9 * Q);
+      QVERIFY(!onBeat.preRoll(9 * Q - 1));
+      // the start of the score
+      PlayStart atZero(score, events, 0);
+      QCOMPARE(atZero.start(), 0);
+      // events at or after the tick are never skipped
+      for (auto i = events.lower_bound(4 * Q); i != events.end(); ++i)
+            QVERIFY(!ps.skips(i->first, i->second));
       delete score;
       Playback::setIniValuesForTest({});
       }
