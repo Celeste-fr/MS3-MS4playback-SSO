@@ -81,6 +81,7 @@ class TestPlayability : public QObject, public MTest
       void brassEntries();
       void brassTrillRules();
       void brassTrills();
+      void chimes();
       void noDynamic();
       };
 
@@ -1683,6 +1684,21 @@ void TestPlayability::brassTrillRules()
       // no euphonium / tuba tremolo rule (D5), no horn register rule (D9)
       for (const BrassTrillRule& x : Ms::brassTrillRules())
             QVERIFY2(!((x.groups & B8_LOW) && x.tremolo) && !((x.groups & B8_HORN) && x.trill && x.valvesLo < 0), x.id);
+      }
+
+void TestPlayability::chimes()
+      {
+      MasterScore* score = readScore(DIR + "chimes-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString why = "more than two chime notes at once (two players can take two each) (solo and section) (Adler p. 442; Sevsay p. 155)";
+      QStringList got = htkRows(r, { "chimes" });
+      QStringList want = { rowText(2, "Tubular Bells", "risky", why, "C4 + E4 + G4"),
+                           rowText(3, "Tubular Bells", "risky", why, "C4 + E4 + G4"),
+                           rowText(4, "Tubular Bells", "risky", why, "C4 + E4 + G4") };
+      want.sort();
+      QCOMPARE(got, want);
+      QCOMPARE(r.rows.size(), 3);                // the vibraphone chord and the first entrances add none
       }
 
 void TestPlayability::brassTrills()

@@ -16,6 +16,7 @@
 #include "playabilitywindtrills.h"
 #include "playabilitybrassentry.h"
 #include "playabilitybrasstrills.h"
+#include <set>
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -210,6 +211,8 @@ class Pass {
       void checkBrassEntries(int st, const QString& staffName);
       // brass trills and two-note tremolos (SPEC-b8)
       void checkBrassTrills(Part* part, const QString& staffName);
+      // chimes: at most two notes at once (P4)
+      void checkChimes(Part* part, const QString& staffName);
       void brassTrillNotes(Chord* chord, ChordInfo& info);
 
    public:
@@ -1013,6 +1016,48 @@ void Pass::checkWindDynamics(Part* part, const QString& staffName)
                               on.push_back(&m.notes[k]);
                   momentRow(m, on, staffName, "dynamic", r.kind == WindDynKind::RED, QString(r.text) + " (" + r.source + ")");
                   }
+            }
+      }
+
+//---------------------------------------------------------
+//   checkChimes (P4, owner-approved 2026-10-11)
+//---------------------------------------------------------
+
+constexpr int CHIMES_MAX_NOTES = 2;     // Adler p. 442; Sevsay p. 155: two players can take two notes each
+
+static bool isChimes(const QString& id, const QString& name)
+      {
+      static const QRegularExpression NAME("tubular|\\bchimes?\\b", QRegularExpression::CaseInsensitiveOption);
+      if (!id.isEmpty())
+            return id == "pitched-percussion.tubular-bells" || id == "tubular-bells" || id == "chimes";
+      return NAME.match(name).hasMatch() && !name.contains("wind", Qt::CaseInsensitive);
+      }
+
+// a moment where a note starts and more than two different pitches sound (held and tied-over notes count)
+void Pass::checkChimes(Part* part, const QString& staffName)
+      {
+      QString id, name;
+      partIdName(part, &id, &name);
+      if (!isChimes(id, name))
+            return;
+      const std::vector<PartMoment> moments = partMoments(part);
+      for (const PartMoment& m : moments) {
+            if (m.sub != 0 || !m.attack())
+                  continue;
+            std::vector<const PartNote*> on;
+            std::set<int> pitches;
+            for (const PartMoment& o : moments) {
+                  if (o.sub != 0 || o.tick > m.tick)
+                        continue;
+                  for (const PartNote& pn : o.notes)
+                        if (pn.end > m.tick) {
+                              on.push_back(&pn);
+                              pitches.insert(pn.note->ppitch());
+                              }
+                  }
+            if (int(pitches.size()) > CHIMES_MAX_NOTES)
+                  momentRow(m, on, staffName, "chimes", false,
+                            "more than two chime notes at once (two players can take two each) (solo and section) (Adler p. 442; Sevsay p. 155)");
             }
       }
 
@@ -2364,6 +2409,7 @@ void Pass::run()
             checkWindDynamics(part, staffName);
             checkWindTrills(part, staffName);
             checkBrassTrills(part, staffName);
+            checkChimes(part, staffName);
             }
       for (int st = 0; st < _score->nstaves(); ++st) {
             Part* part = _score->staff(st)->part();

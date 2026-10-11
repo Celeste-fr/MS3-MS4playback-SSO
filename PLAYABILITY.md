@@ -233,7 +233,15 @@ headless test scores and their checked results are the parity tests.
   data). Tests `brassTrillRules`, `brassTrills` (brasstrill-tests.mscx from
   `tools/playability/gen_brasstrill_tests.py`: 1-, 2-, 3-valve trumpet trills, the pairs not counted twice, a
   horn trill clean only through the B♭ side, B♭ trumpet and cornet by written pitch, m2 vs m3 tremolos on
-  horn and trumpet, a tuba 4-valve-row trill, trombone trill notes and tremolos): 36 pass, 1 skipped.
+  horn and trumpet, a tuba 4-valve-row trill, trombone trill notes and tremolos): 36 pass, 1 skipped (37 pass with `chimes`).
+- Chimes / tubular bells (P4, owner-approved 2026-10-11; instrument id `pitched-percussion.tubular-bells`, or
+  by name "tubular bells" / "chimes" when the part has no id; wind chimes excluded): "risky" (dark yellow) at
+  any moment where a note starts and more than two different pitches sound on the part (all voices and
+  staves; held and tied-over notes count, grace notes do not): two players can take two notes each
+  (`CHIMES_MAX_NOTES`; Adler p. 442; Sevsay p. 155; "(solo and section)"). `Pass::checkChimes`: one row of
+  kind `chimes` per moment, all sounding notes marked. Test `chimes` (chimes-tests.mscx from
+  `tools/playability/gen_chimes_tests.py`: 2-note chord clean, 3-note chord, two voices making 3 pitches,
+  held note + 2-note chord, vibraphone 3-note chord clean).
 - No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
   unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
   (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1
