@@ -23,9 +23,9 @@ for s in SEC:
     for M in 'LK':
         F = json.load(open(f'{W}/fit_{M}.json'))[s]
         sec[M] = {f'{d}|{round(i * 1000)}|{r}': {k: (round(v, 2) if isinstance(v, float) else v) for k, v in
-                  F[f'{d}|{i}|{r}'].items() if k in ('need', 'st', 'pf', 'a', 'b', 'cc', 'max127', 'pf64', 'a64')}
+                  F[f'{d}|{i}|{r}'].items() if k in ('need', 'st', 'pf', 'a', 'b', 'cc', 'max127', 'pf64', 'a64', 'pfd')}
                   for d in DS for i in IOIS for r in SEC[s][3:]}
     sec['note'] = ("need, st (staccatos), pf (slurs at the calibrated CC1 cc), a / b (slurs from silence / re-attacked), "
-                   "pf64 / a64 (slurs at CC1 64), max127 (what CC1 127 adds over cc), dB")
+                   "pf64 / a64 (slurs at CC1 64), pfd (slurs at CC1 = the dynamic d: the written dynamic's value), max127 (what CC1 127 adds over cc), dB")
     out['sections'][s] = sec
 open(os.path.join(D, '..', 'sso_performance_context.json'), 'w').write(json.dumps(out, indent=1) + '\n')

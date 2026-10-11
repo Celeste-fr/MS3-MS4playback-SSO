@@ -168,6 +168,7 @@ class MidiRenderer {
       std::map<const Note*, LibLevel> libLevels;
       // track delays and levels (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
       std::map<const Part*, TrackDelays::Delays> libTrackDelays;
+      std::map<std::pair<const Chord*, int>, double> libContextGain;  // [levels] context: a chord's phrase gain (contextlevel.h), per tickOffset
       std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libTrackRoutes;
       double libDelayLead { 0.0 };      // ms everything plays later by, so the earliest negative delay fits (0: none)
       QString trackDelaysTag;

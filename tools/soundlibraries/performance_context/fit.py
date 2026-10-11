@@ -44,7 +44,7 @@ for sec, (pon, son, tv, *regs) in SEC.items():
                 for (a, ya), (b, yb) in zip(zip(CCS, curve), zip(CCS[1:], curve[1:])):
                     if a >= c - 16 and min(ya, yb) <= tgt <= max(ya, yb) and yb != ya and b > c - 1e-9:
                         cc_need = a + (tgt - ya) * (b - a) / (yb - ya); break
-                tab[(d, ioi, r)] = dict(st=ls[(d, ioi, r)], pf=lpc, pf64=float(np.interp(64, CCS, curve)),
+                tab[(d, ioi, r)] = dict(st=ls[(d, ioi, r)], pf=lpc, pf64=float(np.interp(64, CCS, curve)), pfd=float(np.interp(d, CCS, curve)),
                                         a64=float(np.interp(64, CCS, [lpa[(cc, ioi, r)] for cc in CCS])), need=need, cc=c, ccNeed=cc_need, max127=curve[-1] - lpc,
                                         a=np.interp(c, CCS, [lpa[(cc, ioi, r)] for cc in CCS]),
                                         b=np.interp(c, CCS, [lpb[(cc, ioi, r)] for cc in CCS]))

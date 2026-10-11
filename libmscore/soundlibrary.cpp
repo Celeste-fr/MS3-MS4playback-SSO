@@ -216,6 +216,48 @@ const Articulation::Technique* Articulation::transition(const QString& name) con
       return nullptr;
       }
 
+double Articulation::contextLevelAt(double cc, double ms, double pitch) const
+      {
+      if (contextLevels.empty())
+            return 0.0;
+      std::vector<double> ccs, mss, pitches;
+      for (const ContextLevel& l : contextLevels) {
+            ccs.push_back(l.cc);
+            mss.push_back(std::log(l.ms));
+            pitches.push_back(l.pitch);
+            }
+      for (std::vector<double>* v : { &ccs, &mss, &pitches }) {
+            std::sort(v->begin(), v->end());
+            v->erase(std::unique(v->begin(), v->end()), v->end());
+            }
+      // the two grid values around x and x's share of the way between them (one value: both it)
+      struct Around { size_t lo, hi; double t; };
+      auto around = [](const std::vector<double>& v, double x) {
+            if (x <= v.front())
+                  return Around { 0, 0, 0.0 };
+            if (x >= v.back())
+                  return Around { v.size() - 1, v.size() - 1, 0.0 };
+            size_t hi = 1;
+            while (v[hi] < x)
+                  ++hi;
+            return Around { hi - 1, hi, (x - v[hi - 1]) / (v[hi] - v[hi - 1]) };
+            };
+      const Around a = around(ccs, cc), b = around(mss, std::log(qMax(ms, 1.0))), c = around(pitches, pitch);
+      auto at = [&](size_t i, size_t j, size_t k) {
+            for (const ContextLevel& l : contextLevels)
+                  if (l.cc == ccs[i] && std::fabs(std::log(l.ms) - mss[j]) < 1e-9 && l.pitch == pitches[k])
+                        return l.db;
+            return 0.0;       // (not a full grid: the map's generator writes one)
+            };
+      double db = 0.0;
+      for (int x = 0; x < 2; ++x)
+            for (int y = 0; y < 2; ++y)
+                  for (int z = 0; z < 2; ++z)
+                        db += (x ? a.t : 1 - a.t) * (y ? b.t : 1 - b.t) * (z ? c.t : 1 - c.t)
+                              * at(x ? a.hi : a.lo, y ? b.hi : b.lo, z ? c.hi : c.lo);
+      return db;
+      }
+
 double Articulation::quickLevelAt(int pitch, double ms) const
       {
       // each measured pitch's level at ms, then between the two pitches around the note
@@ -301,6 +343,20 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             }
       std::sort(art.quickLevels.begin(), art.quickLevels.end(), [](const Articulation::QuickLevel& x, const Articulation::QuickLevel& y) {
             return x.pitch != y.pitch ? x.pitch < y.pitch : x.ms < y.ms;
+            });
+      for (const QString& t : a.value("contextLevel").toString().split(' ', QString::SkipEmptyParts)) {
+            const QStringList f = t.left(t.indexOf(':')).split('/');
+            bool ok[4] = { false, false, false, false };
+            if (f.size() != 3 || t.indexOf(':') < 0)
+                  return false;
+            const Articulation::ContextLevel l { f[0].toInt(&ok[0]), f[1].toDouble(&ok[1]), f[2].toInt(&ok[2]),
+                                                 t.mid(t.indexOf(':') + 1).toDouble(&ok[3]) };
+            if (!ok[0] || !ok[1] || !ok[2] || !ok[3] || l.ms <= 0)
+                  return false;
+            art.contextLevels.push_back(l);
+            }
+      std::sort(art.contextLevels.begin(), art.contextLevels.end(), [](const Articulation::ContextLevel& x, const Articulation::ContextLevel& y) {
+            return x.cc != y.cc ? x.cc < y.cc : x.ms != y.ms ? x.ms < y.ms : x.pitch < y.pitch;
             });
       art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
       if (a.hasAttribute("legatoVelocity") && (art.legatoVelocity < 1 || art.legatoVelocity > 127))

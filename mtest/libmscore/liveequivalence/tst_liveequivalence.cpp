@@ -49,6 +49,7 @@
 #include "libmscore/tie.h"
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/trackdelays.h"
+#include "libmscore/contextlevel.h"
 #include "mscore/liveequivalence.h"
 #include "mscore/livesetexport.h"
 #include "mscore/preferences.h"
@@ -102,6 +103,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetTrackDelays();
       void delayedTrackLevel();
       void livePerformanceLevel();
+      void liveContextLevel();
       void liveTracksJson();
       void dumpEvents();
       void playbackSettingsWidget();
@@ -2037,6 +2039,134 @@ void TestLiveEquivalence::livePerformanceLevel()
       }
 
 //---------------------------------------------------------
+//   liveContextLevel
+//    [levels] context (contextlevel.h): a slur's CC11 (its gain less the score's largest) reaches Live's clips as
+//    MuseScore renders it (per route: the notes, the CC11 values in order) and the plain set's CC11 lanes; the volumes
+//    (the Performance patch +6 dB, the rest that much under the largest gain) its Kontakt tracks' Volume
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveContextLevel()
+      {
+      // gain = 8 + (pitch - 60) / 2 at every CC and spacing: the slurs C5-F5 (median 75) 15.5 dB, A4 A4 B4 (69) 12.5,
+      // C5 E5 G5 C6 (77.5) 16.75, C5-C6 (78) 17: the largest 17, the Performance patch +6, the Violin 11 dB under
+      QString grid;
+      for (int cc : { 1, 127 })
+            for (int ms : { 50, 5000 })
+                  for (int p : { 40, 100 })
+                        grid += QString("%1/%2/%3:%4 ").arg(cc).arg(ms).arg(p).arg(8 + (p - 60) / 2.0);
+      auto lib = loadMap(QString(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'/>"
+         "</Instrument></SoundLibrary>").arg(grid.trimmed()));
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "1" } });
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QCOMPARE(int(v.size()), 1);
+      QVERIFY2(std::fabs(v.begin()->second.top - 17) < 1e-6, qPrintable(QString("top %1").arg(v.begin()->second.top)));
+      const int quieter = int(std::lround(127 * std::pow(10.0, -4.5 / 20)));
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+
+      // Live's clips: per route the notes and the CC11 values in order, as rendered
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl);
+      std::map<QString, QStringList> fromEvents, fromClips;
+      std::map<QString, std::vector<std::pair<int, int>>> cc11;            // route -> (units, value)
+      std::set<int> rendered;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch())
+                  continue;
+            const QString key = QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1);
+            if (e.type() == ME_NOTEON && e.velo() > 0)
+                  fromEvents[key] << QString("%1 %2").arg(e.pitch()).arg(e.velo());
+            else if (e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION) {
+                  rendered.insert(e.value());
+                  std::vector<std::pair<int, int>>& c = cc11[key];
+                  const int at = tl.units(te.first);
+                  if (!c.empty() && c.back().first == at)
+                        c.back().second = e.value();
+                  else
+                        c.push_back({ at, e.value() });
+                  }
+            }
+      QVERIFY2(rendered.count(quieter), qPrintable(QString("no CC11 %1 rendered").arg(quieter)));
+      auto values = [](const std::vector<std::pair<int, int>>& c) {
+            QStringList out;
+            for (const auto& p : c)
+                  if (out.isEmpty() || out.last() != QString::number(p.second))
+                        out << QString::number(p.second);
+            return out.join(' ');
+            };
+      for (const auto& c : cc11)
+            fromEvents[c.first] << "cc11: " + values(c.second);
+      for (const LiveClips::Track& c : clips) {
+            std::vector<std::pair<int, int>> carrier;
+            std::vector<LiveClips::Note> notes = c.notes;
+            std::sort(notes.begin(), notes.end());
+            for (const LiveClips::Note& n : notes) {
+                  if (n.pitch < LiveClips::CARRIER_LOW)
+                        fromClips[c.key] << QString("%1 %2").arg(n.pitch).arg(n.velocity);
+                  else if (n.pitch == LiveClips::carrierPitch(CTRL_EXPRESSION))
+                        carrier.push_back({ n.start, LiveClips::carrierValue(n.pitch, n.velocity) });
+                  }
+            if (!carrier.empty())
+                  fromClips[c.key] << "cc11: " + values(carrier);
+            }
+      for (auto& r : fromEvents)
+            r.second.sort();
+      for (auto& r : fromClips)
+            r.second.sort();
+      for (const auto& r : fromEvents)
+            QVERIFY2(fromClips[r.first] == r.second, qPrintable(r.first + ": MuseScore " + r.second.join(", ") + " / Live "
+                                                               + fromClips[r.first].join(", ")));
+
+      // the plain set: the CC11 value a lane's point, the volumes its Kontakt tracks' gains
+      score->setPlaylistDirty();
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      EventMap chunked;
+      for (int utick = 0;;) {
+            const MidiRenderer::Chunk c = r.getChunkAt(utick);
+            if (!c)
+                  break;
+            r.renderChunk(c, &chunked, ctx);
+            utick = c.utick2();
+            }
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, chunked, tl);
+      std::set<int> lanes;
+      std::map<QString, double> gains;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                        gains[k.patch] = k.gain;
+                        for (const PlainLiveSet::Lane& lane : k.lanes)
+                              if (lane.cc == CTRL_EXPRESSION)
+                                    for (const auto& pt : lane.points)
+                                          lanes.insert(pt.second);
+                        }
+      QVERIFY2(lanes.count(quieter), qPrintable(QString("CC11 %1 not in the plain set's lanes").arg(quieter)));
+      QVERIFY(std::fabs(gains["Violin - Performance"] - std::pow(10.0, 6.0 / 20)) < 1e-9);
+      QVERIFY(std::fabs(gains["Violin"] - std::pow(10.0, -11.0 / 20)) < 1e-9);
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   liveTracksJson
 //    the metaTag "liveTracks": left out when empty, the same after a round trip
 //---------------------------------------------------------
@@ -2157,6 +2287,18 @@ void TestLiveEquivalence::dumpEvents()
             QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
             f.write((m.second.join("\n") + "\n").toUtf8());
             }
+      // the routes (routes.txt: "route|part|patch|volume dB", the volume the patch's slot plays at:
+      // TrackDelays::patchGain, track levels and [levels] context)
+      {
+            QStringList routes;
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib))
+                  routes << QString("%1-%2|%3|%4|%5").arg(r.port).arg(r.channel + 1).arg(r.part->partName()).arg(r.instrument->name)
+                            .arg(20 * std::log10(TrackDelays::patchGain(*lib, TrackDelays::of(r.part, delays), r.instrument->name)), 0, 'f', 3);
+            QFile fr(out + "/routes.txt");
+            QVERIFY(fr.open(QIODevice::WriteOnly | QIODevice::Text));
+            fr.write((routes.join("\n") + "\n").toUtf8());
+      }
       // the written notes (notes.txt: "part|seconds|end|pitch|bar|slur", slur: the index of the slur it lies under,
       // -1 none; tied notes once) and the bars' starts (bars.txt), for in-context levels per slurred group
       {

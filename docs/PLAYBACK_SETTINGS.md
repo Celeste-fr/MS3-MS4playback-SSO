@@ -75,10 +75,10 @@ and then reads it as Reload Playback Settings does, playback going on. The box s
 the open score has its own value of a preset key (not cleared). "(Custom)" shows when the ini matches none (not
 selectable).
 
-| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance |
-|---|---|---|---|---|---|
-| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 1: techniques on velocity as loud as the held note, plus MS4's offset (below, Calibrated levels; 2026-10-08) | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) |
-| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch |
+| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance | levels/context |
+|---|---|---|---|---|---|---|
+| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 1: techniques on velocity as loud as the held note, plus MS4's offset (below, Calibrated levels; 2026-10-08) | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) |
+| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch | 0 |
 
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
@@ -167,6 +167,53 @@ the same dynamic, −35.1 (Violas Col Legno at 32) … +25.1 dB (Horns a2 Rip at
 a level can bring any technique to the held note's loudness. Kept in the metaTag `marcatoLevels` (its name from when
 only marcatos had one; a text's entry `{"tick","track","text","db"}`).
 
+## Level rule
+
+The owner, 2026-10-10: "the same written dynamic sounds equally loud in every string part and technique, judged in the
+music", by volume only (never by raising CC1, a timbre crossfade), one level per slur. `[levels] context` (1 by default
+and in Recommended, 0 in Library default; per score through `playbackSettings`; acts with `[slurs] performance`):
+
+- A note on an articulation with a measured context level (the map's `<Articulation contextLevel="cc/ms/pitch:dB ...">`:
+  SSO's five string sections' Performance Legato) plays CC1 at the written dynamic's value (`Ms4::expressionLevel`), not
+  `[levels] calibrated`'s value, and gets its slur's gain: `Articulation::contextLevelAt` (linear in CC1 and pitch, in
+  log ms of spacing, the nearest end's beyond the grid) of the slur's first dynamic, its median note spacing (IOI) and
+  median pitch (`libmscore/contextlevel.h`). One gain per slur: no level step inside it. A note outside a slur (staff
+  text "performance") is a phrase of one.
+- The gain reaches 21 dB (Celli pp, high), more than CC11 can add. The score's largest gain G over every slur of those
+  parts is shared out (`ContextLevel::volumes`): the Performance patches play at volume G - S, every other patch of the
+  library's parts S = max(0, G - 6) dB lower together (6: Live's Volume top; the owner, 2026-10-10: Performance levels
+  move together, by lowering the rest), and each slur plays gain - G by CC11. The volumes go through
+  `TrackDelays::patchGain` (the Kontakt slot's volume in MuseScore; `LiveSetWriter::kontaktVolume` / the plain set's
+  Kontakt track Volume in Live), the CC11 through the per-note levels (`libraryNoteLevels`): Live's clips and the plain
+  set's CC11 lanes carry it. They are not kept in the `trackDelays` metaTag; the Mixer's own track levels add.
+- An Inspector level on top: louder along the patch's own curve from the written value (CC1), softer by CC11.
+
+The gains (`tools/soundlibraries/performance_context/level_rule.py`, from the measured cells of
+`tools/soundlibraries/sso_performance_context.json`, the real Kontakt + SSO on the Windows VM, 2026-10-10; metric L:
+loudest 50 ms RMS per note, median per figure, two takes):
+
+1. The staccatos' (Spiccato at the calibrated velocity) level in the music, least squares over all five sections:
+   st = T(d) + a_s + b_s (p - p_mid) / 12 + c_s log2(IOI / 136 ms). T(32 / 64 / 96 / 112) = -40.2 / -34.9 / -32.3 /
+   -29.9 dB; RMS residual 2.37 dB. The fitted level, not each cell: the cells' take-to-take noise is 0.9-1.3 dB, and
+   two cells break the rule themselves (Celli pp staccatos 4.9 dB over the fit, Basses pp 4.8 under: calibration
+   points to check, not followed).
+2. gain = st - pfd + 1.3 dB: pfd the Performance figure's measured level at CC1 = d; 1.3 dB the Violas' relation the
+   owner approved (slurs 1.3 dB louder than the staccatos around them, HANDOFF.md).
+
+`gen_spitfire_sso.py` writes them into the map (`contextLevel`, the grid: d 32 / 64 / 96 / 112, IOI 100 / 136 / 200 /
+300 / 500 ms, three pitches per section). Gains at IOI 136 ms, low / mid / high register, d 32 / 64 / 96 / 112:
+
+| Section | 32 | 64 | 96 | 112 |
+|---|---|---|---|---|
+| Violins 1 | 10.1 / 13.6 / 16.3 | 6.7 / 10.0 / 12.9 | 1.4 / 6.8 / 9.0 | 1.9 / 6.2 / 7.5 |
+| Violins 2 | 8.8 / 14.1 / 17.0 | 7.3 / 11.5 / 14.5 | 3.8 / 7.1 / 9.7 | 3.9 / 7.2 / 9.5 |
+| Violas | 10.2 / 8.0 / 16.0 | 9.1 / 8.3 / 15.5 | 2.8 / 4.4 / 10.7 | 3.2 / 3.8 / 10.1 |
+| Celli | 16.3 / 20.9 / 20.4 | 11.6 / 15.4 / 14.2 | 6.1 / 9.8 / 9.0 | 7.0 / 10.0 / 8.7 |
+| Basses | 4.6 / 0.7 / 3.7 | 2.6 / -1.9 / 1.0 | 0.4 / -1.1 / 1.2 | 1.5 / -0.8 / 1.2 |
+
+Test: `tst_soundlibrary::levelContext` (the grid, the layers, CC1 at the written value, one CC11 per slur, the volumes),
+`tst_liveequivalence::liveContextLevel` (Live's clips, the plain set's lanes and Kontakt volumes).
+
 ## Inventory
 
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by
@@ -195,6 +242,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Slurred notes shorter than their held technique's measured peak (map `peak`, the median over its semitones of the onset check's mf perceived peak: SSO violins' Long ~1.06 s, violas' 0.77 s) play a quicker technique of the same patch with the note's modifiers: 1 the tenuto short (Short 1.0, its `from` not applied: the slur's note-off ends it), 2 the espressivo long (Long (Rachm.)); none fits: the held one; early by the swapped technique's own onset, by `[heldNotes] byPitch` as every note (`Choice::swapped`; until 2026-10-09 always at each pitch: the owner then heard Whence's first bars uneven, its Violas / Celli per-pitch in-context fit spreading the sent times 86-109 ms; byPitch 1 keeps that: Long (Rachm.)'s per-pitch fit, `sso_rachm_onset_fit.json`, Windows VM 2026-10-08: on Whence's violin passage arrivals SD 10.8 / 11.4 ms for Violins 1 / 2 against 22.0 / 22.6 on its median and 21.6 / 26.5 on Long's; the owner, 2026-10-08: "the timing is still not as good as plain long"). The owner, 2026-10-08: slurred violins had no attack (Whence's slurred notes 136-273 ms); 2026-10-08, after comparing by ear: "let's make slurs quick = 2 the recommended preset" | 2 (Recommended; Library default 0) | `SoundLib::choose` (`chooseSlurred`), `want` (`Want::slurQuick`) | `[slurs] quick`; score: `playbackSettings` |
 | A note `[slurs] quick` swaps plays as loud as its held technique would: Long less Long (Rachm.) at the note's pitch and written length (map `quickLevel` on the swapped articulation: `sso_rachm_levels.json`, re-measured on the Windows VM 2026-10-08 in the passage itself, standard test score's slurred groups, perceived loudness per group against plain Long: the dB that, through the shipped dynamics curve at the note's pitch (per-pitch curves, above), raises the passage's CC1 64 to the CC1 at which Rachm. matches Long, per register: `sso_rachm_context_match.json` → `rachm_quick_levels.py`; match CC1 Violins 1 75 / 82 / 69 (pitches to 75, to 81, above), Violins 2 76 / 67 / 64, Violas 72 / 89 (to 58, above) and Celli 91 / 105 / 98 / 92 (to 49, 52, 56, above) measured 2026-10-09 but not used: the owner, 2026-10-09, the in-context Violas / Celli fits (these levels and their in-context onsets in `sso_rachm_onset_fit.json`) made Whence bars 1-2 Celli ~8 dB louder and pulsing, so their Long (Rachm.) is back to 25a3dcbbeb's (the timing check's onsets, no quickLevel: `RACHM_UNUSED` in `gen_spitfire_sso.py`; the data stay in the files); the same at every length; log-linear in length, linear in pitch, the nearest end's beyond. Not modelled: length. In the standard test score the violas' upper register at CC1 89 reads +1.2 dB on 16ths and -1.3 on 8ths against Long; the held-out check (branch rachm-holdout, `sso_rachm_holdout.json`) -3.7 for 59-90, about -6 at 4-8 32nds), added to the note's level (CC11 down along the held expression curve, CC1 up along the articulation's dynamics curve, as the Inspector's levels: so in Live's clips and the plain set too). The owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured, Violins 1 about 6 dB under Long at 100-136 ms, Violins 2 about 3; at 1 the owner, 2026-10-08: "not the correct volume. violin 1 in bar 5 now sounds really loud relative to the viola and cello" ; that file held isolated notes' differences (5-11 dB), which the shallow dynamics curve turned into CC1 105-127, about 5 dB over Long in the passage (VM). Values replaced by the in-context ones; the owner, 2026-10-09, on build 37882502550: "1 is the right balance, make it the recommended preset" | 1 (on; Recommended 1) | `rendermidi.cpp` (`quickDb`, `marcatoLevel`), `Articulation::quickLevelAt` | `[slurs] quickLevel`; score: `playbackSettings` |
 | Slurred notes of the five string sections play on their Performance legato (as under staff text "performance"; "non performance" opts out), not `[slurs] quick`'s swap; with `[levels] calibrated` as loud as Long (above, Performance legato in Recommended; the owner, 2026-10-10) | 1 (on; Recommended 1, Library default 0) | `want` (`Want::slurPerformance`), `choose` (`choosePerformance`); `rendermidi.cpp` `performanceLevel` | `[slurs] performance`; score: `playbackSettings` |
+| Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' volumes, the rest of the part's patches lower together (above, Level rule; the owner, 2026-10-10) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |
 | A key struck again ends its sounding note just before | on | `finishLibraryEvents` | `[notes] sameKeyEndsFirst` |
 | Tuning copies: tolerance, tail, max copies. Computed when the map leaves them out (SSO's does since 2026-10-03). Tolerance: half the smallest gap between two distinct accidental values (`ScoreTuning::smallestAccidentalGap`: 16.5, MuseScore 3.6's 23-limit comma, against 16.667, a twelfth of a tone: 0.167, so 0.083 cents). Tail: each note's ring to 60 dB under (ISO 3382-1's reverberation time), twice its measured release to 30 dB under (`<Articulation release>`; T30 extrapolated as ISO 3382-1 does); unmeasured: its patch's longest, else the part's (`SoundLib::laneRing`). Max copies: 1 + the free memory (read once a run: Windows available physical memory, Linux MemAvailable) / (245 MB a copy, the owner's 1031 → 1276 MB × the parts that need copies: whose notes play at more than one tuning, `SoundLib::partsNeedingCopies`; the owner, 2026-10-04: an even share between those parts only) (`SoundLib::memoryMaxLanes`) | 0.083 cents; 2 × release; by memory | `SoundLib::lanes`, `libraryLaneSettings` | `[tuning] tolerance`, `tail`, `maxLanes`; score: `soundLibraryLanes` |

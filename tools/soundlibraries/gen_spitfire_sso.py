@@ -1418,6 +1418,18 @@ def quickLevel(patch, sound):
         return None
     return ' '.join(f'{p}/{ms}:{-db:g}' for p, per in sorted(by.items(), key=lambda x: int(x[0]))
                     for ms, db in sorted(per.items(), key=lambda x: int(x[0])) if db is not None) or None
+# - contextLevel= ("cc/ms/pitch:dB ..."): on the five string sections' Performance Legato, the gain in dB a slur needs over
+#   the patch at CC1 = the written dynamic's value, by dynamic, median note spacing and median pitch ([levels] context,
+#   the owner, 2026-10-10: the same written dynamic sounds equally loud in every string part and technique, in context):
+#   the "rule" of sso_performance_context.json (performance_context/level_rule.py, from the Windows VM's renders)
+CONTEXT_RULE = loadFit('sso_performance_context.json').get('rule', {}).get('sections', {})
+def contextLevel(patch, sound):
+    cells = CONTEXT_RULE.get(patch.replace(' - Performance', '')) if patch in PERFORMANCE_TECHNIQUE_PATCHES and sound == 'Legato' else None
+    if not cells:
+        return None
+    key = lambda k: tuple(int(x) for x in k.split('|'))
+    return ' '.join(f'{d}/{ms}/{p}:{cells[k]:g}' for k in sorted(cells, key=key) for d, ms, p in [key(k)])
+contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
 peakCount = 0
@@ -1456,6 +1468,10 @@ for i, line in enumerate(out):
             extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
         if current in PERFORMANCE_TECHNIQUE_PATCHES:
             extra += PERFORMANCE_TECHNIQUES
+        c = contextLevel(current, sound)
+        if c:
+            extra += f' contextLevel="{c}"'
+            contextLevelCount += 1
         legatoGridUsed.add(current)
         up, down = octaveDelays(current)
         if up:

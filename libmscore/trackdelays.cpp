@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "trackdelays.h"
+#include "contextlevel.h"
 #include "partplayback.h"
 #include "part.h"
 #include "score.h"
@@ -68,7 +69,7 @@ double clampDb(double db)
 //   read
 //---------------------------------------------------------
 
-std::map<const Part*, Delays> read(const MasterScore* score)
+static std::map<const Part*, Delays> readTag(const MasterScore* score)
       {
       std::map<const Part*, Delays> delays;
       if (!score)
@@ -98,6 +99,17 @@ std::map<const Part*, Delays> read(const MasterScore* score)
                                                            [&delays](const Part* p) { return delays.count(p) > 0; });
             if (part)
                   delays[part] = d;
+            }
+      return delays;
+      }
+
+std::map<const Part*, Delays> read(const MasterScore* score)
+      {
+      std::map<const Part*, Delays> delays = readTag(score);
+      for (const auto& v : ContextLevel::volumes(score)) {
+            Delays& d = delays[v.first];
+            d.rule = v.second.patchDb;
+            d.ruleTop = v.second.top;
             }
       return delays;
       }
@@ -197,7 +209,9 @@ double patchGain(const SoundLib::Library& library, const Delays& d, const QStrin
       {
       if (library.dynamicsCC == CTRL_EXPRESSION)
             return 1.0;
-      return std::pow(10.0, headroomDb(d, patch) / 20.0);
+      auto r = d.rule.find(patch);
+      const double rule = r == d.rule.end() ? 0.0 : r->second;
+      return std::pow(10.0, std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, patch) + rule)) / 20.0);
       }
 
 }     // namespace TrackDelays

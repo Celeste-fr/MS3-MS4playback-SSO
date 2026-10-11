@@ -60,6 +60,8 @@
 #include "volta.h"
 #include "liveclips.h"
 #include "plainliveset.h"
+#include "contextlevel.h"
+#include "trackdelays.h"
 
 #include "global/log.h"
 
@@ -1304,8 +1306,46 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         performanceMaps[key] = table;
                         return std::shared_ptr<const std::vector<int>>(table);
                         };
+                  // [levels] context (contextlevel.h): a note on an articulation with a measured context level plays its
+                  // dynamics CC at the written dynamic's value, its phrase's gain less the score's largest by CC11 (the
+                  // patches' volumes play the rest: TrackDelays::patchGain); NAN: not such a note
+                  const bool contextOn = li && ContextLevel::on(score) && library->dynamicsCC >= 0
+                                         && library->dynamicsCC != CTRL_EXPRESSION;
+                  auto contextDb = [&](const Note* note, const SoundLib::Choice& c) {
+                        if (!contextOn || !c || !ContextLevel::has(c.articulation) || c.articulation->attacks.empty())
+                              return double(NAN);
+                        const std::pair<const Chord*, int> key { note->chord(), tickOffset };
+                        auto g = libContextGain.find(key);
+                        if (g == libContextGain.end())
+                              g = libContextGain.insert({ key, ContextLevel::gain(*c.articulation, note->chord(), ctx.dynamics, tickOffset) }).first;
+                        auto d = libTrackDelays.find(st1->part());
+                        const double top = d == libTrackDelays.end() ? 0.0 : d->second.ruleTop;
+                        return std::max(TrackDelays::MIN_DB, std::min(0.0, g->second - top));
+                        };
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
                         const double db = levelOf(note) + quickDb(note, c);
+                        const double context = velocity > 0 ? double(NAN) : contextDb(note, c);
+                        if (!std::isnan(context)) {
+                              // its own level on top: louder along its own curve from the written dynamic's value, softer
+                              // by CC11 with the phrase's
+                              const SoundLib::DynamicsCurve* ownCurve = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;
+                              SoundLib::DynamicsCurve own = ownCurve ? ownCurve->atPitch(note->ppitch()) : SoundLib::DynamicsCurve();
+                              const double up = db > 0 ? db : 0.0;
+                              LibLevel l;
+                              if (up > 0) {
+                                    l.controller = library->dynamicsCC;
+                                    l.fallback = Ms4::expressionLevel(dynLevel);
+                                    l.map = [own, up](int x) {
+                                          if (x <= 0)
+                                                return x;
+                                          const int y = own.points.size() < 2 ? MarcatoLevel::velocity(x, up) : qMax(x, own.raise(x, up));
+                                          return qBound(1, y, 127);
+                                          };
+                                    }
+                              l.volumeDb = context + (db < 0 ? db : 0.0);
+                              libLevels[note] = l;
+                              return;
+                              }
                         const std::shared_ptr<const std::vector<int>> performance = velocity > 0 ? nullptr : performanceLevel(note, c);
                         if (performance) {
                               // its own level on top: louder along its own curve from the calibrated value, softer by
@@ -4769,6 +4809,7 @@ void MidiRenderer::updateState()
                   partTexts[part].build(score, part);
             libRoutes.clear();
             libTrackDelays.clear();
+            libContextGain.clear();
             libTrackRoutes.clear();
             libDelayLead = 0.0;
             libLanes.clear();
@@ -4785,7 +4826,7 @@ void MidiRenderer::updateState()
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : routes) {
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
-                        if (d.empty())
+                        if (d.empty() && d.rule.empty())
                               continue;
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };

@@ -13,6 +13,43 @@ named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
 
+## The level rule, `[levels] context` (2026-10-10)
+
+The owner (2026-10-10): the same written dynamic sounds equally loud in every string part and technique, judged in the
+music. Branch `performance-level-rule`: SSO's five string sections' Performance Legato slurs play CC1 at the written
+dynamic and one gain per slur, by volume only (CC11 and patch volumes; never CC1): gain = st_fit - pfd + 1.3 dB
+(`level_rule.py`, map `contextLevel`; docs/PLAYBACK_SETTINGS.md › Level rule). Headroom: the score's largest gain G puts
+the Performance patches at G - S and every other patch of the library's parts at -S, S = max(0, G - 6) (Whence: G 15.3,
+Performance +6.0, the rest -9.3 dB). On in Recommended and by default, 0 in Library default.
+
+Checked with the real Kontakt + SSO on the Windows VM (kthost renders of `dumpEvents`' routes, 2026-10-10) against the
+owner's lowered R set (render + faders), loudest 50 ms per note, median, after one common offset (-1.6 dB):
+
+| Part | Bars | Slurs (Performance) | Staccatos (All techniques) | Without the rule (all notes) |
+|---|---|---|---|---|
+| Violins 1 | 1-12 | +0.3 | +3.1 (2 notes) | -6.3 |
+| Violins 1 | 13-16 | +6.7 | +3.1 | +3.8 |
+| Violins 2 | 1-12 / 13-16 | - | +2.5 / +2.5 | +3.3 / +3.3 |
+| Violas | 1-12 / 13-16 | +0.3 / -0.7 | -0.4 / -0.4 | -3.3 / -1.0 |
+| Celli | 1-12 / 13-16 | -0.0 / - | -2.2 / -1.3 | -6.9 / -0.4 |
+| Basses | 1-12 / 13-16 | - | -0.4 / -0.4 | +0.4 / +0.4 |
+
+Open, for the owner:
+- **Violins 1 bars 13-16 slurs +6.7 dB**: R lowers Violins 1 - Performance 6.5 dB there against bars 1-12 for the same
+  figure (dynamic, spacing, register); a rule by dynamic, spacing and pitch can't. By ear: the rule's level, or a
+  per-score track level.
+- **The All techniques balance between sections** (Violins 1 / 2 +3.1 / +2.5, Celli -2.2 / -1.3): `[levels] calibrated`,
+  not this rule. The measured staccato offsets (fit `a`: Violins 1 -1.5, Violins 2 -1.1, Violas +2.1, Celli +0.6,
+  Basses -0.1 dB) point the other way from R's faders (violins lower, violas higher), so equalising measured level
+  would move further from R. Not applied.
+- Held out (the fit without a block of cells, against each cell's own measured gain; cells' take-to-take noise 0.9-1.3
+  dB): RMS 1.2 / 1.9 / 1.9 / 3.2 / 3.5 dB (Violins 1 / 2, Violas, Celli, Basses) leaving out an IOI, 1.1 / 1.9 / 1.1 /
+  3.6 / 4.5 leaving out the middle register; Celli and Basses pp cells break the rule themselves (4.9 / -4.8 dB).
+- Live: clips, the plain set's CC11 lanes and Kontakt volumes carry the same values (`tst_liveequivalence::
+  liveContextLevel`, Linux, test synth). The VM `--live-equivalence` run needs a Windows build of this branch: not run.
+- A/B (dry strings, bars 1-16, one common gain): `~/MuseScore/ms3fork/uploads/levelrule/` A (rule), B (R lowered), C
+  (before).
+
 ## Performance legato for the strings' slurs in Recommended (2026-10-10)
 
 The owner (2026-10-10, after hand-building *Whence*'s Live set R): Recommended plays the five string sections' slurs on
@@ -45,9 +82,7 @@ Open:
   Whence-like figures (staccatos around slurs) for the five sections × dynamic 32-112 × IOI 100-500 ms × three
   registers. The gain the slurs need over their calibrated CC1 for staccatos - slurs = -1.3 dB is mostly +2 … +9 dB
   (Violins 2 up to +13, Basses about 0), rising with register and falling with IOI; CC1 127 can't give it in most cells.
-  It predicts MuseScore's own Whence (same-part bars) within 0.7-1.7 dB but not the owner's R (Violins 1 bars 1-12 +4.6,
-  13-16 -1.9 dB: the owner wants the same figure 6.5 dB apart there), so the renderer doesn't use it. Waiting for the
-  owner: whether staccato context is the rule to follow, and, if so, the headroom (louder than CC1 127).
+  The owner chose the rule (2026-10-10): applied as `[levels] context`, above.
 
 ## No Performance patches (2026-10-06)
 

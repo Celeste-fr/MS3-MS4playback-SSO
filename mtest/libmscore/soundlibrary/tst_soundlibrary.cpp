@@ -36,6 +36,11 @@
 #include "libmscore/playbacksettings.h"
 #include "libmscore/tuning.h"
 #include "libmscore/trackdelays.h"
+#include "libmscore/contextlevel.h"
+#include "libmscore/ms4playback.h"
+#include "libmscore/note.h"
+#include "libmscore/chord.h"
+#include "libmscore/segment.h"
 #include "libmscore/livesetwriter.h"
 #include "libmscore/synthesizerstate.h"
 #include "mtest/testutils.h"
@@ -109,6 +114,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackSettingsIni();
       void playbackSettingsLayers();
       void slurPerformance();
+      void levelContext();
       void playbackPresets();
       void renderKit();
       void renderKitRoll();
@@ -1717,24 +1723,24 @@ void TestSoundLibrary::playbackPresets()
          "; my comment\n[legato]\n; keepMs note\nkeepMs=77\n\n[heldNotes]\n; early note\nearly=30\n\n[shorts]\nstaccato=44\n";
       QString out = Playback::applyPresetToText(text, *rec);
       // (byPitch, missing: added under the section's header)
-      // (and [levels] calibrated, missing: the section added at the end)
+      // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ncalibrated=%3\n\n[slurs]\nperformance=%5\nquickLevel=1\nquick=%4\n";
-      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1));
+                                + "\n[levels]\ncontext=%6\ncalibrated=%3\n\n[slurs]\nperformance=%5\nquickLevel=1\nquick=%4\n";
+      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
-      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0));
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ncalibrated=0\n\n[slurs]\nperformance=0\nquick=0\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ncontext=0\ncalibrated=0\n\n[slurs]\nperformance=0\nquick=0\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncontext=1\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ncontext=1\ncalibrated=1\n\n[slurs]\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1755,7 +1761,7 @@ void TestSoundLibrary::playbackPresets()
       f.close();
       QVERIFY(Playback::applyPreset("recommended", path));
       QVERIFY(f.open(QIODevice::ReadOnly));
-      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1).arg(2).arg(1));
+      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1));
       f.close();
       // detection, from the file read and from values
       Playback::setIniPath(path);
@@ -1764,7 +1770,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "levels/context", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
@@ -1781,8 +1787,11 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                         { "slurs/performance", 0 } }),
+                                         { "slurs/performance", 0 }, { "levels/context", 0 } }),
                QString("library"));
+      // context left out: its default 1, Recommended's; Library default needs 0
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "levels/context", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
       Playback::setIniPath(QString());
       Playback::setIniValuesForTest({});
@@ -2054,6 +2063,134 @@ void TestSoundLibrary::slurPerformance()
                   QVERIFY(c);
                   QCOMPARE(c.articulation->name, QString("Long"));
                   }
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   levelContext
+//    [levels] context (contextlevel.h) at each layer (default on, the ini's 0, the score's 1 over it): the map's
+//    contextLevel grid (linear in CC and pitch, log in ms, the nearest end's beyond); a slur on the Performance legato
+//    plays CC1 at the written dynamic and one CC11 for the whole slur, its gain less the score's largest; the volumes:
+//    the Performance patch +6 (Live's top), every other patch the rest lower (TrackDelays::read, patchGain)
+//---------------------------------------------------------
+
+void TestSoundLibrary::levelContext()
+      {
+      // gain = 10 + cc / 16 + (pitch - 60) / 12 + log10(ms / 100) at each grid point
+      QString grid;
+      for (int cc : { 32, 96 })
+            for (int ms : { 100, 1000 })
+                  for (int p : { 60, 84 })
+                        grid += QString("%1/%2/%3:%4 ").arg(cc).arg(ms).arg(p).arg(10 + cc / 16.0 + (p - 60) / 12.0 + std::log10(ms / 100.0));
+      auto lib = loadMap(QString(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'/>"
+         "</Instrument></SoundLibrary>").arg(grid.trimmed()).toUtf8().constData());
+      QVERIFY(lib);
+      const SoundLib::Articulation* legato = nullptr;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            for (const SoundLib::Articulation& a : li.articulations)
+                  if (a.name == "Legato")
+                        legato = &a;
+      QVERIFY(legato && legato->contextLevels.size() == 8);
+      QVERIFY(std::fabs(legato->contextLevelAt(64, std::sqrt(10.0) * 100, 72) - (10 + 4 + 0.5 + 1)) < 1e-9);
+      QVERIFY(std::fabs(legato->contextLevelAt(127, 5000, 100) - (10 + 6 + 1 + 2)) < 1e-9);     // (the ends)
+      QVERIFY(std::fabs(legato->contextLevelAt(0, 10, 0) - 12) < 1e-9);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      // (measure 1: C5 D5 E5 F5 slurred; measure 2: G5, then A4 A4 B4 slurred)
+      struct N { int pitch; int patch; int cc1; int cc11; };
+      auto render = [score]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<N> notes;
+            std::map<int, int> cc1, cc11;           // route -> in force
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == 1)
+                        cc1[route] = ev.value();
+                  else if (ev.type() == ME_CONTROLLER && ev.controller() == 11)
+                        cc11[route] = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                        notes.push_back({ ev.pitch(), ev.libraryPatch(), cc1.count(route) ? cc1[route] : -1,
+                                          cc11.count(route) ? cc11[route] : 127 });
+                  }
+            return notes;
+            };
+      auto at = [](const std::vector<N>& n, int pitch) {
+            for (const N& x : n)
+                  if (x.pitch == pitch)
+                        return x;
+            return N { pitch, -1, -1, -1 };
+            };
+      auto chordOf = [score](int pitch) -> const Chord* {
+            for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  if (s->element(0) && s->element(0)->isChord())
+                        for (const Note* n : toChord(s->element(0))->notes())
+                              if (n->ppitch() == pitch)
+                                    return toChord(s->element(0));
+            return nullptr;
+            };
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" } });
+      const std::vector<N> plain = render();
+      QVERIFY(ContextLevel::volumes(score).empty());
+      QVERIFY(TrackDelays::read(score).empty());
+      for (const N& x : plain)
+            QCOMPARE(x.cc11, 127);
+      // the default (1): the volumes
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      const std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QCOMPARE(int(v.size()), 1);
+      Ms4::Dynamics dynamics;
+      dynamics.build(score, score->parts()[0]);
+      const double g1 = ContextLevel::gain(*legato, chordOf(72), dynamics, 0);
+      const double g2 = ContextLevel::gain(*legato, chordOf(69), dynamics, 0);
+      QCOMPARE(ContextLevel::gain(*legato, chordOf(77), dynamics, 0), g1);       // (one per slur)
+      QVERIFY(g1 > 15 && g2 > 12);
+      const double top = std::max(g1, g2);
+      const ContextLevel::Volumes& pv = v.begin()->second;
+      QVERIFY(std::fabs(pv.top - top) < 1e-9);
+      QVERIFY(std::fabs(pv.patchDb.at("Violin - Performance") - 6.0) < 1e-9);
+      QVERIFY(std::fabs(pv.patchDb.at("Violin") + (top - 6.0)) < 1e-9);
+      const TrackDelays::Delays d = TrackDelays::of(score->parts()[0], TrackDelays::read(score));
+      QVERIFY(d.empty() && d.levels.empty());                // (never in the metaTag)
+      QVERIFY(std::fabs(TrackDelays::patchGain(*lib, d, "Violin - Performance") - std::pow(10.0, 6.0 / 20)) < 1e-9);
+      QVERIFY(std::fabs(TrackDelays::patchGain(*lib, d, "Violin") - std::pow(10.0, (6.0 - top) / 20)) < 1e-9);
+      QCOMPARE(TrackDelays::write(score, TrackDelays::read(score)), QString());
+      // rendered: CC1 at the written dynamic (the unslurred note's), CC11 one value per slur
+      const std::vector<N> n = render();
+      const int main = at(n, 79).patch;
+      QVERIFY(at(n, 72).patch != main);
+      for (int p : { 72, 74, 76, 77, 69, 71 })
+            QCOMPARE(at(n, p).cc1, at(plain, p).cc1);
+      auto cc11 = [](double db) { return qBound(1, int(std::lround(127 * std::pow(10.0, db / 20))), 127); };
+      for (int p : { 72, 74, 76, 77 })
+            QCOMPARE(at(n, p).cc11, cc11(g1 - top));
+      for (int p : { 69, 71 })
+            QCOMPARE(at(n, p).cc11, cc11(g2 - top));
+      QCOMPARE(at(n, 79).cc11, 127);                         // (All techniques: its volume)
+      // the score's 1 over the ini's 0
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" } });
+      score->setMetaTag(Playback::metaTag, "levels/context=1");
+      QCOMPARE(int(ContextLevel::volumes(score).size()), 1);
+      QCOMPARE(at(render(), 72).cc11, cc11(g1 - top));
+      score->setMetaTag(Playback::metaTag, "");
+      Playback::setIniValuesForTest({});
+      delete score;
       SoundLib::setCurrent(nullptr);
       }
 

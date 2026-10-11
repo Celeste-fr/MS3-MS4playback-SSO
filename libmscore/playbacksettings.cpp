@@ -93,6 +93,13 @@ static const std::vector<Definition> DEFINITIONS = {
         "part's held note at the same dynamic, plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a "
         "plain note's); a Performance legato note (on the dynamics CC) at the CC at which its patch sounds as loud as the part's "
         "held note; 0: at the dynamic's level, MuseScore 4's accent share on top (the library's own balance)", true },
+      // (the owner, 2026-10-10: the same written dynamic sounds equally loud in every string part and technique, judged in
+      // the music; by volume only, never by raising CC1 (a timbre crossfade); one level per slur; contextlevel.h)
+      { "levels/context", 1, 0, 1, "on/off",
+        "1: a slur on a Performance legato with a measured context level (map contextLevel: SSO's five string sections) plays "
+        "CC1 at the written dynamic and one gain per slur (by its dynamic, median note spacing and median pitch) that makes it "
+        "1.3 dB louder than its section's staccatos in the music; past CC11's top the Performance patches' volume plays it, "
+        "every other patch of the library's parts lower together (Live's Volume top, +6 dB); 0: [levels] calibrated's CC1", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
@@ -302,7 +309,8 @@ QString iniTemplate()
 
 //---------------------------------------------------------
 //   presets
-//    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated) and
+//    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated,
+//    levels/context) and
 //    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance) differ between them. The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
@@ -315,11 +323,13 @@ const std::vector<Preset>& presets()
             // (the owner, 2026-10-07: Library default "is very late, but at least it sounds consistent"; 2026-10-08: "make
             // even early the new recommended": early, each patch by its median onset)
             // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
-            // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance)
+            // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance, and the
+            // level rule: levels/context)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
-                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 } } },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 },
+                                              { "levels/context", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 } } },
+                                              { "slurs/performance", 0 }, { "levels/context", 0 } } },
             };
       return P;
       }

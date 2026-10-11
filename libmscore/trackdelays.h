@@ -68,7 +68,11 @@ struct Delays {
       double ms { 0.0 };                      // the part's (its group track in Live)
       std::map<QString, double> tracks;       // trackKey -> ms added to the part's
       std::map<QString, double> levels;       // trackKey -> dB (track levels)
-      bool empty() const;                     // all 0
+      bool empty() const;                     // all 0 (the metaTag's values; not the rule's below)
+      // the level rule ([levels] context, contextlevel.h; never in the metaTag): each patch's volume in dB, and the
+      // score's largest phrase gain G (a phrase plays its gain less G by CC11)
+      std::map<QString, double> rule;         // patch -> dB
+      double ruleTop { 0.0 };
       };
 
 // a track of the part: its Kontakt track ("<patch>"), a technique track ("<patch> / <technique>")
@@ -77,7 +81,7 @@ QString trackKey(const QString& patch, const QString& technique = QString());
 double clampMs(double ms);
 double clampDb(double db);
 
-// the parts of the master score with delays
+// the parts of the master score with delays (and with the level rule's volumes: ContextLevel::volumes)
 std::map<const Part*, Delays> read(const MasterScore* score);
 // the metaTag's value (empty: none)
 QString write(const MasterScore* score, const std::map<const Part*, Delays>& delays);
@@ -100,7 +104,8 @@ double ownDb(const Delays& d, const QString& key);
 double headroomDb(const Delays& d, const QString& patch);
 // what CC11 plays for a note of the technique on the patch: db() within MIN_DB .. MAX_DB less the patch's headroom
 double noteDb(const Delays& d, const QString& patch, const QString& technique);
-// the patch's volume factor on top of the Mixer's: its headroom as a gain (1 for a library whose dynamics are CC11)
+// the patch's volume factor on top of the Mixer's: its headroom plus the level rule's volume (within MIN_DB .. MAX_DB)
+// as a gain (1 for a library whose dynamics are CC11)
 double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch);
 
 }     // namespace TrackDelays

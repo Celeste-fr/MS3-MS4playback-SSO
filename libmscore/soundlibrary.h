@@ -138,6 +138,13 @@ struct Articulation {
       struct QuickLevel { int pitch; double ms; double db; };
       std::vector<QuickLevel> quickLevels;          // sorted by pitch, then ms
       double quickLevelAt(int pitch, double ms) const; // log-linear in ms, linear in pitch, the nearest end's beyond; 0: none
+      // [levels] context (contextlevel.h): the gain in dB a slur on this articulation needs over the patch at the
+      // dynamics CC = cc (the written dynamic's value), for the slur's median note spacing (ms) and median pitch
+      // (<Articulation contextLevel="cc/ms/pitch:dB …">: a full grid, measured in context, performance_context/level_rule.py)
+      struct ContextLevel { int cc; double ms; int pitch; double db; };
+      std::vector<ContextLevel> contextLevels;       // sorted by cc, ms, pitch
+      // linear in cc and pitch, log-linear in ms, each within the grid (the nearest end's beyond); 0: none
+      double contextLevelAt(double cc, double ms, double pitch) const;
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;
