@@ -325,6 +325,11 @@ LEGATO_VELOCITY = {'Violas - Performance': 100}
 PERFORMANCE_TECHNIQUES = (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
                           ' transitions="portamento:1-19:10 fingered:20-84:69 bowed:85-127:93"'
                           ' reattack="106" reattackGap="54" overlap="24" legatoGap="39"')
+# velocities whose attack plays a faulty recording (avoid="keys:low-high:velocity …"): a round robin with its own narrow
+# tone, measured with kthost on the test VM (sso_bad_samples.json: the bands, the clean velocity next to them and the
+# renders; the owner, 2026-10-10, heard it in Whence's Celli)
+BAD_SAMPLES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_bad_samples.json'),
+                             encoding='utf-8'))['avoid']
 PERFORMANCE_TECHNIQUE_PATCHES = {'Violins 1 - Performance', 'Violins 2 - Performance', 'Violas - Performance',
                                  'Celli - Performance', 'Basses - Performance'}
 # with the techniques, an accented held note stays on the patch (its accented attack, not the All techniques
@@ -1468,6 +1473,10 @@ for i, line in enumerate(out):
             extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
         if current in PERFORMANCE_TECHNIQUE_PATCHES:
             extra += PERFORMANCE_TECHNIQUES
+            if current in BAD_SAMPLES:
+                extra += ' avoid="' + ' '.join(
+                    (f"{b['keys'][0]}" if b['keys'][0] == b['keys'][1] else f"{b['keys'][0]}-{b['keys'][1]}")
+                    + f":{b['band'][0]}-{b['band'][1]}:{b['velocity']}" for b in BAD_SAMPLES[current]) + '"'
         c = contextLevel(current, sound)
         if c:
             extra += f' contextLevel="{c}"'

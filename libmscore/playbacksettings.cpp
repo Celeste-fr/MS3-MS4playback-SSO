@@ -103,6 +103,11 @@ static const std::vector<Definition> DEFINITIONS = {
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
+      // (the owner, 2026-10-10: "the weird square wave-y noise problem" in Whence's Celli; measured: one round robin of
+      // SSO's Celli - Performance C3 spiccato attack, tools/soundlibraries/sso_bad_samples.json)
+      { "notes/avoidBadSamples", 1, 0, 1, "on/off",
+        "1: an attack at a velocity whose recording at that key is faulty (the map's avoid: SSO's Celli - Performance C3) plays "
+        "at the nearest clean velocity measured; a note's own velocity stays; 0: as chosen", true },
       // [tuning]
       { "tuning/tolerance", MAP, 0, 50, "cents",
         "a note this close to a tuning copy's tuning plays on it (default: the map's <Tuning tolerance>, else half the smallest gap between two accidentals' values, 0.083: ScoreTuning::smallestAccidentalGap)", true },

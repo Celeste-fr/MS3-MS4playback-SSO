@@ -145,6 +145,13 @@ struct Articulation {
       std::vector<ContextLevel> contextLevels;       // sorted by cc, ms, pitch
       // linear in cc and pitch, log-linear in ms, each within the grid (the nearest end's beyond); 0: none
       double contextLevelAt(double cc, double ms, double pitch) const;
+      // velocities whose attack plays a faulty recording at these keys (<Articulation avoid="48:100-116:90 …">:
+      // key or low-high keys, the velocity band, the nearest clean velocity measured; a round robin with its own narrow
+      // tone, SSO's Celli - Performance C3: tools/soundlibraries/sso_bad_samples.json). An attack (not a legato
+      // transition) in the band plays at that velocity instead ([notes] avoidBadSamples; a note's own velocity stays)
+      struct Avoid { int keyLow; int keyHigh; int low; int high; int velocity; };
+      std::vector<Avoid> avoid;
+      int avoidVelocity(int key, int velocity) const;    // the velocity to send (the same when not listed)
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;

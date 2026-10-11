@@ -138,6 +138,7 @@ class MidiRenderer {
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
+      bool libAvoidBad = true;                                    // [notes] avoidBadSamples (the map's avoid)
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]

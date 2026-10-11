@@ -204,6 +204,11 @@ switch value of each articulation. For example:
     fingered:20-84:69 bowed:85-127:93" reattack="106" reattackGap="54" overlap="24" legatoGap="39"` (bands: Spitfire's article and
     measured on Violins 1 - Performance, as is legatoGap; velocities and times: the owner's own set, HANDOFF.md). A bowed transition
     plays at `legatoVelocity` where the map has one.
+  - `avoid="keys:low-high:velocity …"` on such an `Articulation`: an attack (not a legato transition) at those keys
+    (one key or `low-high`) with a velocity in the band plays at `velocity` instead, the nearest velocity measured
+    clean: a faulty recording (a round robin with its own narrow tone). Not a note's own velocity; `[notes]
+    avoidBadSamples` 0 turns it off. SSO (`gen_spitfire_sso.py` from `sso_bad_samples.json`): Celli - Performance
+    `avoid="47-48:100-116:99"`.
   - `legatoDelay` on an `Articulation` (ms): a legato transition reaches its new pitch this long
     after its note-on (SSO's Performance patches: 60–690 ms, median 190). Either one number for
     every interval or the delay by interval, `interval:ms` pairs in semitones (the new note minus the
