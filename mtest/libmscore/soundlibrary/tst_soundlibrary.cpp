@@ -3846,11 +3846,12 @@ void TestSoundLibrary::tuningLanesLive()
 
 //---------------------------------------------------------
 //   tuningBendAtArrival
-//    a legato transition's bend glides when the transition arrives ([tuning] bendAtArrival, on): the note-on
+//    a legato transition's bend glide ends when the transition arrives ([tuning] bendAtArrival, on): the note-on
 //    plus the transition's delay (here 200 ms, after a quarter at 120 173.75: fastShare / fastFullMs; the note
-//    plays on its beat), not at the note-on, where the channel's bend would retune the note before while it
-//    still sounds; fresh attacks bend at their note-on; a delay beyond the next note-on: the glide ends just
-//    before it (600 ms, 521 after the quarter: D5+'s arrival after E5's note-on); off (ini or score): at the
+//    plays on its beat), so that the note is in tune from its arrival, not at the note-on, where the channel's
+//    bend would retune the note before while it still sounds; fresh attacks bend at their note-on; a delay beyond
+//    the next note-on (600 ms, 521 after the quarter: D5+'s arrival after E5's note-on): the glide still ends at
+//    its arrival, E5's note-on brings no bend and E5's glide goes on from there; off (ini or score): at the
 //    note-on. quartertones.musicxml at 120: m7's slurred C5, D5+ (12000), E5 (12480)
 //---------------------------------------------------------
 
@@ -3907,8 +3908,9 @@ void TestSoundLibrary::tuningBendAtArrival()
             return out;
             };
       auto ticksOf = [](double msec) { return int(std::lround(msec * 0.96)); };
-      // on: D5+ starts on its beat, its bend holds C5's 8192 until 173.75 ms (167 ticks) later (the transition's
-      // arrival), then glides to 10240 (+50 cents of ±200) one cent a tick: 50 steps on the next 50 ticks; E5 the same from 10240 to 8192
+      // on: D5+ starts on its beat, its bend holds C5's 8192 until 50 ticks before 173.75 ms (167 ticks) later (the
+      // transition's arrival), then glides to 10240 (+50 cents of ±200) one cent a tick: 50 steps, the last at the
+      // arrival; E5 the same from 10240 to 8192
       render();
       QCOMPARE(ons[6].pitch, 74);
       QCOMPARE(ons[7].pitch, 76);
@@ -3920,8 +3922,8 @@ void TestSoundLibrary::tuningBendAtArrival()
             QCOMPARE(b.front().tick, ons[g].tick);
             QCOMPARE(b.front().value, g == 6 ? 8192 : 10240);         // (the note before's)
             const int arrival = written + ticksOf(173.75);
-            QVERIFY2(b[1].tick >= arrival - 1 && b[1].tick <= arrival + ticksOf(4),
-                     qPrintable(QString("glide %1 starts at %2, arrival %3").arg(g).arg(b[1].tick).arg(arrival)));
+            QVERIFY2(b.back().tick >= arrival - 1 && b.back().tick <= arrival + 1,
+                     qPrintable(QString("glide %1 ends at %2, arrival %3").arg(g).arg(b.back().tick).arg(arrival)));
             QCOMPARE(b.back().value, g == 6 ? 10240 : 8192);
             QCOMPARE(int(b.size()), 1 + 50);
             for (size_t k = 2; k < b.size(); ++k) {
@@ -3935,29 +3937,43 @@ void TestSoundLibrary::tuningBendAtArrival()
             QCOMPARE(int(b.size()), 1);
             QCOMPARE(b.front().tick, ons[i].tick);
             }
-      // the clamp: 600 ms, 521 after a quarter; D5+'s transition would arrive 521 ms after its note-on, after E5's
-      // note-on (12480): the glide ends just before E5's note-on, the value reached
+      // 600 ms, 521 after a quarter: D5+'s transition arrives 521 ms (500 ticks) after its note-on, after E5's
+      // note-on (12480): its glide still ends at its arrival (C5 sounds until then), across E5's note-on, which
+      // brings no bend of its own; E5's glide starts from the value reached and ends at E5's arrival
       SoundLib::setCurrent(mapWith("600"));
       render();
       {
-            const std::vector<Bend> b = between(6);
             QCOMPARE(ons[7].tick, 12480);
-            QCOMPARE(b.back().value, 10240);
-            QVERIFY(b.back().tick < ons[7].tick && b.back().tick >= ons[7].tick - ticksOf(5));
-            QCOMPARE(b[1].tick, ons[7].tick - 50);          // (50 steps, the last a tick before E5)
+            std::vector<Bend> b;                            // (D5+'s lane from its note-on on)
+            for (const Bend& x : bends)
+                  if (x.channel == ons[6].channel && x.tick >= ons[6].tick)
+                        b.push_back(x);
+            QVERIFY(b.size() >= 101);
+            QCOMPARE(b[0].tick, 12000);
+            QCOMPARE(b[0].value, 8192);
+            const int arrival = 12000 + ticksOf(521);
+            QVERIFY2(std::abs(b[50].tick - arrival) <= 1, qPrintable(QString("D5+ arrives at %1, glide ends at %2").arg(arrival).arg(b[50].tick)));
+            QCOMPARE(b[50].value, 10240);
+            QVERIFY(b[1].tick < 12480 && b[50].tick > 12480);
+            for (const Bend& x : b)
+                  QVERIFY(x.tick != 12480 || (x.value != 8192 && x.value != 10240));     // (no bend of E5's own at its note-on)
+            QVERIFY(std::abs(b[100].tick - (12480 + ticksOf(521))) <= 1);
+            QCOMPARE(b[100].value, 8192);
+            QCOMPARE(b[51].tick, b[100].tick - 49);
       }
       SoundLib::setCurrent(lib);
       // the layers: ini off (the glide at the note-on), the score's on over it, the score's off
-      auto glideStart = [&]() { render(); return between(6)[1].tick - ons[6].tick; };
-      QVERIFY(glideStart() >= ticksOf(173));
+      // (on: the glide's last step at the arrival; off: the glide's 50 steps from the note-on)
+      auto glideEnd = [&]() { render(); return between(6).back().tick - ons[6].tick; };
+      QVERIFY(glideEnd() >= ticksOf(173) - 1);
       Playback::setIniValuesForTest(withOld({ { "tuning/bendAtArrival", "0" } }));
-      QVERIFY2(glideStart() <= ticksOf(4), qPrintable(QString::number(glideStart())));
+      QVERIFY2(glideEnd() <= 50 + ticksOf(4), qPrintable(QString::number(glideEnd())));
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "tuning/bendAtArrival", 1 } }));
       QCOMPARE(Playback::source("tuning/bendAtArrival", score), Playback::Source::SCORE);
-      QVERIFY(glideStart() >= ticksOf(173));
+      QVERIFY(glideEnd() >= ticksOf(173) - 1);
       Playback::setIniValuesForTest(withOld({}));
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "tuning/bendAtArrival", 0 } }));
-      QVERIFY(glideStart() <= ticksOf(4));
+      QVERIFY(glideEnd() <= 50 + ticksOf(4));
       score->setMetaTag(Playback::metaTag, "");
       delete score;
       Playback::setIniValuesForTest({});

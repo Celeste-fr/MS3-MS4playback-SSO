@@ -2260,6 +2260,7 @@ void TestLiveEquivalence::dumpEvents()
       if (qEnvironmentVariableIsSet("MS_DUMP_SETTINGS"))         // (the score's playback settings, e.g. heldNotes/byPitch=0)
             score->setMetaTag(Playback::metaTag, qEnvironmentVariable("MS_DUMP_SETTINGS"));
       EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;                  // (MS_DUMP_LIVE: trace.txt)
       if (qEnvironmentVariableIsSet("MS_DUMP_CHUNKED")) {         // (as Seq plays it: 10-measure chunks, each in its own map)
             score->masterScore()->setExpandRepeats(true);
             MidiRenderer midi(score);
@@ -2275,6 +2276,7 @@ void TestLiveEquivalence::dumpEvents()
       else if (qEnvironmentVariableIsSet("MS_DUMP_LIVE")) {       // (as Live's clips and sets render: Live's routes)
             MidiRenderer r(score);
             r.setForLiveClips(true);
+            r.setLibraryTrace(&trace);
             SynthesizerState ss;
             MidiRenderer::Context ctx(ss);
             ctx.metronome = false;
@@ -2307,6 +2309,18 @@ void TestLiveEquivalence::dumpEvents()
             QFile kf(out + "/kontakts.txt");
             QVERIFY(kf.open(QIODevice::WriteOnly | QIODevice::Text));
             kf.write((ks.join("\n") + "\n").toUtf8());
+            // each library note's Performance kind and its transition's arrival (trace.txt: "part|seconds|pitch|kind|
+            // delayMs", kind attack / transition / -, delayMs -1: no transition), for the bends' timing
+            QStringList ts;
+            for (const MidiRenderer::LibTrace& t : trace)
+                  ts << QString("%1|%2|%3|%4|%5").arg(t.note->part()->partName())
+                        .arg(score->utick2utime(t.utick), 0, 'f', 6).arg(t.note->ppitch())
+                        .arg(t.performance == MidiRenderer::LibPerformance::ATTACK ? "attack"
+                             : t.performance == MidiRenderer::LibPerformance::TRANSITION ? "transition" : "-")
+                        .arg(t.glideDelayMs, 0, 'f', 1);
+            QFile tf(out + "/trace.txt");
+            QVERIFY(tf.open(QIODevice::WriteOnly | QIODevice::Text));
+            tf.write((ts.join("\n") + "\n").toUtf8());
             QFile rf(out + "/routes.txt");
             QVERIFY(rf.open(QIODevice::WriteOnly | QIODevice::Text));
             rf.write((rs.join("\n") + "\n").toUtf8());

@@ -1771,6 +1771,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                                                           libChoice.articulation->name, interval,
                                                                                           libChoice.articulation->legatoDelayAt(interval, from->ppitch())),
                                                                          lenBefore);
+                                    if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                          libTrace->back().glideDelayMs = libGlideDelayMs[note];
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
                                        && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
@@ -2881,13 +2883,19 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
 //    without audible steps: each step at most one cent", on the renderer's time grid (an event sits on a tick,
 //    so one step a tick is as short as it gets): a glide of d cents takes ceil(d) ticks (a quarter tone 50,
 //    ~52 ms at 120 bpm), each step the bend value nearest k / ceil(d) of the way, so at most a cent to within the bend's own
-//    resolution (range / 8191 a unit, 0.012 cents for SSO's ±100); cut at the lane's next note-on. The glide starts when the transition arrives ([tuning] bendAtArrival, on):
-//    the note-on plus the patch's measured legato delay for the interval (the full delay, whatever the
-//    early start took: libGlideDelayMs), since the bend is the channel's and retunes the note before,
-//    which sounds until then (SSO, Whence on 49b00a0, 2026-10-02: violas 65-83 % retuned 10-30 ms after
-//    the note-on, the new note heard ~90-130 ms after it); no later than the lane's next note-on less
-//    the glide (it ends by then). Off: at the note-on. A note with no note before (a fresh attack, a
-//    slur's first note) bends at its note-on. A chord's notes at one tick on one lane: one glide, at
+//    resolution (range / 8191 a unit, 0.012 cents for SSO's ±100). The glide ends when the transition arrives ([tuning]
+//    bendAtArrival, on): the note-on plus the patch's measured legato delay for the interval (the full delay, whatever
+//    the early start took: libGlideDelayMs), so that the note is in tune from its arrival; it runs in the transition's
+//    last ~50 ms, while the pitch moves from the note before to it (the bend is the channel's: earlier it would
+//    retune the note before, which sounds until then: SSO, Whence on 49b00a0, 2026-10-02: violas 65-83 % retuned
+//    10-30 ms after the note-on, the new note heard ~90-130 ms after it). Not before the note-on (a delay shorter than
+//    the glide: it starts at the note-on). In a quick run a transition may arrive after the next note-on: its glide
+//    still ends at its arrival (the note before sounds until the next transition arrives), and the next glide starts
+//    from where it got to; a glide still running when the lane's next note is attacked stops there, the attack
+//    setting its own bend (Whence 2026-10-10: 71 of 141 quarter-tone transitions in tune for 95 % of the time they
+//    sound, with the glide cut at the next note-on). Off: at the note-on. A note with no note before (a fresh attack, a
+//    slur's first note) bends at its note-on (absolute: playback may start anywhere; a transition's note-on carries the
+//    note before's bend unless a glide is running then). A chord's notes at one tick on one lane: one glide, at
 //    the earliest arrival. (Varispeed glides by the same criterion per output frame: Vst3Plugin::GLIDE_CENT_STEP.) A tuning beyond the range: bend at the centre and varispeed plays it all
 //    (one way for a whole note; the lanes keep what sounds from moving either way). Works hosted and
 //    over MIDI out alike (the bends are events on the lane's route), and in Live's clips
@@ -2903,7 +2911,6 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
       struct Start { int tick; int from; int target; double delay; double range; };   // a note-on's bend; delay (s) -1: no glide
       struct Bend { int tick; int value; int glideStart; };                    // glideStart -1: not a glide's step
       std::map<std::pair<int, int>, std::vector<Start>> starts;                // (port, channel) -> note-ons' bends
-      std::map<std::pair<int, int>, std::vector<int>> noteOns;                 // (port, channel) -> note-on ticks
       std::map<std::pair<int, int>, std::pair<int, int>> source;               // (port, channel) -> its notes' channel and staff
       std::map<std::pair<int, int>, int> patchOf;                              // (port, channel) -> its patch
       auto bendOf = [&](double cents, double range) {
@@ -2935,9 +2942,6 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   ev.setTuning(0.f);            // (the bend plays it: no varispeed)
             const int target = value >= 0 ? value : 8192;
             const std::pair<int, int> route { ev.extPort(), ev.extChannel() };
-            std::vector<int>& ons = noteOns[route];
-            if (ons.empty() || ons.back() != i->first)
-                  ons.push_back(i->first);
             source[route] = { ev.channel(), ev.getOriginatingStaff() };
             patchOf[route] = ev.libraryPatch();
             Start st { i->first, target, target, -1, range };
@@ -2961,31 +2965,60 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             rs.push_back(st);
             }
       for (auto& rst : starts) {
-            const std::vector<int>& ons = noteOns[rst.first];
-            std::vector<Bend> bends;
+            std::vector<Bend> bends;                  // (in tick order)
+            int cur = 8192;                           // the bend after the last one in bends
+            int busyUntil = -1;                       // the running glide's last step
+            // a glide's steps from tick on dropped (the next note's bend or glide takes over); cur: the bend then
+            auto cut = [&](int tick) {
+                  while (!bends.empty() && bends.back().glideStart >= 0 && bends.back().tick >= tick)
+                        bends.pop_back();
+                  if (busyUntil >= tick)
+                        cur = bends.empty() ? 8192 : bends.back().value;
+                  busyUntil = std::min(busyUntil, tick - 1);
+                  };
             for (const Start& st : rst.second) {
-                  bends.push_back({ st.tick, st.from, -1 });
-                  if (st.from == st.target || st.delay < 0)
+                  if (st.delay < 0) {
+                        // an attack (or no note before on the lane): its bend at its note-on
+                        cut(st.tick);
+                        bends.push_back({ st.tick, st.target, -1 });
+                        cur = st.target;
                         continue;
+                        }
                   // (cents of a bend value: SoundLib::bendValue's scale, 8192 down, 8191 up)
                   auto cents = [&st](int v) { return (v - 8192) * st.range / (v < 8192 ? 8192.0 : 8191.0); };
                   // (to within one bend unit, the bend's own resolution: +50 cents is 10240, read back as 50.006)
-                  const int steps = std::max(1, int(std::ceil(std::fabs(cents(st.target) - cents(st.from)) - st.range / 8191.0)));
+                  auto stepsFrom = [&](int from) {
+                        return from == st.target ? 0
+                               : std::max(1, int(std::ceil(std::fabs(cents(st.target) - cents(from)) - st.range / 8191.0)));
+                        };
                   const qreal on = score->utick2utime(st.tick);
-                  int t0 = std::max(st.tick, score->utime2utick(on + st.delay));
-                  auto next = std::upper_bound(ons.begin(), ons.end(), st.tick);
-                  if (next != ons.end())
-                        t0 = std::max(st.tick, std::min(t0, *next - steps - 1));   // (it ends before the next note-on)
-                  for (int k = 1; k <= steps; ++k) {
-                        const int v = st.from + int(std::lround((st.target - st.from) * double(k) / steps));
-                        bends.push_back({ t0 + k, v, st.tick });
+                  const int arrival = std::max(st.tick, score->utime2utick(on + st.delay));
+                  if (busyUntil < st.tick) {
+                        // no glide running: the note before's bend at the note-on (absolute)
+                        bends.push_back({ st.tick, st.from, -1 });
+                        cur = st.from;
                         }
+                  int steps = stepsFrom(cur);
+                  if (steps == 0)
+                        continue;
+                  int t0 = std::max(st.tick, arrival - steps);
+                  if (busyUntil > t0) {
+                        // (the glide before still running: it stops where this one starts, which starts from there)
+                        cut(t0 + 1);
+                        steps = stepsFrom(cur);
+                        if (steps == 0)
+                              continue;
+                        t0 = std::max(st.tick, arrival - steps);
+                        }
+                  if (!bends.empty())
+                        t0 = std::max(t0, bends.back().tick);
+                  const int from = cur;
+                  for (int k = 1; k <= steps; ++k)
+                        bends.push_back({ t0 + k, from + int(std::lround((st.target - from) * double(k) / steps)), st.tick });
+                  busyUntil = t0 + steps;
+                  cur = st.target;
                   }
             for (const Bend& bend : bends) {
-                  // (a glide's step at or after the lane's next note-on: that note sets its own)
-                  auto next = std::upper_bound(ons.begin(), ons.end(), bend.glideStart);
-                  if (bend.glideStart >= 0 && next != ons.end() && *next <= bend.tick)
-                        continue;
                   NPlayEvent ev(ME_PITCHBEND, source[rst.first].first, bend.value & 0x7f, (bend.value >> 7) & 0x7f);
                   ev.setOriginatingStaff(source[rst.first].second);
                   ev.setLibraryPatch(patchOf[rst.first]);
