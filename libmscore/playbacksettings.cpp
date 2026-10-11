@@ -45,7 +45,7 @@ static const std::vector<Definition> DEFINITIONS = {
       // docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
       { "legato/fastShare", 50, 0, 100, "%",
         "after a very short note a transition arrives after this share of its measured delay (SSO is quicker in fast passages; "
-        "times a bent transition's glide, tuning/bendAtArrival) ...", true },
+        "times an unmeasured patch's bent transition's glide, tuning/bendAtArrival) ...", true },
       { "legato/fastFullMs", 380, 0, 4000, "ms", "... rising linearly to all of it after a note this long (0: always all of it)", true },
       // [heldNotes]
       { "heldNotes/early", MAP, 0, 200, "%",
@@ -115,8 +115,9 @@ static const std::vector<Definition> DEFINITIONS = {
       { "tuning/pitchBend", 1, 0, 1, "on/off",
         "1: patches that bend cleanly (<Instrument bend>) are tuned by pitch bend; 0: by varispeed", true },
       { "tuning/bendAtArrival", 1, 0, 1, "on/off",
-        "1: a legato transition's pitch bend glides when the transition arrives (note-on plus the measured legato delay), "
-        "so the note before keeps its tuning while it sounds; 0: at the note-on", true },
+        "1: a legato transition's pitch bend glides with the transition's own pitch (the map's measured bendGlide; else "
+        "from its arrival, note-on plus the measured legato delay), so the note before keeps its tuning while it sounds; "
+        "0: at the note-on", true },
       // [live]
       // (measured in Live 12.4.6: 1 and 0 units keep every carrier before its note; 1 is the smallest the range allows:
       // LiveClips::EPSILON, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
@@ -295,7 +296,8 @@ QString iniTemplate()
            "; \"patch|articulation\". A value is an offset in ms (+25, -30) added to the map's, or a whole\n"
            "; table that replaces it: legato delays by interval (-12:240 -7:280 +2:220 ... +12:440), onsets\n"
            "; by MIDI pitch (55:60 72:40 ...), or one number for all.\n"
-           "\n; a legato transition's delay (ms; a bent transition's glide starts when it arrives: tuning/bendAtArrival)\n"
+           "\n; a legato transition's delay (ms; where the map has no bendGlide, a bent transition's glide starts when it arrives:\n"
+           "; tuning/bendAtArrival)\n"
            "[legato.delay]\n"
            "; Violins 2 - Performance=+25\n"
            "\n; a note's onset (ms; it starts that much early, times heldNotes/early)\n"

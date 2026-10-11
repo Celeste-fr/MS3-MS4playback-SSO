@@ -56,6 +56,7 @@
 //---------------------------------------------------------
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include <QString>
@@ -89,6 +90,8 @@ struct Technique {
 struct Lane {
       int cc { 0 };                       // the controller; PITCH_BEND: the bend (0-16383, centre 8192)
       std::vector<std::pair<int, int>> points;        // (units, value), by time, a value only where it changes
+      std::set<int> glides;               // units of the points a tick after the one before (a glide's steps: Live's
+                                          // ramp between them is the step within a tick); every other point is a step
       };
 constexpr int PITCH_BEND = -1;
 

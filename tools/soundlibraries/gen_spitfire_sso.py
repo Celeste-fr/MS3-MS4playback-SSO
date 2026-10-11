@@ -1170,6 +1170,14 @@ def bendRange(name):
     if abs(up + down) > 0.03 * mean:
         return None
     return round(mean, 1)
+# Microtones on the Performance patches' bends (legato_glide/, 2026-10-11, Kontakt 8 + SSO rendered by kthost on the
+# Windows VM, f0 by YIN): bendGlide= on the Legato articulation: "IOI:leave:arrive" ms, when the transition's f0 leaves
+# the note before (a tenth of the way) and reaches the new note (nine tenths) after the note-on, after a note before
+# that long (glide.py: slurred runs of steps, as Whence plays them, medians; sso_legato_glide.json). Only the five
+# sections measured; the renderer glides the bend with the transition (MidiRenderer::libraryPitchBends). (The bend's
+# smoothing on a held note, sso_bend_smoothing.json, is measured but not used: rendermidi.cpp)
+LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
+                              encoding='utf-8'))
 # - onset= (ms): a sustained articulation's attack, by pitch: when it is heard, its level 15 dB under the note's peak
 #   (the renderer starts a held note that is no legato transition that much early, times <Onset early> percent).
 #   Measured on the VM (2026-10-01, build ce7d801, lone held notes at 3 registers and pp / mf / ff on 13 instruments
@@ -1480,6 +1488,8 @@ for i, line in enumerate(out):
             extra += f' octaveDown="{down}"'
         if up or down:
             octaveCount += 1
+        if current in LEGATO_GLIDE:
+            extra += ' bendGlide="%s"' % ' '.join(f'{g[0]}:{g[1]}:{g[2]}' for g in LEGATO_GLIDE[current]['glide'])
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
     f = shortFrom(current, sound)
     if f:

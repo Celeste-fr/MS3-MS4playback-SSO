@@ -7,7 +7,7 @@ a section there when you need the background of that topic. Commit messages desc
 
 ## Before a build goes to the owner (2026-10-09)
 
-Run the playback audit on *Whence 12-TET* with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
+Run the playback audit on *Whence* (the quarter-tone original, `Whence.mscz`, the standard score since 2026-10-11) with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
 with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every ARRIVAL fail and CAPPED note left must be
 named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
@@ -67,7 +67,7 @@ only early start.
 
 Open:
 - **The playback audit has no model of a transition's arrival**: it judges Performance transitions by the attack
-  onset, so on *Whence* (Recommended) ARRIVAL reads 19 fail / 136 warn (before: 1 fail) and CAPPED 289 info (226 transitions, nearly
+  onset, so on *Whence 12-TET* (Recommended) ARRIVAL reads 19 fail / 136 warn (before: 1 fail) and CAPPED 289 info (226 transitions, nearly
   all on the beat, and 63 re-attacks held back by the keep below). It needs the measured transition delays (`sso_legato_*.json`, `legatoDelay`) before
   those counts mean anything.
 - **A re-attack keeps the note before** (fixed 2026-10-10, integrate-2026-10-10): a slur's last sixteenth (136 ms at
@@ -75,11 +75,18 @@ Open:
   early, the map's reattackGap 54 ms), 11.4 ms (Celli) and 31.8 ms (Violins 1): 63 notes. `onsetEarliest` now keeps
   `[legato] keepMs` (40) after the re-attack gap: those notes sound 39.8 ms and their attacks start 42.0 ms early
   instead of 87.5 / 70.5 / 50 (predicted arrival 45.5 / 28.5 / 8 ms late; Rasch's fail is > 50). Owner to hear.
-- **Quarter tones on the Performance patches glide**: with `[slurs] performance` the strings' slurred quarter-tone
-  notes play on the bending copies (pitch bend timed to the transition's arrival), not on Kontakt-Tune copies. On
-  *Whence* (quarter tones, Recommended, dumpEvents MS_DUMP_LIVE, Live's clips): 147 quarter-tone notes on bending
-  copies, 141 of them at their tuning (within 5 cents) for under half their sounding length; with
-  `slurs/performance=0` every quarter-tone note is on a tuned copy (14 Kontakts, now 20). Owner to decide.
+- **Quarter tones on the Performance patches** (branch `legato-bend-timing`, 2026-10-11, owner to hear): a legato
+  transition's bend now glides straight from the note before's tuning to its own while SSO's own transition moves its
+  pitch (map `bendGlide`: when the f0 leaves the note before / reaches the new one, by the note before's length,
+  pitch-tracked from Kontakt 8 + SSO renders, `sso_legato_glide.json`), then holds; the plain set writes the bend
+  envelope with hold pairs. Real renders on the VM (Kontakt 8 + SSO, kthost): slurred runs at 300 / 600 ms a note in
+  tune (±10 c) 0.81-0.91 / 0.91-0.95 of each note's steady time (before: 0.14-0.15 / 0.83-0.85), the note before intact
+  0.98-1.00. *Whence* (quarter tones, Recommended): the 40 quarter-tone notes the patch settles on in the real
+  render were in tune 0.15 of that time before, 0.54 after (Violins 1 0.06 → 0.66, Celli 0.00 → 0.29: Kontakt smooths
+  a bend over 29-80 ms, `sso_bend_smoothing.json`, measured but not compensated: an inverse overshot ~15 c in
+  context). 69 of the 147 quarter-tone notes on bending copies have no steady time at all (in 136 ms sixteenths the
+  patch's own f0 never settles). With `slurs/performance=0` every quarter-tone note is on a tuned copy. Owner to
+  decide by ear (mp3 pairs in the dev VM's `uploads/legato-bends/`).
 - **Levels against R**: the calibration predicts Performance over All +2.7 dB (Violins 1), +3.8 (Violas), +7.8 (Celli)
   at *Whence*'s CC1 64 (perceived curves of `Spitfire Symphony Orchestra.dynamics.json`, Long minus Performance
   Legato); the owner's R faders say +13.1, +8.6, +14.0 (Violins 1 bars 13-16: +6.6). Measured on held notes along
@@ -254,8 +261,9 @@ velocity 100 is unmeasured, and any start shift changes SSO's transition, above)
 
 ## Where things are (2026-10-02)
 
-- **Standard test score** (2026-10-06): the owner's *Whence* in 12-TET, `~/MuseScore/ms3fork/test-scores/Whence
-  12-TET.mscz` on the dev VM (not in the repo; CLAUDE.md › Building and testing).
+- **Standard test score** (2026-10-11): the owner's *Whence*, the quarter-tone original,
+  `~/MuseScore/ms3fork/test-scores/Whence.mscz` on the dev VM (not in the repo; CLAUDE.md › Building and testing);
+  *Whence 12-TET* (`Whence 12-TET.mscz`, 2026-10-06's standard) only where a test needs no tuning lanes.
 - `main` has everything: `live-set-export` / `claude/intelligent-volta-gx7gmw`, `automation-editor`, the
   measurement branch `claude/intelligent-cray-6pd4o1` and `playability-checker` were merged on 2026-10-02 (the
   branches are kept). Work on a branch; finished work by Claude and its subagents is merged into `main` without asking (the owner, 2026-10-02), anything incomplete or changing an owner-decided value waits for the owner.

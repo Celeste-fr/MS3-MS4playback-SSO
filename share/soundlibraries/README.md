@@ -254,6 +254,12 @@ switch value of each articulation. For example:
     semitones can ring twice as long as the rest: Violins 1 - Performance 855 ms at its test pitch, 2180 at D4).
   - `bend` on an `Instrument` (cents): the patch bends its pitch this far either way at full pitch
     bend, linearly. Notes of other tunings on it are tuned by pitch bend (below).
+  - `bendGlide` on an `Articulation`: `IOI:leave:arrive` triples (ms): after a note before IOI long (its start to
+    the transition's), a legato transition's own pitch leaves the note before (a tenth of the way) leave ms and
+    reaches the new note (nine tenths) arrive ms after its note-on; linear between the listed IOIs, the nearest
+    one's beyond (SSO's five string sections: `sso_legato_glide.json`, `legato_glide/glide.py`, slurred runs of
+    steps pitch-tracked). A transition bent to another tuning glides its bend then, with the transition; left
+    out, from the arrival (`legatoDelay`) one cent a tick.
 
   ```xml
   <Onset early="100"/>
@@ -266,8 +272,8 @@ switch value of each articulation. For example:
 - **Microtones.** `<Tuning method="varispeed" [tolerance="…" tail="…" maxLanes="…"]/>`: a plug-in
   that ignores a note's tuning (Kontakt) plays a part's notes on copies of the patch ("lanes"),
   one tuning each. Where the patch has `bend`, a lane's tuning within the range is played by the
-  patch's own pitch bend (sent on the lane's channel before each note, gliding one cent a tick for a
-  slurred note), otherwise by playing the copy faster or slower (varispeed, hosted only), which also
+  patch's own pitch bend (sent on the lane's channel before each note; a slurred note's glides from the note
+  before's with its transition, `bendGlide` above), otherwise by playing the copy faster or slower (varispeed, hosted only), which also
   plays the plug-in's own timing (envelopes, scripts, effects) a little faster or slower (3 % for a quarter tone). Over MIDI out the bends go to
   the host with the notes. `tolerance` (cents): a note this close to a lane's tuning shares it
   (left out: half the smallest gap between two accidentals' values, 0.083); `tail` (seconds): how long a

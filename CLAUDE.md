@@ -179,8 +179,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   length (`kontaktScriptValueLengths`). Mics on 3-mic patches are Close, Tree, Ambient.
 - Microtones: Kontakt ignores VST 3 note tuning. **Tuning lanes** (patch copies per tuning, metaTag
   `soundLibraryLanes`) play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends
-  cleanly (`<Instrument bend>`; varispeed can't reach Live). A legato transition's bend glides when the
-  transition arrives (note-on + its measured delay, ending before the next note-on; `[tuning] bendAtArrival`).
+  cleanly (`<Instrument bend>`; varispeed can't reach Live). A legato transition's bend glides with the
+  transition's own pitch, straight, a value a tick (map `bendGlide`: when SSO's f0 leaves the note before / reaches the
+  new one, by the note before's length; measured for the five sections' Performance patches), then holds; unmeasured
+  patches: from the arrival (note-on + legato delay), a cent a tick (`libraryPitchBends`, `[tuning] bendAtArrival`;
+  `tools/soundlibraries/legato_glide/`). The plain set writes envelope steps as hold pairs (Live ramps between points).
   **Live and MIDI out** (no varispeed; the owner, 2026-10-10: "I will not accept losing microtones"):
   `SoundLib::routes(…, forLive)` / `lanes(…, fixedTuning)` give a patch without `bend=` a fixed copy per tuning
   (`Lanes::fixed`, `Route::cents`; lane 0 nearest 0 cents; no max), which the export tunes by Kontakt's instrument
@@ -244,8 +247,8 @@ events of a whole score checked against the map's own onsets (not the real sound
 swapped / early techniques or no onset, capped early starts (the cut), predicted arrival against neighbours (sent +
 onset - written; Rasch 1979: > 50 ms fails) and level steps under a slur (values; proposed threshold 0.69 dB, Jesteadt,
 Wier & Green 1977, owner to approve). The renderer
-reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (Recommended) before any
-build goes to the owner.**
+reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (quarter tones,
+`Whence.mscz`; Recommended) before any build goes to the owner.**
 
 ## Building and testing
 
@@ -287,29 +290,35 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   `MS_KONTAKT_MAX_VOICES`, `MS_SOUNDLIBRARY_LOAD_THREADS`, `MS_LIVESET_OUT=<file>` (liveSetWrite's set).
 - Other tests: `tools/soundlibraries/test_make_setups.py`, `test_extract_library_files.py`; Node in
   `tools/live/test/`. Test data: `test-scores/`, `share/verifyplayback/`, each mtest's folder.
-- **Standard test score**: the owner's *Whence* in 12-TET, `~/MuseScore/ms3fork/test-scores/Whence 12-TET.mscz`
-  (and `.mscx`) on the dev VM, **never in the repo** (the owner's score). Use it for dumps (`dumpEvents`), Create Live
-  Set, VM runs and test instructions unless a test needs microtones (then the original, quarter tones). Made
-  2026-10-06 by rounding each quarter tone down, as "Whence simple 2" played: the key's D / B quarter-flats → ♭, its
+- **Standard test score** (the owner, 2026-10-11): *Whence*, the quarter-tone original,
+  `~/MuseScore/ms3fork/test-scores/Whence.mscz` on the dev VM, **never in the repo** (the owner's score). Use it for the
+  playback audit, dumps (`dumpEvents`, with `MS_DUMP_LIVE` for the Live path), Create Live Set, VM runs and test
+  instructions: its quarter tones exercise the tuning lanes, Kontakt Tune and bends. *Whence 12-TET*
+  (`Whence 12-TET.mscz` / `.mscx`, same folder) only where a test needs no tuning lanes; numbers below marked
+  "Whence 12-TET" were measured on it. Whence 12-TET was made 2026-10-06 by rounding each quarter tone down, as "Whence simple 2" played: the key's D / B quarter-flats → ♭, its
   G quarter-sharp dropped (key E♭ B♭ D♭ F♯), each E quarter-sharp → E♮; checked with the fork's dump (107 D / B
   notes a semitone lower, the other 347 and all times unchanged; 10 routes instead of 26: no tuning lanes).
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 76 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 77 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-11: bendGlideMeasured; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
-  Playback audit). Whence 12-TET, Recommended (2026-10-10, `[slurs] performance`): OVERLAP 0, UNMEASURED 10 info,
+  Playback audit). Whence (quarter tones), Recommended (2026-10-11, main cb073b6917): the same counts as Whence 12-TET
+  below (OVERLAP 0, UNMEASURED 10, CAPPED 289, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0).
+  Whence 12-TET, Recommended (2026-10-10, `[slurs] performance`): OVERLAP 0, UNMEASURED 10 info,
   CAPPED 289 info, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0 (with the re-attack keep, 2026-10-10): the audit judges the Performance legato's transitions (on
   the beat) by the attack onset, having no model of a transition's arrival (HANDOFF.md); with `slurs/performance=0` as on
   2026-10-09 (UNMEASURED 9, CAPPED 2, ARRIVAL 1 fail: the Celli's 2nd note, bar 1, LEVEL STEP 12 info).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 24 passed (2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 24 passed (2026-10-11: plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
-  playback does: 10-measure chunks). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
+  playback does: 10-measure chunks, `MS_DUMP_LIVE` as Live's clips (plus kontakts.txt, routes.txt and multis.txt: the
+  plain set's Kontakt instances and each slot's Tune); every dump writes routemap.txt (route, lane, cents, bend range)
+  and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
   allArticulations, textLevel, calibrated), `tst_performancetechnique` 15 (2026-10-10: Auto techniques, overrides, joins on
   rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
