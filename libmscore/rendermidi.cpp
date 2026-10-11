@@ -1278,8 +1278,57 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return quickLevel && c && c.swapped
                                ? c.articulation->quickLevelAt(note->ppitch(), SoundLib::noteSeconds(note) * 1000) : 0.0;
                         };
+                  // a Performance legato note (attacks listed: slurs/performance or staff text "performance") with
+                  // [levels] calibrated: on its dynamics CC, the value at which its patch sounds as loud as the part's
+                  // held note at the value in force (both measured: dynamics.json, by ear where measured;
+                  // SoundLib::calibratedController), for each value 0 … 127; empty: not calibrated
+                  std::map<std::pair<const SoundLib::Articulation*, int>, std::shared_ptr<const std::vector<int>>> performanceMaps;
+                  auto performanceLevel = [&](const Note* note, const SoundLib::Choice& c) {
+                        std::shared_ptr<const std::vector<int>> none;
+                        if (!c || !libHeld || c.articulation->attacks.empty() || library->dynamicsCC < 0
+                            || library->dynamicsCC == CTRL_EXPRESSION)
+                              return none;
+                        const std::pair<const SoundLib::Articulation*, int> key { c.articulation, note->ppitch() };
+                        auto m = performanceMaps.find(key);
+                        if (m != performanceMaps.end())
+                              return m->second;
+                        auto table = std::make_shared<std::vector<int>>(128, -1);
+                        for (int x = 1; x < 128; ++x)
+                              (*table)[x] = SoundLib::calibratedController(*cal, libPatches[c.patch]->name, c.articulation->value,
+                                                                          libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                          x, note->ppitch());
+                        if ((*table)[1] < 0)
+                              table.reset();
+                        else
+                              (*table)[0] = 0;
+                        performanceMaps[key] = table;
+                        return std::shared_ptr<const std::vector<int>>(table);
+                        };
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
                         const double db = levelOf(note) + quickDb(note, c);
+                        const std::shared_ptr<const std::vector<int>> performance = velocity > 0 ? nullptr : performanceLevel(note, c);
+                        if (performance) {
+                              // its own level on top: louder along its own curve from the calibrated value, softer by
+                              // CC11 (a plain volume on SSO's Performance patches: measured 2026-10-02, HANDOFF.md › Legato level balance)
+                              const SoundLib::DynamicsCurve* ownCurve = cal->curve(libPatches[c.patch]->name, c.articulation->value);
+                              SoundLib::DynamicsCurve own = ownCurve ? ownCurve->atPitch(note->ppitch()) : SoundLib::DynamicsCurve();
+                              const double up = db > 0 ? db : 0.0;
+                              LibLevel l;
+                              l.controller = library->dynamicsCC;
+                              l.fallback = Ms4::expressionLevel(dynLevel);
+                              l.map = [performance, own, up](int x) {
+                                    if (x <= 0)
+                                          return x;
+                                    int y = (*performance)[qBound(0, x, 127)];
+                                    if (up > 0)
+                                          y = own.points.size() < 2 ? MarcatoLevel::velocity(y, up) : qMax(y, own.raise(y, up));
+                                    return qBound(1, y, 127);
+                                    };
+                              if (db < 0)
+                                    l.volumeDb = db;
+                              libLevels[note] = l;
+                              return;
+                              }
                         if (db == 0.0 || !c)
                               return;
                         const SoundLib::DynamicsCurve* ownCurve = cal ? cal->curve(libPatches[c.patch]->name, c.articulation->value) : nullptr;

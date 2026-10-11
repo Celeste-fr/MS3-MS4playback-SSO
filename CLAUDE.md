@@ -120,15 +120,20 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   quiet; `[levels] calibrated`, on in Recommended, off in Library default): a technique on velocity plays as loud as
   the part's Long at the same dynamic (measured curves, by ear: perceived loudness where measured), plus MS4.7.5's offset for its articulations (marcato's too),
   plus the Inspector's levels (`libVelocity`, `SoundLib::calibratedVelocity`; docs/PLAYBACK_SETTINGS.md › Calibrated
-  levels); techniques on CC1 keep the library's balance. `[slurs] quick` (2 in Recommended, the default; 0 in Library default) plays short slurred notes on a quicker technique (Long (Rachm.)), early by its own onset, by `[heldNotes] byPitch` as every note (since 2026-10-09; `Choice::swapped`, `sso_rachm_onset_fit.json`) and, with `[slurs] quickLevel` (1 in Recommended, the default), as loud as the held one (map `quickLevel`: perceived, `sso_rachm_levels.json`; `quickDb`). Violins 1 / 2 only: Violas' and Celli's in-context entries in both files are measured but not used (`RACHM_UNUSED` in the generator; the owner, 2026-10-09: Whence bars 1-2 Celli ~8 dB louder and pulsing), their Rachm. as at 25a3dcbbeb. Exception: notes start
+  levels); techniques on CC1 keep the library's balance, except Performance legato notes (since 2026-10-10: by CC1, as
+  loud as Long, `SoundLib::calibratedController`, `performanceLevel` in rendermidi.cpp). `[slurs] quick` (2 in Recommended, the default; 0 in Library default) plays short slurred notes on a quicker technique (Long (Rachm.)), early by its own onset, by `[heldNotes] byPitch` as every note (since 2026-10-09; `Choice::swapped`, `sso_rachm_onset_fit.json`) and, with `[slurs] quickLevel` (1 in Recommended, the default), as loud as the held one (map `quickLevel`: perceived, `sso_rachm_levels.json`; `quickDb`). Violins 1 / 2 only: Violas' and Celli's in-context entries in both files are measured but not used (`RACHM_UNUSED` in the generator; the owner, 2026-10-09: Whence bars 1-2 Celli ~8 dB louder and pulsing), their Rachm. as at 25a3dcbbeb. Exception: notes start
   early by their articulation's median measured onset (held notes, and since 2026-10-08 every measured technique, shorts too) (`[heldNotes] byPitch` 1: each by its pitch's)
   (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
-  players; `[heldNotes] early` 0 plays them as written). **No Performance patches** (the owner, 2026-10-06:
-  the All techniques patches' Release, Tightness and Options): SSO slurs play the All techniques longs, each note its
-  own attack, early by its onset; a legato transition needs an articulation with `legato` first
-  (`Articulation::playsTransitions`), which the SSO map has only under staff text "performance" (modifier `performance`,
-  branch `legato-pair-delays`, waiting for the owner: the Performance patches' Legato, Violas - Performance transitions at
-  velocity 100, map `legatoVelocity`: HANDOFF.md; `sso_legato_*.json` kept). There the five string sections' Performance
+  players; `[heldNotes] early` 0 plays them as written). **Performance patches: the strings' slurs in Recommended**
+  (the owner, 2026-10-10, reversing 2026-10-06's "No Performance patches" for Recommended only): `[slurs] performance`
+  (1 in Recommended, the default; 0 in Library default) plays slurred notes of the five string sections as under staff
+  text "performance" (`Want::slurPerformance`, `choosePerformance`: a plain choice and a legato with `attacks`; staff
+  text "non performance" opts out, `TextState::performanceOff`), instead of `[slurs] quick`'s swap; a staccato before a
+  slur stays on All techniques, so the slur starts from silence. Off (Library default), SSO slurs play the All techniques
+  longs, each note its own attack, early by its onset; a legato transition needs an articulation with `legato` first
+  (`Articulation::playsTransitions`), which the SSO map has only under modifier `performance` (the Performance patches'
+  Legato; Violas - Performance transitions at velocity 100, map `legatoVelocity`, approved with `[slurs] performance`;
+  `sso_legato_*.json` kept). There the five string sections' Performance
   Legato play each note's **Performance technique** (`libmscore/performancetechnique.h`: attack smooth / spiccato /
   accented, transition portamento / fingered / bowed, Auto from the notation; Inspector › Note, every selected note at
   once, a choice resets the note's own values (`Note::undoChangeProperty`); each note's own velocity and join
@@ -282,16 +287,17 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 70 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 71 passed, 3 skipped (counting initTestCase and cleanup, 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches; 2026-10-10: slurPerformance);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
-  Playback audit). Whence 12-TET, Recommended (2026-10-09, Violas / Celli Rachm. restored): OVERLAP 0, UNMEASURED 9
-  info, CAPPED 2 info, ARRIVAL 1 fail (the Celli's 2nd note, bar 1: its first starts at time 0, not early), LEVEL STEP 12
-  info. The audit still reads Violas / Celli as "fitted in context" (it reads the fit files, not `RACHM_UNUSED`).
+  Playback audit). Whence 12-TET, Recommended (2026-10-10, `[slurs] performance`): OVERLAP 0, UNMEASURED 10 info,
+  CAPPED 226 info, ARRIVAL 127 fail / 28 warn, LEVEL STEP 0: the audit judges the Performance legato's transitions (on
+  the beat) by the attack onset, having no model of a transition's arrival (HANDOFF.md); with `slurs/performance=0` as on
+  2026-10-09 (UNMEASURED 9, CAPPED 2, ARRIVAL 1 fail: the Celli's 2nd note, bar 1, LEVEL STEP 12 info).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 21 passed (2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 22 passed (2026-10-10: livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
