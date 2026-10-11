@@ -32,6 +32,7 @@
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
+#include "libmscore/calibrationfile.h"
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
 #include "libmscore/playstart.h"
@@ -94,6 +95,7 @@ class TestSoundLibrary : public QObject, public MTest
       void noteSecondsWritten();
       void dynamicsCalibration();
       void dynamicsCalibrationPitches();
+      void dynamicsCalibrationUserFile();
       void heldOnPerformance();
       void dynamicsCheck();
       void timingCheck();
@@ -5868,6 +5870,59 @@ void TestSoundLibrary::dynamicsCalibrationPitches()
             QCOMPARE(SoundLib::calibratedVelocity(old, "Violin", 40, "Violin", 1, 80, 1.5, pitch),
                      SoundLib::calibratedVelocity(old, "Violin", 40, "Violin", 1, 80, 1.5));
             }
+      }
+
+//---------------------------------------------------------
+//   dynamicsCalibrationUserFile
+//    SoundLib::readCalibration: the shipped file's patches, each patch the user's own file measured replaced by it
+//    whole. Before 2026-10-11 a user's file holding only Solo Violin 1 (the Windows VM's) left the strings
+//    uncalibrated: Whence's staccatos at MuseScore 4's velocities (Violins 2 bars 5-8 64 / 87, not 108 / 119)
+//---------------------------------------------------------
+
+void TestSoundLibrary::dynamicsCalibrationUserFile()
+      {
+      QTemporaryDir dir;
+      auto write = [&](const QString& name, const char* text) {
+            QFile f(dir.path() + "/" + name);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(text);
+            };
+      write("shipped.json", "{\"patches\":{"
+            "\"Violins 2\":{\"1\":{\"drivenBy\":\"controller\",\"curve\":[[16,-48],[64,-36],[127,-28]]},"
+            "\"42\":{\"drivenBy\":\"velocity\",\"curve\":[[16,-75],[64,-53],[127,-28]]}},"
+            "\"Violas\":{\"1\":{\"drivenBy\":\"controller\",\"curve\":[[16,-50],[64,-38],[127,-30]]},"
+            "\"42\":{\"drivenBy\":\"velocity\",\"curve\":[[16,-70],[64,-50],[127,-30]]}}}}");
+      write("user.json", "{\"patches\":{"
+            "\"Solo Violin 1\":{\"1\":{\"drivenBy\":\"controller\",\"curve\":[[16,-40],[127,-20]]}},"
+            "\"Violas\":{\"1\":{\"drivenBy\":\"controller\",\"curve\":[[16,-60],[127,-40]]}}}}");
+      const QString shipped = dir.path() + "/shipped.json";
+      const QString user = dir.path() + "/user.json";
+      const QString none = dir.path() + "/none.json";
+
+      auto both = SoundLib::readCalibration(user, shipped);
+      QVERIFY(both);
+      // a patch only shipped: the shipped curves (the strings' staccatos stay calibrated)
+      QVERIFY(both->curve("Violins 2", 1) && both->curve("Violins 2", 42));
+      QCOMPARE(both->curve("Violins 2", 42)->at(64), -53.0);
+      SoundLib::DynamicsCalibration shippedOnly;
+      QVERIFY(shippedOnly.read(shipped));
+      for (int cc : { 32, 64, 96 })
+            QCOMPARE(SoundLib::calibratedVelocity(*both, "Violins 2", 42, "Violins 2", 1, cc, 0.0),
+                     SoundLib::calibratedVelocity(shippedOnly, "Violins 2", 42, "Violins 2", 1, cc, 0.0));
+      QVERIFY(SoundLib::calibratedVelocity(*both, "Violins 2", 42, "Violins 2", 1, 64, 0.0) > 0);
+      // a patch the user measured: the user's, whole (the shipped articulations it lacks dropped: one measurement)
+      QCOMPARE(both->curve("Violas", 1)->at(16), -60.0);
+      QVERIFY(!both->curve("Violas", 42));
+      // a patch only the user's
+      QCOMPARE(both->curve("Solo Violin 1", 1)->at(127), -20.0);
+
+      // one file alone, or none
+      auto s = SoundLib::readCalibration(none, shipped);
+      QVERIFY(s && s->curve("Violas", 42) && !s->curve("Solo Violin 1", 1));
+      auto u = SoundLib::readCalibration(user, QString());
+      QVERIFY(u && u->curve("Solo Violin 1", 1) && !u->curve("Violins 2", 1));
+      QVERIFY(!SoundLib::readCalibration(none, QString()));
+      QVERIFY(!SoundLib::readCalibration(QString(), none));
       }
 
 //---------------------------------------------------------

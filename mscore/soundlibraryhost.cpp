@@ -15,6 +15,7 @@
 #include "livehelpers.h"
 #include "liveintegration.h"
 #include "libmscore/automation.h"
+#include "libmscore/calibrationfile.h"
 #include "soundlibrarycheck.h"
 
 #include <algorithm>
@@ -240,14 +241,11 @@ void SoundLibraryHost::loadCalibration()
       {
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       std::shared_ptr<SoundLib::DynamicsCalibration> c;
-      if (library) {
-            c = std::make_shared<SoundLib::DynamicsCalibration>();
-            // the user's own measurement (Check articulations › Dynamics) wins; without one the map's shipped
-            // file (the owner's checks, tools/soundlibraries/calibration_from_sound_dynamics.py), so a
-            // fresh install calibrates too
-            if (!c->read(calibrationFile(*library)) && !c->read(shippedCalibrationFile(*library)))
-                  c.reset();
-            }
+      // the user's own measurement (Check articulations › Dynamics) wins for each patch it measured; the others
+      // from the map's shipped file (the owner's checks, tools/soundlibraries/calibration_from_sound_dynamics.py),
+      // so a fresh install calibrates too (SoundLib::readCalibration)
+      if (library)
+            c = SoundLib::readCalibration(calibrationFile(*library), shippedCalibrationFile(*library));
       SoundLib::setDynamicsCalibration(c);
       if (mscore)
             for (MasterScore* s : mscore->scores())

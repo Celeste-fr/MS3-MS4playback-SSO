@@ -46,6 +46,7 @@
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
+#include "libmscore/calibrationfile.h"
 #include "libmscore/spanner.h"
 #include "libmscore/tie.h"
 #include "libmscore/synthesizerstate.h"
@@ -2663,7 +2664,8 @@ void TestLiveEquivalence::liveTracksJson()
 //---------------------------------------------------------
 //   dumpEvents
 //    a tool, skipped unless MS_DUMP_SCORE, MS_DUMP_MAP and MS_DUMP_OUT are set (MS_DUMP_SETTINGS: the score's playback
-//    settings, "id=value;..."; MS_DUMP_CALIBRATION: a dynamics.json to load): per route, MuseScore's events
+//    settings, "id=value;..."; MS_DUMP_CALIBRATION: a dynamics.json to load, MS_DUMP_USER_CALIBRATION: a user's own on
+//    top, as the app reads them): per route, MuseScore's events
 //    (<route> museScore.txt) and the MIDI the device makes of the clip (<route> live.txt) as lines "seconds type a b"
 //    (on, off, cc <n> <value>, pb <14-bit> 0), for replaying both through one plug-in instance elsewhere (the kthost
 //    on the Windows VM: LIVE.md › Measured with SSO). MS_DUMP_LIVE: rendered as Live's clips and sets are (Live's
@@ -2682,9 +2684,10 @@ void TestLiveEquivalence::dumpEvents()
       // MS_DUMP_CALIBRATION=<dynamics.json>: the calibration the app loads (SoundLibraryHost::loadCalibration: the
       // user's own or the map's shipped one), for calibrated levels and quickLevel as the app plays them
       struct ResetCal { ~ResetCal() { SoundLib::setDynamicsCalibration(nullptr); } } resetCal;
-      if (qEnvironmentVariableIsSet("MS_DUMP_CALIBRATION")) {
-            auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
-            QVERIFY(cal->read(qEnvironmentVariable("MS_DUMP_CALIBRATION")));
+      // MS_DUMP_USER_CALIBRATION=<dynamics.json>: a user's own file on top, per patch (SoundLib::readCalibration)
+      if (qEnvironmentVariableIsSet("MS_DUMP_CALIBRATION") || qEnvironmentVariableIsSet("MS_DUMP_USER_CALIBRATION")) {
+            auto cal = SoundLib::readCalibration(qEnvironmentVariable("MS_DUMP_USER_CALIBRATION"), qEnvironmentVariable("MS_DUMP_CALIBRATION"));
+            QVERIFY(cal);
             SoundLib::setDynamicsCalibration(cal);
             }
       MasterScore* score = readCreatedScore(qEnvironmentVariable("MS_DUMP_SCORE"));

@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "soundlibrary.h"
+#include "calibrationfile.h"
 #include "partplayback.h"
 #include "playbacksettings.h"
 
@@ -1175,6 +1176,24 @@ bool DynamicsCalibration::read(const QString& file)
                   }
             }
       return true;
+      }
+
+std::shared_ptr<DynamicsCalibration> readCalibration(const QString& userFile, const QString& shippedFile)
+      {
+      DynamicsCalibration shipped, user;
+      const bool fromShipped = !shippedFile.isEmpty() && shipped.read(shippedFile);
+      const bool own = !userFile.isEmpty() && user.read(userFile);
+      if (!fromShipped && !own)
+            return nullptr;
+      auto c = std::make_shared<DynamicsCalibration>();
+      for (const auto& p : shipped.patches())
+            if (!user.patches().count(p.first))
+                  for (const auto& a : p.second)
+                        c->setCurve(p.first, a.first, a.second);
+      for (const auto& p : user.patches())
+            for (const auto& a : p.second)
+                  c->setCurve(p.first, a.first, a.second);
+      return c;
       }
 
 bool DynamicsCalibration::write(const QString& file) const
