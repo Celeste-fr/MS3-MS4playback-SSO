@@ -13,7 +13,7 @@
 # Instrument groups (SPEC-b8 "Instruments"):
 #   trumpets   trumpets in C and Bb (the W2/B1 TRUMPETS list), cornet, flugelhorn: playabilitywinds.h ids
 #   horn       every horn id of playabilitywinds.h, read as in F (as B1-HN-HIGH / B3)
-#   low        euphonium and the tubas, as the valve diagrams resolve them (brassType)
+#   low        euphonium, baritone horn (owner 2026-10-11) and the tubas, as the valve diagrams resolve them (brassType)
 #   trombones  tenor, bass, alto, contrabass, as the slide diagrams resolve them (brassType)
 #
 # Fields:
@@ -35,7 +35,7 @@
 
 TRUMPETS = ['trumpet', 'bb-trumpet', 'c-trumpet', 'bb-cornet', 'flugelhorn']
 HORNS = ['horn']
-LOW = ['EUPHONIUM', 'F_TUBA', 'EB_TUBA', 'CC_TUBA', 'BBB_TUBA']
+LOW = ['EUPHONIUM', 'BARITONE', 'F_TUBA', 'EB_TUBA', 'CC_TUBA', 'BBB_TUBA']
 TROMBONES = ['TENOR_TROMBONE', 'BASS_TROMBONE', 'ALTO_TROMBONE', 'CONTRABASS_TROMBONE']
 
 RULES = [

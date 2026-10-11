@@ -42,7 +42,7 @@ inline const std::vector<const char*>& b8HornIds()
 
 inline const std::vector<Playability::Brass>& b8LowTypes()
       {
-      static const std::vector<Playability::Brass> types = { Playability::Brass::EUPHONIUM, Playability::Brass::F_TUBA, Playability::Brass::EB_TUBA, Playability::Brass::CC_TUBA, Playability::Brass::BBB_TUBA };
+      static const std::vector<Playability::Brass> types = { Playability::Brass::EUPHONIUM, Playability::Brass::BARITONE, Playability::Brass::F_TUBA, Playability::Brass::EB_TUBA, Playability::Brass::CC_TUBA, Playability::Brass::BBB_TUBA };
       return types;
       }
 
