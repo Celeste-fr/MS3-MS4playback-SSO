@@ -182,6 +182,7 @@ struct ChordInfo {
       BrassInfo brass;                              // SLIDE, VALVES
       QStringList windNotes;        // woodwinds / brass: "<note>: <W2/B1 rule text> (<source>)", every rule it falls under;
                                     // then W5 "<main> tr <upper>" / "<a> ↔ <b>: <rule text> (<source>)"
+                                    // then B3 "<entering notes>" / "<from> → <to>: <rule text> (<source>)"
       };
 
 namespace Playability {

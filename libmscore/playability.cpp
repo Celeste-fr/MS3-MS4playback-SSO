@@ -14,6 +14,7 @@
 #include "playabilitydiagram.h"
 #include "playabilitywinds.h"
 #include "playabilitywindtrills.h"
+#include "playabilitybrassentry.h"
 
 #include "arpeggio.h"
 #include "articulation.h"
@@ -144,6 +145,8 @@ struct BrassPart {
       int valves { 0 };
       };
 
+struct BrassEntryEvent;       // checkBrassEntries
+
 class Pass {
       Score* _score;
       ScoreTuning _tuning;
@@ -200,6 +203,10 @@ class Pass {
       void checkEntrance(int st, const QString& staffName);
       // woodwind trills and two-note tremolos (SPEC-w5)
       void checkWindTrills(Part* part, const QString& staffName);
+      // brass entrances and leaps (SPEC-b3)
+      std::vector<BrassEntryEvent> brassEntryEvents(int st);
+      bool slurredOver(int track, int from, int to) const;
+      void checkBrassEntries(int st, const QString& staffName);
 
    public:
       Pass(Score* score, PlayabilityResult& res) : _score(score), _tuning(score), _res(res) {}
@@ -1197,6 +1204,219 @@ void Pass::checkWindTrills(Part* part, const QString& staffName)
             }
       }
 
+//---------------------------------------------------------
+//   checkBrassEntries
+//    B3, the owner's spec SPEC-b3: brass entrances above the safe limits (dark yellow), trumpet slurred
+//    leaps (dark yellow), tuba low notes reached by a leap (red) and the horn's wide leaps (panel only)
+//    (playabilitybrassentry.h, generated from tools/playability/b3_rules.py). An entrance (B3-D1) is the
+//    first note of a staff or the first note after a rest: nothing sounds on the staff, in any voice, just
+//    before it (checkEntrance's first note is one); with grace notes before it, the first grace chord
+//    enters. Tied continuations never enter. A leap is two consecutive notes of a voice (grace notes
+//    included) with no rest or gap between them; between chords, the top notes and the bottom notes are
+//    compared. Pitches compare by MIDI number; written = sounding - the instrument's WindData
+//    transposition (the horn read as in F). One row per entering chord and rule, or per leap and rule.
+//---------------------------------------------------------
+
+struct BrassEntryEvent {
+      bool leap { false };
+      Chord* chord { nullptr };     // entrance: the chord entering; leap: the chord reached
+      std::vector<Note*> notes;     // entrance: its notes not tied from before
+      Note* from { nullptr };       // leap: the note left ...
+      Note* to { nullptr };         // ... and the note reached
+      bool slurred { false };       // leap: both notes under one slur
+      int tick { 0 }, tickEnd { 0 };
+      int track { 0 };
+      QString id;                   // the instrument (playabilitywinds.h id) and its transposition
+      int tr { 0 };
+      };
+
+static bool brassEntryInstrument(const BrassEntryRule& r, const QString& id)
+      {
+      for (const char* i : r.instruments)
+            if (id == QLatin1String(i))
+                  return true;
+      return false;
+      }
+
+static bool brassEntryAnyRule(const QString& id)
+      {
+      for (const BrassEntryRule& r : brassEntryRules())
+            if (brassEntryInstrument(r, id))
+                  return true;
+      return false;
+      }
+
+// a chord's tick for slurs: a grace chord's main chord's
+static int mainTick(const Chord* c)
+      {
+      return (c->isGrace() ? toChord(c->parent()) : c)->tick().ticks();
+      }
+
+// is there a slur on this track from at or before `from` to at or after `to`? (a slur's tick2 is its
+// last chord's tick, as checkSlurs reads it)
+bool Pass::slurredOver(int track, int from, int to) const
+      {
+      auto sl = _slurs.find(track);
+      if (sl == _slurs.end())
+            return false;
+      for (const auto& x : sl->second)
+            if (x.first <= from && to <= x.second)
+                  return true;
+      return false;
+      }
+
+std::vector<BrassEntryEvent> Pass::brassEntryEvents(int st)
+      {
+      std::vector<BrassEntryEvent> out;
+      Part* part = _score->staff(st)->part();
+      bool any = false;
+      for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i)
+            if (brassEntryAnyRule(windAt(part, i->first)))
+                  any = true;
+      if (!any)
+            return out;
+      collectSpanners();
+      int staffEnd = -1;                  // the latest end of a chord on the staff so far
+      Chord* prev[VOICES] = {};           // the voice's last chord (grace chords included); none after a rest
+      int prevEnd[VOICES];
+      std::fill(prevEnd, prevEnd + VOICES, -1);
+      auto leap = [&](Chord* a, Chord* b, int track, const QString& id, int tr) {
+            auto low = [](Chord* c) { Note* x = c->notes().front(); for (Note* n : c->notes()) if (n->ppitch() < x->ppitch()) x = n; return x; };
+            auto high = [](Chord* c) { Note* x = c->notes().front(); for (Note* n : c->notes()) if (n->ppitch() > x->ppitch()) x = n; return x; };
+            std::vector<std::pair<Note*, Note*>> pairs { { high(a), high(b) } };
+            if (low(a) != high(a) || low(b) != high(b))
+                  pairs.push_back({ low(a), low(b) });
+            for (const auto& p : pairs) {
+                  if (p.first->ppitch() == p.second->ppitch())
+                        continue;
+                  BrassEntryEvent e;
+                  e.leap = true;
+                  e.chord = b;
+                  e.from = p.first;
+                  e.to = p.second;
+                  e.tick = mainTick(a);
+                  e.tickEnd = mainTick(b);
+                  e.slurred = slurredOver(track, e.tick, e.tickEnd);
+                  e.track = track;
+                  e.id = id;
+                  e.tr = tr;
+                  out.push_back(e);
+                  }
+            };
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            int tick = s->tick().ticks();
+            bool entrance = staffEnd < tick;          // nothing sounds on the staff just before
+            int newEnd = staffEnd;
+            for (int v = 0; v < VOICES; ++v) {
+                  int track = st * VOICES + v;
+                  Element* el = s->element(track);
+                  if (!el)
+                        continue;
+                  if (el->isRest()) {
+                        prev[v] = nullptr;
+                        continue;
+                        }
+                  if (!el->isChord() || toChord(el)->notes().empty())
+                        continue;
+                  Chord* c = toChord(el);
+                  int end = tick + c->actualTicks().ticks();
+                  newEnd = std::max(newEnd, end);
+                  if (prevEnd[v] < tick)
+                        prev[v] = nullptr;            // a gap in the voice
+                  prevEnd[v] = end;
+                  QString id = windAt(part, tick);
+                  auto wd = windData().find(id);
+                  if (wd == windData().end() || !brassEntryAnyRule(id)) {
+                        prev[v] = nullptr;
+                        continue;
+                        }
+                  std::vector<Chord*> seq;
+                  for (Chord* g : c->graceNotesBefore())
+                        seq.push_back(g);
+                  seq.push_back(c);
+                  for (Chord* g : c->graceNotesAfter())
+                        seq.push_back(g);
+                  if (entrance) {
+                        BrassEntryEvent e;
+                        e.chord = seq.front();
+                        for (Note* n : e.chord->notes())
+                              if (!n->tieBack())
+                                    e.notes.push_back(n);
+                        e.tick = e.tickEnd = tick;
+                        e.track = track;
+                        e.id = id;
+                        e.tr = wd->second.tr;
+                        if (!e.notes.empty())
+                              out.push_back(e);
+                        }
+                  for (Chord* x : seq) {
+                        if (prev[v])
+                              leap(prev[v], x, track, id, wd->second.tr);
+                        prev[v] = x;
+                        }
+                  }
+            staffEnd = newEnd;
+            }
+      return out;
+      }
+
+// does a B3 rule hit this event? *on: the notes it hits (entrance) or the note reached (leap);
+// *name: what the row and the panel name; *message: its text and source
+static bool brassEntryHits(const BrassEntryRule& r, const BrassEntryEvent& e, std::vector<Note*>* on, QString* name, QString* message)
+      {
+      if (!brassEntryInstrument(r, e.id) || r.leap != e.leap)
+            return false;
+      on->clear();
+      if (!e.leap) {
+            QStringList names;
+            for (Note* n : e.notes) {
+                  int p = r.written ? n->ppitch() - e.tr : n->ppitch();
+                  if (p > r.above) {
+                        on->push_back(n);
+                        names << tpcName(n->tpc1(), n->ppitch());
+                        }
+                  }
+            if (on->empty())
+                  return false;
+            *name = names.join(" + ");
+            }
+      else {
+            int d = e.to->ppitch() - e.from->ppitch();
+            if (!((d > 0 && r.up >= 0 && d >= r.up) || (d < 0 && r.down >= 0 && -d >= r.down)))
+                  return false;
+            if (r.slurred && !e.slurred)
+                  return false;
+            int p = r.written ? e.to->ppitch() - e.tr : e.to->ppitch();
+            if (r.toLo >= 0 && !(p >= r.toLo && p <= r.toHi))
+                  return false;
+            on->push_back(e.to);
+            *name = tpcName(e.from->tpc1(), e.from->ppitch()) + " " + QChar(0x2192) + " " + tpcName(e.to->tpc1(), e.to->ppitch());
+            }
+      *message = QString(r.text) + " (" + r.source + ")";
+      return true;
+      }
+
+void Pass::checkBrassEntries(int st, const QString& staffName)
+      {
+      for (const BrassEntryEvent& e : brassEntryEvents(st)) {
+            for (const BrassEntryRule& r : brassEntryRules()) {
+                  std::vector<Note*> on;
+                  QString name, msg;
+                  if (r.kind == BrassEntryKind::NOTE || !brassEntryHits(r, e, &on, &name, &msg))
+                        continue;
+                  bool red = r.kind == BrassEntryKind::RED;
+                  for (Note* n : on) {
+                        if (red)
+                              mark(n, PlayMark::IMPOSSIBLE);
+                        else
+                              markOver(n, PlayMark::OUT_OF_REACH);
+                        }
+                  addRow(e.tick, e.tickEnd, e.track, staffName, e.leap ? "leap" : "entrance", red ? "impossible" : "risky", msg, name);
+                  (red ? _res.impossible : _res.outOfReach)++;
+                  }
+            }
+      }
+
 // does an arpeggio sign reach the hand's staff at this moment?
 static bool arpeggioOver(const PartMoment& m, int hand)
       {
@@ -1977,6 +2197,7 @@ void Pass::run()
             if (staffName.isEmpty())
                   staffName = QString("staff %1").arg(st + 1);
             checkEntrance(st, staffName);
+            checkBrassEntries(st, staffName);
             }
       for (PlayabilityRow& r : _res.rows)
             r.staffShort = shortStaffName(_score->staff(r.track / VOICES)->part(), r.staff, r.tick);
@@ -2050,6 +2271,15 @@ ChordInfo Pass::inspect(Chord* chord)
       for (const WindTrillEvent& e : windTrillEvents(chord, true))
             for (const auto& hit : windTrillRulesFor(id, wd->second.tr, e))
                   info.windNotes << e.name + ": " + hit.second;
+      // B3: the chord's entrance and the leaps reaching it, every rule (panel notes too)
+      for (const BrassEntryEvent& e : brassEntryEvents(chord->staffIdx()))
+            if (e.chord == chord)
+                  for (const BrassEntryRule& r : brassEntryRules()) {
+                        std::vector<Note*> on;
+                        QString name, msg;
+                        if (brassEntryHits(r, e, &on, &name, &msg))
+                              info.windNotes << name + ": " + msg;
+                        }
       return info;
       }
 
