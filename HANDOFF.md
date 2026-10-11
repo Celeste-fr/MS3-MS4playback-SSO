@@ -40,6 +40,14 @@ Open:
   Legato); the owner's R faders say +13.1, +8.6, +14.0 (Violins 1 bars 13-16: +6.6). Measured on held notes along
   velocity = CC1, one pitch; R's slurs are 136 ms sixteenths (tempo 110), and the All techniques faders also balance the
   spiccatos. The owner decides by ear; nothing was tuned.
+- **Performance level in context, measured, not applied** (branch `performance-context-level`, 2026-10-10;
+  `tools/soundlibraries/sso_performance_context.json`, scripts in `performance_context/`): real Kontakt + SSO renders of
+  Whence-like figures (staccatos around slurs) for the five sections × dynamic 32-112 × IOI 100-500 ms × three
+  registers. The gain the slurs need over their calibrated CC1 for staccatos - slurs = -1.3 dB is mostly +2 … +9 dB
+  (Violins 2 up to +13, Basses about 0), rising with register and falling with IOI; CC1 127 can't give it in most cells.
+  It predicts MuseScore's own Whence (same-part bars) within 0.7-1.7 dB but not the owner's R (Violins 1 bars 1-12 +4.6,
+  13-16 -1.9 dB: the owner wants the same figure 6.5 dB apart there), so the renderer doesn't use it. Waiting for the
+  owner: whether staccato context is the rule to follow, and, if so, the headroom (louder than CC1 127).
 
 ## No Performance patches (2026-10-06)
 
