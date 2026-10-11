@@ -16,6 +16,7 @@
 #include "liveintegration.h"
 #include "libmscore/automation.h"
 #include "libmscore/calibrationfile.h"
+#include "libmscore/renderpreflight.h"
 #include "soundlibrarycheck.h"
 
 #include <algorithm>
@@ -244,12 +245,53 @@ void SoundLibraryHost::loadCalibration()
       // the user's own measurement (Check articulations › Dynamics) wins for each patch it measured; the others
       // from the map's shipped file (the owner's checks, tools/soundlibraries/calibration_from_sound_dynamics.py),
       // so a fresh install calibrates too (SoundLib::readCalibration)
+      RenderPreflight::Calibration sources;
       if (library)
-            c = SoundLib::readCalibration(calibrationFile(*library), shippedCalibrationFile(*library));
+            c = SoundLib::readCalibration(calibrationFile(*library), shippedCalibrationFile(*library), &sources);
       SoundLib::setDynamicsCalibration(c);
+      // what this calibration is made of, for every render's preflight (renderpreflight.h): the working MuseScore
+      // plays the main setups folder; a background job has set its copy (setDataFolder, RenderPreflight::setSetups)
+      if (library) {
+            QStringList patches;
+            for (const SoundLib::LibInstrument& li : library->instruments)
+                  if (!patches.contains(li.name))
+                        patches << li.name;
+            RenderPreflight::setLibrary(library->name, patches);
+            RenderPreflight::setCalibration(sources);
+            if (dataFolderOverride().isEmpty()) {
+                  RenderPreflight::Setups main;
+                  main.folder = main.mainFolder = setupFolder(*library);
+                  main.mode = "main";
+                  RenderPreflight::setSetups(main);
+                  if (!MScore::noGui)     // (a background job writes nothing of the working MuseScore's: it logs its own)
+                        logPreflight("calibration loaded");
+                  }
+            }
       if (mscore)
             for (MasterScore* s : mscore->scores())
                   s->setPlaylistDirty();
+      }
+
+//---------------------------------------------------------
+//   logPreflight
+//    the render preflight (libmscore/renderpreflight.h) appended to "render preflight.log" in the setups folder in
+//    use (qDebug doesn't show on Windows) and on stderr; returns its lines
+//---------------------------------------------------------
+
+QStringList SoundLibraryHost::logPreflight(const QString& job)
+      {
+      const QStringList lines = RenderPreflight::lines(job);
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (library) {
+            const QString folder = setupFolder(*library);
+            QDir().mkpath(folder);
+            QFile f(folder + "/render preflight.log");
+            if (f.open(QIODevice::Append | QIODevice::Text))
+                  f.write((lines.join("\n") + "\n\n").toUtf8());
+            }
+      for (const QString& l : lines)
+            qInfo("%s", qPrintable(l));
+      return lines;
       }
 
 QString SoundLibraryHost::setupFile(const SoundLib::Library& library, const QString& instrument)

@@ -80,6 +80,25 @@ exports, known bugs); strings, winds and brass through Kontakt are untried.
   `measure`, `beat`, `pitchNames`, `text`, `context[]`, `notesBefore2s`, `clip`), `atStrikes` (per
   kind of event: flagged strikes with it, all strikes with it), `offset`, `offsetPerWindow`,
   `weakStrikes`, `unclear`, `weakButSounding`; per score `clipping[]`, `peakDb`.
+- **Preflight** (since 2026-10-11; `libmscore/renderpreflight.h`): what the render played with, at the top of
+  `summary.txt`, in `report.json` `preflight` and printed first by `read_verify_report.py`: the shipped
+  calibration (`share/soundlibraries/<library>.dynamics.json`) and the user's (`<setups folder>/dynamics.json`),
+  each path + SHA-256 (16 hex) + time, **per patch which file its curves came from** (`calibration.patches`),
+  the map's patches without a curve; the setups folder (here the job's copy, `background verify setups`) and
+  what the copy sync did; `playback.ini` path + SHA-256 + the preset its values match. Every `WARNING` line
+  matters: a patch on the user's file, a copy file replaced / removed / kept different, ini warnings. **Read it
+  before trusting a render's levels** (2026-10-11: a partial `dynamics.json` left in the job's copy played
+  Whence's staccatos uncalibrated, unnoticed until the owner heard it). A report without `preflight` came from an
+  older build: which calibration it used is unknown.
+- The job's setups copy (`RenderPreflight::syncJobCopy`, VERIFY): at each start the calibration is made the main
+  folder's (a copy's `dynamics.json` replaced, or removed when the main folder has none), other files the main
+  folder has newer replace the copy's, missing ones are copied (with their time); made setups are kept (each is
+  checked against its `.nki` at its load via `made setups.json`: made again, or Kontakt's own state taken from the
+  main folder). The measuring jobs (`--extract-library`, `--check-*`, key scan, pictures, load times) keep their
+  copy's own results (JOB: only missing files copied) and log each difference as a `WARNING` in their log's
+  preflight; `--live-equivalence` writes `preflight.txt` in its folder, `--create-live-set` adds it to `<set>.txt`;
+  the working MuseScore appends it to `render preflight.log` in its setups folder at each calibration load and
+  Reload Playback Settings.
 - `<score> [<part>] strikes.tsv`: every strike's `broad` (attack flux / the median strike's) and
   `pitchLocal`, the reference's, `weak`, `flagged`, the event tags.
 - `<score> [<part>] notes.tsv`: every note's `riseDb`, `afterDb`, `deficitDb` (its level against the

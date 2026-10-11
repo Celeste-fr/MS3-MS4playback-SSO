@@ -17,6 +17,7 @@
 #include <QtEndian>
 #include <QtTest/QtTest>
 #include <QTemporaryDir>
+#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -33,6 +34,7 @@
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/calibrationfile.h"
+#include "libmscore/renderpreflight.h"
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
 #include "libmscore/playstart.h"
@@ -96,6 +98,8 @@ class TestSoundLibrary : public QObject, public MTest
       void dynamicsCalibration();
       void dynamicsCalibrationPitches();
       void dynamicsCalibrationUserFile();
+      void renderPreflightCalibration();
+      void renderPreflightJobCopy();
       void heldOnPerformance();
       void dynamicsCheck();
       void timingCheck();
@@ -6007,6 +6011,175 @@ void TestSoundLibrary::dynamicsCalibrationUserFile()
       QVERIFY(u && u->curve("Solo Violin 1", 1) && !u->curve("Violins 2", 1));
       QVERIFY(!SoundLib::readCalibration(none, QString()));
       QVERIFY(!SoundLib::readCalibration(QString(), none));
+      }
+
+//---------------------------------------------------------
+//   renderPreflightCalibration
+//    the preflight's calibration (renderpreflight.h): both files' paths and SHA-256, each patch's source, the
+//    patches the user's file overrides as a warning, the map's patches without a curve, playback.ini's hash and preset
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderPreflightCalibration()
+      {
+      QTemporaryDir dir;
+      auto write = [&](const QString& name, const QByteArray& text) {
+            QFile f(dir.path() + "/" + name);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(text);
+            };
+      const QByteArray shippedText = "{\"patches\":{"
+            "\"Violins 2\":{\"42\":{\"drivenBy\":\"velocity\",\"curve\":[[16,-75],[64,-53],[127,-28]]}},"
+            "\"Violas\":{\"42\":{\"drivenBy\":\"velocity\",\"curve\":[[16,-70],[64,-50],[127,-30]]}}}}";
+      write("shipped.json", shippedText);
+      write("user.json", "{\"patches\":{\"Solo Violin 1\":{\"1\":{\"drivenBy\":\"controller\",\"curve\":[[16,-40],[127,-20]]}}}}");
+      const QString shipped = dir.path() + "/shipped.json";
+      const QString user = dir.path() + "/user.json";
+
+      RenderPreflight::Calibration c;
+      QVERIFY(SoundLib::readCalibration(user, shipped, &c));
+      QVERIFY(c.shippedRead && c.userRead && c.shipped.exists && c.user.exists);
+      QCOMPARE(c.shipped.sha256, QString(QCryptographicHash::hash(shippedText, QCryptographicHash::Sha256).toHex().left(16)));
+      QCOMPARE(c.patchFrom.size(), size_t(3));
+      QCOMPARE(c.patchFrom["Violins 2"], QString("shipped"));
+      QCOMPARE(c.patchFrom["Violas"], QString("shipped"));
+      QCOMPARE(c.patchFrom["Solo Violin 1"], QString("user"));
+      // no user file: none read, every patch shipped
+      RenderPreflight::Calibration s;
+      QVERIFY(SoundLib::readCalibration(dir.path() + "/none.json", shipped, &s));
+      QVERIFY(s.shippedRead && !s.userRead && !s.user.exists);
+      QCOMPARE(s.patchFrom.size(), size_t(2));
+
+      // the report
+      RenderPreflight::setLibrary("Test Library", { "Violins 2", "Violas", "Celli" });
+      RenderPreflight::setCalibration(c);
+      RenderPreflight::Setups main;
+      main.folder = main.mainFolder = dir.path();
+      main.mode = "main";
+      RenderPreflight::setSetups(main);
+      Playback::setIniValuesForTest({});
+      const QString text = RenderPreflight::lines("test").join("\n");
+      QVERIFY2(text.contains(c.shipped.sha256) && text.contains(c.user.sha256), qPrintable(text));
+      QVERIFY2(text.contains("2 from the shipped file, 1 from the user's: Solo Violin 1"), qPrintable(text));
+      QVERIFY2(text.contains("1 of the map's 3 patches have no curve"), qPrintable(text));
+      QVERIFY2(text.contains("(the main folder)") && text.contains("playback.ini:"), qPrintable(text));
+      const QStringList w = RenderPreflight::warnings();
+      QVERIFY2(w.size() == 1 && w[0].contains("1 patch(es) play the user's calibration") && w[0].contains("Solo Violin 1"),
+               qPrintable(w.join("\n")));
+      const QJsonObject j = RenderPreflight::json();
+      QCOMPARE(j["calibration"].toObject()["patches"].toObject()["Solo Violin 1"].toString(), QString("user"));
+      QCOMPARE(j["calibration"].toObject()["shipped"].toObject()["sha256"].toString(), c.shipped.sha256);
+      QCOMPARE(j["setups"].toObject()["mode"].toString(), QString("main"));
+      QVERIFY(j.contains("playbackIni") && j["warnings"].toArray().size() == 1);
+      // without the user's patches: no warning
+      RenderPreflight::setCalibration(s);
+      QVERIFY(RenderPreflight::warnings().isEmpty());
+      RenderPreflight::setCalibration(RenderPreflight::Calibration());
+      RenderPreflight::setSetups(RenderPreflight::Setups());
+      RenderPreflight::setLibrary(QString(), {});
+      }
+
+//---------------------------------------------------------
+//   renderPreflightJobCopy
+//    RenderPreflight::syncJobCopy: a background job's setups copy against the main folder. VERIFY (as the working
+//    MuseScore plays): the calibration mirrored (a stale copy's replaced; removed when the main folder has none: the
+//    2026-10-11 case, a partial dynamics.json left in "background verify setups"), a newer main file replacing the
+//    copy's; JOB (the measuring runs): only missing files copied, differences warned about. Made setups differ
+//    as a note (checked against their .nki at each load); logs and locks never copied
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderPreflightJobCopy()
+      {
+      QTemporaryDir dir;
+      const QString main = dir.path() + "/main";
+      const QString copy = dir.path() + "/copy";
+      QDir().mkpath(main);
+      QDir().mkpath(copy);
+      auto write = [](const QString& path, const QByteArray& text, int ageSeconds) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(text);
+            f.flush();        // (else the write at close sets the time again)
+            f.setFileTime(QDateTime::currentDateTime().addSecs(-ageSeconds), QFileDevice::FileModificationTime);
+            };
+      auto read = [](const QString& path) {
+            QFile f(path);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray("(none)");
+            };
+      auto reset = [&]() {
+            QDir(copy).removeRecursively();
+            QDir().mkpath(copy);
+            };
+
+      // the stale calibration: the copy's older partial file replaced by the main folder's
+      write(main + "/dynamics.json", "main calibration", 100);
+      write(main + "/checks.json", "main checks", 100);
+      write(main + "/Violins 2.vst3state", "main state", 100);
+      write(main + "/made setups.json", "{\"Violins 2\":{\"maker\":2}}", 100);
+      write(main + "/load times.log", "log", 100);
+      write(main + "/x.lock", "lock", 100);
+      write(copy + "/dynamics.json", "stale partial", 1000);
+      write(copy + "/checks.json", "old checks", 1000);
+      write(copy + "/Violins 2.vst3state", "copy state", 1000);
+      write(copy + "/made setups.json", "{\"Violins 2\":{\"maker\":1}}", 1000);
+      RenderPreflight::Setups s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::VERIFY, true);
+      QCOMPARE(read(copy + "/dynamics.json"), QByteArray("main calibration"));
+      QCOMPARE(read(copy + "/checks.json"), QByteArray("main checks"));
+      QCOMPARE(read(copy + "/Violins 2.vst3state"), QByteArray("copy state"));       // (checked at its load)
+      QCOMPARE(read(copy + "/made setups.json"), QByteArray("{\"Violins 2\":{\"maker\":1}}"));
+      QVERIFY(!QFileInfo::exists(copy + "/load times.log") && !QFileInfo::exists(copy + "/x.lock"));
+      QCOMPARE(s.copied, 0);
+      QCOMPARE(s.refreshed.size(), 2);
+      QVERIFY(s.refreshed.join("\n").contains("dynamics.json replaced"));
+      QVERIFY(s.warnings.isEmpty());
+      QVERIFY2(s.notes.size() == 1 && s.notes[0].startsWith("1 setup(s) differ") && s.notes[0].contains("Violins 2"),
+               qPrintable(s.notes.join("\n")));
+      // run again: nothing left to do (the copies kept their time)
+      s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::VERIFY, true);
+      QVERIFY(s.refreshed.isEmpty() && s.warnings.isEmpty() && s.copied == 0);
+
+      // the main folder has no calibration: the copy's (stale) removed
+      QFile::remove(main + "/dynamics.json");
+      s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::VERIFY, true);
+      QVERIFY(!QFileInfo::exists(copy + "/dynamics.json"));
+      QVERIFY2(s.refreshed.size() == 1 && s.refreshed[0].startsWith("dynamics.json removed"), qPrintable(s.refreshed.join("\n")));
+      // a fresh copy: everything but logs and locks copied
+      reset();
+      write(main + "/dynamics.json", "main calibration", 100);
+      s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::VERIFY, true);
+      QCOMPARE(s.copied, 4);
+      QVERIFY(s.refreshed.isEmpty() && s.warnings.isEmpty() && s.notes.isEmpty());
+      QCOMPARE(QFileInfo(copy + "/dynamics.json").lastModified(), QFileInfo(main + "/dynamics.json").lastModified());
+      // a copy's file newer than the main folder's (not the calibration): kept, warned about
+      write(copy + "/checks.json", "newer checks", 10);
+      s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::VERIFY, true);
+      QCOMPARE(read(copy + "/checks.json"), QByteArray("newer checks"));
+      QVERIFY2(s.warnings.size() == 1 && s.warnings[0].startsWith("checks.json differs"), qPrintable(s.warnings.join("\n")));
+      // setups by hand (a library MuseScore doesn't make setups for): a newer main one replaces the copy's
+      write(copy + "/Violins 2.vst3state", "old hand-made", 1000);
+      s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::VERIFY, false);
+      QCOMPARE(read(copy + "/Violins 2.vst3state"), QByteArray("main state"));
+
+      // JOB: the copy's own results kept, each difference a warning; the calibration only the copy has, too
+      reset();
+      write(copy + "/dynamics.json", "this job's measurements", 1000);
+      write(copy + "/checks.json", "old checks", 1000);
+      s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::JOB, true);
+      QCOMPARE(read(copy + "/dynamics.json"), QByteArray("this job's measurements"));
+      QCOMPARE(read(copy + "/checks.json"), QByteArray("old checks"));
+      QCOMPARE(s.copied, 2);        // (the setup and made setups.json)
+      QCOMPARE(s.warnings.size(), 2);
+      QVERIFY(s.refreshed.isEmpty());
+      QFile::remove(main + "/dynamics.json");
+      s = RenderPreflight::syncJobCopy(main, copy, RenderPreflight::CopyMode::JOB, true);
+      QVERIFY(QFileInfo::exists(copy + "/dynamics.json"));
+      QVERIFY2(s.warnings.join("\n").contains("dynamics.json is the copy's own"), qPrintable(s.warnings.join("\n")));
+
+      // the report: the copy's state, loud
+      RenderPreflight::setSetups(s);
+      const QString text = RenderPreflight::lines("test").join("\n");
+      QVERIFY2(text.contains("job copy of") && text.contains("WARNING: setups copy: dynamics.json is the copy's own"),
+               qPrintable(text));
+      RenderPreflight::setSetups(RenderPreflight::Setups());
       }
 
 //---------------------------------------------------------

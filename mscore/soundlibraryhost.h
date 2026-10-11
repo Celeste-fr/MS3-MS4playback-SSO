@@ -150,6 +150,9 @@ class SoundLibraryHost : public QObject {
       // read into SoundLib::dynamicsCalibration for the current library
       static QString calibrationFile(const SoundLib::Library& library);
       static void loadCalibration();
+      // the render preflight (libmscore/renderpreflight.h: calibration files and each patch's source, setups folder,
+      // playback.ini) appended to "render preflight.log" in the setups folder in use and on stderr; job: who renders
+      static QStringList logPreflight(const QString& job);
 
       // setups made by MuseScore
       static bool makesSetups(const SoundLib::Library& library);        // the map has <Files>
