@@ -32,6 +32,7 @@
 #include "libmscore/playabilitybrass.h"
 #include "libmscore/playabilitywindtrills.h"
 #include "libmscore/playabilitybrassentry.h"
+#include "libmscore/playabilitybrasstrills.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
 #include "libmscore/select.h"
@@ -78,6 +79,8 @@ class TestPlayability : public QObject, public MTest
       void windTrills();
       void brassEntryRules();
       void brassEntries();
+      void brassTrillRules();
+      void brassTrills();
       void noDynamic();
       };
 
@@ -1630,6 +1633,125 @@ void TestPlayability::brassEntries()
       QCOMPARE(b3(5, BAR + Q), QStringList({ line("F1" + A + "C1", "B3-TUBA-LOW") }));
       QCOMPARE(b3(5, Q), QStringList());                                                 // by step
       QCOMPARE(b3(5, 3 * BAR + 2 * Q), QStringList());                                   // after a rest
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   B8 brass trills and two-note tremolos (SPEC-b8; tools/playability/gen_brasstrill_tests.py)
+//---------------------------------------------------------
+
+static const BrassTrillRule* b8Rule(const char* id)
+      {
+      for (const BrassTrillRule& r : Ms::brassTrillRules())
+            if (QString(r.id) == id)
+                  return &r;
+      return nullptr;
+      }
+
+void TestPlayability::brassTrillRules()
+      {
+      // the generated table: 6 marks and 1 panel note, every text ending "(solo and section)" (B8-D10)
+      int marks = 0, notes = 0;
+      for (const BrassTrillRule& r : Ms::brassTrillRules()) {
+            (r.kind == BrassTrillKind::NOTE ? notes : marks)++;
+            QVERIFY2(QString(r.text).endsWith("(solo and section)"), r.id);
+            }
+      QCOMPARE(marks, 6);
+      QCOMPARE(notes, 1);
+      // trumpets in C and Bb, cornet, flugelhorn; not the bass, piccolo or other trumpets
+      QCOMPARE(int(Ms::b8TrumpetIds().size()), 5);
+      for (const char* i : Ms::b8TrumpetIds())
+            QVERIFY2(!QString(i).contains("bass"), i);
+      QCOMPARE(int(Ms::b8LowTypes().size()), 5);                  // euphonium, F, Eb, CC, BBb tubas
+      QCOMPARE(int(Ms::b8TromboneTypes().size()), 4);             // tenor, bass, alto, contrabass
+      const BrassTrillRule* r = b8Rule("B8-TPT-PAIRS");          // written Ab3-Bb3, C4-Db4; trills and tremolos
+      QVERIFY(r && r->groups == B8_TRUMPETS && r->written && r->trill && r->tremolo && r->pairs.size() == 2
+              && r->pairs[0] == std::make_pair(56, 58) && r->pairs[1] == std::make_pair(60, 61));
+      r = b8Rule("B8-VALVES-2");                                  // exactly 2, not after TPT-PAIRS
+      QVERIFY(r && r->groups == (B8_TRUMPETS | B8_HORN | B8_LOW) && r->trill && !r->tremolo
+              && r->valvesLo == 2 && r->valvesHi == 2 && r->unless == std::vector<int>({ 0 }));
+      r = b8Rule("B8-VALVES-3");                                  // 3 or more
+      QVERIFY(r && r->valvesLo == 3 && r->valvesHi == -1 && r->unless == std::vector<int>({ 0 }));
+      r = b8Rule("B8-HN-TREM");                                   // a minor 3rd or more
+      QVERIFY(r && r->groups == B8_HORN && !r->trill && r->tremolo && r->atLeast == 3);
+      r = b8Rule("B8-TPT-TREM");
+      QVERIFY(r && r->groups == B8_TRUMPETS && r->tremolo && r->atLeast == 3 && QString(r->source).contains("Blatter p. 161"));
+      r = b8Rule("B8-TBN-TRILL");                                 // panel only
+      QVERIFY(r && r->groups == B8_TROMBONES && r->trill && !r->tremolo && r->kind == BrassTrillKind::NOTE);
+      r = b8Rule("B8-TBN-TREM");
+      QVERIFY(r && r->groups == B8_TROMBONES && r->tremolo && r->kind == BrassTrillKind::WARNING && r->atLeast < 0);
+      // no euphonium / tuba tremolo rule (D5), no horn register rule (D9)
+      for (const BrassTrillRule& x : Ms::brassTrillRules())
+            QVERIFY2(!((x.groups & B8_LOW) && x.tremolo) && !((x.groups & B8_HORN) && x.trill && x.valvesLo < 0), x.id);
+      }
+
+void TestPlayability::brassTrills()
+      {
+      MasterScore* score = readScore(DIR + "brasstrill-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      auto row = [](int bar, const char* staff, const char* id, const QString& notes) {
+            const BrassTrillRule* b = b8Rule(id);
+            return rowText(bar, staff, "risky", QString(b->text) + " (" + b->source + ")", notes);
+            };
+      const QString T = " " + QString(QChar(0x2194)) + " ";
+      QStringList got = htkRows(r, { "trill", "tremolo" });
+      QStringList want = {
+            // trumpet in C: 1 valve clean, 2 and 3 marked; the pairs only once; tremolos from a minor 3rd
+            row(2, "Trumpet in C", "B8-VALVES-2", "D4 tr E4"), row(3, "Trumpet in C", "B8-VALVES-3", "Eb4 tr F4"),
+            row(4, "Trumpet in C", "B8-TPT-PAIRS", "Ab3 tr Bb3"), row(5, "Trumpet in C", "B8-TPT-PAIRS", "C4 tr Db4"),
+            row(7, "Trumpet in C", "B8-TPT-TREM", "E4" + T + "G4"), row(8, "Trumpet in C", "B8-TPT-PAIRS", "Bb3" + T + "Ab3"),
+            // Bb trumpet and cornet by written pitch (named sounding)
+            row(1, "Trumpet in Bb", "B8-TPT-PAIRS", "Gb3 tr Ab3"), row(1, "Cornet", "B8-VALVES-2", "C4 tr D4"),
+            // horn: the Bb side's thumb fingerings count (bar 1 clean)
+            row(2, "Horn in F", "B8-VALVES-2", "C3 tr Db3"), row(3, "Horn in F", "B8-VALVES-3", "Db2 tr Eb2"),
+            row(5, "Horn in F", "B8-HN-TREM", "A3" + T + "C4"),
+            row(1, "Tuba", "B8-VALVES-2", "C1 tr D1"),
+            row(2, "Tenor Trombone", "B8-TBN-TREM", "C4" + T + "D4"),
+            row(2, "Contrabass Trombone", "B8-TBN-TREM", "C2" + T + "D2") };
+      want.sort();
+      compare(got, want);
+      QCOMPARE(got, want);
+
+      // marks: the trill's main note, both tremolo notes, dark yellow
+      QStringList m = marks(score, r);
+      const int BAR = 1920, Q = 480;
+      auto mk = [](const char* staff, int tick, int pitch) {
+            return QString("%1 | %2 | %3 | outOfReach").arg(staff).arg(tick).arg(pitch);
+            };
+      for (const QString& x : { mk("Trumpet in C", BAR, 62), mk("Trumpet in C", 6 * BAR, 64), mk("Trumpet in C", 6 * BAR + 2 * Q, 67),
+                                mk("Trumpet in Bb", Q, 54), mk("Horn in F", 4 * BAR, 57), mk("Horn in F", 4 * BAR + 2 * Q, 60),
+                                mk("Contrabass Trombone", BAR, 36) })
+            QVERIFY2(m.contains(x), qPrintable(x));
+      for (const QString& x : m) {
+            QVERIFY2(!x.startsWith("Trumpet in C | 0 "), qPrintable(x));                                // 1 valve
+            QVERIFY2(!x.startsWith("Trumpet in C | " + QString::number(5 * BAR)), qPrintable(x));       // m2 tremolo
+            QVERIFY2(!x.startsWith("Trumpet in Bb | " + QString::number(BAR)), qPrintable(x));          // written Bb3-C4
+            QVERIFY2(!x.startsWith("Horn in F | " + QString::number(Q)), qPrintable(x));                // Bb side: 1 valve
+            QVERIFY2(!x.startsWith("Horn in F | " + QString::number(3 * BAR)), qPrintable(x));          // m2 tremolo
+            QVERIFY2(!x.startsWith("Tenor Trombone | 0 "), qPrintable(x));                              // trill: panel only
+            QVERIFY2(!x.startsWith("Tuba | " + QString::number(BAR)), qPrintable(x));                   // E2-F2: 1 valve
+            }
+
+      // the panel: every rule of the chord's trills and its tremolo (from either chord), panel notes too
+      auto b8 = [&](int staff, int tick) {
+            QStringList out;
+            for (const QString& x : Playability::inspect(chordAt(score, tick, staff * VOICES)).windNotes)
+                  for (const BrassTrillRule& b : Ms::brassTrillRules())
+                        if (x.contains(b.text))
+                              out << x;
+            return out;
+            };
+      auto line = [](const QString& what, const char* id) {
+            const BrassTrillRule* b = b8Rule(id);
+            return what + ": " + b->text + " (" + b->source + ")";
+            };
+      QCOMPARE(b8(0, 3 * BAR + Q), QStringList({ line("Ab3 tr Bb3", "B8-TPT-PAIRS") }));    // not VALVES-3 too
+      QCOMPARE(b8(0, 7 * BAR + 2 * Q), QStringList({ line("Bb3" + T + "Ab3", "B8-TPT-PAIRS") }));
+      QCOMPARE(b8(0, 0), QStringList());
+      QCOMPARE(b8(3, Q), QStringList());                                                       // horn Bb side
+      QCOMPARE(b8(5, 0), QStringList({ line("F4 tr G4", "B8-TBN-TRILL") }));
+      QCOMPARE(b8(6, 0), QStringList({ line("F2 tr G2", "B8-TBN-TRILL") }));                // no wind data
       delete score;
       }
 
