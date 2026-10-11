@@ -30,6 +30,7 @@
 #include "libmscore/playabilitydiagram.h"
 #include "libmscore/playabilityrules.h"
 #include "libmscore/playabilitybrass.h"
+#include "libmscore/playabilitywindtrills.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
 #include "libmscore/select.h"
@@ -72,6 +73,8 @@ class TestPlayability : public QObject, public MTest
       void brassLayouts();
       void windDynRules();
       void windDynamics();
+      void windTrillRules();
+      void windTrills();
       };
 
 static QString rowText(int bar, const QString& staff, const QString& verdict, const QString& reason, const QString& notes)
@@ -1365,6 +1368,158 @@ void TestPlayability::windDynamics()
       for (const QString& x : all)
             QVERIFY2(!x.startsWith("Piccolo") && !x.startsWith("Alto Flute") && !x.startsWith("Clarinet")
                      && !x.startsWith("Eb Clarinet"), qPrintable(x));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   W5 woodwind trills and two-note tremolos (SPEC-w5; tools/playability/gen_windtrill_tests.py)
+//---------------------------------------------------------
+
+static const WindTrillRule* trillRule(const char* id)
+      {
+      for (const WindTrillRule& r : Ms::windTrillRules())
+            if (QString(r.id) == id)
+                  return &r;
+      return nullptr;
+      }
+
+void TestPlayability::windTrillRules()
+      {
+      // the generated table: 16 marks and 1 panel note, each mark "(solo and section)"
+      int marks = 0, notes = 0;
+      for (const WindTrillRule& r : Ms::windTrillRules()) {
+            (r.kind == WindTrillKind::NOTE ? notes : marks)++;
+            if (r.kind != WindTrillKind::NOTE)
+                  QVERIFY2(QString(r.text).contains("(solo and section)"), r.id);
+            }
+      QCOMPARE(marks, 16);
+      QCOMPARE(notes, 1);
+      const WindTrillRule* r = trillRule("W5-FL-HIGH");
+      QVERIFY(r && r->clauses.size() == 1 && r->clauses[0].trill && !r->clauses[0].tremolo
+              && r->clauses[0].mainLo == 91 && r->clauses[0].mainHi == 127 && !r->written);
+      r = trillRule("W5-OB-HIGH");                          // above D6: from Eb6
+      QVERIFY(r && r->clauses[0].mainLo == 87 && r->written && r->instruments.size() == 2);
+      r = trillRule("W5-SAX-HIGH");                         // above written A6: from A#6
+      QVERIFY(r && r->clauses[0].mainLo == 94 && r->written && r->instruments.size() == 7);
+      r = trillRule("W5-BSN-LOW");                          // Bb1-Gb2, trills and tremolos, first and exclusive
+      QVERIFY(r && r->exclusive && r->clauses[0].noteLo == 34 && r->clauses[0].noteHi == 42 && r->clauses[0].trill
+              && r->clauses[0].tremolo && r->notePairA == 37 && r->notePairB == 39);
+      for (const WindTrillRule& x : Ms::windTrillRules())
+            for (const char* i : x.instruments)
+                  if (QString(i) == "bassoon") {
+                        QCOMPARE(QString(x.id), QString("W5-BSN-LOW"));
+                        goto bassoonFirst;
+                        }
+bassoonFirst:
+      r = trillRule("W5-BSN-FLATS");                        // Db Eb Gb (bits 1 3 6) or A4; Adler's three pairs excepted
+      QVERIFY(r && r->clauses[0].mainPcs == 0x4a && r->clauses[1].mainLo == 69 && r->clauses[1].mainHi == 69
+              && r->except.size() == 3);
+      r = trillRule("W5-FL-TREM-WIDE");                     // wider than a P5, lower note C4-B4
+      QVERIFY(r && r->clauses[0].wider == 7 && r->clauses[0].lowerLo == 60 && r->clauses[0].lowerHi == 71);
+      QVERIFY(trillRule("W5-OB-TREM")->clauses[0].wider == 5 && trillRule("W5-BSN-TREM")->clauses[0].wider == 5);
+      // no rules for piccolo, alto flute, clarinets, contrabassoon (W5-D5, D9, D12)
+      for (const WindTrillRule& x : Ms::windTrillRules())
+            for (const char* i : x.instruments)
+                  QVERIFY2(!QString(i).contains("clarinet") && QString(i) != "piccolo" && QString(i) != "alto-flute"
+                           && QString(i) != "contrabassoon", x.id);
+      }
+
+void TestPlayability::windTrills()
+      {
+      MasterScore* score = readScore(DIR + "windtrill-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      auto row = [](int bar, const char* staff, const char* id, const char* notes, const char* extra = nullptr) {
+            const WindTrillRule* w = trillRule(id);
+            QString text = QString(w->text) + (extra ? QString("; ") + extra : QString()) + " (" + w->source + ")";
+            return rowText(bar, staff, w->kind == WindTrillKind::RED ? "impossible" : "risky", text, notes);
+            };
+      const QString T = " " + QString(QChar(0x2194)) + " ";
+      auto trem = [&](const char* a, const char* b) { return QString(a) + T + b; };
+      const char* KEY = "some bassoons have a trill key for C#2-D#2";
+      QStringList got = htkRows(r, { "trill", "tremolo" });
+      QStringList want = {
+            // flute: upper notes from an accidental earlier in the bar; MIDI pairs (Db4-Eb4 = C#4-D#4)
+            row(1, "Flute", "W5-FL-LOW-A", "C4 tr Db4"), row(3, "Flute", "W5-FL-LOW-A", "Db4 tr Eb4"),
+            row(4, "Flute", "W5-FL-LOW-B", "B3 tr C4"), row(5, "Flute", "W5-FL-LOW-B", "B3 tr C#4"),
+            row(6, "Flute", "W5-FL-HIGH", "G6 tr A6"), row(6, "Flute", "W5-FL-HIGH", "D7 tr E7"),
+            row(7, "Flute", "W5-FL-LOW-A", qPrintable(trem("C4", "Eb4"))), row(8, "Flute", "W5-FL-LOW-A", qPrintable(trem("Eb4", "C4"))),
+            row(9, "Flute", "W5-FL-TREM-B3", qPrintable(trem("B3", "D4"))),
+            row(10, "Flute", "W5-FL-TREM-WIDE", qPrintable(trem("C4", "A4"))), row(11, "Flute", "W5-FL-TREM-WIDE", qPrintable(trem("B4", "G5"))),
+            row(15, "Flute", "W5-FL-LOW-A", "C4 tr Db4"),
+            row(16, "Flute", "W5-FL-HIGH", "G6 tr A6"),
+            // upper notes from the key signature (E major)
+            row(1, "Flute 2", "W5-FL-LOW-A", "C#4 tr D#4"), row(2, "Flute 2", "W5-FL-LOW-B", "B3 tr C#4"),
+            // oboe
+            row(1, "Oboe", "W5-OB-LOW", "A#3 tr B3"), row(2, "Oboe", "W5-OB-HALF", "B#3 tr C#4"),
+            row(3, "Oboe", "W5-OB-HIGH", "Eb6 tr F6"), row(4, "Oboe", "W5-OB-CS5", "C#5 tr D#5"),
+            row(5, "Oboe", "W5-OB-LOW", qPrintable(trem("Bb3", "B3"))), row(6, "Oboe", "W5-OB-TREM", qPrintable(trem("C4", "G4"))),
+            // English horn and alto saxophone by written pitch, named sounding
+            row(1, "English Horn", "W5-OB-LOW", "D#3 tr E3"), row(2, "English Horn", "W5-OB-HIGH", "Ab5 tr Bb5"),
+            row(1, "Alto Saxophone", "W5-SAX-HIGH", "C#6 tr D6"), row(1, "Alto Saxophone", "W5-SAX-HIGH", "D6 tr Eb6"),
+            // bassoon: LOW first and alone; FLATS by pitch class; Adler's pairs above C5 clean
+            row(1, "Bassoon", "W5-BSN-LOW", "Bb1 tr C2"), row(1, "Bassoon", "W5-BSN-LOW", "F2 tr G2"),
+            row(1, "Bassoon", "W5-BSN-AB2", "Ab2 tr Bb2"),
+            row(2, "Bassoon", "W5-BSN-LOW", "Gb2 tr A2"), row(2, "Bassoon", "W5-BSN-LOW", "C#2 tr D2"),
+            row(3, "Bassoon", "W5-BSN-LOW", "C#2 tr D#2", KEY),
+            row(4, "Bassoon", "W5-BSN-FLATS", "Db3 tr E3"), row(4, "Bassoon", "W5-BSN-FLATS", "Eb3 tr F3"),
+            row(4, "Bassoon", "W5-BSN-FLATS", "Gb3 tr A3"), row(4, "Bassoon", "W5-BSN-FLATS", "A4 tr B4"),
+            row(5, "Bassoon", "W5-BSN-FLATS", "C#4 tr D4"),
+            row(6, "Bassoon", "W5-BSN-HIGH", "C5 tr D5"),
+            row(10, "Bassoon", "W5-BSN-FLATS", "C#5 tr D#5"), row(10, "Bassoon", "W5-BSN-HIGH", "C#5 tr D#5"),
+            row(11, "Bassoon", "W5-BSN-FLATS", "Eb5 tr F5"), row(11, "Bassoon", "W5-BSN-HIGH", "Eb5 tr F5"),
+            row(13, "Bassoon", "W5-BSN-TREM", qPrintable(trem("A2", "Eb3"))),
+            row(14, "Bassoon", "W5-BSN-LOW", qPrintable(trem("F2", "D3"))),
+            row(15, "Bassoon", "W5-BSN-LOW", qPrintable(trem("D#2", "C#2")), KEY) };
+      want.sort();
+      compare(got, want);
+      QCOMPARE(got, want);
+
+      // marks: the trill's main note; both notes of a tremolo; red wins over a later warning
+      QStringList m = marks(score, r);
+      const int BAR = 1920, Q = 480;
+      auto mk = [](const char* staff, int tick, int pitch, const char* what) {
+            return QString("%1 | %2 | %3 | %4").arg(staff).arg(tick).arg(pitch).arg(what);
+            };
+      for (const QString& x : { mk("Flute", Q, 60, "impossible"), mk("Flute", 5 * BAR + Q, 91, "outOfReach"),
+                                mk("Flute", 6 * BAR, 60, "impossible"), mk("Flute", 6 * BAR + 2 * Q, 63, "impossible"),
+                                mk("Flute", 15 * BAR, 91, "outOfReach"),
+                                mk("English Horn", 0, 51, "impossible"),          // sounding D#3
+                                mk("Bassoon", 9 * BAR + Q, 73, "impossible"),     // C#5: FLATS red, HIGH warning
+                                mk("Bassoon", 12 * BAR, 45, "outOfReach"), mk("Bassoon", 12 * BAR + 2 * Q, 51, "outOfReach") })
+            QVERIFY2(m.contains(x), qPrintable(x));
+      for (const QString& x : m) {
+            QVERIFY2(!x.startsWith("Clarinet"), qPrintable(x));
+            QVERIFY2(!x.startsWith("Flute | " + QString::number(15 * BAR + 2 * Q)), qPrintable(x));   // the tied G6
+            QVERIFY2(!x.startsWith("Flute | " + QString::number(5 * BAR + 3 * Q)), qPrintable(x));    // the mordent
+            QVERIFY2(!x.startsWith("Bassoon | " + QString::number(8 * BAR)), qPrintable(x));          // D#5-E5: panel only
+            QVERIFY2(!x.startsWith("English Horn | " + QString::number(2 * BAR + Q)), qPrintable(x)); // written E#4-F#4
+            }
+
+      // the panel: every rule of the chord's trills and its tremolo (from either chord), panel notes too,
+      // after the W2/B1 notes of its notes (high bassoon here: kept apart below)
+      auto notesAt = [&](int staff, int tick) {
+            QStringList out;
+            for (const QString& x : Playability::inspect(chordAt(score, tick, staff * VOICES)).windNotes)
+                  if (x.section(':', 0, 0).contains(" tr ") || x.section(':', 0, 0).contains(T))
+                        out << x;
+            return out;
+            };
+      QStringList all = Playability::inspect(chordAt(score, 8 * BAR, 5 * VOICES)).windNotes;
+      QCOMPARE(all.size(), 2);
+      QVERIFY(all[0].startsWith("D#5: high bassoon"));
+      auto line = [](const QString& what, const char* id, const char* extra = nullptr) {
+            const WindTrillRule* w = trillRule(id);
+            return what + ": " + w->text + (extra ? QString("; ") + extra : QString()) + " (" + w->source + ")";
+            };
+      QCOMPARE(notesAt(5, 8 * BAR), QStringList({ line("D#5 tr E5", "W5-BSN-E-KEY") }));
+      QCOMPARE(notesAt(5, 9 * BAR + Q), QStringList({ line("C#5 tr D#5", "W5-BSN-FLATS"), line("C#5 tr D#5", "W5-BSN-HIGH") }));
+      QCOMPARE(notesAt(5, 14 * BAR), QStringList({ line(trem("D#2", "C#2"), "W5-BSN-LOW", KEY) }));
+      QCOMPARE(notesAt(5, 14 * BAR + 2 * Q), QStringList({ line(trem("D#2", "C#2"), "W5-BSN-LOW", KEY) }));
+      QCOMPARE(notesAt(5, 6 * BAR), QStringList());                                  // C#5-D5
+      QCOMPARE(notesAt(0, BAR + Q), QStringList());                                  // C#4-D4 in C major
+      QCOMPARE(notesAt(1, 0), QStringList({ line("C#4 tr D#4", "W5-FL-LOW-A") }));  // the same note in E major
+      QCOMPARE(notesAt(6, 0), QStringList());                                        // clarinet
       delete score;
       }
 
